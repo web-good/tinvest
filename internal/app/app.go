@@ -5,16 +5,15 @@ import (
 	"log/slog"
 	"sync"
 	"tinvest/internal/config"
-	"tinvest/pkg/client/db"
-	"tinvest/pkg/client/grpc"
+	"tinvest/internal/service/trading_strategy/rsi_trading/scheduler"
+	"tinvest/internal/service_provider"
 	"tinvest/pkg/closer"
 	"tinvest/pkg/logger"
 )
 
 type App struct {
-	config     *config.Config
-	db         db.Client
-	grpcClient grpc.ClientGrpc
+	config *config.Config
+	sp     *service_provider.ServiceProvider
 }
 
 func InitApp(ctx context.Context) (app *App, err error) {
@@ -43,8 +42,21 @@ func (a *App) Run(ctx context.Context) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		rsiResult := scheduler.NewSchedulerService(
+			a.sp.GetRsiTradingService(
+				a.config.GrpcClient.AddressProd,
+				a.config.GrpcClient.TokenProd,
+				a.config.TelegramClient.ChatID,
+				a.config.TelegramClient.Token,
+			),
+		)
+		err := rsiResult.Trade(ctx, 1)
 
+		if err != nil {
+			logger.ErrorContext(ctx, "Ошибка при работе воркера MacD Rsi", err.Error())
+		}
 	}()
+
 	wg.Wait()
 
 	return nil
@@ -53,8 +65,10 @@ func (a *App) Run(ctx context.Context) error {
 func (a *App) initializationLoop(ctx context.Context) (err error) {
 	inits := []func(context.Context) error{
 		a.initConfig,
-		a.initDatabase,
+		a.initServiceProvider,
+		//	a.initDatabase,
 		a.initGrpcClient,
+		a.initTelegramBotClient,
 	}
 	err = nil
 

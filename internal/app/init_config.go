@@ -16,7 +16,17 @@ func (a *App) initConfig(ctx context.Context) error {
 		return fmt.Errorf("failed to load env_file: %w", err)
 	}
 
-	cfg := &config.Config{}
+	err = load("./env/token.env")
+
+	if err != nil {
+		return fmt.Errorf("failed to load token_env_file: %w", err)
+	}
+
+	cfg := &config.Config{
+		AppName:        "T-invest",
+		GrpcClient:     config.NewGrpcClientConfig(),
+		TelegramClient: config.NewTelegramClientConfig(),
+	}
 	err = confita.NewLoader(
 		env.NewBackend(),
 	).Load(ctx, cfg)

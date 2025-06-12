@@ -2,16 +2,23 @@ package purchase_shares
 
 import (
 	"context"
+	"tinvest/pkg/client/grpc"
 )
 
-var _ Service = (*service)(nil)
+var _ PurchaseShares = (*Service)(nil)
 
-type service struct{}
-
-type Service interface {
-	PurchaseByStrategy(context.Context) error
+type Service struct {
+	instrumentServiceGrpcClient grpc.InstrumentsServiceClient
+	marketDataServiceGrpcClient grpc.MarketDataServiceClient
 }
 
-func NewService() *service {
-	return &service{}
+type PurchaseShares interface {
+	MacdRsiStrategy(context.Context) error
+}
+
+func NewService(instrumentsServiceClient grpc.InstrumentsServiceClient, marketDataServiceGrpcClient grpc.MarketDataServiceClient) PurchaseShares {
+	return &Service{
+		instrumentServiceGrpcClient: instrumentsServiceClient,
+		marketDataServiceGrpcClient: marketDataServiceGrpcClient,
+	}
 }

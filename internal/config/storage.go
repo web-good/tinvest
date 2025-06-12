@@ -1,6 +1,8 @@
 package config
 
-import "net"
+import (
+	"net"
+)
 
 type Storage struct {
 	DbHost string `config:"DB_HOST"`
