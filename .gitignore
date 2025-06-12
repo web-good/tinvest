@@ -1,3 +1,3 @@
-./env/token.env
+*token.env
 ./bin
 .idea
