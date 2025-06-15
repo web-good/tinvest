@@ -45,6 +45,7 @@ func (s *schedulerService) Trade(ctx context.Context, interval int) error {
 		case <-jobTicker.C:
 			logger.InfoContext(ctx, "Воркер MacD Rsi успешно работает")
 		default:
+			time.Sleep(10 * time.Second)
 		}
 	}
 }
