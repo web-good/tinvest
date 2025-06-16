@@ -5,7 +5,7 @@ on:
     branches: [ main, master ]
 
 env:
-  REGISTRY: "docker.io"
+  REGISTRY: "koshelevoleg"
   IMAGE_NAME: "tinvest"
   CONTAINER_NAME: "tinvest-container"
 
