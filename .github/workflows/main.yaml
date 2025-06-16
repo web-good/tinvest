@@ -5,7 +5,7 @@ on:
     branches: [ main, master ]
 
 env:
-  REGISTRY: "koshelevoleg"
+  REGISTRY: "docker.io"
   IMAGE_NAME: "tinvest"
   CONTAINER_NAME: "tinvest-container"
 
@@ -27,4 +27,4 @@ jobs:
         run: |
           TAG_NAME=$(echo $GITHUB_SHA | head -c7)
           docker buildx create --use
-          docker buildx build --no-cache --push --tag $REGISTRY/$IMAGE_NAME:$TAG_NAME .
+          docker buildx build --no-cache --push --tag $REGISTRY/koshelevoleg/$IMAGE_NAME:$TAG_NAME .
