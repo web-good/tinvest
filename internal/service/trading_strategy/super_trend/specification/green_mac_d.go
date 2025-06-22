@@ -1,7 +1,6 @@
 package specification
 
 import (
-	"fmt"
 	"tinvest/internal/model"
 )
 
@@ -22,7 +21,7 @@ func (s *GreenMacD) IsSatisfiedBy(itemTechAnalyse []*model.MacDItemTechAnalyse) 
 
 	for i := len(itemTechAnalyse) - 1; j < iterLen; i-- {
 		item := itemTechAnalyse[i]
-		fmt.Println("rrrrrrrrrrrr", item.Date, item.MacDLine)
+
 		if item.MacDLine.Units > item.SignalLine.Units && i > 0 {
 			countGreenIndicators++
 		}

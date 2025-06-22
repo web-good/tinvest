@@ -53,7 +53,7 @@ func (a *App) Run(ctx context.Context) error {
 		err := sh.Trade(ctx)
 
 		if err != nil {
-			logger.ErrorContext(ctx, "Error in worker super trand", err.Error())
+			logger.ErrorContext(ctx, "Error in worker super trend", err.Error())
 		}
 	}()
 

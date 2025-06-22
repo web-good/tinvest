@@ -36,7 +36,7 @@ func (a *App) initConfig(ctx context.Context) error {
 	err = confita.NewLoader(
 		env.NewBackend(),
 	).Load(ctx, cfg)
-	fmt.Println("))))))))))))))))))))))))))))))", os.Getenv("APP_ENV"), "***********************", cfg.TelegramClient.Token)
+
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
