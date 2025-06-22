@@ -7,7 +7,7 @@ import (
 
 func (a *App) initTelegramBotClient(ctx context.Context) error {
 	logger.InfoContext(ctx, "Start telegram bot client")
-	_, err := a.sp.GetTelegramBotClient(a.config.TelegramClient.Token, a.config.TelegramClient.ChatID)
+	_, err := a.sp.GetTelegramBotClient()
 
 	if err != nil {
 		return err

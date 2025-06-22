@@ -15,7 +15,9 @@ type telegramBotClientClient struct {
 }
 
 func (b *telegramBotClientClient) SendMessage(msg string) error {
-	_, err := b.clientApi.Send(tgbotapi.NewMessage(b.chatId, msg))
+	ms := tgbotapi.NewMessage(b.chatId, msg)
+	ms.ParseMode = "HTML"
+	_, err := b.clientApi.Send(ms)
 
 	if err != nil {
 		return fmt.Errorf("failed to send message: %w", err)

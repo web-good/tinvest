@@ -1,7 +1,6 @@
 FROM golang:1.23-alpine as builder
 
 ENV TZ=Europe/Moscow
-
 COPY . /application
 
 WORKDIR /application
@@ -13,6 +12,8 @@ FROM alpine:latest
 
 ENV TZ=Europe/Moscow
 
+RUN apk add tzdata
+ENV APP_ENV='prod'
 WORKDIR /application
 
 COPY --from=builder /application/build ./build

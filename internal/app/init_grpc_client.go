@@ -11,7 +11,7 @@ const (
 
 func (a *App) initGrpcClient(ctx context.Context) error {
 	logger.InfoContext(ctx, "Initialize gRPC client")
-	_, err := a.sp.GetGrpcClient(a.config.GrpcClient.AddressProd, a.config.GrpcClient.TokenProd)
+	_, err := a.sp.GetGrpcClient()
 
 	if err != nil {
 		return err

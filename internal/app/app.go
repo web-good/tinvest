@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"sync"
 	"tinvest/internal/config"
-	"tinvest/internal/service/trading_strategy/rsi_trading/scheduler"
+	"tinvest/internal/service/trading_strategy/super_trend/scheduler"
 	"tinvest/internal/service_provider"
 	"tinvest/pkg/closer"
 	"tinvest/pkg/logger"
@@ -40,20 +40,20 @@ func (a *App) Run(ctx context.Context) error {
 	logger.Info("starting App", slog.String("APP_ENV", a.config.AppEnv))
 	wg := sync.WaitGroup{}
 	wg.Add(1)
+	/*go func() {
+		defer wg.Done()
+		err := a.sp.GetSuperTrendTradingService().Trade(ctx)
+		if err != nil {
+			return
+		}
+	}()*/
 	go func() {
 		defer wg.Done()
-		rsiResult := scheduler.NewSchedulerService(
-			a.sp.GetRsiTradingService(
-				a.config.GrpcClient.AddressProd,
-				a.config.GrpcClient.TokenProd,
-				a.config.TelegramClient.ChatID,
-				a.config.TelegramClient.Token,
-			),
-		)
-		err := rsiResult.Trade(ctx, 1)
+		sh := scheduler.NewSchedulerService(a.sp.GetSuperTrendTradingService())
+		err := sh.Trade(ctx)
 
 		if err != nil {
-			logger.ErrorContext(ctx, "Ошибка при работе воркера MacD Rsi", err.Error())
+			logger.ErrorContext(ctx, "Error in worker super trand", err.Error())
 		}
 	}()
 

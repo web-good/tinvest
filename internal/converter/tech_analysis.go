@@ -68,7 +68,7 @@ func ConvertRsiTechAnalysisFromPb(techAnalysisItems []*investapi.GetTechAnalysis
 
 func convertRsiTechAnalyseFromBp(item *investapi.GetTechAnalysisResponse_TechAnalysisItem) *model.RsiItemTechAnalyse {
 	loc, _ := time.LoadLocation("Europe/Moscow")
-	
+
 	return &model.RsiItemTechAnalyse{
 		Date: item.GetTimestamp().AsTime().In(loc),
 		SignalLine: model.Quotation{
@@ -89,8 +89,10 @@ func ConvertEmaTechAnalysisFromPb(techAnalysisItems []*investapi.GetTechAnalysis
 }
 
 func convertEmaTechAnalyseFromBp(item *investapi.GetTechAnalysisResponse_TechAnalysisItem) *model.EmaItemTechAnalyse {
+	loc, _ := time.LoadLocation("Europe/Moscow")
+
 	return &model.EmaItemTechAnalyse{
-		Date: item.GetTimestamp().AsTime(),
+		Date: item.GetTimestamp().AsTime().In(loc),
 		SignalLine: model.Quotation{
 			Units: item.GetSignal().GetUnits(),
 			Nano:  item.GetSignal().GetNano(),
