@@ -1,6 +1,7 @@
 package service_provider
 
 import (
+	"tinvest/internal/service/instrument/ema"
 	"tinvest/internal/service/notification/purchase_shares"
 	"tinvest/internal/service/trading_strategy/rsi_trading"
 	"tinvest/internal/service/trading_strategy/super_trend"
@@ -10,6 +11,7 @@ type service struct {
 	purchaseSharesService    purchase_shares.PurchaseShares
 	rsiTradingService        rsi_trading.RsiTrading
 	superTrendTradingService super_trend.SuperTrend
+	emaInstrument            ema.Instrument
 }
 
 func (*ServiceProvider) GetPurchaseSharesService() purchase_shares.PurchaseShares {
@@ -42,9 +44,21 @@ func (*ServiceProvider) GetSuperTrendTradingService() super_trend.SuperTrend {
 		serviceProvider.service.superTrendTradingService = super_trend.NewService(
 			grpcClient.InstrumentsServiceClient(),
 			grpcClient.MarketDataServiceClient(),
+			serviceProvider.Ema(),
 			tgClient,
 		)
 	}
 
 	return serviceProvider.service.superTrendTradingService
+}
+
+func (*ServiceProvider) Ema() ema.Instrument {
+	if serviceProvider.service.emaInstrument == nil {
+		grpcClient, _ := serviceProvider.GetGrpcClient()
+		serviceProvider.service.emaInstrument = ema.NewEma(
+			grpcClient.MarketDataServiceClient(),
+		)
+	}
+
+	return serviceProvider.service.emaInstrument
 }

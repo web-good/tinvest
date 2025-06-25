@@ -1,7 +1,6 @@
 package converter
 
 import (
-	"fmt"
 	"time"
 	"tinvest/internal/model"
 	investapi "tinvest/internal/pb/v1"
@@ -19,13 +18,25 @@ func ConvertCandlesTechAnalysisFromPb(techAnalysisItems []*investapi.HistoricCan
 
 func convertCandlesTechAnalyseFromBp(item *investapi.HistoricCandle) *model.CandleItemTechAnalyse {
 	loc, _ := time.LoadLocation("Europe/Moscow")
-	fmt.Println(item)
+
 	return &model.CandleItemTechAnalyse{
-		Time:       item.Time.AsTime().In(loc),
-		Open:       model.Quotation{},
-		Close:      model.Quotation{},
-		High:       model.Quotation{},
-		Low:        model.Quotation{},
+		Time: item.Time.AsTime().In(loc),
+		Open: model.Quotation{
+			Units: item.Open.Units,
+			Nano:  item.Open.Nano,
+		},
+		Close: model.Quotation{
+			Units: item.Close.Units,
+			Nano:  item.Close.Nano,
+		},
+		High: model.Quotation{
+			Units: item.High.Units,
+			Nano:  item.High.Nano,
+		},
+		Low: model.Quotation{
+			Units: item.Low.Units,
+			Nano:  item.Low.Nano,
+		},
 		IsComplete: item.IsComplete,
 	}
 }

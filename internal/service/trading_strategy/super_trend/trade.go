@@ -2,7 +2,6 @@ package super_trend
 
 import (
 	"context"
-	"fmt"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"time"
 	"tinvest/internal/service/trading_strategy/super_trend/notification"
@@ -14,11 +13,16 @@ func (s *service) Trade(ctx context.Context) error {
 	t, _ := s.instrumentServiceGrpcClient.Shares(ctx)
 
 	for _, share := range t {
-		fastEma, _ := s.marketDataServiceGrpcClient.GetTechAnalyseEma(ctx, share.ID, 4, timestamppb.New(time.Now().AddDate(0, 0, -1)), timestamppb.New(time.Now()), 5)
-		openEma, _ := s.marketDataServiceGrpcClient.GetTechAnalyseEma(ctx, share.ID, 4, timestamppb.New(time.Now().AddDate(0, 0, -1)), timestamppb.New(time.Now()), 35)
+		ema35, _ := s.emaData.TechAnalyse(ctx, &share.ID, 4, time.Now().AddDate(0, 0, -2), int32(35))
+		ema5, _ := s.emaData.TechAnalyse(ctx, &share.ID, 4, time.Now().AddDate(0, 0, -1), int32(5))
+
+		if len(ema35) == 0 || len(ema5) == 0 {
+			continue
+		}
+
 		sp := specification.SuperTrendIntersection{}
 
-		if sp.IsSatisfiedBy(fastEma, openEma) == false {
+		if sp.IsSatisfiedBy(ema5, ema35) == false {
 			continue
 		}
 
@@ -39,6 +43,6 @@ func (s *service) Trade(ctx context.Context) error {
 			return err
 		}
 	}
-	fmt.Println(shares)
+
 	return nil
 }

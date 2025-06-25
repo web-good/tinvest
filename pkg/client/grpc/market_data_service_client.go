@@ -17,7 +17,7 @@ type MarketDataServiceClient interface {
 	GetTechAnalyseRsi(context context.Context, instrumentUid string, interval int, from *timestamppb.Timestamp, to *timestamppb.Timestamp) ([]*model.RsiItemTechAnalyse, error)
 	GetTechAnalyseEma(context context.Context, instrumentUid string, interval int, from *timestamppb.Timestamp, to *timestamppb.Timestamp, length int32) ([]*model.EmaItemTechAnalyse, error)
 	GetTechAnalyseBB(context context.Context, instrumentUid string, interval int, from *timestamppb.Timestamp, to *timestamppb.Timestamp) ([]*model.BbItemTechAnalyse, error)
-	GetCandles(context context.Context, instrumentUid *string, interval int32, from *timestamp.Timestamp, to *timestamp.Timestamp, limit *int32, withWeekend bool) ([]*model.CandleItemTechAnalyse, error)
+	GetCandles(context context.Context, instrumentUid *string, interval int32, from *timestamp.Timestamp, to *timestamp.Timestamp, limit *int32) ([]*model.CandleItemTechAnalyse, error)
 }
 
 type marketDataService struct {
@@ -51,6 +51,7 @@ func (m *marketDataService) GetTechAnalyseBB(ctx context.Context, instrumentUid 
 func (m *marketDataService) GetTechAnalyseEma(ctx context.Context, instrumentUid string, interval int, from *timestamppb.Timestamp, to *timestamppb.Timestamp, length int32) ([]*model.EmaItemTechAnalyse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	//fmt.Println(from.AsTime(), to.AsTime(), instrumentUid, "++++++++++++++++++++++++")
 	resp, err := m.marketDataApi.GetTechAnalysis(ctx, &investapi.GetTechAnalysisRequest{
 		Length:        length,
 		IndicatorType: investapi.GetTechAnalysisRequest_INDICATOR_TYPE_EMA,
@@ -112,23 +113,18 @@ func (m *marketDataService) GetTechAnalyseMacD(ctx context.Context, instrumentUi
 	return converter.ConvertMacDTechAnalysisFromPb(resp.GetTechnicalIndicators()), nil
 }
 
-func (m *marketDataService) GetCandles(ctx context.Context, instrumentUid *string, interval int32, from *timestamp.Timestamp, to *timestamp.Timestamp, limit *int32, withWeekend bool) ([]*model.CandleItemTechAnalyse, error) {
+func (m *marketDataService) GetCandles(ctx context.Context, instrumentUid *string, interval int32, from *timestamp.Timestamp, to *timestamp.Timestamp, limit *int32) ([]*model.CandleItemTechAnalyse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	///	candleSourceType := investapi.GetCandlesRequest_CANDLE_SOURCE_UNSPECIFIED
 
-	if withWeekend == true {
-		//		candleSourceType = investapi.GetCandlesRequest_CANDLE_SOURCE_INCLUDE_WEEKEND
-	}
 	resp, err := m.marketDataApi.GetCandles(ctx, &investapi.GetCandlesRequest{
 		From:         from,
 		InstrumentId: instrumentUid,
 		To:           to,
-		Interval:     investapi.CandleInterval_CANDLE_INTERVAL_DAY,
-		//CandleSourceType: &candleSourceType,
-		Limit: limit,
+		Interval:     investapi.CandleInterval(interval),
+		Limit:        limit,
 	}, NewRPCCredential(m.auth))
-	fmt.Println("4342342", resp.GetCandles())
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to request TechAnalysis: %w", err)
 	}

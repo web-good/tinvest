@@ -4,14 +4,14 @@ import (
 	"tinvest/internal/model"
 )
 
-const countGreenCandles int = 2
+const countGreenCandles int = 1
 
 type GreenMacD struct {
 	countGreenCandles int
 }
 
 func (s *GreenMacD) IsSatisfiedBy(itemTechAnalyse []*model.MacDItemTechAnalyse) bool {
-	iterLen := 2
+	iterLen := 1
 	j := 0
 	countGreenIndicators := 0
 

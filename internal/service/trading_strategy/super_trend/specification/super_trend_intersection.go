@@ -1,19 +1,20 @@
 package specification
 
 import (
+	"fmt"
 	"time"
-	"tinvest/internal/model"
+	domainema "tinvest/internal/domain/ema"
 )
 
 type SuperTrendIntersection struct{}
 
 type item struct {
-	iFastEma  model.EmaItemTechAnalyse
-	iTradeEma model.EmaItemTechAnalyse
+	iFastEma  domainema.ItemTechAnalyse
+	iTradeEma domainema.ItemTechAnalyse
 }
 
-func (s *SuperTrendIntersection) IsSatisfiedBy(fastEma []*model.EmaItemTechAnalyse, tradeEma []*model.EmaItemTechAnalyse) bool {
-	iterLen := 2
+func (s *SuperTrendIntersection) IsSatisfiedBy(fastEma []domainema.ItemTechAnalyse, tradeEma []domainema.ItemTechAnalyse) bool {
+	iterLen := 3
 	timeNow := time.Now()
 
 	if len(fastEma) <= iterLen || len(tradeEma) <= iterLen {
@@ -26,38 +27,45 @@ func (s *SuperTrendIntersection) IsSatisfiedBy(fastEma []*model.EmaItemTechAnaly
 	)
 	itemFlagTrade := false
 	itemPrevFlagTrade := false
-	itemTechAnalyse.iFastEma = *fastEma[len(fastEma)-1]
-	itemTechAnalyse.iTradeEma = *tradeEma[len(fastEma)-1]
-	prevItemTechAnalyse.iFastEma = *fastEma[len(fastEma)-2]
-	prevItemTechAnalyse.iTradeEma = *tradeEma[len(fastEma)-2]
+	j := 0
 
-	if itemTechAnalyse.iFastEma.Date.Hour() != timeNow.Hour() ||
-		itemTechAnalyse.iFastEma.Date.Hour() != timeNow.Hour() ||
-		prevItemTechAnalyse.iFastEma.Date.Hour() != timeNow.Add(-1*time.Hour).Hour() ||
-		prevItemTechAnalyse.iTradeEma.Date.Hour() != timeNow.Add(-1*time.Hour).Hour() {
-		return false
-	}
+	for i := len(fastEma) - 1; j < iterLen; i-- {
+		itemTechAnalyse.iFastEma = fastEma[i]
+		itemTechAnalyse.iTradeEma = tradeEma[i]
+		prevItemTechAnalyse.iFastEma = fastEma[i-1]
+		prevItemTechAnalyse.iTradeEma = tradeEma[i-1]
 
-	if itemTechAnalyse.iFastEma.SignalLine.Units > itemTechAnalyse.iTradeEma.SignalLine.Units {
-		itemFlagTrade = true
-	}
+		if i == len(fastEma)-1 && (itemTechAnalyse.iFastEma.Date.Hour() != timeNow.Hour() ||
+			itemTechAnalyse.iTradeEma.Date.Hour() != timeNow.Hour() ||
+			prevItemTechAnalyse.iFastEma.Date.Hour() != timeNow.Add(-1*time.Hour).Hour() ||
+			prevItemTechAnalyse.iTradeEma.Date.Hour() != timeNow.Add(-1*time.Hour).Hour()) {
+			return false
+		}
 
-	if prevItemTechAnalyse.iFastEma.SignalLine.Units < prevItemTechAnalyse.iTradeEma.SignalLine.Units {
-		itemPrevFlagTrade = true
-	}
+		if itemTechAnalyse.iFastEma.SignalLine.Units > itemTechAnalyse.iTradeEma.SignalLine.Units {
+			itemFlagTrade = true
+		}
 
-	if itemTechAnalyse.iFastEma.SignalLine.Units == itemTechAnalyse.iTradeEma.SignalLine.Units &&
-		itemTechAnalyse.iFastEma.SignalLine.Nano > itemTechAnalyse.iTradeEma.SignalLine.Nano {
-		itemFlagTrade = true
-	}
+		if prevItemTechAnalyse.iFastEma.SignalLine.Units < prevItemTechAnalyse.iTradeEma.SignalLine.Units {
+			itemPrevFlagTrade = true
+		}
 
-	if prevItemTechAnalyse.iFastEma.SignalLine.Units == prevItemTechAnalyse.iTradeEma.SignalLine.Units &&
-		prevItemTechAnalyse.iFastEma.SignalLine.Nano < prevItemTechAnalyse.iTradeEma.SignalLine.Nano {
-		itemFlagTrade = true
-	}
+		if itemTechAnalyse.iFastEma.SignalLine.Units == itemTechAnalyse.iTradeEma.SignalLine.Units &&
+			itemTechAnalyse.iFastEma.SignalLine.Nano > itemTechAnalyse.iTradeEma.SignalLine.Nano {
+			itemFlagTrade = true
+		}
 
-	if itemPrevFlagTrade == true && itemFlagTrade == true {
-		return true
+		if prevItemTechAnalyse.iFastEma.SignalLine.Units == prevItemTechAnalyse.iTradeEma.SignalLine.Units &&
+			prevItemTechAnalyse.iFastEma.SignalLine.Nano < prevItemTechAnalyse.iTradeEma.SignalLine.Nano {
+			itemFlagTrade = true
+		}
+
+		if itemPrevFlagTrade == true && itemFlagTrade == true {
+			fmt.Println(itemTechAnalyse, prevItemTechAnalyse)
+			return true
+		}
+
+		j++
 	}
 
 	return false
