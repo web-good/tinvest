@@ -10,7 +10,7 @@ import (
 )
 
 func (e *service) TechAnalyse(context context.Context, instrumentUid *string, interval int32, from time.Time, period int32) ([]domainema.ItemTechAnalyse, error) {
-	limit := period * 4
+	limit := period
 	candles, err := e.marketDataServiceClient.GetCandles(context, instrumentUid, interval, timestamppb.New(from), timestamppb.New(time.Now()), &limit)
 
 	if err != nil {
@@ -28,7 +28,8 @@ func (e *service) TechAnalyse(context context.Context, instrumentUid *string, in
 	//fracPart, intPart := SplitPrice(float64(candles[0].Close.Units))
 
 	for i := 0; i < int(period) && i < len(candles); i++ {
-		sum += float64(candles[i].Close.Units)
+		fmt.Println(candles[i].Close, candles[i].Time, "\n")
+		sum += float64(candles[i].Close.Units) + float64(candles[i].Close.Nano)/math.Pow(10, float64(9))
 	}
 
 	sma := sum / float64(min(period, int32(len(candles))))
@@ -42,7 +43,7 @@ func (e *service) TechAnalyse(context context.Context, instrumentUid *string, in
 	}
 
 	for i := 1; i < len(candles); i++ {
-		fracPart, intPart := SplitPrice(((float64(candles[i].Close.Units) - float64(ema[i-1].SignalLine.Units)) * multiplier) + float64(ema[i-1].SignalLine.Units))
+		fracPart, intPart := SplitPrice(((float64(candles[i].Close.Units) + float64(candles[i].Close.Nano)/math.Pow(10, float64(9)) - float64(candles[i-1].Close.Units) + float64(candles[i-1].Close.Nano)/math.Pow(10, float64(9))) * multiplier) + float64(candles[i-1].Close.Units) + float64(candles[i-1].Close.Nano)/math.Pow(10, float64(9)))
 		ema[i] = domainema.ItemTechAnalyse{
 			Date: candles[i].Time,
 			SignalLine: domainema.Quotation{

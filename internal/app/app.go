@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"sync"
 	"tinvest/internal/config"
-	"tinvest/internal/service/trading_strategy/super_trend/scheduler"
 	"tinvest/internal/service_provider"
 	"tinvest/pkg/closer"
 	"tinvest/pkg/logger"
@@ -40,14 +39,14 @@ func (a *App) Run(ctx context.Context) error {
 	logger.Info("starting App", slog.String("APP_ENV", a.config.AppEnv))
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	/*go func() {
+	go func() {
 		defer wg.Done()
 		err := a.sp.GetSuperTrendTradingService().Trade(ctx)
 		if err != nil {
 			return
 		}
-	}()*/
-	go func() {
+	}()
+	/*go func() {
 		defer wg.Done()
 		sh := scheduler.NewSchedulerService(a.sp.GetSuperTrendTradingService())
 		err := sh.Trade(ctx)
@@ -55,7 +54,7 @@ func (a *App) Run(ctx context.Context) error {
 		if err != nil {
 			logger.ErrorContext(ctx, "Error in worker super trend", err.Error())
 		}
-	}()
+	}()*/
 
 	wg.Wait()
 
