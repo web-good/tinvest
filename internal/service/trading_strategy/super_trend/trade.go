@@ -4,25 +4,35 @@ import (
 	"context"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"time"
+	atr "tinvest/internal/domain/atr"
+	"tinvest/internal/model"
 	"tinvest/internal/service/trading_strategy/super_trend/notification"
 	"tinvest/internal/service/trading_strategy/super_trend/specification"
 	"tinvest/pkg/logger"
 )
 
 func (s *service) Trade(ctx context.Context) error {
-	var shares []string
+	var (
+		shares []model.Share
+		atrs   map[string]atr.ItemTechAnalyse
+	)
 	t, _ := s.instrumentServiceGrpcClient.Shares(ctx)
 
 	for _, share := range t {
-		ema35, err35 := s.ema.TechAnalyse(ctx, &share.ID, 4, time.Now().AddDate(0, 0, -7), 35)
 		ema5, err5 := s.ema.TechAnalyse(ctx, &share.ID, 4, time.Now().AddDate(0, 0, -2), 5)
 
-		if err35 != nil {
-			logger.ErrorContext(ctx, "Error in calculate ema35", err35)
+		if err5 != nil {
+			logger.ErrorContext(ctx, "Error in calculate ema5", err5, share.Name)
+
+			continue
 		}
 
-		if err5 != nil {
-			logger.ErrorContext(ctx, "Error in calculate ema5", err5)
+		ema35, err35 := s.ema.TechAnalyse(ctx, &share.ID, 4, time.Now().AddDate(0, 0, -7), 35)
+
+		if err35 != nil {
+			logger.ErrorContext(ctx, "Error in calculate ema35", err35, share.Name)
+
+			continue
 		}
 
 		sp := specification.SuperTrendIntersection{}
@@ -40,12 +50,18 @@ func (s *service) Trade(ctx context.Context) error {
 		}
 
 		logger.InfoContext(ctx, "Entered the condition macd intersection", share.Name)
-		//s.atr.TechAnalyse(ctx, &share.ID)
-		shares = append(shares, share.Name)
+		shares = append(shares, *share)
+		atrTechItem, atrErr := s.atr.TechAnalyse(ctx, &share.ID)
+
+		if atrErr != nil {
+			logger.ErrorContext(ctx, "Failed to get ATR", share.Name)
+		}
+
+		atrs[share.ID] = atrTechItem
 	}
 
 	if len(shares) > 0 {
-		err := s.tgClient.SendMessage(notification.Trade(shares))
+		err := s.tgClient.SendMessage(notification.Trade(shares, atrs))
 
 		if err != nil {
 			return err

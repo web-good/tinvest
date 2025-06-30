@@ -1,7 +1,6 @@
 package specification
 
 import (
-	"fmt"
 	"time"
 	domainema "tinvest/internal/domain/ema"
 )
@@ -28,14 +27,16 @@ func (s *SuperTrendIntersection) IsSatisfiedBy(fastEma []domainema.ItemTechAnaly
 	itemFlagTrade := false
 	itemPrevFlagTrade := false
 	j := 0
+	tradeI := len(tradeEma)
 
-	for i := len(fastEma) - 1; j < iterLen; i-- {
-		itemTechAnalyse.iFastEma = fastEma[i]
-		itemTechAnalyse.iTradeEma = tradeEma[i]
-		prevItemTechAnalyse.iFastEma = fastEma[i-1]
-		prevItemTechAnalyse.iTradeEma = tradeEma[i-1]
+	for fastI := len(fastEma) - 1; j < iterLen; fastI-- {
+		tradeI = tradeI - 1
+		itemTechAnalyse.iFastEma = fastEma[fastI]
+		itemTechAnalyse.iTradeEma = tradeEma[tradeI]
+		prevItemTechAnalyse.iFastEma = fastEma[fastI-1]
+		prevItemTechAnalyse.iTradeEma = tradeEma[tradeI-1]
 
-		if i == len(fastEma)-1 && (itemTechAnalyse.iFastEma.Date.Hour() != timeNow.Hour() ||
+		if fastI == len(fastEma)-1 && (itemTechAnalyse.iFastEma.Date.Hour() != timeNow.Hour() ||
 			itemTechAnalyse.iTradeEma.Date.Hour() != timeNow.Hour() ||
 			prevItemTechAnalyse.iFastEma.Date.Hour() != timeNow.Add(-1*time.Hour).Hour() ||
 			prevItemTechAnalyse.iTradeEma.Date.Hour() != timeNow.Add(-1*time.Hour).Hour()) {
@@ -61,7 +62,6 @@ func (s *SuperTrendIntersection) IsSatisfiedBy(fastEma []domainema.ItemTechAnaly
 		}
 
 		if itemPrevFlagTrade == true && itemFlagTrade == true {
-			fmt.Println(itemTechAnalyse, prevItemTechAnalyse)
 			return true
 		}
 
