@@ -6,6 +6,7 @@ import (
 	"time"
 	"tinvest/internal/service/trading_strategy/super_trend/notification"
 	"tinvest/internal/service/trading_strategy/super_trend/specification"
+	"tinvest/pkg/logger"
 )
 
 func (s *service) Trade(ctx context.Context) error {
@@ -16,8 +17,12 @@ func (s *service) Trade(ctx context.Context) error {
 		ema35, err35 := s.ema.TechAnalyse(ctx, &share.ID, 4, time.Now().Add(-70*time.Hour), 35)
 		ema5, err5 := s.ema.TechAnalyse(ctx, &share.ID, 4, time.Now().Add(-10*time.Hour), 5)
 
-		if err35 != nil || err5 != nil {
-			continue
+		if err35 != nil {
+			logger.ErrorContext(ctx, "Error in calculate ema35", err35)
+		}
+
+		if err5 != nil {
+			logger.ErrorContext(ctx, "Error in calculate ema5", err5)
 		}
 
 		sp := specification.SuperTrendIntersection{}
@@ -26,13 +31,16 @@ func (s *service) Trade(ctx context.Context) error {
 			continue
 		}
 
+		logger.InfoContext(ctx, "Entered the condition ema intersection", share.Name)
 		macDModel, _ := s.marketDataServiceGrpcClient.GetTechAnalyseMacD(ctx, share.ID, 11, timestamppb.New(time.Now().AddDate(0, 0, -1)), timestamppb.New(time.Now()), 12)
 		greenMacDSp := specification.GreenMacD{}
 
 		if greenMacDSp.IsSatisfiedBy(macDModel) == false {
 			continue
 		}
-		s.atr.TechAnalyse(ctx, &share.ID)
+
+		logger.InfoContext(ctx, "Entered the condition macd intersection", share.Name)
+		//s.atr.TechAnalyse(ctx, &share.ID)
 		shares = append(shares, share.Name)
 	}
 
