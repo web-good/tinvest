@@ -14,8 +14,8 @@ func (s *service) Trade(ctx context.Context) error {
 	t, _ := s.instrumentServiceGrpcClient.Shares(ctx)
 
 	for _, share := range t {
-		ema35, err35 := s.ema.TechAnalyse(ctx, &share.ID, 4, time.Now().Add(-70*time.Hour), 35)
-		ema5, err5 := s.ema.TechAnalyse(ctx, &share.ID, 4, time.Now().Add(-10*time.Hour), 5)
+		ema35, err35 := s.ema.TechAnalyse(ctx, &share.ID, 4, time.Now().AddDate(0, 0, -7), 35)
+		ema5, err5 := s.ema.TechAnalyse(ctx, &share.ID, 4, time.Now().AddDate(0, 0, -2), 5)
 
 		if err35 != nil {
 			logger.ErrorContext(ctx, "Error in calculate ema35", err35)
