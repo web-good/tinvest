@@ -16,6 +16,7 @@ func (s *service) Trade(ctx context.Context) error {
 		shares []model.Share
 		atrs   map[string]atr.ItemTechAnalyse
 	)
+	atrs = make(map[string]atr.ItemTechAnalyse)
 	t, _ := s.instrumentServiceGrpcClient.Shares(ctx)
 
 	for _, share := range t {
@@ -55,15 +56,17 @@ func (s *service) Trade(ctx context.Context) error {
 
 		if atrErr != nil {
 			logger.ErrorContext(ctx, "Failed to get ATR", share.Name)
+		} else {
+			atrs[share.ID] = atrTechItem
 		}
-
-		atrs[share.ID] = atrTechItem
 	}
 
 	if len(shares) > 0 {
 		err := s.tgClient.SendMessage(notification.Trade(shares, atrs))
 
 		if err != nil {
+			logger.ErrorContext(ctx, "message is not sent", err)
+
 			return err
 		}
 	}

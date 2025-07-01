@@ -46,19 +46,20 @@ func (s *SuperTrendIntersection) IsSatisfiedBy(fastEma []domainema.ItemTechAnaly
 		if itemTechAnalyse.iFastEma.SignalLine.Units > itemTechAnalyse.iTradeEma.SignalLine.Units {
 			itemFlagTrade = true
 		}
-
-		if prevItemTechAnalyse.iFastEma.SignalLine.Units < prevItemTechAnalyse.iTradeEma.SignalLine.Units {
-			itemPrevFlagTrade = true
-		}
-
 		if itemTechAnalyse.iFastEma.SignalLine.Units == itemTechAnalyse.iTradeEma.SignalLine.Units &&
 			itemTechAnalyse.iFastEma.SignalLine.Nano > itemTechAnalyse.iTradeEma.SignalLine.Nano {
 			itemFlagTrade = true
 		}
 
-		if prevItemTechAnalyse.iFastEma.SignalLine.Units == prevItemTechAnalyse.iTradeEma.SignalLine.Units &&
-			prevItemTechAnalyse.iFastEma.SignalLine.Nano < prevItemTechAnalyse.iTradeEma.SignalLine.Nano {
-			itemFlagTrade = true
+		if itemFlagTrade {
+			if prevItemTechAnalyse.iFastEma.SignalLine.Units == prevItemTechAnalyse.iTradeEma.SignalLine.Units &&
+				prevItemTechAnalyse.iFastEma.SignalLine.Nano < prevItemTechAnalyse.iTradeEma.SignalLine.Nano {
+				itemPrevFlagTrade = true
+			}
+
+			if prevItemTechAnalyse.iFastEma.SignalLine.Units < prevItemTechAnalyse.iTradeEma.SignalLine.Units {
+				itemPrevFlagTrade = true
+			}
 		}
 
 		if itemPrevFlagTrade == true && itemFlagTrade == true {

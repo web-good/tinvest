@@ -14,7 +14,7 @@ func Trade(shares []model.Share, atrs map[string]atr.ItemTechAnalyse) string {
 		notifyMessageBuilder.WriteString("<u>" + share.Name + "</u>")
 
 		if atr, exist := atrs[share.ID]; exist {
-			notifyMessageBuilder.WriteString("<u>" + atr.ToString() + "</u>")
+			notifyMessageBuilder.WriteString(" <u>" + atr.ToString() + "</u>")
 		}
 
 		notifyMessageBuilder.WriteString("\n")
