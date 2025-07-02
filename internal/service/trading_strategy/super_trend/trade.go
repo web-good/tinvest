@@ -20,6 +20,20 @@ func (s *service) Trade(ctx context.Context) error {
 	t, _ := s.instrumentServiceGrpcClient.Shares(ctx)
 
 	for _, share := range t {
+		dayMCD, err := s.marketDataServiceGrpcClient.GetTechAnalyseMacD(ctx, share.ID, 4, timestamppb.New(time.Now().AddDate(0, 0, -4)), timestamppb.New(time.Now()), 9)
+
+		if err != nil {
+			logger.ErrorContext(ctx, "cannot get day macd", err, share.Name)
+
+			continue
+		}
+
+		macDSp := specification.MacDSpecification{}
+
+		if macDSp.IsSatisfiedBy(dayMCD) == false {
+			continue
+		}
+
 		ema5, err5 := s.ema.TechAnalyse(ctx, &share.ID, 4, time.Now().AddDate(0, 0, -2), 5)
 
 		if err5 != nil {
@@ -43,7 +57,7 @@ func (s *service) Trade(ctx context.Context) error {
 		}
 
 		logger.InfoContext(ctx, "Entered the condition ema intersection", share.Name)
-		macDModel, _ := s.marketDataServiceGrpcClient.GetTechAnalyseMacD(ctx, share.ID, 11, timestamppb.New(time.Now().AddDate(0, 0, -1)), timestamppb.New(time.Now()), 12)
+		macDModel, _ := s.marketDataServiceGrpcClient.GetTechAnalyseMacD(ctx, share.ID, 11, timestamppb.New(time.Now().AddDate(0, 0, -1)), timestamppb.New(time.Now()), 9)
 		greenMacDSp := specification.GreenMacD{}
 
 		if greenMacDSp.IsSatisfiedBy(macDModel) == false {
