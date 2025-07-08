@@ -56,7 +56,6 @@ func (s *service) Trade(ctx context.Context) error {
 			continue
 		}
 
-		logger.InfoContext(ctx, "Entered the condition ema intersection", share.Name)
 		macDModel, _ := s.marketDataServiceGrpcClient.GetTechAnalyseMacD(ctx, share.ID, 11, timestamppb.New(time.Now().AddDate(0, 0, -1)), timestamppb.New(time.Now()), 9)
 		greenMacDSp := specification.GreenMacD{}
 
@@ -64,7 +63,6 @@ func (s *service) Trade(ctx context.Context) error {
 			continue
 		}
 
-		logger.InfoContext(ctx, "Entered the condition macd intersection", share.Name)
 		shares = append(shares, *share)
 		atrTechItem, atrErr := s.atr.TechAnalyse(ctx, &share.ID)
 

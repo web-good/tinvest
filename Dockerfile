@@ -6,6 +6,7 @@ COPY . /application
 WORKDIR /application
 
 RUN go mod download
+ENV APP_ENV='prod'
 RUN go build -o ./build ./cmd/main.go
 
 FROM alpine:latest

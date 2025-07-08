@@ -3,30 +3,30 @@ package scheduler
 import (
 	"context"
 	"time"
-	"tinvest/internal/service/trading_strategy/rsi_trading"
+	"tinvest/internal/service/trading_strategy/macd_rsi"
 	"tinvest/pkg/logger"
 	"tinvest/pkg/scheduler"
 )
 
 type schedulerService struct {
 	sh      scheduler.Scheduler
-	service rsi_trading.RsiTrading
+	service macd_rsi.MacdRsi
 }
 
-func NewSchedulerService(service rsi_trading.RsiTrading) rsi_trading.RsiTrading {
+func NewSchedulerService(service macd_rsi.MacdRsi) macd_rsi.MacdRsi {
 	return &schedulerService{
 		sh:      scheduler.NewScheduler(),
 		service: service,
 	}
 }
 
-func (s *schedulerService) Trade(ctx context.Context, interval int) error {
+func (s *schedulerService) Trade(ctx context.Context) error {
 	jobTicker := time.NewTicker(time.Hour)
 	defer s.sh.Stop()
 	defer jobTicker.Stop()
-	err := s.sh.AddJob("5 * * * *", func() {
+	err := s.sh.AddJob("*/20 * * * *", func() {
 		logger.InfoContext(ctx, "Воркер MacD Rsi начал работу")
-		err := s.service.Trade(ctx, interval)
+		err := s.service.Trade(ctx)
 
 		if err != nil {
 			logger.ErrorContext(ctx, "Ошибка в ходе работы job", err)

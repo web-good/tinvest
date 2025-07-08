@@ -5,7 +5,8 @@ import (
 	"log/slog"
 	"sync"
 	"tinvest/internal/config"
-	"tinvest/internal/service/trading_strategy/super_trend/scheduler"
+	mdrs "tinvest/internal/service/trading_strategy/macd_rsi/scheduler"
+	st "tinvest/internal/service/trading_strategy/super_trend/scheduler"
 	"tinvest/internal/service_provider"
 	"tinvest/pkg/closer"
 	"tinvest/pkg/logger"
@@ -38,26 +39,14 @@ func (a *App) Run(ctx context.Context) error {
 	}()
 
 	logger.Info("starting App", slog.String("APP_ENV", a.config.AppEnv))
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	/*go func() {
-		defer wg.Done()
-		err := a.sp.GetSuperTrendTradingService().Trade(ctx)
-		if err != nil {
-			return
-		}
-	}()*/
-	go func() {
-		defer wg.Done()
-		sh := scheduler.NewSchedulerService(a.sp.GetSuperTrendTradingService())
-		err := sh.Trade(ctx)
 
-		if err != nil {
-			logger.ErrorContext(ctx, "Error in worker super trend", err.Error())
-		}
-	}()
+	if a.config.AppEnv == "prod" {
+		a.runProd(ctx)
 
-	wg.Wait()
+		return nil
+	}
+
+	a.runDev(ctx)
 
 	return nil
 }
@@ -83,4 +72,52 @@ func (a *App) initializationLoop(ctx context.Context) (err error) {
 	}
 
 	return
+}
+
+func (a *App) runDev(ctx context.Context) {
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err := a.sp.GetSuperTrendTradingService().Trade(ctx)
+
+		if err != nil {
+			logger.ErrorContext(ctx, "Error in worker super trend", err.Error())
+		}
+	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err := a.sp.GetMacdRsiTradingService().Trade(ctx)
+
+		if err != nil {
+			logger.ErrorContext(ctx, "Error in worker macd rsi", err.Error())
+		}
+	}()
+	wg.Wait()
+}
+
+func (a *App) runProd(ctx context.Context) {
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		sh := st.NewSchedulerService(a.sp.GetSuperTrendTradingService())
+		err := sh.Trade(ctx)
+
+		if err != nil {
+			logger.ErrorContext(ctx, "Error in worker super trend", err.Error())
+		}
+	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		sh := mdrs.NewSchedulerService(a.sp.GetMacdRsiTradingService())
+		err := sh.Trade(ctx)
+
+		if err != nil {
+			logger.ErrorContext(ctx, "Error in worker macd rsi", err.Error())
+		}
+	}()
+	wg.Wait()
 }

@@ -4,13 +4,13 @@ import (
 	"tinvest/internal/service/instrument/atr"
 	"tinvest/internal/service/instrument/ema"
 	"tinvest/internal/service/notification/purchase_shares"
-	"tinvest/internal/service/trading_strategy/rsi_trading"
+	"tinvest/internal/service/trading_strategy/macd_rsi"
 	"tinvest/internal/service/trading_strategy/super_trend"
 )
 
 type service struct {
 	purchaseSharesService    purchase_shares.PurchaseShares
-	rsiTradingService        rsi_trading.RsiTrading
+	macdRsiTradingService    macd_rsi.MacdRsi
 	superTrendTradingService super_trend.SuperTrend
 	emaInstrument            ema.Instrument
 	atrInstrument            atr.Instrument
@@ -25,18 +25,19 @@ func (*ServiceProvider) GetPurchaseSharesService() purchase_shares.PurchaseShare
 	return serviceProvider.service.purchaseSharesService
 }
 
-func (*ServiceProvider) GetRsiTradingService() rsi_trading.RsiTrading {
-	if serviceProvider.service.rsiTradingService == nil {
+func (*ServiceProvider) GetMacdRsiTradingService() macd_rsi.MacdRsi {
+	if serviceProvider.service.macdRsiTradingService == nil {
 		grpcClient, _ := serviceProvider.GetGrpcClient()
 		tgClient, _ := serviceProvider.GetTelegramBotClient()
-		serviceProvider.service.rsiTradingService = rsi_trading.NewService(
+		serviceProvider.service.macdRsiTradingService = macd_rsi.NewService(
 			grpcClient.InstrumentsServiceClient(),
 			grpcClient.MarketDataServiceClient(),
+			serviceProvider.Atr(),
 			tgClient,
 		)
 	}
 
-	return serviceProvider.service.rsiTradingService
+	return serviceProvider.service.macdRsiTradingService
 }
 
 func (*ServiceProvider) GetSuperTrendTradingService() super_trend.SuperTrend {

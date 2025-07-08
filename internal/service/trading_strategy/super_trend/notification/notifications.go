@@ -8,7 +8,7 @@ import (
 
 func Trade(shares []model.Share, atrs map[string]atr.ItemTechAnalyse) string {
 	notifyMessageBuilder := strings.Builder{}
-	notifyMessageBuilder.WriteString("🟢 \n<u><b>К ПОКУПКЕ (Super Trend):</b></u>\n\n\n<code>")
+	notifyMessageBuilder.WriteString("🟢 \n<u><b>Пересекли EMA35 (Super Trend):</b></u>\n\n\n<code>")
 
 	for _, share := range shares {
 		notifyMessageBuilder.WriteString("<u>" + share.Name + "</u>")
