@@ -24,6 +24,13 @@ func (s *service) Trade(ctx context.Context) error {
 		//y, _ := s.marketDataServiceGrpcClient.GetTechAnalyseEma(ctx, share.ID, 4, timestamppb.New(time.Now().AddDate(0, 0, -1)), timestamppb.New(time.Now()), 200)
 		//ema := specification.EmaSpecification{}
 		//ema.IsSatisfiedBy(y)
+		macDModel4h, _ := s.marketDataServiceGrpcClient.GetTechAnalyseMacD(ctx, share.ID, 11, timestamppb.New(time.Now().AddDate(0, 0, -1)), timestamppb.New(time.Now()), 9)
+		greenMacDSp := specification.GreenMacD{}
+
+		if greenMacDSp.IsSatisfiedBy(macDModel4h) == false {
+			continue
+		}
+
 		rsiModel, err := s.marketDataServiceGrpcClient.GetTechAnalyseRsi(ctx, share.ID, 4, timestamppb.New(time.Now().AddDate(0, 0, -1)), timestamppb.New(time.Now()))
 
 		if err != nil {
