@@ -24,7 +24,7 @@ func (s *schedulerService) Trade(ctx context.Context) error {
 	jobTicker := time.NewTicker(time.Hour)
 	defer s.sh.Stop()
 	defer jobTicker.Stop()
-	err := s.sh.AddJob("*/20 * * * *", func() {
+	err := s.sh.AddJob("*/40 * * * *", func() {
 		logger.InfoContext(ctx, "Воркер MacD Rsi начал работу")
 		err := s.service.Trade(ctx)
 

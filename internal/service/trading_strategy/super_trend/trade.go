@@ -4,8 +4,7 @@ import (
 	"context"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"time"
-	atr "tinvest/internal/domain/atr"
-	"tinvest/internal/model"
+	notification2 "tinvest/internal/domain/notification"
 	"tinvest/internal/service/trading_strategy/super_trend/notification"
 	"tinvest/internal/service/trading_strategy/super_trend/specification"
 	"tinvest/pkg/logger"
@@ -13,14 +12,13 @@ import (
 
 func (s *service) Trade(ctx context.Context) error {
 	var (
-		shares []model.Share
-		atrs   map[string]atr.ItemTechAnalyse
+		n []notification2.SuperTrend
 	)
-	atrs = make(map[string]atr.ItemTechAnalyse)
+
 	t, _ := s.instrumentServiceGrpcClient.Shares(ctx)
 
 	for _, share := range t {
-		dayMCD, err := s.marketDataServiceGrpcClient.GetTechAnalyseMacD(ctx, share.ID, 4, timestamppb.New(time.Now().AddDate(0, 0, -4)), timestamppb.New(time.Now()), 9)
+		hMacD, err := s.marketDataServiceGrpcClient.GetTechAnalyseMacD(ctx, share.ID, 4, timestamppb.New(time.Now().AddDate(0, 0, -8)), timestamppb.New(time.Now()), 12)
 
 		if err != nil {
 			logger.ErrorContext(ctx, "cannot get day macd", err, share.Name)
@@ -28,9 +26,15 @@ func (s *service) Trade(ctx context.Context) error {
 			continue
 		}
 
-		macDSp := specification.MacDSpecification{}
+		rsiModel, err := s.marketDataServiceGrpcClient.GetTechAnalyseRsi(ctx, share.ID, 4, timestamppb.New(time.Now().AddDate(0, 0, -1)), timestamppb.New(time.Now()))
 
-		if macDSp.IsSatisfiedBy(dayMCD) == false {
+		if err != nil {
+			logger.ErrorContext(ctx, "Failed to get rsi", share.Name)
+		}
+
+		macDSp := specification.GreenMacD{}
+
+		if macDSp.IsSatisfiedBy(hMacD) == false {
 			continue
 		}
 
@@ -56,25 +60,42 @@ func (s *service) Trade(ctx context.Context) error {
 			continue
 		}
 
-		macDModel, _ := s.marketDataServiceGrpcClient.GetTechAnalyseMacD(ctx, share.ID, 11, timestamppb.New(time.Now().AddDate(0, 0, -1)), timestamppb.New(time.Now()), 9)
-		greenMacDSp := specification.GreenMacD{}
+		rsiS := specification.RsiSpecification{}
 
-		if greenMacDSp.IsSatisfiedBy(macDModel) == false {
+		if rsiS.IsSatisfiedBy(rsiModel) != true {
 			continue
 		}
 
-		shares = append(shares, *share)
-		atrTechItem, atrErr := s.atr.TechAnalyse(ctx, &share.ID)
+		greenMacDSp := specification.GreenMacD{}
+		macDModel, _ := s.marketDataServiceGrpcClient.GetTechAnalyseMacD(ctx, share.ID, 11, timestamppb.New(time.Now().AddDate(0, 0, -1)), timestamppb.New(time.Now()), 9)
+		greenMacDSp.IsSatisfiedBy(macDModel)
+		notif := notification2.SuperTrend{
+			Share: *share,
+		}
+
+		if greenMacDSp.IsSatisfiedBy(macDModel) == true {
+			notif.Indicator = notification2.Yellow
+		}
+
+		dMacDModel, _ := s.marketDataServiceGrpcClient.GetTechAnalyseMacD(ctx, share.ID, 5, timestamppb.New(time.Now().AddDate(0, 0, -20)), timestamppb.New(time.Now()), 9)
+
+		if greenMacDSp.IsSatisfiedBy(dMacDModel) == false {
+			continue
+		}
+
+		notif.Indicator = notification2.Green
+		var atrErr error
+		notif.Atr, atrErr = s.atr.TechAnalyse(ctx, &share.ID)
 
 		if atrErr != nil {
 			logger.ErrorContext(ctx, "Failed to get ATR", share.Name)
-		} else {
-			atrs[share.ID] = atrTechItem
 		}
+
+		n = append(n, notif)
 	}
 
-	if len(shares) > 0 {
-		err := s.tgClient.SendMessage(notification.Trade(shares, atrs))
+	if len(n) > 0 {
+		err := s.tgClient.SendMessage(notification.Trade(n))
 
 		if err != nil {
 			logger.ErrorContext(ctx, "message is not sent", err)

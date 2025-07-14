@@ -13,18 +13,17 @@ type item struct {
 
 func (s *SuperTrendIntersection) IsSatisfiedBy(fastEma []domainema.ItemTechAnalyse, tradeEma []domainema.ItemTechAnalyse) bool {
 	iterLen := 3
-	//timeNow := time.Now()
 
 	if len(fastEma) <= iterLen || len(tradeEma) <= iterLen {
 		return false
 	}
 
 	var (
-		itemTechAnalyse     item
-		prevItemTechAnalyse item
+		itemTechAnalyse item
+		//prevItemTechAnalyse item
 	)
 	itemFlagTrade := false
-	itemPrevFlagTrade := false
+	//itemPrevFlagTrade := false
 	j := 0
 	tradeI := len(tradeEma)
 
@@ -32,16 +31,8 @@ func (s *SuperTrendIntersection) IsSatisfiedBy(fastEma []domainema.ItemTechAnaly
 		tradeI = tradeI - 1
 		itemTechAnalyse.iFastEma = fastEma[fastI]
 		itemTechAnalyse.iTradeEma = tradeEma[tradeI]
-		prevItemTechAnalyse.iFastEma = fastEma[fastI-1]
-		prevItemTechAnalyse.iTradeEma = tradeEma[tradeI-1]
-
-		//if fastI == len(fastEma)-1 && (itemTechAnalyse.iFastEma.Date.Hour() != timeNow.Hour() ||
-		//	itemTechAnalyse.iTradeEma.Date.Hour() != timeNow.Hour()) {
-		//||
-		//	prevItemTechAnalyse.iFastEma.Date.Hour() != timeNow.Add(-1*time.Hour).Hour() ||
-		//	prevItemTechAnalyse.iTradeEma.Date.Hour() != timeNow.Add(-1*time.Hour).Hour()) {
-		//	return false
-		//}
+		//prevItemTechAnalyse.iFastEma = fastEma[fastI-1]
+		//prevItemTechAnalyse.iTradeEma = tradeEma[tradeI-1]
 
 		if itemTechAnalyse.iFastEma.SignalLine.Units > itemTechAnalyse.iTradeEma.SignalLine.Units {
 			itemFlagTrade = true
@@ -51,7 +42,7 @@ func (s *SuperTrendIntersection) IsSatisfiedBy(fastEma []domainema.ItemTechAnaly
 			itemFlagTrade = true
 		}
 
-		if itemFlagTrade {
+		/*if itemFlagTrade {
 			if prevItemTechAnalyse.iFastEma.SignalLine.Units == prevItemTechAnalyse.iTradeEma.SignalLine.Units &&
 				prevItemTechAnalyse.iFastEma.SignalLine.Nano < prevItemTechAnalyse.iTradeEma.SignalLine.Nano {
 				itemPrevFlagTrade = true
@@ -61,8 +52,8 @@ func (s *SuperTrendIntersection) IsSatisfiedBy(fastEma []domainema.ItemTechAnaly
 				itemPrevFlagTrade = true
 			}
 		}
-
-		if itemPrevFlagTrade == true && itemFlagTrade == true {
+		*/
+		if itemFlagTrade == true {
 			return true
 		}
 
