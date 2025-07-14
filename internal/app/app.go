@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"sync"
 	"tinvest/internal/config"
-	mdrs "tinvest/internal/service/trading_strategy/macd_rsi/scheduler"
 	st "tinvest/internal/service/trading_strategy/super_trend/scheduler"
 	"tinvest/internal/service_provider"
 	"tinvest/pkg/closer"
@@ -109,7 +108,7 @@ func (a *App) runProd(ctx context.Context) {
 			logger.ErrorContext(ctx, "Error in worker super trend", err.Error())
 		}
 	}()
-	wg.Add(1)
+	/*wg.Add(1)
 	go func() {
 		defer wg.Done()
 		sh := mdrs.NewSchedulerService(a.sp.GetMacdRsiTradingService())
@@ -118,6 +117,6 @@ func (a *App) runProd(ctx context.Context) {
 		if err != nil {
 			logger.ErrorContext(ctx, "Error in worker macd rsi", err.Error())
 		}
-	}()
+	}()*/
 	wg.Wait()
 }
