@@ -9,7 +9,7 @@ type MacDSpecification struct {
 }
 
 func (s *MacDSpecification) IsSatisfiedBy(itemTechAnalyse []*model.MacDItemTechAnalyse) bool {
-	iterLen := 11
+	iterLen := 3
 	j := 0
 
 	if len(itemTechAnalyse) <= iterLen {

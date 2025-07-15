@@ -84,6 +84,18 @@ func (a *App) runDev(ctx context.Context) {
 			logger.ErrorContext(ctx, "Error in worker super trend", err.Error())
 		}
 	}()
+
+	/*wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err := a.sp.Get200EmaService().Trade(ctx, input.Trade{
+			Interval: input.Hour1,
+		})
+
+		if err != nil {
+			logger.ErrorContext(ctx, "Error in worker super trend", err.Error())
+		}
+	}()*/
 	/*wg.Add(1)
 	go func() {
 		defer wg.Done()

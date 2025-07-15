@@ -4,6 +4,7 @@ import (
 	"tinvest/internal/service/instrument/atr"
 	"tinvest/internal/service/instrument/ema"
 	"tinvest/internal/service/notification/purchase_shares"
+	"tinvest/internal/service/trading_strategy/ema200"
 	"tinvest/internal/service/trading_strategy/macd_rsi"
 	"tinvest/internal/service/trading_strategy/super_trend"
 )
@@ -12,6 +13,7 @@ type service struct {
 	purchaseSharesService    purchase_shares.PurchaseShares
 	macdRsiTradingService    macd_rsi.MacdRsi
 	superTrendTradingService super_trend.SuperTrend
+	ema200                   ema200.Ema200
 	emaInstrument            ema.Instrument
 	atrInstrument            atr.Instrument
 }
@@ -54,6 +56,22 @@ func (*ServiceProvider) GetSuperTrendTradingService() super_trend.SuperTrend {
 	}
 
 	return serviceProvider.service.superTrendTradingService
+}
+
+func (*ServiceProvider) Get200EmaService() ema200.Ema200 {
+	if serviceProvider.service.ema200 == nil {
+		grpcClient, _ := serviceProvider.GetGrpcClient()
+		tgClient, _ := serviceProvider.GetTelegramBotClient()
+		serviceProvider.service.ema200 = ema200.NewService(
+			grpcClient.InstrumentsServiceClient(),
+			grpcClient.MarketDataServiceClient(),
+			serviceProvider.Ema(),
+			serviceProvider.Atr(),
+			tgClient,
+		)
+	}
+
+	return serviceProvider.service.ema200
 }
 
 func (*ServiceProvider) Ema() ema.Instrument {
