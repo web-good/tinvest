@@ -9,7 +9,7 @@ import (
 func Trade(shares []notification2.SuperTrend) string {
 	notifyMessageBuilder := strings.Builder{}
 	notifyMessageBuilder.WriteString("<u><b>Super Trend:</b></u>\n\n\n")
-	notifyMessageBuilder.WriteString("<i>Дневной MACD зеленый. Часовой ТМ - MACD(3ч) пересёкся ниже нуля или пересеклись ema35 и ema5, rsi50(4ч), macd зелёный </i>\n\n")
+	notifyMessageBuilder.WriteString("<i>Дневной MACD зеленый. на 4 часах ema5 над ema35. на одном часа ema5 над ema35 и rsi пересёк 50 или 55 снизу вверх </i>\n\n")
 	notifyMessageBuilder.WriteString("<code>")
 
 	for _, share := range shares {

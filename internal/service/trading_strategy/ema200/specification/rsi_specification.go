@@ -7,7 +7,7 @@ import (
 type RsiSpecification struct{}
 
 func (s *RsiSpecification) IsSatisfiedBy(itemTechAnalyse []*model.RsiItemTechAnalyse) bool {
-	iterLen := 1
+	iterLen := 6
 
 	if len(itemTechAnalyse) <= iterLen {
 		return false
@@ -20,10 +20,6 @@ func (s *RsiSpecification) IsSatisfiedBy(itemTechAnalyse []*model.RsiItemTechAna
 		prevItem := itemTechAnalyse[i-1]
 
 		if prevItem.SignalLine.Units < int64(50) && item.SignalLine.Units >= int64(50) {
-			return true
-		}
-
-		if prevItem.SignalLine.Units < int64(55) && item.SignalLine.Units >= int64(55) {
 			return true
 		}
 

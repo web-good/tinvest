@@ -22,7 +22,7 @@ type service struct {
 
 func NewAtr(marketDataServiceClient MarketDataClient) *service {
 	return &service{
-		period:                  15,
+		period:                  20,
 		marketDataServiceClient: marketDataServiceClient,
 	}
 }

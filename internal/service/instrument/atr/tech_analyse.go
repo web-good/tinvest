@@ -68,7 +68,6 @@ func (s *service) filterCandles(candles []*model.CandleItemTechAnalyse, multipli
 
 	for i := len(candles) - 1; i >= 0; i-- {
 		ranges[i] = float64(candles[i].High.Units - candles[i].Low.Units)
-
 	}
 
 	// Вычисляем среднее и стандартное отклонение
@@ -109,12 +108,17 @@ func (s *service) calculateATR(candles []*model.CandleItemTechAnalyse) float64 {
 	sumTR := 0.0
 
 	for i := 1; i < int(s.period); i++ {
-		high := candles[i].High.Units
-		low := candles[i].Low.Units
+		current := candles[i]
 		prev := candles[i-1]
+		high := current.High.Units
+		low := current.Low.Units
 		prevClose := prev.Close.Units
 
-		tr := math.Max(float64(high-low), math.Max(math.Abs(math.Abs(float64(high-prevClose))), math.Abs(float64(low-prevClose))))
+		highLow := float64(high - low)
+		highPrevClose := math.Abs(float64(high - prevClose))
+		lowPrevClose := math.Abs(float64(low - prevClose))
+
+		tr := math.Max(highLow, math.Max(highPrevClose, lowPrevClose))
 		sumTR += tr
 	}
 
@@ -122,7 +126,31 @@ func (s *service) calculateATR(candles []*model.CandleItemTechAnalyse) float64 {
 }
 
 func (s *service) calculatePassedValue(candle *model.CandleItemTechAnalyse, atr float64) int64 {
-	return int64(float64(combinePrice(candle.High.Units, candle.High.Nano)-combinePrice(candle.Low.Units, candle.Low.Nano)) * 100 / atr)
+	var (
+		high model.Quotation
+		low  model.Quotation
+	)
+	if candle.Open.Units > candle.Close.Units {
+		high = candle.Open
+		low = candle.Close
+	}
+
+	if candle.Open.Units < candle.Close.Units {
+		low = candle.Open
+		high = candle.Close
+	}
+
+	if candle.Open.Units == candle.Close.Units {
+		if candle.Open.Nano > candle.Close.Nano {
+			high = candle.Open
+			low = candle.Close
+		} else {
+			high = candle.Close
+			low = candle.Open
+		}
+	}
+
+	return int64(float64(combinePrice(high.Units, high.Nano)-combinePrice(low.Units, low.Nano)) * 100 / atr)
 }
 
 func combinePrice(intPart int64, frac int32) float64 {

@@ -20,7 +20,7 @@ func (s *service) Trade(ctx context.Context) error {
 	t, _ := s.instrumentServiceGrpcClient.Shares(ctx)
 
 	for _, share := range t {
-		//роверяем что macd зелёный на дневке
+		//проверяем что macd зелёный на дневке
 		greenMacDSp := specification.GreenMacD{}
 		dMacDModel, _ := s.marketDataServiceGrpcClient.GetTechAnalyseMacD(ctx, share.ID, 5, timestamppb.New(time.Now().AddDate(0, 0, -20)), timestamppb.New(time.Now()), 12)
 
@@ -28,29 +28,62 @@ func (s *service) Trade(ctx context.Context) error {
 			continue
 		}
 
-		hMacD, err := s.marketDataServiceGrpcClient.GetTechAnalyseMacD(ctx, share.ID, 4, timestamppb.New(time.Now().AddDate(0, 0, -8)), timestamppb.New(time.Now()), 12)
+		//смотрим что на 4ч ema5 выше ema 35
+		ema5, err5 := s.ema.TechAnalyse(ctx, &share.ID, 11, time.Now().AddDate(0, 0, -10), 5)
 
-		if err != nil {
-			logger.ErrorContext(ctx, "cannot get day macd", err, share.Name)
-
-			continue
-		}
-
-		if s.yellow(hMacD) {
-			s.addToPool(ctx, share, notification2.Yellow)
+		if err5 != nil {
+			logger.ErrorContext(ctx, fmt.Errorf("error in calculate ema5 4h :%w,  %s", err5, share.Name).Error())
 
 			continue
 		}
 
-		gr, err := s.green(ctx, share, hMacD)
+		ema35, err35 := s.ema.TechAnalyse(ctx, &share.ID, 11, time.Now().AddDate(0, 0, -20), 35)
+
+		if err35 != nil {
+			logger.ErrorContext(ctx, fmt.Errorf("error in calculate ema35 4h :%w,  %s", err35, share.Name).Error())
+
+			continue
+		}
+
+		sp := specification.SuperTrendIntersection{}
+
+		if sp.IsSatisfiedBy(ema5, ema35) != true {
+			continue
+		}
+
+		//смотрим что на 1ч ema5 выше ema 35
+		ema1h5, err1h5 := s.ema.TechAnalyse(ctx, &share.ID, 4, time.Now().AddDate(0, 0, -2), 5)
+
+		if err1h5 != nil {
+			logger.ErrorContext(ctx, fmt.Errorf("error in calculate ema5 1h:%w,  %s", err1h5, share.Name).Error())
+		}
+
+		ema1h35, err1h35 := s.ema.TechAnalyse(ctx, &share.ID, 4, time.Now().AddDate(0, 0, -7), 35)
+
+		if err1h35 != nil {
+			logger.ErrorContext(ctx, fmt.Errorf("error in calculate ema35 1h:%w,  %s", err1h35, share.Name).Error())
+		}
+
+		sp1h := specification.SuperTrendIntersection{}
+
+		if sp1h.IsSatisfiedBy(ema1h5, ema1h35) != true {
+			continue
+		}
+
+		//смотрим что rsi пересёк 50 55
+		rsiModel, err := s.marketDataServiceGrpcClient.GetTechAnalyseRsi(ctx, share.ID, 4, timestamppb.New(time.Now().AddDate(0, 0, -1)), timestamppb.New(time.Now()))
 
 		if err != nil {
-			logger.ErrorContext(ctx, err.Error(), share.Name)
+			logger.ErrorContext(ctx, fmt.Errorf("failed to get rsi :%w,  %s", err, share.Name).Error())
 		}
 
-		if gr == true {
-			s.addToPool(ctx, share, notification2.Green)
+		rsiS := specification.RsiSpecification{}
+
+		if rsiS.IsSatisfiedBy(rsiModel) != true {
+			continue
 		}
+
+		s.addToPool(ctx, share, notification2.Green)
 	}
 
 	if len(n) > 0 {
@@ -66,57 +99,6 @@ func (s *service) Trade(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-func (s *service) yellow(macdItems []*model.MacDItemTechAnalyse) bool {
-	//ищем пересечение macd на часовике
-	macDs := specification.MacDSpecification{}
-
-	if macDs.IsSatisfiedBy(macdItems) {
-		return true
-	}
-
-	return false
-}
-
-func (s *service) green(ctx context.Context, share *model.Share, macdItems []*model.MacDItemTechAnalyse) (bool, error) {
-	rsiModel, err := s.marketDataServiceGrpcClient.GetTechAnalyseRsi(ctx, share.ID, 4, timestamppb.New(time.Now().AddDate(0, 0, -1)), timestamppb.New(time.Now()))
-
-	if err != nil {
-		return false, fmt.Errorf("failed to get rsi :%w", err)
-	}
-
-	rsiS := specification.RsiSpecification{}
-
-	if rsiS.IsSatisfiedBy(rsiModel) != true {
-		return false, nil
-	}
-
-	macDSp := specification.GreenMacD{}
-
-	if macDSp.IsSatisfiedBy(macdItems) != true {
-		return false, nil
-	}
-
-	ema5, err5 := s.ema.TechAnalyse(ctx, &share.ID, 4, time.Now().AddDate(0, 0, -2), 5)
-
-	if err5 != nil {
-		return false, fmt.Errorf("error in calculate ema5 :%w", err5)
-	}
-
-	ema35, err35 := s.ema.TechAnalyse(ctx, &share.ID, 4, time.Now().AddDate(0, 0, -7), 35)
-
-	if err35 != nil {
-		return false, fmt.Errorf("error in calculate ema35 :%w", err35)
-	}
-
-	sp := specification.SuperTrendIntersection{}
-
-	if sp.IsSatisfiedBy(ema5, ema35) != true {
-		return false, nil
-	}
-
-	return true, nil
 }
 
 func (s *service) addToPool(ctx context.Context, share *model.Share, indicator notification2.Color) {
