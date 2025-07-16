@@ -61,6 +61,8 @@ func (s *service) Trade(ctx context.Context) error {
 
 			return err
 		}
+
+		n = []notification2.SuperTrend{}
 	}
 
 	return nil
