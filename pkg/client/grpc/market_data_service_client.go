@@ -73,7 +73,7 @@ func (m *marketDataService) GetTechAnalyseRsi(ctx context.Context, instrumentUid
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	resp, err := m.marketDataApi.GetTechAnalysis(ctx, &investapi.GetTechAnalysisRequest{
-		Length:        14,
+		Length:        5,
 		IndicatorType: investapi.GetTechAnalysisRequest_INDICATOR_TYPE_RSI,
 		InstrumentUid: instrumentUid,
 		From:          from,
