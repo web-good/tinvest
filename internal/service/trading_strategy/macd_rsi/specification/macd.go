@@ -4,38 +4,34 @@ import (
 	"tinvest/internal/model"
 )
 
-type MacDSpecification struct {
-	differenceValue float64
+type Macd struct {
+	SearchArea int
 }
 
-func (s *MacDSpecification) IsSatisfiedBy(itemTechAnalyse []*model.MacDItemTechAnalyse) bool {
-	iterLen := 5
+func (s *Macd) IsSatisfiedBy(itemTechAnalyse []*model.MacDItemTechAnalyse) bool {
 	j := 0
 
-	if len(itemTechAnalyse) <= iterLen {
+	if len(itemTechAnalyse) <= s.SearchArea {
 		return false
 	}
 
-	for i := len(itemTechAnalyse) - 1; j < iterLen; i-- {
+	for i := len(itemTechAnalyse) - 1; j < s.SearchArea; i-- {
 		item := itemTechAnalyse[i]
+		prevItem := itemTechAnalyse[i-1]
 
-		if item.MacDLine.Units > 0 || item.SignalLine.Units > 0 || item.SignalLine.Nano > 0 || item.MacDLine.Nano > 0 {
+		if prevItem.MacDLine.Units > 0 || prevItem.SignalLine.Units > 0 || prevItem.SignalLine.Nano > 0 || prevItem.MacDLine.Nano > 0 {
 			j++
 
 			continue
 		}
 
 		if item.MacDLine.Units > item.SignalLine.Units && i > 0 {
-			prevItem := itemTechAnalyse[i-1]
-
 			if prevItem.MacDLine.Units < prevItem.SignalLine.Units {
 				return true
 			}
 		}
 
 		if item.MacDLine.Units == item.SignalLine.Units && i > 0 && item.MacDLine.Nano > item.SignalLine.Nano {
-			prevItem := itemTechAnalyse[i-1]
-
 			if prevItem.MacDLine.Units == prevItem.SignalLine.Units && prevItem.MacDLine.Nano < prevItem.SignalLine.Nano {
 				return true
 			}

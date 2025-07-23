@@ -5,6 +5,9 @@ import (
 	"log/slog"
 	"sync"
 	"tinvest/internal/config"
+	"tinvest/internal/service/trading_strategy/macd_rsi/dto"
+	"tinvest/internal/service/trading_strategy/macd_rsi/enum"
+	mr "tinvest/internal/service/trading_strategy/macd_rsi/scheduler"
 	st "tinvest/internal/service/trading_strategy/super_trend/scheduler"
 	"tinvest/internal/service_provider"
 	"tinvest/pkg/closer"
@@ -75,7 +78,7 @@ func (a *App) initializationLoop(ctx context.Context) (err error) {
 
 func (a *App) runDev(ctx context.Context) {
 	wg := sync.WaitGroup{}
-	wg.Add(1)
+	/*wg.Add(1)
 	go func() {
 		defer wg.Done()
 		err := a.sp.GetSuperTrendTradingService().Trade(ctx)
@@ -84,8 +87,8 @@ func (a *App) runDev(ctx context.Context) {
 			logger.ErrorContext(ctx, "Error in worker super trend", err.Error())
 		}
 	}()
-	/*
-		go func() {
+
+	/*	go func() {
 			defer wg.Done()
 			err := a.sp.GetSuperTrendTradingService().TakeProfit(ctx)
 
@@ -105,15 +108,24 @@ func (a *App) runDev(ctx context.Context) {
 				logger.ErrorContext(ctx, "Error in worker super trend", err.Error())
 			}
 		}()*/
-	/*wg.Add(1)
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		err := a.sp.GetMacdRsiTradingService().Trade(ctx)
+		err := a.sp.GetMacdRsiTradingService().Trade(ctx, dto.Trade{SearchArea: 2, Interval: enum.Hour1, RSILength: 9, MACDLength: 9, Scheduler: "*/40 * * * *", RSIFastLength: 5})
 
 		if err != nil {
 			logger.ErrorContext(ctx, "Error in worker macd rsi", err.Error())
 		}
-	}()*/
+	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err := a.sp.GetMacdRsiTradingService().Trade(ctx, dto.Trade{SearchArea: 2, Interval: enum.Hour4, RSILength: 9, MACDLength: 9, Scheduler: "5 * * * *", RSIFastLength: 5})
+
+		if err != nil {
+			logger.ErrorContext(ctx, "Error in worker macd rsi", err.Error())
+		}
+	}()
 	wg.Wait()
 }
 
@@ -141,15 +153,26 @@ func (a *App) runProd(ctx context.Context) {
 		}
 	}()
 
-	/*wg.Add(1)
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		sh := mdrs.NewSchedulerService(a.sp.GetMacdRsiTradingService())
-		err := sh.Trade(ctx)
+		sh := mr.NewSchedulerService(a.sp.GetMacdRsiTradingService())
+		err := sh.Trade(ctx, dto.Trade{SearchArea: 2, Interval: enum.Hour1, RSILength: 9, MACDLength: 9, Scheduler: "*/40 * * * *", RSIFastLength: 5})
 
 		if err != nil {
-			logger.ErrorContext(ctx, "Error in worker macd rsi", err.Error())
+			logger.ErrorContext(ctx, "Error in worker macd rsi 1H", err.Error())
 		}
-	}()*/
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		sh := mr.NewSchedulerService(a.sp.GetMacdRsiTradingService())
+		err := sh.Trade(ctx, dto.Trade{SearchArea: 2, Interval: enum.Hour4, RSILength: 9, MACDLength: 9, Scheduler: "5 * * * *", RSIFastLength: 5})
+
+		if err != nil {
+			logger.ErrorContext(ctx, "Error in worker macd rsi 1H", err.Error())
+		}
+	}()
 	wg.Wait()
 }

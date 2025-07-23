@@ -3,12 +3,13 @@ package macd_rsi
 import (
 	"context"
 	"tinvest/internal/domain/atr"
+	"tinvest/internal/service/trading_strategy/macd_rsi/dto"
 	"tinvest/pkg/client/grpc"
 	"tinvest/pkg/client/telegram"
 )
 
 type MacdRsi interface {
-	Trade(ctx context.Context) error
+	Trade(ctx context.Context, in dto.Trade) error
 }
 
 type atrInstrument interface {

@@ -71,7 +71,7 @@ func (s *service) Trade(ctx context.Context) error {
 		}
 
 		//смотрим что rsi пересёк 50 55
-		rsiModel, err := s.marketDataServiceGrpcClient.GetTechAnalyseRsi(ctx, share.ID, 4, timestamppb.New(time.Now().AddDate(0, 0, -1)), timestamppb.New(time.Now()))
+		rsiModel, err := s.marketDataServiceGrpcClient.GetTechAnalyseRsi(ctx, share.ID, 4, timestamppb.New(time.Now().AddDate(0, 0, -1)), timestamppb.New(time.Now()), 4)
 
 		if err != nil {
 			logger.ErrorContext(ctx, fmt.Errorf("failed to get rsi :%w,  %s", err, share.Name).Error())

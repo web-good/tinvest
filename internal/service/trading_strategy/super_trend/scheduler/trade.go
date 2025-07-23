@@ -27,7 +27,7 @@ func (s *schedulerService) Trade(ctx context.Context) error {
 		jobTicker.Stop()
 	}()
 	//7-18 * * 1-5"
-	err := s.sh.AddJob("5 * * * *", func() {
+	err := s.sh.AddJob("25 * * * *", func() {
 		logger.InfoContext(ctx, "Start worker Super trend")
 		err := s.service.Trade(ctx)
 

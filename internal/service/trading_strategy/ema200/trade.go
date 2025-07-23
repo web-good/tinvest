@@ -16,7 +16,7 @@ func (s *service) Trade(ctx context.Context, dto input.Trade) error {
 	for _, share := range t {
 		fmt.Println(share)
 
-		rsiModel, err := s.marketDataServiceGrpcClient.GetTechAnalyseRsi(ctx, share.ID, int(dto.Interval), timestamppb.New(time.Now().AddDate(0, 0, -1)), timestamppb.New(time.Now()))
+		rsiModel, err := s.marketDataServiceGrpcClient.GetTechAnalyseRsi(ctx, share.ID, int(dto.Interval), timestamppb.New(time.Now().AddDate(0, 0, -1)), timestamppb.New(time.Now()), 14)
 
 		if err != nil {
 			logger.ErrorContext(ctx, "Failed to get rsi", share.Name)

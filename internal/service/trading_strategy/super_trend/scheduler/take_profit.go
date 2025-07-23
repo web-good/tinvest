@@ -13,7 +13,7 @@ func (s *schedulerService) TakeProfit(ctx context.Context) error {
 		jobTicker.Stop()
 	}()
 	//7-18 * * 1-5"
-	err := s.sh.AddJob("*/5 * * * *", func() {
+	err := s.sh.AddJob("*/1 * * * *", func() {
 		logger.InfoContext(ctx, "Start worker Super trend take profit")
 		err := s.service.TakeProfit(ctx)
 

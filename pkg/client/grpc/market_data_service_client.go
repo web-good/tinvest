@@ -14,7 +14,7 @@ import (
 
 type MarketDataServiceClient interface {
 	GetTechAnalyseMacD(context context.Context, instrumentUid string, interval int, from *timestamppb.Timestamp, to *timestamppb.Timestamp, fastLength int32) ([]*model.MacDItemTechAnalyse, error)
-	GetTechAnalyseRsi(context context.Context, instrumentUid string, interval int, from *timestamppb.Timestamp, to *timestamppb.Timestamp) ([]*model.RsiItemTechAnalyse, error)
+	GetTechAnalyseRsi(context context.Context, instrumentUid string, interval int, from *timestamppb.Timestamp, to *timestamppb.Timestamp, length int32) ([]*model.RsiItemTechAnalyse, error)
 	GetTechAnalyseEma(context context.Context, instrumentUid string, interval int, from *timestamppb.Timestamp, to *timestamppb.Timestamp, length int32) ([]*model.EmaItemTechAnalyse, error)
 	GetTechAnalyseBB(context context.Context, instrumentUid string, interval int, from *timestamppb.Timestamp, to *timestamppb.Timestamp) ([]*model.BbItemTechAnalyse, error)
 	GetCandles(context context.Context, instrumentUid *string, interval int32, from *timestamp.Timestamp, to *timestamp.Timestamp, limit *int32, withHoliday bool) ([]*model.CandleItemTechAnalyse, error)
@@ -69,11 +69,11 @@ func (m *marketDataService) GetTechAnalyseEma(ctx context.Context, instrumentUid
 	return converter.ConvertEmaTechAnalysisFromPb(resp.GetTechnicalIndicators()), nil
 }
 
-func (m *marketDataService) GetTechAnalyseRsi(ctx context.Context, instrumentUid string, interval int, from *timestamppb.Timestamp, to *timestamppb.Timestamp) ([]*model.RsiItemTechAnalyse, error) {
+func (m *marketDataService) GetTechAnalyseRsi(ctx context.Context, instrumentUid string, interval int, from *timestamppb.Timestamp, to *timestamppb.Timestamp, length int32) ([]*model.RsiItemTechAnalyse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	resp, err := m.marketDataApi.GetTechAnalysis(ctx, &investapi.GetTechAnalysisRequest{
-		Length:        5,
+		Length:        length,
 		IndicatorType: investapi.GetTechAnalysisRequest_INDICATOR_TYPE_RSI,
 		InstrumentUid: instrumentUid,
 		From:          from,

@@ -6,47 +6,61 @@ import (
 	"time"
 	"tinvest/internal/domain/atr"
 	"tinvest/internal/model"
+	"tinvest/internal/service/trading_strategy/macd_rsi/dto"
+	"tinvest/internal/service/trading_strategy/macd_rsi/enum"
 	"tinvest/internal/service/trading_strategy/macd_rsi/notification"
 	"tinvest/internal/service/trading_strategy/macd_rsi/specification"
 	"tinvest/pkg/logger"
 )
 
-func (s *service) Trade(ctx context.Context) error {
-	t, _ := s.instrumentServiceGrpcClient.Shares(ctx)
+func (s *service) Trade(ctx context.Context, in dto.Trade) error {
 	var (
 		shares []model.Share
 		atrs   map[string]atr.ItemTechAnalyse
 	)
+	t, _ := s.instrumentServiceGrpcClient.Shares(ctx)
 	atrs = make(map[string]atr.ItemTechAnalyse)
+	macdSpecification := specification.Macd{SearchArea: in.SearchArea}
+	rsiSpecification := specification.RsiTrade{SearchArea: in.SearchArea, Value: 50}
+	rsi2Specification := specification.RsiTrade{SearchArea: in.SearchArea, Value: 70}
 
 	for _, share := range t {
-		//EMA
-		//y, _ := s.marketDataServiceGrpcClient.GetTechAnalyseEma(ctx, share.ID, 4, timestamppb.New(time.Now().AddDate(0, 0, -1)), timestamppb.New(time.Now()), 200)
-		//ema := specification.EmaSpecification{}
-		//ema.IsSatisfiedBy(y)
-		macDModel4h, _ := s.marketDataServiceGrpcClient.GetTechAnalyseMacD(ctx, share.ID, 11, timestamppb.New(time.Now().AddDate(0, 0, -1)), timestamppb.New(time.Now()), 9)
-		greenMacDSp := specification.GreenMacD{}
+		dateFrom := timestamppb.New(time.Now().AddDate(0, 0, -1))
+		dateTo := timestamppb.New(time.Now())
 
-		if greenMacDSp.IsSatisfiedBy(macDModel4h) == false {
+		if in.Interval == enum.Hour1 {
+			dateFrom = timestamppb.New(time.Now().AddDate(0, 0, -1))
+		}
+
+		if in.Interval == enum.Hour4 {
+			dateFrom = timestamppb.New(time.Now().AddDate(0, 0, -3))
+		}
+
+		macDModel, errM := s.marketDataServiceGrpcClient.GetTechAnalyseMacD(ctx, share.ID, int(in.Interval), dateFrom, dateTo, in.MACDLength)
+
+		if errM != nil {
+			logger.ErrorContext(ctx, "Failed to get macd", share.Name)
+
 			continue
 		}
 
-		rsiModel, err := s.marketDataServiceGrpcClient.GetTechAnalyseRsi(ctx, share.ID, 4, timestamppb.New(time.Now().AddDate(0, 0, -1)), timestamppb.New(time.Now()))
+		rsiModel, errR := s.marketDataServiceGrpcClient.GetTechAnalyseRsi(ctx, share.ID, int(in.Interval), dateFrom, dateTo, in.RSILength)
 
-		if err != nil {
+		if errR != nil {
 			logger.ErrorContext(ctx, "Failed to get rsi", share.Name)
+
+			continue
 		}
 
-		rsiS := specification.RsiSpecification{}
-		macDModel, err := s.marketDataServiceGrpcClient.GetTechAnalyseMacD(ctx, share.ID, 4, timestamppb.New(time.Now().AddDate(0, 0, -1)), timestamppb.New(time.Now()), 9)
+		rsi2Model, errR := s.marketDataServiceGrpcClient.GetTechAnalyseRsi(ctx, share.ID, int(in.Interval), dateFrom, dateTo, in.RSIFastLength)
 
-		if err != nil {
-			logger.ErrorContext(ctx, "Failed to get macd", share.Name)
+		if errR != nil {
+			logger.ErrorContext(ctx, "Failed to get rsi", share.Name)
+
+			continue
 		}
 
-		macDSpecification := specification.MacDSpecification{}
-
-		if macDSpecification.IsSatisfiedBy(macDModel) != true || rsiS.IsSatisfiedBy(rsiModel) != true {
+		if macdSpecification.IsSatisfiedBy(macDModel) != true || rsiSpecification.IsSatisfiedBy(rsiModel) != true || rsi2Specification.IsSatisfiedBy(rsi2Model) != true {
 			continue
 		}
 
@@ -61,7 +75,8 @@ func (s *service) Trade(ctx context.Context) error {
 	}
 
 	if len(shares) > 0 {
-		err := s.tgClient.SendMessage(notification.Trade(shares, atrs))
+		err := s.tgClient.SendMessage(notification.Trade(shares, atrs, in.Interval))
+		shares = []model.Share{}
 
 		if err != nil {
 			logger.ErrorContext(ctx, "message is not sent", err)
