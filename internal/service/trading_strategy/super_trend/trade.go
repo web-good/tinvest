@@ -37,36 +37,36 @@ func (s *service) Trade(ctx context.Context) error {
 			continue
 		}
 
-		ema35, err35 := s.ema.TechAnalyse(ctx, &share.ID, 11, time.Now().AddDate(0, 0, -20), 35)
+		ema20, err20 := s.ema.TechAnalyse(ctx, &share.ID, 11, time.Now().AddDate(0, 0, -20), 20)
 
-		if err35 != nil {
-			logger.ErrorContext(ctx, fmt.Errorf("error in calculate ema35 4h :%w,  %s", err35, share.Name).Error())
+		if err20 != nil {
+			logger.ErrorContext(ctx, fmt.Errorf("error in calculate ema20 4h :%w,  %s", err20, share.Name).Error())
 
 			continue
 		}
 
 		sp := specification.SuperTrendIntersection{}
 
-		if sp.IsSatisfiedBy(ema5, ema35) != true {
+		if sp.IsSatisfiedBy(ema5, ema20) != true {
 			continue
 		}
 
 		//смотрим что на 1ч ema5 выше ema 35
-		ema1h5, err1h5 := s.ema.TechAnalyse(ctx, &share.ID, 4, time.Now().AddDate(0, 0, -2), 5)
+		ema1h10, err1h10 := s.ema.TechAnalyse(ctx, &share.ID, 4, time.Now().AddDate(0, 0, -2), 10)
 
-		if err1h5 != nil {
-			logger.ErrorContext(ctx, fmt.Errorf("error in calculate ema5 1h:%w,  %s", err1h5, share.Name).Error())
+		if err1h10 != nil {
+			logger.ErrorContext(ctx, fmt.Errorf("error in calculate ema10 1h:%w,  %s", err1h10, share.Name).Error())
 		}
 
-		ema1h35, err1h35 := s.ema.TechAnalyse(ctx, &share.ID, 4, time.Now().AddDate(0, 0, -7), 35)
+		ema1h40, err1h40 := s.ema.TechAnalyse(ctx, &share.ID, 4, time.Now().AddDate(0, 0, -7), 40)
 
-		if err1h35 != nil {
-			logger.ErrorContext(ctx, fmt.Errorf("error in calculate ema35 1h:%w,  %s", err1h35, share.Name).Error())
+		if err1h40 != nil {
+			logger.ErrorContext(ctx, fmt.Errorf("error in calculate ema40 1h:%w,  %s", err1h40, share.Name).Error())
 		}
 
 		sp1h := specification.SuperTrendIntersection{}
 
-		if sp1h.IsSatisfiedBy(ema1h5, ema1h35) != true {
+		if sp1h.IsSatisfiedBy(ema1h10, ema1h40) != true {
 			continue
 		}
 

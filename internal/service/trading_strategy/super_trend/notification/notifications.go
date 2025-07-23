@@ -34,3 +34,20 @@ func Trade(shares []notification2.SuperTrend) string {
 
 	return notifyMessageBuilder.String()
 }
+
+func TakeProfit(shares []notification2.TakeProfit) string {
+	notifyMessageBuilder := strings.Builder{}
+	notifyMessageBuilder.WriteString("<u><b>Take Profit:</b></u>\n\n\n")
+	notifyMessageBuilder.WriteString("<i>Условие по снятию прибыли</i>\n\n")
+	notifyMessageBuilder.WriteString("<code>")
+
+	for _, share := range shares {
+		notifyMessageBuilder.WriteString("<u> 🟡")
+		notifyMessageBuilder.WriteString(share.Share.Name + "</u>")
+		notifyMessageBuilder.WriteString("\n")
+	}
+
+	notifyMessageBuilder.WriteString("</code>")
+
+	return notifyMessageBuilder.String()
+}

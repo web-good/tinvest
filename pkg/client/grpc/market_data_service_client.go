@@ -40,7 +40,7 @@ func (m *marketDataService) GetTechAnalyseBB(ctx context.Context, instrumentUid 
 			DeviationMultiplier: &investapi.Quotation{Units: 2},
 		},
 	}, NewRPCCredential(m.auth))
-	fmt.Println(resp)
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to request TechAnalysis: %w", err)
 	}

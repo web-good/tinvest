@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	"math"
 	"time"
 	"tinvest/internal/domain/ema"
+	"tinvest/internal/utils"
 )
 
 func (e *service) TechAnalyse(context context.Context, instrumentUid *string, interval int32, from time.Time, period int) ([]ema.ItemTechAnalyse, error) {
@@ -31,20 +31,14 @@ func (e *service) TechAnalyse(context context.Context, instrumentUid *string, in
 	}
 
 	emas[period-1] = sum / float64(period)
-	emaR[period-1].SignalLine.Units, emaR[period-1].SignalLine.Nano = splitPrice(emas[period-1])
+	emaR[period-1].SignalLine.Units, emaR[period-1].SignalLine.Nano = utils.SplitPrice(emas[period-1])
 	multiplier := 2.0 / float64(period+1)
 
 	for k := period; k < len(candles); k++ {
 		emas[k] = (float64(candles[k].Close.Units)-emas[k-1])*multiplier + emas[k-1]
-		emaR[k].SignalLine.Units, emaR[k].SignalLine.Nano = splitPrice(emas[k])
+		emaR[k].SignalLine.Units, emaR[k].SignalLine.Nano = utils.SplitPrice(emas[k])
 		emaR[k].Date = candles[k].Time
 	}
 
 	return emaR, nil
-}
-
-func splitPrice(price float64) (int64, int32) {
-	frac, intPart := math.Modf(price)
-
-	return int64(frac), int32(math.Round(intPart * 1e9))
 }

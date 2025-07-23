@@ -13,6 +13,7 @@ var _ SuperTrend = (*service)(nil)
 
 type SuperTrend interface {
 	Trade(ctx context.Context) error
+	TakeProfit(ctx context.Context) error
 }
 
 type emaInstrument interface {
@@ -29,14 +30,26 @@ type service struct {
 	ema                         emaInstrument
 	atr                         atrInstrument
 	tgClient                    telegram.Client
+	usersServiceClient          grpc.UsersServiceClient
+	operationsServiceClient     grpc.OperationsServiceClient
 }
 
-func NewService(instrumentsServiceClient grpc.InstrumentsServiceClient, marketDataServiceGrpcClient grpc.MarketDataServiceClient, emaInstrument emaInstrument, atrInstrument atrInstrument, tgClient telegram.Client) SuperTrend {
+func NewService(
+	instrumentsServiceClient grpc.InstrumentsServiceClient,
+	marketDataServiceGrpcClient grpc.MarketDataServiceClient,
+	emaInstrument emaInstrument,
+	atrInstrument atrInstrument,
+	tgClient telegram.Client,
+	usersServiceClient grpc.UsersServiceClient,
+	operationsServiceClient grpc.OperationsServiceClient,
+) SuperTrend {
 	return &service{
 		instrumentServiceGrpcClient: instrumentsServiceClient,
 		marketDataServiceGrpcClient: marketDataServiceGrpcClient,
 		ema:                         emaInstrument,
 		atr:                         atrInstrument,
 		tgClient:                    tgClient,
+		usersServiceClient:          usersServiceClient,
+		operationsServiceClient:     operationsServiceClient,
 	}
 }

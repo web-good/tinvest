@@ -6,12 +6,15 @@ import (
 	"google.golang.org/grpc"
 	"time"
 	"tinvest/internal/converter"
+	"tinvest/internal/domain/share"
 	"tinvest/internal/model"
 	investapi "tinvest/internal/pb/v1"
+	converter2 "tinvest/pkg/client/grpc/converter"
 )
 
 type InstrumentsServiceClient interface {
 	Shares(ctx context.Context) ([]*model.Share, error)
+	ShareByID(ctx context.Context, id string) (*share.Share, error)
 }
 
 type instrumentsServiceClient struct {
@@ -39,4 +42,19 @@ func (c *instrumentsServiceClient) Shares(ctx context.Context) ([]*model.Share, 
 	}
 
 	return converter.ConvertSharesFromPb(resp.Instruments), nil
+}
+
+func (c *instrumentsServiceClient) ShareByID(ctx context.Context, id string) (*share.Share, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	resp, err := c.instrumentsApi.ShareBy(ctx, &investapi.InstrumentRequest{
+		IdType: investapi.InstrumentIdType_INSTRUMENT_ID_TYPE_UID,
+		Id:     id,
+	}, NewRPCCredential(c.auth))
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to request share by id: %w", err)
+	}
+
+	return converter2.ConvertShareFromPb(resp.Instrument), nil
 }

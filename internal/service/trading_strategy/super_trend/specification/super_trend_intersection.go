@@ -12,7 +12,7 @@ type item struct {
 }
 
 func (s *SuperTrendIntersection) IsSatisfiedBy(fastEma []domainema.ItemTechAnalyse, tradeEma []domainema.ItemTechAnalyse) bool {
-	iterLen := 3
+	iterLen := 1
 
 	if len(fastEma) <= iterLen || len(tradeEma) <= iterLen {
 		return false

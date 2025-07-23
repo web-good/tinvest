@@ -50,5 +50,23 @@ generate-market-data-api:
 	--plugin=protoc-gen-go-grpc=bin/protoc-gen-go-grpc \
 	api/v1/marketdata.proto
 
+generate-users-api:
+	mkdir -p internal/pb/v1
+	protoc --proto_path api/v1 \
+	--go_out=./internal/pb/v1 --experimental_allow_proto3_optional --go_opt=paths=source_relative \
+	--plugin=protoc-gen-go=bin/protoc-gen-go \
+	--go-grpc_out=internal/pb/v1 --go-grpc_opt=paths=source_relative \
+	--plugin=protoc-gen-go-grpc=bin/protoc-gen-go-grpc \
+	api/v1/users.proto
+
+generate-operations-api:
+	mkdir -p internal/pb/v1
+	protoc --proto_path api/v1 \
+	--go_out=./internal/pb/v1 --experimental_allow_proto3_optional --go_opt=paths=source_relative \
+	--plugin=protoc-gen-go=bin/protoc-gen-go \
+	--go-grpc_out=internal/pb/v1 --go-grpc_opt=paths=source_relative \
+	--plugin=protoc-gen-go-grpc=bin/protoc-gen-go-grpc \
+	api/v1/operations.proto
+
 wire-generate:
 	$(LOCAL_BIN)/goverter .

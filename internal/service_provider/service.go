@@ -52,6 +52,8 @@ func (*ServiceProvider) GetSuperTrendTradingService() super_trend.SuperTrend {
 			serviceProvider.Ema(),
 			serviceProvider.Atr(),
 			tgClient,
+			grpcClient.UserServiceClient(),
+			grpcClient.OperationsServiceClient(),
 		)
 	}
 

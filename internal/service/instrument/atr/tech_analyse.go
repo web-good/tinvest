@@ -8,6 +8,7 @@ import (
 	"time"
 	"tinvest/internal/domain/atr"
 	"tinvest/internal/model"
+	"tinvest/internal/utils"
 )
 
 func (s *service) TechAnalyse(context context.Context, instrumentUid *string) (atr.ItemTechAnalyse, error) {
@@ -150,9 +151,5 @@ func (s *service) calculatePassedValue(candle *model.CandleItemTechAnalyse, atr 
 		}
 	}
 
-	return int64(float64(combinePrice(high.Units, high.Nano)-combinePrice(low.Units, low.Nano)) * 100 / atr)
-}
-
-func combinePrice(intPart int64, frac int32) float64 {
-	return float64(intPart) + float64(frac)/1e9
+	return int64(float64(utils.CombinePrice(high.Units, high.Nano)-utils.CombinePrice(low.Units, low.Nano)) * 100 / atr)
 }
