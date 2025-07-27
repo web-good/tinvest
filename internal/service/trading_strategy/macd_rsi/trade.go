@@ -2,6 +2,7 @@ package macd_rsi
 
 import (
 	"context"
+	"fmt"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"time"
 	"tinvest/internal/domain/atr"
@@ -20,31 +21,22 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) error {
 	)
 	t, _ := s.instrumentServiceGrpcClient.Shares(ctx)
 	atrs = make(map[string]atr.ItemTechAnalyse)
-	macdSpecification := specification.Macd{SearchArea: in.SearchArea}
-	rsiSpecification := specification.RsiTrade{SearchArea: in.SearchArea, Value: 50}
-	rsi2Specification := specification.RsiTrade{SearchArea: in.SearchArea, Value: 70}
+	rsiSpecification := specification.RsiTrade{Value: 30}
+	emaSpecification := specification.EmaIntersection{}
 
 	for _, share := range t {
-		dateFrom := timestamppb.New(time.Now().AddDate(0, 0, -1))
+		dateFrom := timestamppb.New(time.Now().AddDate(0, 0, -2))
 		dateTo := timestamppb.New(time.Now())
 
-		if in.Interval == enum.Hour1 {
-			dateFrom = timestamppb.New(time.Now().AddDate(0, 0, -1))
+		if in.LocalInterval == enum.Hour1 {
+			dateFrom = timestamppb.New(time.Now().AddDate(0, 0, -2))
 		}
 
-		if in.Interval == enum.Hour4 {
-			dateFrom = timestamppb.New(time.Now().AddDate(0, 0, -3))
+		if in.LocalInterval == enum.Hour4 {
+			dateFrom = timestamppb.New(time.Now().AddDate(0, 0, -4))
 		}
 
-		macDModel, errM := s.marketDataServiceGrpcClient.GetTechAnalyseMacD(ctx, share.ID, int(in.Interval), dateFrom, dateTo, in.MACDLength)
-
-		if errM != nil {
-			logger.ErrorContext(ctx, "Failed to get macd", share.Name)
-
-			continue
-		}
-
-		rsiModel, errR := s.marketDataServiceGrpcClient.GetTechAnalyseRsi(ctx, share.ID, int(in.Interval), dateFrom, dateTo, in.RSILength)
+		rsiModel, errR := s.marketDataServiceGrpcClient.GetTechAnalyseRsi(ctx, share.ID, int(in.LocalInterval), dateFrom, dateTo, in.RSILength)
 
 		if errR != nil {
 			logger.ErrorContext(ctx, "Failed to get rsi", share.Name)
@@ -52,15 +44,53 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) error {
 			continue
 		}
 
-		rsi2Model, errR := s.marketDataServiceGrpcClient.GetTechAnalyseRsi(ctx, share.ID, int(in.Interval), dateFrom, dateTo, in.RSIFastLength)
-
-		if errR != nil {
-			logger.ErrorContext(ctx, "Failed to get rsi", share.Name)
+		if len(rsiModel) == 0 {
+			logger.InfoContext(ctx, "Rsi can not get 0 len", share.Name)
 
 			continue
 		}
 
-		if macdSpecification.IsSatisfiedBy(macDModel) != true || rsiSpecification.IsSatisfiedBy(rsiModel) != true || rsi2Specification.IsSatisfiedBy(rsi2Model) != true {
+		if rsiSpecification.IsSatisfiedBy(rsiModel) != true {
+			continue
+		}
+
+		ema5, err5 := s.ema.TechAnalyse(ctx, &share.ID, int32(in.GlobalInterval), time.Now().AddDate(0, 0, -20), 5)
+
+		if err5 != nil {
+			logger.ErrorContext(ctx, fmt.Errorf("error in calculate ema5 4h :%w,  %s", err5, share.Name).Error())
+
+			continue
+		}
+
+		emaG20, errG20 := s.ema.TechAnalyse(ctx, &share.ID, int32(in.GlobalInterval), time.Now().AddDate(0, 0, -20), 20)
+
+		if errG20 != nil {
+			logger.ErrorContext(ctx, fmt.Errorf("error in calculate ema50 4h :%w,  %s", emaG20, share.Name).Error())
+
+			continue
+		}
+
+		if emaSpecification.IsSatisfiedBy(ema5, emaG20) != true {
+			continue
+		}
+
+		ema20, err20 := s.ema.TechAnalyse(ctx, &share.ID, int32(in.LocalInterval), time.Now().AddDate(0, 0, -10), 20)
+
+		if err20 != nil {
+			logger.ErrorContext(ctx, fmt.Errorf("error in calculate ema5 4h :%w,  %s", err20, share.Name).Error())
+
+			continue
+		}
+
+		ema50, err50 := s.ema.TechAnalyse(ctx, &share.ID, int32(in.LocalInterval), time.Now().AddDate(0, 0, -20), 50)
+
+		if err50 != nil {
+			logger.ErrorContext(ctx, fmt.Errorf("error in calculate ema50 4h :%w,  %s", err50, share.Name).Error())
+
+			continue
+		}
+
+		if emaSpecification.IsSatisfiedBy(ema20, ema50) != true {
 			continue
 		}
 
@@ -75,7 +105,7 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) error {
 	}
 
 	if len(shares) > 0 {
-		err := s.tgClient.SendMessage(notification.Trade(shares, atrs, in.Interval))
+		err := s.tgClient.SendMessage(notification.Trade(shares, atrs, in.LocalInterval))
 		shares = []model.Share{}
 
 		if err != nil {

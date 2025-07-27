@@ -23,9 +23,9 @@ func (s *RsiSpecification) IsSatisfiedBy(itemTechAnalyse []*model.RsiItemTechAna
 			return true
 		}
 
-		//if prevItem.SignalLine.Units < int64(55) && item.SignalLine.Units >= int64(55) {
-		//	return true
-		//}
+		if prevItem.SignalLine.Units < int64(55) && item.SignalLine.Units >= int64(55) {
+			return true
+		}
 
 		j++
 	}

@@ -8,7 +8,6 @@ import (
 	"tinvest/internal/service/trading_strategy/macd_rsi/dto"
 	"tinvest/internal/service/trading_strategy/macd_rsi/enum"
 	mr "tinvest/internal/service/trading_strategy/macd_rsi/scheduler"
-	st "tinvest/internal/service/trading_strategy/super_trend/scheduler"
 	"tinvest/internal/service_provider"
 	"tinvest/pkg/closer"
 	"tinvest/pkg/logger"
@@ -111,27 +110,19 @@ func (a *App) runDev(ctx context.Context) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		err := a.sp.GetMacdRsiTradingService().Trade(ctx, dto.Trade{SearchArea: 2, Interval: enum.Hour1, RSILength: 9, MACDLength: 9, Scheduler: "*/40 * * * *", RSIFastLength: 5})
+		err := a.sp.GetMacdRsiTradingService().Trade(ctx, dto.Trade{SearchArea: 2, LocalInterval: enum.Hour1, GlobalInterval: enum.Hour4, RSILength: 5, Scheduler: "*/40 * * * *"})
 
 		if err != nil {
 			logger.ErrorContext(ctx, "Error in worker macd rsi", err.Error())
 		}
 	}()
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		err := a.sp.GetMacdRsiTradingService().Trade(ctx, dto.Trade{SearchArea: 2, Interval: enum.Hour4, RSILength: 9, MACDLength: 9, Scheduler: "5 * * * *", RSIFastLength: 5})
 
-		if err != nil {
-			logger.ErrorContext(ctx, "Error in worker macd rsi", err.Error())
-		}
-	}()
 	wg.Wait()
 }
 
 func (a *App) runProd(ctx context.Context) {
 	wg := sync.WaitGroup{}
-	wg.Add(1)
+	/*wg.Add(1)
 	go func() {
 		defer wg.Done()
 		sh := st.NewSchedulerService(a.sp.GetSuperTrendTradingService())
@@ -152,19 +143,19 @@ func (a *App) runProd(ctx context.Context) {
 			logger.ErrorContext(ctx, "Error in worker take profit super trend", err.Error())
 		}
 	}()
-
+	*/
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		sh := mr.NewSchedulerService(a.sp.GetMacdRsiTradingService())
-		err := sh.Trade(ctx, dto.Trade{SearchArea: 2, Interval: enum.Hour1, RSILength: 9, MACDLength: 9, Scheduler: "*/40 * * * *", RSIFastLength: 5})
+		err := sh.Trade(ctx, dto.Trade{LocalInterval: enum.Hour1, GlobalInterval: enum.Hour4, RSILength: 6, MACDLength: 9, Scheduler: "*/5 * * * *"})
 
 		if err != nil {
 			logger.ErrorContext(ctx, "Error in worker macd rsi 1H", err.Error())
 		}
 	}()
 
-	wg.Add(1)
+	/*wg.Add(1)
 	go func() {
 		defer wg.Done()
 		sh := mr.NewSchedulerService(a.sp.GetMacdRsiTradingService())
@@ -173,6 +164,6 @@ func (a *App) runProd(ctx context.Context) {
 		if err != nil {
 			logger.ErrorContext(ctx, "Error in worker macd rsi 1H", err.Error())
 		}
-	}()
+	}()*/
 	wg.Wait()
 }

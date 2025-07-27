@@ -5,21 +5,22 @@ import (
 )
 
 type RsiTrade struct {
-	SearchArea int
-	Value      int64
+	Value int64
 }
 
 func (s *RsiTrade) IsSatisfiedBy(itemTechAnalyse []*model.RsiItemTechAnalyse) bool {
-	if len(itemTechAnalyse) <= s.SearchArea {
+	iterLen := 2
+	j := 0
+
+	if len(itemTechAnalyse) == 0 || len(itemTechAnalyse) < iterLen {
 		return false
 	}
 
-	j := 0
-
-	for i := len(itemTechAnalyse) - 1; j < s.SearchArea; i-- {
+	for i := len(itemTechAnalyse) - 1; j < iterLen; i-- {
 		item := itemTechAnalyse[i]
+		prevItem := itemTechAnalyse[i-1]
 
-		if item.SignalLine.Units >= int64(50) {
+		if item.SignalLine.Units >= s.Value && prevItem.SignalLine.Units < s.Value {
 			return true
 		}
 

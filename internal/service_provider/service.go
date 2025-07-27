@@ -36,6 +36,7 @@ func (*ServiceProvider) GetMacdRsiTradingService() macd_rsi.MacdRsi {
 			grpcClient.MarketDataServiceClient(),
 			serviceProvider.Atr(),
 			tgClient,
+			serviceProvider.Ema(),
 		)
 	}
 

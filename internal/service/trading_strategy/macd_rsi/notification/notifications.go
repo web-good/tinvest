@@ -9,7 +9,7 @@ import (
 
 func Trade(shares []model.Share, atrs map[string]atr.ItemTechAnalyse, interval enum.Interval) string {
 	notifyMessageBuilder := strings.Builder{}
-	notifyMessageBuilder.WriteString("🟢 \n<u><b>RSI MACD:</b></u>\n\n\n<code>")
+	notifyMessageBuilder.WriteString("🟢 \n<u><b>RSI MACD NEW:</b></u>\n\n\n<code>")
 	notifyMessageBuilder.WriteString(interval.String())
 
 	for _, share := range shares {
