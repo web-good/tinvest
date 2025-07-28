@@ -12,7 +12,7 @@ func (s *RsiTrade) IsSatisfiedBy(itemTechAnalyse []*model.RsiItemTechAnalyse) bo
 	iterLen := 2
 	j := 0
 
-	if len(itemTechAnalyse) == 0 || len(itemTechAnalyse) < iterLen {
+	if len(itemTechAnalyse) == 0 || len(itemTechAnalyse) < iterLen+1 {
 		return false
 	}
 
