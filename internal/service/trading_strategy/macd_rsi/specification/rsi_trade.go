@@ -17,10 +17,10 @@ func (s *RsiTrade) IsSatisfiedBy(itemTechAnalyse []*model.RsiItemTechAnalyse) bo
 	}
 
 	for i := len(itemTechAnalyse) - 1; j < iterLen; i-- {
-		item := itemTechAnalyse[i]
-		prevItem := itemTechAnalyse[i-1]
+		item := itemTechAnalyse[i-1]
+		//prevItem := itemTechAnalyse[i-2]
 
-		if item.SignalLine.Units >= s.Value && prevItem.SignalLine.Units < s.Value {
+		if item.SignalLine.Units < s.Value {
 			return true
 		}
 

@@ -110,13 +110,22 @@ func (a *App) runDev(ctx context.Context) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		err := a.sp.GetMacdRsiTradingService().Trade(ctx, dto.Trade{SearchArea: 2, LocalInterval: enum.Hour1, GlobalInterval: enum.Hour4, RSILength: 5, Scheduler: "*/40 * * * *"})
+		err := a.sp.GetMacdRsiTradingService().Trade(ctx, dto.Trade{LocalInterval: enum.Hour1, GlobalInterval: enum.Hour4, RSILength: 5, Scheduler: "*/35 * * * *"})
 
 		if err != nil {
 			logger.ErrorContext(ctx, "Error in worker macd rsi", err.Error())
 		}
 	}()
+	/*
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			err := a.sp.GetMacdRsiTradingService().TakeProfit(ctx, dto.TakeProfit{Interval: enum.Hour1, RSILength: 5, Scheduler: "* * * * *"})
 
+			if err != nil {
+				logger.ErrorContext(ctx, "Error in worker macd rsi", err.Error())
+			}
+		}()*/
 	wg.Wait()
 }
 

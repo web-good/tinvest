@@ -11,6 +11,7 @@ import (
 
 type OperationsServiceClient interface {
 	GetPortfolio(ctx context.Context, accountID string) ([]model.Position, error)
+	GetOperation(ctx context.Context, accountID string, figi string) ([]model.Operation, error)
 }
 
 type operationsServiceClient struct {
@@ -40,4 +41,20 @@ func (o *operationsServiceClient) GetPortfolio(ctx context.Context, accountID st
 	}
 
 	return converter.ConvertPortfolioFromBp(resp), nil
+}
+
+func (o *operationsServiceClient) GetOperation(ctx context.Context, accountID string, figi string) ([]model.Operation, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	resp, err := o.operationApi.GetOperations(ctx, &investapi.OperationsRequest{
+		AccountId: accountID,
+		Figi:      &figi,
+	}, NewRPCCredential(o.auth))
+
+	if err != nil {
+		return nil, err
+	}
+
+	return converter.ConvertOperationFromBp(resp.Operations), nil
 }

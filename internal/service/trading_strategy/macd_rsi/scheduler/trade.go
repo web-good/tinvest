@@ -14,6 +14,11 @@ type schedulerService struct {
 	service macd_rsi.MacdRsi
 }
 
+func (s *schedulerService) TakeProfit(ctx context.Context, in dto.TakeProfit) error {
+	//TODO implement me
+	panic("implement me")
+}
+
 func NewSchedulerService(service macd_rsi.MacdRsi) macd_rsi.MacdRsi {
 	return &schedulerService{
 		sh:      scheduler.NewScheduler(),

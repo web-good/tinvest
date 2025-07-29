@@ -12,6 +12,7 @@ import (
 
 type MacdRsi interface {
 	Trade(ctx context.Context, in dto.Trade) error
+	TakeProfit(ctx context.Context, in dto.TakeProfit) error
 }
 
 type atrInstrument interface {
@@ -28,14 +29,18 @@ type service struct {
 	atrInstrument               atrInstrument
 	tgClient                    telegram.Client
 	ema                         emaInstrument
+	usersServiceClient          grpc.UsersServiceClient
+	operationsServiceClient     grpc.OperationsServiceClient
 }
 
-func NewService(instrumentsServiceClient grpc.InstrumentsServiceClient, marketDataServiceGrpcClient grpc.MarketDataServiceClient, atrInstrument atrInstrument, tgClient telegram.Client, emaInstrument emaInstrument) *service {
+func NewService(instrumentsServiceClient grpc.InstrumentsServiceClient, marketDataServiceGrpcClient grpc.MarketDataServiceClient, atrInstrument atrInstrument, tgClient telegram.Client, emaInstrument emaInstrument, userServiceClient grpc.UsersServiceClient, operationServiceClient grpc.OperationsServiceClient) *service {
 	return &service{
 		instrumentServiceGrpcClient: instrumentsServiceClient,
 		marketDataServiceGrpcClient: marketDataServiceGrpcClient,
 		atrInstrument:               atrInstrument,
 		tgClient:                    tgClient,
 		ema:                         emaInstrument,
+		usersServiceClient:          userServiceClient,
+		operationsServiceClient:     operationServiceClient,
 	}
 }
