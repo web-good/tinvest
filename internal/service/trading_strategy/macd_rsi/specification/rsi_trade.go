@@ -11,7 +11,6 @@ type RsiTrade struct {
 func (s *RsiTrade) IsSatisfiedBy(itemTechAnalyse []*model.RsiItemTechAnalyse) bool {
 	iterLen := 1
 	j := 0
-
 	itemTechAnalyse = itemTechAnalyse[:len(itemTechAnalyse)-1]
 
 	if len(itemTechAnalyse) == 0 || len(itemTechAnalyse) < iterLen+1 {

@@ -12,8 +12,8 @@ import (
 )
 
 func (s *service) TechAnalyse(context context.Context, instrumentUid *string) (atr.ItemTechAnalyse, error) {
-	p := int32(25)
-	candles, err := s.marketDataServiceClient.GetCandles(context, instrumentUid, 5, timestamppb.New(time.Now().AddDate(0, 0, -50)), timestamppb.New(time.Now()), &p, false)
+	p := int32(20)
+	candles, err := s.marketDataServiceClient.GetCandles(context, instrumentUid, 5, timestamppb.New(time.Now().AddDate(0, 0, -20)), timestamppb.New(time.Now()), &p, false)
 
 	if err != nil {
 		return atr.ItemTechAnalyse{}, fmt.Errorf("failed to get candles from MarketDataService: %w", err)
