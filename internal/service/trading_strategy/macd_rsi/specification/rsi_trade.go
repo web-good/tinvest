@@ -9,18 +9,20 @@ type RsiTrade struct {
 }
 
 func (s *RsiTrade) IsSatisfiedBy(itemTechAnalyse []*model.RsiItemTechAnalyse) bool {
-	iterLen := 2
+	iterLen := 1
 	j := 0
+
+	itemTechAnalyse = itemTechAnalyse[:len(itemTechAnalyse)-1]
 
 	if len(itemTechAnalyse) == 0 || len(itemTechAnalyse) < iterLen+1 {
 		return false
 	}
 
 	for i := len(itemTechAnalyse) - 1; j < iterLen; i-- {
-		item := itemTechAnalyse[i-1]
-		//prevItem := itemTechAnalyse[i-2]
+		item := itemTechAnalyse[i]
+		prevItem := itemTechAnalyse[i-1]
 
-		if item.SignalLine.Units < s.Value {
+		if item.SignalLine.Units < s.Value && prevItem.SignalLine.Units >= s.Value {
 			return true
 		}
 
