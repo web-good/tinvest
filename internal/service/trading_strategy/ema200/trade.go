@@ -40,7 +40,7 @@ func (s *service) Trade(ctx context.Context, dto input.Trade) error {
 			continue
 		}
 
-		ema200, err200 := s.ema.TechAnalyse(ctx, &share.ID, int32(dto.Interval), time.Now().AddDate(0, 0, -20), 200)
+		ema200, err200 := s.ema.TechAnalyse(ctx, &share.ID, int32(dto.Interval), time.Now().AddDate(0, 0, -20), time.Now(), 200)
 
 		if err200 != nil {
 			logger.ErrorContext(ctx, "Error in calculate ema200", err200, share.Name)
@@ -48,7 +48,7 @@ func (s *service) Trade(ctx context.Context, dto input.Trade) error {
 			continue
 		}
 
-		ema5, err5 := s.ema.TechAnalyse(ctx, &share.ID, 4, time.Now().AddDate(0, 0, -2), 5)
+		ema5, err5 := s.ema.TechAnalyse(ctx, &share.ID, 4, time.Now().AddDate(0, 0, -2), time.Now(), 5)
 
 		if err5 != nil {
 			logger.ErrorContext(ctx, "Error in calculate ema200", err5, share.Name)

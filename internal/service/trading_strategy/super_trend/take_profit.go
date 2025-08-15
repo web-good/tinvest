@@ -5,6 +5,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"time"
 	notification2 "tinvest/internal/domain/notification"
+	"tinvest/internal/enum"
 	"tinvest/internal/service/trading_strategy/super_trend/notification"
 	"tinvest/internal/service/trading_strategy/super_trend/specification"
 	"tinvest/pkg/logger"
@@ -35,7 +36,7 @@ func (s *service) TakeProfit(ctx context.Context) error {
 		rsiSp := specification.RsiProfit{}
 
 		for _, position := range portfolio {
-			atr, err := s.atr.TechAnalyse(ctx, &position.ShareID)
+			atr, err := s.atr.TechAnalyse(ctx, &position.ShareID, enum.Hour1)
 			rsiModel, err := s.marketDataServiceGrpcClient.GetTechAnalyseRsi(ctx, position.ShareID, 4, timestamppb.New(time.Now().AddDate(0, 0, -1)), timestamppb.New(time.Now()), 4)
 
 			if err != nil {

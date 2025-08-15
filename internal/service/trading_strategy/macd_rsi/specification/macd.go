@@ -2,36 +2,28 @@ package specification
 
 import (
 	"tinvest/internal/model"
+	"tinvest/internal/utils"
 )
 
 type Macd struct {
-	SearchArea int
 }
 
 func (s *Macd) IsSatisfiedBy(itemTechAnalyse []*model.MacDItemTechAnalyse) bool {
-	j := 0
-
-	if len(itemTechAnalyse) <= s.SearchArea {
-		return false
-	}
-
-	for i := len(itemTechAnalyse) - 1; j < s.SearchArea; i-- {
+	for i := len(itemTechAnalyse) - 1; i >= 1; i-- {
 		item := itemTechAnalyse[i]
 		prevItem := itemTechAnalyse[i-1]
 
-		if prevItem.MacDLine.Units > 0 || prevItem.SignalLine.Units > 0 || prevItem.SignalLine.Nano > 0 || prevItem.MacDLine.Nano > 0 {
-			j++
-
+		/*if item.SignalLine.Nano > 0 || item.MacDLine.Nano > 0 {
 			continue
-		}
+		}*/
 
-		if item.MacDLine.Units > item.SignalLine.Units && i > 0 {
-			if prevItem.MacDLine.Units < prevItem.SignalLine.Units {
+		if item.MacDLine.Units > item.SignalLine.Units {
+			if utils.CombinePrice(prevItem.MacDLine.Units, prevItem.MacDLine.Nano) < utils.CombinePrice(prevItem.SignalLine.Units, prevItem.SignalLine.Nano) {
 				return true
 			}
 		}
 
-		if item.MacDLine.Units == item.SignalLine.Units && i > 0 && item.MacDLine.Nano > item.SignalLine.Nano {
+		if item.MacDLine.Units == item.SignalLine.Units && item.MacDLine.Nano > item.SignalLine.Nano {
 			if prevItem.MacDLine.Units == prevItem.SignalLine.Units && prevItem.MacDLine.Nano < prevItem.SignalLine.Nano {
 				return true
 			}
@@ -40,8 +32,6 @@ func (s *Macd) IsSatisfiedBy(itemTechAnalyse []*model.MacDItemTechAnalyse) bool 
 				return true
 			}
 		}
-
-		j++
 	}
 
 	return false

@@ -5,6 +5,7 @@ import (
 	"time"
 	"tinvest/internal/domain/atr"
 	domainema "tinvest/internal/domain/ema"
+	"tinvest/internal/enum"
 	"tinvest/internal/service/trading_strategy/ema200/dto/input"
 	"tinvest/pkg/client/grpc"
 	"tinvest/pkg/client/telegram"
@@ -15,11 +16,11 @@ type Ema200 interface {
 }
 
 type emaInstrument interface {
-	TechAnalyse(context context.Context, instrumentUid *string, interval int32, from time.Time, period int) ([]domainema.ItemTechAnalyse, error)
+	TechAnalyse(context context.Context, instrumentUid *string, interval int32, from time.Time, to time.Time, period int) ([]domainema.ItemTechAnalyse, error)
 }
 
 type atrInstrument interface {
-	TechAnalyse(context context.Context, instrumentUid *string) (atr.ItemTechAnalyse, error)
+	TechAnalyse(context context.Context, instrumentUid *string, interval enum.Interval) (atr.ItemTechAnalyse, error)
 }
 
 type service struct {

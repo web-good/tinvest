@@ -36,5 +36,6 @@ type CandleItemTechAnalyse struct {
 	Close      Quotation
 	Low        Quotation
 	High       Quotation
+	Volume     int64
 	IsComplete bool
 }

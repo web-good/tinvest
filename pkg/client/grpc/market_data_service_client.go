@@ -18,6 +18,7 @@ type MarketDataServiceClient interface {
 	GetTechAnalyseEma(context context.Context, instrumentUid string, interval int, from *timestamppb.Timestamp, to *timestamppb.Timestamp, length int32) ([]*model.EmaItemTechAnalyse, error)
 	GetTechAnalyseBB(context context.Context, instrumentUid string, interval int, from *timestamppb.Timestamp, to *timestamppb.Timestamp) ([]*model.BbItemTechAnalyse, error)
 	GetCandles(context context.Context, instrumentUid *string, interval int32, from *timestamp.Timestamp, to *timestamp.Timestamp, limit *int32, withHoliday bool) ([]*model.CandleItemTechAnalyse, error)
+	GetTechAnalyseMacDCustom(ctx context.Context, instrumentUid string, interval int, from *timestamppb.Timestamp, to *timestamppb.Timestamp, fastLength int32, slowLength int32, smoothing int32) ([]*model.MacDItemTechAnalyse, error)
 }
 
 type marketDataService struct {
@@ -51,7 +52,7 @@ func (m *marketDataService) GetTechAnalyseBB(ctx context.Context, instrumentUid 
 func (m *marketDataService) GetTechAnalyseEma(ctx context.Context, instrumentUid string, interval int, from *timestamppb.Timestamp, to *timestamppb.Timestamp, length int32) ([]*model.EmaItemTechAnalyse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	//fmt.Println(from.AsTime(), to.AsTime(), instrumentUid, "++++++++++++++++++++++++")
+
 	resp, err := m.marketDataApi.GetTechAnalysis(ctx, &investapi.GetTechAnalysisRequest{
 		Length:        length,
 		IndicatorType: investapi.GetTechAnalysisRequest_INDICATOR_TYPE_EMA,
@@ -103,6 +104,30 @@ func (m *marketDataService) GetTechAnalyseMacD(ctx context.Context, instrumentUi
 			FastLength:      fastLength,
 			SlowLength:      26,
 			SignalSmoothing: 9,
+		},
+	}, NewRPCCredential(m.auth))
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to request TechAnalysis: %w", err)
+	}
+
+	return converter.ConvertMacDTechAnalysisFromPb(resp.GetTechnicalIndicators()), nil
+}
+
+func (m *marketDataService) GetTechAnalyseMacDCustom(ctx context.Context, instrumentUid string, interval int, from *timestamppb.Timestamp, to *timestamppb.Timestamp, fastLength int32, slowLength int32, smoothing int32) ([]*model.MacDItemTechAnalyse, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	resp, err := m.marketDataApi.GetTechAnalysis(ctx, &investapi.GetTechAnalysisRequest{
+		IndicatorType: investapi.GetTechAnalysisRequest_INDICATOR_TYPE_MACD,
+		InstrumentUid: instrumentUid,
+		From:          from,
+		To:            to,
+		Interval:      investapi.GetTechAnalysisRequest_IndicatorInterval(interval),
+		TypeOfPrice:   investapi.GetTechAnalysisRequest_TYPE_OF_PRICE_CLOSE,
+		Smoothing: &investapi.GetTechAnalysisRequest_Smoothing{
+			FastLength:      fastLength,
+			SlowLength:      slowLength,
+			SignalSmoothing: smoothing,
 		},
 	}, NewRPCCredential(m.auth))
 

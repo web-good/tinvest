@@ -9,9 +9,9 @@ import (
 	"tinvest/internal/utils"
 )
 
-func (e *service) TechAnalyse(context context.Context, instrumentUid *string, interval int32, from time.Time, period int) ([]ema.ItemTechAnalyse, error) {
+func (e *service) TechAnalyse(context context.Context, instrumentUid *string, interval int32, from time.Time, to time.Time, period int) ([]ema.ItemTechAnalyse, error) {
 	limit := int32(period * 2)
-	candles, err := e.marketDataServiceClient.GetCandles(context, instrumentUid, interval, timestamppb.New(from), timestamppb.New(time.Now()), &limit, true)
+	candles, err := e.marketDataServiceClient.GetCandles(context, instrumentUid, interval, timestamppb.New(from), timestamppb.New(to), &limit, true)
 
 	if err != nil {
 		return nil, fmt.Errorf("GetCandles error: %w", err)

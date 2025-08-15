@@ -4,11 +4,13 @@ import (
 	"context"
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"tinvest/internal/domain/atr"
+	"tinvest/internal/enum"
 	"tinvest/internal/model"
 )
 
 type Instrument interface {
-	TechAnalyse(context context.Context, instrumentUid *string) (atr.ItemTechAnalyse, error)
+	TechAnalyse(context context.Context, instrumentUid *string, interval enum.Interval) (atr.ItemTechAnalyse, error)
+	AverageVolume(ctx context.Context, instrumentUid string, interval enum.Interval) (float64, error)
 }
 
 type MarketDataClient interface {

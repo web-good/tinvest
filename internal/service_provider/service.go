@@ -3,6 +3,7 @@ package service_provider
 import (
 	"tinvest/internal/service/instrument/atr"
 	"tinvest/internal/service/instrument/ema"
+	"tinvest/internal/service/instrument/macd"
 	"tinvest/internal/service/notification/purchase_shares"
 	"tinvest/internal/service/trading_strategy/ema200"
 	"tinvest/internal/service/trading_strategy/macd_rsi"
@@ -16,6 +17,7 @@ type service struct {
 	ema200                   ema200.Ema200
 	emaInstrument            ema.Instrument
 	atrInstrument            atr.Instrument
+	MACDInstrument           macd.Instrument
 }
 
 func (*ServiceProvider) GetPurchaseSharesService() purchase_shares.PurchaseShares {
@@ -37,6 +39,7 @@ func (*ServiceProvider) GetMacdRsiTradingService() macd_rsi.MacdRsi {
 			serviceProvider.Atr(),
 			tgClient,
 			serviceProvider.Ema(),
+			serviceProvider.MACD(),
 			grpcClient.UserServiceClient(),
 			grpcClient.OperationsServiceClient(),
 		)
@@ -99,4 +102,15 @@ func (*ServiceProvider) Atr() atr.Instrument {
 	}
 
 	return serviceProvider.service.atrInstrument
+}
+
+func (*ServiceProvider) MACD() macd.Instrument {
+	if serviceProvider.service.MACDInstrument == nil {
+		grpcClient, _ := serviceProvider.GetGrpcClient()
+		serviceProvider.service.MACDInstrument = macd.New(
+			grpcClient.MarketDataServiceClient(),
+		)
+	}
+
+	return serviceProvider.service.MACDInstrument
 }

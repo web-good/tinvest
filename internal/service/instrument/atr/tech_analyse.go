@@ -7,13 +7,14 @@ import (
 	"math"
 	"time"
 	"tinvest/internal/domain/atr"
+	"tinvest/internal/enum"
 	"tinvest/internal/model"
 	"tinvest/internal/utils"
 )
 
-func (s *service) TechAnalyse(context context.Context, instrumentUid *string) (atr.ItemTechAnalyse, error) {
+func (s *service) TechAnalyse(context context.Context, instrumentUid *string, interval enum.Interval) (atr.ItemTechAnalyse, error) {
 	p := int32(20)
-	candles, err := s.marketDataServiceClient.GetCandles(context, instrumentUid, 5, timestamppb.New(time.Now().AddDate(0, 0, -20)), timestamppb.New(time.Now()), &p, false)
+	candles, err := s.marketDataServiceClient.GetCandles(context, instrumentUid, interval.ToNumberInvestApi(), utils.TimeStampPbGenerator(time.Now(), -20, interval), timestamppb.New(time.Now()), &p, false)
 
 	if err != nil {
 		return atr.ItemTechAnalyse{}, fmt.Errorf("failed to get candles from MarketDataService: %w", err)

@@ -6,6 +6,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"time"
 	notification2 "tinvest/internal/domain/notification"
+	"tinvest/internal/enum"
 	"tinvest/internal/model"
 	"tinvest/internal/service/trading_strategy/super_trend/notification"
 	"tinvest/internal/service/trading_strategy/super_trend/specification"
@@ -29,7 +30,7 @@ func (s *service) Trade(ctx context.Context) error {
 		}
 
 		//смотрим что на 4ч ema5 выше ema 35
-		ema5, err5 := s.ema.TechAnalyse(ctx, &share.ID, 11, time.Now().AddDate(0, 0, -10), 5)
+		ema5, err5 := s.ema.TechAnalyse(ctx, &share.ID, 11, time.Now().AddDate(0, 0, -10), time.Now(), 5)
 
 		if err5 != nil {
 			logger.ErrorContext(ctx, fmt.Errorf("error in calculate ema5 4h :%w,  %s", err5, share.Name).Error())
@@ -37,7 +38,7 @@ func (s *service) Trade(ctx context.Context) error {
 			continue
 		}
 
-		ema20, err20 := s.ema.TechAnalyse(ctx, &share.ID, 11, time.Now().AddDate(0, 0, -20), 20)
+		ema20, err20 := s.ema.TechAnalyse(ctx, &share.ID, 11, time.Now().AddDate(0, 0, -20), time.Now(), 20)
 
 		if err20 != nil {
 			logger.ErrorContext(ctx, fmt.Errorf("error in calculate ema20 4h :%w,  %s", err20, share.Name).Error())
@@ -52,13 +53,13 @@ func (s *service) Trade(ctx context.Context) error {
 		}
 
 		//смотрим что на 1ч ema5 выше ema 35
-		ema1h10, err1h10 := s.ema.TechAnalyse(ctx, &share.ID, 4, time.Now().AddDate(0, 0, -2), 10)
+		ema1h10, err1h10 := s.ema.TechAnalyse(ctx, &share.ID, 4, time.Now().AddDate(0, 0, -2), time.Now(), 10)
 
 		if err1h10 != nil {
 			logger.ErrorContext(ctx, fmt.Errorf("error in calculate ema10 1h:%w,  %s", err1h10, share.Name).Error())
 		}
 
-		ema1h40, err1h40 := s.ema.TechAnalyse(ctx, &share.ID, 4, time.Now().AddDate(0, 0, -7), 40)
+		ema1h40, err1h40 := s.ema.TechAnalyse(ctx, &share.ID, 4, time.Now().AddDate(0, 0, -7), time.Now(), 40)
 
 		if err1h40 != nil {
 			logger.ErrorContext(ctx, fmt.Errorf("error in calculate ema40 1h:%w,  %s", err1h40, share.Name).Error())
@@ -108,7 +109,7 @@ func (s *service) addToPool(ctx context.Context, share *model.Share, indicator n
 	}
 
 	var atrErr error
-	notif.Atr, atrErr = s.atr.TechAnalyse(ctx, &share.ID)
+	notif.Atr, atrErr = s.atr.TechAnalyse(ctx, &share.ID, enum.Hour1)
 
 	if atrErr != nil {
 		logger.ErrorContext(ctx, "Failed to get ATR", share.Name)

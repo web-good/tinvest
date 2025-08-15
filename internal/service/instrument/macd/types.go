@@ -1,15 +1,16 @@
-package ema
+package macd
 
 import (
 	"context"
 	"github.com/golang/protobuf/ptypes/timestamp"
-	"time"
-	domainema "tinvest/internal/domain/ema"
+	"google.golang.org/protobuf/types/known/timestamppb"
+	"tinvest/internal/domain"
+	"tinvest/internal/enum"
 	"tinvest/internal/model"
 )
 
 type Instrument interface {
-	TechAnalyse(context context.Context, instrumentUid *string, interval int32, from time.Time, to time.Time, period int) ([]domainema.ItemTechAnalyse, error)
+	CalculateMACD(context context.Context, instrumentUid string, interval enum.Interval, dateFrom *timestamppb.Timestamp, DateTo *timestamppb.Timestamp, fast int32, slow int32, signal int32) ([]*domain.MACDItemTechAnalyse, error)
 }
 
 type marketDataClient interface {
@@ -20,7 +21,7 @@ type service struct {
 	marketDataServiceClient marketDataClient
 }
 
-func NewEma(marketDataServiceClient marketDataClient) *service {
+func New(marketDataServiceClient marketDataClient) *service {
 	return &service{
 		marketDataServiceClient: marketDataServiceClient,
 	}

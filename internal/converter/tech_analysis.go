@@ -37,6 +37,7 @@ func convertCandlesTechAnalyseFromBp(item *investapi.HistoricCandle) *model.Cand
 			Units: item.Low.Units,
 			Nano:  item.Low.Nano,
 		},
+		Volume:     item.Volume,
 		IsComplete: item.IsComplete,
 	}
 }

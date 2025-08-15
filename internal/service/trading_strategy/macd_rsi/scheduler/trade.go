@@ -14,6 +14,11 @@ type schedulerService struct {
 	service macd_rsi.MacdRsi
 }
 
+func (s *schedulerService) BackTest(ctx context.Context, in dto.BackTest) error {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (s *schedulerService) TakeProfit(ctx context.Context, in dto.TakeProfit) error {
 	//TODO implement me
 	panic("implement me")

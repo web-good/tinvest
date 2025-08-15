@@ -1,16 +1,16 @@
 package specification
 
 import (
-	"fmt"
+	"tinvest/internal/domain/ema"
 	"tinvest/internal/model"
 )
 
 type EmaSpecification struct{}
 
-func (s *EmaSpecification) IsSatisfiedBy(itemTechAnalyse []*model.EmaItemTechAnalyse) bool {
-	for _, item := range itemTechAnalyse {
-		fmt.Println(item)
+func (s *EmaSpecification) IsSatisfiedBy(ema ema.ItemTechAnalyse, candle model.CandleItemTechAnalyse) bool {
+	if ema.SignalLine.Units < candle.Close.Units {
+		return true
 	}
 
-	return true
+	return false
 }

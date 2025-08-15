@@ -3,9 +3,8 @@ package macd_rsi
 import (
 	"context"
 	"fmt"
-	"google.golang.org/protobuf/types/known/timestamppb"
-	"time"
 	notification2 "tinvest/internal/domain/notification"
+	"tinvest/internal/enum"
 	"tinvest/internal/service/trading_strategy/macd_rsi/dto"
 	"tinvest/internal/service/trading_strategy/macd_rsi/specification"
 	"tinvest/pkg/logger"
@@ -34,11 +33,9 @@ func (s *service) TakeProfit(ctx context.Context, in dto.TakeProfit) error {
 
 		portfolio, _ := s.operationsServiceClient.GetPortfolio(ctx, acc.ID)
 		atrSp := specification.ProfitEqualsAtr{}
-		rsiSp := specification.RsiProfit{}
 
 		for _, position := range portfolio {
-			atr, err := s.atrInstrument.TechAnalyse(ctx, &position.ShareID)
-			rsiModel, err := s.marketDataServiceGrpcClient.GetTechAnalyseRsi(ctx, position.ShareID, int(in.Interval), timestamppb.New(time.Now().AddDate(0, 0, -1)), timestamppb.New(time.Now()), in.RSILength)
+			atr, err := s.atrInstrument.TechAnalyse(ctx, &position.ShareID, enum.Hour1)
 			operations, er := s.operationsServiceClient.GetOperation(ctx, acc.ID, position.Figi)
 
 			fmt.Println(operations, er)
@@ -48,7 +45,7 @@ func (s *service) TakeProfit(ctx context.Context, in dto.TakeProfit) error {
 				continue
 			}
 
-			if atrSp.IsSatisfiedBy(atr, position) || rsiSp.IsSatisfiedBy(rsiModel) {
+			if atrSp.IsSatisfiedBy(atr, position) {
 				share, err2 := s.instrumentServiceGrpcClient.ShareByID(ctx, position.ShareID)
 
 				if err2 != nil {

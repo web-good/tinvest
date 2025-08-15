@@ -4,9 +4,10 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+	"time"
 	"tinvest/internal/config"
+	"tinvest/internal/enum"
 	"tinvest/internal/service/trading_strategy/macd_rsi/dto"
-	"tinvest/internal/service/trading_strategy/macd_rsi/enum"
 	mr "tinvest/internal/service/trading_strategy/macd_rsi/scheduler"
 	"tinvest/internal/service_provider"
 	"tinvest/pkg/closer"
@@ -76,6 +77,20 @@ func (a *App) initializationLoop(ctx context.Context) (err error) {
 }
 
 func (a *App) runDev(ctx context.Context) {
+	loc, _ := time.LoadLocation("Europe/Moscow")
+	a.sp.GetMacdRsiTradingService().BackTest(ctx, dto.BackTest{
+		AtrInterval: enum.Day1,
+		Interval:    enum.Hour1,
+		//	DateFrom: time.Date(2025, time.July, 18, 9, 20, 0, 0, time.UTC),
+		DateFrom: time.Now().AddDate(0, 0, -24).In(loc),
+		DateTo:   time.Now().AddDate(0, 0, 0).In(loc),
+		InstrumentID: []string{
+			//	"e6123145-9665-43e0-8413-cd61b8aa9b13",
+			"87db07bc-0e02-4e29-90bb-05e8ef791d7b",
+			//"ab1f751e-15b2-4c74-802c-1b3e8638c394",
+			//"7de75794-a27f-4d81-a39b-492345813822",
+		}, //сбер,Тбанк софт лайн,яндекс
+	})
 	wg := sync.WaitGroup{}
 	/*wg.Add(1)
 	go func() {
@@ -110,7 +125,7 @@ func (a *App) runDev(ctx context.Context) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		err := a.sp.GetMacdRsiTradingService().Trade(ctx, dto.Trade{LocalInterval: enum.Hour1, GlobalInterval: enum.Hour4, RSILength: 5, Scheduler: "*/35 * * * *"})
+		err := a.sp.GetMacdRsiTradingService().Trade(ctx, dto.Trade{RSILength: 5, Scheduler: "*/35 * * * *"})
 
 		if err != nil {
 			logger.ErrorContext(ctx, "Error in worker macd rsi", err.Error())
@@ -157,7 +172,7 @@ func (a *App) runProd(ctx context.Context) {
 	go func() {
 		defer wg.Done()
 		sh := mr.NewSchedulerService(a.sp.GetMacdRsiTradingService())
-		err := sh.Trade(ctx, dto.Trade{LocalInterval: enum.Hour1, GlobalInterval: enum.Hour4, RSILength: 5, Scheduler: "*/35 * * * *"})
+		err := sh.Trade(ctx, dto.Trade{RSILength: 5, Scheduler: "*/35 * * * *"})
 
 		if err != nil {
 			logger.ErrorContext(ctx, "Error in worker macd rsi 1H", err.Error())
