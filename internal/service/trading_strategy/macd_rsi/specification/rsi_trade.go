@@ -1,14 +1,14 @@
 package specification
 
 import (
-	"tinvest/internal/model"
+	"tinvest/internal/domain"
 )
 
 type RsiTrade struct {
 }
 
-func (s *RsiTrade) IsSatisfiedBy(itemTechAnalyse *model.RsiItemTechAnalyse) bool {
-	if itemTechAnalyse.SignalLine.Units > 50 && itemTechAnalyse.SignalLine.Units < 70 {
+func (s *RsiTrade) IsSatisfiedBy(itemTechAnalyse *domain.RSIItemTechAnalyse) bool {
+	if itemTechAnalyse.SignalLine.Units < 70 {
 		return true
 	}
 

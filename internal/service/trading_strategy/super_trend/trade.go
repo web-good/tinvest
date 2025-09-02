@@ -109,7 +109,7 @@ func (s *service) addToPool(ctx context.Context, share *model.Share, indicator n
 	}
 
 	var atrErr error
-	notif.Atr, atrErr = s.atr.TechAnalyse(ctx, &share.ID, enum.Hour1)
+	notif.Atr, atrErr = s.atr.TechAnalyse(ctx, &share.ID, enum.Hour1, time.Now())
 
 	if atrErr != nil {
 		logger.ErrorContext(ctx, "Failed to get ATR", share.Name)

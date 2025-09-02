@@ -3,6 +3,7 @@ package macd_rsi
 import (
 	"context"
 	"fmt"
+	"time"
 	notification2 "tinvest/internal/domain/notification"
 	"tinvest/internal/enum"
 	"tinvest/internal/service/trading_strategy/macd_rsi/dto"
@@ -35,7 +36,7 @@ func (s *service) TakeProfit(ctx context.Context, in dto.TakeProfit) error {
 		atrSp := specification.ProfitEqualsAtr{}
 
 		for _, position := range portfolio {
-			atr, err := s.atrInstrument.TechAnalyse(ctx, &position.ShareID, enum.Hour1)
+			atr, err := s.atrInstrument.TechAnalyse(ctx, &position.ShareID, enum.Hour1, time.Now())
 			operations, er := s.operationsServiceClient.GetOperation(ctx, acc.ID, position.Figi)
 
 			fmt.Println(operations, er)

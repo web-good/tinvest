@@ -1,10 +1,13 @@
 package dto
 
-import "tinvest/internal/service/trading_strategy/macd_rsi/enum"
+import (
+	"time"
+	"tinvest/internal/enum"
+)
 
 type Trade struct {
-	LocalInterval  enum.Interval
-	GlobalInterval enum.Interval
-	RSILength      int32
-	Scheduler      string
+	AtrInterval enum.Interval
+	TimeFrame   time.Duration
+	Interval    enum.Interval
+	Scheduler   string
 }

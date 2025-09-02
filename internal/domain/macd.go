@@ -6,6 +6,7 @@ type MACDItemTechAnalyse struct {
 	Date       time.Time
 	SignalLine Quotation
 	MacDLine   Quotation
+	UnderZero  bool
 	Diff       float64
 	IsCross    bool
 }

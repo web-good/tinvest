@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"sync"
-	"time"
 	"tinvest/internal/config"
 	"tinvest/internal/enum"
 	"tinvest/internal/service/trading_strategy/macd_rsi/dto"
@@ -77,20 +76,22 @@ func (a *App) initializationLoop(ctx context.Context) (err error) {
 }
 
 func (a *App) runDev(ctx context.Context) {
-	loc, _ := time.LoadLocation("Europe/Moscow")
+	/*loc, _ := time.LoadLocation("Europe/Moscow")
 	a.sp.GetMacdRsiTradingService().BackTest(ctx, dto.BackTest{
 		AtrInterval: enum.Day1,
 		Interval:    enum.Hour1,
 		//	DateFrom: time.Date(2025, time.July, 18, 9, 20, 0, 0, time.UTC),
-		DateFrom: time.Now().AddDate(0, 0, -24).In(loc),
+		DateFrom: time.Now().AddDate(0, -1, 0).In(loc),
 		DateTo:   time.Now().AddDate(0, 0, 0).In(loc),
 		InstrumentID: []string{
-			//	"e6123145-9665-43e0-8413-cd61b8aa9b13",
-			"87db07bc-0e02-4e29-90bb-05e8ef791d7b",
-			//"ab1f751e-15b2-4c74-802c-1b3e8638c394",
-			//"7de75794-a27f-4d81-a39b-492345813822",
-		}, //сбер,Тбанк софт лайн,яндекс
-	})
+			//"e6123145-9665-43e0-8413-cd61b8aa9b13",//сбер
+			//"87db07bc-0e02-4e29-90bb-05e8ef791d7b",//Тбанк
+			//	"ab1f751e-15b2-4c74-802c-1b3e8638c394", //софт
+			"7de75794-a27f-4d81-a39b-492345813822", //яндекс
+			"02cfdf61-6298-4c0f-a9ca-9cabc82afaf3", //лукойл
+			"eb4ba863-e85f-4f80-8c29-f2627938ee58", //мечел
+		},
+	})*/
 	wg := sync.WaitGroup{}
 	/*wg.Add(1)
 	go func() {
@@ -100,7 +101,7 @@ func (a *App) runDev(ctx context.Context) {
 		if err != nil {
 			logger.ErrorContext(ctx, "Error in worker super trend", err.Error())
 		}
-	}()
+	}()*/
 
 	/*	go func() {
 			defer wg.Done()
@@ -125,7 +126,7 @@ func (a *App) runDev(ctx context.Context) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		err := a.sp.GetMacdRsiTradingService().Trade(ctx, dto.Trade{RSILength: 5, Scheduler: "*/35 * * * *"})
+		err := a.sp.GetMacdRsiTradingService().Trade(ctx, dto.Trade{AtrInterval: enum.Day1, Interval: enum.Hour1, Scheduler: "*/35 * * * *"})
 
 		if err != nil {
 			logger.ErrorContext(ctx, "Error in worker macd rsi", err.Error())
@@ -146,48 +147,15 @@ func (a *App) runDev(ctx context.Context) {
 
 func (a *App) runProd(ctx context.Context) {
 	wg := sync.WaitGroup{}
-	/*wg.Add(1)
-	go func() {
-		defer wg.Done()
-		sh := st.NewSchedulerService(a.sp.GetSuperTrendTradingService())
-		err := sh.Trade(ctx)
-
-		if err != nil {
-			logger.ErrorContext(ctx, "Error in worker super trend", err.Error())
-		}
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		sh := st.NewSchedulerService(a.sp.GetSuperTrendTradingService())
-		err := sh.TakeProfit(ctx)
-
-		if err != nil {
-			logger.ErrorContext(ctx, "Error in worker take profit super trend", err.Error())
-		}
-	}()
-	*/
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		sh := mr.NewSchedulerService(a.sp.GetMacdRsiTradingService())
-		err := sh.Trade(ctx, dto.Trade{RSILength: 5, Scheduler: "*/35 * * * *"})
+		err := sh.Trade(ctx, dto.Trade{AtrInterval: enum.Day1, Interval: enum.Hour1, Scheduler: "5 8-20 * * 1-5"})
 
 		if err != nil {
 			logger.ErrorContext(ctx, "Error in worker macd rsi 1H", err.Error())
 		}
 	}()
-
-	/*wg.Add(1)
-	go func() {
-		defer wg.Done()
-		sh := mr.NewSchedulerService(a.sp.GetMacdRsiTradingService())
-		err := sh.Trade(ctx, dto.Trade{SearchArea: 2, Interval: enum.Hour4, RSILength: 9, MACDLength: 9, Scheduler: "5 * * * *", RSIFastLength: 5})
-
-		if err != nil {
-			logger.ErrorContext(ctx, "Error in worker macd rsi 1H", err.Error())
-		}
-	}()*/
 	wg.Wait()
 }

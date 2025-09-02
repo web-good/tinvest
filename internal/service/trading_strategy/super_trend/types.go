@@ -22,7 +22,7 @@ type emaInstrument interface {
 }
 
 type atrInstrument interface {
-	TechAnalyse(context context.Context, instrumentUid *string, interval enum.Interval) (atr.ItemTechAnalyse, error)
+	TechAnalyse(context context.Context, instrumentUid *string, interval enum.Interval, dateNow time.Time) (atr.ItemTechAnalyse, error)
 }
 
 type service struct {

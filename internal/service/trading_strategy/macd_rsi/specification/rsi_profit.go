@@ -2,15 +2,14 @@ package specification
 
 import (
 	"time"
+	"tinvest/internal/domain"
 	"tinvest/internal/enum"
-	"tinvest/internal/model"
 	"tinvest/internal/utils"
 )
 
 type RsiProfit struct{}
 
-func (p *RsiProfit) IsSatisfiedBy(itemTechAnalyse []*model.RsiItemTechAnalyse, purchaseTime time.Time, nowTime time.Time, timeFrame enum.Interval) bool {
-
+func (p *RsiProfit) IsSatisfiedBy(itemTechAnalyse []*domain.RSIItemTechAnalyse, purchaseTime time.Time, nowTime time.Time, timeFrame enum.Interval) bool {
 	iterLen := 1
 
 	if len(itemTechAnalyse) <= iterLen {
@@ -19,9 +18,9 @@ func (p *RsiProfit) IsSatisfiedBy(itemTechAnalyse []*model.RsiItemTechAnalyse, p
 
 	j := 0
 
-	for i := len(itemTechAnalyse) - 1; j < iterLen; i-- {
+	for i := 0; i < len(itemTechAnalyse)-2; i++ {
 		item := itemTechAnalyse[i]
-		prevItem := itemTechAnalyse[i-1]
+		prevItem := itemTechAnalyse[i+1]
 
 		if utils.CombinePrice(prevItem.SignalLine.Units, prevItem.SignalLine.Nano) > float64(70) && utils.CombinePrice(item.SignalLine.Units, item.SignalLine.Nano) <= float64(70) {
 			candelesCount := nowTime.Sub(purchaseTime)

@@ -1,6 +1,8 @@
 package specification
 
-import "tinvest/internal/model"
+import (
+	"tinvest/internal/model"
+)
 
 type Volume struct{}
 

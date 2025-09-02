@@ -2,23 +2,16 @@ package notification
 
 import (
 	"strings"
-	"tinvest/internal/domain/atr"
-	"tinvest/internal/model"
-	"tinvest/internal/service/trading_strategy/macd_rsi/enum"
+	"tinvest/internal/domain"
 )
 
-func Trade(shares []model.Share, atrs map[string]atr.ItemTechAnalyse, interval enum.Interval) string {
+func Trade(info *domain.Info) string {
 	notifyMessageBuilder := strings.Builder{}
 	notifyMessageBuilder.WriteString("🟢 \n<u><b>RSI MACD NEW:</b></u>\n\n\n<code>")
-	notifyMessageBuilder.WriteString(interval.String())
 
-	for _, share := range shares {
-		notifyMessageBuilder.WriteString("<u>" + share.Name + "</u>")
-
-		if atr, exist := atrs[share.ID]; exist {
-			notifyMessageBuilder.WriteString(" <u>" + atr.ToString() + "</u>")
-		}
-
+	for _, log := range info.Items() {
+		notifyMessageBuilder.WriteString("<u><b>" + log.InstrumentName + "</b></u>")
+		notifyMessageBuilder.WriteString("\n" + log.ATR.ToString() + "\n")
 		notifyMessageBuilder.WriteString("\n")
 	}
 

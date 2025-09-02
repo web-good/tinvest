@@ -9,12 +9,9 @@ import (
 	"tinvest/internal/utils"
 )
 
-func (s *service) AverageVolume(ctx context.Context, instrumentUid string, interval enum.Interval) (float64, error) {
-	loc, _ := time.LoadLocation("Europe/Moscow")
-	dateFrom := time.Now().In(loc)
-
+func (s *service) AverageVolume(ctx context.Context, instrumentUid string, interval enum.Interval, dateNow time.Time) (float64, error) {
 	p := int32(20)
-	candles, err := s.marketDataServiceClient.GetCandles(ctx, &instrumentUid, interval.ToNumberInvestApi(), utils.TimeStampPbGenerator(dateFrom, -25, interval), utils.TimeStampPbGenerator(dateFrom, -1, interval), &p, false)
+	candles, err := s.marketDataServiceClient.GetCandles(ctx, &instrumentUid, interval.ToNumberInvestApi(), utils.TimeStampPbGenerator(dateNow, -25, interval), utils.TimeStampPbGenerator(dateNow, -1, interval), &p, false)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get candles from MarketDataService: %w", err)
 	}
@@ -27,7 +24,7 @@ func (s *service) AverageVolume(ctx context.Context, instrumentUid string, inter
 	volume := float64(0)
 
 	for i := len(candles) - 1; j < 14; i-- {
-		volume = volume + utils.CombinePrice(candles[i].Close.Units, candles[i].Close.Nano)
+		volume = volume + float64(candles[i].Volume)
 		j++
 	}
 

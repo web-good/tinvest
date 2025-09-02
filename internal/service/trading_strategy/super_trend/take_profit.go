@@ -36,7 +36,7 @@ func (s *service) TakeProfit(ctx context.Context) error {
 		rsiSp := specification.RsiProfit{}
 
 		for _, position := range portfolio {
-			atr, err := s.atr.TechAnalyse(ctx, &position.ShareID, enum.Hour1)
+			atr, err := s.atr.TechAnalyse(ctx, &position.ShareID, enum.Hour1, time.Now())
 			rsiModel, err := s.marketDataServiceGrpcClient.GetTechAnalyseRsi(ctx, position.ShareID, 4, timestamppb.New(time.Now().AddDate(0, 0, -1)), timestamppb.New(time.Now()), 4)
 
 			if err != nil {

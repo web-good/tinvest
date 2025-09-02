@@ -12,9 +12,9 @@ import (
 	"tinvest/internal/utils"
 )
 
-func (s *service) TechAnalyse(context context.Context, instrumentUid *string, interval enum.Interval) (atr.ItemTechAnalyse, error) {
+func (s *service) TechAnalyse(context context.Context, instrumentUid *string, interval enum.Interval, dateNow time.Time) (atr.ItemTechAnalyse, error) {
 	p := int32(20)
-	candles, err := s.marketDataServiceClient.GetCandles(context, instrumentUid, interval.ToNumberInvestApi(), utils.TimeStampPbGenerator(time.Now(), -20, interval), timestamppb.New(time.Now()), &p, false)
+	candles, err := s.marketDataServiceClient.GetCandles(context, instrumentUid, interval.ToNumberInvestApi(), utils.TimeStampPbGenerator(dateNow, -20, interval), timestamppb.New(dateNow), &p, false)
 
 	if err != nil {
 		return atr.ItemTechAnalyse{}, fmt.Errorf("failed to get candles from MarketDataService: %w", err)

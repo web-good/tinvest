@@ -13,6 +13,14 @@ import (
 	"tinvest/pkg/client/telegram"
 )
 
+type rsiInstrument interface {
+	CalculateRSI(context context.Context, instrumentUid string, interval enum.Interval, dateFrom *timestamppb.Timestamp, DateTo *timestamppb.Timestamp, period int32) ([]*domain.RSIItemTechAnalyse, error)
+}
+
+type volatilityInstrument interface {
+	CalculateVolatility(context context.Context, instrumentUid string, interval enum.Interval, dateFrom *timestamppb.Timestamp, dateTo *timestamppb.Timestamp, length int32) (*domain.VolatilityItemTechAnalyse, error)
+}
+
 type MacdRsi interface {
 	Trade(ctx context.Context, in dto.Trade) error
 	TakeProfit(ctx context.Context, in dto.TakeProfit) error
@@ -20,8 +28,8 @@ type MacdRsi interface {
 }
 
 type atrInstrument interface {
-	TechAnalyse(context context.Context, instrumentUid *string, interval enum.Interval) (atr.ItemTechAnalyse, error)
-	AverageVolume(ctx context.Context, instrumentUid string, interval enum.Interval) (float64, error)
+	TechAnalyse(context context.Context, instrumentUid *string, interval enum.Interval, dateNow time.Time) (atr.ItemTechAnalyse, error)
+	AverageVolume(ctx context.Context, instrumentUid string, interval enum.Interval, dateNow time.Time) (float64, error)
 }
 
 type emaInstrument interface {
@@ -39,11 +47,13 @@ type service struct {
 	tgClient                    telegram.Client
 	ema                         emaInstrument
 	macd                        macdInstrument
+	rsi                         rsiInstrument
 	usersServiceClient          grpc.UsersServiceClient
 	operationsServiceClient     grpc.OperationsServiceClient
+	volatility                  volatilityInstrument
 }
 
-func NewService(instrumentsServiceClient grpc.InstrumentsServiceClient, marketDataServiceGrpcClient grpc.MarketDataServiceClient, atrInstrument atrInstrument, tgClient telegram.Client, emaInstrument emaInstrument, macd macdInstrument, userServiceClient grpc.UsersServiceClient, operationServiceClient grpc.OperationsServiceClient) *service {
+func NewService(instrumentsServiceClient grpc.InstrumentsServiceClient, marketDataServiceGrpcClient grpc.MarketDataServiceClient, atrInstrument atrInstrument, tgClient telegram.Client, emaInstrument emaInstrument, macd macdInstrument, rsi rsiInstrument, userServiceClient grpc.UsersServiceClient, operationServiceClient grpc.OperationsServiceClient, volatility volatilityInstrument) *service {
 	return &service{
 		instrumentServiceGrpcClient: instrumentsServiceClient,
 		marketDataServiceGrpcClient: marketDataServiceGrpcClient,
@@ -53,5 +63,7 @@ func NewService(instrumentsServiceClient grpc.InstrumentsServiceClient, marketDa
 		usersServiceClient:          userServiceClient,
 		operationsServiceClient:     operationServiceClient,
 		macd:                        macd,
+		rsi:                         rsi,
+		volatility:                  volatility,
 	}
 }

@@ -4,6 +4,8 @@ import (
 	"tinvest/internal/service/instrument/atr"
 	"tinvest/internal/service/instrument/ema"
 	"tinvest/internal/service/instrument/macd"
+	"tinvest/internal/service/instrument/rsi"
+	"tinvest/internal/service/instrument/volatility"
 	"tinvest/internal/service/notification/purchase_shares"
 	"tinvest/internal/service/trading_strategy/ema200"
 	"tinvest/internal/service/trading_strategy/macd_rsi"
@@ -17,7 +19,9 @@ type service struct {
 	ema200                   ema200.Ema200
 	emaInstrument            ema.Instrument
 	atrInstrument            atr.Instrument
+	rsiInstrument            rsi.Instrument
 	MACDInstrument           macd.Instrument
+	volatilityInstrument     volatility.Instrument
 }
 
 func (*ServiceProvider) GetPurchaseSharesService() purchase_shares.PurchaseShares {
@@ -40,8 +44,10 @@ func (*ServiceProvider) GetMacdRsiTradingService() macd_rsi.MacdRsi {
 			tgClient,
 			serviceProvider.Ema(),
 			serviceProvider.MACD(),
+			serviceProvider.RSI(),
 			grpcClient.UserServiceClient(),
 			grpcClient.OperationsServiceClient(),
+			serviceProvider.Volatility(),
 		)
 	}
 
@@ -113,4 +119,26 @@ func (*ServiceProvider) MACD() macd.Instrument {
 	}
 
 	return serviceProvider.service.MACDInstrument
+}
+
+func (*ServiceProvider) RSI() rsi.Instrument {
+	if serviceProvider.service.rsiInstrument == nil {
+		grpcClient, _ := serviceProvider.GetGrpcClient()
+		serviceProvider.service.rsiInstrument = rsi.New(
+			grpcClient.MarketDataServiceClient(),
+		)
+	}
+
+	return serviceProvider.service.rsiInstrument
+}
+
+func (*ServiceProvider) Volatility() volatility.Instrument {
+	if serviceProvider.service.volatilityInstrument == nil {
+		grpcClient, _ := serviceProvider.GetGrpcClient()
+		serviceProvider.service.volatilityInstrument = volatility.New(
+			grpcClient.MarketDataServiceClient(),
+		)
+	}
+
+	return serviceProvider.service.volatilityInstrument
 }
