@@ -1,6 +1,6 @@
 package dto
 
-import "tinvest/internal/service/trading_strategy/macd_rsi/enum"
+import "tinvest/internal/enum"
 
 type TakeProfit struct {
 	Interval   enum.Interval

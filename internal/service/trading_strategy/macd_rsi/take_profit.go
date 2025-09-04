@@ -8,11 +8,12 @@ import (
 	"tinvest/internal/enum"
 	"tinvest/internal/service/trading_strategy/macd_rsi/dto"
 	"tinvest/internal/service/trading_strategy/macd_rsi/specification"
+	"tinvest/internal/utils"
 	"tinvest/pkg/logger"
 )
 
 // const TakeProfitAccount string = "2252263587"
-const TakeProfitAccount string = "2142346697"
+const TakeProfitAccount string = "2252263587"
 
 var (
 	notificationTakeProfit []notification2.TakeProfit
@@ -38,6 +39,12 @@ func (s *service) TakeProfit(ctx context.Context, in dto.TakeProfit) error {
 		for _, position := range portfolio {
 			atr, err := s.atrInstrument.TechAnalyse(ctx, &position.ShareID, enum.Hour1, time.Now())
 			operations, er := s.operationsServiceClient.GetOperation(ctx, acc.ID, position.Figi)
+
+			if utils.CombinePrice(position.PurchasePrice.Units, position.PurchasePrice.Nano) >
+				utils.CombinePrice(position.Price.Units, position.Price.Nano) {
+				//TODO сделать отправку уведомления о том что надо докупить акцию в случае просадки больше Н процентов
+				continue
+			}
 
 			fmt.Println(operations, er)
 			if err != nil {
