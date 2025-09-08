@@ -20,8 +20,33 @@ func (s *schedulerService) BackTest(ctx context.Context, in dto.BackTest) error 
 }
 
 func (s *schedulerService) TakeProfit(ctx context.Context, in dto.TakeProfit) error {
-	//TODO implement me
-	panic("implement me")
+	jobTicker := time.NewTicker(time.Hour)
+	defer s.sh.Stop()
+	defer jobTicker.Stop()
+	err := s.sh.AddJob(in.Scheduler, func() {
+		logger.InfoContext(ctx, "Воркер MacD Rsi take profit начал работу")
+		err := s.service.TakeProfit(ctx, in)
+
+		if err != nil {
+			logger.ErrorContext(ctx, "Ошибка в ходе работы job", err)
+		}
+	})
+	s.sh.Start()
+
+	if err != nil {
+		return err
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-jobTicker.C:
+			logger.InfoContext(ctx, "Воркер MacD Rsi take profit успешно работает")
+		default:
+			time.Sleep(10 * time.Second)
+		}
+	}
 }
 
 func NewSchedulerService(service macd_rsi.MacdRsi) macd_rsi.MacdRsi {
