@@ -160,7 +160,7 @@ func (a *App) runProd(ctx context.Context) {
 	go func() {
 		defer wg.Done()
 		sh := mr.NewSchedulerService(a.sp.GetMacdRsiTradingService())
-		err := sh.TakeProfit(ctx, dto.TakeProfit{Interval: enum.Hour1, ATRInterval: enum.Day1, Scheduler: "*/2 * * * *"})
+		err := sh.TakeProfit(ctx, dto.TakeProfit{Interval: enum.Hour1, ATRInterval: enum.Day1, Scheduler: "*/2 8-23 * * *"})
 
 		if err != nil {
 			logger.ErrorContext(ctx, "Error in worker macd rsi 1H take profit", err.Error())

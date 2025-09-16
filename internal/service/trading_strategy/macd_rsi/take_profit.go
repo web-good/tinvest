@@ -39,7 +39,7 @@ func (s *service) TakeProfit(ctx context.Context, in dto.TakeProfit) error {
 		}
 
 		portfolio, _ := s.operationsServiceClient.GetPortfolio(ctx, acc.ID)
-		atrSp := specification.ProfitEqualsAtr{ATRProfit: 0.6}
+		atrSp := specification.ProfitEqualsAtr{ATRProfit: 0.3}
 		rsiProfit := specification.RsiProfit{}
 		buySp := specification.BuyMore{Diff: 0.07}
 
