@@ -41,7 +41,7 @@ func (s *service) TakeProfit(ctx context.Context, in dto.TakeProfit) error {
 		portfolio, _ := s.operationsServiceClient.GetPortfolio(ctx, acc.ID)
 		atrSp := specification.ProfitEqualsAtr{ATRProfit: 0.3}
 		rsiProfit := specification.RsiProfit{}
-		buySp := specification.BuyMore{Diff: 0.05}
+		buySp := specification.BuyMore{Diff: 0.03}
 
 		for _, position := range portfolio {
 			atr, err := s.atrInstrument.TechAnalyse(ctx, &position.ShareID, in.ATRInterval, dateNow)

@@ -213,7 +213,15 @@ func (s *service) processRsi(ctx context.Context, in dto.Trade, share *model.Sha
 	ema, errEma := s.ema.TechAnalyse(ctx, &share.ID, int32(in.Interval), utils.TimeGenerator(dateNow, -200, in.Interval), utils.TimeGenerator(dateNow, -1, in.Interval), 50)
 
 	if errEma != nil {
-		logger.ErrorContext(ctx, fmt.Errorf("error in calculate ema :%w", errEma).Error())
+		logger.ErrorContext(ctx, fmt.Errorf("error in calculate ema50 :%w", errEma).Error())
+
+		return domain.Item{}, errEma
+	}
+
+	ema150, errEma150 := s.ema.TechAnalyse(ctx, &share.ID, int32(in.Interval), utils.TimeGenerator(dateNow, -300, in.Interval), utils.TimeGenerator(dateNow, -1, in.Interval), 150)
+
+	if errEma150 != nil {
+		logger.ErrorContext(ctx, fmt.Errorf("error in calculate ema150 :%w", errEma).Error())
 
 		return domain.Item{}, errEma
 	}
@@ -230,6 +238,13 @@ func (s *service) processRsi(ctx context.Context, in dto.Trade, share *model.Sha
 		logger.ErrorContext(ctx, fmt.Errorf("empty priceNow").Error())
 
 		return domain.Item{}, errPriceN
+	}
+
+	priceEma50 := utils.CombinePrice(ema[len(ema)-1].SignalLine.Units, ema[len(ema)-1].SignalLine.Nano)
+	priceEma150 := utils.CombinePrice(ema150[len(ema150)-1].SignalLine.Units, ema150[len(ema150)-1].SignalLine.Nano)
+
+	if priceEma50 < priceEma150 {
+		return domain.Item{}, nil
 	}
 
 	if !emaSp.IsSatisfiedBy(ema[len(ema)-1], *priceNow[0]) {

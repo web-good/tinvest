@@ -7,6 +7,7 @@ import (
 	"tinvest/internal/service/instrument/rsi"
 	"tinvest/internal/service/instrument/volatility"
 	"tinvest/internal/service/notification/purchase_shares"
+	"tinvest/internal/service/trading_strategy/down_pump"
 	"tinvest/internal/service/trading_strategy/ema200"
 	"tinvest/internal/service/trading_strategy/macd_rsi"
 	"tinvest/internal/service/trading_strategy/super_trend"
@@ -15,6 +16,7 @@ import (
 type service struct {
 	purchaseSharesService    purchase_shares.PurchaseShares
 	macdRsiTradingService    macd_rsi.MacdRsi
+	downPumpTradingService   down_pump.DownPump
 	superTrendTradingService super_trend.SuperTrend
 	ema200                   ema200.Ema200
 	emaInstrument            ema.Instrument
@@ -52,6 +54,20 @@ func (*ServiceProvider) GetMacdRsiTradingService() macd_rsi.MacdRsi {
 	}
 
 	return serviceProvider.service.macdRsiTradingService
+}
+
+func (*ServiceProvider) GetDownPumpTradingService() down_pump.DownPump {
+	if serviceProvider.service.downPumpTradingService == nil {
+		grpcClient, _ := serviceProvider.GetGrpcClient()
+		tgClient, _ := serviceProvider.GetTelegramBotClient()
+		serviceProvider.service.downPumpTradingService = down_pump.NewService(
+			grpcClient.InstrumentsServiceClient(),
+			grpcClient.MarketDataServiceClient(),
+			tgClient,
+		)
+	}
+
+	return serviceProvider.service.downPumpTradingService
 }
 
 func (*ServiceProvider) GetSuperTrendTradingService() super_trend.SuperTrend {
