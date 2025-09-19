@@ -45,6 +45,7 @@ func (s *service) TakeProfit(ctx context.Context, in dto.TakeProfit) error {
 		buySp := specification.BuyMore{Diff: 0.03}
 
 		for _, position := range portfolio {
+			logger.InfoContext(ctx, "position", slog.Any("result", position))
 			atr, err := s.atrInstrument.TechAnalyse(ctx, &position.ShareID, in.ATRInterval, dateNow)
 			if err != nil {
 				logger.ErrorContext(ctx, "atr get error", err)
