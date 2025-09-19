@@ -35,6 +35,7 @@ func (s *service) TakeProfit(ctx context.Context, in dto.TakeProfit) error {
 	}
 
 	for _, acc := range res {
+		logger.InfoContext(ctx, "acc", slog.Any("result", acc))
 		if acc.ID != TakeProfitAccount {
 			continue
 		}
