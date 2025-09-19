@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	"log/slog"
 	"time"
 	notification2 "tinvest/internal/domain/notification"
 	"tinvest/internal/service/trading_strategy/macd_rsi/dto"
@@ -35,7 +34,6 @@ func (s *service) TakeProfit(ctx context.Context, in dto.TakeProfit) error {
 	}
 
 	for _, acc := range res {
-		logger.InfoContext(ctx, "acc", slog.Any("result", acc))
 		if acc.ID != TakeProfitAccount {
 			continue
 		}
@@ -46,7 +44,6 @@ func (s *service) TakeProfit(ctx context.Context, in dto.TakeProfit) error {
 		buySp := specification.BuyMore{Diff: 0.03}
 
 		for _, position := range portfolio {
-			logger.InfoContext(ctx, "position", slog.Any("result", position))
 			atr, err := s.atrInstrument.TechAnalyse(ctx, &position.ShareID, in.ATRInterval, dateNow)
 			if err != nil {
 				logger.ErrorContext(ctx, "atr get error", err)
@@ -95,7 +92,7 @@ func (s *service) TakeProfit(ctx context.Context, in dto.TakeProfit) error {
 
 		notificationTakeProfit = []notification2.TakeProfit{}
 	}
-	logger.InfoContext(ctx, "result", slog.Any("result", notificationBuy))
+
 	if len(notificationBuy) != 0 {
 		err := s.tgClient.SendMessage(notification.TakeBuy(notificationBuy))
 
