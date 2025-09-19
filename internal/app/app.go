@@ -123,7 +123,7 @@ func (a *App) runDev(ctx context.Context) {
 				logger.ErrorContext(ctx, "Error in worker super trend", err.Error())
 			}
 		}()*/
-	wg.Add(1)
+	/*wg.Add(1)
 	go func() {
 		defer wg.Done()
 		err := a.sp.GetMacdRsiTradingService().Trade(ctx, dto.Trade{AtrInterval: enum.Day1, Interval: enum.Hour1, Scheduler: "*35 * * * *"})
@@ -131,9 +131,8 @@ func (a *App) runDev(ctx context.Context) {
 		if err != nil {
 			logger.ErrorContext(ctx, "Error in worker macd rsi", err.Error())
 		}
-	}()
-
-	/*wg.Add(1)
+	}()*/
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		err := a.sp.GetMacdRsiTradingService().TakeProfit(ctx, dto.TakeProfit{Interval: enum.Hour1, ATRInterval: enum.Day1})
@@ -142,7 +141,7 @@ func (a *App) runDev(ctx context.Context) {
 			logger.ErrorContext(ctx, "Error in worker macd rsi", err.Error())
 		}
 	}()
-
+	/**
 	wg.Add(1)
 	go func() {
 		defer wg.Done()

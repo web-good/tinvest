@@ -69,7 +69,7 @@ func (s *service) TakeProfit(ctx context.Context, in dto.TakeProfit) error {
 				return err2
 			}
 
-			if purchasePrice > price && buySp.IsSatisfiedBy(purchasePrice, price) && rsi[1].SignalLine.Units < 28 {
+			if purchasePrice > price && buySp.IsSatisfiedBy(purchasePrice, price) && rsi[1].SignalLine.Units < 30 {
 				notificationBuy = append(notificationBuy, notification2.TakeProfit{Share: *share})
 
 				continue

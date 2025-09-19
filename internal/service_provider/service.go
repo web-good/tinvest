@@ -61,6 +61,8 @@ func (*ServiceProvider) GetDownPumpTradingService() down_pump.DownPump {
 		grpcClient, _ := serviceProvider.GetGrpcClient()
 		tgClient, _ := serviceProvider.GetTelegramBotClient()
 		serviceProvider.service.downPumpTradingService = down_pump.NewService(
+			serviceProvider.Ema(),
+			serviceProvider.RSI(),
 			grpcClient.InstrumentsServiceClient(),
 			grpcClient.MarketDataServiceClient(),
 			tgClient,

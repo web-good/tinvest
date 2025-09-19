@@ -49,7 +49,7 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) error {
 				return
 			}
 
-			time.Sleep(1 * time.Second)
+			time.Sleep(1500 * time.Millisecond)
 			resultMACD, err := s.do(ctx, in, share)
 
 			if err != nil || resultMACD.MACD == nil {
@@ -210,7 +210,7 @@ func (s *service) processRsi(ctx context.Context, in dto.Trade, share *model.Sha
 		return domain.Item{}, nil
 	}
 
-	ema, errEma := s.ema.TechAnalyse(ctx, &share.ID, int32(in.Interval), utils.TimeGenerator(dateNow, -200, in.Interval), utils.TimeGenerator(dateNow, -1, in.Interval), 50)
+	ema, errEma := s.ema.TechAnalyse(ctx, &share.ID, int32(in.Interval), utils.TimeGenerator(dateNow, -250, in.Interval), utils.TimeGenerator(dateNow, -1, in.Interval), 50)
 
 	if errEma != nil {
 		logger.ErrorContext(ctx, fmt.Errorf("error in calculate ema50 :%w", errEma).Error())
@@ -218,7 +218,7 @@ func (s *service) processRsi(ctx context.Context, in dto.Trade, share *model.Sha
 		return domain.Item{}, errEma
 	}
 
-	ema150, errEma150 := s.ema.TechAnalyse(ctx, &share.ID, int32(in.Interval), utils.TimeGenerator(dateNow, -300, in.Interval), utils.TimeGenerator(dateNow, -1, in.Interval), 150)
+	ema150, errEma150 := s.ema.TechAnalyse(ctx, &share.ID, int32(in.Interval), utils.TimeGenerator(dateNow, -450, in.Interval), utils.TimeGenerator(dateNow, -1, in.Interval), 150)
 
 	if errEma150 != nil {
 		logger.ErrorContext(ctx, fmt.Errorf("error in calculate ema150 :%w", errEma).Error())
