@@ -135,10 +135,11 @@ func (a *App) runDev(ctx context.Context) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		err := a.sp.GetMacdRsiTradingService().TakeProfit(ctx, dto.TakeProfit{Interval: enum.Hour1, ATRInterval: enum.Day1})
+		sh := mr.NewSchedulerService(a.sp.GetMacdRsiTradingService())
+		err := sh.TakeProfit(ctx, dto.TakeProfit{Interval: enum.Hour1, ATRInterval: enum.Day1, Scheduler: "*/2 8-23 * * *"})
 
 		if err != nil {
-			logger.ErrorContext(ctx, "Error in worker macd rsi", err.Error())
+			logger.ErrorContext(ctx, "Error in worker macd rsi 1H take profit", err.Error())
 		}
 	}()
 	/**
@@ -167,6 +168,7 @@ func (a *App) runProd(ctx context.Context) {
 			logger.ErrorContext(ctx, "Error in worker macd rsi 1H", err.Error())
 		}
 	}()
+
 	go func() {
 		defer wg.Done()
 		sh := mr.NewSchedulerService(a.sp.GetMacdRsiTradingService())

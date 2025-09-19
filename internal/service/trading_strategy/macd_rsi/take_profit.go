@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"log/slog"
 	"time"
 	notification2 "tinvest/internal/domain/notification"
 	"tinvest/internal/service/trading_strategy/macd_rsi/dto"
@@ -92,7 +93,7 @@ func (s *service) TakeProfit(ctx context.Context, in dto.TakeProfit) error {
 
 		notificationTakeProfit = []notification2.TakeProfit{}
 	}
-
+	logger.InfoContext(ctx, "result", slog.Any("result", notificationBuy))
 	if len(notificationBuy) != 0 {
 		err := s.tgClient.SendMessage(notification.TakeBuy(notificationBuy))
 
