@@ -68,7 +68,6 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 
 	if len(info.Items()) > 0 {
 		err := s.tgClient.SendMessage(notif.Trade(info))
-		info.Clear()
 
 		if err != nil {
 			logger.ErrorContext(ctx, "message is not sent", err)
