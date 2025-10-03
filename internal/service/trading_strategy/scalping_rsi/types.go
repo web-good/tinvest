@@ -1,4 +1,4 @@
-package down_pump
+package scalping_rsi
 
 import (
 	"context"
@@ -7,12 +7,12 @@ import (
 	"tinvest/internal/domain"
 	domainema "tinvest/internal/domain/ema"
 	"tinvest/internal/enum"
-	"tinvest/internal/service/trading_strategy/down_pump/dto"
+	"tinvest/internal/service/trading_strategy/scalping_rsi/dto"
 	"tinvest/pkg/client/grpc"
 	"tinvest/pkg/client/telegram"
 )
 
-type DownPump interface {
+type ScalpingRsi interface {
 	Trade(ctx context.Context, in dto.Trade) error
 }
 

@@ -3,6 +3,7 @@ package utils
 import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"math"
+	"strings"
 	"time"
 	"tinvest/internal/enum"
 )
@@ -31,4 +32,29 @@ func TimeGenerator(date time.Time, count int64, timeFrame enum.Interval) time.Ti
 func RoundFloat(val float64, precision uint) float64 {
 	ratio := math.Pow(10, float64(precision))
 	return math.Round(val*ratio) / ratio
+}
+
+// Вспомогательная функция для экранирования специальных символов MarkdownV2
+func EscapeMarkdown(text string) string {
+	replacer := strings.NewReplacer(
+		"_", "\\_",
+		"*", "\\*",
+		"[", "\\[",
+		"]", "\\]",
+		"(", "\\(",
+		")", "\\)",
+		"~", "\\~",
+		"`", "\\`",
+		">", "\\>",
+		"#", "\\#",
+		"+", "\\+",
+		"-", "\\-",
+		"=", "\\=",
+		"|", "\\|",
+		"{", "\\{",
+		"}", "\\}",
+		".", "\\.",
+		"!", "\\!",
+	)
+	return replacer.Replace(text)
 }

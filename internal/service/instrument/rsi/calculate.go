@@ -12,6 +12,7 @@ import (
 )
 
 func (s service) CalculateRSI(context context.Context, instrumentUid string, interval enum.Interval, dateFrom *timestamppb.Timestamp, dateTo *timestamppb.Timestamp, period int32) ([]*domain.RSIItemTechAnalyse, error) {
+	//fmt.Println(dateFrom.AsTime(), dateTo.AsTime())
 	limit := period*3 - 1
 	candles, _ := s.marketDataServiceClient.GetCandles(context, &instrumentUid, interval.ToNumberInvestApi(), dateFrom, dateTo, &limit, true)
 

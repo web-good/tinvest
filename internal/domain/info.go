@@ -15,6 +15,8 @@ type Item struct {
 	MACD           []*MACDItemTechAnalyse
 	RSI            []*RSIItemTechAnalyse
 	ATR            atr.ItemTechAnalyse
+	RSIValue       int
+	ProcentPrice   float64
 }
 
 func NewInfo() *Info {

@@ -7,23 +7,25 @@ import (
 	"tinvest/internal/service/instrument/rsi"
 	"tinvest/internal/service/instrument/volatility"
 	"tinvest/internal/service/notification/purchase_shares"
-	"tinvest/internal/service/trading_strategy/down_pump"
 	"tinvest/internal/service/trading_strategy/ema200"
+	"tinvest/internal/service/trading_strategy/golden_x"
 	"tinvest/internal/service/trading_strategy/macd_rsi"
+	"tinvest/internal/service/trading_strategy/scalping_rsi"
 	"tinvest/internal/service/trading_strategy/super_trend"
 )
 
 type service struct {
-	purchaseSharesService    purchase_shares.PurchaseShares
-	macdRsiTradingService    macd_rsi.MacdRsi
-	downPumpTradingService   down_pump.DownPump
-	superTrendTradingService super_trend.SuperTrend
-	ema200                   ema200.Ema200
-	emaInstrument            ema.Instrument
-	atrInstrument            atr.Instrument
-	rsiInstrument            rsi.Instrument
-	MACDInstrument           macd.Instrument
-	volatilityInstrument     volatility.Instrument
+	purchaseSharesService     purchase_shares.PurchaseShares
+	macdRsiTradingService     macd_rsi.MacdRsi
+	scalpingRsiTradingService scalping_rsi.ScalpingRsi
+	superTrendTradingService  super_trend.SuperTrend
+	goldenXTradingService     golden_x.GoldenX
+	ema200                    ema200.Ema200
+	emaInstrument             ema.Instrument
+	atrInstrument             atr.Instrument
+	rsiInstrument             rsi.Instrument
+	MACDInstrument            macd.Instrument
+	volatilityInstrument      volatility.Instrument
 }
 
 func (*ServiceProvider) GetPurchaseSharesService() purchase_shares.PurchaseShares {
@@ -56,11 +58,11 @@ func (*ServiceProvider) GetMacdRsiTradingService() macd_rsi.MacdRsi {
 	return serviceProvider.service.macdRsiTradingService
 }
 
-func (*ServiceProvider) GetDownPumpTradingService() down_pump.DownPump {
-	if serviceProvider.service.downPumpTradingService == nil {
+func (*ServiceProvider) GetScalpingRsiTradingService() scalping_rsi.ScalpingRsi {
+	if serviceProvider.service.scalpingRsiTradingService == nil {
 		grpcClient, _ := serviceProvider.GetGrpcClient()
 		tgClient, _ := serviceProvider.GetTelegramBotClient()
-		serviceProvider.service.downPumpTradingService = down_pump.NewService(
+		serviceProvider.service.scalpingRsiTradingService = scalping_rsi.NewService(
 			serviceProvider.Ema(),
 			serviceProvider.RSI(),
 			grpcClient.InstrumentsServiceClient(),
@@ -69,7 +71,22 @@ func (*ServiceProvider) GetDownPumpTradingService() down_pump.DownPump {
 		)
 	}
 
-	return serviceProvider.service.downPumpTradingService
+	return serviceProvider.service.scalpingRsiTradingService
+}
+
+func (*ServiceProvider) GetGoldenXTradingService() golden_x.GoldenX {
+	if serviceProvider.service.goldenXTradingService == nil {
+		grpcClient, _ := serviceProvider.GetGrpcClient()
+		tgClient, _ := serviceProvider.GetTelegramBotClient()
+		serviceProvider.service.goldenXTradingService = golden_x.NewService(
+			serviceProvider.RSI(),
+			grpcClient.InstrumentsServiceClient(),
+			grpcClient.MarketDataServiceClient(),
+			tgClient,
+		)
+	}
+
+	return serviceProvider.service.goldenXTradingService
 }
 
 func (*ServiceProvider) GetSuperTrendTradingService() super_trend.SuperTrend {
