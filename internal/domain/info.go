@@ -43,3 +43,9 @@ func (i *Info) Items() map[string]Item {
 	defer i.mu.RUnlock()
 	return i.items
 }
+
+func (i *Info) Clear() {
+	i.mu.RLock()
+	defer i.mu.RUnlock()
+	i.items = make(map[string]Item)
+}

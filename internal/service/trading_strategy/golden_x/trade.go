@@ -64,15 +64,16 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 
 		procent := calculateProcentToDevident(utils.CombinePrice(candles[len(candles)-1].Close.Units, candles[len(candles)-1].Close.Nano), shareRSI.AverageDevident)
 		info.WriteToMap(share.ID, domain.Item{InstrumentName: share.Name, ProcentPrice: procent, RSIValue: shareRSI.RSILength})
+	}
 
-		if len(info.Items()) > 0 {
-			err := s.tgClient.SendMessage(notif.Trade(info))
+	if len(info.Items()) > 0 {
+		err := s.tgClient.SendMessage(notif.Trade(info))
+		info.Clear()
 
-			if err != nil {
-				logger.ErrorContext(ctx, "message is not sent", err)
+		if err != nil {
+			logger.ErrorContext(ctx, "message is not sent", err)
 
-				return err
-			}
+			return err
 		}
 	}
 
