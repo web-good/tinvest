@@ -22,7 +22,7 @@ func (s *schedulerService) Trade(ctx context.Context, in dto.Trade) error {
 	heartbeat := heartbeat.New()
 	heartbeatCh := heartbeat.Beating(4 * time.Hour)
 	err := s.sh.AddJob(in.Scheduler, func() {
-		logger.InfoContext(ctx, "Воркер MacD Rsi начал работу")
+		logger.InfoContext(ctx, "Воркер Golden RSI начал работу")
 		err := s.service.Trade(ctx, in)
 
 		if err != nil {
