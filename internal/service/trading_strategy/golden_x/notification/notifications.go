@@ -13,7 +13,7 @@ func Trade(info *domain.Info) string {
 
 	for _, log := range info.Items() {
 		notifyMessageBuilder.WriteString("• <b>Акция:</b> " + log.InstrumentName + "\n")
-		notifyMessageBuilder.WriteString("  <b>RSI:</b> " + strconv.Itoa(log.RSIValue) + "\n")
+		notifyMessageBuilder.WriteString("  <b>RSI Length:</b> " + strconv.Itoa(log.RSIValue) + "\n")
 		notifyMessageBuilder.WriteString("  <b>Див.доход≈</b>" + fmt.Sprintf("%.2f", log.ProcentPrice) + "%\n\n")
 
 		notifyMessageBuilder.WriteString("\n")

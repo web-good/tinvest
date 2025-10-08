@@ -1,8 +1,10 @@
 package utils
 
 import (
+	"fmt"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"math"
+	"strconv"
 	"strings"
 	"time"
 	"tinvest/internal/enum"
@@ -57,4 +59,26 @@ func EscapeMarkdown(text string) string {
 		"!", "\\!",
 	)
 	return replacer.Replace(text)
+}
+
+// CalculateWeightedAverage принимает слайс чисел и возвращает взвешенное среднее,
+// где последние элементы имеют больший вес.
+func CalculateWeightedAverage(numbers []float64) float64 {
+	var weightedSum float64
+	var totalWeight float64
+
+	// создаем веса так, чтобы последние имели больший вес
+	for i, num := range numbers {
+		weight := float64(i + 1) // веса: 1, 2, 3, ...
+		weightedSum += num * weight
+		totalWeight += weight
+	}
+
+	if totalWeight == 0 {
+		return 0 // на случай пустого слайса
+	}
+
+	num, _ := strconv.ParseFloat(fmt.Sprintf("%.2f", weightedSum/totalWeight), 64)
+
+	return num
 }

@@ -14,8 +14,9 @@ import (
 )
 
 type App struct {
-	config *config.Config
-	sp     *service_provider.ServiceProvider
+	config     *config.Config
+	sp         *service_provider.ServiceProvider
+	collection *Collection
 }
 
 func InitApp(ctx context.Context) (app *App, err error) {
@@ -55,6 +56,7 @@ func (a *App) Run(ctx context.Context) error {
 func (a *App) initializationLoop(ctx context.Context) (err error) {
 	inits := []func(context.Context) error{
 		a.initConfig,
+		a.initCollection,
 		a.initServiceProvider,
 		//	a.initDatabase,
 		a.initGrpcClient,
@@ -158,26 +160,13 @@ func (a *App) runDev(ctx context.Context) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		tgBot, _ := a.sp.GetTelegramBotClient()
-		err := scheduler.NewSchedulerService(a.sp.GetGoldenXTradingService(), tgBot).Trade(
+
+		err := a.sp.GetGoldenXTradingService().Trade(
 			ctx,
 			goldenx.Trade{
 				Interval:  enum.Week1,
 				Scheduler: "*/2 * * * *",
-				ShareList: []goldenx.Share{
-					{ID: "962e2a95-02a9-4171-abd7-aa198dbe643a", RSILength: 12, Name: "Газпром", AverageDevident: 13.1},
-					{ID: "a797f14a-8513-4b84-b15e-a3b98dc4cc00", RSILength: 14, Name: "Сургутнефтегаз - прив", AverageDevident: 5.4},
-					{ID: "efdb54d3-2f92-44da-b7a3-8849e96039f6", RSILength: 11, Name: "Татнефть - прив", AverageDevident: 58.1},
-					{ID: "fd417230-19cf-4e7b-9623-f7c9ca18ec6b", RSILength: 9, Name: "Роснефть", AverageDevident: 30.2},
-					{ID: "02cfdf61-6298-4c0f-a9ca-9cabc82afaf3", RSILength: 10, Name: "Лукойл", AverageDevident: 559},
-					{ID: "c190ff1f-1447-4227-b543-316332699ca5", RSILength: 11, Name: "Сбер Банк - прив", AverageDevident: 18.4},
-					{ID: "e1b089f3-9bf1-44c3-897f-25e9f591bebc", RSILength: 14, Name: "Ростелеком - прив", AverageDevident: 5.3},
-					{ID: "cd8063ad-73ad-4b31-bd0d-93138d9e99a2", RSILength: 13, Name: "МТС", AverageDevident: 31.4},
-					{ID: "fa6aae10-b8d5-48c8-bbfd-d320d925d096", RSILength: 13, Name: "Северсталь", AverageDevident: 161.3},
-					{ID: "161eb0d0-aaac-4451-b374-f5d0eeb1b508", RSILength: 13, Name: "НЛМК", AverageDevident: 23.7},
-					{ID: "7132b1c9-ee26-4464-b5b5-1046264b61d9", RSILength: 15, Name: "ММК", AverageDevident: 4.2},
-					{ID: "9978b56f-782a-4a80-a4b1-a48cbecfd194", RSILength: 14, Name: "ФосАгро", AverageDevident: 484},
-				},
+				ShareList: *a.collection.GoldInstruments,
 			},
 		)
 
@@ -219,20 +208,7 @@ func (a *App) runProd(ctx context.Context) {
 			goldenx.Trade{
 				Interval:  enum.Week1,
 				Scheduler: "0 */2 * * *",
-				ShareList: []goldenx.Share{
-					{ID: "962e2a95-02a9-4171-abd7-aa198dbe643a", RSILength: 12, Name: "Газпром", AverageDevident: 13.1},
-					{ID: "a797f14a-8513-4b84-b15e-a3b98dc4cc00", RSILength: 14, Name: "Сургутнефтегаз - прив", AverageDevident: 5.4},
-					{ID: "efdb54d3-2f92-44da-b7a3-8849e96039f6", RSILength: 11, Name: "Татнефть - прив", AverageDevident: 58.1},
-					{ID: "fd417230-19cf-4e7b-9623-f7c9ca18ec6b", RSILength: 9, Name: "Роснефть", AverageDevident: 30.2},
-					{ID: "02cfdf61-6298-4c0f-a9ca-9cabc82afaf3", RSILength: 10, Name: "Лукойл", AverageDevident: 559},
-					{ID: "c190ff1f-1447-4227-b543-316332699ca5", RSILength: 11, Name: "Сбер Банк - прив", AverageDevident: 18.4},
-					{ID: "e1b089f3-9bf1-44c3-897f-25e9f591bebc", RSILength: 14, Name: "Ростелеком - прив", AverageDevident: 5.3},
-					{ID: "cd8063ad-73ad-4b31-bd0d-93138d9e99a2", RSILength: 13, Name: "МТС", AverageDevident: 31.4},
-					{ID: "fa6aae10-b8d5-48c8-bbfd-d320d925d096", RSILength: 13, Name: "Северсталь", AverageDevident: 161.3},
-					{ID: "161eb0d0-aaac-4451-b374-f5d0eeb1b508", RSILength: 13, Name: "НЛМК", AverageDevident: 23.7},
-					{ID: "7132b1c9-ee26-4464-b5b5-1046264b61d9", RSILength: 15, Name: "ММК", AverageDevident: 4.2},
-					{ID: "9978b56f-782a-4a80-a4b1-a48cbecfd194", RSILength: 14, Name: "ФосАгро", AverageDevident: 484},
-				},
+				ShareList: *a.collection.GoldInstruments,
 			},
 		)
 

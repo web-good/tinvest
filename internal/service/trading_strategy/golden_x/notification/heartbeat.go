@@ -12,11 +12,11 @@ func Heartbeat(in *dto.Trade) string {
 
 	builder.WriteString("💟 <b>Процесс работает, отслеживает следующие акции:</b>\n\n")
 
-	for _, share := range in.ShareList {
+	for _, share := range in.ShareList.All() {
 		instrumentName := utils.EscapeMarkdown(share.Name)
 		builder.WriteString(
 			"• <b>Акция:</b> " + instrumentName + "\n" +
-				"  <b>RSI:</b> " + strconv.Itoa(share.RSILength) + "\n\n",
+				"  <b>RSI Length:</b> " + strconv.Itoa(share.RSILength) + "\n\n",
 		)
 	}
 

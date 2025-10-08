@@ -9,6 +9,7 @@ import (
 	"tinvest/internal/service/trading_strategy/golden_x/dto"
 	notif "tinvest/internal/service/trading_strategy/golden_x/notification"
 	"tinvest/internal/utils"
+	"tinvest/pkg/collection"
 	"tinvest/pkg/logger"
 )
 
@@ -21,17 +22,16 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 	t, _ := s.instrumentServiceGrpcClient.Shares(ctx)
 	loc, _ := time.LoadLocation("Europe/Moscow")
 	dateNow := time.Now().In(loc)
-	var shareRSI dto.Share
+	var shareRSI collection.Instrument
 	info := domain.NewInfo()
 	limit := int32(3)
 
 	for _, share := range t {
 		flag := false
-		for _, DTOShare := range in.ShareList {
-			if DTOShare.ID == share.ID {
-				flag = true
-				shareRSI = DTOShare
-			}
+
+		if shareItem, ok := in.ShareList.Get(share.ID); ok == true {
+			flag = true
+			shareRSI = shareItem
 		}
 
 		if !flag {
@@ -80,5 +80,5 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 }
 
 func calculateProcentToDevident(price float64, devident float64) float64 {
-	return devident * 100 / price
+	return (devident - (devident * 13 / 100)) * 100 / price
 }
