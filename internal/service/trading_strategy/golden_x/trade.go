@@ -24,6 +24,7 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 	dateNow := time.Now().In(loc)
 	var shareRSI collection.Instrument
 	info := domain.NewInfo()
+	RSIInfo := domain.NewInfo()
 	limit := int32(3)
 
 	for _, share := range t {
@@ -53,6 +54,13 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 			continue
 		}
 
+		RSIInfo.WriteToMap(
+			share.ID,
+			domain.Item{
+				InstrumentName: share.Name,
+				RSIValue:       shareRSI.RSILength,
+				ProcentPrice:   utils.CombinePrice(rsi[0].SignalLine.Units, rsi[0].SignalLine.Nano),
+			})
 		if utils.CombinePrice(rsi[0].SignalLine.Units, rsi[0].SignalLine.Nano) > 30 {
 			continue
 		}
@@ -68,6 +76,16 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 
 	if len(info.Items()) > 0 {
 		err := s.tgClient.SendMessage(notif.Trade(info))
+
+		if err != nil {
+			logger.ErrorContext(ctx, "message is not sent", err)
+
+			return err
+		}
+	}
+
+	if len(RSIInfo.Items()) > 0 {
+		err := s.tgClient.SendMessage(notif.RSIList(RSIInfo))
 
 		if err != nil {
 			logger.ErrorContext(ctx, "message is not sent", err)

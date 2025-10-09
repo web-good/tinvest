@@ -16,6 +16,7 @@ func Heartbeat(in *dto.Trade) string {
 		instrumentName := utils.EscapeMarkdown(share.Name)
 		builder.WriteString(
 			"• <b>Акция:</b> " + instrumentName + "\n" +
+				"• <b>Средняя див доходность:</b> " + strconv.FormatFloat(share.AverageDevident, 'f', -1, 64) + "\n" +
 				"  <b>RSI Length:</b> " + strconv.Itoa(share.RSILength) + "\n\n",
 		)
 	}
