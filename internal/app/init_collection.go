@@ -100,6 +100,13 @@ func initCompanyListForGoldenStrategy() *collection.InstrumentCollection {
 				RSILength:       9,
 				Name:            "ФосАгро",
 				AverageDevident: utils.CalculateWeightedAverage([]float64{372, 300, 558, 1098, 1020, 552}),
+			}).
+		Add(
+			collection.Instrument{
+				ID:              "653d47e9-dbd4-407a-a1c3-47f897df4694",
+				RSILength:       10,
+				Name:            "Транс нефть",
+				AverageDevident: utils.CalculateWeightedAverage([]float64{107, 116, 92, 105, 166.6, 177.2, 198.25}),
 			})
 
 	return companyCollection

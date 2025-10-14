@@ -29,7 +29,7 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 
 	for _, share := range t {
 		flag := false
-
+		fmt.Println(share)
 		if shareItem, ok := in.ShareList.Get(share.ID); ok == true {
 			flag = true
 			shareRSI = shareItem
@@ -54,24 +54,25 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 			continue
 		}
 
-		RSIInfo.WriteToMap(
-			share.ID,
-			domain.Item{
-				InstrumentName: share.Name,
-				RSIValue:       shareRSI.RSILength,
-				ProcentPrice:   utils.CombinePrice(rsi[0].SignalLine.Units, rsi[0].SignalLine.Nano),
-			})
-		if utils.CombinePrice(rsi[0].SignalLine.Units, rsi[0].SignalLine.Nano) > 30 {
-			continue
-		}
-
 		candles, candlesErr := s.marketDataServiceGrpcClient.GetCandles(ctx, &share.ID, in.Interval.ToNumberInvestApi(), utils.TimeStampPbGenerator(dateNow, -20, in.Interval), timestamppb.New(dateNow), &limit, true)
 		if candlesErr != nil {
 			logger.ErrorContext(ctx, fmt.Errorf("error in calculate Candle :%w", candlesErr).Error())
 		}
 
 		procent := calculateProcentToDevident(utils.CombinePrice(candles[len(candles)-1].Close.Units, candles[len(candles)-1].Close.Nano), shareRSI.AverageDevident)
-		info.WriteToMap(share.ID, domain.Item{InstrumentName: share.Name, ProcentPrice: procent, RSIValue: shareRSI.RSILength})
+		RSIInfo.WriteToMap(
+			share.ID,
+			domain.Item{
+				InstrumentName: share.Name,
+				RSILength:      shareRSI.RSILength,
+				RSIValue:       utils.CombinePrice(rsi[0].SignalLine.Units, rsi[0].SignalLine.Nano),
+				ProcentPrice:   procent,
+			})
+		if utils.CombinePrice(rsi[0].SignalLine.Units, rsi[0].SignalLine.Nano) > 30 {
+			continue
+		}
+
+		info.WriteToMap(share.ID, domain.Item{InstrumentName: share.Name, ProcentPrice: procent})
 	}
 
 	if len(info.Items()) > 0 {

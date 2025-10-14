@@ -15,7 +15,8 @@ type Item struct {
 	MACD           []*MACDItemTechAnalyse
 	RSI            []*RSIItemTechAnalyse
 	ATR            atr.ItemTechAnalyse
-	RSIValue       int
+	RSIValue       float64
+	RSILength      int
 	ProcentPrice   float64
 }
 
