@@ -29,7 +29,6 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 
 	for _, share := range t {
 		flag := false
-		fmt.Println(share)
 		if shareItem, ok := in.ShareList.Get(share.ID); ok == true {
 			flag = true
 			shareRSI = shareItem
@@ -68,16 +67,21 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 				RSIValue:       utils.CombinePrice(rsi[0].SignalLine.Units, rsi[0].SignalLine.Nano),
 				ProcentPrice:   procent,
 			})
-		if utils.CombinePrice(rsi[0].SignalLine.Units, rsi[0].SignalLine.Nano) > 30 {
+		if utils.CombinePrice(rsi[0].SignalLine.Units, rsi[0].SignalLine.Nano) > 40 {
 			continue
 		}
 
-		info.WriteToMap(share.ID, domain.Item{InstrumentName: share.Name, ProcentPrice: procent})
+		info.WriteToMap(
+			share.ID,
+			domain.Item{
+				InstrumentName: share.Name,
+				ProcentPrice:   procent,
+				RSIValue:       utils.CombinePrice(rsi[0].SignalLine.Units, rsi[0].SignalLine.Nano),
+			})
 	}
 
 	if len(info.Items()) > 0 {
-		err := s.tgClient.SendMessage(notif.Trade(info))
-
+		err := s.tgClient.SendMessage(notif.Trade(info, in.ShareTip))
 		if err != nil {
 			logger.ErrorContext(ctx, "message is not sent", err)
 
@@ -86,8 +90,7 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 	}
 
 	if len(RSIInfo.Items()) > 0 {
-		err := s.tgClient.SendMessage(notif.RSIList(RSIInfo))
-
+		err := s.tgClient.SendMessage(notif.RSIList(RSIInfo, in.ShareTip))
 		if err != nil {
 			logger.ErrorContext(ctx, "message is not sent", err)
 

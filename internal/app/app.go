@@ -164,8 +164,9 @@ func (a *App) runDev(ctx context.Context) {
 		err := a.sp.GetGoldenXTradingService().Trade(
 			ctx,
 			goldenx.Trade{
+				ShareTip:  1,
 				Interval:  enum.Week1,
-				Scheduler: "*/2 * * * *",
+				Scheduler: "*/4 * * * *",
 				ShareList: *a.collection.GoldInstruments,
 			},
 		)
@@ -174,7 +175,24 @@ func (a *App) runDev(ctx context.Context) {
 			logger.ErrorContext(ctx, "Error in worker golden X strategy", err.Error())
 		}
 	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
 
+		err := a.sp.GetGoldenXTradingService().Trade(
+			ctx,
+			goldenx.Trade{
+				ShareTip:  2,
+				Interval:  enum.Week1,
+				Scheduler: "*/5 * * * *",
+				ShareList: *a.collection.GrowthShare,
+			},
+		)
+
+		if err != nil {
+			logger.ErrorContext(ctx, "Error in worker golden X strategy", err.Error())
+		}
+	}()
 	wg.Wait()
 }
 
@@ -206,6 +224,7 @@ func (a *App) runProd(ctx context.Context) {
 		err := scheduler.NewSchedulerService(a.sp.GetGoldenXTradingService(), tgBot).Trade(
 			ctx,
 			goldenx.Trade{
+				ShareTip:  1,
 				Interval:  enum.Week1,
 				Scheduler: "0 */2 * * *",
 				ShareList: *a.collection.GoldInstruments,
@@ -213,7 +232,24 @@ func (a *App) runProd(ctx context.Context) {
 		)
 
 		if err != nil {
-			logger.ErrorContext(ctx, "Error in worker golden X strategy", err.Error())
+			logger.ErrorContext(ctx, "Error in worker golden X strategy ShareTip:1", err.Error())
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		tgBot, _ := a.sp.GetTelegramBotClient()
+		err := scheduler.NewSchedulerService(a.sp.GetGoldenXTradingService(), tgBot).Trade(
+			ctx,
+			goldenx.Trade{
+				ShareTip:  2,
+				Interval:  enum.Week1,
+				Scheduler: "0 */4 * * *",
+				ShareList: *a.collection.GrowthShare,
+			},
+		)
+
+		if err != nil {
+			logger.ErrorContext(ctx, "Error in worker golden X strategy ShareTip:2", err.Error())
 		}
 	}()
 	wg.Wait()

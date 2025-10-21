@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"fmt"
 	"tinvest/internal/utils"
 	"tinvest/pkg/collection"
 	"tinvest/pkg/logger"
@@ -10,13 +9,14 @@ import (
 
 type Collection struct {
 	GoldInstruments *collection.InstrumentCollection
+	GrowthShare     *collection.InstrumentCollection
 }
 
 func (a *App) initCollection(ctx context.Context) error {
 	logger.InfoContext(ctx, "Start init list")
-	fmt.Println(initCompanyListForGoldenStrategy())
 	a.collection = &Collection{}
 	a.collection.GoldInstruments = initCompanyListForGoldenStrategy()
+	a.collection.GrowthShare = initGrowthShare()
 	logger.InfoContext(ctx, "End init list")
 
 	return nil
@@ -107,6 +107,43 @@ func initCompanyListForGoldenStrategy() *collection.InstrumentCollection {
 				RSILength:       10,
 				Name:            "Транс нефть",
 				AverageDevident: utils.CalculateWeightedAverage([]float64{107, 116, 92, 105, 166.6, 177.2, 198.25}),
+			})
+
+	return companyCollection
+}
+
+func initGrowthShare() *collection.InstrumentCollection {
+	companyCollection := collection.NewCollection()
+	companyCollection.
+		Add(
+			collection.Instrument{
+				ID:        "7de75794-a27f-4d81-a39b-492345813822",
+				RSILength: 7,
+				Name:      "Яндекс",
+			}).
+		Add(
+			collection.Instrument{
+				ID:        "10620843-28ce-44e8-80c2-f26ceb1bd3e1",
+				RSILength: 7,
+				Name:      "Полюс",
+			}).
+		Add(
+			collection.Instrument{
+				ID:        "87db07bc-0e02-4e29-90bb-05e8ef791d7b",
+				RSILength: 8,
+				Name:      "Т-Технологии",
+			}).
+		Add(
+			collection.Instrument{
+				ID:        "1e19953d-01c6-4ecd-a5f4-53ae3ed44029",
+				RSILength: 8,
+				Name:      "Банк Санкт-Петербург",
+			}).
+		Add(
+			collection.Instrument{
+				ID:        "0da66728-6c30-44c4-9264-df8fac2467ee",
+				RSILength: 9,
+				Name:      "НОВАТЭК",
 			})
 
 	return companyCollection
