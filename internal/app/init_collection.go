@@ -97,7 +97,7 @@ func initCompanyListForGoldenStrategy() *collection.InstrumentCollection {
 		Add(
 			collection.Instrument{
 				ID:              "9978b56f-782a-4a80-a4b1-a48cbecfd194",
-				RSILength:       9,
+				RSILength:       7,
 				Name:            "ФосАгро",
 				AverageDevident: utils.CalculateWeightedAverage([]float64{372, 300, 558, 1098, 1020, 552}),
 			}).
