@@ -7,6 +7,7 @@ import (
 	"tinvest/internal/service/instrument/rsi"
 	"tinvest/internal/service/instrument/volatility"
 	"tinvest/internal/service/notification/purchase_shares"
+	"tinvest/internal/service/trading_strategy/bonds"
 	"tinvest/internal/service/trading_strategy/ema200"
 	"tinvest/internal/service/trading_strategy/golden_x"
 	"tinvest/internal/service/trading_strategy/macd_rsi"
@@ -20,6 +21,7 @@ type service struct {
 	scalpingRsiTradingService scalping_rsi.ScalpingRsi
 	superTrendTradingService  super_trend.SuperTrend
 	goldenXTradingService     golden_x.GoldenX
+	bondsTradingService       bonds.Bonds
 	ema200                    ema200.Ema200
 	emaInstrument             ema.Instrument
 	atrInstrument             atr.Instrument
@@ -72,6 +74,21 @@ func (*ServiceProvider) GetScalpingRsiTradingService() scalping_rsi.ScalpingRsi 
 	}
 
 	return serviceProvider.service.scalpingRsiTradingService
+}
+
+func (*ServiceProvider) GetBondsTradingService() bonds.Bonds {
+	if serviceProvider.service.bondsTradingService == nil {
+		grpcClient, _ := serviceProvider.GetGrpcClient()
+		tgClient, _ := serviceProvider.GetTelegramBotClient()
+		serviceProvider.service.bondsTradingService = bonds.NewService(
+			serviceProvider.RSI(),
+			grpcClient.InstrumentsServiceClient(),
+			grpcClient.MarketDataServiceClient(),
+			tgClient,
+		)
+	}
+
+	return serviceProvider.service.bondsTradingService
 }
 
 func (*ServiceProvider) GetGoldenXTradingService() golden_x.GoldenX {

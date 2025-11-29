@@ -2,11 +2,11 @@ package config
 
 type TelegramClient struct {
 	Token  string `config:"TELEGRAM"`
-	ChatID int64
+	ChatID []int64
 }
 
 func NewTelegramClientConfig() *TelegramClient {
 	return &TelegramClient{
-		ChatID: 397653673,
+		ChatID: []int64{397653673, 975449762},
 	}
 }
