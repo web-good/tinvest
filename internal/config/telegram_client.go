@@ -7,6 +7,6 @@ type TelegramClient struct {
 
 func NewTelegramClientConfig() *TelegramClient {
 	return &TelegramClient{
-		ChatID: []int64{397653673, 975449762},
+		ChatID: []int64{397653673, 784012062},
 	}
 }
