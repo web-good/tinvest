@@ -238,7 +238,7 @@ func (a *App) runProd(ctx context.Context) {
 			goldenx.Trade{
 				ShareTip:  1,
 				Interval:  enum.Week1,
-				Scheduler: "0 */2 * * *",
+				Scheduler: "0 */5 * * *",
 				ShareList: *a.collection.GoldInstruments,
 			},
 		)
@@ -255,7 +255,7 @@ func (a *App) runProd(ctx context.Context) {
 			goldenx.Trade{
 				ShareTip:  2,
 				Interval:  enum.Week1,
-				Scheduler: "0 */4 * * *",
+				Scheduler: "0 */5 * * *",
 				ShareList: *a.collection.GrowthShare,
 			},
 		)
