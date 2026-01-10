@@ -39,27 +39,6 @@ func (*ServiceProvider) GetPurchaseSharesService() purchase_shares.PurchaseShare
 	return serviceProvider.service.purchaseSharesService
 }
 
-func (*ServiceProvider) GetMacdRsiTradingService() macd_rsi.MacdRsi {
-	if serviceProvider.service.macdRsiTradingService == nil {
-		grpcClient, _ := serviceProvider.GetGrpcClient()
-		tgClient, _ := serviceProvider.GetTelegramBotClient()
-		serviceProvider.service.macdRsiTradingService = macd_rsi.NewService(
-			grpcClient.InstrumentsServiceClient(),
-			grpcClient.MarketDataServiceClient(),
-			serviceProvider.Atr(),
-			tgClient,
-			serviceProvider.Ema(),
-			serviceProvider.MACD(),
-			serviceProvider.RSI(),
-			grpcClient.UserServiceClient(),
-			grpcClient.OperationsServiceClient(),
-			serviceProvider.Volatility(),
-		)
-	}
-
-	return serviceProvider.service.macdRsiTradingService
-}
-
 func (*ServiceProvider) GetScalpingRsiTradingService() scalping_rsi.ScalpingRsi {
 	if serviceProvider.service.scalpingRsiTradingService == nil {
 		grpcClient, _ := serviceProvider.GetGrpcClient()

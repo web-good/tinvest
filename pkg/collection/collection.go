@@ -1,5 +1,51 @@
 package collection
 
+import (
+	"sort"
+	"sync"
+)
+
+type collection[T any] struct {
+	mu    sync.RWMutex
+	items []T
+}
+
+func New[T any]() *collection[T] {
+	return &collection[T]{items: make([]T, 0)}
+}
+
+func (c *collection[T]) Add(item T) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.items = append(c.items, item)
+}
+
+func (c *collection[T]) GetTopByCriteria(fnCriteria func(i, j T) bool) []T {
+	copied := make([]T, len(c.items))
+	copy(copied, c.items)
+	sort.Slice(copied, func(i, j int) bool {
+		return fnCriteria(copied[i], copied[j])
+	})
+	//sort.Slice(copied, fnCriteria)
+
+	// возвращаем первые 10 элементов или все, если элементов меньше 10
+	if len(copied) < 15 {
+		return copied
+	}
+
+	return copied[:15]
+}
+
+func (c *collection[T]) GetAll() []T {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	// Можно возвращать копию слайса, чтобы избежать гонки при чтении
+	copied := make([]T, len(c.items))
+	copy(copied, c.items)
+
+	return copied
+}
+
 type Instrument struct {
 	ID              string
 	Name            string

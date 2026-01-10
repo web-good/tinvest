@@ -2,12 +2,9 @@ package scheduler
 
 import (
 	"context"
-	"time"
 	"tinvest/internal/service/trading_strategy/golden_x"
 	"tinvest/internal/service/trading_strategy/golden_x/dto"
-	"tinvest/internal/service/trading_strategy/golden_x/notification"
 	"tinvest/pkg/client/telegram"
-	"tinvest/pkg/heartbeat"
 	"tinvest/pkg/logger"
 	"tinvest/pkg/scheduler"
 )
@@ -19,14 +16,14 @@ type schedulerService struct {
 }
 
 func (s *schedulerService) Trade(ctx context.Context, in dto.Trade) error {
-	heartbeat := heartbeat.New()
-	heartbeatCh := heartbeat.Beating(4 * time.Hour)
+	//heartbeat := heartbeat.New()
+	//heartbeatCh := heartbeat.Beating(4 * time.Hour)
 	err := s.sh.AddJob(in.Scheduler, func() {
 		logger.InfoContext(ctx, "Воркер Golden RSI начал работу")
 		err := s.service.Trade(ctx, in)
 
 		if err != nil {
-			heartbeat.Stop()
+			//heartbeat.Stop()
 			logger.ErrorContext(ctx, "Ошибка в ходе работы job", err)
 		}
 	})
@@ -37,7 +34,7 @@ func (s *schedulerService) Trade(ctx context.Context, in dto.Trade) error {
 
 	defer s.sh.Stop()
 
-	for {
+	/*for {
 		select {
 		case _, ok := <-heartbeatCh:
 			if !ok {
@@ -48,7 +45,8 @@ func (s *schedulerService) Trade(ctx context.Context, in dto.Trade) error {
 		default:
 			time.Sleep(10 * time.Second)
 		}
-	}
+	}*/
+	return nil
 }
 
 func NewSchedulerService(service golden_x.GoldenX, tgClient telegram.Client) golden_x.GoldenX {

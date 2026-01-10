@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"time"
 	investapi "tinvest/internal/pb/v1"
 	"tinvest/internal/utils"
 	"tinvest/pkg/client/grpc/model"
@@ -13,12 +14,24 @@ func ConvertBondsFromPb(in *investapi.BondsResponse) []*model.Bond {
 		if bond.RiskLevel != investapi.RiskLevel_RISK_LEVEL_LOW {
 			continue
 		}
-
-		if bond.Exchange != "moex_morning_evening_ofz" {
+		if bond.FloatingCouponFlag == true {
 			continue
+		}
+		if bond.Exchange != "moex_morning_evening_ofz" {
+			//continue
 		}
 
 		res = append(res, convertBondModelFromBondPb(bond))
+	}
+
+	return res
+}
+
+func ConvertCouponsFromPb(in []*investapi.Coupon) []*model.BondCoupon {
+	res := make([]*model.BondCoupon, 0, len(in))
+
+	for _, coupon := range in {
+		res = append(res, convertBondCouponModelFromCouponPb(coupon))
 	}
 
 	return res
@@ -35,5 +48,18 @@ func convertBondModelFromBondPb(bond *investapi.Bond) *model.Bond {
 		FloatingCouponFlag:    bond.FloatingCouponFlag,
 		Nominal:               utils.CombinePrice(bond.Nominal.Units, bond.Nominal.Nano),
 		RiskLevel:             bond.RiskLevel.String(),
+		AmortizationFlag:      bond.AmortizationFlag,
+		Nkd:                   utils.CombinePrice(bond.AciValue.Units, bond.AciValue.Nano),
+	}
+}
+
+func convertBondCouponModelFromCouponPb(coupon *investapi.Coupon) *model.BondCoupon {
+	loc, _ := time.LoadLocation("Europe/Moscow")
+
+	return &model.BondCoupon{
+		CouponDate:      coupon.CouponDate.AsTime().In(loc),
+		PayOnBond:       model.Quotation{Nano: coupon.PayOneBond.Nano, Units: coupon.PayOneBond.Units},
+		CouponStartDate: coupon.CouponStartDate.AsTime().In(loc),
+		CouponEndDate:   coupon.CouponEndDate.AsTime().In(loc),
 	}
 }

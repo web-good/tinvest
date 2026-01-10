@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"time"
 	"tinvest/internal/converter"
 	"tinvest/internal/domain/share"
@@ -17,6 +18,7 @@ type InstrumentsServiceClient interface {
 	Shares(ctx context.Context) ([]*model.Share, error)
 	ShareByID(ctx context.Context, id string) (*share.Share, error)
 	Bonds(ctx context.Context) ([]*pkgmodel.Bond, error)
+	GetBondCoupons(instrumentId string, from time.Time, to time.Time) ([]*pkgmodel.BondCoupon, error)
 }
 
 type instrumentsServiceClient struct {
@@ -44,6 +46,25 @@ func (c *instrumentsServiceClient) Bonds(ctx context.Context) ([]*pkgmodel.Bond,
 	}
 
 	return converter2.ConvertBondsFromPb(resp), nil
+}
+
+func (c *instrumentsServiceClient) GetBondCoupons(instrumentId string, from time.Time, to time.Time) ([]*pkgmodel.BondCoupon, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	resp, err := c.instrumentsApi.GetBondCoupons(
+		ctx,
+		&investapi.GetBondCouponsRequest{
+			From:         timestamppb.New(from),
+			To:           timestamppb.New(to),
+			InstrumentId: instrumentId,
+		},
+		NewRPCCredential(c.auth))
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to request BondCoupons: %w", err)
+	}
+
+	return converter2.ConvertCouponsFromPb(resp.Events), nil
 }
 
 func (c *instrumentsServiceClient) Shares(ctx context.Context) ([]*model.Share, error) {

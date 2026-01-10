@@ -6,6 +6,7 @@ import (
 	"sync"
 	"tinvest/internal/config"
 	"tinvest/internal/enum"
+	bondsscheduler "tinvest/internal/service/trading_strategy/bonds/scheduler"
 	goldenx "tinvest/internal/service/trading_strategy/golden_x/dto"
 	"tinvest/internal/service/trading_strategy/golden_x/scheduler"
 	"tinvest/internal/service_provider"
@@ -184,7 +185,7 @@ func (a *App) runDev(ctx context.Context) {
 		//)
 
 		//if err != nil {
-		logger.ErrorContext(ctx, "Error in worker golden X strategy")
+		//logger.ErrorContext(ctx, "Error in worker golden X strategy")
 		//}
 	}()
 	wg.Add(1)
@@ -202,7 +203,7 @@ func (a *App) runDev(ctx context.Context) {
 		//	)
 
 		//	if err != nil {
-		logger.ErrorContext(ctx, "Error in worker golden X strategy")
+		//logger.ErrorContext(ctx, "Error in worker golden X strategy")
 		//	}
 	}()
 	wg.Wait()
@@ -210,7 +211,7 @@ func (a *App) runDev(ctx context.Context) {
 
 func (a *App) runProd(ctx context.Context) {
 	wg := sync.WaitGroup{}
-	wg.Add(1)
+	wg.Add(3)
 	/*go func() {
 		defer wg.Done()
 		sh := mr.NewSchedulerService(a.sp.GetMacdRsiTradingService())
@@ -230,6 +231,13 @@ func (a *App) runProd(ctx context.Context) {
 			logger.ErrorContext(ctx, "Error in worker macd rsi 1H take profit", err.Error())
 		}
 	}()*/
+	go func() {
+		defer wg.Done()
+		err := bondsscheduler.NewScheduler(a.sp.GetBondsTradingService()).Trade(ctx)
+		if err != nil {
+			logger.ErrorContext(ctx, "Error in worker golden X strategy ShareTip:2", err.Error())
+		}
+	}()
 	go func() {
 		defer wg.Done()
 		tgBot, _ := a.sp.GetTelegramBotClient()
@@ -259,7 +267,6 @@ func (a *App) runProd(ctx context.Context) {
 				ShareList: *a.collection.GrowthShare,
 			},
 		)
-
 		if err != nil {
 			logger.ErrorContext(ctx, "Error in worker golden X strategy ShareTip:2", err.Error())
 		}
