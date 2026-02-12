@@ -1,0 +1,19 @@
+# This is an example agent configuration file
+# It is used to define custom AI agents within Continue
+# Each agent file can be accessed by selecting it from the agent dropdown
+
+# To learn more, see the full config.yaml reference: https://docs.continue.dev/reference
+
+name: Example Agent
+version: 1.0.0
+schema: v1
+
+# Models define which AI models this agent can use
+# https://docs.continue.dev/customization/models
+models:
+  - name: my gpt-5
+    provider: openrouter
+    model: mistralai/devstral-2512:free
+    apiKey: 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
+
+

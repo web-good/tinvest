@@ -1,0 +1,10 @@
+name: New MCP server
+version: 0.0.1
+schema: v1
+mcpServers:
+  - name: MCP Context 7
+    type: streamable-http
+    url: https://mcp.context7.com/mcp
+    requestOptions:
+      headers:
+        Authorization: Bearer ctx7sk-f2067919-0c83-4ac9-8315-6f787768f8bf

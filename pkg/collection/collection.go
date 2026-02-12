@@ -20,20 +20,18 @@ func (c *collection[T]) Add(item T) {
 	c.items = append(c.items, item)
 }
 
-func (c *collection[T]) GetTopByCriteria(fnCriteria func(i, j T) bool) []T {
+func (c *collection[T]) GetTopByCriteria(fnCriteria func(i, j T) bool, size int) []T {
 	copied := make([]T, len(c.items))
 	copy(copied, c.items)
 	sort.Slice(copied, func(i, j int) bool {
 		return fnCriteria(copied[i], copied[j])
 	})
-	//sort.Slice(copied, fnCriteria)
 
-	// возвращаем первые 10 элементов или все, если элементов меньше 10
-	if len(copied) < 15 {
+	if len(copied) < size {
 		return copied
 	}
 
-	return copied[:15]
+	return copied[:size]
 }
 
 func (c *collection[T]) GetAll() []T {
