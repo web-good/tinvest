@@ -12,7 +12,7 @@ import (
 	"tinvest/pkg/logger"
 )
 
-func Sender(ctx context.Context, bondCh <-chan domain.BondReport, tgClient telegram.Client, wg *sync.WaitGroup, dateFrom time.Time, dateTo time.Time) {
+func Sender(ctx context.Context, bondCh <-chan domain.BondReport, tgClient telegram.Client, wg *sync.WaitGroup, dateFrom, dateTo time.Time) {
 	defer wg.Done()
 	collectionBond := collection.New[domain.BondReport]()
 
@@ -25,6 +25,11 @@ func Sender(ctx context.Context, bondCh <-chan domain.BondReport, tgClient teleg
 	}
 
 	sortedResult := collectionBond.GetTopByCriteria(func(i, j domain.BondReport) bool {
+		c := i.ExecutionDate.Year() - time.Now().Year()
+		if c >= 6 {
+			return i.CouponPercentByYear > j.CouponPercentByYear
+		}
+
 		return i.PercentByYear > j.PercentByYear
 	}, 10)
 
