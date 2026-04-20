@@ -10,8 +10,8 @@ import (
 )
 
 type OperationsServiceClient interface {
-	GetPortfolio(ctx context.Context, accountID string) ([]model.Position, error)
-	GetOperation(ctx context.Context, accountID string, figi string) ([]model.Operation, error)
+	GetPortfolio(ctx context.Context, accountID string) ([]*model.Position, error)
+	GetOperation(ctx context.Context, accountID string, figi string) ([]*model.Operation, error)
 }
 
 type operationsServiceClient struct {
@@ -26,7 +26,7 @@ func NewOperationsServiceClient(conn grpc.ClientConnInterface, token string) Ope
 	}
 }
 
-func (o *operationsServiceClient) GetPortfolio(ctx context.Context, accountID string) ([]model.Position, error) {
+func (o *operationsServiceClient) GetPortfolio(ctx context.Context, accountID string) ([]*model.Position, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	var cur investapi.PortfolioRequest_CurrencyRequest
@@ -43,7 +43,7 @@ func (o *operationsServiceClient) GetPortfolio(ctx context.Context, accountID st
 	return converter.ConvertPortfolioFromBp(resp), nil
 }
 
-func (o *operationsServiceClient) GetOperation(ctx context.Context, accountID string, figi string) ([]model.Operation, error) {
+func (o *operationsServiceClient) GetOperation(ctx context.Context, accountID string, figi string) ([]*model.Operation, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 

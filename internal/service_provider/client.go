@@ -80,3 +80,22 @@ func (s *ServiceProvider) GetTelegramBotClient() (telegram.Client, error) {
 
 	return serviceProvider.client.telegramBot, nil
 }
+
+func (s *ServiceProvider) GetTelegramBotClientWithProxy() (telegram.Client, error) {
+	if serviceProvider.client.telegramBot != nil {
+		return serviceProvider.client.telegramBot, nil
+	}
+
+	var err error
+	serviceProvider.client.telegramBot, err = telegram.InitTelegramBotProxy(
+		s.appConfig.TelegramClient.Token,
+		s.appConfig.TelegramClient.ChatID,
+		"dedicated.love-internet.xyz:4515",
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("could not init telegram bot: %w", err)
+	}
+
+	return serviceProvider.client.telegramBot, nil
+}

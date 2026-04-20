@@ -21,7 +21,7 @@ func ConvertBondsFromPb(in *investapi.BondsResponse) []*model.Bond {
 			//continue
 		}
 
-		res = append(res, convertBondModelFromBondPb(bond))
+		res = append(res, ConvertBondModelFromBondPb(bond))
 	}
 
 	return res
@@ -37,7 +37,7 @@ func ConvertCouponsFromPb(in []*investapi.Coupon) []*model.BondCoupon {
 	return res
 }
 
-func convertBondModelFromBondPb(bond *investapi.Bond) *model.Bond {
+func ConvertBondModelFromBondPb(bond *investapi.Bond) *model.Bond {
 	return &model.Bond{
 		Id:                    bond.Uid,
 		Name:                  bond.Name,

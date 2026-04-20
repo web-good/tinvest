@@ -79,22 +79,6 @@ func (a *App) initializationLoop(ctx context.Context) (err error) {
 }
 
 func (a *App) runDev(ctx context.Context) {
-	/*loc, _ := time.LoadLocation("Europe/Moscow")
-	a.sp.GetMacdRsiTradingService().BackTest(ctx, dto.BackTest{
-		AtrInterval: enum.Day1,
-		Interval:    enum.Hour1,
-		//	DateFrom: time.Date(2025, time.July, 18, 9, 20, 0, 0, time.UTC),
-		DateFrom: time.Now().AddDate(0, -1, 0).In(loc),
-		DateTo:   time.Now().AddDate(0, 0, 0).In(loc),
-		InstrumentID: []string{
-			//"e6123145-9665-43e0-8413-cd61b8aa9b13",//сбер
-			//"87db07bc-0e02-4e29-90bb-05e8ef791d7b",//Тбанк
-			//	"ab1f751e-15b2-4c74-802c-1b3e8638c394", //софт
-			"7de75794-a27f-4d81-a39b-492345813822", //яндекс
-			"02cfdf61-6298-4c0f-a9ca-9cabc82afaf3", //лукойл
-			"eb4ba863-e85f-4f80-8c29-f2627938ee58", //мечел
-		},
-	})*/
 	wg := sync.WaitGroup{}
 	/*wg.Add(1)
 	go func() {
@@ -157,7 +141,7 @@ func (a *App) runDev(ctx context.Context) {
 			logger.ErrorContext(ctx, "Error in worker macd rsi", err.Error())
 		}
 	}()
-	*/
+
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -169,26 +153,20 @@ func (a *App) runDev(ctx context.Context) {
 		if err != nil {
 			logger.ErrorContext(ctx, "Error in worker golden X strategy", err.Error())
 		}
-	}()
+	}()*/
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 
-		//err := a.sp.GetGoldenXTradingService().Trade(
-		//	ctx,
-		//	goldenx.Trade{
-		//		ShareTip:  1,
-		//		Interval:  enum.Week1,
-		//		Scheduler: "*/4 * * * *",
-		//		//ShareList: *a.collection.GoldInstruments,
-		//	},
-		//)
+		err := a.sp.GetAnalyze().BondsPortfolio(
+			ctx,
+		)
 
-		//if err != nil {
-		//logger.ErrorContext(ctx, "Error in worker golden X strategy")
-		//}
+		if err != nil {
+			logger.ErrorContext(ctx, "Error in worker golden X strategy")
+		}
 	}()
-	wg.Add(1)
+	/*wg.Add(1)
 	go func() {
 		defer wg.Done()
 
@@ -197,7 +175,7 @@ func (a *App) runDev(ctx context.Context) {
 		//		goldenx.Trade{
 		//			ShareTip:  2,
 		//			Interval:  enum.Week1,
-		//			Scheduler: "*/5 * * * *",
+		//			Scheduler: "* * * * *",
 		//			ShareList: *a.collection.GrowthShare,
 		//		},
 		//	)
@@ -205,7 +183,7 @@ func (a *App) runDev(ctx context.Context) {
 		//	if err != nil {
 		//logger.ErrorContext(ctx, "Error in worker golden X strategy")
 		//	}
-	}()
+	//}()*/
 	wg.Wait()
 }
 

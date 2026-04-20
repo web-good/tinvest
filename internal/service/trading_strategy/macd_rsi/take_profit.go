@@ -75,7 +75,7 @@ func (s *service) TakeProfit(ctx context.Context, in dto.TakeProfit) error {
 				continue
 			}
 
-			if atrSp.IsSatisfiedBy(atr, position, rsi[0]) || rsiProfit.IsSatisfiedByProfit(rsi, position) {
+			if atrSp.IsSatisfiedBy(atr, *position, rsi[0]) || rsiProfit.IsSatisfiedByProfit(rsi, *position) {
 				notificationTakeProfit = append(notificationTakeProfit, notification2.TakeProfit{Share: *share})
 
 				return nil

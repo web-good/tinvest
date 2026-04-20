@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/heetch/confita"
 	"github.com/heetch/confita/backend/env"
@@ -39,6 +40,12 @@ func (a *App) initConfig(ctx context.Context) error {
 
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
+	}
+
+	prJson := os.Getenv("PROFILES")
+	errP := json.Unmarshal([]byte(prJson), &cfg.TelegramClient.Profiles)
+	if errP != nil {
+		return fmt.Errorf("failed to parse env personse: %w", errP)
 	}
 
 	a.config = cfg

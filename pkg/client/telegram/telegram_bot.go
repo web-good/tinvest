@@ -3,6 +3,7 @@ package telegram
 import (
 	"fmt"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"net/http"
 )
 
 type Client interface {
@@ -33,6 +34,18 @@ func (b *telegramBotClientClient) SendMessage(msg string) error {
 
 func InitTelegramBot(token string, chatId []int64) (Client, error) {
 	bot, err := tgbotapi.NewBotAPI(token)
+
+	if err != nil {
+		return nil, err
+	}
+
+	bot.Debug = true
+
+	return &telegramBotClientClient{clientApi: bot, chatIds: chatId}, nil
+}
+
+func InitTelegramBotProxy(token string, chatId []int64, proxyURL string) (Client, error) {
+	bot, err := tgbotapi.NewBotAPIWithClient(token, "https://v0-telegram-proxy-api.vercel.app/bot%s/%s", &http.Client{})
 
 	if err != nil {
 		return nil, err

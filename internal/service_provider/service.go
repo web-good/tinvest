@@ -7,6 +7,7 @@ import (
 	"tinvest/internal/service/instrument/rsi"
 	"tinvest/internal/service/instrument/volatility"
 	"tinvest/internal/service/notification/purchase_shares"
+	"tinvest/internal/service/portfolio/analyze"
 	"tinvest/internal/service/trading_strategy/bonds"
 	"tinvest/internal/service/trading_strategy/ema200"
 	"tinvest/internal/service/trading_strategy/golden_x"
@@ -28,6 +29,7 @@ type service struct {
 	rsiInstrument             rsi.Instrument
 	MACDInstrument            macd.Instrument
 	volatilityInstrument      volatility.Instrument
+	analyze                   analyze.Analyze
 }
 
 func (*ServiceProvider) GetPurchaseSharesService() purchase_shares.PurchaseShares {
@@ -172,4 +174,19 @@ func (*ServiceProvider) Volatility() volatility.Instrument {
 	}
 
 	return serviceProvider.service.volatilityInstrument
+}
+
+func (*ServiceProvider) GetAnalyze() analyze.Analyze {
+	if serviceProvider.service.analyze == nil {
+		grpcClient, _ := serviceProvider.GetGrpcClient()
+		tgClient, _ := serviceProvider.GetTelegramBotClient()
+		serviceProvider.service.analyze = analyze.NewService(
+			grpcClient.OperationsServiceClient(),
+			grpcClient.UserServiceClient(),
+			tgClient,
+			grpcClient.InstrumentsServiceClient(),
+		)
+	}
+
+	return serviceProvider.service.analyze
 }

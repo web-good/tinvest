@@ -8,11 +8,12 @@ type Quotation struct {
 }
 
 type Position struct {
-	Figi          string
-	ShareID       string
-	Price         Quotation
-	Quantity      int64
-	PurchasePrice Quotation
+	InstrumentType string
+	Figi           string
+	ShareID        string
+	Price          Quotation
+	Quantity       int64
+	PurchasePrice  Quotation
 }
 
 type Operation struct {

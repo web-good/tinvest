@@ -18,6 +18,7 @@ type InstrumentsServiceClient interface {
 	Shares(ctx context.Context) ([]*model.Share, error)
 	ShareByID(ctx context.Context, id string) (*share.Share, error)
 	Bonds(ctx context.Context) ([]*pkgmodel.Bond, error)
+	BondByID(ctx context.Context, id string) (*pkgmodel.Bond, error)
 	GetBondCoupons(instrumentId string, from time.Time, to time.Time) ([]*pkgmodel.BondCoupon, error)
 }
 
@@ -95,4 +96,19 @@ func (c *instrumentsServiceClient) ShareByID(ctx context.Context, id string) (*s
 	}
 
 	return converter2.ConvertShareFromPb(resp.Instrument), nil
+}
+
+func (c *instrumentsServiceClient) BondByID(ctx context.Context, id string) (*pkgmodel.Bond, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	resp, err := c.instrumentsApi.BondBy(ctx, &investapi.InstrumentRequest{
+		IdType: investapi.InstrumentIdType_INSTRUMENT_ID_TYPE_UID,
+		Id:     id,
+	}, NewRPCCredential(c.auth))
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to request share by id: %w", err)
+	}
+
+	return converter2.ConvertBondModelFromBondPb(resp.Instrument), nil
 }

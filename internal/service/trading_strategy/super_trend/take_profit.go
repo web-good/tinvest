@@ -45,7 +45,7 @@ func (s *service) TakeProfit(ctx context.Context) error {
 				continue
 			}
 
-			if atrSp.IsSatisfiedBy(atr, position) || rsiSp.IsSatisfiedBy(rsiModel) {
+			if atrSp.IsSatisfiedBy(atr, *position) || rsiSp.IsSatisfiedBy(rsiModel) {
 				share, err2 := s.instrumentServiceGrpcClient.ShareByID(ctx, position.ShareID)
 
 				if err2 != nil {
