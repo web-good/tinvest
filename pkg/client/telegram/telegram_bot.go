@@ -8,6 +8,7 @@ import (
 
 type Client interface {
 	SendMessage(msg string) error
+	SendMessageToChat(chatID int64, msg string) error
 }
 
 type telegramBotClientClient struct {
@@ -19,10 +20,7 @@ func (b *telegramBotClientClient) SendMessage(msg string) error {
 	var errMsg string
 
 	for _, chatID := range b.chatIds {
-		ms := tgbotapi.NewMessage(chatID, msg)
-		ms.ParseMode = "HTML"
-		_, err := b.clientApi.Send(ms)
-		if err != nil {
+		if err := b.SendMessageToChat(chatID, msg); err != nil {
 			errMsg += fmt.Sprintf("Failed to send to chat %d: %v\n", chatID, err)
 		}
 	}
@@ -30,6 +28,13 @@ func (b *telegramBotClientClient) SendMessage(msg string) error {
 		return fmt.Errorf(errMsg)
 	}
 	return nil
+}
+
+func (b *telegramBotClientClient) SendMessageToChat(chatID int64, msg string) error {
+	ms := tgbotapi.NewMessage(chatID, msg)
+	ms.ParseMode = "HTML"
+	_, err := b.clientApi.Send(ms)
+	return err
 }
 
 func InitTelegramBot(token string, chatId []int64) (Client, error) {

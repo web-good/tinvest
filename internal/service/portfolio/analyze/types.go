@@ -7,7 +7,7 @@ import (
 )
 
 type Analyze interface {
-	BondsPortfolio(context context.Context) error
+	BondsPortfolio(context context.Context, chatID int64) error
 }
 
 type service struct {

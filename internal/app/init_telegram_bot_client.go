@@ -9,7 +9,7 @@ import (
 func (a *App) initTelegramBotClient(ctx context.Context) error {
 	logger.InfoContext(ctx, "Start telegram bot client")
 	if a.config.AppEnv == "dev" {
-		_, err := a.sp.GetTelegramBotClientWithProxy()
+		_, err := a.sp.GetTelegramBotClient()
 		if err != nil {
 			return err
 		}

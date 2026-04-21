@@ -160,6 +160,7 @@ func (a *App) runDev(ctx context.Context) {
 
 		err := a.sp.GetAnalyze().BondsPortfolio(
 			ctx,
+			a.config.TelegramClient.ChatID[0],
 		)
 
 		if err != nil {
