@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"tinvest/internal/utils"
 	"tinvest/pkg/collection"
 	"tinvest/pkg/logger"
 )
@@ -27,86 +26,75 @@ func initCompanyListForGoldenStrategy() *collection.InstrumentCollection {
 	companyCollection.
 		Add(
 			collection.Instrument{
-				ID:              "962e2a95-02a9-4171-abd7-aa198dbe643a",
-				RSILength:       8,
-				Name:            "Газпром",
-				AverageDevident: utils.CalculateWeightedAverage([]float64{7.89, 8, 8, 16.6, 15.2, 12.55, 51}),
+				ID:        "962e2a95-02a9-4171-abd7-aa198dbe643a",
+				RSILength: 8,
+				Name:      "Газпром",
 			}).
 		Add(
 			collection.Instrument{
-				ID:              "a797f14a-8513-4b84-b15e-a3b98dc4cc00",
-				RSILength:       10,
-				Name:            "Сургутнефтегаз - прив",
-				AverageDevident: utils.CalculateWeightedAverage([]float64{7.62, 0.97, 6.7, 4.7, 0.8, 12.29, 8.5}),
+				ID:        "a797f14a-8513-4b84-b15e-a3b98dc4cc00",
+				RSILength: 10,
+				Name:      "Сургутнефтегаз - прив",
 			}).
 		Add(
 			collection.Instrument{
-				ID:              "efdb54d3-2f92-44da-b7a3-8849e96039f6",
-				RSILength:       9,
-				Name:            "Татнефть - прив",
-				AverageDevident: utils.CalculateWeightedAverage([]float64{119.1, 10.94, 28.82, 58, 83, 62.1, 98.54, 74.85}),
+				ID:        "efdb54d3-2f92-44da-b7a3-8849e96039f6",
+				RSILength: 9,
+				Name:      "Татнефть - прив",
 			}).
 		Add(
 			collection.Instrument{
-				ID:              "fd417230-19cf-4e7b-9623-f7c9ca18ec6b",
-				RSILength:       9,
-				Name:            "Роснефть",
-				AverageDevident: utils.CalculateWeightedAverage([]float64{26.67, 18.07, 24.97, 23.63, 38.36, 59.78, 51.15}),
+				ID:        "fd417230-19cf-4e7b-9623-f7c9ca18ec6b",
+				RSILength: 9,
+				Name:      "Роснефть",
 			}).
 		Add(
 			collection.Instrument{
-				ID:              "02cfdf61-6298-4c0f-a9ca-9cabc82afaf3",
-				RSILength:       9,
-				Name:            "Лукойл",
-				AverageDevident: utils.CalculateWeightedAverage([]float64{225, 347, 396, 553, 793, 885, 1012}),
+				ID:        "02cfdf61-6298-4c0f-a9ca-9cabc82afaf3",
+				RSILength: 9,
+				Name:      "Лукойл",
 			}).
 		Add(
 			collection.Instrument{
-				ID:              "c190ff1f-1447-4227-b543-316332699ca5",
-				RSILength:       8,
-				Name:            "Сбер Банк - прив",
-				AverageDevident: utils.CalculateWeightedAverage([]float64{12, 16, 18.7, 18.7, 25, 33.3, 34.84}),
-			}).
-		Add(collection.Instrument{
-			ID:              "e1b089f3-9bf1-44c3-897f-25e9f591bebc",
-			RSILength:       9,
-			Name:            "Ростелеком - прив",
-			AverageDevident: utils.CalculateWeightedAverage([]float64{5, 5, 5, 4.56, 5.4, 6, 6.25}),
-		}).
-		Add(
-			collection.Instrument{
-				ID:              "fa6aae10-b8d5-48c8-bbfd-d320d925d096",
-				RSILength:       11,
-				Name:            "Северсталь",
-				AverageDevident: utils.CalculateWeightedAverage([]float64{73.14, 110, 156.37, 121.7, 106.39, 253.42, 309.93}),
+				ID:        "c190ff1f-1447-4227-b543-316332699ca5",
+				RSILength: 8,
+				Name:      "Сбер Банк - прив",
 			}).
 		Add(
 			collection.Instrument{
-				ID:              "161eb0d0-aaac-4451-b374-f5d0eeb1b508",
-				RSILength:       8,
-				Name:            "НЛМК",
-				AverageDevident: utils.CalculateWeightedAverage([]float64{6.51, 12.56, 19.46, 22.82, 20.73, 41.91, 25.43}),
+				ID:        "fa6aae10-b8d5-48c8-bbfd-d320d925d096",
+				RSILength: 11,
+				Name:      "Северсталь",
 			}).
 		Add(
 			collection.Instrument{
-				ID:              "7132b1c9-ee26-4464-b5b5-1046264b61d9",
-				RSILength:       9,
-				Name:            "ММК",
-				AverageDevident: utils.CalculateWeightedAverage([]float64{2.3, 3.84, 3.48, 3.75, 8.4, 2.6, 5.1}),
+				ID:        "161eb0d0-aaac-4451-b374-f5d0eeb1b508",
+				RSILength: 8,
+				Name:      "НЛМК",
 			}).
 		Add(
 			collection.Instrument{
-				ID:              "9978b56f-782a-4a80-a4b1-a48cbecfd194",
-				RSILength:       7,
-				Name:            "ФосАгро",
-				AverageDevident: utils.CalculateWeightedAverage([]float64{372, 300, 558, 1098, 1020, 552}),
+				ID:        "7132b1c9-ee26-4464-b5b5-1046264b61d9",
+				RSILength: 9,
+				Name:      "ММК",
 			}).
 		Add(
 			collection.Instrument{
-				ID:              "653d47e9-dbd4-407a-a1c3-47f897df4694",
-				RSILength:       9,
-				Name:            "Транс нефть",
-				AverageDevident: utils.CalculateWeightedAverage([]float64{107, 116, 92, 105, 166.6, 177.2, 198.25}),
+				ID:        "9978b56f-782a-4a80-a4b1-a48cbecfd194",
+				RSILength: 7,
+				Name:      "ФосАгро",
+			}).
+		Add(
+			collection.Instrument{
+				ID:        "653d47e9-dbd4-407a-a1c3-47f897df4694",
+				RSILength: 9,
+				Name:      "Транс нефть",
+			}).
+		Add(
+			collection.Instrument{
+				ID:        "1e19953d-01c6-4ecd-a5f4-53ae3ed44029",
+				RSILength: 8,
+				Name:      "Банк Санкт-Петербург",
 			})
 
 	return companyCollection
@@ -132,12 +120,6 @@ func initGrowthShare() *collection.InstrumentCollection {
 				ID:        "87db07bc-0e02-4e29-90bb-05e8ef791d7b",
 				RSILength: 8,
 				Name:      "Т-Технологии",
-			}).
-		Add(
-			collection.Instrument{
-				ID:        "1e19953d-01c6-4ecd-a5f4-53ae3ed44029",
-				RSILength: 8,
-				Name:      "Банк Санкт-Петербург",
 			}).
 		Add(
 			collection.Instrument{

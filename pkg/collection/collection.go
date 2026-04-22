@@ -45,10 +45,9 @@ func (c *collection[T]) GetAll() []T {
 }
 
 type Instrument struct {
-	ID              string
-	Name            string
-	RSILength       int
-	AverageDevident float64
+	ID        string
+	Name      string
+	RSILength int
 }
 
 type InstrumentCollection struct {
@@ -69,6 +68,7 @@ func (cc *InstrumentCollection) Add(instrument Instrument) *InstrumentCollection
 
 func (cc *InstrumentCollection) Get(id string) (Instrument, bool) {
 	company, exists := cc.instrument[id]
+
 	return company, exists
 }
 

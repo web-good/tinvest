@@ -1,7 +1,6 @@
 package notification
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 	"tinvest/internal/domain"
@@ -31,7 +30,6 @@ func RSIList(info *domain.Info, shareTip int) string {
 		notifyMessageBuilder.WriteString("  <b>RSI Length:</b>" + strconv.Itoa(log.RSILength) + "\n")
 		notifyMessageBuilder.WriteString("  <b>RSI Value:</b>")
 		notifyMessageBuilder.WriteString(strconv.Itoa(int(log.RSIValue)) + "\n")
-		notifyMessageBuilder.WriteString("  <b>Див.дох./к тек.цене≈</b>" + fmt.Sprintf("%.2f", log.ProcentPrice) + "%\n\n")
 		notifyMessageBuilder.WriteString("\n")
 	}
 

@@ -17,7 +17,6 @@ type Item struct {
 	ATR            atr.ItemTechAnalyse
 	RSIValue       float64
 	RSILength      int
-	ProcentPrice   float64
 }
 
 func NewInfo() *Info {

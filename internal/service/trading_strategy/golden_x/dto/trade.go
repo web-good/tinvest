@@ -10,5 +10,4 @@ type Trade struct {
 	Interval  enum.Interval
 	ShareList collection.InstrumentCollection
 	Scheduler string
-	HeartBeat <-chan struct{}
 }

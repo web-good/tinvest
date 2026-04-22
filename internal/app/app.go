@@ -6,6 +6,7 @@ import (
 	"sync"
 	"tinvest/internal/config"
 	"tinvest/internal/enum"
+	analyzescheduler "tinvest/internal/service/portfolio/analyze/scheduler"
 	bondsscheduler "tinvest/internal/service/trading_strategy/bonds/scheduler"
 	goldenx "tinvest/internal/service/trading_strategy/golden_x/dto"
 	"tinvest/internal/service/trading_strategy/golden_x/scheduler"
@@ -215,6 +216,13 @@ func (a *App) runProd(ctx context.Context) {
 		err := bondsscheduler.NewScheduler(a.sp.GetBondsTradingService()).Trade(ctx)
 		if err != nil {
 			logger.ErrorContext(ctx, "Error in worker golden X strategy ShareTip:2", err.Error())
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		err := analyzescheduler.NewScheduler(a.sp.GetAnalyze()).BondsPortfolio(ctx, a.config.TelegramClient.ChatID[0])
+		if err != nil {
+			logger.ErrorContext(ctx, "Error in worker Bonds Portfolio Analyze", err.Error())
 		}
 	}()
 	go func() {
