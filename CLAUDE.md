@@ -3,6 +3,9 @@
 ## Overview
 This is a Go-based trading/investment application that implements various trading strategies (MACD-RSI, SuperTrend, EMA200, Bonds, Golden X) and interacts with Telegram bots for notifications.
 
+## Документация по проекту
+База знаний по проекту тут: [../docs/wiki/index.md](`index.md`)
+
 ## Tech Stack
 - Go 1.25
 - gRPC for internal service communication
@@ -36,3 +39,19 @@ See internal/config/config.go for structure.
 
 ## Database
 Migrations are in the `migrations` directory.
+
+## Documentation
+Project documentation is maintained in a separate `docs/` directory at the same level as `tinvest/`. This includes:
+- LLM Wiki with automatically generated code documentation
+- Source materials in `docs/raw/`
+- Wiki pages in `docs/wiki/`
+
+Start with `docs/README.md` for an overview, or go directly to `docs/wiki/index.md` for the wiki index.
+
+The LLM Wiki follows the pattern described in "A pattern for building personal knowledge bases using LLMs" and includes documentation for:
+- Project architecture and overview
+- Module-by-module code documentation
+- Trading strategies and business logic
+- Configuration and deployment guides
+
+The documentation is maintained by LLM agents and updated automatically when code changes.
