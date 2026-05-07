@@ -17,9 +17,6 @@ func ConvertBondsFromPb(in *investapi.BondsResponse) []*model.Bond {
 		if bond.FloatingCouponFlag == true {
 			continue
 		}
-		if bond.Exchange != "moex_morning_evening_ofz" {
-			//continue
-		}
 
 		res = append(res, ConvertBondModelFromBondPb(bond))
 	}

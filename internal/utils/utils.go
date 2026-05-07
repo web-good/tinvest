@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 	"tinvest/internal/enum"
+	"tinvest/internal/model"
+	pkgmodel "tinvest/pkg/client/grpc/model"
 )
 
 func CombinePrice(intPart int64, frac int32) float64 {
@@ -18,6 +20,20 @@ func SplitPrice(price float64) (int64, int32) {
 	frac, intPart := math.Modf(price)
 
 	return int64(frac), int32(math.Round(intPart * 1e9))
+}
+
+func CreateQuotation(units int64, nano int64) *pkgmodel.Quotation {
+	return &pkgmodel.Quotation{
+		Units: units,
+		Nano:  int32(nano),
+	}
+}
+
+func CreateInternalQuotation(units int64, nano int64) model.Quotation {
+	return model.Quotation{
+		Units: units,
+		Nano:  int32(nano),
+	}
 }
 
 func TimeStampPbGenerator(date time.Time, countCandles int64, timeFrame enum.Interval) *timestamppb.Timestamp {

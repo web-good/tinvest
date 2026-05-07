@@ -49,51 +49,71 @@ func (s *service) CalculateProfit(ctx context.Context, bond *pkgmodel.Bond) (dom
 
 func calculateProfit(bond *pkgmodel.Bond, coupons []*pkgmodel.BondCoupon, candles *model.CandleItemTechAnalyse) domain.BondReport {
 	var (
-		couponProfit  float64 = 0
-		finalSum      float64
-		couponYearSum float64 = 0
+		totalCoupons       float64 = 0
+		currentYearCoupons float64 = 0
 	)
 
-	j := 0
+	// Расчет общей суммы всех купонов до погашения
+	now := time.Now()
+	currentYearStart := time.Date(now.Year(), 1, 1, 0, 0, 0, 0, now.Location())
+	currentYearEnd := time.Date(now.Year()+1, 1, 1, 0, 0, 0, 0, now.Location())
+
 	for _, coupon := range coupons {
-		couponProfit += utils.CombinePrice(coupon.PayOnBond.Units, coupon.PayOnBond.Nano)
-		if j < int(bond.CouponQuantityPerYear) {
-			couponYearSum = couponYearSum + utils.CombinePrice(coupon.PayOnBond.Units, coupon.PayOnBond.Nano)
-			j++
+		couponAmount := utils.CombinePrice(coupon.PayOnBond.Units, coupon.PayOnBond.Nano)
+		totalCoupons += couponAmount
+
+		// Суммируем только купоны текущего года
+		if coupon.CouponDate.After(currentYearStart) && coupon.CouponDate.Before(currentYearEnd) {
+			currentYearCoupons += couponAmount
 		}
 	}
 
-	couponYearSum = couponYearSum - couponYearSum*13/100
-	bondPrice := (utils.CombinePrice(candles.Close.Units, candles.Close.Nano) * bond.Nominal) / 100
-	procentCouponYear := (couponYearSum * 100) / bondPrice
-	couponProfitNalog := couponProfit - (couponProfit * 13 / 100)
-	if bondPrice < bond.Nominal {
-		finalSum = ((bond.Nominal - bondPrice - ((bond.Nominal - bondPrice) * 13 / 100)) + couponProfitNalog) - bond.Nkd
+	// Расчет цены облигации
+	closePrice := utils.CombinePrice(candles.Close.Units, candles.Close.Nano)
+	bondPrice := (closePrice * bond.Nominal) / 100
+
+	// Текущая купонная доходность (годовой показатель)
+	var annualCouponIncome float64
+	if currentYearCoupons > 0 {
+		annualCouponIncome = currentYearCoupons
 	} else {
-		finalSum = ((bond.Nominal - bondPrice) + couponProfitNalog) - bond.Nkd
+		// Если купонов в текущем году нет, берем ближайший будущий купон
+		if len(coupons) > 0 {
+			annualCouponIncome = utils.CombinePrice(coupons[0].PayOnBond.Units, coupons[0].PayOnBond.Nano) * float64(bond.CouponQuantityPerYear)
+		}
+	}
+	couponPercentByYear := (annualCouponIncome * 100) / bondPrice
+
+	// Расчет налогов
+	couponTax := totalCoupons * 0.13 // Налог на все купоны
+
+	// Налог на разницу между номиналом и ценой покупки (только если есть прибыль)
+	var nominalPriceTax float64 = 0
+	nominalPriceDiff := bond.Nominal - bondPrice
+	if nominalPriceDiff > 0 {
+		nominalPriceTax = nominalPriceDiff * 0.13
 	}
 
-	monthCount, _ := monthsBetweenDates(bond.MaturityDate.Format("2006-01-02"))
-	manyByYear := (finalSum * 12) / float64(monthCount)
-	percentByYear := (100 * manyByYear) / bondPrice
+	// Итого инвестиции: цена облигации + НКД
+	totalInvestment := bondPrice + bond.Nkd
 
-	return factory.CreateBondReport(bond, finalSum, manyByYear, percentByYear, procentCouponYear)
-}
+	// Итого возврат: номинал + все купоны
+	totalReturn := bond.Nominal + totalCoupons
 
-// monthsBetweenDates возвращает количество месяцев между текущей датой и целевой датой
-func monthsBetweenDates(targetDateStr string) (int, error) {
-	// Парсим целевую дату из строки
-	targetDate, err := time.Parse("2006-01-02", targetDateStr)
-	if err != nil {
-		return 0, err
+	// Итоговая прибыль после вычета всех налогов
+	finalProfit := totalReturn - totalInvestment - couponTax - nominalPriceTax
+
+	// Точный расчет периода до погашения в днях
+	daysToMaturity := int(bond.MaturityDate.Sub(now).Hours() / 24)
+	if daysToMaturity < 1 {
+		daysToMaturity = 1
 	}
 
-	// Получаем текущую дату
-	currentDate := time.Now()
-	// Вычисляем разницу в годах и месяцах
-	years := targetDate.Year() - currentDate.Year()
-	months := int(targetDate.Month()) - int(currentDate.Month())
-	totalMonths := years*12 + months
+	// Годовая доходность в деньгах
+	profitPerYear := (finalProfit * 365) / float64(daysToMaturity)
 
-	return totalMonths, nil
+	// Годовая доходность в процентах от реальных инвестиций
+	percentByYear := (100 * profitPerYear) / totalInvestment
+
+	return factory.CreateBondReport(bond, finalProfit, profitPerYear, percentByYear, couponPercentByYear)
 }

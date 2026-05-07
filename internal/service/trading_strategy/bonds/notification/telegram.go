@@ -1,6 +1,7 @@
 package notification
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -8,30 +9,89 @@ import (
 )
 
 func Send(bonds []domain.BondReport, dateFrom time.Time, dateTo time.Time) string {
-	notifyMessageBuilder := strings.Builder{}
-	notifyMessageBuilder.WriteString("<u><b>🏛Облигации - с датой погашения ")
-	notifyMessageBuilder.WriteString("от ")
-	notifyMessageBuilder.WriteString(strconv.Itoa(dateFrom.Year()))
-	notifyMessageBuilder.WriteString(" - до ")
-	notifyMessageBuilder.WriteString(strconv.Itoa(dateTo.Year()))
-	notifyMessageBuilder.WriteString(" года:</b></u>\n\n\n<code>")
-	notifyMessageBuilder.WriteString("🔶 " + string(bonds[0].Type) + "\n\n")
-
-	for _, bond := range bonds {
-		notifyMessageBuilder.WriteString("• <b>Название:</b><u>" + bond.Name + "</u>\n")
-		notifyMessageBuilder.WriteString("- <b>Средне годовая доходность к погашению с учетом налога:</b>" +
-			strconv.FormatFloat(bond.PercentByYear, 'f', 1, 64) +
-			"% (" + strconv.FormatFloat(bond.ManyByYear, 'f', 1, 64) + "₽)\n")
-		notifyMessageBuilder.WriteString("- <b>НКД:</b>" + strconv.FormatFloat(bond.Nkd, 'f', 1, 64) + "₽\n")
-		notifyMessageBuilder.WriteString("- <b>Доходность к погашению с учетом налога:</b>" +
-			strconv.FormatFloat(bond.FinalSum, 'f', 1, 64) + "₽\n")
-		notifyMessageBuilder.WriteString("- <b>Купонная доходность с учетом налога:</b>" +
-			strconv.FormatFloat(bond.CouponPercentByYear, 'f', 1, 64) + "%\n")
-		notifyMessageBuilder.WriteString("- <b>Дата погащения:</b>" + bond.ExecutionDate.Format(time.DateOnly) + "\n")
-		notifyMessageBuilder.WriteString("====================\n\n")
+	if len(bonds) == 0 {
+		return ""
 	}
 
-	notifyMessageBuilder.WriteString("</code>")
+	var notifyMessageBuilder strings.Builder
+
+	// Заголовок сообщения
+	notifyMessageBuilder.WriteString(fmt.Sprintf(
+		"<b>📊 Облигации </b>\n\n"+
+			"🗓️ <i>Период: %s - %s</i>\n\n",
+		dateFrom.Format("02.01.2006"),
+		dateTo.Format("02.01.2006"),
+	))
+
+	// Тип облигаций
+	bondType := strings.ToUpper(string(bonds[0].Type))
+	notifyMessageBuilder.WriteString(fmt.Sprintf("🏛️ <b>%s</b>\n\n", bondType))
+
+	// Список облигаций
+	for i, bond := range bonds {
+		// Разделитель между облигациями
+		if i > 0 {
+			notifyMessageBuilder.WriteString("\n" +
+				"──────────────────────\n\n")
+		}
+
+		// Название облигации
+		notifyMessageBuilder.WriteString(fmt.Sprintf(
+			"<b>%d. %s</b>\n\n",
+			i+1,
+			htmlEscape(bond.Name),
+		))
+
+		// Ключевые метрики в компактном виде
+		notifyMessageBuilder.WriteString(
+			"💰 <b>Доходность (с налогом)/год:</b> " + formatPercent(bond.PercentByYear) + "\n" +
+				"🎯 <b>Купонная доходность в год:</b> " + formatPercent(bond.CouponPercentByYear) + "\n" +
+				"📈 <b>Прибыль/год:</b> " + formatMoney(bond.ManyByYear) + "₽\n" +
+				"💳 <b>НКД:</b> " + formatMoney(bond.Nkd) + "₽\n" +
+				"💵 <b>Доходность к погашению:</b> " + formatMoney(bond.FinalSum) + "₽\n" +
+				"⏰ <b>Погашение:</b> " + bond.ExecutionDate.Format("02.01.2006") + "\n")
+	}
+
+	// Подвал сообщения
+	notifyMessageBuilder.WriteString(
+		"\n──────────────────────\n" +
+			"<i>📌 Данные актуальны на " + time.Now().Format("02.01.2006 15:04") + "</i>",
+	)
 
 	return notifyMessageBuilder.String()
+}
+
+// htmlEscape экранирует HTML-символы для безопасности
+func htmlEscape(s string) string {
+	s = strings.ReplaceAll(s, "&", "&amp;")
+	s = strings.ReplaceAll(s, "<", "&lt;")
+	s = strings.ReplaceAll(s, ">", "&gt;")
+	return s
+}
+
+// formatPercent форматирует процент с правильным знаком
+func formatPercent(value float64) string {
+	return strconv.FormatFloat(value, 'f', 1, 64) + "%"
+}
+
+// formatMoney форматирует денежную сумму с разделителями
+func formatMoney(value float64) string {
+	// Для больших чисел добавляем разделитель тысяч
+	str := strconv.FormatFloat(value, 'f', 1, 64)
+	if len(str) > 6 {
+		// Простое форматирование для тысяч
+		parts := strings.Split(str, ".")
+		intPart := parts[0]
+		if len(intPart) > 3 {
+			var result strings.Builder
+			for i, char := range intPart {
+				if i > 0 && (len(intPart)-i)%3 == 0 {
+					result.WriteString(" ")
+				}
+				result.WriteRune(char)
+			}
+			str = result.String() + "." + parts[1]
+		}
+	}
+	return str
 }

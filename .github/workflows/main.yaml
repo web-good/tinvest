@@ -54,4 +54,4 @@ jobs:
             docker rm $CONTAINER_NAME
 
             # Run a new container from a new image
-            docker run -e T_BANK=${{ secrets.T_BANK }} -e TELEGRAM=${{ secrets.TELEGRAM }} -d -p 50051:50051 --name $CONTAINER_NAME -t $REGISTRY/koshelevoleg/$IMAGE_NAME:$TAG_NAME
+            docker run -e T_BANK=${{ secrets.T_BANK }} -e PROFILES=${{ secrets.PROFILES }} -e TELEGRAM=${{ secrets.TELEGRAM }} -d -p 50051:50051 --name $CONTAINER_NAME -t $REGISTRY/koshelevoleg/$IMAGE_NAME:$TAG_NAME

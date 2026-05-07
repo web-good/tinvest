@@ -142,7 +142,7 @@ func (a *App) runDev(ctx context.Context) {
 			logger.ErrorContext(ctx, "Error in worker macd rsi", err.Error())
 		}
 	}()
-
+	*/
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -154,8 +154,8 @@ func (a *App) runDev(ctx context.Context) {
 		if err != nil {
 			logger.ErrorContext(ctx, "Error in worker golden X strategy", err.Error())
 		}
-	}()*/
-	wg.Add(1)
+	}()
+	/*wg.Add(1)
 	go func() {
 		defer wg.Done()
 
@@ -168,7 +168,7 @@ func (a *App) runDev(ctx context.Context) {
 			logger.ErrorContext(ctx, "Error in worker golden X strategy")
 		}
 	}()
-	/*wg.Add(1)
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
 
