@@ -55,15 +55,15 @@ func calculateProfit(bond *pkgmodel.Bond, coupons []*pkgmodel.BondCoupon, candle
 
 	// Расчет общей суммы всех купонов до погашения
 	now := time.Now()
-	currentYearStart := time.Date(now.Year(), 1, 1, 0, 0, 0, 0, now.Location())
-	currentYearEnd := time.Date(now.Year()+1, 1, 1, 0, 0, 0, 0, now.Location())
 
 	for _, coupon := range coupons {
 		couponAmount := utils.CombinePrice(coupon.PayOnBond.Units, coupon.PayOnBond.Nano)
 		totalCoupons += couponAmount
 
 		// Суммируем только купоны текущего года
-		if coupon.CouponDate.After(currentYearStart) && coupon.CouponDate.Before(currentYearEnd) {
+		// Учитываем все купоны текущего года (выплаченные и будущие)
+		couponYear := coupon.CouponDate.Year()
+		if couponYear == now.Year() {
 			currentYearCoupons += couponAmount
 		}
 	}

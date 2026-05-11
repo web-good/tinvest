@@ -141,3 +141,53 @@ func TestCalculateProfit_Bond26248_CouponYield(t *testing.T) {
 		t.Logf("  Расчет: (%.2f * 100) / %.2f = %.2f%%", 122.16, 885.0, (122.16*100)/885.0)
 	}
 }
+
+func TestCalculateProfit_AllYearCouponsIncludingPaid(t *testing.T) {
+	// Тест проверяет, что в расчете купонной доходности участвуют ВСЕ купоны года,
+	// включая те, что уже были выплачены
+
+	now := time.Now()
+	currentYear := now.Year()
+
+	bond := &pkgmodel.Bond{
+		Name:                  "Тестовая облигация",
+		Nominal:               1000.0,
+		Nkd:                   10.0,
+		MaturityDate:          time.Now().AddDate(3, 0, 0),
+		Exchange:              "moex_share",
+		CouponQuantityPerYear: 4,
+	}
+
+	// Создаем купоны: 2 уже выплаченных в этом году и 2 будущих в этом же году
+	coupons := []*pkgmodel.BondCoupon{
+		// Уже выплаченные купоны (в начале года)
+		{PayOnBond: *utils.CreateQuotation(25, 0), CouponDate: time.Date(currentYear, 2, 15, 0, 0, 0, 0, now.Location())},
+		{PayOnBond: *utils.CreateQuotation(25, 0), CouponDate: time.Date(currentYear, 5, 15, 0, 0, 0, 0, now.Location())},
+
+		// Будущие купоны (в конце года)
+		{PayOnBond: *utils.CreateQuotation(25, 0), CouponDate: time.Date(currentYear, 8, 15, 0, 0, 0, 0, now.Location())},
+		{PayOnBond: *utils.CreateQuotation(25, 0), CouponDate: time.Date(currentYear, 11, 15, 0, 0, 0, 0, now.Location())},
+	}
+
+	candle := &model.CandleItemTechAnalyse{
+		Close: utils.CreateInternalQuotation(99, 0), // 99% от номинала = 990 руб
+	}
+
+	report := calculateProfit(bond, coupons, candle)
+
+	// Проверяем купонную доходность
+	// Все 4 купона должны учитываться: 25 * 4 = 100 руб в год
+	// Купонная доходность: (100 * 100) / (990 + 10 НКД) = 10000 / 1000 = 10%
+	expectedCouponYield := 10.0
+
+	if report.CouponPercentByYear < expectedCouponYield-0.1 || report.CouponPercentByYear > expectedCouponYield+0.1 {
+		t.Errorf("Ожидаемая купонная доходность %.2f%%, получили %.2f%%", expectedCouponYield, report.CouponPercentByYear)
+		t.Logf("Детали расчета:")
+		t.Logf("  Цена облигации: %.2f руб", 990.0)
+		t.Logf("  НКД: %.2f руб", 10.0)
+		t.Logf("  Общие инвестиции: %.2f руб", 1000.0)
+		t.Logf("  Годовые купоны (4 шт по 25 руб): %.2f руб", 100.0)
+		t.Logf("  Расчет: (%.2f * 100) / %.2f = %.2f%%", 100.0, 1000.0, expectedCouponYield)
+		t.Logf("  Примечание: Учитываются ВСЕ купоны года, включая уже выплаченные")
+	}
+}
