@@ -143,7 +143,7 @@ func (a *App) runDev(ctx context.Context) {
 		}
 	}()
 	*/
-	wg.Add(1)
+	/*wg.Add(1)
 	go func() {
 		defer wg.Done()
 
@@ -168,24 +168,25 @@ func (a *App) runDev(ctx context.Context) {
 			logger.ErrorContext(ctx, "Error in worker golden X strategy")
 		}
 	}()
+	*/
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 
-		//	err := a.sp.GetGoldenXTradingService().Trade(
-		//		ctx,
-		//		goldenx.Trade{
-		//			ShareTip:  2,
-		//			Interval:  enum.Week1,
-		//			Scheduler: "* * * * *",
-		//			ShareList: *a.collection.GrowthShare,
-		//		},
-		//	)
+		err := a.sp.GetGoldenXTradingService().Trade(
+			ctx,
+			goldenx.Trade{
+				ShareTip:  2,
+				Interval:  enum.Week1,
+				Scheduler: "* * * * *",
+				ShareList: *a.collection.GrowthShare,
+			},
+		)
 
-		//	if err != nil {
-		//logger.ErrorContext(ctx, "Error in worker golden X strategy")
-		//	}
-	//}()*/
+		if err != nil {
+			logger.ErrorContext(ctx, "Error in worker golden X strategy")
+		}
+	}()
 	wg.Wait()
 }
 
@@ -205,7 +206,7 @@ func (a *App) runProd(ctx context.Context) {
 	/*go func() {
 	defer wg.Done()
 	sh := mr.NewSchedulerService(a.sp.GetMacdRsiTradingService())
-	err := sh.TakeProfit(ctx, dto.TakeProfit{Interval: enum.Hour1, ATRInterval: enum.Day1, Scheduler: "*/ //2 8-23 * * *"})
+	err := sh.TakeProfit(ctx, dto.TakeProfit{Interval: enum.Hour1, ATRInterval: enum.Day1, Scheduler: "*///2 8-23 * * *"})
 
 	/*if err != nil {
 			logger.ErrorContext(ctx, "Error in worker macd rsi 1H take profit", err.Error())

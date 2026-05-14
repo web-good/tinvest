@@ -1,57 +1,49 @@
 # TInvest Project
 
 ## Overview
-This is a Go-based trading/investment application that implements various trading strategies (MACD-RSI, SuperTrend, EMA200, Bonds, Golden X) and interacts with Telegram bots for notifications.
-
-## Документация по проекту
-База знаний по проекту тут: [../docs/wiki/index.md](`index.md`)
+Go-based trading/investment application built around the Tinkoff Invest gRPC API. It implements several trading strategies (MACD-RSI, SuperTrend, EMA200, Golden X, Bonds, Scalping RSI), analyzes the portfolio, and sends notifications via Telegram bots.
 
 ## Tech Stack
 - Go 1.25
-- gRPC for internal service communication
-- PostgreSQL (via sqlx) for data storage
+- gRPC (Tinkoff Invest API) for market data and orders
+- PostgreSQL (via sqlx) for data storage; migrations under `migrations/`
 - Telegram Bot API for notifications
-- Docker for containerization (docker-compose.yaml present)
+- Docker / docker-compose for local infra
+- Code generation: `protoc-gen-go`, `protoc-gen-go-grpc`, `goverter` (see `Makefile`)
 
-## Key Directories
-- `internal/app`: Application initialization and lifecycle
-- `internal/config`: Configuration loading
-- `internal/domain`: Core domain models (shares, bonds, technical indicators)
-- `internal/service`: Business logic for trading strategies and services
-- `internal/service_provider`: Dependency injection / service provider
-- `pkg`: Shared packages (logger, closer, gRPC clients)
-- `cmd`: Entry point (main.go)
+## Layout
+- `cmd/main.go` — entry point; initializes and runs `internal/app`.
+- `internal/app` — application initialization and lifecycle (`runDev` / `runProd`).
+- `internal/config` — configuration loading via `heetch/confita`.
+- `internal/service_provider` — dependency injection / wiring.
+- `internal/domain` — core domain models and indicator math:
+  - `share/`, `bond_report.go`, `portfolio.go`, `info.go`
+  - indicators: `atr/`, `ema/`, `rsi.go`, `macd.go`, `volatility.go`
+  - `notification/`, `backtest/`
+- `internal/service` — business logic, grouped by concern:
+  - `trading_strategy/` — `macd_rsi`, `super_trend`, `ema200`, `golden_x`, `bonds`, `scalping_rsi`
+  - `instrument/` — indicator calculators: `atr`, `ema`, `macd`, `rsi`, `volatility`
+  - `notification/purchase_shares`
+  - `portfolio/analyze`
+- `internal/converter` — DTO/model converters (goverter-generated).
+- `internal/pb` — generated protobuf/gRPC stubs (`api/v1/*.proto`).
+- `internal/enum`, `internal/model`, `internal/utils` — shared types/helpers.
+- `pkg` — reusable packages: `client`, `closer`, `collection`, `heartbeat`, `logger`, `scheduler`, `semaphore`.
+- `api/v1` — `.proto` definitions for Tinkoff Invest API.
+- `migrations/` — SQL migrations (see `migration.sh` / `migration.Dockerfile`).
 
 ## How to Run
-1. Copy `env/local.env.example` to `env/local.env` and fill in required values
-2. Ensure PostgreSQL is running (see docker-compose.yaml)
-3. Run: `go run ./cmd/main`
+1. Copy `env/local.env.example` to `env/local.env` and fill in required values (tokens, DB DSN, etc.).
+2. Start dependencies (PostgreSQL) via `docker-compose up -d`.
+3. Run: `go run ./cmd/main`.
 
 ## Development Notes
-- The application can run in `dev` or `prod` mode (set via APP_ENV)
-- In dev mode, multiple strategy workers run via goroutines (see internal/app/app.go:runDev)
-- In prod mode, specific workers are scheduled via cron-like schedulers
-- Telegram bot integration is used for sending notifications
+- `APP_ENV` selects mode: `dev` runs strategy workers as goroutines (`internal/app/app.go:runDev`); `prod` schedules workers via the `pkg/scheduler` cron-like scheduler.
+- Telegram bot integration is used for sending strategy/portfolio notifications.
+- Code generation entry points live in `Makefile` (e.g. `make generate`, plus per-service `generate-*-api` targets); deps installed into `./bin` via `make install-deps`.
 
 ## Configuration
-Configuration is loaded via heetch/confita from environment variables and/or config files.
-See internal/config/config.go for structure.
+Loaded via `heetch/confita` from environment variables and/or files. See `internal/config/config.go` for the full schema.
 
 ## Database
-Migrations are in the `migrations` directory.
-
-## Documentation
-Project documentation is maintained in a separate `docs/` directory at the same level as `tinvest/`. This includes:
-- LLM Wiki with automatically generated code documentation
-- Source materials in `docs/raw/`
-- Wiki pages in `docs/wiki/`
-
-Start with `docs/README.md` for an overview, or go directly to `docs/wiki/index.md` for the wiki index.
-
-The LLM Wiki follows the pattern described in "A pattern for building personal knowledge bases using LLMs" and includes documentation for:
-- Project architecture and overview
-- Module-by-module code documentation
-- Trading strategies and business logic
-- Configuration and deployment guides
-
-The documentation is maintained by LLM agents and updated automatically when code changes.
+PostgreSQL accessed through `sqlx`. Migrations live in `migrations/` and are applied via `migration.sh` (see `migration.Dockerfile` for the container variant).

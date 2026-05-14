@@ -26,12 +26,6 @@ func initCompanyListForGoldenStrategy() *collection.InstrumentCollection {
 	companyCollection.
 		Add(
 			collection.Instrument{
-				ID:        "962e2a95-02a9-4171-abd7-aa198dbe643a",
-				RSILength: 8,
-				Name:      "Газпром",
-			}).
-		Add(
-			collection.Instrument{
 				ID:        "a797f14a-8513-4b84-b15e-a3b98dc4cc00",
 				RSILength: 10,
 				Name:      "Сургутнефтегаз - прив",
@@ -103,6 +97,18 @@ func initCompanyListForGoldenStrategy() *collection.InstrumentCollection {
 func initGrowthShare() *collection.InstrumentCollection {
 	companyCollection := collection.NewCollection()
 	companyCollection.
+		Add(
+			collection.Instrument{
+				ID:        "0d53d29a-3794-41c6-ba72-556d46bacb46",
+				RSILength: 7,
+				Name:      "Мать и дитя",
+			}).
+		Add(
+			collection.Instrument{
+				ID:        "962e2a95-02a9-4171-abd7-aa198dbe643a",
+				RSILength: 8,
+				Name:      "Газпром",
+			}).
 		Add(
 			collection.Instrument{
 				ID:        "7de75794-a27f-4d81-a39b-492345813822",
