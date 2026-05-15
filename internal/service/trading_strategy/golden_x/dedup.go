@@ -30,7 +30,7 @@ func tierFromRSI(rsi float64) alertTier {
 // a new alert should be sent. An alert fires only when the tier changes
 // AND the new tier is not tierNone (RSI > 40 means "silent reset").
 type alertState struct {
-	mu   sync.RWMutex
+	mu   sync.Mutex
 	last map[string]alertTier
 }
 
