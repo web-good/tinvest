@@ -15,6 +15,7 @@ import (
 func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
+			logger.ErrorContext(ctx, fmt.Sprintf("panic in golden_x.Trade: %v", r))
 			err = fmt.Errorf("panic: %v", r)
 		}
 	}()
@@ -28,7 +29,7 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 			ctx,
 			share.ID,
 			in.Interval,
-			utils.TimeStampPbGenerator(dateNow, -20, in.Interval),
+			utils.TimeStampPbGenerator(dateNow, -80, in.Interval),
 			timestamppb.New(dateNow),
 			int32(share.RSILength),
 		)
