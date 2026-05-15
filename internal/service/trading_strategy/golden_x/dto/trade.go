@@ -6,7 +6,7 @@ import (
 )
 
 type Trade struct {
-	ShareTip  int
+	Kind      StrategyKind
 	Interval  enum.Interval
 	ShareList collection.InstrumentCollection
 	Scheduler string

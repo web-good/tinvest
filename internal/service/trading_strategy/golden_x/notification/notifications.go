@@ -4,21 +4,16 @@ import (
 	"strconv"
 	"strings"
 	"tinvest/internal/domain"
+	"tinvest/internal/service/trading_strategy/golden_x/dto"
 )
 
-func Trade(info *domain.Info, shareTip int) string {
+func Trade(info *domain.Info, kind dto.StrategyKind) string {
 	notifyMessageBuilder := strings.Builder{}
-	if shareTip == 1 {
-		notifyMessageBuilder.WriteString("🥇\n\n")
-	}
-	if shareTip == 2 {
-		notifyMessageBuilder.WriteString("🥈\n\n")
+	if medal := kind.Medal(); medal != "" {
+		notifyMessageBuilder.WriteString(medal + "\n\n")
 	}
 
-	notifyMessageBuilder.WriteString("<u><b>Акции находящтеся в локальных минимумах:</b></u>\n\n\n<code>")
-	if shareTip == 1 {
-
-	}
+	notifyMessageBuilder.WriteString("<u><b>Акции находящиеся в локальных минимумах:</b></u>\n\n\n<code>")
 	for _, log := range info.Items() {
 		if log.RSIValue <= 40 && log.RSIValue >= 35 {
 			notifyMessageBuilder.WriteString("• <b>Акция:</b> " + log.InstrumentName + " 🟤\n")

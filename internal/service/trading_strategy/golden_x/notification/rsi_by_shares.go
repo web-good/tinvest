@@ -4,15 +4,13 @@ import (
 	"strconv"
 	"strings"
 	"tinvest/internal/domain"
+	"tinvest/internal/service/trading_strategy/golden_x/dto"
 )
 
-func RSIList(info *domain.Info, shareTip int) string {
+func RSIList(info *domain.Info, kind dto.StrategyKind) string {
 	notifyMessageBuilder := strings.Builder{}
-	if shareTip == 1 {
-		notifyMessageBuilder.WriteString("🥇\n\n")
-	}
-	if shareTip == 2 {
-		notifyMessageBuilder.WriteString("🥈\n\n")
+	if medal := kind.Medal(); medal != "" {
+		notifyMessageBuilder.WriteString(medal + "\n\n")
 	}
 
 	notifyMessageBuilder.WriteString("🧾\n<u><b>Промежуточные значения RSI и % цены к див доход:</b></u>\n\n\n<code>")

@@ -72,7 +72,7 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 	}
 
 	if len(info.Items()) > 0 {
-		err := s.tgClient.SendMessage(notif.Trade(info, in.ShareTip))
+		err := s.tgClient.SendMessage(notif.Trade(info, in.Kind))
 		if err != nil {
 			logger.ErrorContext(ctx, "message is not sent", err)
 
@@ -81,7 +81,7 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 	}
 
 	if len(RSIInfo.Items()) > 0 {
-		err := s.tgClient.SendMessage(notif.RSIList(RSIInfo, in.ShareTip))
+		err := s.tgClient.SendMessage(notif.RSIList(RSIInfo, in.Kind))
 		if err != nil {
 			logger.ErrorContext(ctx, "message is not sent", err)
 
