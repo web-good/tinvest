@@ -39,14 +39,21 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 			continue
 		}
 
+		closedRSI, ok := lastClosedWeeklyRSI(rsi, dateNow, loc)
+		if !ok {
+			logger.InfoContext(ctx, "no closed weekly RSI candle for share", "share", share.Name)
+			continue
+		}
+		rsiValue := utils.CombinePrice(closedRSI.SignalLine.Units, closedRSI.SignalLine.Nano)
+
 		RSIInfo.WriteToMap(
 			share.ID,
 			domain.Item{
 				InstrumentName: share.Name,
 				RSILength:      share.RSILength,
-				RSIValue:       utils.CombinePrice(rsi[0].SignalLine.Units, rsi[0].SignalLine.Nano),
+				RSIValue:       rsiValue,
 			})
-		if utils.CombinePrice(rsi[0].SignalLine.Units, rsi[0].SignalLine.Nano) > 40 {
+		if rsiValue > 40 {
 			continue
 		}
 
@@ -54,7 +61,7 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 			share.ID,
 			domain.Item{
 				InstrumentName: share.Name,
-				RSIValue:       utils.CombinePrice(rsi[0].SignalLine.Units, rsi[0].SignalLine.Nano),
+				RSIValue:       rsiValue,
 			})
 	}
 
