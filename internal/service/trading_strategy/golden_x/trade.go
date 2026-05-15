@@ -9,7 +9,6 @@ import (
 	"tinvest/internal/service/trading_strategy/golden_x/dto"
 	notif "tinvest/internal/service/trading_strategy/golden_x/notification"
 	"tinvest/internal/utils"
-	"tinvest/pkg/collection"
 	"tinvest/pkg/logger"
 )
 
@@ -19,31 +18,19 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 			err = fmt.Errorf("panic: %v", r)
 		}
 	}()
-	t, _ := s.instrumentServiceGrpcClient.Shares(ctx)
 	loc, _ := time.LoadLocation("Europe/Moscow")
 	dateNow := time.Now().In(loc)
-	var shareRSI collection.Instrument
 	info := domain.NewInfo()
 	RSIInfo := domain.NewInfo()
 
-	for _, share := range t {
-		flag := false
-		if shareItem, ok := in.ShareList.Get(share.ID); ok == true {
-			flag = true
-			shareRSI = shareItem
-		}
-
-		if !flag {
-			continue
-		}
-
+	for _, share := range in.ShareList.All() {
 		rsi, rsiErr := s.rsi.CalculateRSI(
 			ctx,
 			share.ID,
 			in.Interval,
 			utils.TimeStampPbGenerator(dateNow, -20, in.Interval),
 			timestamppb.New(dateNow),
-			int32(shareRSI.RSILength),
+			int32(share.RSILength),
 		)
 
 		if rsiErr != nil {
@@ -56,7 +43,7 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 			share.ID,
 			domain.Item{
 				InstrumentName: share.Name,
-				RSILength:      shareRSI.RSILength,
+				RSILength:      share.RSILength,
 				RSIValue:       utils.CombinePrice(rsi[0].SignalLine.Units, rsi[0].SignalLine.Nano),
 			})
 		if utils.CombinePrice(rsi[0].SignalLine.Units, rsi[0].SignalLine.Nano) > 40 {
