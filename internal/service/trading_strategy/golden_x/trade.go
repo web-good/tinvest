@@ -53,7 +53,8 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 				RSILength:      share.RSILength,
 				RSIValue:       rsiValue,
 			})
-		if rsiValue > 40 {
+		tier := tierFromRSI(rsiValue)
+		if !s.state.ShouldAlert(share.ID, tier) {
 			continue
 		}
 
