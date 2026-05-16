@@ -119,3 +119,32 @@ func TestAdaptiveThresholds_DoesNotMutateInput(t *testing.T) {
 		}
 	}
 }
+
+func TestAdaptiveSellThresholds(t *testing.T) {
+	// R-7 reference (mirrors TestAdaptiveThresholds p5=5.95, p15=15.85):
+	//   percentile([1..100], 80) = 1 + 0.80*99 = 80.20
+	//   percentile([1..100], 90) = 1 + 0.90*99 = 90.10
+	//   percentile([1..100], 95) = 1 + 0.95*99 = 95.05
+	rsi := rangeFloat(1, 100)
+	got := adaptiveSellThresholds(rsi)
+	if math.Abs(got.P80-80.20) > 1e-9 {
+		t.Errorf("P80 = %v, want 80.20", got.P80)
+	}
+	if math.Abs(got.P90-90.10) > 1e-9 {
+		t.Errorf("P90 = %v, want 90.10", got.P90)
+	}
+	if math.Abs(got.P95-95.05) > 1e-9 {
+		t.Errorf("P95 = %v, want 95.05", got.P95)
+	}
+}
+
+func TestAdaptiveSellThresholds_DoesNotMutateInput(t *testing.T) {
+	in := []float64{50, 10, 30, 20, 40, 90, 70, 60, 80, 100}
+	original := append([]float64(nil), in...)
+	_ = adaptiveSellThresholds(in)
+	for i := range in {
+		if in[i] != original[i] {
+			t.Fatalf("input mutated at %d: got %v, want %v", i, in[i], original[i])
+		}
+	}
+}

@@ -52,3 +52,16 @@ func adaptiveThresholds(rsiSeries []float64) dto.Thresholds {
 		P15: percentile(sorted, 15),
 	}
 }
+
+// adaptiveSellThresholds computes P80, P90 and P95 over an unordered slice of
+// historical RSI values. The input is not mutated; a sorted copy is taken
+// internally. Mirrors adaptiveThresholds but for the upper tail.
+func adaptiveSellThresholds(rsiSeries []float64) dto.SellThresholds {
+	sorted := append([]float64(nil), rsiSeries...)
+	sort.Float64s(sorted)
+	return dto.SellThresholds{
+		P80: percentile(sorted, 80),
+		P90: percentile(sorted, 90),
+		P95: percentile(sorted, 95),
+	}
+}
