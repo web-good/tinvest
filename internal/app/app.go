@@ -176,10 +176,11 @@ func (a *App) runDev(ctx context.Context) {
 		err := a.sp.GetGoldenXTradingService().Trade(
 			ctx,
 			goldenx.Trade{
-				Kind:      goldenx.StrategyKindGrowth,
-				Interval:  enum.Week1,
-				Scheduler: "* * * * *",
-				ShareList: *a.collection.GrowthShare,
+				Kind:           goldenx.StrategyKindGrowth,
+				Interval:       enum.Week1,
+				Scheduler:      "* * * * *",
+				ShareList:      *a.collection.GrowthShare,
+				UseTrendFilter: true,
 			},
 		)
 
@@ -249,10 +250,11 @@ func (a *App) runProd(ctx context.Context) {
 		err := scheduler.NewSchedulerService(a.sp.GetGoldenXTradingService(), tgBot).Trade(
 			ctx,
 			goldenx.Trade{
-				Kind:      goldenx.StrategyKindGrowth,
-				Interval:  enum.Week1,
-				Scheduler: "0 */5 * * *",
-				ShareList: *a.collection.GrowthShare,
+				Kind:           goldenx.StrategyKindGrowth,
+				Interval:       enum.Week1,
+				Scheduler:      "0 */5 * * *",
+				ShareList:      *a.collection.GrowthShare,
+				UseTrendFilter: true,
 			},
 		)
 		if err != nil {

@@ -6,8 +6,9 @@ import (
 )
 
 type Trade struct {
-	Kind      StrategyKind
-	Interval  enum.Interval
-	ShareList collection.InstrumentCollection
-	Scheduler string
+	Kind           StrategyKind
+	Interval       enum.Interval
+	ShareList      collection.InstrumentCollection
+	Scheduler      string
+	UseTrendFilter bool
 }
