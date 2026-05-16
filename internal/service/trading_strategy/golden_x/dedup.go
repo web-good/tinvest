@@ -6,29 +6,13 @@ type alertTier int
 
 const (
 	tierNone alertTier = iota
-	tierBrown
 	tierYellow
 	tierGreen
 )
 
-// tierFromRSI classifies an RSI value into an alert tier.
-// Thresholds match the color buckets used in notification/notifications.go.
-func tierFromRSI(rsi float64) alertTier {
-	switch {
-	case rsi < 31:
-		return tierGreen
-	case rsi < 35:
-		return tierYellow
-	case rsi <= 40:
-		return tierBrown
-	default:
-		return tierNone
-	}
-}
-
 // alertState tracks the last tier emitted per shareID and decides whether
 // a new alert should be sent. An alert fires only when the tier changes
-// AND the new tier is not tierNone (RSI > 40 means "silent reset").
+// AND the new tier is not tierNone (RSI above p15 means "silent reset").
 type alertState struct {
 	mu   sync.Mutex
 	last map[string]alertTier
