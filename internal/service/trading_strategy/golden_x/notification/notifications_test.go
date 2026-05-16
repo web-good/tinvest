@@ -25,7 +25,7 @@ func TestTrade_AdaptiveTiersAndThresholdSuffix(t *testing.T) {
 		"notrend-id": {P5: 24, P15: 31},
 	}
 
-	got := Trade(info, dto.StrategyKindGrowth, trends, thresholds)
+	got := Trade(info, nil, dto.StrategyKindGrowth, trends, thresholds, nil)
 
 	if !strings.Contains(got, "Yandex 🟢 ✅") {
 		t.Errorf("expected 'Yandex 🟢 ✅', got:\n%s", got)
@@ -45,7 +45,7 @@ func TestTrade_NoThresholdsRendersNoEmojiOrSuffix(t *testing.T) {
 	info := domain.NewInfo()
 	info.WriteToMap("any-id", domain.Item{InstrumentName: "Lukoil", RSIValue: 28})
 
-	got := Trade(info, dto.StrategyKindDividend, nil, nil)
+	got := Trade(info, nil, dto.StrategyKindDividend, nil, nil, nil)
 
 	if !strings.Contains(got, "🥇") {
 		t.Errorf("expected gold medal, got:\n%s", got)
@@ -55,6 +55,83 @@ func TestTrade_NoThresholdsRendersNoEmojiOrSuffix(t *testing.T) {
 	}
 	if strings.Contains(got, "p5=") {
 		t.Errorf("expected no threshold suffix, got:\n%s", got)
+	}
+}
+
+func TestTrade_RendersSellSectionGold(t *testing.T) {
+	buyInfo := domain.NewInfo()
+	sellInfo := domain.NewInfo()
+	sellInfo.WriteToMap("yellow-sell", domain.Item{InstrumentName: "Lukoil", RSIValue: 65})
+	sellInfo.WriteToMap("orange-sell", domain.Item{InstrumentName: "Gazprom", RSIValue: 75})
+	sellInfo.WriteToMap("red-sell", domain.Item{InstrumentName: "Phosagro", RSIValue: 85})
+
+	sellThresholds := map[string]dto.SellThresholds{
+		"yellow-sell": {P80: 60, P90: 70, P95: 80},
+		"orange-sell": {P80: 60, P90: 70, P95: 80},
+		"red-sell":    {P80: 60, P90: 70, P95: 80},
+	}
+
+	got := Trade(buyInfo, sellInfo, dto.StrategyKindDividend, nil, nil, sellThresholds)
+
+	if !strings.Contains(got, "Акции находящиеся в локальных максимумах") {
+		t.Errorf("expected sell-section header, got:\n%s", got)
+	}
+	if !strings.Contains(got, "Lukoil 🟠") {
+		t.Errorf("expected 'Lukoil 🟠', got:\n%s", got)
+	}
+	if !strings.Contains(got, "Gazprom 🔴") {
+		t.Errorf("expected 'Gazprom 🔴', got:\n%s", got)
+	}
+	if !strings.Contains(got, "Phosagro 🚨") {
+		t.Errorf("expected 'Phosagro 🚨', got:\n%s", got)
+	}
+	if !strings.Contains(got, "(p80=60.0, p90=70.0, p95=80.0)") {
+		t.Errorf("expected sell threshold suffix, got:\n%s", got)
+	}
+}
+
+func TestTrade_RendersSellSectionGrowth(t *testing.T) {
+	buyInfo := domain.NewInfo()
+	sellInfo := domain.NewInfo()
+	sellInfo.WriteToMap("growth-exit", domain.Item{InstrumentName: "Yandex", RSIValue: 80})
+
+	sellThresholds := map[string]dto.SellThresholds{
+		"growth-exit": {P80: 60, P90: 70, P95: 80},
+	}
+
+	got := Trade(buyInfo, sellInfo, dto.StrategyKindGrowth, nil, nil, sellThresholds)
+
+	if !strings.Contains(got, "Yandex 🔴") {
+		t.Errorf("expected Growth sell tier 🔴 for Yandex, got:\n%s", got)
+	}
+}
+
+func TestTrade_BuyAndSellTogether(t *testing.T) {
+	buyInfo := domain.NewInfo()
+	buyInfo.WriteToMap("buy-id", domain.Item{InstrumentName: "Sber", RSIValue: 20})
+	sellInfo := domain.NewInfo()
+	sellInfo.WriteToMap("sell-id", domain.Item{InstrumentName: "Phosagro", RSIValue: 85})
+
+	thresholds := map[string]dto.Thresholds{
+		"buy-id": {P5: 24, P15: 31},
+	}
+	sellThresholds := map[string]dto.SellThresholds{
+		"sell-id": {P80: 60, P90: 70, P95: 80},
+	}
+
+	got := Trade(buyInfo, sellInfo, dto.StrategyKindDividend, nil, thresholds, sellThresholds)
+
+	if !strings.Contains(got, "Акции находящиеся в локальных минимумах") {
+		t.Errorf("buy section missing, got:\n%s", got)
+	}
+	if !strings.Contains(got, "Акции находящиеся в локальных максимумах") {
+		t.Errorf("sell section missing, got:\n%s", got)
+	}
+	if !strings.Contains(got, "Sber 🟢") {
+		t.Errorf("expected 'Sber 🟢' in buy section, got:\n%s", got)
+	}
+	if !strings.Contains(got, "Phosagro 🚨") {
+		t.Errorf("expected 'Phosagro 🚨' in sell section, got:\n%s", got)
 	}
 }
 

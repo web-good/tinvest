@@ -43,10 +43,12 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 	}()
 	loc, _ := time.LoadLocation("Europe/Moscow")
 	dateNow := time.Now().In(loc)
-	info := domain.NewInfo()
+	buyInfo := domain.NewInfo()
+	sellInfo := domain.NewInfo()
 	RSIInfo := domain.NewInfo()
 	trends := make(map[string]dto.TrendStatus)
 	thresholds := make(map[string]dto.Thresholds)
+	sellThresholds := make(map[string]dto.SellThresholds)
 
 	for _, share := range in.ShareList.All() {
 		candles, candleErr := s.fetchWeeklyCandles(ctx, share.ID, in.Interval, dateNow)
@@ -56,7 +58,7 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 		}
 		closed := closedWeeklyCandles(candles, dateNow, loc)
 
-		lastRSI, sharedThresholds, adaptiveErr := adaptiveRSIForShare(closed, share.RSILength)
+		lastRSI, rsiSeries, sharedThresholds, adaptiveErr := adaptiveRSIForShare(closed, share.RSILength)
 		if errors.Is(adaptiveErr, ErrAdaptiveInsufficientHistory) {
 			logger.InfoContext(ctx, "adaptive tiers: insufficient history", "share", share.Name)
 			continue
@@ -80,6 +82,9 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 		}
 
 		thresholds[share.ID] = sharedThresholds
+		shareSellThresholds := adaptiveSellThresholds(rsiSeries)
+		sellThresholds[share.ID] = shareSellThresholds
+
 		RSIInfo.WriteToMap(
 			share.ID,
 			domain.Item{
@@ -88,21 +93,35 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 				RSIValue:       lastRSI,
 			})
 
-		tier := tierFromAdaptive(lastRSI, sharedThresholds.P5, sharedThresholds.P15)
-		if !s.state.ShouldAlert(share.ID, tier) {
+		buyTier := tierFromAdaptive(lastRSI, sharedThresholds.P5, sharedThresholds.P15)
+		sellTier := sellTierFromAdaptive(lastRSI, shareSellThresholds, in.Kind)
+
+		// Buy and sell zones are mutually exclusive on RSI — at most one is non-None.
+		// Prefer the sell signal if present, otherwise the buy signal.
+		finalTier := buyTier
+		if sellTier != tierNone {
+			finalTier = sellTier
+		}
+
+		if !s.state.ShouldAlert(share.ID, finalTier) {
 			continue
 		}
 
-		info.WriteToMap(
-			share.ID,
-			domain.Item{
-				InstrumentName: share.Name,
-				RSIValue:       lastRSI,
-			})
+		item := domain.Item{
+			InstrumentName: share.Name,
+			RSIValue:       lastRSI,
+		}
+		switch finalTier {
+		case tierYellow, tierGreen:
+			buyInfo.WriteToMap(share.ID, item)
+		case tierSellYellow, tierSellOrange, tierSellRed:
+			sellInfo.WriteToMap(share.ID, item)
+		}
 	}
 
-	if len(info.Items()) > 0 {
-		if sendErr := s.tgClient.SendMessage(notif.Trade(info, in.Kind, trends, thresholds)); sendErr != nil {
+	if len(buyInfo.Items()) > 0 || len(sellInfo.Items()) > 0 {
+		msg := notif.Trade(buyInfo, sellInfo, in.Kind, trends, thresholds, sellThresholds)
+		if sendErr := s.tgClient.SendMessage(msg); sendErr != nil {
 			logger.ErrorContext(ctx, "message is not sent", sendErr)
 			return sendErr
 		}
@@ -134,28 +153,28 @@ func (s *service) fetchWeeklyCandles(ctx context.Context, shareID string, interv
 	)
 }
 
-// adaptiveRSIForShare computes the share's last-closed-week RSI and adaptive
-// p5/p15 thresholds over up to adaptiveWindowMax historical RSI values.
-// Returns ErrAdaptiveInsufficientHistory if fewer than adaptiveWindowMin RSI
-// values are available.
-func adaptiveRSIForShare(closedCandles []*model.CandleItemTechAnalyse, rsiPeriod int) (float64, dto.Thresholds, error) {
+// adaptiveRSIForShare computes the share's last-closed-week RSI, the trimmed
+// historical RSI slice used for percentiles, and the adaptive p5/p15 buy
+// thresholds. Returns ErrAdaptiveInsufficientHistory if fewer than
+// adaptiveWindowMin RSI values are available. The returned slice may be used
+// by the caller to derive additional percentiles (e.g. sell thresholds)
+// without recomputing RSI.
+func adaptiveRSIForShare(closedCandles []*model.CandleItemTechAnalyse, rsiPeriod int) (float64, []float64, dto.Thresholds, error) {
 	closes := make([]float64, len(closedCandles))
 	for i, c := range closedCandles {
 		closes[i] = utils.CombinePrice(c.Close.Units, c.Close.Nano)
 	}
 	full := computeRSISeries(closes, rsiPeriod)
-	// Trim warmup zeros — RSI is defined from index rsiPeriod onward.
 	if len(full) <= rsiPeriod {
-		return 0, dto.Thresholds{}, ErrAdaptiveInsufficientHistory
+		return 0, nil, dto.Thresholds{}, ErrAdaptiveInsufficientHistory
 	}
 	rsi := full[rsiPeriod:]
 	if len(rsi) < adaptiveWindowMin {
-		return 0, dto.Thresholds{}, ErrAdaptiveInsufficientHistory
+		return 0, nil, dto.Thresholds{}, ErrAdaptiveInsufficientHistory
 	}
-	// Keep only the most recent adaptiveWindowMax values for percentile stability.
 	if len(rsi) > adaptiveWindowMax {
 		rsi = rsi[len(rsi)-adaptiveWindowMax:]
 	}
 	lastRSI := rsi[len(rsi)-1]
-	return lastRSI, adaptiveThresholds(rsi), nil
+	return lastRSI, rsi, adaptiveThresholds(rsi), nil
 }

@@ -10,33 +10,46 @@ import (
 )
 
 func Trade(
-	info *domain.Info,
+	buyInfo *domain.Info,
+	sellInfo *domain.Info,
 	kind dto.StrategyKind,
 	trends map[string]dto.TrendStatus,
 	thresholds map[string]dto.Thresholds,
+	sellThresholds map[string]dto.SellThresholds,
 ) string {
-	notifyMessageBuilder := strings.Builder{}
+	b := strings.Builder{}
 	if medal := kind.Medal(); medal != "" {
-		notifyMessageBuilder.WriteString(medal + "\n\n")
+		b.WriteString(medal + "\n\n")
 	}
 
-	notifyMessageBuilder.WriteString("<u><b>Акции находящиеся в локальных минимумах:</b></u>\n\n\n<code>")
-	for id, log := range info.Items() {
-		trendMark := trends[id].Mark()
-		if trendMark != "" {
-			trendMark = " " + trendMark
+	if buyInfo != nil && len(buyInfo.Items()) > 0 {
+		b.WriteString("<u><b>Акции находящиеся в локальных минимумах:</b></u>\n\n\n<code>")
+		for id, log := range buyInfo.Items() {
+			trendMark := trends[id].Mark()
+			if trendMark != "" {
+				trendMark = " " + trendMark
+			}
+			b.WriteString("• <b>Акция:</b> " + log.InstrumentName + tierEmoji(log.RSIValue, thresholds[id]) + trendMark + "\n")
+			b.WriteString("  <b>RSI Value:</b>" + strconv.Itoa(int(log.RSIValue)) + thresholdSuffix(thresholds[id]) + "\n")
+			b.WriteString("\n")
 		}
-		notifyMessageBuilder.WriteString("• <b>Акция:</b> " + log.InstrumentName + tierEmoji(log.RSIValue, thresholds[id]) + trendMark + "\n")
-		notifyMessageBuilder.WriteString("  <b>RSI Value:</b>" + strconv.Itoa(int(log.RSIValue)) + thresholdSuffix(thresholds[id]) + "\n")
-		notifyMessageBuilder.WriteString("\n")
+		b.WriteString("</code>\n\n")
 	}
 
-	notifyMessageBuilder.WriteString("</code>")
+	if sellInfo != nil && len(sellInfo.Items()) > 0 {
+		b.WriteString("<u><b>Акции находящиеся в локальных максимумах:</b></u>\n\n\n<code>")
+		for id, log := range sellInfo.Items() {
+			b.WriteString("• <b>Акция:</b> " + log.InstrumentName + sellTierEmoji(log.RSIValue, sellThresholds[id]) + "\n")
+			b.WriteString("  <b>RSI Value:</b>" + strconv.Itoa(int(log.RSIValue)) + sellThresholdSuffix(sellThresholds[id]) + "\n")
+			b.WriteString("\n")
+		}
+		b.WriteString("</code>")
+	}
 
-	return notifyMessageBuilder.String()
+	return b.String()
 }
 
-// tierEmoji renders the colored circle based on adaptive thresholds. Empty
+// tierEmoji renders the colored circle based on adaptive buy thresholds. Empty
 // Thresholds (zero value, e.g. for shares filtered out before we could compute
 // them) renders no emoji — the row still appears with the raw RSI value.
 func tierEmoji(rsi float64, th dto.Thresholds) string {
@@ -53,11 +66,40 @@ func tierEmoji(rsi float64, th dto.Thresholds) string {
 	}
 }
 
-// thresholdSuffix renders the percentile annotation appended to the RSI line,
-// e.g. "  (p5=24, p15=31)". Empty Thresholds renders nothing.
+// thresholdSuffix renders the buy percentile annotation appended to the RSI
+// line, e.g. "  (p5=24.0, p15=31.0)". Empty Thresholds renders nothing.
 func thresholdSuffix(th dto.Thresholds) string {
 	if th.P5 == 0 && th.P15 == 0 {
 		return ""
 	}
 	return fmt.Sprintf("  (p5=%.1f, p15=%.1f)", th.P5, th.P15)
+}
+
+// sellTierEmoji renders the colored circle for a sell-side row using the
+// share's own adaptive upper percentiles. Strict `>` comparisons mirror
+// sellTierFromAdaptive. Empty SellThresholds renders no emoji.
+func sellTierEmoji(rsi float64, st dto.SellThresholds) string {
+	if st.P80 == 0 && st.P90 == 0 && st.P95 == 0 {
+		return ""
+	}
+	switch {
+	case rsi > st.P95:
+		return " 🚨"
+	case rsi > st.P90:
+		return " 🔴"
+	case rsi > st.P80:
+		return " 🟠"
+	default:
+		return ""
+	}
+}
+
+// sellThresholdSuffix renders the sell percentile annotation appended to the
+// RSI line, e.g. "  (p80=60.0, p90=70.0, p95=80.0)". Empty SellThresholds
+// renders nothing.
+func sellThresholdSuffix(st dto.SellThresholds) string {
+	if st.P80 == 0 && st.P90 == 0 && st.P95 == 0 {
+		return ""
+	}
+	return fmt.Sprintf("  (p80=%.1f, p90=%.1f, p95=%.1f)", st.P80, st.P90, st.P95)
 }
