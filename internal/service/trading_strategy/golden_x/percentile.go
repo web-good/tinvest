@@ -65,3 +65,36 @@ func adaptiveSellThresholds(rsiSeries []float64) dto.SellThresholds {
 		P95: percentile(sorted, 95),
 	}
 }
+
+// sellTierFromAdaptive maps the last closed-week RSI to a Golden X sell tier
+// using the share's own historical upper percentiles. Comparisons are strict
+// (`>`) — equality at a boundary falls into the looser tier. Behavior depends
+// on kind:
+//
+//   - Dividend (Gold): three tiers — SellYellow at p80, SellOrange at p90,
+//     SellRed at p95.
+//   - Growth: single tier — SellOrange at p90. The sharp-exit semantics from
+//     the original Golden X spec.
+//   - Unknown: always tierNone (defensive default).
+func sellTierFromAdaptive(rsi float64, st dto.SellThresholds, kind dto.StrategyKind) alertTier {
+	switch kind {
+	case dto.StrategyKindDividend:
+		switch {
+		case rsi > st.P95:
+			return tierSellRed
+		case rsi > st.P90:
+			return tierSellOrange
+		case rsi > st.P80:
+			return tierSellYellow
+		default:
+			return tierNone
+		}
+	case dto.StrategyKindGrowth:
+		if rsi > st.P90 {
+			return tierSellOrange
+		}
+		return tierNone
+	default:
+		return tierNone
+	}
+}

@@ -41,3 +41,29 @@ func TestAlertState_IndependentShares(t *testing.T) {
 		t.Fatal("repeat Yellow for a must not alert")
 	}
 }
+
+func TestAlertState_BuyToSellTransition(t *testing.T) {
+	s := newAlertState()
+	const id = "share-1"
+
+	// Yellow buy fires → moves through None (RSI in mid-zone) →
+	// SellYellow fires → SellRed fires → silent reset.
+	if !s.ShouldAlert(id, tierYellow) {
+		t.Fatal("first Yellow must alert")
+	}
+	if s.ShouldAlert(id, tierNone) {
+		t.Fatal("None must not alert (silent reset)")
+	}
+	if !s.ShouldAlert(id, tierSellYellow) {
+		t.Fatal("SellYellow after reset must alert")
+	}
+	if s.ShouldAlert(id, tierSellYellow) {
+		t.Fatal("repeat SellYellow must not alert")
+	}
+	if !s.ShouldAlert(id, tierSellRed) {
+		t.Fatal("escalation SellYellow→SellRed must alert")
+	}
+	if s.ShouldAlert(id, tierNone) {
+		t.Fatal("trailing None must not alert")
+	}
+}

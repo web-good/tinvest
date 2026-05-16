@@ -3,6 +3,8 @@ package golden_x
 import (
 	"math"
 	"testing"
+
+	"tinvest/internal/service/trading_strategy/golden_x/dto"
 )
 
 func TestPercentile_R7(t *testing.T) {
@@ -146,5 +148,59 @@ func TestAdaptiveSellThresholds_DoesNotMutateInput(t *testing.T) {
 		if in[i] != original[i] {
 			t.Fatalf("input mutated at %d: got %v, want %v", i, in[i], original[i])
 		}
+	}
+}
+
+func TestSellTierFromAdaptive_Gold(t *testing.T) {
+	st := dto.SellThresholds{P80: 60, P90: 70, P95: 80}
+	tests := []struct {
+		name string
+		rsi  float64
+		want alertTier
+	}{
+		{"rsi below p80 → None", 59, tierNone},
+		{"rsi == p80 → None (strict >)", 60, tierNone},
+		{"rsi between p80 and p90 → SellYellow", 65, tierSellYellow},
+		{"rsi == p90 → SellYellow (strict >)", 70, tierSellYellow},
+		{"rsi between p90 and p95 → SellOrange", 75, tierSellOrange},
+		{"rsi == p95 → SellOrange (strict >)", 80, tierSellOrange},
+		{"rsi above p95 → SellRed", 85, tierSellRed},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := sellTierFromAdaptive(tc.rsi, st, dto.StrategyKindDividend)
+			if got != tc.want {
+				t.Fatalf("sellTierFromAdaptive(%v, gold) = %v, want %v", tc.rsi, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestSellTierFromAdaptive_Growth(t *testing.T) {
+	st := dto.SellThresholds{P80: 60, P90: 70, P95: 80}
+	tests := []struct {
+		name string
+		rsi  float64
+		want alertTier
+	}{
+		{"rsi below p90 → None", 65, tierNone},
+		{"rsi == p90 → None (strict >)", 70, tierNone},
+		{"rsi above p90 but below p95 → SellOrange", 75, tierSellOrange},
+		{"rsi above p95 → SellOrange (single tier for Growth)", 90, tierSellOrange},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := sellTierFromAdaptive(tc.rsi, st, dto.StrategyKindGrowth)
+			if got != tc.want {
+				t.Fatalf("sellTierFromAdaptive(%v, growth) = %v, want %v", tc.rsi, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestSellTierFromAdaptive_UnknownKindReturnsNone(t *testing.T) {
+	st := dto.SellThresholds{P80: 60, P90: 70, P95: 80}
+	if got := sellTierFromAdaptive(99, st, dto.StrategyKindUnknown); got != tierNone {
+		t.Fatalf("sellTierFromAdaptive(unknown) = %v, want tierNone", got)
 	}
 }

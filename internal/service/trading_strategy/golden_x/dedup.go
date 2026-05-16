@@ -5,9 +5,12 @@ import "sync"
 type alertTier int
 
 const (
-	tierNone alertTier = iota
-	tierYellow
-	tierGreen
+	tierNone       alertTier = iota
+	tierYellow               // buy: RSI < p15
+	tierGreen                // buy: RSI < p5
+	tierSellYellow           // sell (Gold only): RSI > p80
+	tierSellOrange           // sell: RSI > p90 (Growth's single tier)
+	tierSellRed              // sell (Gold only): RSI > p95
 )
 
 // alertState tracks the last tier emitted per shareID and decides whether
