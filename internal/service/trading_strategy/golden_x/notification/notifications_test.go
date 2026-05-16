@@ -88,6 +88,9 @@ func TestTrade_RendersSellSectionGold(t *testing.T) {
 	if !strings.Contains(got, "(p80=60.0, p90=70.0, p95=80.0)") {
 		t.Errorf("expected sell threshold suffix, got:\n%s", got)
 	}
+	if strings.Contains(got, "Акции находящиеся в локальных минимумах") {
+		t.Errorf("expected no buy-section header when buyInfo is empty, got:\n%s", got)
+	}
 }
 
 func TestTrade_RendersSellSectionGrowth(t *testing.T) {
@@ -103,6 +106,9 @@ func TestTrade_RendersSellSectionGrowth(t *testing.T) {
 
 	if !strings.Contains(got, "Yandex 🔴") {
 		t.Errorf("expected Growth sell tier 🔴 for Yandex, got:\n%s", got)
+	}
+	if strings.Contains(got, "Акции находящиеся в локальных минимумах") {
+		t.Errorf("expected no buy-section header when buyInfo is empty, got:\n%s", got)
 	}
 }
 

@@ -96,8 +96,8 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 		buyTier := tierFromAdaptive(lastRSI, sharedThresholds.P5, sharedThresholds.P15)
 		sellTier := sellTierFromAdaptive(lastRSI, shareSellThresholds, in.Kind)
 
-		// Buy and sell zones are mutually exclusive on RSI — at most one is non-None.
-		// Prefer the sell signal if present, otherwise the buy signal.
+		// Buy and sell zones are mutually exclusive on RSI — picks whichever
+		// (if any) is non-None.
 		finalTier := buyTier
 		if sellTier != tierNone {
 			finalTier = sellTier
