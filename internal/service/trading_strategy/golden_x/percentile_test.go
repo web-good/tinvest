@@ -69,3 +69,53 @@ func rangeFloat(from, to int) []float64 {
 	}
 	return out
 }
+
+func TestTierFromAdaptive(t *testing.T) {
+	tests := []struct {
+		name string
+		rsi  float64
+		p5   float64
+		p15  float64
+		want alertTier
+	}{
+		{"rsi strictly below p5 → Green", 20, 24, 31, tierGreen},
+		{"rsi == p5 → Yellow (strict <)", 24, 24, 31, tierYellow},
+		{"rsi between p5 and p15 → Yellow", 28, 24, 31, tierYellow},
+		{"rsi == p15 → None (strict <)", 31, 24, 31, tierNone},
+		{"rsi above p15 → None", 40, 24, 31, tierNone},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tierFromAdaptive(tc.rsi, tc.p5, tc.p15)
+			if got != tc.want {
+				t.Fatalf("tierFromAdaptive(%v, %v, %v) = %v, want %v", tc.rsi, tc.p5, tc.p15, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestAdaptiveThresholds(t *testing.T) {
+	// percentile([1..100], 5)  = 5.95
+	// percentile([1..100], 15) = 15.85
+	rsi := rangeFloat(1, 100)
+	got := adaptiveThresholds(rsi)
+	if math.Abs(got.P5-5.95) > 1e-9 {
+		t.Errorf("P5 = %v, want 5.95", got.P5)
+	}
+	if math.Abs(got.P15-15.85) > 1e-9 {
+		t.Errorf("P15 = %v, want 15.85", got.P15)
+	}
+}
+
+func TestAdaptiveThresholds_DoesNotMutateInput(t *testing.T) {
+	// Input may arrive in any order; helper must sort defensively without
+	// scrambling the caller's slice.
+	in := []float64{50, 10, 30, 20, 40}
+	original := append([]float64(nil), in...)
+	_ = adaptiveThresholds(in)
+	for i := range in {
+		if in[i] != original[i] {
+			t.Fatalf("input mutated at %d: got %v, want %v", i, in[i], original[i])
+		}
+	}
+}
