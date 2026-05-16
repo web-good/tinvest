@@ -25,7 +25,7 @@ func TestTrade_AdaptiveTiersAndThresholdSuffix(t *testing.T) {
 		"notrend-id": {P5: 24, P15: 31},
 	}
 
-	got := Trade(info, nil, dto.StrategyKindGrowth, trends, thresholds, nil)
+	got := Trade(info, nil, dto.StrategyKindGrowth, trends, thresholds, nil, nil)
 
 	if !strings.Contains(got, "Yandex 🟢 ✅") {
 		t.Errorf("expected 'Yandex 🟢 ✅', got:\n%s", got)
@@ -45,7 +45,7 @@ func TestTrade_NoThresholdsRendersNoEmojiOrSuffix(t *testing.T) {
 	info := domain.NewInfo()
 	info.WriteToMap("any-id", domain.Item{InstrumentName: "Lukoil", RSIValue: 28})
 
-	got := Trade(info, nil, dto.StrategyKindDividend, nil, nil, nil)
+	got := Trade(info, nil, dto.StrategyKindDividend, nil, nil, nil, nil)
 
 	if !strings.Contains(got, "🥇") {
 		t.Errorf("expected gold medal, got:\n%s", got)
@@ -71,7 +71,7 @@ func TestTrade_RendersSellSectionGold(t *testing.T) {
 		"red-sell":    {P80: 60, P90: 70, P95: 80},
 	}
 
-	got := Trade(buyInfo, sellInfo, dto.StrategyKindDividend, nil, nil, sellThresholds)
+	got := Trade(buyInfo, sellInfo, dto.StrategyKindDividend, nil, nil, sellThresholds, nil)
 
 	if !strings.Contains(got, "Акции находящиеся в локальных максимумах") {
 		t.Errorf("expected sell-section header, got:\n%s", got)
@@ -102,7 +102,7 @@ func TestTrade_RendersSellSectionGrowth(t *testing.T) {
 		"growth-exit": {P80: 60, P90: 70, P95: 80},
 	}
 
-	got := Trade(buyInfo, sellInfo, dto.StrategyKindGrowth, nil, nil, sellThresholds)
+	got := Trade(buyInfo, sellInfo, dto.StrategyKindGrowth, nil, nil, sellThresholds, nil)
 
 	if !strings.Contains(got, "Yandex 🔴") {
 		t.Errorf("expected Growth sell tier 🔴 for Yandex, got:\n%s", got)
@@ -125,7 +125,7 @@ func TestTrade_BuyAndSellTogether(t *testing.T) {
 		"sell-id": {P80: 60, P90: 70, P95: 80},
 	}
 
-	got := Trade(buyInfo, sellInfo, dto.StrategyKindDividend, nil, thresholds, sellThresholds)
+	got := Trade(buyInfo, sellInfo, dto.StrategyKindDividend, nil, thresholds, sellThresholds, nil)
 
 	if !strings.Contains(got, "Акции находящиеся в локальных минимумах") {
 		t.Errorf("buy section missing, got:\n%s", got)
@@ -156,5 +156,56 @@ func TestRSIList_RendersAdaptiveTier(t *testing.T) {
 	}
 	if !strings.Contains(got, "(p5=24.0, p15=31.0)") {
 		t.Errorf("expected threshold suffix in RSIList, got:\n%s", got)
+	}
+}
+
+func TestTrade_RendersBullishDivergenceBadge(t *testing.T) {
+	buyInfo := domain.NewInfo()
+	buyInfo.WriteToMap("share-div", domain.Item{InstrumentName: "Lukoil", RSIValue: 20})
+
+	thresholds := map[string]dto.Thresholds{
+		"share-div": {P5: 24, P15: 31},
+	}
+	divergences := map[string]bool{"share-div": true}
+
+	got := Trade(buyInfo, nil, dto.StrategyKindDividend, nil, thresholds, nil, divergences)
+
+	if !strings.Contains(got, "Lukoil 🟢 📈") {
+		t.Errorf("expected 'Lukoil 🟢 📈' (tier + badge), got:\n%s", got)
+	}
+}
+
+func TestTrade_NoBadgeWhenNotDivergent(t *testing.T) {
+	buyInfo := domain.NewInfo()
+	buyInfo.WriteToMap("share-plain", domain.Item{InstrumentName: "Lukoil", RSIValue: 20})
+
+	thresholds := map[string]dto.Thresholds{
+		"share-plain": {P5: 24, P15: 31},
+	}
+
+	got := Trade(buyInfo, nil, dto.StrategyKindDividend, nil, thresholds, nil, nil)
+
+	if strings.Contains(got, "📈") {
+		t.Errorf("expected no divergence badge, got:\n%s", got)
+	}
+}
+
+func TestTrade_BadgeAfterTrendMark(t *testing.T) {
+	buyInfo := domain.NewInfo()
+	buyInfo.WriteToMap("share-both", domain.Item{InstrumentName: "Yandex", RSIValue: 20})
+
+	thresholds := map[string]dto.Thresholds{
+		"share-both": {P5: 24, P15: 31},
+	}
+	trends := map[string]dto.TrendStatus{
+		"share-both": dto.TrendWith,
+	}
+	divergences := map[string]bool{"share-both": true}
+
+	got := Trade(buyInfo, nil, dto.StrategyKindGrowth, trends, thresholds, nil, divergences)
+
+	// Expect order: name, tier emoji, trend mark, divergence badge.
+	if !strings.Contains(got, "Yandex 🟢 ✅ 📈") {
+		t.Errorf("expected 'Yandex 🟢 ✅ 📈' (ordered), got:\n%s", got)
 	}
 }
