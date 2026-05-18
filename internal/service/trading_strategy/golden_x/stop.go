@@ -2,23 +2,23 @@ package golden_x
 
 import "tinvest/internal/service/trading_strategy/golden_x/dto"
 
-// goldenXATRMultiplierGold is the ATR stop multiplier for the Dividend
+// atrMultiplierDividend is the ATR stop multiplier for the Dividend
 // (long-hold) strategy: wider stops survive deeper weekly noise.
-const goldenXATRMultiplierGold = 2.0
+const atrMultiplierDividend = 2.0
 
-// goldenXATRMultiplierGrowth is the stop multiplier for Growth — tighter,
-// since the strategy exits sooner on RSI overheats.
-const goldenXATRMultiplierGrowth = 1.5
+// atrMultiplierGrowth is the stop multiplier for Growth — tighter, since the
+// strategy exits sooner on RSI overheats.
+const atrMultiplierGrowth = 1.5
 
 // kForKind returns the ATR multiplier appropriate for the given strategy kind.
-// Gold (Dividend) holds longer and needs wider stops; Growth exits sooner and
-// uses tighter stops. Unknown kinds fall back to Gold — defensive only; the
+// Dividend holds longer and needs wider stops; Growth exits sooner and uses
+// tighter stops. Unknown kinds fall back to Dividend — defensive only; the
 // production code paths construct the enum at the call site.
 func kForKind(kind dto.StrategyKind) float64 {
 	if kind == dto.StrategyKindGrowth {
-		return goldenXATRMultiplierGrowth
+		return atrMultiplierGrowth
 	}
-	return goldenXATRMultiplierGold
+	return atrMultiplierDividend
 }
 
 // stopFromATR composes a dto.Stop from the last close, ATR value, and
