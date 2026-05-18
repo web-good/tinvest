@@ -14,6 +14,7 @@ import (
 	"tinvest/internal/service/trading_strategy/golden_x/dto"
 	notif "tinvest/internal/service/trading_strategy/golden_x/notification"
 	"tinvest/internal/utils"
+	"tinvest/pkg/indicators"
 	"tinvest/pkg/logger"
 )
 
@@ -41,6 +42,17 @@ const divergenceFractalK = 2
 // for current week behavior on a weekly TF.
 const divergenceLookbackWeeks = 52
 
+// volumeSMALookback is the number of closed weekly candles preceding the
+// last closed week, used as the SMA baseline for volume confirmation.
+const volumeSMALookback = 20
+
+// volumeMultiplier is the strictness factor: the last closed week's volume
+// must be > volumeMultiplier × SMA of the previous volumeSMALookback weeks
+// for the 🔊 badge to fire. 1.5× is the balance between "barely above
+// average" (which would emit the badge for most shares and dilute meaning)
+// and a 2× "rare spike" (which would almost never fire).
+const volumeMultiplier = 1.5
+
 // ErrAdaptiveInsufficientHistory is returned when a share has fewer than
 // adaptiveWindowMin closed weekly RSI values available.
 var ErrAdaptiveInsufficientHistory = errors.New("adaptive tiers: insufficient RSI history")
@@ -61,6 +73,7 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 	thresholds := make(map[string]dto.Thresholds)
 	sellThresholds := make(map[string]dto.SellThresholds)
 	divergences := make(map[string]bool)
+	volumesConfirmed := make(map[string]bool)
 
 	for _, share := range in.ShareList.All() {
 		candles, candleErr := s.fetchWeeklyCandles(ctx, share.ID, in.Interval, dateNow)
@@ -111,6 +124,14 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 			if bullishDivergence(lows, rsiTail, divergenceFractalK) {
 				divergences[share.ID] = true
 			}
+
+			volumes := make([]int64, len(closed))
+			for i, c := range closed {
+				volumes[i] = c.Volume
+			}
+			if indicators.VolumeConfirmed(volumes, volumeSMALookback, volumeMultiplier) {
+				volumesConfirmed[share.ID] = true
+			}
 		}
 
 		RSIInfo.WriteToMap(
@@ -147,7 +168,7 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 	}
 
 	if len(buyInfo.Items()) > 0 || len(sellInfo.Items()) > 0 {
-		msg := notif.Trade(buyInfo, sellInfo, in.Kind, trends, thresholds, sellThresholds, divergences)
+		msg := notif.Trade(buyInfo, sellInfo, in.Kind, trends, thresholds, sellThresholds, divergences, volumesConfirmed)
 		if sendErr := s.tgClient.SendMessage(msg); sendErr != nil {
 			logger.ErrorContext(ctx, "message is not sent", sendErr)
 			return sendErr

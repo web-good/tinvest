@@ -17,6 +17,7 @@ func Trade(
 	thresholds map[string]dto.Thresholds,
 	sellThresholds map[string]dto.SellThresholds,
 	divergences map[string]bool,
+	volumesConfirmed map[string]bool,
 ) string {
 	b := strings.Builder{}
 	if medal := kind.Medal(); medal != "" {
@@ -30,7 +31,7 @@ func Trade(
 			if trendMark != "" {
 				trendMark = " " + trendMark
 			}
-			b.WriteString("• <b>Акция:</b> " + log.InstrumentName + tierEmoji(log.RSIValue, thresholds[id]) + trendMark + divergenceBadge(divergences[id]) + "\n")
+			b.WriteString("• <b>Акция:</b> " + log.InstrumentName + tierEmoji(log.RSIValue, thresholds[id]) + trendMark + divergenceBadge(divergences[id]) + volumeBadge(volumesConfirmed[id]) + "\n")
 			b.WriteString("  <b>RSI Value:</b>" + strconv.Itoa(int(log.RSIValue)) + thresholdSuffix(thresholds[id]) + "\n")
 			b.WriteString("\n")
 		}
@@ -56,6 +57,16 @@ func Trade(
 func divergenceBadge(divergent bool) string {
 	if divergent {
 		return " 📈"
+	}
+	return ""
+}
+
+// volumeBadge returns " 🔊" when the share's row should display the volume
+// confirmation annotation, "" otherwise. The badge is purely additive — it
+// never participates in dedup and never replaces an existing emoji.
+func volumeBadge(confirmed bool) string {
+	if confirmed {
+		return " 🔊"
 	}
 	return ""
 }
