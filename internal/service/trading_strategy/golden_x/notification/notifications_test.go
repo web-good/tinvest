@@ -25,7 +25,7 @@ func TestTrade_AdaptiveTiersAndThresholdSuffix(t *testing.T) {
 		"notrend-id": {P5: 24, P15: 31},
 	}
 
-	got := Trade(info, nil, dto.StrategyKindGrowth, trends, thresholds, nil, nil, nil)
+	got := Trade(info, nil, dto.StrategyKindGrowth, trends, thresholds, nil, nil, nil, nil)
 
 	if !strings.Contains(got, "Yandex 🟢 ✅") {
 		t.Errorf("expected 'Yandex 🟢 ✅', got:\n%s", got)
@@ -45,7 +45,7 @@ func TestTrade_NoThresholdsRendersNoEmojiOrSuffix(t *testing.T) {
 	info := domain.NewInfo()
 	info.WriteToMap("any-id", domain.Item{InstrumentName: "Lukoil", RSIValue: 28})
 
-	got := Trade(info, nil, dto.StrategyKindDividend, nil, nil, nil, nil, nil)
+	got := Trade(info, nil, dto.StrategyKindDividend, nil, nil, nil, nil, nil, nil)
 
 	if !strings.Contains(got, "🥇") {
 		t.Errorf("expected gold medal, got:\n%s", got)
@@ -71,7 +71,7 @@ func TestTrade_RendersSellSectionGold(t *testing.T) {
 		"red-sell":    {P80: 60, P90: 70, P95: 80},
 	}
 
-	got := Trade(buyInfo, sellInfo, dto.StrategyKindDividend, nil, nil, sellThresholds, nil, nil)
+	got := Trade(buyInfo, sellInfo, dto.StrategyKindDividend, nil, nil, sellThresholds, nil, nil, nil)
 
 	if !strings.Contains(got, "Акции находящиеся в локальных максимумах") {
 		t.Errorf("expected sell-section header, got:\n%s", got)
@@ -102,7 +102,7 @@ func TestTrade_RendersSellSectionGrowth(t *testing.T) {
 		"growth-exit": {P80: 60, P90: 70, P95: 80},
 	}
 
-	got := Trade(buyInfo, sellInfo, dto.StrategyKindGrowth, nil, nil, sellThresholds, nil, nil)
+	got := Trade(buyInfo, sellInfo, dto.StrategyKindGrowth, nil, nil, sellThresholds, nil, nil, nil)
 
 	if !strings.Contains(got, "Yandex 🔴") {
 		t.Errorf("expected Growth sell tier 🔴 for Yandex, got:\n%s", got)
@@ -125,7 +125,7 @@ func TestTrade_BuyAndSellTogether(t *testing.T) {
 		"sell-id": {P80: 60, P90: 70, P95: 80},
 	}
 
-	got := Trade(buyInfo, sellInfo, dto.StrategyKindDividend, nil, thresholds, sellThresholds, nil, nil)
+	got := Trade(buyInfo, sellInfo, dto.StrategyKindDividend, nil, thresholds, sellThresholds, nil, nil, nil)
 
 	if !strings.Contains(got, "Акции находящиеся в локальных минимумах") {
 		t.Errorf("buy section missing, got:\n%s", got)
@@ -168,7 +168,7 @@ func TestTrade_RendersBullishDivergenceBadge(t *testing.T) {
 	}
 	divergences := map[string]bool{"share-div": true}
 
-	got := Trade(buyInfo, nil, dto.StrategyKindDividend, nil, thresholds, nil, divergences, nil)
+	got := Trade(buyInfo, nil, dto.StrategyKindDividend, nil, thresholds, nil, divergences, nil, nil)
 
 	if !strings.Contains(got, "Lukoil 🟢 📈") {
 		t.Errorf("expected 'Lukoil 🟢 📈' (tier + badge), got:\n%s", got)
@@ -183,7 +183,7 @@ func TestTrade_NoBadgeWhenNotDivergent(t *testing.T) {
 		"share-plain": {P5: 24, P15: 31},
 	}
 
-	got := Trade(buyInfo, nil, dto.StrategyKindDividend, nil, thresholds, nil, nil, nil)
+	got := Trade(buyInfo, nil, dto.StrategyKindDividend, nil, thresholds, nil, nil, nil, nil)
 
 	if strings.Contains(got, "📈") {
 		t.Errorf("expected no divergence badge, got:\n%s", got)
@@ -202,7 +202,7 @@ func TestTrade_BadgeAfterTrendMark(t *testing.T) {
 	}
 	divergences := map[string]bool{"share-both": true}
 
-	got := Trade(buyInfo, nil, dto.StrategyKindGrowth, trends, thresholds, nil, divergences, nil)
+	got := Trade(buyInfo, nil, dto.StrategyKindGrowth, trends, thresholds, nil, divergences, nil, nil)
 
 	// Expect order: name, tier emoji, trend mark, divergence badge.
 	if !strings.Contains(got, "Yandex 🟢 ✅ 📈") {
@@ -220,7 +220,7 @@ func TestTrade_VolumeBadgeAppendedAfterDivergence(t *testing.T) {
 	divergences := map[string]bool{"share-both": true}
 	volumes := map[string]bool{"share-both": true}
 
-	got := Trade(buyInfo, nil, dto.StrategyKindDividend, nil, thresholds, nil, divergences, volumes)
+	got := Trade(buyInfo, nil, dto.StrategyKindDividend, nil, thresholds, nil, divergences, volumes, nil)
 
 	// Expect order: name, tier emoji, divergence badge, volume badge.
 	if !strings.Contains(got, "Lukoil 🟢 📈 🔊") {
@@ -237,7 +237,7 @@ func TestTrade_VolumeBadgeAbsentWhenNotConfirmed(t *testing.T) {
 	}
 	divergences := map[string]bool{"share-no-vol": true}
 
-	got := Trade(buyInfo, nil, dto.StrategyKindDividend, nil, thresholds, nil, divergences, nil)
+	got := Trade(buyInfo, nil, dto.StrategyKindDividend, nil, thresholds, nil, divergences, nil, nil)
 
 	if strings.Contains(got, "🔊") {
 		t.Errorf("expected no volume badge, got:\n%s", got)
@@ -256,12 +256,72 @@ func TestTrade_VolumeBadgeWithoutDivergence(t *testing.T) {
 	}
 	volumes := map[string]bool{"share-vol-only": true}
 
-	got := Trade(buyInfo, nil, dto.StrategyKindDividend, nil, thresholds, nil, nil, volumes)
+	got := Trade(buyInfo, nil, dto.StrategyKindDividend, nil, thresholds, nil, nil, volumes, nil)
 
 	if !strings.Contains(got, "Lukoil 🟢 🔊") {
 		t.Errorf("expected 'Lukoil 🟢 🔊' (volume only, no divergence), got:\n%s", got)
 	}
 	if strings.Contains(got, "📈") {
 		t.Errorf("expected no divergence badge, got:\n%s", got)
+	}
+}
+
+func TestTrade_StopLineRendersAfterRSI(t *testing.T) {
+	buyInfo := domain.NewInfo()
+	buyInfo.WriteToMap("share-stop", domain.Item{InstrumentName: "Lukoil", RSIValue: 20})
+
+	thresholds := map[string]dto.Thresholds{
+		"share-stop": {P5: 24, P15: 31},
+	}
+	stops := map[string]dto.Stop{
+		"share-stop": {Price: 2410.5, DistancePct: 6.2},
+	}
+
+	got := Trade(buyInfo, nil, dto.StrategyKindDividend, nil, thresholds, nil, nil, nil, stops)
+
+	if !strings.Contains(got, "<b>Stop:</b> 2410.50 (−6.2%)") {
+		t.Errorf("expected '<b>Stop:</b> 2410.50 (−6.2%%)', got:\n%s", got)
+	}
+	// Stop line must appear AFTER the RSI line of the same share.
+	rsiIdx := strings.Index(got, "RSI Value:</b>20")
+	stopIdx := strings.Index(got, "<b>Stop:</b>")
+	if rsiIdx < 0 || stopIdx < 0 || stopIdx < rsiIdx {
+		t.Errorf("expected Stop line after RSI line, got order RSI=%d Stop=%d in:\n%s", rsiIdx, stopIdx, got)
+	}
+}
+
+func TestTrade_StopLineAbsentWhenEmpty(t *testing.T) {
+	buyInfo := domain.NewInfo()
+	buyInfo.WriteToMap("share-nostop", domain.Item{InstrumentName: "Lukoil", RSIValue: 20})
+
+	thresholds := map[string]dto.Thresholds{
+		"share-nostop": {P5: 24, P15: 31},
+	}
+	// Empty stops map.
+	got := Trade(buyInfo, nil, dto.StrategyKindDividend, nil, thresholds, nil, nil, nil, map[string]dto.Stop{})
+
+	if strings.Contains(got, "Stop:") {
+		t.Errorf("expected no Stop line, got:\n%s", got)
+	}
+}
+
+func TestTrade_StopLineAbsentOnSellRow(t *testing.T) {
+	buyInfo := domain.NewInfo()
+	sellInfo := domain.NewInfo()
+	sellInfo.WriteToMap("sell-id", domain.Item{InstrumentName: "Phosagro", RSIValue: 85})
+
+	sellThresholds := map[string]dto.SellThresholds{
+		"sell-id": {P80: 60, P90: 70, P95: 80},
+	}
+	// Even if the map is wrongly populated for a sell-side ID, the renderer
+	// must not surface a Stop line — stop is buy-only by construction.
+	stops := map[string]dto.Stop{
+		"sell-id": {Price: 1234.5, DistancePct: 9.9},
+	}
+
+	got := Trade(buyInfo, sellInfo, dto.StrategyKindDividend, nil, nil, sellThresholds, nil, nil, stops)
+
+	if strings.Contains(got, "Stop:") {
+		t.Errorf("expected no Stop line on sell row, got:\n%s", got)
 	}
 }

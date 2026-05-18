@@ -53,6 +53,18 @@ const volumeSMALookback = 20
 // and a 2× "rare spike" (which would almost never fire).
 const volumeMultiplier = 1.5
 
+// atrPeriod is Wilder's standard ATR period applied on the weekly TF closed-
+// candle stream used for buy-side stop suggestions.
+const atrPeriod = 14
+
+// atrMultiplierDividend is the ATR stop multiplier for the Dividend (long-
+// hold) strategy: wider stops survive deeper weekly noise.
+const atrMultiplierDividend = 2.0
+
+// atrMultiplierGrowth is the stop multiplier for Growth — tighter, since the
+// strategy exits sooner on RSI overheats.
+const atrMultiplierGrowth = 1.5
+
 // ErrAdaptiveInsufficientHistory is returned when a share has fewer than
 // adaptiveWindowMin closed weekly RSI values available.
 var ErrAdaptiveInsufficientHistory = errors.New("adaptive tiers: insufficient RSI history")
@@ -74,6 +86,7 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 	sellThresholds := make(map[string]dto.SellThresholds)
 	divergences := make(map[string]bool)
 	volumesConfirmed := make(map[string]bool)
+	stops := make(map[string]dto.Stop)
 
 	for _, share := range in.ShareList.All() {
 		candles, candleErr := s.fetchWeeklyCandles(ctx, share.ID, in.Interval, dateNow)
@@ -132,6 +145,19 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 			if indicators.VolumeConfirmed(volumes, volumeSMALookback, volumeMultiplier) {
 				volumesConfirmed[share.ID] = true
 			}
+
+			highs := make([]float64, len(closed))
+			lowsF := make([]float64, len(closed))
+			closes := make([]float64, len(closed))
+			for i, c := range closed {
+				highs[i] = utils.CombinePrice(c.High.Units, c.High.Nano)
+				lowsF[i] = utils.CombinePrice(c.Low.Units, c.Low.Nano)
+				closes[i] = utils.CombinePrice(c.Close.Units, c.Close.Nano)
+			}
+			if atrValue := indicators.ATR(highs, lowsF, closes, atrPeriod); atrValue > 0 {
+				lastClose := closes[len(closes)-1]
+				stops[share.ID] = stopFromATR(lastClose, atrValue, kForKind(in.Kind))
+			}
 		}
 
 		RSIInfo.WriteToMap(
@@ -168,7 +194,7 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 	}
 
 	if len(buyInfo.Items()) > 0 || len(sellInfo.Items()) > 0 {
-		msg := notif.Trade(buyInfo, sellInfo, in.Kind, trends, thresholds, sellThresholds, divergences, volumesConfirmed)
+		msg := notif.Trade(buyInfo, sellInfo, in.Kind, trends, thresholds, sellThresholds, divergences, volumesConfirmed, stops)
 		if sendErr := s.tgClient.SendMessage(msg); sendErr != nil {
 			logger.ErrorContext(ctx, "message is not sent", sendErr)
 			return sendErr

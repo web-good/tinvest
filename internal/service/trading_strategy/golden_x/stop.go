@@ -2,14 +2,6 @@ package golden_x
 
 import "tinvest/internal/service/trading_strategy/golden_x/dto"
 
-// atrMultiplierDividend is the ATR stop multiplier for the Dividend
-// (long-hold) strategy: wider stops survive deeper weekly noise.
-const atrMultiplierDividend = 2.0
-
-// atrMultiplierGrowth is the stop multiplier for Growth — tighter, since the
-// strategy exits sooner on RSI overheats.
-const atrMultiplierGrowth = 1.5
-
 // kForKind returns the ATR multiplier appropriate for the given strategy kind.
 // Dividend holds longer and needs wider stops; Growth exits sooner and uses
 // tighter stops. Unknown kinds fall back to Dividend — defensive only; the

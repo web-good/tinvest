@@ -18,6 +18,7 @@ func Trade(
 	sellThresholds map[string]dto.SellThresholds,
 	divergences map[string]bool,
 	volumesConfirmed map[string]bool,
+	stops map[string]dto.Stop,
 ) string {
 	b := strings.Builder{}
 	if medal := kind.Medal(); medal != "" {
@@ -33,6 +34,7 @@ func Trade(
 			}
 			b.WriteString("• <b>Акция:</b> " + log.InstrumentName + tierEmoji(log.RSIValue, thresholds[id]) + trendMark + divergenceBadge(divergences[id]) + volumeBadge(volumesConfirmed[id]) + "\n")
 			b.WriteString("  <b>RSI Value:</b>" + strconv.Itoa(int(log.RSIValue)) + thresholdSuffix(thresholds[id]) + "\n")
+			b.WriteString(stopLine(stops[id]))
 			b.WriteString("\n")
 		}
 		b.WriteString("</code>\n\n")
@@ -69,6 +71,17 @@ func volumeBadge(confirmed bool) string {
 		return " 🔊"
 	}
 	return ""
+}
+
+// stopLine renders the ATR-derived stop suggestion as its own line:
+// "  <b>Stop:</b> <price> (−<pct>%)\n". The zero-value dto.Stop{} renders
+// "" — same convention as Thresholds and SellThresholds, keeps the indicator
+// additive and silent on insufficient history.
+func stopLine(s dto.Stop) string {
+	if s.Price == 0 && s.DistancePct == 0 {
+		return ""
+	}
+	return fmt.Sprintf("  <b>Stop:</b> %.2f (−%.1f%%)\n", s.Price, s.DistancePct)
 }
 
 // tierEmoji renders the colored circle based on adaptive buy thresholds. Empty
