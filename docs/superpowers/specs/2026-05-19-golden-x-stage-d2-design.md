@@ -184,10 +184,10 @@ Remove `const trendEMAPeriod = 200`. `trendStatusFromClosed(closed, period)` alr
 
 ### `golden_x/trade.go` (modified)
 
-- Remove seven `const` declarations: `atrPeriod`, `atrMultiplierDividend`, `atrMultiplierGrowth`, `volumeSMALookback`, `volumeMultiplier`, `divergenceLookbackWeeks`, `adaptiveWindowMin`, `adaptiveWindowMax`. (Eight, counting both adaptive bounds.)
+- Remove eight `const` declarations: `adaptiveWindowMax`, `adaptiveWindowMin`, `divergenceLookbackWeeks`, `volumeSMALookback`, `volumeMultiplier`, `atrPeriod`, `atrMultiplierDividend`, `atrMultiplierGrowth`.
+- **Kept in place** (intentionally out of scope): `candleLookbackWeeks` (fetch-policy, not algorithm) and `divergenceFractalK` (narrow C3 internal — pivot width, not on the user's selected list of D2 knobs).
 - `adaptiveRSIForShare(closed, rsiPeriod, minWin, maxWin int)` and `lowsAlignedToRSI(closed, rsiPeriod, rsiSeries, maxWin int)` accept window bounds explicitly.
 - In `Trade()` orchestrator: build `settings := DefaultSettings()` once before the per-share loop; pass into each `Detect` call.
-- `WarmupPeriod` (if it exists and is unrelated to these knobs) stays unchanged.
 
 ### `golden_x/backtest/replay.go` (modified)
 
@@ -296,6 +296,8 @@ Catches accidental fat-fingers in defaults during future edits.
 - **Renaming `dto.Thresholds.P5/P15` and `dto.SellThresholds.P80/P90/P95`** to role-based names. Larger refactor, doesn't enable any new functionality, deferred.
 - **Per-share knob overrides** (e.g., a per-instrument ATR multiplier). Per-share data still lives in `collection.Instrument`; not relevant until a real use case appears.
 - **Production env-var integration** through `heetch/confita` and `internal/config`. Same deferral.
+- **`divergenceFractalK`** (the fractal-pivot half-width used by the C3 divergence detector, currently `= 2`). Narrow indicator-internal parameter, not on the user-selected list of D2 knobs. Can move into `Settings` later as an indicator-tuning follow-up.
+- **`candleLookbackWeeks`** (currently `= 260`). It governs how many weekly candles we *fetch* from gRPC, not how the algorithm processes them — a fetch/policy knob rather than an algorithm knob. Out of scope.
 
 ## Acceptance
 
