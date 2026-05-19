@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+
 	"tinvest/internal/service/trading_strategy/golden_x/shares"
 	"tinvest/pkg/collection"
 	"tinvest/pkg/logger"
