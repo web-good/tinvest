@@ -217,8 +217,7 @@ func TestDetect(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if !sig.GreenBuy && !sig.YellowBuy {
-			t.Logf("sig: RSI=%.2f P5=%.2f P15=%.2f — series did not produce a buy signal", sig.RSI, sig.Thresholds.P5, sig.Thresholds.P15)
-			t.Skip("series did not produce a buy signal; cannot test Stop")
+			t.Fatalf("series did not produce a buy signal; cannot test Stop. RSI=%.2f P5=%.2f P15=%.2f", sig.RSI, sig.Thresholds.P5, sig.Thresholds.P15)
 		}
 		if sig.Stop.Price <= 0 {
 			t.Errorf("Stop.Price = %v, want > 0 for buy signal with non-flat candles", sig.Stop.Price)

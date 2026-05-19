@@ -44,24 +44,7 @@ func computeEMA(closes []float64, period int) []float64 {
 // given period over closed-week closes. Returns ErrInsufficientHistory when
 // fewer than `period` closed weekly candles are available.
 func trendStatusFromCandles(candles []*model.CandleItemTechAnalyse, period int, now time.Time, loc *time.Location) (dto.TrendStatus, error) {
-	closed := closedWeeklyCandles(candles, now, loc)
-	if len(closed) < period {
-		return dto.TrendUnknown, ErrInsufficientHistory
-	}
-
-	closes := make([]float64, len(closed))
-	for i, c := range closed {
-		closes[i] = utils.CombinePrice(c.Close.Units, c.Close.Nano)
-	}
-
-	ema := computeEMA(closes, period)
-	lastClose := closes[len(closes)-1]
-	lastEMA := ema[len(ema)-1]
-
-	if lastClose > lastEMA {
-		return dto.TrendWith, nil
-	}
-	return dto.TrendAgainst, nil
+	return trendStatusFromClosed(closedWeeklyCandles(candles, now, loc), period)
 }
 
 // trendStatusFromClosed is the closed-candle-aware variant used by Detect

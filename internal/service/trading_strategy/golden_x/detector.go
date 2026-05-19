@@ -81,6 +81,6 @@ func Detect(
 		sig.LastClose = utils.CombinePrice(last.Close.Units, last.Close.Nano)
 	}
 
-	_ = kind // already consumed via kForKind / sell thresholds; kept for symmetry
+	_ = kind // consumed by kForKind only when a buy tier fires; blank-assign silences the compiler when the buy branch is skipped
 	return sig, nil
 }
