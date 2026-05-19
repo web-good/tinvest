@@ -64,6 +64,26 @@ func trendStatusFromCandles(candles []*model.CandleItemTechAnalyse, period int, 
 	return dto.TrendAgainst, nil
 }
 
+// trendStatusFromClosed is the closed-candle-aware variant used by Detect
+// (which receives already-trimmed candles). Equivalent to
+// trendStatusFromCandles but skips the closedWeeklyCandles filter.
+func trendStatusFromClosed(closed []*model.CandleItemTechAnalyse, period int) (dto.TrendStatus, error) {
+	if len(closed) < period {
+		return dto.TrendUnknown, ErrInsufficientHistory
+	}
+	closes := make([]float64, len(closed))
+	for i, c := range closed {
+		closes[i] = utils.CombinePrice(c.Close.Units, c.Close.Nano)
+	}
+	ema := computeEMA(closes, period)
+	lastClose := closes[len(closes)-1]
+	lastEMA := ema[len(ema)-1]
+	if lastClose > lastEMA {
+		return dto.TrendWith, nil
+	}
+	return dto.TrendAgainst, nil
+}
+
 // closedWeeklyCandles returns the input slice filtered to candles whose Time
 // is strictly before the current week (Monday 00:00 in loc), preserving order.
 // nil entries are skipped.

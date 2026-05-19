@@ -12,4 +12,3 @@ func startOfWeek(t time.Time, loc *time.Location) time.Time {
 	year, month, day := t.Date()
 	return time.Date(year, month, day-weekday, 0, 0, 0, 0, loc)
 }
-

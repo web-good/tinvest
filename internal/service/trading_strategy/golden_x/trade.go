@@ -14,7 +14,6 @@ import (
 	"tinvest/internal/service/trading_strategy/golden_x/dto"
 	notif "tinvest/internal/service/trading_strategy/golden_x/notification"
 	"tinvest/internal/utils"
-	"tinvest/pkg/indicators"
 	"tinvest/pkg/logger"
 )
 
@@ -96,67 +95,31 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 		}
 		closed := closedWeeklyCandles(candles, dateNow, loc)
 
-		lastRSI, rsiSeries, sharedThresholds, adaptiveErr := adaptiveRSIForShare(closed, share.RSILength)
-		if errors.Is(adaptiveErr, ErrAdaptiveInsufficientHistory) {
+		sig, detectErr := Detect(closed, share.RSILength, in.Kind, in.UseTrendFilter)
+		if errors.Is(detectErr, ErrAdaptiveInsufficientHistory) {
 			logger.InfoContext(ctx, "adaptive tiers: insufficient history", "share", share.Name)
 			continue
 		}
-		if adaptiveErr != nil {
-			logger.ErrorContext(ctx, fmt.Errorf("adaptive tiers for %s: %w", share.Name, adaptiveErr).Error())
+		if errors.Is(detectErr, ErrInsufficientHistory) {
+			logger.InfoContext(ctx, "trend filter: insufficient history", "share", share.Name)
+			continue
+		}
+		if detectErr != nil {
+			logger.ErrorContext(ctx, fmt.Errorf("detect signal for %s: %w", share.Name, detectErr).Error())
 			continue
 		}
 
+		thresholds[share.ID] = sig.Thresholds
+		sellThresholds[share.ID] = sig.SellThresholds
 		if in.UseTrendFilter {
-			status, trendErr := trendStatusFromCandles(candles, trendEMAPeriod, dateNow, loc)
-			if errors.Is(trendErr, ErrInsufficientHistory) {
-				logger.InfoContext(ctx, "trend filter: insufficient history", "share", share.Name)
-				continue
-			}
-			if trendErr != nil {
-				logger.ErrorContext(ctx, fmt.Errorf("trend filter for %s: %w", share.Name, trendErr).Error())
-				continue
-			}
-			trends[share.ID] = status
+			trends[share.ID] = sig.TrendStatus
 		}
 
-		thresholds[share.ID] = sharedThresholds
-		shareSellThresholds := adaptiveSellThresholds(rsiSeries)
-		sellThresholds[share.ID] = shareSellThresholds
-
-		buyTier := tierFromAdaptive(lastRSI, sharedThresholds.P5, sharedThresholds.P15)
-
-		if buyTier != tierNone {
-			lows := lowsAlignedToRSI(closed, share.RSILength, rsiSeries)
-			if len(lows) > divergenceLookbackWeeks {
-				lows = lows[len(lows)-divergenceLookbackWeeks:]
-			}
-			rsiTail := rsiSeries
-			if len(rsiTail) > divergenceLookbackWeeks {
-				rsiTail = rsiTail[len(rsiTail)-divergenceLookbackWeeks:]
-			}
-			if bullishDivergence(lows, rsiTail, divergenceFractalK) {
-				divergences[share.ID] = true
-			}
-
-			volumes := make([]int64, len(closed))
-			for i, c := range closed {
-				volumes[i] = c.Volume
-			}
-			if indicators.VolumeConfirmed(volumes, volumeSMALookback, volumeMultiplier) {
-				volumesConfirmed[share.ID] = true
-			}
-
-			highs := make([]float64, len(closed))
-			lowsF := make([]float64, len(closed))
-			closes := make([]float64, len(closed))
-			for i, c := range closed {
-				highs[i] = utils.CombinePrice(c.High.Units, c.High.Nano)
-				lowsF[i] = utils.CombinePrice(c.Low.Units, c.Low.Nano)
-				closes[i] = utils.CombinePrice(c.Close.Units, c.Close.Nano)
-			}
-			if atrValue := indicators.ATR(highs, lowsF, closes, atrPeriod); atrValue > 0 {
-				lastClose := closes[len(closes)-1]
-				stops[share.ID] = stopFromATR(lastClose, atrValue, kForKind(in.Kind))
+		if sig.GreenBuy || sig.YellowBuy {
+			divergences[share.ID] = sig.DivergenceOK
+			volumesConfirmed[share.ID] = sig.VolumeOK
+			if sig.Stop != (dto.Stop{}) {
+				stops[share.ID] = sig.Stop
 			}
 		}
 
@@ -165,10 +128,11 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 			domain.Item{
 				InstrumentName: share.Name,
 				RSILength:      share.RSILength,
-				RSIValue:       lastRSI,
+				RSIValue:       sig.RSI,
 			})
 
-		sellTier := sellTierFromAdaptive(lastRSI, shareSellThresholds, in.Kind)
+		buyTier := tierFromAdaptive(sig.RSI, sig.Thresholds.P5, sig.Thresholds.P15)
+		sellTier := sellTierFromAdaptive(sig.RSI, sig.SellThresholds, in.Kind)
 
 		// Buy and sell zones are mutually exclusive on RSI — picks whichever
 		// (if any) is non-None.
@@ -183,7 +147,7 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 
 		item := domain.Item{
 			InstrumentName: share.Name,
-			RSIValue:       lastRSI,
+			RSIValue:       sig.RSI,
 		}
 		switch finalTier {
 		case tierYellow, tierGreen:

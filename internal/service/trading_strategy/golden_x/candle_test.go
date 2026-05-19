@@ -13,4 +13,3 @@ func mustLoad(t *testing.T, name string) *time.Location {
 	}
 	return loc
 }
-
