@@ -1,8 +1,6 @@
 package backtest
 
 import (
-	"time"
-
 	"tinvest/internal/model"
 	"tinvest/internal/service/trading_strategy/golden_x/dto"
 	"tinvest/internal/utils"
@@ -46,7 +44,7 @@ func Replay(shareID string, candles []*model.CandleItemTechAnalyse, detect Detec
 				// 1a. Stop hit on this week's Low.
 				trades = append(trades, pos.CloseAll(weekT.Time, pos.StopPrice(), ExitReasonStop))
 				pos = nil
-			} else if partials := evaluateSellExits(pos, weekT.Time, weekClose, sig); len(partials) > 0 {
+			} else if partials := pos.EvaluateSellExits(weekT.Time, weekClose, sig.SellThresholds, sig.RSI); len(partials) > 0 {
 				// 1b. Sell-tier exits at week close.
 				trades = append(trades, partials...)
 				if pos.FullyClosed() {
@@ -71,16 +69,4 @@ func Replay(shareID string, candles []*model.CandleItemTechAnalyse, detect Detec
 		trades = append(trades, pos.CloseAll(last.Time, lastClose, ExitReasonOpen))
 	}
 	return trades
-}
-
-// evaluateSellExits wraps Position.EvaluateSellExits and skips the call when
-// SellThresholds is the zero value. Per dto.Stop docs, empty Thresholds /
-// SellThresholds are treated as "not computed" by production code, so the
-// replay engine must do the same to avoid spurious partial exits when Detect
-// returned no adaptive series (e.g. early in history before enough RSI bars).
-func evaluateSellExits(pos *Position, weekEnd time.Time, weekClose float64, sig dto.Signal) []Trade {
-	if sig.SellThresholds == (dto.SellThresholds{}) {
-		return nil
-	}
-	return pos.EvaluateSellExits(weekEnd, weekClose, sig.SellThresholds, sig.RSI)
 }

@@ -92,12 +92,13 @@ func TestReplay_TimeoutAfter52Weeks(t *testing.T) {
 	for i := 0; i < N; i++ {
 		candles[i] = mkCandle(base.AddDate(0, 0, 7*i), 90, 100)
 	}
+	st := dto.SellThresholds{P80: 99, P90: 99, P95: 99}
 	fake := func(closed []*model.CandleItemTechAnalyse, _ int, _ dto.StrategyKind, _ bool) (dto.Signal, error) {
 		idx := len(closed) - 1
 		if idx == 2 {
-			return dto.Signal{GreenBuy: true, LastClose: 100, Stop: dto.Stop{Price: 80}}, nil
+			return dto.Signal{GreenBuy: true, LastClose: 100, Stop: dto.Stop{Price: 80}, SellThresholds: st}, nil
 		}
-		return dto.Signal{RSI: 50}, nil
+		return dto.Signal{RSI: 50, SellThresholds: st}, nil
 	}
 	trades := Replay("X", candles, fake, ReplayConfig{Kind: dto.StrategyKindDividend, StartIdx: 2, MaxWeeks: 52})
 	if len(trades) != 1 || trades[0].ExitReason != ExitReasonTimeout {
@@ -117,11 +118,12 @@ func TestReplay_OpenAtEndOfHistory(t *testing.T) {
 	for i := 0; i < N; i++ {
 		candles[i] = mkCandle(base.AddDate(0, 0, 7*i), 90, 100+int64(i))
 	}
+	st := dto.SellThresholds{P80: 99, P90: 99, P95: 99}
 	fake := func(closed []*model.CandleItemTechAnalyse, _ int, _ dto.StrategyKind, _ bool) (dto.Signal, error) {
 		if len(closed) == 3 {
-			return dto.Signal{GreenBuy: true, LastClose: 102, Stop: dto.Stop{Price: 50}}, nil
+			return dto.Signal{GreenBuy: true, LastClose: 102, Stop: dto.Stop{Price: 50}, SellThresholds: st}, nil
 		}
-		return dto.Signal{RSI: 50}, nil
+		return dto.Signal{RSI: 50, SellThresholds: st}, nil
 	}
 	trades := Replay("X", candles, fake, ReplayConfig{Kind: dto.StrategyKindDividend, StartIdx: 2, MaxWeeks: 52})
 	if len(trades) != 1 || trades[0].ExitReason != ExitReasonOpen {
