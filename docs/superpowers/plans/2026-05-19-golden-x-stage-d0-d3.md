@@ -2020,21 +2020,21 @@ This task is **manual** — requires a live `T_BANK` token. Engineer runs and co
 
   Ensure `env/token.env` has `T_BANK=<token>`. Then run:
   ```bash
-  go run ./cmd/backtest --kind=Dividend --from=2022-01-01 --shares=c190ff1f-1447-4227-b543-316332699ca5
+  go run ./cmd/backtest --kind=Dividend --from=2020-08-17
   ```
-  (The ID is SBER from `shares.Dividend()`.)
+  (Full Dividend list, from the earliest weekly candle Tinkoff serves. A single ticker with a recent `--from` like `--from=2022-01-01 --shares=<SBER>` will yield `Count=0` — the 200-week EMA/RSI warmup window eats most of the `--from..--to` slice, leaving too few weeks for a p5-RSI dip to fire on any one share. Use the full list, or push `--from` back to ~2020 if you must restrict to one share.)
 
   Expected:
-  - Console prints `## Overall` block with non-zero `Count`.
+  - Console prints `## Overall` block with `Count` in the dozens (≈30 trades on the 11-share Dividend list over ~5.7 years is the empirical baseline).
   - Console prints `## Exit reasons` block.
   - Console prints `Report written to: cache/backtests/<ts>_Dividend.md`.
-  - File `cache/candles/c190ff1f-…_W.json` now exists.
+  - Cache files `cache/candles/<share-id>_W.json` now exist for every share in the list.
 
 - [ ] **Step 2: Second run (cache hit, no API)**
 
   Temporarily invalidate the token so any API call would fail:
   ```bash
-  T_BANK=bogus go run ./cmd/backtest --kind=Dividend --from=2022-01-01 --shares=c190ff1f-1447-4227-b543-316332699ca5
+  T_BANK=bogus go run ./cmd/backtest --kind=Dividend --from=2020-08-17
   ```
 
   Expected: identical Overall section as run #1 (no API calls happened — verified by the bogus token not breaking anything). The binary should NOT print "T_BANK env var required" because `anyCacheMiss` returns false.
@@ -2043,7 +2043,7 @@ This task is **manual** — requires a live `T_BANK` token. Engineer runs and co
 
   Open the generated Markdown report. Confirm:
   - `Count` is in the dozens (single-digit number of trades over ~3 years is suspicious; thousands is wrong).
-  - `MaxDD%` is in `[0, 100]`.
+  - `MaxDD%` is reported as additive sum-of-return-pp drawdown (`equity += ReturnPct × Units`, no compounding) — values can exceed 100% when stop-loss streaks stack. Verify in `report.go:maxDrawdown`. Do NOT treat as equity-curve drawdown.
   - `Cumulative%` ≈ `Σ(ReturnPct × Units)` — eyeball-check by adding a few rows from the `## Trades` section.
   - Exit reasons are distributed (you should see a mix of `sell_p80`/`sell_p90`/`sell_p95`/`stop`/`timeout`/`open`).
 
