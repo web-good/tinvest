@@ -3,3 +3,4 @@
 .idea
 .continue
 qdrant_data
+/cache
