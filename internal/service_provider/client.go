@@ -2,16 +2,12 @@ package service_provider
 
 import (
 	"fmt"
-	"tinvest/pkg/client/db"
-	"tinvest/pkg/client/db/pg"
 	internalgrpc "tinvest/pkg/client/grpc"
 	"tinvest/pkg/client/telegram"
-	"tinvest/pkg/closer"
 )
 
 type client struct {
 	grpcClient  internalgrpc.GrpcClient
-	dbClient    db.Client
 	telegramBot telegram.Client
 }
 
@@ -29,38 +25,6 @@ func (s *ServiceProvider) GetGrpcClient() (internalgrpc.GrpcClient, error) {
 	}
 
 	return serviceProvider.client.grpcClient, nil
-}
-
-func (s *ServiceProvider) GetDbClient(dsn string) (db.Client, error) {
-	if serviceProvider.client.dbClient == nil {
-		var err error
-		serviceProvider.client.dbClient, err = pg.New(
-			s.ctx,
-			dsn,
-		)
-
-		if err != nil {
-			return nil, fmt.Errorf("could not connect to database: %w", err)
-		}
-
-		closer.Add(func() error {
-			err := serviceProvider.client.dbClient.Db().Close()
-
-			if err != nil {
-				return err
-			}
-
-			return nil
-		})
-
-		err = serviceProvider.client.dbClient.Db().Ping(s.ctx)
-
-		if err != nil {
-			return nil, fmt.Errorf("ping to database error: %w", err)
-		}
-	}
-
-	return serviceProvider.client.dbClient, nil
 }
 
 func (s *ServiceProvider) GetTelegramBotClient() (telegram.Client, error) {

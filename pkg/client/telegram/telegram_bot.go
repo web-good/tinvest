@@ -25,7 +25,7 @@ func (b *telegramBotClientClient) SendMessage(msg string) error {
 		}
 	}
 	if errMsg != "" {
-		return fmt.Errorf(errMsg)
+		return fmt.Errorf("%s", errMsg)
 	}
 	return nil
 }
