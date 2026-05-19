@@ -15,7 +15,7 @@ import (
 
 	"tinvest/internal/enum"
 	"tinvest/internal/model"
-	golden_x "tinvest/internal/service/trading_strategy/golden_x"
+	"tinvest/internal/service/trading_strategy/golden_x"
 	"tinvest/internal/service/trading_strategy/golden_x/backtest"
 	"tinvest/internal/service/trading_strategy/golden_x/dto"
 	"tinvest/internal/service/trading_strategy/golden_x/shares"
@@ -78,12 +78,16 @@ func main() {
 	report := backtest.Report{Kind: kind, From: from, To: to, PerShare: map[string]backtest.Stats{}}
 	useTrendFilter := kind == dto.StrategyKindGrowth
 
+	fetcher := newGrpcFetcher(grpcClient, to)
+	cache := backtest.NewCache(*cacheDir, fetcher, *refresh)
+
 	for _, instr := range list.All() {
-		fetcher := newGrpcFetcher(grpcClient, to)
-		cache := backtest.NewCache(*cacheDir, fetcher, *refresh)
 		raw, ferr := cache.Get(ctx, instr.ID)
 		if ferr != nil {
-			log.Printf("WARN %s: %v", instr.Name, ferr)
+			if *refresh {
+				log.Fatalf("fetch %s: %v", instr.Name, ferr)
+			}
+			log.Printf("WARN %s: %v (skipping; rerun with --refresh to retry)", instr.Name, ferr)
 			continue
 		}
 		closed := filterClosed(raw, msk)
@@ -115,11 +119,6 @@ func main() {
 	}
 
 	// Console summary.
-	var b strings.Builder
-	b.WriteString("## Overall\n\n")
-	// Re-use the writer functions by hand.
-	// (Already covered by RenderMarkdown; print its Overall + ExitReasons blocks via slicing the full report
-	// would be brittle. Just print the two sections directly.)
 	fmt.Println(consoleSummary(report))
 	fmt.Printf("\nReport written to: %s\n", path)
 }
