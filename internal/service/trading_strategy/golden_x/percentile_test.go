@@ -100,7 +100,7 @@ func TestAdaptiveThresholds(t *testing.T) {
 	// percentile([1..100], 5)  = 5.95
 	// percentile([1..100], 15) = 15.85
 	rsi := rangeFloat(1, 100)
-	got := adaptiveThresholds(rsi)
+	got := adaptiveThresholds(rsi, 5, 15)
 	if math.Abs(got.P5-5.95) > 1e-9 {
 		t.Errorf("P5 = %v, want 5.95", got.P5)
 	}
@@ -114,7 +114,7 @@ func TestAdaptiveThresholds_DoesNotMutateInput(t *testing.T) {
 	// scrambling the caller's slice.
 	in := []float64{50, 10, 30, 20, 40}
 	original := append([]float64(nil), in...)
-	_ = adaptiveThresholds(in)
+	_ = adaptiveThresholds(in, 5, 15)
 	for i := range in {
 		if in[i] != original[i] {
 			t.Fatalf("input mutated at %d: got %v, want %v", i, in[i], original[i])
@@ -128,7 +128,7 @@ func TestAdaptiveSellThresholds(t *testing.T) {
 	//   percentile([1..100], 90) = 1 + 0.90*99 = 90.10
 	//   percentile([1..100], 95) = 1 + 0.95*99 = 95.05
 	rsi := rangeFloat(1, 100)
-	got := adaptiveSellThresholds(rsi)
+	got := adaptiveSellThresholds(rsi, 80, 90, 95)
 	if math.Abs(got.P80-80.20) > 1e-9 {
 		t.Errorf("P80 = %v, want 80.20", got.P80)
 	}
@@ -143,7 +143,7 @@ func TestAdaptiveSellThresholds(t *testing.T) {
 func TestAdaptiveSellThresholds_DoesNotMutateInput(t *testing.T) {
 	in := []float64{50, 10, 30, 20, 40, 90, 70, 60, 80, 100}
 	original := append([]float64(nil), in...)
-	_ = adaptiveSellThresholds(in)
+	_ = adaptiveSellThresholds(in, 80, 90, 95)
 	for i := range in {
 		if in[i] != original[i] {
 			t.Fatalf("input mutated at %d: got %v, want %v", i, in[i], original[i])

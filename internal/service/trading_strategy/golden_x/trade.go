@@ -192,30 +192,28 @@ func (s *service) fetchWeeklyCandles(ctx context.Context, shareID string, interv
 	)
 }
 
-// adaptiveRSIForShare computes the share's last-closed-week RSI, the trimmed
-// historical RSI slice used for percentiles, and the adaptive p5/p15 buy
-// thresholds. Returns ErrAdaptiveInsufficientHistory if fewer than
-// adaptiveWindowMin RSI values are available. The returned slice may be used
-// by the caller to derive additional percentiles (e.g. sell thresholds)
-// without recomputing RSI.
-func adaptiveRSIForShare(closedCandles []*model.CandleItemTechAnalyse, rsiPeriod int) (float64, []float64, dto.Thresholds, error) {
+// adaptiveRSIForShare computes the share's last-closed-week RSI and the
+// trimmed historical RSI slice used for percentile calculations. Returns
+// ErrAdaptiveInsufficientHistory if fewer than minWin RSI values are
+// available; trims the head to maxWin if longer. Threshold computation
+// (adaptiveThresholds / adaptiveSellThresholds) is the caller's responsibility.
+func adaptiveRSIForShare(closedCandles []*model.CandleItemTechAnalyse, rsiPeriod, minWin, maxWin int) (float64, []float64, error) {
 	closes := make([]float64, len(closedCandles))
 	for i, c := range closedCandles {
 		closes[i] = utils.CombinePrice(c.Close.Units, c.Close.Nano)
 	}
 	full := computeRSISeries(closes, rsiPeriod)
 	if len(full) <= rsiPeriod {
-		return 0, nil, dto.Thresholds{}, ErrAdaptiveInsufficientHistory
+		return 0, nil, ErrAdaptiveInsufficientHistory
 	}
 	rsi := full[rsiPeriod:]
-	if len(rsi) < adaptiveWindowMin {
-		return 0, nil, dto.Thresholds{}, ErrAdaptiveInsufficientHistory
+	if len(rsi) < minWin {
+		return 0, nil, ErrAdaptiveInsufficientHistory
 	}
-	if len(rsi) > adaptiveWindowMax {
-		rsi = rsi[len(rsi)-adaptiveWindowMax:]
+	if len(rsi) > maxWin {
+		rsi = rsi[len(rsi)-maxWin:]
 	}
-	lastRSI := rsi[len(rsi)-1]
-	return lastRSI, rsi, adaptiveThresholds(rsi), nil
+	return rsi[len(rsi)-1], rsi, nil
 }
 
 // lowsAlignedToRSI extracts Low values from closedCandles and trims the head

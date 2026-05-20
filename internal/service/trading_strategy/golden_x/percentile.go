@@ -42,27 +42,30 @@ func tierFromAdaptive(rsi, p5, p15 float64) alertTier {
 	}
 }
 
-// adaptiveThresholds computes P5 and P15 over an unordered slice of historical
-// RSI values. The input is not mutated; a sorted copy is taken internally.
-func adaptiveThresholds(rsiSeries []float64) dto.Thresholds {
+// adaptiveThresholds computes the two buy-tier percentiles over an unordered
+// slice of historical RSI values. pGreen and pYellow are percentile points
+// in [0, 100] (typically 5 and 15). The input is not mutated; a sorted copy
+// is taken internally.
+func adaptiveThresholds(rsiSeries []float64, pGreen, pYellow float64) dto.Thresholds {
 	sorted := append([]float64(nil), rsiSeries...)
 	sort.Float64s(sorted)
 	return dto.Thresholds{
-		P5:  percentile(sorted, 5),
-		P15: percentile(sorted, 15),
+		P5:  percentile(sorted, pGreen),
+		P15: percentile(sorted, pYellow),
 	}
 }
 
-// adaptiveSellThresholds computes P80, P90 and P95 over an unordered slice of
-// historical RSI values. The input is not mutated; a sorted copy is taken
-// internally. Mirrors adaptiveThresholds but for the upper tail.
-func adaptiveSellThresholds(rsiSeries []float64) dto.SellThresholds {
+// adaptiveSellThresholds computes the three sell-tier percentiles over an
+// unordered slice of historical RSI values. pYellow/pOrange/pRed are
+// percentile points in [0, 100] (typically 80/90/95). The input is not
+// mutated; a sorted copy is taken internally.
+func adaptiveSellThresholds(rsiSeries []float64, pYellow, pOrange, pRed float64) dto.SellThresholds {
 	sorted := append([]float64(nil), rsiSeries...)
 	sort.Float64s(sorted)
 	return dto.SellThresholds{
-		P80: percentile(sorted, 80),
-		P90: percentile(sorted, 90),
-		P95: percentile(sorted, 95),
+		P80: percentile(sorted, pYellow),
+		P90: percentile(sorted, pOrange),
+		P95: percentile(sorted, pRed),
 	}
 }
 

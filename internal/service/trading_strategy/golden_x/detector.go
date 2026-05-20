@@ -22,16 +22,15 @@ func Detect(
 	useTrendFilter bool,
 	settings dto.Settings,
 ) (dto.Signal, error) {
-	_ = settings // consumed in Tasks 4-6; explicit blank-assign documents intent and silences unused-param lint
-	lastRSI, rsiSeries, thresholds, err := adaptiveRSIForShare(closed, rsiPeriod)
+	lastRSI, rsiSeries, err := adaptiveRSIForShare(closed, rsiPeriod, settings.AdaptiveWindowMin, settings.AdaptiveWindowMax)
 	if err != nil {
 		return dto.Signal{}, err
 	}
 
 	sig := dto.Signal{
 		RSI:            lastRSI,
-		Thresholds:     thresholds,
-		SellThresholds: adaptiveSellThresholds(rsiSeries),
+		Thresholds:     adaptiveThresholds(rsiSeries, settings.BuyGreen, settings.BuyYellow),
+		SellThresholds: adaptiveSellThresholds(rsiSeries, settings.SellYellow, settings.SellOrange, settings.SellRed),
 	}
 
 	if useTrendFilter {
@@ -42,7 +41,7 @@ func Detect(
 		sig.TrendStatus = status
 	}
 
-	buyTier := tierFromAdaptive(lastRSI, thresholds.P5, thresholds.P15)
+	buyTier := tierFromAdaptive(lastRSI, sig.Thresholds.P5, sig.Thresholds.P15)
 	sig.GreenBuy = buyTier == tierGreen
 	sig.YellowBuy = buyTier == tierYellow
 
