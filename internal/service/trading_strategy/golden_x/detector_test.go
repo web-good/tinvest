@@ -59,7 +59,7 @@ func TestDetect(t *testing.T) {
 	base := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	t.Run("insufficient_history", func(t *testing.T) {
-		// 50 candles with rsiPeriod=7: 50-7=43 RSI values < adaptiveWindowMin(100)
+		// 50 candles with rsiPeriod=7: 50-7=43 RSI values < settings.AdaptiveWindowMin (default 100)
 		candles := buildWeeklyCandles(base, 50, func(i int) int64 { return int64(100 + i) })
 		_, err := Detect(candles, 7, dto.StrategyKindDividend, false, DefaultSettings())
 		if !errors.Is(err, ErrAdaptiveInsufficientHistory) {
@@ -69,7 +69,7 @@ func TestDetect(t *testing.T) {
 
 	t.Run("no_buy", func(t *testing.T) {
 		// Strictly rising series → RSI is persistently high → above P15 → no buy.
-		// 120 candles with rsiPeriod=7: 113 RSI values, well above adaptiveWindowMin.
+		// 120 candles with rsiPeriod=7: 113 RSI values, well above settings.AdaptiveWindowMin.
 		candles := buildWeeklyCandles(base, 120, func(i int) int64 { return int64(100 + i*5) })
 		sig, err := Detect(candles, 7, dto.StrategyKindDividend, false, DefaultSettings())
 		if err != nil {
@@ -179,7 +179,7 @@ func TestDetect(t *testing.T) {
 	})
 
 	t.Run("trend_filter_on_insufficient_history", func(t *testing.T) {
-		// 110 candles: enough RSI history (103 values) but fewer than trendEMAPeriod(200)
+		// 110 candles: enough RSI history (103 values) but fewer than settings.TrendEMAPeriod (default 200)
 		// → ErrInsufficientHistory from trend filter.
 		candles := buildWeeklyCandles(base, 110, func(i int) int64 { return int64(100 + i*5) })
 		_, err := Detect(candles, 7, dto.StrategyKindGrowth, true, DefaultSettings())

@@ -31,7 +31,7 @@ const candleLookbackWeeks = 260
 const divergenceFractalK = 2
 
 // ErrAdaptiveInsufficientHistory is returned when a share has fewer than
-// adaptiveWindowMin closed weekly RSI values available.
+// settings.AdaptiveWindowMin closed weekly RSI values available.
 var ErrAdaptiveInsufficientHistory = errors.New("adaptive tiers: insufficient RSI history")
 
 func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
@@ -188,7 +188,7 @@ func adaptiveRSIForShare(closedCandles []*model.CandleItemTechAnalyse, rsiPeriod
 // shorter, if there are fewer candles available — defensive).
 func lowsAlignedToRSI(closedCandles []*model.CandleItemTechAnalyse, rsiPeriod int, rsiSeries []float64) []float64 {
 	// adaptiveRSIForShare drops rsiPeriod warmup candles, then potentially
-	// keeps only the last adaptiveWindowMax. Mirror the same trim here.
+	// keeps only the last settings.AdaptiveWindowMax. Mirror the same trim here.
 	start := rsiPeriod
 	if len(closedCandles)-rsiPeriod > len(rsiSeries) {
 		start = len(closedCandles) - len(rsiSeries)
