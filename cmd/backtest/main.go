@@ -80,6 +80,7 @@ func main() {
 
 	fetcher := newGrpcFetcher(grpcClient, to)
 	cache := backtest.NewCache(*cacheDir, fetcher, *refresh)
+	settings := golden_x.DefaultSettings()
 
 	for _, instr := range list.All() {
 		raw, ferr := cache.Get(ctx, instr.ID)
@@ -97,12 +98,12 @@ func main() {
 			continue
 		}
 		trades := backtest.Replay(instr.ID, closed,
-			func(c []*model.CandleItemTechAnalyse, period int, k dto.StrategyKind, uft bool) (dto.Signal, error) {
-				return golden_x.Detect(c, period, k, uft)
+			func(c []*model.CandleItemTechAnalyse, period int, k dto.StrategyKind, uft bool, s dto.Settings) (dto.Signal, error) {
+				return golden_x.Detect(c, period, k, uft, s)
 			},
 			backtest.ReplayConfig{
 				Kind: kind, RSIPeriod: instr.RSILength, StartIdx: startIdx,
-				MaxWeeks: 52, UseTrendFilter: useTrendFilter,
+				MaxWeeks: 52, UseTrendFilter: useTrendFilter, Settings: settings,
 			})
 		report.Trades = append(report.Trades, trades...)
 		report.PerShare[instr.ID] = backtest.AggregateStats(trades)

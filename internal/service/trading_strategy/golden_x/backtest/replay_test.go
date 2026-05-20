@@ -27,7 +27,7 @@ func TestReplay_StopFiresBeforeSellTier(t *testing.T) {
 		mkCandle(base.AddDate(0, 0, 21), 80, 110),  // Low 80 hits stop @ 90; close 110 also above P95
 		mkCandle(base.AddDate(0, 0, 28), 110, 110),
 	}
-	fake := func(closed []*model.CandleItemTechAnalyse, _ int, _ dto.StrategyKind, _ bool) (dto.Signal, error) {
+	fake := func(closed []*model.CandleItemTechAnalyse, _ int, _ dto.StrategyKind, _ bool, _ dto.Settings) (dto.Signal, error) {
 		last := closed[len(closed)-1]
 		switch last.Time {
 		case candles[2].Time:
@@ -58,7 +58,7 @@ func TestReplay_SellSequenceProducesThreePartials(t *testing.T) {
 		candles[i] = mkCandle(base.AddDate(0, 0, 7*i), 95, 100+int64(i))
 	}
 	st := dto.SellThresholds{P80: 70, P90: 80, P95: 90}
-	fake := func(closed []*model.CandleItemTechAnalyse, _ int, _ dto.StrategyKind, _ bool) (dto.Signal, error) {
+	fake := func(closed []*model.CandleItemTechAnalyse, _ int, _ dto.StrategyKind, _ bool, _ dto.Settings) (dto.Signal, error) {
 		idx := len(closed) - 1
 		switch idx {
 		case 2:
@@ -93,7 +93,7 @@ func TestReplay_TimeoutAfter52Weeks(t *testing.T) {
 		candles[i] = mkCandle(base.AddDate(0, 0, 7*i), 90, 100)
 	}
 	st := dto.SellThresholds{P80: 99, P90: 99, P95: 99}
-	fake := func(closed []*model.CandleItemTechAnalyse, _ int, _ dto.StrategyKind, _ bool) (dto.Signal, error) {
+	fake := func(closed []*model.CandleItemTechAnalyse, _ int, _ dto.StrategyKind, _ bool, _ dto.Settings) (dto.Signal, error) {
 		idx := len(closed) - 1
 		if idx == 2 {
 			return dto.Signal{GreenBuy: true, LastClose: 100, Stop: dto.Stop{Price: 80}, SellThresholds: st}, nil
@@ -119,7 +119,7 @@ func TestReplay_OpenAtEndOfHistory(t *testing.T) {
 		candles[i] = mkCandle(base.AddDate(0, 0, 7*i), 90, 100+int64(i))
 	}
 	st := dto.SellThresholds{P80: 99, P90: 99, P95: 99}
-	fake := func(closed []*model.CandleItemTechAnalyse, _ int, _ dto.StrategyKind, _ bool) (dto.Signal, error) {
+	fake := func(closed []*model.CandleItemTechAnalyse, _ int, _ dto.StrategyKind, _ bool, _ dto.Settings) (dto.Signal, error) {
 		if len(closed) == 3 {
 			return dto.Signal{GreenBuy: true, LastClose: 102, Stop: dto.Stop{Price: 50}, SellThresholds: st}, nil
 		}

@@ -8,7 +8,7 @@ import (
 
 // DetectFunc is the signature of golden_x.Detect; injected so the replay
 // engine can be unit-tested with a fake detector.
-type DetectFunc func(closed []*model.CandleItemTechAnalyse, rsiPeriod int, kind dto.StrategyKind, useTrendFilter bool) (dto.Signal, error)
+type DetectFunc func(closed []*model.CandleItemTechAnalyse, rsiPeriod int, kind dto.StrategyKind, useTrendFilter bool, settings dto.Settings) (dto.Signal, error)
 
 type ReplayConfig struct {
 	Kind           dto.StrategyKind
@@ -16,6 +16,7 @@ type ReplayConfig struct {
 	StartIdx       int // first index at which we will evaluate a signal
 	MaxWeeks       int // timeout cap (52 per spec §4.2)
 	UseTrendFilter bool
+	Settings       dto.Settings // strategy knobs; built once by the caller and threaded into every detect() call
 }
 
 // Replay iterates the closed-weekly-candle slice and emits Trade rows per
@@ -31,7 +32,7 @@ func Replay(shareID string, candles []*model.CandleItemTechAnalyse, detect Detec
 	for t := cfg.StartIdx; t < len(candles); t++ {
 		closed := candles[:t+1]
 		weekT := candles[t]
-		sig, err := detect(closed, cfg.RSIPeriod, cfg.Kind, cfg.UseTrendFilter)
+		sig, err := detect(closed, cfg.RSIPeriod, cfg.Kind, cfg.UseTrendFilter, cfg.Settings)
 		if err != nil {
 			continue
 		}

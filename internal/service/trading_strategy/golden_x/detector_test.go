@@ -61,7 +61,7 @@ func TestDetect(t *testing.T) {
 	t.Run("insufficient_history", func(t *testing.T) {
 		// 50 candles with rsiPeriod=7: 50-7=43 RSI values < adaptiveWindowMin(100)
 		candles := buildWeeklyCandles(base, 50, func(i int) int64 { return int64(100 + i) })
-		_, err := Detect(candles, 7, dto.StrategyKindDividend, false)
+		_, err := Detect(candles, 7, dto.StrategyKindDividend, false, DefaultSettings())
 		if !errors.Is(err, ErrAdaptiveInsufficientHistory) {
 			t.Fatalf("expected ErrAdaptiveInsufficientHistory, got %v", err)
 		}
@@ -71,7 +71,7 @@ func TestDetect(t *testing.T) {
 		// Strictly rising series → RSI is persistently high → above P15 → no buy.
 		// 120 candles with rsiPeriod=7: 113 RSI values, well above adaptiveWindowMin.
 		candles := buildWeeklyCandles(base, 120, func(i int) int64 { return int64(100 + i*5) })
-		sig, err := Detect(candles, 7, dto.StrategyKindDividend, false)
+		sig, err := Detect(candles, 7, dto.StrategyKindDividend, false, DefaultSettings())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -99,7 +99,7 @@ func TestDetect(t *testing.T) {
 		candles := buildWeeklyCandles(base, n, func(i int) int64 {
 			return int64(100 + i*5)
 		})
-		sig, err := Detect(candles, 7, dto.StrategyKindDividend, false)
+		sig, err := Detect(candles, 7, dto.StrategyKindDividend, false, DefaultSettings())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -133,7 +133,7 @@ func TestDetect(t *testing.T) {
 			dropDepth := int64(i - 180)
 			return int64(1000+180*3) - dropDepth*80
 		})
-		sig, err := Detect(candles, 7, dto.StrategyKindDividend, false)
+		sig, err := Detect(candles, 7, dto.StrategyKindDividend, false, DefaultSettings())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -153,7 +153,7 @@ func TestDetect(t *testing.T) {
 	t.Run("trend_filter_off_leaves_trend_unknown", func(t *testing.T) {
 		// With useTrendFilter=false, TrendStatus must be TrendUnknown.
 		candles := buildWeeklyCandles(base, 120, func(i int) int64 { return int64(100 + i*5) })
-		sig, err := Detect(candles, 7, dto.StrategyKindDividend, false)
+		sig, err := Detect(candles, 7, dto.StrategyKindDividend, false, DefaultSettings())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -169,7 +169,7 @@ func TestDetect(t *testing.T) {
 		candles := buildWeeklyCandles(base, n, func(i int) int64 {
 			return int64(1000 + i*10)
 		})
-		sig, err := Detect(candles, 7, dto.StrategyKindGrowth, true)
+		sig, err := Detect(candles, 7, dto.StrategyKindGrowth, true, DefaultSettings())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -182,7 +182,7 @@ func TestDetect(t *testing.T) {
 		// 110 candles: enough RSI history (103 values) but fewer than trendEMAPeriod(200)
 		// → ErrInsufficientHistory from trend filter.
 		candles := buildWeeklyCandles(base, 110, func(i int) int64 { return int64(100 + i*5) })
-		_, err := Detect(candles, 7, dto.StrategyKindGrowth, true)
+		_, err := Detect(candles, 7, dto.StrategyKindGrowth, true, DefaultSettings())
 		if !errors.Is(err, ErrInsufficientHistory) {
 			t.Fatalf("expected ErrInsufficientHistory with trend filter and short history, got %v", err)
 		}
@@ -212,7 +212,7 @@ func TestDetect(t *testing.T) {
 			func(i int, c int64) int64 { return c - 50 },
 			func(i int) int64 { return 1000 },
 		)
-		sig, err := Detect(candles, 7, dto.StrategyKindDividend, false)
+		sig, err := Detect(candles, 7, dto.StrategyKindDividend, false, DefaultSettings())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -250,7 +250,7 @@ func TestDetect(t *testing.T) {
 		for _, v := range seriesVariants {
 			t.Run(v.name, func(t *testing.T) {
 				candles := buildWeeklyCandles(base, 120, v.closeFn)
-				sig, err := Detect(candles, 7, dto.StrategyKindDividend, false)
+				sig, err := Detect(candles, 7, dto.StrategyKindDividend, false, DefaultSettings())
 				if err != nil {
 					t.Fatalf("unexpected error: %v", err)
 				}

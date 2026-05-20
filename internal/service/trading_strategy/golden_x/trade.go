@@ -86,6 +86,7 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 	divergences := make(map[string]bool)
 	volumesConfirmed := make(map[string]bool)
 	stops := make(map[string]dto.Stop)
+	settings := DefaultSettings()
 
 	for _, share := range in.ShareList.All() {
 		candles, candleErr := s.fetchWeeklyCandles(ctx, share.ID, in.Interval, dateNow)
@@ -95,7 +96,7 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 		}
 		closed := closedWeeklyCandles(candles, dateNow, loc)
 
-		sig, detectErr := Detect(closed, share.RSILength, in.Kind, in.UseTrendFilter)
+		sig, detectErr := Detect(closed, share.RSILength, in.Kind, in.UseTrendFilter, settings)
 		if errors.Is(detectErr, ErrAdaptiveInsufficientHistory) {
 			logger.InfoContext(ctx, "adaptive tiers: insufficient history", "share", share.Name)
 			continue

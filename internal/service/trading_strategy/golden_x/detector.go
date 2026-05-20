@@ -20,7 +20,9 @@ func Detect(
 	rsiPeriod int,
 	kind dto.StrategyKind,
 	useTrendFilter bool,
+	settings dto.Settings,
 ) (dto.Signal, error) {
+	_ = settings // consumed in Tasks 4-6; explicit blank-assign documents intent and silences unused-param lint
 	lastRSI, rsiSeries, thresholds, err := adaptiveRSIForShare(closed, rsiPeriod)
 	if err != nil {
 		return dto.Signal{}, err
