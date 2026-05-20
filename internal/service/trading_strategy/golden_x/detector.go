@@ -34,7 +34,7 @@ func Detect(
 	}
 
 	if useTrendFilter {
-		status, terr := trendStatusFromClosed(closed, trendEMAPeriod)
+		status, terr := trendStatusFromClosed(closed, settings.TrendEMAPeriod)
 		if terr != nil {
 			return dto.Signal{}, terr
 		}
@@ -47,12 +47,12 @@ func Detect(
 
 	if buyTier != tierNone {
 		lows := lowsAlignedToRSI(closed, rsiPeriod, rsiSeries)
-		if len(lows) > divergenceLookbackWeeks {
-			lows = lows[len(lows)-divergenceLookbackWeeks:]
+		if len(lows) > settings.DivergenceLookbackWeeks {
+			lows = lows[len(lows)-settings.DivergenceLookbackWeeks:]
 		}
 		rsiTail := rsiSeries
-		if len(rsiTail) > divergenceLookbackWeeks {
-			rsiTail = rsiTail[len(rsiTail)-divergenceLookbackWeeks:]
+		if len(rsiTail) > settings.DivergenceLookbackWeeks {
+			rsiTail = rsiTail[len(rsiTail)-settings.DivergenceLookbackWeeks:]
 		}
 		sig.DivergenceOK = bullishDivergence(lows, rsiTail, divergenceFractalK)
 
@@ -60,7 +60,7 @@ func Detect(
 		for i, c := range closed {
 			volumes[i] = c.Volume
 		}
-		sig.VolumeOK = indicators.VolumeConfirmed(volumes, volumeSMALookback, volumeMultiplier)
+		sig.VolumeOK = indicators.VolumeConfirmed(volumes, settings.VolumeSMALookback, settings.VolumeMultiplier)
 
 		highs := make([]float64, len(closed))
 		lowsF := make([]float64, len(closed))
@@ -70,7 +70,7 @@ func Detect(
 			lowsF[i] = utils.CombinePrice(c.Low.Units, c.Low.Nano)
 			closes[i] = utils.CombinePrice(c.Close.Units, c.Close.Nano)
 		}
-		if atrValue := indicators.ATR(highs, lowsF, closes, atrPeriod); atrValue > 0 {
+		if atrValue := indicators.ATR(highs, lowsF, closes, settings.ATRPeriod); atrValue > 0 {
 			lastClose := closes[len(closes)-1]
 			sig.LastClose = lastClose
 			sig.Stop = stopFromATR(lastClose, atrValue, kForKind(kind, settings))
@@ -82,6 +82,5 @@ func Detect(
 		sig.LastClose = utils.CombinePrice(last.Close.Units, last.Close.Nano)
 	}
 
-	_ = kind // consumed by kForKind only when a buy tier fires; blank-assign silences the compiler when the buy branch is skipped
 	return sig, nil
 }

@@ -9,9 +9,6 @@ import (
 	"tinvest/internal/utils"
 )
 
-// trendEMAPeriod is the lookback for the higher-trend EMA filter (EMA200 W).
-const trendEMAPeriod = 200
-
 // ErrInsufficientHistory is returned when a share does not have enough closed
 // weekly candles to compute the EMA200 filter (fresh IPOs).
 var ErrInsufficientHistory = errors.New("trend filter: insufficient candle history")

@@ -17,52 +17,18 @@ import (
 	"tinvest/pkg/logger"
 )
 
-// adaptiveWindowMax is the maximum number of historical RSI values we keep for
-// percentile computation. Matches the original ~200 from the design spec.
-const adaptiveWindowMax = 200
-
-// adaptiveWindowMin is the lower bound; shares with fewer closed-week RSI
-// values than this are skipped (consistent with C1's insufficient-history rule).
-const adaptiveWindowMin = 100
-
 // candleLookbackWeeks is how many weekly candles we request per share per tick.
 // Covers EMA200 warmup (Growth-only) and adaptive-tier RSI history (both
 // instances) in one RPC, staying under the Tinkoff weekly cap (300 per call).
+// Out of scope for D2: this is a fetch-policy knob, not an algorithm knob.
 const candleLookbackWeeks = 260
 
 // divergenceFractalK is the half-window for fractal pivot detection: a candle
 // at index i is a confirmed pivot low iff its Low is strictly less than the
 // Lows of its 2*k neighbors (k on each side). k=2 is the classical Williams
 // fractal setting; on a weekly TF it gives a swing-low at least 2 weeks old.
+// Out of scope for D2: indicator-internal pivot width, not on the knob list.
 const divergenceFractalK = 2
-
-// divergenceLookbackWeeks bounds how far back we search for the prior pivot
-// low. Older pivots are ignored — a year-old swing low is "stale" evidence
-// for current week behavior on a weekly TF.
-const divergenceLookbackWeeks = 52
-
-// volumeSMALookback is the number of closed weekly candles preceding the
-// last closed week, used as the SMA baseline for volume confirmation.
-const volumeSMALookback = 20
-
-// volumeMultiplier is the strictness factor: the last closed week's volume
-// must be > volumeMultiplier × SMA of the previous volumeSMALookback weeks
-// for the 🔊 badge to fire. 1.5× is the balance between "barely above
-// average" (which would emit the badge for most shares and dilute meaning)
-// and a 2× "rare spike" (which would almost never fire).
-const volumeMultiplier = 1.5
-
-// atrPeriod is Wilder's standard ATR period applied on the weekly TF closed-
-// candle stream used for buy-side stop suggestions.
-const atrPeriod = 14
-
-// atrMultiplierDividend is the ATR stop multiplier for the Dividend (long-
-// hold) strategy: wider stops survive deeper weekly noise.
-const atrMultiplierDividend = 2.0
-
-// atrMultiplierGrowth is the stop multiplier for Growth — tighter, since the
-// strategy exits sooner on RSI overheats.
-const atrMultiplierGrowth = 1.5
 
 // ErrAdaptiveInsufficientHistory is returned when a share has fewer than
 // adaptiveWindowMin closed weekly RSI values available.
