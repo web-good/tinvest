@@ -73,7 +73,7 @@ func Detect(
 		if atrValue := indicators.ATR(highs, lowsF, closes, atrPeriod); atrValue > 0 {
 			lastClose := closes[len(closes)-1]
 			sig.LastClose = lastClose
-			sig.Stop = stopFromATR(lastClose, atrValue, kForKind(kind))
+			sig.Stop = stopFromATR(lastClose, atrValue, kForKind(kind, settings))
 		} else {
 			sig.LastClose = closes[len(closes)-1]
 		}

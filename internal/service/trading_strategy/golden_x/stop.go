@@ -6,11 +6,11 @@ import "tinvest/internal/service/trading_strategy/golden_x/dto"
 // Dividend holds longer and needs wider stops; Growth exits sooner and uses
 // tighter stops. Unknown kinds fall back to Dividend — defensive only; the
 // production code paths construct the enum at the call site.
-func kForKind(kind dto.StrategyKind) float64 {
+func kForKind(kind dto.StrategyKind, settings dto.Settings) float64 {
 	if kind == dto.StrategyKindGrowth {
-		return atrMultiplierGrowth
+		return settings.ATRMultiplierGrowth
 	}
-	return atrMultiplierDividend
+	return settings.ATRMultiplierDividend
 }
 
 // stopFromATR composes a dto.Stop from the last close, ATR value, and

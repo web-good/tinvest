@@ -8,6 +8,7 @@ import (
 )
 
 func TestKForKind(t *testing.T) {
+	settings := DefaultSettings()
 	tests := []struct {
 		name string
 		kind dto.StrategyKind
@@ -19,7 +20,7 @@ func TestKForKind(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := kForKind(tc.kind)
+			got := kForKind(tc.kind, settings)
 			if math.Abs(got-tc.want) > 1e-9 {
 				t.Fatalf("kForKind(%v) = %v, want %v", tc.kind, got, tc.want)
 			}
