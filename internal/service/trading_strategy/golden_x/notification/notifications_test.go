@@ -8,6 +8,36 @@ import (
 	"tinvest/internal/service/trading_strategy/golden_x/dto"
 )
 
+// bodyWithoutLegend strips the static legend block so negative assertions
+// (expecting an emoji to be absent) only inspect the actual share rows.
+func bodyWithoutLegend(s string) string {
+	return strings.Replace(s, legendBlock, "", 1)
+}
+
+func TestTrade_RendersLegendBlock(t *testing.T) {
+	buyInfo := domain.NewInfo()
+	buyInfo.WriteToMap("share-leg", domain.Item{InstrumentName: "Lukoil", RSIValue: 20})
+	thresholds := map[string]dto.Thresholds{
+		"share-leg": {P5: 24, P15: 31},
+	}
+
+	got := Trade(buyInfo, nil, dto.StrategyKindDividend, nil, thresholds, nil, nil, nil, nil)
+
+	if !strings.Contains(got, legendBlock) {
+		t.Errorf("expected legend block in output, got:\n%s", got)
+	}
+	// Legend must sit between the medal and the buy-section header.
+	medalIdx := strings.Index(got, "🥇")
+	legendIdx := strings.Index(got, "<b>Легенда:</b>")
+	buyHeaderIdx := strings.Index(got, "Акции находящиеся в локальных минимумах")
+	if medalIdx < 0 || legendIdx < 0 || buyHeaderIdx < 0 {
+		t.Fatalf("missing landmarks: medal=%d legend=%d header=%d in:\n%s", medalIdx, legendIdx, buyHeaderIdx, got)
+	}
+	if !(medalIdx < legendIdx && legendIdx < buyHeaderIdx) {
+		t.Errorf("expected order medal < legend < header, got medal=%d legend=%d header=%d", medalIdx, legendIdx, buyHeaderIdx)
+	}
+}
+
 func TestTrade_AdaptiveTiersAndThresholdSuffix(t *testing.T) {
 	info := domain.NewInfo()
 	info.WriteToMap("green-id", domain.Item{InstrumentName: "Yandex", RSIValue: 20})
@@ -50,7 +80,8 @@ func TestTrade_NoThresholdsRendersNoEmojiOrSuffix(t *testing.T) {
 	if !strings.Contains(got, "🥇") {
 		t.Errorf("expected gold medal, got:\n%s", got)
 	}
-	if strings.Contains(got, "🟢") || strings.Contains(got, "🟡") {
+	body := bodyWithoutLegend(got)
+	if strings.Contains(body, "🟢") || strings.Contains(body, "🟡") {
 		t.Errorf("expected no tier emoji when thresholds missing, got:\n%s", got)
 	}
 	if strings.Contains(got, "p5=") {
@@ -185,7 +216,7 @@ func TestTrade_NoBadgeWhenNotDivergent(t *testing.T) {
 
 	got := Trade(buyInfo, nil, dto.StrategyKindDividend, nil, thresholds, nil, nil, nil, nil)
 
-	if strings.Contains(got, "📈") {
+	if strings.Contains(bodyWithoutLegend(got), "📈") {
 		t.Errorf("expected no divergence badge, got:\n%s", got)
 	}
 }
@@ -239,7 +270,7 @@ func TestTrade_VolumeBadgeAbsentWhenNotConfirmed(t *testing.T) {
 
 	got := Trade(buyInfo, nil, dto.StrategyKindDividend, nil, thresholds, nil, divergences, nil, nil)
 
-	if strings.Contains(got, "🔊") {
+	if strings.Contains(bodyWithoutLegend(got), "🔊") {
 		t.Errorf("expected no volume badge, got:\n%s", got)
 	}
 	if !strings.Contains(got, "Lukoil 🟢 📈") {
@@ -261,7 +292,7 @@ func TestTrade_VolumeBadgeWithoutDivergence(t *testing.T) {
 	if !strings.Contains(got, "Lukoil 🟢 🔊") {
 		t.Errorf("expected 'Lukoil 🟢 🔊' (volume only, no divergence), got:\n%s", got)
 	}
-	if strings.Contains(got, "📈") {
+	if strings.Contains(bodyWithoutLegend(got), "📈") {
 		t.Errorf("expected no divergence badge, got:\n%s", got)
 	}
 }

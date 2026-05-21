@@ -24,6 +24,7 @@ func Trade(
 	if medal := kind.Medal(); medal != "" {
 		b.WriteString(medal + "\n\n")
 	}
+	b.WriteString(legendBlock)
 
 	if buyInfo != nil && len(buyInfo.Items()) > 0 {
 		b.WriteString("<u><b>Акции находящиеся в локальных минимумах:</b></u>\n\n\n<code>")
@@ -52,6 +53,17 @@ func Trade(
 
 	return b.String()
 }
+
+const legendBlock = "<b>Легенда:</b>\n" +
+	"🟢 сильно перепродан\n" +
+	"🟡 перепродан\n" +
+	"🟠 перекуплен\n" +
+	"🔴 сильно перекуплен\n" +
+	"🚨 экстремум сверху\n" +
+	"✅ тренд за нас\n" +
+	"🚫 тренд против\n" +
+	"📈 бычья дивергенция\n" +
+	"🔊 подтверждение объёмом\n\n"
 
 // divergenceBadge returns " 📈" when the share's row should display the
 // bullish RSI divergence annotation, "" otherwise. Empty input map renders
