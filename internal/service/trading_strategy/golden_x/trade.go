@@ -133,7 +133,7 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 	}
 
 	if len(RSIInfo.Items()) > 0 {
-		if sendErr := s.tgClient.SendMessage(notif.RSIList(RSIInfo, in.Kind, thresholds)); sendErr != nil {
+		if sendErr := s.tgClient.SendMessage(notif.RSIList(RSIInfo, in.Kind, trends, thresholds, sellThresholds, divergences, volumesConfirmed, stops)); sendErr != nil {
 			logger.ErrorContext(ctx, "message is not sent", sendErr)
 			return sendErr
 		}
