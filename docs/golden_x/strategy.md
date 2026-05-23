@@ -1,6 +1,6 @@
 # Алгоритм Golden X
 
-Ядро стратегии — чистая функция `Detect()` в `internal/service/trading_strategy/golden_x/detector.go:18`. Никакого I/O, никакого времени, никакой телеметрии: на вход — массив недельных свечей (закрытые + текущая формирующаяся), на выходе — `dto.Signal`. Всю обвязку (загрузку данных, дедупликацию, отправку в Telegram) делает обёртка `service.Trade`.
+Ядро стратегии — чистая функция `Detect()` в `internal/service/trading_strategy/golden_x/detector.go:19`. Никакого I/O, никакого времени, никакой телеметрии: на вход — массив недельных свечей (закрытые + текущая формирующаяся), на выходе — `dto.Signal`. Всю обвязку (загрузку данных, отправку в Telegram) делает обёртка `service.Trade`.
 
 ## Жизненный цикл сигнала на одну акцию
 
@@ -16,7 +16,7 @@
 [tier покупки 🟢/🟡 или нет] ← tierFromAdaptive()
        ↓
 [если есть tier покупки:]
-   ├── фильтр тренда EMA200 ← trendStatusFromClosed()  (только Growth)
+   ├── фильтр тренда EMA200 ← trendStatusFromClosed()
    ├── бычья дивергенция    ← bullishDivergence()
    ├── подтверждение объёма ← indicators.VolumeConfirmed()
    └── стоп ATR             ← stopFromATR()
@@ -25,8 +25,6 @@
        ↓
 [dto.Signal] → service.Trade
                 ↓
-        [дедупликация ShouldAlert()]
-                ↓
         [форматирование notification.Trade()]
                 ↓
         [Telegram Bot API]
@@ -34,13 +32,11 @@
 
 ### Шаг 1. Загрузка данных
 
-`fetchWeeklyCandles()` (`trade.go:148`) тянет ~260 недельных свечей через gRPC Tinkoff Invest. Tinkoff возвращает в том числе текущую формирующуюся неделю (помечена `IsComplete=false`). `compactCandles()` (`trend_filter.go:63`) убирает только nil-элементы — формирующаяся свеча сохраняется и попадает в `Detect`, поэтому RSI/тренд/стоп реагируют на движение цены внутри текущей недели, не дожидаясь её закрытия в понедельник 00:00 MSK.
-
-**Trade-off:** значения индикаторов «дышат» с ценой в течение недели — tier может смениться и обратно. Дедуп `ShouldAlert()` срабатывает только на смену tier, поэтому без дополнительной защиты возможны дублирующие алёрты внутри одной недели. Антифлап вынесен в отдельную задачу.
+`fetchWeeklyCandles()` (`trade.go:138`) тянет ~260 недельных свечей через gRPC Tinkoff Invest. Tinkoff возвращает в том числе текущую формирующуюся неделю (помечена `IsComplete=false`). `compactCandles()` (`trend_filter.go:63`) убирает только nil-элементы — формирующаяся свеча сохраняется и попадает в `Detect`, поэтому RSI/тренд/стоп реагируют на движение цены внутри текущей недели, не дожидаясь её закрытия в понедельник 00:00 MSK.
 
 ### Шаг 2. Адаптивный RSI
 
-`adaptiveRSIForShare()` (`detector.go:166`):
+`adaptiveRSIForShare()` (`trade.go:156`):
 
 1. Считает полный ряд RSI методом Wilder через `computeRSISeries()` (`rsi.go:14`). Период — индивидуальный для каждой акции (`RSILength` в `shares.go`, обычно 7..11).
 2. Отбрасывает первые `rsiPeriod` значений (warmup).
@@ -70,16 +66,16 @@
 
 ### Шаг 5. Подтверждения покупки (только если tier ≠ none)
 
-#### 5.1 Фильтр тренда (`trend_filter.go:50`)
+#### 5.1 Фильтр тренда (`trend_filter.go:42`)
 
-Только для Growth (включается через `useTrendFilter`). Считает EMA200 (по `TrendEMAPeriod`) методом Wilder и сравнивает последний `Close` с последним EMA:
+Включается через `useTrendFilter` (в проде включён для обеих стратегий). Считает EMA200 (по `TrendEMAPeriod`) и сравнивает последний `Close` с последним EMA:
 
 | Условие | TrendStatus | Mark |
 |---|---|---|
 | `Close > EMA200_W` | `TrendWith` | ✅ |
 | `Close ≤ EMA200_W` | `TrendAgainst` | 🚫 |
 
-Если истории недостаточно для EMA — `ErrInsufficientHistory`. Для Dividend поле остаётся `TrendUnknown`, в сообщении ничего не печатается.
+Если истории недостаточно для EMA — `ErrInsufficientHistory`. Если `useTrendFilter` не включён, поле остаётся `TrendUnknown`, в сообщении ничего не печатается.
 
 #### 5.2 Бычья дивергенция (`divergence.go:40`)
 
@@ -89,7 +85,7 @@
 2. Проверить: `low[последняя] < low[pivot]` И `RSI[последняя] > RSI[pivot]`.
 3. Если оба условия выполнены — бычья дивергенция, флаг `DivergenceOK = true`, в сообщении появляется 📈.
 
-#### 5.3 Подтверждение объёма (`detector.go:63`)
+#### 5.3 Подтверждение объёма (`detector.go:64`)
 
 `indicators.VolumeConfirmed()`: `volume[last] > VolumeMultiplier × SMA(volume, VolumeSMALookback)`. По дефолту: `>1.5 × SMA20`. Флаг `VolumeOK = true` → 🔊 в сообщении.
 
@@ -120,27 +116,19 @@ DistancePct  = (Close − Stop) / Close × 100
 
 Сравнения строгие (`>`). Growth-стратегия игнорирует P80 и P95 — продажа только на P90.
 
-### Шаг 7. Дедупликация (anti-spam)
+### Шаг 7. Формирование уведомления
 
-`alertState` (`dedup.go:19`) хранит `map[shareID] → tier` — последний выданный tier для каждой акции. `ShouldAlert(shareID, tier)`:
-
-- Если новый `tier == tierNone` → молчаливо сбрасывает state, **сообщение не шлётся**.
-- Если новый `tier != prev` → возвращает `true`, обновляет state.
-- Если новый `tier == prev` → возвращает `false` (повтор).
-
-Поведение: при «зависании» RSI в зелёной зоне на несколько недель алерт приходит только раз. Когда RSI вышел в нейтраль и потом снова упал в зелёную — придёт повторно. Когда RSI перешёл из зелёной в жёлтую — придёт сразу (это смена tier).
+Все акции с tier ≠ `tierNone` попадают в уведомление — покупочные (`tierYellow`, `tierGreen`) в секцию «Сигналы на покупку», продажные (`tierSellYellow`, `tierSellOrange`, `tierSellRed`) в секцию «Сигналы на продажу». Дедупликации нет: каждый тик стратегии отправляет полный список всех акций, находящихся в зонах покупки или продажи.
 
 ### Шаг 8. Отправка в Telegram
 
-`notification.Trade()` (`notification/notifications.go:12`) собирает HTML-сообщение со всеми покупками и продажами одной партией. Доставка через Telegram Bot API на все `chatIds` из конфига (см. `internal/app/app.go`).
-
-Параллельно отправляется второе сообщение — `RSIList` (`notification/rsi_by_shares.go:11`) — где перечислены все RSI текущей итерации, чтобы видеть состояние всего портфеля (не только сработавшие сигналы).
+`notification.Trade()` (`notification/notifications.go:12`) собирает HTML-сообщение со всеми покупками и продажами одной партией. Сообщение начинается с блока легенды (`legendBlock`), объясняющего все emoji. Доставка через Telegram Bot API на все `chatIds` из конфига (см. `internal/app/app.go`).
 
 ## Разница Dividend vs Growth
 
 | Аспект | 🥇 Dividend | 🥈 Growth |
 |---|---|---|
-| Фильтр тренда (EMA200) | выключен | включён, выводит ✅/🚫 |
+| Фильтр тренда (EMA200) | включён ✅/🚫 | включён ✅/🚫 |
 | Множитель ATR для стопа | 2.0 | 1.5 |
 | Тиры продажи | P80 🟠, P90 🔴, P95 🚨 | P90 🔴 |
 | Стиль выхода | Частичные по 1/3 | Полный выход на первом сигнале |
@@ -174,10 +162,11 @@ type Signal struct {
 
 ```go
 goldenx.Trade{
-    Kind:      goldenx.StrategyKindDividend,    // или StrategyKindGrowth
-    Interval:  enum.Week1,
-    Scheduler: "0 */5 * * *",                   // cron-выражение
-    ShareList: *a.collection.GoldInstruments,   // или GrowthInstruments
+    Kind:           goldenx.StrategyKindDividend,    // или StrategyKindGrowth
+    Interval:       enum.Week1,
+    Scheduler:      "0 */5 * * *",                   // cron-выражение
+    ShareList:      *a.collection.GoldInstruments,   // или GrowthShare
+    UseTrendFilter: true,
 }
 ```
 

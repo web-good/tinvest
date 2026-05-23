@@ -1,9 +1,8 @@
 # Алерты Golden X — расшифровка
 
-Стратегия шлёт уведомления через Telegram Bot API в HTML-режиме. Один прогон шедулера может породить **два** сообщения:
+Стратегия шлёт уведомления через Telegram Bot API в HTML-режиме. Один прогон шедулера порождает **одно** сообщение:
 
-1. **Trade Message** — основной алерт с покупками и продажами. Формируется в `notification.Trade()` (`notification/notifications.go:12`).
-2. **RSI List** — промежуточные значения RSI по всем тикерам (даже без сигнала). Формируется в `notification.RSIList()` (`notification/rsi_by_shares.go:11`).
+- **Trade Message** — основной алерт с покупками и продажами. Формируется в `notification.Trade()` (`notification/notifications.go:12`). Начинается с блока легенды, объясняющего все emoji.
 
 ## Каталог иконок
 
@@ -11,29 +10,30 @@
 
 | Emoji | Что означает | Условие | Источник |
 |---|---|---|---|
-| 🥇 | Стратегия **Dividend (Gold)** | `kind = StrategyKindDividend` | `dto/strategy_kind.go:14` |
-| 🥈 | Стратегия **Growth** | `kind = StrategyKindGrowth` | `dto/strategy_kind.go:16` |
-| 🟢 | Сильная покупка | `RSI < P5` | `notification/notifications.go:96` |
-| 🟡 | Слабая покупка | `P5 ≤ RSI < P15` | `notification/notifications.go:98` |
-| 🟠 | Частичная продажа (Gold only) | `RSI > P80` | `notification/notifications.go:126` |
-| 🔴 | Продажа | `RSI > P90` | `notification/notifications.go:124` |
-| 🚨 | Финальный выход / тревога (Gold only) | `RSI > P95` | `notification/notifications.go:122` |
-| ✅ | Тренд за нас (Growth only) | `Close > EMA200_W` | `dto/trend_status.go:19` |
-| 🚫 | Тренд против (Growth only) | `Close ≤ EMA200_W` | `dto/trend_status.go:21` |
-| 📈 | Бычья RSI-дивергенция | `bullishDivergence() = true` | `notification/notifications.go:61` |
-| 🔊 | Объём подтверждён | `Volume > VolumeMultiplier × SMA20` | `notification/notifications.go:71` |
-| 🧾 | Заголовок «промежуточные RSI» | константа в RSIList-сообщении | `notification/rsi_by_shares.go:17` |
+| 🥇 | Стратегия **Dividend (Gold)** | `kind = StrategyKindDividend` | `dto/strategy_kind.go:11` |
+| 🥈 | Стратегия **Growth** | `kind = StrategyKindGrowth` | `dto/strategy_kind.go:13` |
+| 🟢 | Сильная покупка | `RSI < P5` | `notification/notifications.go:107` |
+| 🟡 | Слабая покупка | `P5 ≤ RSI < P15` | `notification/notifications.go:109` |
+| 🟠 | Частичная продажа (Gold only) | `RSI > P80` | `notification/notifications.go:139` |
+| 🔴 | Продажа | `RSI > P90` | `notification/notifications.go:137` |
+| 🚨 | Финальный выход / тревога (Gold only) | `RSI > P95` | `notification/notifications.go:135` |
+| ✅ | Тренд за нас | `Close > EMA200_W` | `dto/trend_status.go:18` |
+| 🚫 | Тренд против | `Close ≤ EMA200_W` | `dto/trend_status.go:20` |
+| 📈 | Бычья RSI-дивергенция | `bullishDivergence() = true` | `notification/notifications.go:73` |
+| 🔊 | Объём подтверждён | `Volume > VolumeMultiplier × SMA20` | `notification/notifications.go:82` |
 
 Сравнения RSI с порогами **строгие** (`<` и `>`), не `≤`/`≥`. Если RSI ровно равен порогу — соответствующий emoji не показывается.
 
 ## Шаблон Trade-сообщения
 
-Реальный HTML-шаблон собирается через `strings.Builder` в `notification/notifications.go:12-54`. Логически:
+Реальный HTML-шаблон собирается через `strings.Builder` в `notification/notifications.go:12-55`. Логически:
 
 ```
 [МЕДАЛЬ]
 
-<u><b>Акции находящиеся в локальных минимумах:</b></u>
+[ЛЕГЕНДА — блок legendBlock с расшифровкой всех emoji]
+
+<u><b>Сигналы на покупку:</b></u>
 
 <code>• <b>Акция:</b> ИМЯ [tier] [trend] [divergence] [volume]
   <b>RSI Value:</b>NN  (p5=N.N, p15=N.N)
@@ -42,7 +42,7 @@
 • <b>Акция:</b> ИМЯ2 ...
 </code>
 
-<u><b>Акции находящиеся в локальных максимумах:</b></u>
+<u><b>Сигналы на продажу:</b></u>
 
 <code>• <b>Акция:</b> ИМЯ [sell-tier]
   <b>RSI Value:</b>NN  (p80=N.N, p90=N.N, p95=N.N)
@@ -56,17 +56,28 @@
 ```
 🥇
 
-Акции находящиеся в локальных минимумах:
+Легенда:
+🟢 сильно перепродан
+🟡 перепродан
+🟠 перекуплен
+🔴 сильно перекуплен
+🚨 экстремум сверху
+✅ тренд за нас
+🚫 тренд против
+📈 бычья дивергенция
+🔊 подтверждение объёмом
 
-• Акция: Лукойл 🟢 📈 🔊
+Сигналы на покупку:
+
+• Акция: Лукойл 🟢 ✅ 📈 🔊
   RSI Value:18  (p5=22.4, p15=29.1)
-  Stop: 6 482.50 (−6.2%)
+  Stop: 6482.50 (−6.2%)
 
-• Акция: Татнефть - прив 🟡
+• Акция: Татнефть - прив 🟡 🚫
   RSI Value:27  (p5=24.0, p15=31.0)
   Stop: 642.30 (−4.8%)
 
-Акции находящиеся в локальных максимумах:
+Сигналы на продажу:
 
 • Акция: ФосАгро 🚨
   RSI Value:88  (p80=70.5, p90=78.2, p95=82.9)
@@ -80,23 +91,26 @@
 ```
 🥈
 
-Акции находящиеся в локальных минимумах:
+Легенда:
+...
+
+Сигналы на покупку:
 
 • Акция: Яндекс 🟢 ✅ 📈
   RSI Value:19  (p5=23.0, p15=30.5)
-  Stop: 3 240.10 (−5.7%)
+  Stop: 3240.10 (−5.7%)
 
 • Акция: Газпром 🟡 🚫
   RSI Value:28  (p5=24.0, p15=31.0)
   Stop: 122.80 (−4.5%)
 
-Акции находящиеся в локальных максимумах:
+Сигналы на продажу:
 
 • Акция: Полюс 🔴
   RSI Value:91  (p80=72.0, p90=80.0, p95=86.0)
 ```
 
-Для Growth в buy-секции виден маркер тренда (✅/🚫). У Dividend этого маркера нет.
+В обеих стратегиях в buy-секции виден маркер тренда (✅/🚫), т.к. `UseTrendFilter: true` для обоих типов.
 
 ## Порядок элементов в строке
 
@@ -104,7 +118,7 @@
 • <b>Акция:</b> ИМЯ [tier emoji][trend mark][divergence][volume]
 ```
 
-Конкретно (`notification/notifications.go:35`):
+Конкретно (`notification/notifications.go:36`):
 
 ```go
 log.InstrumentName
@@ -129,29 +143,6 @@ log.InstrumentName
 
 Значения, у которых вся структура нулевая (`Thresholds{}`, `SellThresholds{}`, `Stop{}`), вообще не печатаются — это «тихое» поведение для случаев нехватки истории.
 
-## Второе сообщение: RSI List 🧾
-
-Формируется `RSIList()` отдельно (`notification/rsi_by_shares.go:11`) — содержит все тикеры портфеля с их текущим RSI, даже без сигнала. Шаблон:
-
-```
-🥇   (или 🥈)
-
-🧾
-Промежуточные значения RSI и % цены к див доход:
-
-• Акция: Лукойл 🟢
-  RSI Length:9
-  RSI Value:18  (p5=22.4, p15=29.1)
-
-• Акция: Татнефть - прив
-  RSI Length:9
-  RSI Value:42  (p5=24.0, p15=31.0)
-
-...
-```
-
-Зачем: общая картина по всему списку — какие акции рядом с зоной покупки/продажи, какие в нейтрали. `RSI Length` показывает индивидуальный период RSI этой бумаги (`RSILength` из `shares.go`).
-
 ## Доставка
 
 - Метод: Telegram Bot API.
@@ -160,14 +151,3 @@ log.InstrumentName
 - Где инициализируется бот: `internal/app/app.go` (см. вызов `InitTelegramBot`).
 
 В live прод одновременно крутятся две стратегии (Dividend + Growth), и каждая шлёт свои сообщения с собственной медалью (🥇 / 🥈).
-
-## Дедупликация — что важно знать про повторы
-
-Алерт по конкретной акции придёт только при **смене tier**. Подробности — в [strategy.md §7](strategy.md#шаг-7-дедупликация-anti-spam). Кратко:
-
-- RSI ушёл из зоны → молчание (никакого «вышли из сигнала» сообщения).
-- RSI снова вошёл → новый алерт.
-- RSI перешёл из 🟢 в 🟡 → алерт (это смена tier).
-- RSI остался в 🟢 на следующей неделе → молчание (повтор).
-
-Поэтому: если в Telegram алерт пришёл один раз, а на следующей неделе тикер всё ещё в 🟢 — это нормально, состояние сохраняется до выхода RSI из зоны.
