@@ -79,7 +79,7 @@ go run ./cmd/backtest/main.go --kind Dividend --refresh
 
 ## Что происходит внутри
 
-Алгоритм `cmd/backtest/main.go:77-111` и `backtest/replay.go`:
+Алгоритм `cmd/backtest/main.go:77-125` и `backtest/replay.go`:
 
 1. **Сбор тикеров** — `selectShareList(kind, --shares)`. Если `--shares=""`, берётся весь список из `shares.Dividend()` или `shares.Growth()`.
 
@@ -89,11 +89,11 @@ go run ./cmd/backtest/main.go --kind Dividend --refresh
    - Сохранить в кэш на следующий прогон.
    - При cache miss и `--refresh=false` — печатает `WARN` и **пропускает** эту акцию (не падает).
 
-3. **Фильтрация закрытых недель** — `filterClosed()` (`cmd/backtest/main.go:197`) с понедельником 00:00 MSK как cutoff. Эта фильтрация специфична для backtest — в live-пути аналогичный фильтр был удалён, и `Detect` теперь видит текущую формирующуюся неделю. В backtest по дизайну все свечи — закрытые исторические бары.
+3. **Фильтрация закрытых недель** — `filterClosed()` (`cmd/backtest/main.go:200`) с понедельником 00:00 MSK как cutoff. Эта фильтрация специфична для backtest — в live-пути аналогичный фильтр был удалён, и `Detect` теперь видит текущую формирующуюся неделю. В backtest по дизайну все свечи — закрытые исторические бары.
 
 4. **Обрезка по диапазону** — `trimByDateRange()` отбрасывает свечи вне `[--from, --to]`.
 
-5. **Прогрев** — `chooseStartIdx(RSILength)` (`cmd/backtest/main.go:225`) пропускает первые `max(200, RSILength + 100)` свечей. Это даёт время «прогреться» EMA200 и накопить минимум 100 значений для адаптивных перцентилей.
+5. **Прогрев** — `chooseStartIdx(RSILength)` (`cmd/backtest/main.go:227`) пропускает первые `max(200, RSILength + 100)` свечей. Это даёт время «прогреться» EMA200 и накопить минимум 100 значений для адаптивных перцентилей.
 
 6. **Replay по неделям** — `backtest.Replay` (см. `backtest/replay.go`). На каждой свече:
    - Вызвать `golden_x.Detect()` с текущей историей.
@@ -213,7 +213,7 @@ func AggressiveSettings() dto.Settings {
 }
 ```
 
-И в `cmd/backtest/main.go:83` заменить:
+И в `cmd/backtest/main.go` (строка `settings := golden_x.DefaultSettings()`) заменить:
 
 ```go
 settings := golden_x.AggressiveSettings()

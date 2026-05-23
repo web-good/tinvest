@@ -21,15 +21,15 @@
 | `SellYellow` | float64 | **80** | Перцентиль для 🟠 частичной продажи (только Dividend) | `percentile.go:62`, `percentile.go:82` |
 | `SellOrange` | float64 | **90** | Перцентиль для 🔴 продажи (оба режима) | `percentile.go:62`, `percentile.go:82` |
 | `SellRed` | float64 | **95** | Перцентиль для 🚨 финального выхода (только Dividend) | `percentile.go:62`, `percentile.go:82` |
-| `ATRPeriod` | int | **14** | Период ATR для расчёта стопа | `detector.go:73` |
+| `ATRPeriod` | int | **14** | Период ATR для расчёта стопа | `detector.go:74` |
 | `ATRMultiplierDividend` | float64 | **2.0** | Множитель ATR для стопа Dividend (`Stop = Close − 2.0×ATR`) | `stop.go:9` |
 | `ATRMultiplierGrowth` | float64 | **1.5** | Множитель ATR для стопа Growth | `stop.go:9` |
-| `VolumeSMALookback` | int | **20** | Окно SMA для проверки объёма | `detector.go:63` |
-| `VolumeMultiplier` | float64 | **1.5** | Множитель: `Volume > 1.5 × SMA20` → подтверждение 🔊 | `detector.go:63` |
-| `TrendEMAPeriod` | int | **200** | Период EMA для фильтра тренда (только Growth) | `trend_filter.go:50` |
-| `AdaptiveWindowMin` | int | **100** | Минимум недель RSI для адаптивных перцентилей (включая текущую формирующуюся); меньше — `ErrAdaptiveInsufficientHistory` | `detector.go:25` |
-| `AdaptiveWindowMax` | int | **200** | Максимум недель RSI (включая текущую формирующуюся); история обрезается до последних N значений | `detector.go:25` |
-| `DivergenceLookbackWeeks` | int | **52** | Глубина поиска фрактального минимума для дивергенции | `detector.go:50` |
+| `VolumeSMALookback` | int | **20** | Окно SMA для проверки объёма | `detector.go:64` |
+| `VolumeMultiplier` | float64 | **1.5** | Множитель: `Volume > 1.5 × SMA20` → подтверждение 🔊 | `detector.go:64` |
+| `TrendEMAPeriod` | int | **200** | Период EMA для фильтра тренда (обе стратегии) | `trend_filter.go:42` |
+| `AdaptiveWindowMin` | int | **100** | Минимум недель RSI для адаптивных перцентилей (включая текущую формирующуюся); меньше — `ErrAdaptiveInsufficientHistory` | `detector.go:26` |
+| `AdaptiveWindowMax` | int | **200** | Максимум недель RSI (включая текущую формирующуюся); история обрезается до последних N значений | `detector.go:26` |
+| `DivergenceLookbackWeeks` | int | **52** | Глубина поиска фрактального минимума для дивергенции | `detector.go:51` |
 
 ## Per-share параметр: `RSILength`
 

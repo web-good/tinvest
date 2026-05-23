@@ -90,9 +90,9 @@ $$\text{percentile}(x, p) = x_{\text{lo}} + (h - \text{lo}) \cdot (x_{\text{hi}}
 
 ## 3. EMA200 — фильтр тренда
 
-Источник: `trend_filter.go:20-37` (`computeEMA`), `trend_filter.go:50` (`trendStatusFromClosed`).
+Источник: `trend_filter.go:19-36` (`computeEMA`), `trend_filter.go:42` (`trendStatusFromClosed`).
 
-**Идея.** Подтвердить, что покупка идёт «по тренду»: цена выше своей долгосрочной средней. Используется только в Growth.
+**Идея.** Подтвердить, что покупка идёт «по тренду»: цена выше своей долгосрочной средней. В проде включён для обеих стратегий (Dividend и Growth).
 
 ### Seed
 
@@ -130,7 +130,7 @@ $$EMA_k = \alpha \cdot c_k + (1 - \alpha) \cdot EMA_{k-1}$$
 
 ## 4. Бычья дивергенция по фракталам Williams
 
-Источник: `divergence.go:10-50`.
+Источник: `divergence.go:10-51`.
 
 **Идея.** Найти момент, когда цена обновляет минимум, но RSI этого не подтверждает — классический признак истощения нисходящего движения.
 
@@ -158,7 +158,7 @@ $$\text{Bullish} \iff \text{low}_{\text{last}} < \text{low}_{p} \quad \text{И} 
 
 ## 5. ATR — стоп-лосс
 
-Источник: `pkg/indicators` (используется в `stop.go`, `detector.go:73`).
+Источник: `pkg/indicators` (используется в `stop.go`, `detector.go:74`).
 
 **Идея.** Стоп-лосс ставится не в фиксированных процентах, а в кратных Average True Range — статистике дневной/недельной волатильности тикера.
 
@@ -195,13 +195,13 @@ $$\text{DistancePct} = \frac{\text{lastClose} - \text{StopPrice}}{\text{lastClos
 
 ### Вырожденные случаи
 
-`stopFromATR()` возвращает пустой `Stop{}` если `atr ≤ 0`, `lastClose ≤ 0`, или `StopPrice ≤ 0`. В сообщении строка `Stop:` тогда не печатается (см. `stopLine()` в `notification/notifications.go:80`).
+`stopFromATR()` возвращает пустой `Stop{}` если `atr ≤ 0`, `lastClose ≤ 0`, или `StopPrice ≤ 0`. В сообщении строка `Stop:` тогда не печатается (см. `stopLine()` в `notification/notifications.go:92`).
 
 ---
 
 ## 6. VolumeConfirmed
 
-Источник: `pkg/indicators.VolumeConfirmed()` (используется в `detector.go:63`).
+Источник: `pkg/indicators.VolumeConfirmed()` (используется в `detector.go:64`).
 
 **Идея.** Подтвердить сигнал «свежим» всплеском объёма по сравнению с недавним средним.
 
