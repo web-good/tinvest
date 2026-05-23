@@ -45,7 +45,6 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 	dateNow := time.Now().In(loc)
 	buyInfo := domain.NewInfo()
 	sellInfo := domain.NewInfo()
-	RSIInfo := domain.NewInfo()
 	trends := make(map[string]dto.TrendStatus)
 	thresholds := make(map[string]dto.Thresholds)
 	sellThresholds := make(map[string]dto.SellThresholds)
@@ -90,14 +89,6 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 			}
 		}
 
-		RSIInfo.WriteToMap(
-			share.ID,
-			domain.Item{
-				InstrumentName: share.Name,
-				RSILength:      share.RSILength,
-				RSIValue:       sig.RSI,
-			})
-
 		buyTier := tierFromAdaptive(sig.RSI, sig.Thresholds.P5, sig.Thresholds.P15)
 		sellTier := sellTierFromAdaptive(sig.RSI, sig.SellThresholds, in.Kind)
 
@@ -108,7 +99,13 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 			finalTier = sellTier
 		}
 
-		if !s.state.ShouldAlert(share.ID, finalTier) {
+		snap := alertSnapshot{
+			tier:       finalTier,
+			trendOK:    sig.TrendStatus == dto.TrendWith,
+			divergence: sig.DivergenceOK,
+			volumeOK:   sig.VolumeOK,
+		}
+		if !s.state.ShouldAlert(share.ID, snap) {
 			continue
 		}
 
@@ -127,13 +124,6 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 	if len(buyInfo.Items()) > 0 || len(sellInfo.Items()) > 0 {
 		msg := notif.Trade(buyInfo, sellInfo, in.Kind, trends, thresholds, sellThresholds, divergences, volumesConfirmed, stops)
 		if sendErr := s.tgClient.SendMessage(msg); sendErr != nil {
-			logger.ErrorContext(ctx, "message is not sent", sendErr)
-			return sendErr
-		}
-	}
-
-	if len(RSIInfo.Items()) > 0 {
-		if sendErr := s.tgClient.SendMessage(notif.RSIList(RSIInfo, in.Kind, trends, thresholds, sellThresholds, divergences, volumesConfirmed, stops)); sendErr != nil {
 			logger.ErrorContext(ctx, "message is not sent", sendErr)
 			return sendErr
 		}

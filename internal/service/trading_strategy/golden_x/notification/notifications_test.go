@@ -29,7 +29,7 @@ func TestTrade_RendersLegendBlock(t *testing.T) {
 	// Legend must sit between the medal and the buy-section header.
 	medalIdx := strings.Index(got, "🥇")
 	legendIdx := strings.Index(got, "<b>Легенда:</b>")
-	buyHeaderIdx := strings.Index(got, "Акции находящиеся в локальных минимумах")
+	buyHeaderIdx := strings.Index(got, "Сигналы на покупку")
 	if medalIdx < 0 || legendIdx < 0 || buyHeaderIdx < 0 {
 		t.Fatalf("missing landmarks: medal=%d legend=%d header=%d in:\n%s", medalIdx, legendIdx, buyHeaderIdx, got)
 	}
@@ -104,7 +104,7 @@ func TestTrade_RendersSellSectionGold(t *testing.T) {
 
 	got := Trade(buyInfo, sellInfo, dto.StrategyKindDividend, nil, nil, sellThresholds, nil, nil, nil)
 
-	if !strings.Contains(got, "Акции находящиеся в локальных максимумах") {
+	if !strings.Contains(got, "Сигналы на продажу") {
 		t.Errorf("expected sell-section header, got:\n%s", got)
 	}
 	if !strings.Contains(got, "Lukoil 🟠") {
@@ -119,7 +119,7 @@ func TestTrade_RendersSellSectionGold(t *testing.T) {
 	if !strings.Contains(got, "(p80=60.0, p90=70.0, p95=80.0)") {
 		t.Errorf("expected sell threshold suffix, got:\n%s", got)
 	}
-	if strings.Contains(got, "Акции находящиеся в локальных минимумах") {
+	if strings.Contains(got, "Сигналы на покупку") {
 		t.Errorf("expected no buy-section header when buyInfo is empty, got:\n%s", got)
 	}
 }
@@ -138,7 +138,7 @@ func TestTrade_RendersSellSectionGrowth(t *testing.T) {
 	if !strings.Contains(got, "Yandex 🔴") {
 		t.Errorf("expected Growth sell tier 🔴 for Yandex, got:\n%s", got)
 	}
-	if strings.Contains(got, "Акции находящиеся в локальных минимумах") {
+	if strings.Contains(got, "Сигналы на покупку") {
 		t.Errorf("expected no buy-section header when buyInfo is empty, got:\n%s", got)
 	}
 }
@@ -158,10 +158,10 @@ func TestTrade_BuyAndSellTogether(t *testing.T) {
 
 	got := Trade(buyInfo, sellInfo, dto.StrategyKindDividend, nil, thresholds, sellThresholds, nil, nil, nil)
 
-	if !strings.Contains(got, "Акции находящиеся в локальных минимумах") {
+	if !strings.Contains(got, "Сигналы на покупку") {
 		t.Errorf("buy section missing, got:\n%s", got)
 	}
-	if !strings.Contains(got, "Акции находящиеся в локальных максимумах") {
+	if !strings.Contains(got, "Сигналы на продажу") {
 		t.Errorf("sell section missing, got:\n%s", got)
 	}
 	if !strings.Contains(got, "Sber 🟢") {
@@ -169,63 +169,6 @@ func TestTrade_BuyAndSellTogether(t *testing.T) {
 	}
 	if !strings.Contains(got, "Phosagro 🚨") {
 		t.Errorf("expected 'Phosagro 🚨' in sell section, got:\n%s", got)
-	}
-}
-
-func TestRSIList_RendersAdaptiveTier(t *testing.T) {
-	info := domain.NewInfo()
-	info.WriteToMap("any-id", domain.Item{InstrumentName: "Lukoil", RSILength: 11, RSIValue: 28})
-
-	thresholds := map[string]dto.Thresholds{
-		"any-id": {P5: 24, P15: 31},
-	}
-
-	got := RSIList(info, dto.StrategyKindDividend, nil, thresholds, nil, nil, nil, nil)
-
-	if !strings.Contains(got, "Lukoil 🟡") {
-		t.Errorf("expected 'Lukoil 🟡' in RSIList, got:\n%s", got)
-	}
-	if !strings.Contains(got, "(p5=24.0, p15=31.0)") {
-		t.Errorf("expected threshold suffix in RSIList, got:\n%s", got)
-	}
-}
-
-func TestRSIList_RendersLegendAndPerShareBadges(t *testing.T) {
-	info := domain.NewInfo()
-	info.WriteToMap("buy-id", domain.Item{InstrumentName: "Yandex", RSILength: 11, RSIValue: 20})
-	info.WriteToMap("sell-id", domain.Item{InstrumentName: "Phosagro", RSILength: 11, RSIValue: 85})
-
-	trends := map[string]dto.TrendStatus{
-		"buy-id": dto.TrendWith,
-	}
-	thresholds := map[string]dto.Thresholds{
-		"buy-id": {P5: 24, P15: 31},
-	}
-	sellThresholds := map[string]dto.SellThresholds{
-		"sell-id": {P80: 60, P90: 70, P95: 80},
-	}
-	divergences := map[string]bool{"buy-id": true}
-	volumes := map[string]bool{"buy-id": true}
-	stops := map[string]dto.Stop{
-		"buy-id": {Price: 2410.5, DistancePct: 6.2},
-	}
-
-	got := RSIList(info, dto.StrategyKindGrowth, trends, thresholds, sellThresholds, divergences, volumes, stops)
-
-	if !strings.Contains(got, legendBlock) {
-		t.Errorf("expected legend block in RSIList output, got:\n%s", got)
-	}
-	if !strings.Contains(got, "Yandex 🟢 ✅ 📈 🔊") {
-		t.Errorf("expected 'Yandex 🟢 ✅ 📈 🔊' in RSIList, got:\n%s", got)
-	}
-	if !strings.Contains(got, "Phosagro 🚨") {
-		t.Errorf("expected sell tier 🚨 for Phosagro in RSIList, got:\n%s", got)
-	}
-	if !strings.Contains(got, "(p80=60.0, p90=70.0, p95=80.0)") {
-		t.Errorf("expected sell threshold suffix in RSIList, got:\n%s", got)
-	}
-	if !strings.Contains(got, "<b>Stop:</b> 2410.50 (−6.2%)") {
-		t.Errorf("expected stop line in RSIList, got:\n%s", got)
 	}
 }
 

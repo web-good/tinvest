@@ -27,7 +27,7 @@ func Trade(
 	b.WriteString(legendBlock)
 
 	if buyInfo != nil && len(buyInfo.Items()) > 0 {
-		b.WriteString("<u><b>Акции находящиеся в локальных минимумах:</b></u>\n\n\n<code>")
+		b.WriteString("<u><b>Сигналы на покупку:</b></u>\n\n\n<code>")
 		for id, log := range buyInfo.Items() {
 			trendMark := trends[id].Mark()
 			if trendMark != "" {
@@ -42,7 +42,7 @@ func Trade(
 	}
 
 	if sellInfo != nil && len(sellInfo.Items()) > 0 {
-		b.WriteString("<u><b>Акции находящиеся в локальных максимумах:</b></u>\n\n\n<code>")
+		b.WriteString("<u><b>Сигналы на продажу:</b></u>\n\n\n<code>")
 		for id, log := range sellInfo.Items() {
 			b.WriteString("• <b>Акция:</b> " + log.InstrumentName + sellTierEmoji(log.RSIValue, sellThresholds[id]) + "\n")
 			b.WriteString("  <b>RSI Value:</b>" + strconv.Itoa(int(log.RSIValue)) + sellThresholdSuffix(sellThresholds[id]) + "\n")
