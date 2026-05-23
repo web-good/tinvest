@@ -31,7 +31,7 @@ const candleLookbackWeeks = 260
 const divergenceFractalK = 2
 
 // ErrAdaptiveInsufficientHistory is returned when a share has fewer than
-// settings.AdaptiveWindowMin closed weekly RSI values available.
+// settings.AdaptiveWindowMin weekly RSI values available.
 var ErrAdaptiveInsufficientHistory = errors.New("adaptive tiers: insufficient RSI history")
 
 func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
@@ -60,9 +60,9 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 			logger.ErrorContext(ctx, fmt.Errorf("get candles for %s: %w", share.Name, candleErr).Error())
 			continue
 		}
-		closed := compactCandles(candles)
+		weekly := compactCandles(candles)
 
-		sig, detectErr := Detect(closed, share.RSILength, in.Kind, in.UseTrendFilter, settings)
+		sig, detectErr := Detect(weekly, share.RSILength, in.Kind, in.UseTrendFilter, settings)
 		if errors.Is(detectErr, ErrAdaptiveInsufficientHistory) {
 			logger.InfoContext(ctx, "adaptive tiers: insufficient history", "share", share.Name)
 			continue
@@ -158,14 +158,14 @@ func (s *service) fetchWeeklyCandles(ctx context.Context, shareID string, interv
 	)
 }
 
-// adaptiveRSIForShare computes the share's last-closed-week RSI and the
+// adaptiveRSIForShare computes the share's last weekly RSI and the
 // trimmed historical RSI slice used for percentile calculations. Returns
 // ErrAdaptiveInsufficientHistory if fewer than minWin RSI values are
 // available; trims the head to maxWin if longer. Threshold computation
 // (adaptiveThresholds / adaptiveSellThresholds) is the caller's responsibility.
-func adaptiveRSIForShare(closedCandles []*model.CandleItemTechAnalyse, rsiPeriod, minWin, maxWin int) (float64, []float64, error) {
-	closes := make([]float64, len(closedCandles))
-	for i, c := range closedCandles {
+func adaptiveRSIForShare(candles []*model.CandleItemTechAnalyse, rsiPeriod, minWin, maxWin int) (float64, []float64, error) {
+	closes := make([]float64, len(candles))
+	for i, c := range candles {
 		closes[i] = utils.CombinePrice(c.Close.Units, c.Close.Nano)
 	}
 	full := computeRSISeries(closes, rsiPeriod)
@@ -182,23 +182,23 @@ func adaptiveRSIForShare(closedCandles []*model.CandleItemTechAnalyse, rsiPeriod
 	return rsi[len(rsi)-1], rsi, nil
 }
 
-// lowsAlignedToRSI extracts Low values from closedCandles and trims the head
+// lowsAlignedToRSI extracts Low values from candles and trims the head
 // so the returned slice aligns 1-to-1 with the rsiSeries returned by
 // adaptiveRSIForShare. The result has the same length as rsiSeries (or
 // shorter, if there are fewer candles available — defensive).
-func lowsAlignedToRSI(closedCandles []*model.CandleItemTechAnalyse, rsiPeriod int, rsiSeries []float64) []float64 {
+func lowsAlignedToRSI(candles []*model.CandleItemTechAnalyse, rsiPeriod int, rsiSeries []float64) []float64 {
 	// adaptiveRSIForShare drops rsiPeriod warmup candles, then potentially
 	// keeps only the last settings.AdaptiveWindowMax. Mirror the same trim here.
 	start := rsiPeriod
-	if len(closedCandles)-rsiPeriod > len(rsiSeries) {
-		start = len(closedCandles) - len(rsiSeries)
+	if len(candles)-rsiPeriod > len(rsiSeries) {
+		start = len(candles) - len(rsiSeries)
 	}
 	if start < 0 {
 		start = 0
 	}
-	out := make([]float64, 0, len(closedCandles)-start)
-	for i := start; i < len(closedCandles); i++ {
-		out = append(out, utils.CombinePrice(closedCandles[i].Low.Units, closedCandles[i].Low.Nano))
+	out := make([]float64, 0, len(candles)-start)
+	for i := start; i < len(candles); i++ {
+		out = append(out, utils.CombinePrice(candles[i].Low.Units, candles[i].Low.Nano))
 	}
 	return out
 }
