@@ -35,9 +35,10 @@ func computeEMA(closes []float64, period int) []float64 {
 	return out
 }
 
-// trendStatusFromClosed is the closed-candle-aware variant used by Detect
-// (which receives already-trimmed candles). Equivalent to
-// trendStatusFromCandles but skips the closedWeeklyCandles filter.
+// trendStatusFromClosed computes the trend status from an ordered weekly
+// candle slice: it compares the last close against an EMA of the given
+// period over all closes. Returns ErrInsufficientHistory if the slice is
+// shorter than period.
 func trendStatusFromClosed(closed []*model.CandleItemTechAnalyse, period int) (dto.TrendStatus, error) {
 	if len(closed) < period {
 		return dto.TrendUnknown, ErrInsufficientHistory
