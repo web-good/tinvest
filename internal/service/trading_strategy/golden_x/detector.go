@@ -7,10 +7,11 @@ import (
 	"tinvest/pkg/indicators"
 )
 
-// Detect runs the full Golden X signal pipeline against an already-closed
-// weekly candle history for a single share. It is pure: no I/O, no time
-// dependency, no telemetry. Callers (service.Trade and backtest.Replay)
-// are responsible for trimming to closed weeks before invoking.
+// Detect runs the full Golden X signal pipeline against an ordered weekly
+// candle history for a single share. It is pure: no I/O, no time
+// dependency, no telemetry. The caller controls slice composition:
+// service.Trade includes the currently forming weekly candle so indicators
+// react intra-week; backtest.Replay supplies only closed historical bars.
 //
 // Returns ErrAdaptiveInsufficientHistory or ErrInsufficientHistory when
 // history is too short for the adaptive RSI window or the EMA200 trend

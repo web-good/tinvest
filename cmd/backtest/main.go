@@ -194,9 +194,11 @@ func (g *grpcFetcher) Fetch(ctx context.Context, shareID string) ([]*model.Candl
 	)
 }
 
+// filterClosed drops candles in the currently-open week, so backtest replays
+// strictly closed historical bars. Live prod no longer applies this filter —
+// see internal/service/trading_strategy/golden_x/trade.go and trend_filter.go.
 func filterClosed(candles []*model.CandleItemTechAnalyse, loc *time.Location) []*model.CandleItemTechAnalyse {
 	now := time.Now().In(loc)
-	// Reuse the same Monday-00:00 cutoff prod uses.
 	weekday := (int(now.Weekday()) + 6) % 7
 	y, m, d := now.Date()
 	cutoff := time.Date(y, m, d-weekday, 0, 0, 0, 0, loc)
