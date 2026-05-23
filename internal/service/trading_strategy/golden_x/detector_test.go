@@ -260,4 +260,41 @@ func TestDetect(t *testing.T) {
 			})
 		}
 	})
+
+	t.Run("forming_candle_shifts_rsi", func(t *testing.T) {
+		// Build two identical 120-week series: flat at 100 except the last
+		// candle. In one series the last close stays at 100; in the other we
+		// flag it IsComplete=false and drop the close to 50. Detect must
+		// observe a strictly lower RSI in the second series — proof that the
+		// forming candle participates in the calculation rather than being
+		// filtered out.
+		baseline := buildWeeklyCandles(base, 120, func(i int) int64 {
+			if i == 119 {
+				return 100
+			}
+			return 100
+		})
+		withForming := buildWeeklyCandles(base, 120, func(i int) int64 {
+			if i == 119 {
+				return 50
+			}
+			return 100
+		})
+		withForming[119].IsComplete = false
+
+		sigBaseline, err := Detect(baseline, 7, dto.StrategyKindDividend, false, DefaultSettings())
+		if err != nil {
+			t.Fatalf("baseline Detect: unexpected error: %v", err)
+		}
+		sigForming, err := Detect(withForming, 7, dto.StrategyKindDividend, false, DefaultSettings())
+		if err != nil {
+			t.Fatalf("forming Detect: unexpected error: %v", err)
+		}
+		if !(sigForming.RSI < sigBaseline.RSI) {
+			t.Fatalf("forming candle must lower RSI: baseline=%.4f forming=%.4f", sigBaseline.RSI, sigForming.RSI)
+		}
+		if sigForming.LastClose != 50 {
+			t.Fatalf("LastClose must reflect forming candle close (50), got %.2f", sigForming.LastClose)
+		}
+	})
 }
