@@ -268,12 +268,7 @@ func TestDetect(t *testing.T) {
 		// observe a strictly lower RSI in the second series — proof that the
 		// forming candle participates in the calculation rather than being
 		// filtered out.
-		baseline := buildWeeklyCandles(base, 120, func(i int) int64 {
-			if i == 119 {
-				return 100
-			}
-			return 100
-		})
+		baseline := buildWeeklyCandles(base, 120, func(int) int64 { return 100 })
 		withForming := buildWeeklyCandles(base, 120, func(i int) int64 {
 			if i == 119 {
 				return 50
@@ -290,7 +285,7 @@ func TestDetect(t *testing.T) {
 		if err != nil {
 			t.Fatalf("forming Detect: unexpected error: %v", err)
 		}
-		if !(sigForming.RSI < sigBaseline.RSI) {
+		if sigForming.RSI >= sigBaseline.RSI {
 			t.Fatalf("forming candle must lower RSI: baseline=%.4f forming=%.4f", sigBaseline.RSI, sigForming.RSI)
 		}
 		if sigForming.LastClose != 50 {
