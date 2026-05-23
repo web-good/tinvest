@@ -7,6 +7,17 @@ import (
 	"tinvest/internal/service/trading_strategy/golden_x/dto"
 )
 
+type alertTier int
+
+const (
+	tierNone       alertTier = iota
+	tierYellow               // buy: RSI < p15
+	tierGreen                // buy: RSI < p5
+	tierSellYellow           // sell (Gold only): RSI > p80
+	tierSellOrange           // sell: RSI > p90 (Growth's single tier)
+	tierSellRed              // sell (Gold only): RSI > p95
+)
+
 // percentile returns the R-7 (linear-interpolation) percentile of a sorted
 // (ascending) slice. This is the default method in numpy.percentile and Excel.
 // p is in [0, 100]. Empty input returns 0.

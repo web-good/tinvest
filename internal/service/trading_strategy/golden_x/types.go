@@ -16,7 +16,6 @@ type service struct {
 	instrumentServiceGrpcClient grpc.InstrumentsServiceClient
 	marketDataServiceGrpcClient grpc.MarketDataServiceClient
 	tgClient                    telegram.Client
-	state                       *alertState
 }
 
 func NewService(
@@ -28,6 +27,5 @@ func NewService(
 		instrumentServiceGrpcClient: instrumentsServiceClient,
 		marketDataServiceGrpcClient: marketDataServiceGrpcClient,
 		tgClient:                    tgClient,
-		state:                       newAlertState(),
 	}
 }

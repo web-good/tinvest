@@ -92,31 +92,15 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 		buyTier := tierFromAdaptive(sig.RSI, sig.Thresholds.P5, sig.Thresholds.P15)
 		sellTier := sellTierFromAdaptive(sig.RSI, sig.SellThresholds, in.Kind)
 
-		// Buy and sell zones are mutually exclusive on RSI — picks whichever
-		// (if any) is non-None.
-		finalTier := buyTier
-		if sellTier != tierNone {
-			finalTier = sellTier
-		}
-
-		snap := alertSnapshot{
-			tier:       finalTier,
-			trendOK:    sig.TrendStatus == dto.TrendWith,
-			divergence: sig.DivergenceOK,
-			volumeOK:   sig.VolumeOK,
-		}
-		if !s.state.ShouldAlert(share.ID, snap) {
-			continue
-		}
-
 		item := domain.Item{
 			InstrumentName: share.Name,
 			RSIValue:       sig.RSI,
 		}
-		switch finalTier {
-		case tierYellow, tierGreen:
+		// Buy and sell zones are mutually exclusive — RSI can't be both < p15 and > p80.
+		switch {
+		case buyTier != tierNone:
 			buyInfo.WriteToMap(share.ID, item)
-		case tierSellYellow, tierSellOrange, tierSellRed:
+		case sellTier != tierNone:
 			sellInfo.WriteToMap(share.ID, item)
 		}
 	}
