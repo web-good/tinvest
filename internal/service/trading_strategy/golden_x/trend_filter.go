@@ -2,7 +2,6 @@ package golden_x
 
 import (
 	"errors"
-	"time"
 
 	"tinvest/internal/model"
 	"tinvest/internal/service/trading_strategy/golden_x/dto"
@@ -36,14 +35,6 @@ func computeEMA(closes []float64, period int) []float64 {
 	return out
 }
 
-// trendStatusFromCandles computes the trend status using the last closed
-// weekly candle (Monday 00:00 in loc as the week boundary) and an EMA of the
-// given period over closed-week closes. Returns ErrInsufficientHistory when
-// fewer than `period` closed weekly candles are available.
-func trendStatusFromCandles(candles []*model.CandleItemTechAnalyse, period int, now time.Time, loc *time.Location) (dto.TrendStatus, error) {
-	return trendStatusFromClosed(closedWeeklyCandles(candles, now, loc), period)
-}
-
 // trendStatusFromClosed is the closed-candle-aware variant used by Detect
 // (which receives already-trimmed candles). Equivalent to
 // trendStatusFromCandles but skips the closedWeeklyCandles filter.
@@ -64,19 +55,17 @@ func trendStatusFromClosed(closed []*model.CandleItemTechAnalyse, period int) (d
 	return dto.TrendAgainst, nil
 }
 
-// closedWeeklyCandles returns the input slice filtered to candles whose Time
-// is strictly before the current week (Monday 00:00 in loc), preserving order.
-// nil entries are skipped.
-func closedWeeklyCandles(candles []*model.CandleItemTechAnalyse, now time.Time, loc *time.Location) []*model.CandleItemTechAnalyse {
-	currentWeekStart := startOfWeek(now, loc)
+// compactCandles drops nil entries from candles, preserving order.
+// It is the only sanitization the prod path needs before handing the slice
+// to Detect — the current forming candle (IsComplete=false) is intentionally
+// kept so indicators reflect intra-week price movement.
+func compactCandles(candles []*model.CandleItemTechAnalyse) []*model.CandleItemTechAnalyse {
 	out := make([]*model.CandleItemTechAnalyse, 0, len(candles))
 	for _, c := range candles {
 		if c == nil {
 			continue
 		}
-		if c.Time.Before(currentWeekStart) {
-			out = append(out, c)
-		}
+		out = append(out, c)
 	}
 	return out
 }

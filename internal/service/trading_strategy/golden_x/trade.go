@@ -60,7 +60,7 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 			logger.ErrorContext(ctx, fmt.Errorf("get candles for %s: %w", share.Name, candleErr).Error())
 			continue
 		}
-		closed := closedWeeklyCandles(candles, dateNow, loc)
+		closed := compactCandles(candles)
 
 		sig, detectErr := Detect(closed, share.RSILength, in.Kind, in.UseTrendFilter, settings)
 		if errors.Is(detectErr, ErrAdaptiveInsufficientHistory) {
