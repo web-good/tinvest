@@ -232,10 +232,11 @@ func (a *App) runProd(ctx context.Context) {
 		err := scheduler.NewSchedulerService(a.sp.GetGoldenXTradingService(), tgBot).Trade(
 			ctx,
 			goldenx.Trade{
-				Kind:      goldenx.StrategyKindDividend,
-				Interval:  enum.Week1,
-				Scheduler: "0 */5 * * *",
-				ShareList: *a.collection.GoldInstruments,
+				Kind:           goldenx.StrategyKindDividend,
+				Interval:       enum.Week1,
+				Scheduler:      "0 */5 * * *",
+				ShareList:      *a.collection.GoldInstruments,
+				UseTrendFilter: true,
 			},
 		)
 
