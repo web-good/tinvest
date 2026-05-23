@@ -27,8 +27,8 @@
 | `VolumeSMALookback` | int | **20** | Окно SMA для проверки объёма | `detector.go:63` |
 | `VolumeMultiplier` | float64 | **1.5** | Множитель: `Volume > 1.5 × SMA20` → подтверждение 🔊 | `detector.go:63` |
 | `TrendEMAPeriod` | int | **200** | Период EMA для фильтра тренда (только Growth) | `trend_filter.go:50` |
-| `AdaptiveWindowMin` | int | **100** | Минимум закрытых недель RSI для адаптивных перцентилей; меньше — `ErrAdaptiveInsufficientHistory` | `detector.go:25` |
-| `AdaptiveWindowMax` | int | **200** | Максимум закрытых недель RSI; история обрезается до последних N значений | `detector.go:25` |
+| `AdaptiveWindowMin` | int | **100** | Минимум недель RSI для адаптивных перцентилей (включая текущую формирующуюся); меньше — `ErrAdaptiveInsufficientHistory` | `detector.go:25` |
+| `AdaptiveWindowMax` | int | **200** | Максимум недель RSI (включая текущую формирующуюся); история обрезается до последних N значений | `detector.go:25` |
 | `DivergenceLookbackWeeks` | int | **52** | Глубина поиска фрактального минимума для дивергенции | `detector.go:50` |
 
 ## Per-share параметр: `RSILength`
