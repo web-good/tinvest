@@ -77,7 +77,6 @@ func (*ServiceProvider) GetGoldenXTradingService() golden_x.GoldenX {
 		grpcClient, _ := serviceProvider.GetGrpcClient()
 		tgClient, _ := serviceProvider.GetTelegramBotClient()
 		serviceProvider.service.goldenXTradingService = golden_x.NewService(
-			grpcClient.InstrumentsServiceClient(),
 			grpcClient.MarketDataServiceClient(),
 			tgClient,
 		)

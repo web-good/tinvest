@@ -1,10 +1,10 @@
-package golden_x
+package percentile
 
 import (
 	"math"
 	"testing"
 
-	"tinvest/internal/service/trading_strategy/golden_x/dto"
+	"tinvest/internal/service/trading_strategy/golden_x/model"
 )
 
 func TestPercentile_R7(t *testing.T) {
@@ -55,9 +55,9 @@ func TestPercentile_R7(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := percentile(tc.sorted, tc.p)
+			got := r7(tc.sorted, tc.p)
 			if math.Abs(got-tc.want) > 1e-9 {
-				t.Fatalf("percentile(%v, %v) = %v, want %v", tc.sorted, tc.p, got, tc.want)
+				t.Fatalf("r7(%v, %v) = %v, want %v", tc.sorted, tc.p, got, tc.want)
 			}
 		})
 	}
@@ -78,19 +78,19 @@ func TestTierFromAdaptive(t *testing.T) {
 		rsi  float64
 		p5   float64
 		p15  float64
-		want alertTier
+		want AlertTier
 	}{
-		{"rsi strictly below p5 → Green", 20, 24, 31, tierGreen},
-		{"rsi == p5 → Yellow (strict <)", 24, 24, 31, tierYellow},
-		{"rsi between p5 and p15 → Yellow", 28, 24, 31, tierYellow},
-		{"rsi == p15 → None (strict <)", 31, 24, 31, tierNone},
-		{"rsi above p15 → None", 40, 24, 31, tierNone},
+		{"rsi strictly below p5 → Green", 20, 24, 31, TierGreen},
+		{"rsi == p5 → Yellow (strict <)", 24, 24, 31, TierYellow},
+		{"rsi between p5 and p15 → Yellow", 28, 24, 31, TierYellow},
+		{"rsi == p15 → None (strict <)", 31, 24, 31, TierNone},
+		{"rsi above p15 → None", 40, 24, 31, TierNone},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := tierFromAdaptive(tc.rsi, tc.p5, tc.p15)
+			got := TierFromAdaptive(tc.rsi, tc.p5, tc.p15)
 			if got != tc.want {
-				t.Fatalf("tierFromAdaptive(%v, %v, %v) = %v, want %v", tc.rsi, tc.p5, tc.p15, got, tc.want)
+				t.Fatalf("TierFromAdaptive(%v, %v, %v) = %v, want %v", tc.rsi, tc.p5, tc.p15, got, tc.want)
 			}
 		})
 	}
@@ -100,7 +100,7 @@ func TestAdaptiveThresholds(t *testing.T) {
 	// percentile([1..100], 5)  = 5.95
 	// percentile([1..100], 15) = 15.85
 	rsi := rangeFloat(1, 100)
-	got := adaptiveThresholds(rsi, 5, 15)
+	got := AdaptiveThresholds(rsi, 5, 15)
 	if math.Abs(got.P5-5.95) > 1e-9 {
 		t.Errorf("P5 = %v, want 5.95", got.P5)
 	}
@@ -114,7 +114,7 @@ func TestAdaptiveThresholds_DoesNotMutateInput(t *testing.T) {
 	// scrambling the caller's slice.
 	in := []float64{50, 10, 30, 20, 40}
 	original := append([]float64(nil), in...)
-	_ = adaptiveThresholds(in, 5, 15)
+	_ = AdaptiveThresholds(in, 5, 15)
 	for i := range in {
 		if in[i] != original[i] {
 			t.Fatalf("input mutated at %d: got %v, want %v", i, in[i], original[i])
@@ -128,7 +128,7 @@ func TestAdaptiveSellThresholds(t *testing.T) {
 	//   percentile([1..100], 90) = 1 + 0.90*99 = 90.10
 	//   percentile([1..100], 95) = 1 + 0.95*99 = 95.05
 	rsi := rangeFloat(1, 100)
-	got := adaptiveSellThresholds(rsi, 80, 90, 95)
+	got := AdaptiveSellThresholds(rsi, 80, 90, 95)
 	if math.Abs(got.P80-80.20) > 1e-9 {
 		t.Errorf("P80 = %v, want 80.20", got.P80)
 	}
@@ -143,7 +143,7 @@ func TestAdaptiveSellThresholds(t *testing.T) {
 func TestAdaptiveSellThresholds_DoesNotMutateInput(t *testing.T) {
 	in := []float64{50, 10, 30, 20, 40, 90, 70, 60, 80, 100}
 	original := append([]float64(nil), in...)
-	_ = adaptiveSellThresholds(in, 80, 90, 95)
+	_ = AdaptiveSellThresholds(in, 80, 90, 95)
 	for i := range in {
 		if in[i] != original[i] {
 			t.Fatalf("input mutated at %d: got %v, want %v", i, in[i], original[i])
@@ -152,55 +152,55 @@ func TestAdaptiveSellThresholds_DoesNotMutateInput(t *testing.T) {
 }
 
 func TestSellTierFromAdaptive_Gold(t *testing.T) {
-	st := dto.SellThresholds{P80: 60, P90: 70, P95: 80}
+	st := model.SellThresholds{P80: 60, P90: 70, P95: 80}
 	tests := []struct {
 		name string
 		rsi  float64
-		want alertTier
+		want AlertTier
 	}{
-		{"rsi below p80 → None", 59, tierNone},
-		{"rsi == p80 → None (strict >)", 60, tierNone},
-		{"rsi between p80 and p90 → SellYellow", 65, tierSellYellow},
-		{"rsi == p90 → SellYellow (strict >)", 70, tierSellYellow},
-		{"rsi between p90 and p95 → SellOrange", 75, tierSellOrange},
-		{"rsi == p95 → SellOrange (strict >)", 80, tierSellOrange},
-		{"rsi above p95 → SellRed", 85, tierSellRed},
+		{"rsi below p80 → None", 59, TierNone},
+		{"rsi == p80 → None (strict >)", 60, TierNone},
+		{"rsi between p80 and p90 → SellYellow", 65, TierSellYellow},
+		{"rsi == p90 → SellYellow (strict >)", 70, TierSellYellow},
+		{"rsi between p90 and p95 → SellOrange", 75, TierSellOrange},
+		{"rsi == p95 → SellOrange (strict >)", 80, TierSellOrange},
+		{"rsi above p95 → SellRed", 85, TierSellRed},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := sellTierFromAdaptive(tc.rsi, st, dto.StrategyKindDividend)
+			got := SellTierFromAdaptive(tc.rsi, st, model.StrategyKindDividend)
 			if got != tc.want {
-				t.Fatalf("sellTierFromAdaptive(%v, gold) = %v, want %v", tc.rsi, got, tc.want)
+				t.Fatalf("SellTierFromAdaptive(%v, gold) = %v, want %v", tc.rsi, got, tc.want)
 			}
 		})
 	}
 }
 
 func TestSellTierFromAdaptive_Growth(t *testing.T) {
-	st := dto.SellThresholds{P80: 60, P90: 70, P95: 80}
+	st := model.SellThresholds{P80: 60, P90: 70, P95: 80}
 	tests := []struct {
 		name string
 		rsi  float64
-		want alertTier
+		want AlertTier
 	}{
-		{"rsi below p90 → None", 65, tierNone},
-		{"rsi == p90 → None (strict >)", 70, tierNone},
-		{"rsi above p90 but below p95 → SellOrange", 75, tierSellOrange},
-		{"rsi above p95 → SellOrange (single tier for Growth)", 90, tierSellOrange},
+		{"rsi below p90 → None", 65, TierNone},
+		{"rsi == p90 → None (strict >)", 70, TierNone},
+		{"rsi above p90 but below p95 → SellOrange", 75, TierSellOrange},
+		{"rsi above p95 → SellOrange (single tier for Growth)", 90, TierSellOrange},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := sellTierFromAdaptive(tc.rsi, st, dto.StrategyKindGrowth)
+			got := SellTierFromAdaptive(tc.rsi, st, model.StrategyKindGrowth)
 			if got != tc.want {
-				t.Fatalf("sellTierFromAdaptive(%v, growth) = %v, want %v", tc.rsi, got, tc.want)
+				t.Fatalf("SellTierFromAdaptive(%v, growth) = %v, want %v", tc.rsi, got, tc.want)
 			}
 		})
 	}
 }
 
 func TestSellTierFromAdaptive_UnknownKindReturnsNone(t *testing.T) {
-	st := dto.SellThresholds{P80: 60, P90: 70, P95: 80}
-	if got := sellTierFromAdaptive(99, st, dto.StrategyKindUnknown); got != tierNone {
-		t.Fatalf("sellTierFromAdaptive(unknown) = %v, want tierNone", got)
+	st := model.SellThresholds{P80: 60, P90: 70, P95: 80}
+	if got := SellTierFromAdaptive(99, st, model.StrategyKindUnknown); got != TierNone {
+		t.Fatalf("SellTierFromAdaptive(unknown) = %v, want TierNone", got)
 	}
 }

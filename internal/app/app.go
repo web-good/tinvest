@@ -9,6 +9,7 @@ import (
 	analyzescheduler "tinvest/internal/service/portfolio/analyze/scheduler"
 	bondsscheduler "tinvest/internal/service/trading_strategy/bonds/scheduler"
 	goldenx "tinvest/internal/service/trading_strategy/golden_x/dto"
+	gxmodel "tinvest/internal/service/trading_strategy/golden_x/model"
 	"tinvest/internal/service/trading_strategy/golden_x/scheduler"
 	"tinvest/internal/service_provider"
 	"tinvest/pkg/closer"
@@ -175,7 +176,7 @@ func (a *App) runDev(ctx context.Context) {
 		err := a.sp.GetGoldenXTradingService().Trade(
 			ctx,
 			goldenx.Trade{
-				Kind:           goldenx.StrategyKindGrowth,
+				Kind:           gxmodel.StrategyKindGrowth,
 				Interval:       enum.Week1,
 				Scheduler:      "* * * * *",
 				ShareList:      *a.collection.GrowthShare,
@@ -228,29 +229,36 @@ func (a *App) runProd(ctx context.Context) {
 	}()
 	go func() {
 		defer wg.Done()
-		tgBot, _ := a.sp.GetTelegramBotClient()
+		tgBot, tgErr := a.sp.GetTelegramBotClient()
+		if tgErr != nil {
+			logger.ErrorContext(ctx, "telegram bot init failed for golden X dividend", tgErr.Error())
+			return
+		}
 		err := scheduler.NewSchedulerService(a.sp.GetGoldenXTradingService(), tgBot).Trade(
 			ctx,
 			goldenx.Trade{
-				Kind:           goldenx.StrategyKindDividend,
+				Kind:           gxmodel.StrategyKindDividend,
 				Interval:       enum.Week1,
 				Scheduler:      "0 */5 * * *",
 				ShareList:      *a.collection.GoldInstruments,
 				UseTrendFilter: true,
 			},
 		)
-
 		if err != nil {
 			logger.ErrorContext(ctx, "Error in worker golden X strategy ShareTip:1", err.Error())
 		}
 	}()
 	go func() {
 		defer wg.Done()
-		tgBot, _ := a.sp.GetTelegramBotClient()
+		tgBot, tgErr := a.sp.GetTelegramBotClient()
+		if tgErr != nil {
+			logger.ErrorContext(ctx, "telegram bot init failed for golden X growth", tgErr.Error())
+			return
+		}
 		err := scheduler.NewSchedulerService(a.sp.GetGoldenXTradingService(), tgBot).Trade(
 			ctx,
 			goldenx.Trade{
-				Kind:           goldenx.StrategyKindGrowth,
+				Kind:           gxmodel.StrategyKindGrowth,
 				Interval:       enum.Week1,
 				Scheduler:      "0 */5 * * *",
 				ShareList:      *a.collection.GrowthShare,

@@ -1,6 +1,5 @@
 // Package shares is the source-of-truth share list for the Golden X
-// strategy. Importable from prod (cmd) and backtest (cmd/backtest)
-// without dragging in package app.
+// strategy. Importable from prod (cmd) without dragging in package app.
 package shares
 
 import "tinvest/pkg/collection"

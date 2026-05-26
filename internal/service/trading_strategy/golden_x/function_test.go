@@ -8,7 +8,7 @@ import (
 
 	"tinvest/internal/domain/ema"
 	"tinvest/internal/model"
-	"tinvest/internal/service/trading_strategy/golden_x/dto"
+	gxmodel "tinvest/internal/service/trading_strategy/golden_x/model"
 )
 
 func TestComputeEMA(t *testing.T) {
@@ -65,36 +65,36 @@ func TestTrendStatusFromCandles(t *testing.T) {
 		return out
 	}
 
-	t.Run("rising series — close above EMA → dto.TrendWith", func(t *testing.T) {
+	t.Run("rising series — close above EMA → gxmodel.TrendWith", func(t *testing.T) {
 		candles := build(10, func(i int) int64 { return int64(100 + i*5) })
 		got, err := trendStatusFromClosed(candles, 3)
 		if err != nil {
 			t.Fatalf("unexpected err: %v", err)
 		}
-		if got != dto.TrendWith {
-			t.Fatalf("got %v, want dto.TrendWith", got)
+		if got != gxmodel.TrendWith {
+			t.Fatalf("got %v, want gxmodel.TrendWith", got)
 		}
 	})
 
-	t.Run("falling series — close below EMA → dto.TrendAgainst", func(t *testing.T) {
+	t.Run("falling series — close below EMA → gxmodel.TrendAgainst", func(t *testing.T) {
 		candles := build(10, func(i int) int64 { return int64(200 - i*5) })
 		got, err := trendStatusFromClosed(candles, 3)
 		if err != nil {
 			t.Fatalf("unexpected err: %v", err)
 		}
-		if got != dto.TrendAgainst {
-			t.Fatalf("got %v, want dto.TrendAgainst", got)
+		if got != gxmodel.TrendAgainst {
+			t.Fatalf("got %v, want gxmodel.TrendAgainst", got)
 		}
 	})
 
-	t.Run("close == EMA → dto.TrendAgainst (strict >)", func(t *testing.T) {
+	t.Run("close == EMA → gxmodel.TrendAgainst (strict >)", func(t *testing.T) {
 		candles := build(10, func(int) int64 { return 100 })
 		got, err := trendStatusFromClosed(candles, 3)
 		if err != nil {
 			t.Fatalf("unexpected err: %v", err)
 		}
-		if got != dto.TrendAgainst {
-			t.Fatalf("got %v, want dto.TrendAgainst", got)
+		if got != gxmodel.TrendAgainst {
+			t.Fatalf("got %v, want gxmodel.TrendAgainst", got)
 		}
 	})
 
@@ -132,20 +132,20 @@ func TestTrendStatusFromCandles(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected err: %v", err)
 		}
-		if got != dto.TrendWith {
-			t.Fatalf("got %v, want dto.TrendWith (forming week must influence trend)", got)
+		if got != gxmodel.TrendWith {
+			t.Fatalf("got %v, want gxmodel.TrendWith (forming week must influence trend)", got)
 		}
 	})
 }
 
 func TestTrendStatus_Mark(t *testing.T) {
 	tests := []struct {
-		status dto.TrendStatus
+		status gxmodel.TrendStatus
 		want   string
 	}{
-		{dto.TrendWith, "✅"},
-		{dto.TrendAgainst, "🚫"},
-		{dto.TrendUnknown, ""},
+		{gxmodel.TrendWith, "✅"},
+		{gxmodel.TrendAgainst, "🚫"},
+		{gxmodel.TrendUnknown, ""},
 	}
 	for _, tc := range tests {
 		if got := tc.status.Mark(); got != tc.want {

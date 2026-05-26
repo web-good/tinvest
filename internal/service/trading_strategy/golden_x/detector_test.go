@@ -6,7 +6,8 @@ import (
 	"time"
 
 	"tinvest/internal/model"
-	"tinvest/internal/service/trading_strategy/golden_x/dto"
+	gxmodel "tinvest/internal/service/trading_strategy/golden_x/model"
+	"tinvest/internal/service/trading_strategy/golden_x/factory"
 )
 
 // ohlcCandle builds a CandleItemTechAnalyse with full OHLCV data.
@@ -34,25 +35,6 @@ func buildWeeklyCandles(baseTime time.Time, n int, closeFn func(i int) int64) []
 	return out
 }
 
-// buildWeeklyCandlesOHLCV is like buildWeeklyCandles but lets caller supply
-// OHLCV functions for more realistic ATR and volume data.
-func buildWeeklyCandlesOHLCV(
-	baseTime time.Time,
-	n int,
-	closeFn func(i int) int64,
-	highFn func(i int, c int64) int64,
-	lowFn func(i int, c int64) int64,
-	volFn func(i int) int64,
-) []*model.CandleItemTechAnalyse {
-	out := make([]*model.CandleItemTechAnalyse, n)
-	for i := 0; i < n; i++ {
-		t := baseTime.AddDate(0, 0, -7*(n-1-i))
-		c := closeFn(i)
-		out[i] = ohlcCandle(t, c, highFn(i, c), lowFn(i, c), c, volFn(i))
-	}
-	return out
-}
-
 func TestDetect(t *testing.T) {
 	// Use a fixed "now" so candle timestamps are always in the past (closed).
 	// All candles will be timestamped well before this date.
@@ -61,7 +43,7 @@ func TestDetect(t *testing.T) {
 	t.Run("insufficient_history", func(t *testing.T) {
 		// 50 candles with rsiPeriod=7: 50-7=43 RSI values < settings.AdaptiveWindowMin (default 100)
 		candles := buildWeeklyCandles(base, 50, func(i int) int64 { return int64(100 + i) })
-		_, err := Detect(candles, 7, dto.StrategyKindDividend, false, DefaultSettings())
+		_, err := Detect(candles, 7, gxmodel.StrategyKindDividend, false, factory.DefaultSettings())
 		if !errors.Is(err, ErrAdaptiveInsufficientHistory) {
 			t.Fatalf("expected ErrAdaptiveInsufficientHistory, got %v", err)
 		}
@@ -71,7 +53,7 @@ func TestDetect(t *testing.T) {
 		// Strictly rising series → RSI is persistently high → above P15 → no buy.
 		// 120 candles with rsiPeriod=7: 113 RSI values, well above settings.AdaptiveWindowMin.
 		candles := buildWeeklyCandles(base, 120, func(i int) int64 { return int64(100 + i*5) })
-		sig, err := Detect(candles, 7, dto.StrategyKindDividend, false, DefaultSettings())
+		sig, err := Detect(candles, 7, gxmodel.StrategyKindDividend, false, factory.DefaultSettings())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -80,13 +62,6 @@ func TestDetect(t *testing.T) {
 		}
 		if sig.YellowBuy {
 			t.Error("YellowBuy should be false for rising series")
-		}
-		// No buy means Stop should be zero value.
-		if sig.Stop != (dto.Stop{}) {
-			t.Errorf("Stop should be zero when no buy, got %+v", sig.Stop)
-		}
-		if sig.LastClose <= 0 {
-			t.Error("LastClose should be positive even on no-buy")
 		}
 	})
 
@@ -99,7 +74,7 @@ func TestDetect(t *testing.T) {
 		candles := buildWeeklyCandles(base, n, func(i int) int64 {
 			return int64(100 + i*5)
 		})
-		sig, err := Detect(candles, 7, dto.StrategyKindDividend, false, DefaultSettings())
+		sig, err := Detect(candles, 7, gxmodel.StrategyKindDividend, false, factory.DefaultSettings())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -133,7 +108,7 @@ func TestDetect(t *testing.T) {
 			dropDepth := int64(i - 180)
 			return int64(1000+180*3) - dropDepth*80
 		})
-		sig, err := Detect(candles, 7, dto.StrategyKindDividend, false, DefaultSettings())
+		sig, err := Detect(candles, 7, gxmodel.StrategyKindDividend, false, factory.DefaultSettings())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -145,19 +120,16 @@ func TestDetect(t *testing.T) {
 		if sig.GreenBuy && sig.YellowBuy {
 			t.Error("GreenBuy and YellowBuy must not both be true")
 		}
-		if sig.LastClose <= 0 {
-			t.Error("LastClose must be positive")
-		}
 	})
 
 	t.Run("trend_filter_off_leaves_trend_unknown", func(t *testing.T) {
 		// With useTrendFilter=false, TrendStatus must be TrendUnknown.
 		candles := buildWeeklyCandles(base, 120, func(i int) int64 { return int64(100 + i*5) })
-		sig, err := Detect(candles, 7, dto.StrategyKindDividend, false, DefaultSettings())
+		sig, err := Detect(candles, 7, gxmodel.StrategyKindDividend, false, factory.DefaultSettings())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if sig.TrendStatus != dto.TrendUnknown {
+		if sig.TrendStatus != gxmodel.TrendUnknown {
 			t.Errorf("TrendStatus = %v, want TrendUnknown when useTrendFilter=false", sig.TrendStatus)
 		}
 	})
@@ -169,11 +141,11 @@ func TestDetect(t *testing.T) {
 		candles := buildWeeklyCandles(base, n, func(i int) int64 {
 			return int64(1000 + i*10)
 		})
-		sig, err := Detect(candles, 7, dto.StrategyKindGrowth, true, DefaultSettings())
+		sig, err := Detect(candles, 7, gxmodel.StrategyKindGrowth, true, factory.DefaultSettings())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if sig.TrendStatus != dto.TrendWith {
+		if sig.TrendStatus != gxmodel.TrendWith {
 			t.Errorf("TrendStatus = %v, want TrendWith for strong uptrend", sig.TrendStatus)
 		}
 	})
@@ -182,51 +154,9 @@ func TestDetect(t *testing.T) {
 		// 110 candles: enough RSI history (103 values) but fewer than settings.TrendEMAPeriod (default 200)
 		// → ErrInsufficientHistory from trend filter.
 		candles := buildWeeklyCandles(base, 110, func(i int) int64 { return int64(100 + i*5) })
-		_, err := Detect(candles, 7, dto.StrategyKindGrowth, true, DefaultSettings())
+		_, err := Detect(candles, 7, gxmodel.StrategyKindGrowth, true, factory.DefaultSettings())
 		if !errors.Is(err, ErrInsufficientHistory) {
 			t.Fatalf("expected ErrInsufficientHistory with trend filter and short history, got %v", err)
-		}
-	})
-
-	t.Run("stop_computed_when_buy_and_atr_positive", func(t *testing.T) {
-		// Build a series designed to produce a buy signal with non-zero ATR
-		// and prices high enough that stop = lastClose - k*ATR > 0.
-		// - 180 candles slowly rising from 5000 (giving RSI history in uptrend)
-		// - 20 candles moderately dropping to force RSI below P15
-		// - High/Low spreads +50/-50 give ATR ≈ 50, k=2.0 (Dividend)
-		//   → stop = lastClose - 2*50 = lastClose - 100; keeping lastClose > 200.
-		const base5000Rise = 5000
-		n := 200
-		candles := buildWeeklyCandlesOHLCV(
-			base,
-			n,
-			func(i int) int64 {
-				if i < 180 {
-					return int64(base5000Rise + i*5)
-				}
-				// Moderate drop: 5000+180*5=5900 base, drop 15 per week.
-				dropDepth := int64(i - 180)
-				return int64(base5000Rise+180*5) - dropDepth*15
-			},
-			func(i int, c int64) int64 { return c + 50 },
-			func(i int, c int64) int64 { return c - 50 },
-			func(i int) int64 { return 1000 },
-		)
-		sig, err := Detect(candles, 7, dto.StrategyKindDividend, false, DefaultSettings())
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if !sig.GreenBuy && !sig.YellowBuy {
-			t.Fatalf("series did not produce a buy signal; cannot test Stop. RSI=%.2f P5=%.2f P15=%.2f", sig.RSI, sig.Thresholds.P5, sig.Thresholds.P15)
-		}
-		if sig.Stop.Price <= 0 {
-			t.Errorf("Stop.Price = %v, want > 0 for buy signal with non-flat candles", sig.Stop.Price)
-		}
-		if sig.Stop.DistancePct <= 0 {
-			t.Errorf("Stop.DistancePct = %v, want > 0", sig.Stop.DistancePct)
-		}
-		if sig.LastClose <= 0 {
-			t.Errorf("LastClose = %v, want > 0", sig.LastClose)
 		}
 	})
 
@@ -250,7 +180,7 @@ func TestDetect(t *testing.T) {
 		for _, v := range seriesVariants {
 			t.Run(v.name, func(t *testing.T) {
 				candles := buildWeeklyCandles(base, 120, v.closeFn)
-				sig, err := Detect(candles, 7, dto.StrategyKindDividend, false, DefaultSettings())
+				sig, err := Detect(candles, 7, gxmodel.StrategyKindDividend, false, factory.DefaultSettings())
 				if err != nil {
 					t.Fatalf("unexpected error: %v", err)
 				}
@@ -277,19 +207,16 @@ func TestDetect(t *testing.T) {
 		})
 		withForming[119].IsComplete = false
 
-		sigBaseline, err := Detect(baseline, 7, dto.StrategyKindDividend, false, DefaultSettings())
+		sigBaseline, err := Detect(baseline, 7, gxmodel.StrategyKindDividend, false, factory.DefaultSettings())
 		if err != nil {
 			t.Fatalf("baseline Detect: unexpected error: %v", err)
 		}
-		sigForming, err := Detect(withForming, 7, dto.StrategyKindDividend, false, DefaultSettings())
+		sigForming, err := Detect(withForming, 7, gxmodel.StrategyKindDividend, false, factory.DefaultSettings())
 		if err != nil {
 			t.Fatalf("forming Detect: unexpected error: %v", err)
 		}
 		if sigForming.RSI >= sigBaseline.RSI {
 			t.Fatalf("forming candle must lower RSI: baseline=%.4f forming=%.4f", sigBaseline.RSI, sigForming.RSI)
-		}
-		if sigForming.LastClose != 50 {
-			t.Fatalf("LastClose must reflect forming candle close (50), got %.2f", sigForming.LastClose)
 		}
 	})
 }

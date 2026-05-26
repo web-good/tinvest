@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"time"
+	_ "time/tzdata"
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -12,7 +14,10 @@ import (
 	"tinvest/internal/enum"
 	"tinvest/internal/model"
 	"tinvest/internal/service/trading_strategy/golden_x/dto"
+	"tinvest/internal/service/trading_strategy/golden_x/factory"
+	gxmodel "tinvest/internal/service/trading_strategy/golden_x/model"
 	notif "tinvest/internal/service/trading_strategy/golden_x/notification"
+	"tinvest/internal/service/trading_strategy/golden_x/percentile"
 	"tinvest/internal/utils"
 	"tinvest/pkg/logger"
 )
@@ -37,23 +42,28 @@ var ErrAdaptiveInsufficientHistory = errors.New("adaptive tiers: insufficient RS
 func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			logger.ErrorContext(ctx, fmt.Sprintf("panic in golden_x.Trade: %v", r))
+			logger.ErrorContext(ctx, fmt.Sprintf("panic in golden_x.Trade: %v\n%s", r, debug.Stack()))
 			err = fmt.Errorf("panic: %v", r)
 		}
 	}()
-	loc, _ := time.LoadLocation("Europe/Moscow")
+	loc, locErr := time.LoadLocation("Europe/Moscow")
+	if locErr != nil {
+		return fmt.Errorf("load timezone: %w", locErr)
+	}
 	dateNow := time.Now().In(loc)
 	buyInfo := domain.NewInfo()
 	sellInfo := domain.NewInfo()
-	trends := make(map[string]dto.TrendStatus)
-	thresholds := make(map[string]dto.Thresholds)
-	sellThresholds := make(map[string]dto.SellThresholds)
+	trends := make(map[string]gxmodel.TrendStatus)
+	thresholds := make(map[string]gxmodel.Thresholds)
+	sellThresholds := make(map[string]gxmodel.SellThresholds)
 	divergences := make(map[string]bool)
 	volumesConfirmed := make(map[string]bool)
-	stops := make(map[string]dto.Stop)
-	settings := DefaultSettings()
+	settings := factory.DefaultSettings()
 
 	for _, share := range in.ShareList.All() {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		candles, candleErr := s.fetchWeeklyCandles(ctx, share.ID, in.Interval, dateNow)
 		if candleErr != nil {
 			logger.ErrorContext(ctx, fmt.Errorf("get candles for %s: %w", share.Name, candleErr).Error())
@@ -84,29 +94,25 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 		if sig.GreenBuy || sig.YellowBuy {
 			divergences[share.ID] = sig.DivergenceOK
 			volumesConfirmed[share.ID] = sig.VolumeOK
-			if sig.Stop != (dto.Stop{}) {
-				stops[share.ID] = sig.Stop
-			}
 		}
 
-		buyTier := tierFromAdaptive(sig.RSI, sig.Thresholds.P5, sig.Thresholds.P15)
-		sellTier := sellTierFromAdaptive(sig.RSI, sig.SellThresholds, in.Kind)
-
+		buyTier := percentile.TierFromAdaptive(sig.RSI, sig.Thresholds.P5, sig.Thresholds.P15)
+		sellTier := percentile.SellTierFromAdaptive(sig.RSI, sig.SellThresholds, in.Kind)
 		item := domain.Item{
 			InstrumentName: share.Name,
 			RSIValue:       sig.RSI,
 		}
 		// Buy and sell zones are mutually exclusive — RSI can't be both < p15 and > p80.
 		switch {
-		case buyTier != tierNone:
+		case buyTier != percentile.TierNone:
 			buyInfo.WriteToMap(share.ID, item)
-		case sellTier != tierNone:
+		case sellTier != percentile.TierNone:
 			sellInfo.WriteToMap(share.ID, item)
 		}
 	}
 
 	if len(buyInfo.Items()) > 0 || len(sellInfo.Items()) > 0 {
-		msg := notif.Trade(buyInfo, sellInfo, in.Kind, trends, thresholds, sellThresholds, divergences, volumesConfirmed, stops)
+		msg := notif.Trade(buyInfo, sellInfo, in.Kind, trends, thresholds, sellThresholds, divergences, volumesConfirmed)
 		if sendErr := s.tgClient.SendMessage(msg); sendErr != nil {
 			logger.ErrorContext(ctx, "message is not sent", sendErr)
 			return sendErr
@@ -130,49 +136,4 @@ func (s *service) fetchWeeklyCandles(ctx context.Context, shareID string, interv
 		&limit,
 		true,
 	)
-}
-
-// adaptiveRSIForShare computes the share's last weekly RSI and the
-// trimmed historical RSI slice used for percentile calculations. Returns
-// ErrAdaptiveInsufficientHistory if fewer than minWin RSI values are
-// available; trims the head to maxWin if longer. Threshold computation
-// (adaptiveThresholds / adaptiveSellThresholds) is the caller's responsibility.
-func adaptiveRSIForShare(candles []*model.CandleItemTechAnalyse, rsiPeriod, minWin, maxWin int) (float64, []float64, error) {
-	closes := make([]float64, len(candles))
-	for i, c := range candles {
-		closes[i] = utils.CombinePrice(c.Close.Units, c.Close.Nano)
-	}
-	full := computeRSISeries(closes, rsiPeriod)
-	if len(full) <= rsiPeriod {
-		return 0, nil, ErrAdaptiveInsufficientHistory
-	}
-	rsi := full[rsiPeriod:]
-	if len(rsi) < minWin {
-		return 0, nil, ErrAdaptiveInsufficientHistory
-	}
-	if len(rsi) > maxWin {
-		rsi = rsi[len(rsi)-maxWin:]
-	}
-	return rsi[len(rsi)-1], rsi, nil
-}
-
-// lowsAlignedToRSI extracts Low values from candles and trims the head
-// so the returned slice aligns 1-to-1 with the rsiSeries returned by
-// adaptiveRSIForShare. The result has the same length as rsiSeries (or
-// shorter, if there are fewer candles available — defensive).
-func lowsAlignedToRSI(candles []*model.CandleItemTechAnalyse, rsiPeriod int, rsiSeries []float64) []float64 {
-	// adaptiveRSIForShare drops rsiPeriod warmup candles, then potentially
-	// keeps only the last settings.AdaptiveWindowMax. Mirror the same trim here.
-	start := rsiPeriod
-	if len(candles)-rsiPeriod > len(rsiSeries) {
-		start = len(candles) - len(rsiSeries)
-	}
-	if start < 0 {
-		start = 0
-	}
-	out := make([]float64, 0, len(candles)-start)
-	for i := start; i < len(candles); i++ {
-		out = append(out, utils.CombinePrice(candles[i].Low.Units, candles[i].Low.Nano))
-	}
-	return out
 }

@@ -1,3 +1,5 @@
+/superpowers:using-superpowers используя практики чистой ахитектуры , патерны  фабрика пайплайн декоратор многопаточность и тд проревьюуй эту стратегию                                     
+internal/service/trading_strategy/golden_x
 # Golden X — Stage C2: Adaptive RSI Tiers
 
 ## Context

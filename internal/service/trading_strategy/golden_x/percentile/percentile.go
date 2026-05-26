@@ -1,27 +1,27 @@
-package golden_x
+package percentile
 
 import (
 	"math"
 	"sort"
 
-	"tinvest/internal/service/trading_strategy/golden_x/dto"
+	"tinvest/internal/service/trading_strategy/golden_x/model"
 )
 
-type alertTier int
+type AlertTier int
 
 const (
-	tierNone       alertTier = iota
-	tierYellow               // buy: RSI < p15
-	tierGreen                // buy: RSI < p5
-	tierSellYellow           // sell (Gold only): RSI > p80
-	tierSellOrange           // sell: RSI > p90 (Growth's single tier)
-	tierSellRed              // sell (Gold only): RSI > p95
+	TierNone       AlertTier = iota
+	TierYellow               // buy: RSI < p15
+	TierGreen                // buy: RSI < p5
+	TierSellYellow           // sell (Gold only): RSI > p80
+	TierSellOrange           // sell: RSI > p90 (Growth's single tier)
+	TierSellRed              // sell (Gold only): RSI > p95
 )
 
-// percentile returns the R-7 (linear-interpolation) percentile of a sorted
+// r7 returns the R-7 (linear-interpolation) percentile of a sorted
 // (ascending) slice. This is the default method in numpy.percentile and Excel.
 // p is in [0, 100]. Empty input returns 0.
-func percentile(sortedAsc []float64, p float64) float64 {
+func r7(sortedAsc []float64, p float64) float64 {
 	n := len(sortedAsc)
 	if n == 0 {
 		return 0
@@ -39,48 +39,48 @@ func percentile(sortedAsc []float64, p float64) float64 {
 	return sortedAsc[lo]*(1-weight) + sortedAsc[hi]*weight
 }
 
-// tierFromAdaptive maps the last closed-week RSI to a Golden X buy tier using
+// TierFromAdaptive maps the last closed-week RSI to a Golden X buy tier using
 // the share's own historical percentiles. Comparisons are strict — equality
 // at the boundary falls into the looser tier (Yellow at p5, None at p15).
-func tierFromAdaptive(rsi, p5, p15 float64) alertTier {
+func TierFromAdaptive(rsi, p5, p15 float64) AlertTier {
 	switch {
 	case rsi < p5:
-		return tierGreen
+		return TierGreen
 	case rsi < p15:
-		return tierYellow
+		return TierYellow
 	default:
-		return tierNone
+		return TierNone
 	}
 }
 
-// adaptiveThresholds computes the two buy-tier percentiles over an unordered
+// AdaptiveThresholds computes the two buy-tier percentiles over an unordered
 // slice of historical RSI values. pGreen and pYellow are percentile points
 // in [0, 100] (typically 5 and 15). The input is not mutated; a sorted copy
 // is taken internally.
-func adaptiveThresholds(rsiSeries []float64, pGreen, pYellow float64) dto.Thresholds {
+func AdaptiveThresholds(rsiSeries []float64, pGreen, pYellow float64) model.Thresholds {
 	sorted := append([]float64(nil), rsiSeries...)
 	sort.Float64s(sorted)
-	return dto.Thresholds{
-		P5:  percentile(sorted, pGreen),
-		P15: percentile(sorted, pYellow),
+	return model.Thresholds{
+		P5:  r7(sorted, pGreen),
+		P15: r7(sorted, pYellow),
 	}
 }
 
-// adaptiveSellThresholds computes the three sell-tier percentiles over an
+// AdaptiveSellThresholds computes the three sell-tier percentiles over an
 // unordered slice of historical RSI values. pYellow/pOrange/pRed are
 // percentile points in [0, 100] (typically 80/90/95). The input is not
 // mutated; a sorted copy is taken internally.
-func adaptiveSellThresholds(rsiSeries []float64, pYellow, pOrange, pRed float64) dto.SellThresholds {
+func AdaptiveSellThresholds(rsiSeries []float64, pYellow, pOrange, pRed float64) model.SellThresholds {
 	sorted := append([]float64(nil), rsiSeries...)
 	sort.Float64s(sorted)
-	return dto.SellThresholds{
-		P80: percentile(sorted, pYellow),
-		P90: percentile(sorted, pOrange),
-		P95: percentile(sorted, pRed),
+	return model.SellThresholds{
+		P80: r7(sorted, pYellow),
+		P90: r7(sorted, pOrange),
+		P95: r7(sorted, pRed),
 	}
 }
 
-// sellTierFromAdaptive maps the last closed-week RSI to a Golden X sell tier
+// SellTierFromAdaptive maps the last closed-week RSI to a Golden X sell tier
 // using the share's own historical upper percentiles. Comparisons are strict
 // (`>`) — equality at a boundary falls into the looser tier. Behavior depends
 // on kind:
@@ -89,26 +89,26 @@ func adaptiveSellThresholds(rsiSeries []float64, pYellow, pOrange, pRed float64)
 //     SellRed at p95.
 //   - Growth: single tier — SellOrange at p90. The sharp-exit semantics from
 //     the original Golden X spec.
-//   - Unknown: always tierNone (defensive default).
-func sellTierFromAdaptive(rsi float64, st dto.SellThresholds, kind dto.StrategyKind) alertTier {
+//   - Unknown: always TierNone (defensive default).
+func SellTierFromAdaptive(rsi float64, st model.SellThresholds, kind model.StrategyKind) AlertTier {
 	switch kind {
-	case dto.StrategyKindDividend:
+	case model.StrategyKindDividend:
 		switch {
 		case rsi > st.P95:
-			return tierSellRed
+			return TierSellRed
 		case rsi > st.P90:
-			return tierSellOrange
+			return TierSellOrange
 		case rsi > st.P80:
-			return tierSellYellow
+			return TierSellYellow
 		default:
-			return tierNone
+			return TierNone
 		}
-	case dto.StrategyKindGrowth:
+	case model.StrategyKindGrowth:
 		if rsi > st.P90 {
-			return tierSellOrange
+			return TierSellOrange
 		}
-		return tierNone
+		return TierNone
 	default:
-		return tierNone
+		return TierNone
 	}
 }

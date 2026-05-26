@@ -13,18 +13,15 @@ type GoldenX interface {
 }
 
 type service struct {
-	instrumentServiceGrpcClient grpc.InstrumentsServiceClient
 	marketDataServiceGrpcClient grpc.MarketDataServiceClient
 	tgClient                    telegram.Client
 }
 
 func NewService(
-	instrumentsServiceClient grpc.InstrumentsServiceClient,
 	marketDataServiceGrpcClient grpc.MarketDataServiceClient,
 	tgClient telegram.Client,
 ) *service {
 	return &service{
-		instrumentServiceGrpcClient: instrumentsServiceClient,
 		marketDataServiceGrpcClient: marketDataServiceGrpcClient,
 		tgClient:                    tgClient,
 	}

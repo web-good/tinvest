@@ -6,19 +6,18 @@ import (
 	"strings"
 
 	"tinvest/internal/domain"
-	"tinvest/internal/service/trading_strategy/golden_x/dto"
+	"tinvest/internal/service/trading_strategy/golden_x/model"
 )
 
 func Trade(
 	buyInfo *domain.Info,
 	sellInfo *domain.Info,
-	kind dto.StrategyKind,
-	trends map[string]dto.TrendStatus,
-	thresholds map[string]dto.Thresholds,
-	sellThresholds map[string]dto.SellThresholds,
+	kind model.StrategyKind,
+	trends map[string]model.TrendStatus,
+	thresholds map[string]model.Thresholds,
+	sellThresholds map[string]model.SellThresholds,
 	divergences map[string]bool,
 	volumesConfirmed map[string]bool,
-	stops map[string]dto.Stop,
 ) string {
 	b := strings.Builder{}
 	if medal := kind.Medal(); medal != "" {
@@ -35,7 +34,6 @@ func Trade(
 			}
 			b.WriteString("• <b>Акция:</b> " + log.InstrumentName + tierEmoji(log.RSIValue, thresholds[id]) + trendMark + divergenceBadge(divergences[id]) + volumeBadge(volumesConfirmed[id]) + "\n")
 			b.WriteString("  <b>RSI Value:</b>" + strconv.Itoa(int(log.RSIValue)) + thresholdSuffix(thresholds[id]) + "\n")
-			b.WriteString(stopLine(stops[id]))
 			b.WriteString("\n")
 		}
 		b.WriteString("</code>\n\n")
@@ -85,21 +83,10 @@ func volumeBadge(confirmed bool) string {
 	return ""
 }
 
-// stopLine renders the ATR-derived stop suggestion as its own line:
-// "  <b>Stop:</b> <price> (−<pct>%)\n". The zero-value dto.Stop{} renders
-// "" — same convention as Thresholds and SellThresholds, keeps the indicator
-// additive and silent on insufficient history.
-func stopLine(s dto.Stop) string {
-	if s.Price == 0 && s.DistancePct == 0 {
-		return ""
-	}
-	return fmt.Sprintf("  <b>Stop:</b> %.2f (−%.1f%%)\n", s.Price, s.DistancePct)
-}
-
 // tierEmoji renders the colored circle based on adaptive buy thresholds. Empty
 // Thresholds (zero value, e.g. for shares filtered out before we could compute
 // them) renders no emoji — the row still appears with the raw RSI value.
-func tierEmoji(rsi float64, th dto.Thresholds) string {
+func tierEmoji(rsi float64, th model.Thresholds) string {
 	if th.P5 == 0 && th.P15 == 0 {
 		return ""
 	}
@@ -115,7 +102,7 @@ func tierEmoji(rsi float64, th dto.Thresholds) string {
 
 // thresholdSuffix renders the buy percentile annotation appended to the RSI
 // line, e.g. "  (p5=24.0, p15=31.0)". Empty Thresholds renders nothing.
-func thresholdSuffix(th dto.Thresholds) string {
+func thresholdSuffix(th model.Thresholds) string {
 	if th.P5 == 0 && th.P15 == 0 {
 		return ""
 	}
@@ -125,7 +112,7 @@ func thresholdSuffix(th dto.Thresholds) string {
 // sellTierEmoji renders the colored circle for a sell-side row using the
 // share's own adaptive upper percentiles. Strict `>` comparisons mirror
 // sellTierFromAdaptive. Empty SellThresholds renders no emoji.
-func sellTierEmoji(rsi float64, st dto.SellThresholds) string {
+func sellTierEmoji(rsi float64, st model.SellThresholds) string {
 	if st.P80 == 0 && st.P90 == 0 && st.P95 == 0 {
 		return ""
 	}
@@ -144,7 +131,7 @@ func sellTierEmoji(rsi float64, st dto.SellThresholds) string {
 // sellThresholdSuffix renders the sell percentile annotation appended to the
 // RSI line, e.g. "  (p80=60.0, p90=70.0, p95=80.0)". Empty SellThresholds
 // renders nothing.
-func sellThresholdSuffix(st dto.SellThresholds) string {
+func sellThresholdSuffix(st model.SellThresholds) string {
 	if st.P80 == 0 && st.P90 == 0 && st.P95 == 0 {
 		return ""
 	}

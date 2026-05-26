@@ -17,48 +17,28 @@ type schedulerService struct {
 }
 
 func (s *schedulerService) Trade(ctx context.Context, in dto.Trade) error {
-	//heartbeat := heartbeat.New()
-	//heartbeatCh := heartbeat.Beating(4 * time.Hour)
 	jobTicker := time.NewTicker(time.Hour)
-	defer func() {
-		jobTicker.Stop()
-	}()
+	defer jobTicker.Stop()
+
 	err := s.sh.AddJob(in.Scheduler, func() {
 		logger.InfoContext(ctx, "Воркер Golden RSI начал работу")
-		err := s.service.Trade(ctx, in)
-
-		if err != nil {
-			//heartbeat.Stop()
+		if err := s.service.Trade(ctx, in); err != nil {
 			logger.ErrorContext(ctx, "Ошибка в ходе работы job", err)
 		}
 	})
-	s.sh.Start()
 	if err != nil {
 		return err
 	}
 
+	s.sh.Start()
 	defer s.sh.Stop()
 
-	/*for {
-		select {
-		case _, ok := <-heartbeatCh:
-			if !ok {
-				return nil
-			}
-
-			s.tgClient.SendMessage(notification.Heartbeat(&in))
-		default:
-			time.Sleep(10 * time.Second)
-		}
-	}*/
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case <-jobTicker.C:
 			logger.InfoContext(ctx, "Worker Golden Share is running")
-		default:
-			time.Sleep(10 * time.Second)
 		}
 	}
 }

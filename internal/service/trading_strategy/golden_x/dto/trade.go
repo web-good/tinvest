@@ -2,11 +2,12 @@ package dto
 
 import (
 	"tinvest/internal/enum"
+	"tinvest/internal/service/trading_strategy/golden_x/model"
 	"tinvest/pkg/collection"
 )
 
 type Trade struct {
-	Kind           StrategyKind
+	Kind           model.StrategyKind
 	Interval       enum.Interval
 	ShareList      collection.InstrumentCollection
 	Scheduler      string
