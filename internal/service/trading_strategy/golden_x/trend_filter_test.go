@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"tinvest/internal/domain/ema"
 	"tinvest/internal/model"
 	"tinvest/internal/service/trading_strategy/golden_x/dto"
 )
@@ -17,7 +18,7 @@ func TestComputeEMA(t *testing.T) {
 	// pos 3: (4-2)*0.5 + 2 = 3
 	// pos 4: (5-3)*0.5 + 3 = 4
 	// pos 5: (6-4)*0.5 + 4 = 5
-	got := computeEMA([]float64{1, 2, 3, 4, 5, 6}, 3)
+	got := ema.Compute([]float64{1, 2, 3, 4, 5, 6}, 3)
 	want := []float64{0, 0, 2, 3, 4, 5}
 	if len(got) != len(want) {
 		t.Fatalf("len = %d, want %d", len(got), len(want))
@@ -30,7 +31,7 @@ func TestComputeEMA(t *testing.T) {
 }
 
 func TestComputeEMA_InsufficientReturnsZeroes(t *testing.T) {
-	got := computeEMA([]float64{1, 2}, 3)
+	got := ema.Compute([]float64{1, 2}, 3)
 	if len(got) != 2 {
 		t.Fatalf("len = %d, want 2", len(got))
 	}

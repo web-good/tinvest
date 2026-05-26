@@ -3,13 +3,15 @@ package ema
 import (
 	"context"
 	"fmt"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"time"
-	"tinvest/internal/domain/ema"
+
+	"google.golang.org/protobuf/types/known/timestamppb"
+
+	domainema "tinvest/internal/domain/ema"
 	"tinvest/internal/utils"
 )
 
-func (e *service) TechAnalyse(context context.Context, instrumentUid *string, interval int32, from time.Time, to time.Time, period int) ([]ema.ItemTechAnalyse, error) {
+func (e *service) TechAnalyse(context context.Context, instrumentUid *string, interval int32, from time.Time, to time.Time, period int) ([]domainema.ItemTechAnalyse, error) {
 	limit := int32(period * 2)
 	candles, err := e.marketDataServiceClient.GetCandles(context, instrumentUid, interval, timestamppb.New(from), timestamppb.New(to), &limit, true)
 
@@ -21,23 +23,19 @@ func (e *service) TechAnalyse(context context.Context, instrumentUid *string, in
 		return nil, fmt.Errorf("not enough candles")
 	}
 
-	emas := make([]float64, len(candles))
-	emaR := make([]ema.ItemTechAnalyse, len(candles))
-
-	var sum float64
-
-	for i := 0; i < period; i++ {
-		sum += float64(candles[i].Close.Units)
+	closes := make([]float64, len(candles))
+	for i, c := range candles {
+		closes[i] = float64(c.Close.Units)
 	}
 
-	emas[period-1] = sum / float64(period)
-	emaR[period-1].SignalLine.Units, emaR[period-1].SignalLine.Nano = utils.SplitPrice(emas[period-1])
-	multiplier := 2.0 / float64(period+1)
+	emas := domainema.Compute(closes, period)
+	emaR := make([]domainema.ItemTechAnalyse, len(candles))
 
-	for k := period; k < len(candles); k++ {
-		emas[k] = (float64(candles[k].Close.Units)-emas[k-1])*multiplier + emas[k-1]
+	for k := period - 1; k < len(candles); k++ {
 		emaR[k].SignalLine.Units, emaR[k].SignalLine.Nano = utils.SplitPrice(emas[k])
-		emaR[k].Date = candles[k].Time
+		if k >= period {
+			emaR[k].Date = candles[k].Time
+		}
 	}
 
 	return emaR, nil

@@ -3,6 +3,7 @@ package golden_x
 import (
 	"errors"
 
+	"tinvest/internal/domain/ema"
 	"tinvest/internal/model"
 	"tinvest/internal/service/trading_strategy/golden_x/dto"
 	"tinvest/internal/utils"
@@ -11,29 +12,6 @@ import (
 // ErrInsufficientHistory is returned when a share does not have enough closed
 // weekly candles to compute the EMA200 filter (fresh IPOs).
 var ErrInsufficientHistory = errors.New("trend filter: insufficient candle history")
-
-// computeEMA returns a sliding EMA of the given period over closes.
-// Result has the same length as closes; positions before period-1 are zero.
-// The seed is an SMA of the first `period` values, matching the formula used
-// across the codebase (see internal/service/instrument/ema/tech_analyse.go).
-func computeEMA(closes []float64, period int) []float64 {
-	out := make([]float64, len(closes))
-	if len(closes) < period {
-		return out
-	}
-
-	var sum float64
-	for i := 0; i < period; i++ {
-		sum += closes[i]
-	}
-	out[period-1] = sum / float64(period)
-	multiplier := 2.0 / float64(period+1)
-
-	for k := period; k < len(closes); k++ {
-		out[k] = (closes[k]-out[k-1])*multiplier + out[k-1]
-	}
-	return out
-}
 
 // trendStatusFromClosed computes the trend status from an ordered weekly
 // candle slice: it compares the last close against an EMA of the given
@@ -47,9 +25,9 @@ func trendStatusFromClosed(closed []*model.CandleItemTechAnalyse, period int) (d
 	for i, c := range closed {
 		closes[i] = utils.CombinePrice(c.Close.Units, c.Close.Nano)
 	}
-	ema := computeEMA(closes, period)
+	emaValues := ema.Compute(closes, period)
 	lastClose := closes[len(closes)-1]
-	lastEMA := ema[len(ema)-1]
+	lastEMA := emaValues[len(emaValues)-1]
 	if lastClose > lastEMA {
 		return dto.TrendWith, nil
 	}
