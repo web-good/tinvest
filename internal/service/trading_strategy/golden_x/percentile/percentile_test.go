@@ -78,13 +78,13 @@ func TestTierFromAdaptive(t *testing.T) {
 		rsi  float64
 		p5   float64
 		p15  float64
-		want AlertTier
+		want model.AlertTier
 	}{
-		{"rsi strictly below p5 → Green", 20, 24, 31, TierGreen},
-		{"rsi == p5 → Yellow (strict <)", 24, 24, 31, TierYellow},
-		{"rsi between p5 and p15 → Yellow", 28, 24, 31, TierYellow},
-		{"rsi == p15 → None (strict <)", 31, 24, 31, TierNone},
-		{"rsi above p15 → None", 40, 24, 31, TierNone},
+		{"rsi strictly below p5 → Green", 20, 24, 31, model.TierGreen},
+		{"rsi == p5 → Yellow (strict <)", 24, 24, 31, model.TierYellow},
+		{"rsi between p5 and p15 → Yellow", 28, 24, 31, model.TierYellow},
+		{"rsi == p15 → None (strict <)", 31, 24, 31, model.TierNone},
+		{"rsi above p15 → None", 40, 24, 31, model.TierNone},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -156,15 +156,15 @@ func TestSellTierFromAdaptive_Gold(t *testing.T) {
 	tests := []struct {
 		name string
 		rsi  float64
-		want AlertTier
+		want model.AlertTier
 	}{
-		{"rsi below p80 → None", 59, TierNone},
-		{"rsi == p80 → None (strict >)", 60, TierNone},
-		{"rsi between p80 and p90 → SellYellow", 65, TierSellYellow},
-		{"rsi == p90 → SellYellow (strict >)", 70, TierSellYellow},
-		{"rsi between p90 and p95 → SellOrange", 75, TierSellOrange},
-		{"rsi == p95 → SellOrange (strict >)", 80, TierSellOrange},
-		{"rsi above p95 → SellRed", 85, TierSellRed},
+		{"rsi below p80 → None", 59, model.TierNone},
+		{"rsi == p80 → None (strict >)", 60, model.TierNone},
+		{"rsi between p80 and p90 → SellYellow", 65, model.TierSellYellow},
+		{"rsi == p90 → SellYellow (strict >)", 70, model.TierSellYellow},
+		{"rsi between p90 and p95 → SellOrange", 75, model.TierSellOrange},
+		{"rsi == p95 → SellOrange (strict >)", 80, model.TierSellOrange},
+		{"rsi above p95 → SellRed", 85, model.TierSellRed},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -181,12 +181,12 @@ func TestSellTierFromAdaptive_Growth(t *testing.T) {
 	tests := []struct {
 		name string
 		rsi  float64
-		want AlertTier
+		want model.AlertTier
 	}{
-		{"rsi below p90 → None", 65, TierNone},
-		{"rsi == p90 → None (strict >)", 70, TierNone},
-		{"rsi above p90 but below p95 → SellOrange", 75, TierSellOrange},
-		{"rsi above p95 → SellOrange (single tier for Growth)", 90, TierSellOrange},
+		{"rsi below p90 → None", 65, model.TierNone},
+		{"rsi == p90 → None (strict >)", 70, model.TierNone},
+		{"rsi above p90 but below p95 → SellOrange", 75, model.TierSellOrange},
+		{"rsi above p95 → SellOrange (single tier for Growth)", 90, model.TierSellOrange},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -200,7 +200,7 @@ func TestSellTierFromAdaptive_Growth(t *testing.T) {
 
 func TestSellTierFromAdaptive_UnknownKindReturnsNone(t *testing.T) {
 	st := model.SellThresholds{P80: 60, P90: 70, P95: 80}
-	if got := SellTierFromAdaptive(99, st, model.StrategyKindUnknown); got != TierNone {
+	if got := SellTierFromAdaptive(99, st, model.StrategyKindUnknown); got != model.TierNone {
 		t.Fatalf("SellTierFromAdaptive(unknown) = %v, want TierNone", got)
 	}
 }

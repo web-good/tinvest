@@ -7,17 +7,6 @@ import (
 	"tinvest/internal/service/trading_strategy/golden_x/model"
 )
 
-type AlertTier int
-
-const (
-	TierNone       AlertTier = iota
-	TierYellow               // buy: RSI < p15
-	TierGreen                // buy: RSI < p5
-	TierSellYellow           // sell (Gold only): RSI > p80
-	TierSellOrange           // sell: RSI > p90 (Growth's single tier)
-	TierSellRed              // sell (Gold only): RSI > p95
-)
-
 // r7 returns the R-7 (linear-interpolation) percentile of a sorted
 // (ascending) slice. This is the default method in numpy.percentile and Excel.
 // p is in [0, 100]. Empty input returns 0.
@@ -42,14 +31,14 @@ func r7(sortedAsc []float64, p float64) float64 {
 // TierFromAdaptive maps the last closed-week RSI to a Golden X buy tier using
 // the share's own historical percentiles. Comparisons are strict — equality
 // at the boundary falls into the looser tier (Yellow at p5, None at p15).
-func TierFromAdaptive(rsi, p5, p15 float64) AlertTier {
+func TierFromAdaptive(rsi, p5, p15 float64) model.AlertTier {
 	switch {
 	case rsi < p5:
-		return TierGreen
+		return model.TierGreen
 	case rsi < p15:
-		return TierYellow
+		return model.TierYellow
 	default:
-		return TierNone
+		return model.TierNone
 	}
 }
 
@@ -90,25 +79,25 @@ func AdaptiveSellThresholds(rsiSeries []float64, pYellow, pOrange, pRed float64)
 //   - Growth: single tier — SellOrange at p90. The sharp-exit semantics from
 //     the original Golden X spec.
 //   - Unknown: always TierNone (defensive default).
-func SellTierFromAdaptive(rsi float64, st model.SellThresholds, kind model.StrategyKind) AlertTier {
+func SellTierFromAdaptive(rsi float64, st model.SellThresholds, kind model.StrategyKind) model.AlertTier {
 	switch kind {
 	case model.StrategyKindDividend:
 		switch {
 		case rsi > st.P95:
-			return TierSellRed
+			return model.TierSellRed
 		case rsi > st.P90:
-			return TierSellOrange
+			return model.TierSellOrange
 		case rsi > st.P80:
-			return TierSellYellow
+			return model.TierSellYellow
 		default:
-			return TierNone
+			return model.TierNone
 		}
 	case model.StrategyKindGrowth:
 		if rsi > st.P90 {
-			return TierSellOrange
+			return model.TierSellOrange
 		}
-		return TierNone
+		return model.TierNone
 	default:
-		return TierNone
+		return model.TierNone
 	}
 }

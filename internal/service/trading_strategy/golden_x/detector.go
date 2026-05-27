@@ -44,10 +44,10 @@ func Detect(
 	}
 
 	buyTier := percentile.TierFromAdaptive(lastRSI, sig.Thresholds.P5, sig.Thresholds.P15)
-	sig.GreenBuy = buyTier == percentile.TierGreen
-	sig.YellowBuy = buyTier == percentile.TierYellow
+	sig.GreenBuy = buyTier == gxmodel.TierGreen
+	sig.YellowBuy = buyTier == gxmodel.TierYellow
 
-	if buyTier != percentile.TierNone {
+	if buyTier != gxmodel.TierNone {
 		lows := lowsAlignedToRSI(closed, rsiPeriod, rsiSeries)
 		if len(lows) > settings.DivergenceLookbackWeeks {
 			lows = lows[len(lows)-settings.DivergenceLookbackWeeks:]

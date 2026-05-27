@@ -5,45 +5,35 @@ import (
 	"strconv"
 	"strings"
 
-	"tinvest/internal/domain"
 	"tinvest/internal/service/trading_strategy/golden_x/model"
 )
 
-func Trade(
-	buyInfo *domain.Info,
-	sellInfo *domain.Info,
-	kind model.StrategyKind,
-	trends map[string]model.TrendStatus,
-	thresholds map[string]model.Thresholds,
-	sellThresholds map[string]model.SellThresholds,
-	divergences map[string]bool,
-	volumesConfirmed map[string]bool,
-) string {
+func Trade(r model.TradeResult) string {
 	b := strings.Builder{}
-	if medal := kind.Medal(); medal != "" {
+	if medal := r.Kind.Medal(); medal != "" {
 		b.WriteString(medal + "\n\n")
 	}
 	b.WriteString(legendBlock)
 
-	if buyInfo != nil && len(buyInfo.Items()) > 0 {
+	if len(r.BuyShares) > 0 {
 		b.WriteString("<u><b>Сигналы на покупку:</b></u>\n\n\n<code>")
-		for id, log := range buyInfo.Items() {
-			trendMark := trends[id].Mark()
+		for _, sr := range r.BuyShares {
+			trendMark := sr.TrendStatus.Mark()
 			if trendMark != "" {
 				trendMark = " " + trendMark
 			}
-			b.WriteString("• <b>Акция:</b> " + log.InstrumentName + tierEmoji(log.RSIValue, thresholds[id]) + trendMark + divergenceBadge(divergences[id]) + volumeBadge(volumesConfirmed[id]) + "\n")
-			b.WriteString("  <b>RSI Value:</b>" + strconv.Itoa(int(log.RSIValue)) + thresholdSuffix(thresholds[id]) + "\n")
+			b.WriteString("• <b>Акция:</b> " + sr.InstrumentName + buyTierEmoji(sr.BuyTier) + trendMark + divergenceBadge(sr.DivergenceOK) + volumeBadge(sr.VolumeOK) + "\n")
+			b.WriteString("  <b>RSI Value:</b>" + strconv.Itoa(int(sr.RSI)) + thresholdSuffix(sr.Thresholds) + "\n")
 			b.WriteString("\n")
 		}
 		b.WriteString("</code>\n\n")
 	}
 
-	if sellInfo != nil && len(sellInfo.Items()) > 0 {
+	if len(r.SellShares) > 0 {
 		b.WriteString("<u><b>Сигналы на продажу:</b></u>\n\n\n<code>")
-		for id, log := range sellInfo.Items() {
-			b.WriteString("• <b>Акция:</b> " + log.InstrumentName + sellTierEmoji(log.RSIValue, sellThresholds[id]) + "\n")
-			b.WriteString("  <b>RSI Value:</b>" + strconv.Itoa(int(log.RSIValue)) + sellThresholdSuffix(sellThresholds[id]) + "\n")
+		for _, sr := range r.SellShares {
+			b.WriteString("• <b>Акция:</b> " + sr.InstrumentName + sellTierEmoji(sr.SellTier) + "\n")
+			b.WriteString("  <b>RSI Value:</b>" + strconv.Itoa(int(sr.RSI)) + sellThresholdSuffix(sr.SellThresholds) + "\n")
 			b.WriteString("\n")
 		}
 		b.WriteString("</code>")
@@ -83,18 +73,29 @@ func volumeBadge(confirmed bool) string {
 	return ""
 }
 
-// tierEmoji renders the colored circle based on adaptive buy thresholds. Empty
-// Thresholds (zero value, e.g. for shares filtered out before we could compute
-// them) renders no emoji — the row still appears with the raw RSI value.
-func tierEmoji(rsi float64, th model.Thresholds) string {
-	if th.P5 == 0 && th.P15 == 0 {
+// buyTierEmoji maps a pre-computed buy AlertTier to the corresponding colored
+// circle emoji. TierNone (and any unexpected value) renders no emoji.
+func buyTierEmoji(tier model.AlertTier) string {
+	switch tier {
+	case model.TierGreen:
+		return " 🟢"
+	case model.TierYellow:
+		return " 🟡"
+	default:
 		return ""
 	}
-	switch {
-	case rsi < th.P5:
-		return " 🟢"
-	case rsi < th.P15:
-		return " 🟡"
+}
+
+// sellTierEmoji maps a pre-computed sell AlertTier to the corresponding colored
+// circle emoji. TierNone (and any unexpected value) renders no emoji.
+func sellTierEmoji(tier model.AlertTier) string {
+	switch tier {
+	case model.TierSellRed:
+		return " 🚨"
+	case model.TierSellOrange:
+		return " 🔴"
+	case model.TierSellYellow:
+		return " 🟠"
 	default:
 		return ""
 	}
@@ -107,25 +108,6 @@ func thresholdSuffix(th model.Thresholds) string {
 		return ""
 	}
 	return fmt.Sprintf("  (p5=%.1f, p15=%.1f)", th.P5, th.P15)
-}
-
-// sellTierEmoji renders the colored circle for a sell-side row using the
-// share's own adaptive upper percentiles. Strict `>` comparisons mirror
-// sellTierFromAdaptive. Empty SellThresholds renders no emoji.
-func sellTierEmoji(rsi float64, st model.SellThresholds) string {
-	if st.P80 == 0 && st.P90 == 0 && st.P95 == 0 {
-		return ""
-	}
-	switch {
-	case rsi > st.P95:
-		return " 🚨"
-	case rsi > st.P90:
-		return " 🔴"
-	case rsi > st.P80:
-		return " 🟠"
-	default:
-		return ""
-	}
 }
 
 // sellThresholdSuffix renders the sell percentile annotation appended to the

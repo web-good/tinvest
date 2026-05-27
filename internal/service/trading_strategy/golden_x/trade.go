@@ -10,7 +10,6 @@ import (
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"tinvest/internal/domain"
 	"tinvest/internal/enum"
 	"tinvest/internal/model"
 	"tinvest/internal/service/trading_strategy/golden_x/dto"
@@ -50,13 +49,11 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 		return fmt.Errorf("load timezone: %w", locErr)
 	}
 	dateNow := time.Now().In(loc)
-	buyInfo := domain.NewInfo()
-	sellInfo := domain.NewInfo()
-	trends := make(map[string]gxmodel.TrendStatus)
-	thresholds := make(map[string]gxmodel.Thresholds)
-	sellThresholds := make(map[string]gxmodel.SellThresholds)
-	divergences := make(map[string]bool)
-	volumesConfirmed := make(map[string]bool)
+	result := gxmodel.TradeResult{
+		BuyShares:  make(map[string]gxmodel.ShareResult),
+		SellShares: make(map[string]gxmodel.ShareResult),
+		Kind:       in.Kind,
+	}
 	settings := s.settings
 
 	for _, share := range in.ShareList.All() {
@@ -84,34 +81,36 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 			continue
 		}
 
-		thresholds[share.ID] = sig.Thresholds
-		sellThresholds[share.ID] = sig.SellThresholds
-		if in.UseTrendFilter {
-			trends[share.ID] = sig.TrendStatus
-		}
-
-		if sig.GreenBuy || sig.YellowBuy {
-			divergences[share.ID] = sig.DivergenceOK
-			volumesConfirmed[share.ID] = sig.VolumeOK
-		}
-
 		buyTier := percentile.TierFromAdaptive(sig.RSI, sig.Thresholds.P5, sig.Thresholds.P15)
 		sellTier := percentile.SellTierFromAdaptive(sig.RSI, sig.SellThresholds, in.Kind)
-		item := domain.Item{
+
+		sr := gxmodel.ShareResult{
 			InstrumentName: share.Name,
-			RSIValue:       sig.RSI,
+			RSI:            sig.RSI,
+			BuyTier:        buyTier,
+			SellTier:       sellTier,
+			Thresholds:     sig.Thresholds,
+			SellThresholds: sig.SellThresholds,
 		}
+		if in.UseTrendFilter {
+			sr.TrendStatus = sig.TrendStatus
+		}
+		if sig.GreenBuy || sig.YellowBuy {
+			sr.DivergenceOK = sig.DivergenceOK
+			sr.VolumeOK = sig.VolumeOK
+		}
+
 		// Buy and sell zones are mutually exclusive — RSI can't be both < p15 and > p80.
 		switch {
-		case buyTier != percentile.TierNone:
-			buyInfo.WriteToMap(share.ID, item)
-		case sellTier != percentile.TierNone:
-			sellInfo.WriteToMap(share.ID, item)
+		case buyTier != gxmodel.TierNone:
+			result.BuyShares[share.ID] = sr
+		case sellTier != gxmodel.TierNone:
+			result.SellShares[share.ID] = sr
 		}
 	}
 
-	if len(buyInfo.Items()) > 0 || len(sellInfo.Items()) > 0 {
-		msg := notif.Trade(buyInfo, sellInfo, in.Kind, trends, thresholds, sellThresholds, divergences, volumesConfirmed)
+	if len(result.BuyShares) > 0 || len(result.SellShares) > 0 {
+		msg := notif.Trade(result)
 		if sendErr := s.tgClient.SendMessage(msg); sendErr != nil {
 			logger.ErrorContext(ctx, "message is not sent", sendErr)
 			return sendErr
