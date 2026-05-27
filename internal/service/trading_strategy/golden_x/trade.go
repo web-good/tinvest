@@ -14,7 +14,6 @@ import (
 	"tinvest/internal/enum"
 	"tinvest/internal/model"
 	"tinvest/internal/service/trading_strategy/golden_x/dto"
-	"tinvest/internal/service/trading_strategy/golden_x/factory"
 	gxmodel "tinvest/internal/service/trading_strategy/golden_x/model"
 	notif "tinvest/internal/service/trading_strategy/golden_x/notification"
 	"tinvest/internal/service/trading_strategy/golden_x/percentile"
@@ -58,7 +57,7 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 	sellThresholds := make(map[string]gxmodel.SellThresholds)
 	divergences := make(map[string]bool)
 	volumesConfirmed := make(map[string]bool)
-	settings := factory.DefaultSettings()
+	settings := s.settings
 
 	for _, share := range in.ShareList.All() {
 		if ctx.Err() != nil {
