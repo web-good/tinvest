@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"runtime/debug"
+	"sync"
 	"time"
 	_ "time/tzdata"
 
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"tinvest/internal/enum"
@@ -17,6 +19,7 @@ import (
 	notif "tinvest/internal/service/trading_strategy/golden_x/notification"
 	"tinvest/internal/service/trading_strategy/golden_x/percentile"
 	"tinvest/internal/utils"
+	"tinvest/pkg/collection"
 	"tinvest/pkg/logger"
 )
 
@@ -33,9 +36,26 @@ const candleLookbackWeeks = 260
 // Out of scope for D2: indicator-internal pivot width, not on the knob list.
 const divergenceFractalK = 2
 
+// fetchConcurrencyLimit caps parallel candle RPCs so we don't overwhelm the
+// Tinkoff API gateway or exhaust local file descriptors.
+const fetchConcurrencyLimit = 5
+
 // ErrAdaptiveInsufficientHistory is returned when a share has fewer than
 // settings.AdaptiveWindowMin weekly RSI values available.
 var ErrAdaptiveInsufficientHistory = errors.New("adaptive tiers: insufficient RSI history")
+
+// fetchResult holds the outcome of a single share's candle fetch.
+type fetchResult struct {
+	share   collection.Instrument
+	candles []*model.CandleItemTechAnalyse
+	err     error
+}
+
+// detectResult holds a successfully detected signal for a single share.
+type detectResult struct {
+	share  collection.Instrument
+	signal gxmodel.Signal
+}
 
 func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 	defer func() {
@@ -49,43 +69,85 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 		return fmt.Errorf("load timezone: %w", locErr)
 	}
 	dateNow := time.Now().In(loc)
+
+	fetched := s.fetchAll(ctx, in, dateNow)
+	signals := detectAll(ctx, fetched, in, s.settings)
+	result := classify(signals, in)
+	return s.notify(ctx, result)
+}
+
+// fetchAll concurrently fetches and compacts weekly candles for every share.
+// Individual fetch errors are captured per-share; the caller decides how to
+// handle them. The errgroup concurrency is capped at fetchConcurrencyLimit.
+func (s *service) fetchAll(ctx context.Context, in dto.Trade, dateNow time.Time) []fetchResult {
+	allShares := in.ShareList.All()
+	g, gCtx := errgroup.WithContext(ctx)
+	g.SetLimit(fetchConcurrencyLimit)
+
+	var mu sync.Mutex
+	results := make([]fetchResult, 0, len(allShares))
+
+	for _, share := range allShares {
+		g.Go(func() error {
+			candles, err := s.fetchWeeklyCandles(gCtx, share.ID, in.Interval, dateNow)
+			fr := fetchResult{share: share, err: err}
+			if err == nil {
+				fr.candles = compactCandles(candles)
+			}
+			mu.Lock()
+			results = append(results, fr)
+			mu.Unlock()
+			return nil // errors are tracked per-share, never cancel the group
+		})
+	}
+	_ = g.Wait()
+	return results
+}
+
+// detectAll runs Detect on every successfully fetched share. Shares with
+// fetch errors or insufficient history are logged and skipped.
+func detectAll(ctx context.Context, fetched []fetchResult, in dto.Trade, settings gxmodel.Settings) []detectResult {
+	results := make([]detectResult, 0, len(fetched))
+	for _, fr := range fetched {
+		if fr.err != nil {
+			logger.ErrorContext(ctx, fmt.Errorf("get candles for %s: %w", fr.share.Name, fr.err).Error())
+			continue
+		}
+
+		sig, detectErr := Detect(fr.candles, fr.share.RSILength, in.Kind, in.UseTrendFilter, settings)
+		if errors.Is(detectErr, ErrAdaptiveInsufficientHistory) {
+			logger.InfoContext(ctx, "adaptive tiers: insufficient history", "share", fr.share.Name)
+			continue
+		}
+		if errors.Is(detectErr, ErrInsufficientHistory) {
+			logger.InfoContext(ctx, "trend filter: insufficient history", "share", fr.share.Name)
+			continue
+		}
+		if detectErr != nil {
+			logger.ErrorContext(ctx, fmt.Errorf("detect signal for %s: %w", fr.share.Name, detectErr).Error())
+			continue
+		}
+
+		results = append(results, detectResult{share: fr.share, signal: sig})
+	}
+	return results
+}
+
+// classify buckets detected signals into buy and sell maps based on adaptive
+// percentile tiers. It is pure: no I/O, no context.
+func classify(detected []detectResult, in dto.Trade) gxmodel.TradeResult {
 	result := gxmodel.TradeResult{
 		BuyShares:  make(map[string]gxmodel.ShareResult),
 		SellShares: make(map[string]gxmodel.ShareResult),
 		Kind:       in.Kind,
 	}
-	settings := s.settings
-
-	for _, share := range in.ShareList.All() {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		candles, candleErr := s.fetchWeeklyCandles(ctx, share.ID, in.Interval, dateNow)
-		if candleErr != nil {
-			logger.ErrorContext(ctx, fmt.Errorf("get candles for %s: %w", share.Name, candleErr).Error())
-			continue
-		}
-		weekly := compactCandles(candles)
-
-		sig, detectErr := Detect(weekly, share.RSILength, in.Kind, in.UseTrendFilter, settings)
-		if errors.Is(detectErr, ErrAdaptiveInsufficientHistory) {
-			logger.InfoContext(ctx, "adaptive tiers: insufficient history", "share", share.Name)
-			continue
-		}
-		if errors.Is(detectErr, ErrInsufficientHistory) {
-			logger.InfoContext(ctx, "trend filter: insufficient history", "share", share.Name)
-			continue
-		}
-		if detectErr != nil {
-			logger.ErrorContext(ctx, fmt.Errorf("detect signal for %s: %w", share.Name, detectErr).Error())
-			continue
-		}
-
+	for _, dr := range detected {
+		sig := dr.signal
 		buyTier := percentile.TierFromAdaptive(sig.RSI, sig.Thresholds.P5, sig.Thresholds.P15)
 		sellTier := percentile.SellTierFromAdaptive(sig.RSI, sig.SellThresholds, in.Kind)
 
 		sr := gxmodel.ShareResult{
-			InstrumentName: share.Name,
+			InstrumentName: dr.share.Name,
 			RSI:            sig.RSI,
 			BuyTier:        buyTier,
 			SellTier:       sellTier,
@@ -103,20 +165,25 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 		// Buy and sell zones are mutually exclusive — RSI can't be both < p15 and > p80.
 		switch {
 		case buyTier != gxmodel.TierNone:
-			result.BuyShares[share.ID] = sr
+			result.BuyShares[dr.share.ID] = sr
 		case sellTier != gxmodel.TierNone:
-			result.SellShares[share.ID] = sr
+			result.SellShares[dr.share.ID] = sr
 		}
 	}
+	return result
+}
 
-	if len(result.BuyShares) > 0 || len(result.SellShares) > 0 {
-		msg := notif.Trade(result)
-		if sendErr := s.tgClient.SendMessage(msg); sendErr != nil {
-			logger.ErrorContext(ctx, "message is not sent", sendErr)
-			return sendErr
-		}
+// notify sends the aggregated trade result to Telegram. If there are no
+// buy or sell signals it is a no-op.
+func (s *service) notify(ctx context.Context, result gxmodel.TradeResult) error {
+	if len(result.BuyShares) == 0 && len(result.SellShares) == 0 {
+		return nil
 	}
-
+	msg := notif.Trade(result)
+	if sendErr := s.tgClient.SendMessage(msg); sendErr != nil {
+		logger.ErrorContext(ctx, "message is not sent", sendErr)
+		return sendErr
+	}
 	return nil
 }
 
