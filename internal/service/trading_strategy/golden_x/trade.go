@@ -137,9 +137,10 @@ func detectAll(ctx context.Context, fetched []fetchResult, in dto.Trade, setting
 // percentile tiers. It is pure: no I/O, no context.
 func classify(detected []detectResult, in dto.Trade) gxmodel.TradeResult {
 	result := gxmodel.TradeResult{
-		BuyShares:  make(map[string]gxmodel.ShareResult),
-		SellShares: make(map[string]gxmodel.ShareResult),
-		Kind:       in.Kind,
+		BuyShares:       make(map[string]gxmodel.ShareResult),
+		SellShares:      make(map[string]gxmodel.ShareResult),
+		CappedBuyShares: make(map[string]gxmodel.ShareResult),
+		Kind:            in.Kind,
 	}
 	for _, dr := range detected {
 		sig := dr.signal
@@ -153,6 +154,7 @@ func classify(detected []detectResult, in dto.Trade) gxmodel.TradeResult {
 			SellTier:       sellTier,
 			Thresholds:     sig.Thresholds,
 			SellThresholds: sig.SellThresholds,
+			Sector:         dr.share.Sector,
 		}
 		if in.UseTrendFilter {
 			sr.TrendStatus = sig.TrendStatus
@@ -161,6 +163,8 @@ func classify(detected []detectResult, in dto.Trade) gxmodel.TradeResult {
 			sr.DivergenceOK = sig.DivergenceOK
 			sr.VolumeOK = sig.VolumeOK
 		}
+
+		sr.Score = signalScore(sr)
 
 		// Buy and sell zones are mutually exclusive — RSI can't be both < p15 and > p80.
 		switch {
@@ -171,6 +175,34 @@ func classify(detected []detectResult, in dto.Trade) gxmodel.TradeResult {
 		}
 	}
 	return result
+}
+
+// signalScore computes a composite buy-signal strength score for a ShareResult.
+// Higher scores indicate stronger confluence of buy conditions.
+//
+//   - TierGreen buy tier:  +3
+//   - TierYellow buy tier: +1
+//   - TrendWith:           +2
+//   - DivergenceOK:        +2
+//   - VolumeOK:            +1
+func signalScore(sr gxmodel.ShareResult) int {
+	s := 0
+	switch sr.BuyTier {
+	case gxmodel.TierGreen:
+		s += 3
+	case gxmodel.TierYellow:
+		s += 1
+	}
+	if sr.TrendStatus == gxmodel.TrendWith {
+		s += 2
+	}
+	if sr.DivergenceOK {
+		s += 2
+	}
+	if sr.VolumeOK {
+		s += 1
+	}
+	return s
 }
 
 // notify sends the aggregated trade result to Telegram. If there are no

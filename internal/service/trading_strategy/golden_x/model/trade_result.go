@@ -13,13 +13,16 @@ type ShareResult struct {
 	TrendStatus    TrendStatus
 	DivergenceOK   bool
 	VolumeOK       bool
+	Score          int
+	Sector         string
 }
 
 // TradeResult aggregates the buy/sell signals for a single Trade tick. It is
 // the sole argument to notification.Trade, replacing the previous 8-parameter
 // call.
 type TradeResult struct {
-	BuyShares  map[string]ShareResult
-	SellShares map[string]ShareResult
-	Kind       StrategyKind
+	BuyShares       map[string]ShareResult
+	SellShares      map[string]ShareResult
+	CappedBuyShares map[string]ShareResult
+	Kind            StrategyKind
 }
