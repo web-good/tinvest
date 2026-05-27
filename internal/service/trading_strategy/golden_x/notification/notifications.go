@@ -2,11 +2,31 @@ package notification
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
 	"tinvest/internal/service/trading_strategy/golden_x/model"
 )
+
+type shareEntry struct {
+	id string
+	sr model.ShareResult
+}
+
+func sortedByScore(m map[string]model.ShareResult) []shareEntry {
+	entries := make([]shareEntry, 0, len(m))
+	for id, sr := range m {
+		entries = append(entries, shareEntry{id: id, sr: sr})
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].sr.Score != entries[j].sr.Score {
+			return entries[i].sr.Score > entries[j].sr.Score
+		}
+		return entries[i].id < entries[j].id
+	})
+	return entries
+}
 
 func Trade(r model.TradeResult) string {
 	b := strings.Builder{}
@@ -17,23 +37,61 @@ func Trade(r model.TradeResult) string {
 
 	if len(r.BuyShares) > 0 {
 		b.WriteString("<u><b>Сигналы на покупку:</b></u>\n\n\n<code>")
-		for _, sr := range r.BuyShares {
+		for _, e := range sortedByScore(r.BuyShares) {
+			sr := e.sr
 			trendMark := sr.TrendStatus.Mark()
 			if trendMark != "" {
 				trendMark = " " + trendMark
 			}
 			b.WriteString("• <b>Акция:</b> " + sr.InstrumentName + buyTierEmoji(sr.BuyTier) + trendMark + divergenceBadge(sr.DivergenceOK) + volumeBadge(sr.VolumeOK) + "\n")
 			b.WriteString("  <b>RSI Value:</b>" + strconv.Itoa(int(sr.RSI)) + thresholdSuffix(sr.Thresholds) + "\n")
+			if sr.Score > 0 {
+				b.WriteString("  <b>Score:</b> " + strconv.Itoa(sr.Score) + "\n")
+			}
 			b.WriteString("\n")
 		}
 		b.WriteString("</code>\n\n")
 	}
 
+	if len(r.CappedBuyShares) > 0 {
+		sectors := make(map[string][]shareEntry)
+		for id, sr := range r.CappedBuyShares {
+			sectors[sr.Sector] = append(sectors[sr.Sector], shareEntry{id: id, sr: sr})
+		}
+		sectorNames := make([]string, 0, len(sectors))
+		for name := range sectors {
+			sectorNames = append(sectorNames, name)
+		}
+		sort.Strings(sectorNames)
+
+		for _, sectorName := range sectorNames {
+			entries := sectors[sectorName]
+			sort.Slice(entries, func(i, j int) bool {
+				if entries[i].sr.Score != entries[j].sr.Score {
+					return entries[i].sr.Score > entries[j].sr.Score
+				}
+				return entries[i].id < entries[j].id
+			})
+			b.WriteString("⏸️ <b>Лимит сектора «" + sectorName + "»:</b>\n<code>")
+			for _, e := range entries {
+				sr := e.sr
+				b.WriteString("• <b>Акция:</b> " + sr.InstrumentName + buyTierEmoji(sr.BuyTier) + "\n")
+				b.WriteString("  <b>RSI Value:</b>" + strconv.Itoa(int(sr.RSI)) + thresholdSuffix(sr.Thresholds) + "\n")
+				b.WriteString("\n")
+			}
+			b.WriteString("</code>\n\n")
+		}
+	}
+
 	if len(r.SellShares) > 0 {
 		b.WriteString("<u><b>Сигналы на продажу:</b></u>\n\n\n<code>")
-		for _, sr := range r.SellShares {
+		for _, e := range sortedByScore(r.SellShares) {
+			sr := e.sr
 			b.WriteString("• <b>Акция:</b> " + sr.InstrumentName + sellTierEmoji(sr.SellTier) + "\n")
 			b.WriteString("  <b>RSI Value:</b>" + strconv.Itoa(int(sr.RSI)) + sellThresholdSuffix(sr.SellThresholds) + "\n")
+			if sr.Score > 0 {
+				b.WriteString("  <b>Score:</b> " + strconv.Itoa(sr.Score) + "\n")
+			}
 			b.WriteString("\n")
 		}
 		b.WriteString("</code>")
@@ -51,7 +109,8 @@ const legendBlock = "<b>Легенда:</b>\n" +
 	"✅ тренд за нас\n" +
 	"🚫 тренд против\n" +
 	"📈 бычья дивергенция\n" +
-	"🔊 подтверждение объёмом\n\n"
+	"🔊 подтверждение объёмом\n" +
+	"⏸️ лимит сектора\n\n"
 
 // divergenceBadge returns " 📈" when the share's row should display the
 // bullish RSI divergence annotation, "" otherwise. Empty input map renders

@@ -365,3 +365,130 @@ func TestTrade_VolumeBadgeWithoutDivergence(t *testing.T) {
 		t.Errorf("expected no divergence badge, got:\n%s", got)
 	}
 }
+
+func TestTrade_RendersScore(t *testing.T) {
+	r := model.TradeResult{
+		BuyShares: map[string]model.ShareResult{
+			"score-id": {
+				InstrumentName: "Lukoil",
+				RSI:            20,
+				BuyTier:        model.TierGreen,
+				Thresholds:     model.Thresholds{P5: 24, P15: 31},
+				Score:          7,
+			},
+		},
+		SellShares: make(map[string]model.ShareResult),
+		Kind:       model.StrategyKindDividend,
+	}
+
+	got := Trade(r)
+
+	if !strings.Contains(got, "Score:</b> 7") {
+		t.Errorf("expected Score: 7 in output, got:\n%s", got)
+	}
+}
+
+func TestTrade_SortsByScoreDesc(t *testing.T) {
+	r := model.TradeResult{
+		BuyShares: map[string]model.ShareResult{
+			"a-low": {
+				InstrumentName: "LowScore",
+				RSI:            20,
+				BuyTier:        model.TierGreen,
+				Score:          3,
+			},
+			"b-high": {
+				InstrumentName: "HighScore",
+				RSI:            18,
+				BuyTier:        model.TierGreen,
+				Score:          7,
+			},
+			"c-mid": {
+				InstrumentName: "MidScore",
+				RSI:            22,
+				BuyTier:        model.TierYellow,
+				Score:          5,
+			},
+		},
+		SellShares: make(map[string]model.ShareResult),
+		Kind:       model.StrategyKindGrowth,
+	}
+
+	got := Trade(r)
+
+	highIdx := strings.Index(got, "HighScore")
+	midIdx := strings.Index(got, "MidScore")
+	lowIdx := strings.Index(got, "LowScore")
+
+	if highIdx < 0 || midIdx < 0 || lowIdx < 0 {
+		t.Fatalf("missing share names in output:\n%s", got)
+	}
+	if !(highIdx < midIdx && midIdx < lowIdx) {
+		t.Errorf("expected HighScore(%d) < MidScore(%d) < LowScore(%d) in output:\n%s", highIdx, midIdx, lowIdx, got)
+	}
+}
+
+func TestTrade_RendersCappedSection(t *testing.T) {
+	r := model.TradeResult{
+		BuyShares:  make(map[string]model.ShareResult),
+		SellShares: make(map[string]model.ShareResult),
+		CappedBuyShares: map[string]model.ShareResult{
+			"oil-1": {
+				InstrumentName: "Lukoil",
+				RSI:            22,
+				BuyTier:        model.TierGreen,
+				Thresholds:     model.Thresholds{P5: 24, P15: 31},
+				Sector:         "Нефть",
+				Score:          5,
+			},
+			"oil-2": {
+				InstrumentName: "Rosneft",
+				RSI:            25,
+				BuyTier:        model.TierYellow,
+				Thresholds:     model.Thresholds{P5: 24, P15: 31},
+				Sector:         "Нефть",
+				Score:          3,
+			},
+		},
+		Kind: model.StrategyKindDividend,
+	}
+
+	got := Trade(r)
+
+	if !strings.Contains(got, "⏸️") {
+		t.Errorf("expected capped section emoji, got:\n%s", got)
+	}
+	if !strings.Contains(got, "Лимит сектора «Нефть»") {
+		t.Errorf("expected sector name in capped section, got:\n%s", got)
+	}
+	if !strings.Contains(got, "Lukoil") || !strings.Contains(got, "Rosneft") {
+		t.Errorf("expected both capped shares in output, got:\n%s", got)
+	}
+	// Lukoil (score 5) should appear before Rosneft (score 3)
+	lukoilIdx := strings.Index(got, "Lukoil")
+	rosneftIdx := strings.Index(got, "Rosneft")
+	if lukoilIdx > rosneftIdx {
+		t.Errorf("expected Lukoil (score 5) before Rosneft (score 3), got:\n%s", got)
+	}
+}
+
+func TestTrade_NoCappedSectionWhenEmpty(t *testing.T) {
+	r := model.TradeResult{
+		BuyShares: map[string]model.ShareResult{
+			"buy-id": {
+				InstrumentName: "Sber",
+				RSI:            20,
+				BuyTier:        model.TierGreen,
+			},
+		},
+		SellShares: make(map[string]model.ShareResult),
+		Kind:       model.StrategyKindDividend,
+	}
+
+	got := Trade(r)
+
+	body := bodyWithoutLegend(got)
+	if strings.Contains(body, "⏸️") {
+		t.Errorf("expected no capped section when CappedBuyShares is empty, got:\n%s", got)
+	}
+}
