@@ -48,6 +48,7 @@ type Instrument struct {
 	ID        string
 	Name      string
 	RSILength int
+	Sector    string
 }
 
 type InstrumentCollection struct {
