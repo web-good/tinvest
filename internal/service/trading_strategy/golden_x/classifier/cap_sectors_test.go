@@ -1,4 +1,4 @@
-package golden_x
+package classifier
 
 import (
 	"testing"
@@ -8,12 +8,12 @@ import (
 
 func TestCapSectors(t *testing.T) {
 	tests := []struct {
-		name            string
-		buyShares       map[string]gxmodel.ShareResult
-		sellShares      map[string]gxmodel.ShareResult
-		wantBuy         map[string]bool // IDs expected in BuyShares
-		wantCapped      map[string]bool // IDs expected in CappedBuyShares
-		wantSellCount   int
+		name          string
+		buyShares     map[string]gxmodel.ShareResult
+		sellShares    map[string]gxmodel.ShareResult
+		wantBuy       map[string]bool // IDs expected in BuyShares
+		wantCapped    map[string]bool // IDs expected in CappedBuyShares
+		wantSellCount int
 	}{
 		{
 			name: "three shares same sector — top 2 kept, bottom 1 capped",
@@ -95,7 +95,7 @@ func TestCapSectors(t *testing.T) {
 				input.SellShares = make(map[string]gxmodel.ShareResult)
 			}
 
-			got := capSectors(input)
+			got := CapSectors(input)
 
 			// Check BuyShares
 			if len(got.BuyShares) != len(tc.wantBuy) {
@@ -137,7 +137,7 @@ func TestCapSectors_TiebreakerByID(t *testing.T) {
 		CappedBuyShares: make(map[string]gxmodel.ShareResult),
 	}
 
-	got := capSectors(input)
+	got := CapSectors(input)
 
 	// "a" and "b" should be kept (lexicographically first), "c" capped.
 	if _, ok := got.BuyShares["a"]; !ok {

@@ -15,9 +15,9 @@ func (s *service) Trade(ctx context.Context) error {
 		return err
 	}
 
-	doneCh := make(chan struct{})
 	wg.Add(1)
 	go func() {
+		doneCh := make(chan struct{})
 		pipeline.Sender(
 			ctx,
 			pipeline.CalculateProfit(
@@ -34,6 +34,7 @@ func (s *service) Trade(ctx context.Context) error {
 	}()
 	wg.Add(1)
 	go func() {
+		doneCh := make(chan struct{})
 		pipeline.Sender(
 			ctx,
 			pipeline.CalculateProfit(
@@ -50,6 +51,7 @@ func (s *service) Trade(ctx context.Context) error {
 	}()
 	wg.Add(1)
 	go func() {
+		doneCh := make(chan struct{})
 		pipeline.Sender(
 			ctx,
 			pipeline.CalculateProfit(
@@ -66,6 +68,7 @@ func (s *service) Trade(ctx context.Context) error {
 	}()
 	wg.Add(1)
 	go func() {
+		doneCh := make(chan struct{})
 		pipeline.Sender(
 			ctx,
 			pipeline.CalculateProfit(

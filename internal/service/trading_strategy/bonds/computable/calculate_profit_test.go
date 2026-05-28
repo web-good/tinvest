@@ -37,12 +37,13 @@ func TestCalculateProfit(t *testing.T) {
 			},
 			// Расчет:
 			// Цена: 985 руб, НКД: 15.5 руб, Инвестиции: 1000.5 руб
-			// Купоны: 60 руб, Налог на купоны: 7.8 руб
+			// Будущие купоны: 60 руб
+			// Налог на купоны: (60 - 15.5) * 0.13 = 5.785 руб (НКД уменьшает налоговую базу)
 			// Номинал - Цена: 15 руб, Налог: 1.95 руб
 			// Возврат: 1000 + 60 = 1060 руб
-			// Прибыль: 1060 - 1000.5 - 7.8 - 1.95 = 49.75 руб
-			expectedProfit: 49.75,
-			expectedYield:  4.97, // ~5% годовых
+			// Прибыль: 1060 - 1000.5 - 5.785 - 1.95 = 51.765 руб
+			expectedProfit: 51.8,
+			expectedYield:  5.2,
 		},
 		{
 			name: "Корпоративная облигация с премией",
@@ -65,12 +66,13 @@ func TestCalculateProfit(t *testing.T) {
 			},
 			// Расчет:
 			// Цена: 1020 руб, НКД: 25 руб, Инвестиции: 1045 руб
-			// Купоны: 180 руб, Налог: 23.4 руб
+			// Будущие купоны: 180 руб
+			// Налог на купоны: (180 - 25) * 0.13 = 20.15 руб (НКД уменьшает налоговую базу)
 			// Номинал - Цена: -20 руб (убыток, налог не платится)
 			// Возврат: 1000 + 180 = 1180 руб
-			// Прибыль: 1180 - 1045 - 23.4 = 111.6 руб
-			expectedProfit: 111.6,
-			expectedYield:  5.34, // ~5.34% годовых
+			// Прибыль: 1180 - 1045 - 20.15 = 114.85 руб
+			expectedProfit: 114.9,
+			expectedYield:  5.5,
 		},
 	}
 
@@ -88,12 +90,10 @@ func TestCalculateProfit(t *testing.T) {
 				t.Errorf("Ожидаемая доходность %.2f%%, получили %.2f%%", tt.expectedYield, report.PercentByYear)
 			}
 
-			// Проверяем, что купонная доходность не включает налог
-				// Для ОФЗ с двумя купонами в году по 30 руб и ценой 985 руб:
-				// Годовые купоны: 30 * 2 = 60 руб
-				// Купонная доходность: (60 * 100) / 985 = 6.09%
+			// Для ОФЗ: 1 купон в текущем году (30 руб), инвестиции = 985 + 15.5 = 1000.5
+				// Купонная доходность: (30 * 100) / 1000.5 = 3.0%
 				if tt.name == "ОФЗ с дисконтом" {
-					expectedCouponYield := 3.00
+					expectedCouponYield := 3.0
 					if report.CouponPercentByYear < expectedCouponYield-0.1 || report.CouponPercentByYear > expectedCouponYield+0.1 {
 						t.Errorf("Ожидаемая купонная доходность %.2f, получили %.2f", expectedCouponYield, report.CouponPercentByYear)
 					}
@@ -128,9 +128,9 @@ func TestCalculateProfit_Bond26248_CouponYield(t *testing.T) {
 
 	report := calculateProfit(bond, coupons, candle)
 
-	// Проверяем купонную доходность
-	// Годовые купоны: 61.08 * 2 = 122.16 руб
-	// Купонная доходность: (122.16 * 100) / 885 = 13.81%
+	// Годовые купоны: 61.8 * 2 = 123.6 руб, НКД = 0
+	// Инвестиции: 885 + 0 = 885 руб
+	// Купонная доходность: (123.6 * 100) / 885 = 13.97%
 	expectedCouponYield := 14.0
 
 	if report.CouponPercentByYear < expectedCouponYield-0.1 || report.CouponPercentByYear > expectedCouponYield+0.1 {
@@ -175,19 +175,12 @@ func TestCalculateProfit_AllYearCouponsIncludingPaid(t *testing.T) {
 
 	report := calculateProfit(bond, coupons, candle)
 
-	// Проверяем купонную доходность
-	// Все 4 купона должны учитываться: 25 * 4 = 100 руб в год
-	// Купонная доходность: (100 * 100) / (990 + 10 НКД) = 10000 / 1000 = 10%
+	// Все 4 купона текущего года: 25 * 4 = 100 руб
+	// Инвестиции: 990 + 10 НКД = 1000 руб
+	// Купонная доходность: (100 * 100) / 1000 = 10.0%
 	expectedCouponYield := 10.0
 
 	if report.CouponPercentByYear < expectedCouponYield-0.1 || report.CouponPercentByYear > expectedCouponYield+0.1 {
 		t.Errorf("Ожидаемая купонная доходность %.2f%%, получили %.2f%%", expectedCouponYield, report.CouponPercentByYear)
-		t.Logf("Детали расчета:")
-		t.Logf("  Цена облигации: %.2f руб", 990.0)
-		t.Logf("  НКД: %.2f руб", 10.0)
-		t.Logf("  Общие инвестиции: %.2f руб", 1000.0)
-		t.Logf("  Годовые купоны (4 шт по 25 руб): %.2f руб", 100.0)
-		t.Logf("  Расчет: (%.2f * 100) / %.2f = %.2f%%", 100.0, 1000.0, expectedCouponYield)
-		t.Logf("  Примечание: Учитываются ВСЕ купоны года, включая уже выплаченные")
 	}
 }

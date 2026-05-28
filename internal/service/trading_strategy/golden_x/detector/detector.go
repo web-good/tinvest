@@ -1,12 +1,29 @@
-package golden_x
+package detector
 
 import (
+	"errors"
+
 	"tinvest/internal/model"
 	"tinvest/internal/service/trading_strategy/divergence"
 	gxmodel "tinvest/internal/service/trading_strategy/golden_x/model"
 	"tinvest/internal/service/trading_strategy/golden_x/percentile"
 	"tinvest/pkg/indicators"
 )
+
+// divergenceFractalK is the half-window for fractal pivot detection: a candle
+// at index i is a confirmed pivot low iff its Low is strictly less than the
+// Lows of its 2*k neighbors (k on each side). k=2 is the classical Williams
+// fractal setting; on a weekly TF it gives a swing-low at least 2 weeks old.
+// Out of scope for D2: indicator-internal pivot width, not on the knob list.
+const divergenceFractalK = 2
+
+// ErrAdaptiveInsufficientHistory is returned when a share has fewer than
+// settings.AdaptiveWindowMin weekly RSI values available.
+var ErrAdaptiveInsufficientHistory = errors.New("adaptive tiers: insufficient RSI history")
+
+// ErrInsufficientHistory is returned when a share does not have enough closed
+// weekly candles to compute the EMA200 filter (fresh IPOs).
+var ErrInsufficientHistory = errors.New("trend filter: insufficient candle history")
 
 // Detect runs the full Golden X signal pipeline against an ordered weekly
 // candle history for a single share. It is pure: no I/O, no time

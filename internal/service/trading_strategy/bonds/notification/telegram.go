@@ -44,7 +44,7 @@ func Send(bonds []domain.BondReport, dateFrom time.Time, dateTo time.Time) strin
 
 		// Ключевые метрики в компактном виде
 		notifyMessageBuilder.WriteString(
-			"💰 <b>Доходность (с налогом)/год:</b> " + formatPercent(bond.PercentByYear) + "\n" +
+			"💰 <b>Чистая доходность/год:</b> " + formatPercent(bond.PercentByYear) + "\n" +
 				"🎯 <b>Купонная доходность в год:</b> " + formatPercent(bond.CouponPercentByYear) + "\n" +
 				"📈 <b>Прибыль/год:</b> " + formatMoney(bond.ManyByYear) + "₽\n" +
 				"💳 <b>НКД:</b> " + formatMoney(bond.Nkd) + "₽\n" +

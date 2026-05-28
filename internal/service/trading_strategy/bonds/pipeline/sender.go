@@ -24,12 +24,12 @@ func Sender(ctx context.Context, bondCh <-chan domain.BondReport, tgClient teleg
 		return
 	}
 
+	sortByCouponYield := int(dateTo.Sub(time.Now()).Hours()/8760) >= 6
+
 	sortedResult := collectionBond.GetTopByCriteria(func(i, j domain.BondReport) bool {
-		c := i.ExecutionDate.Year() - time.Now().Year()
-		if c >= 6 {
+		if sortByCouponYield {
 			return i.CouponPercentByYear > j.CouponPercentByYear
 		}
-
 		return i.PercentByYear > j.PercentByYear
 	}, 10)
 
