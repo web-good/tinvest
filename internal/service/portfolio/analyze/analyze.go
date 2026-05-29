@@ -17,9 +17,9 @@ func (s service) BondsPortfolio(ctx context.Context, chatID int64) error {
 		return nil
 	}
 
-	// Buckets: 0-3 years, 3-6 years, 6+ years
+	// Buckets: 0-2 years, 2-6 years, 6+ years (split points aligned with bonds screening strategy)
 	now := time.Now()
-	level1End := now.AddDate(3, 0, 0) // 3 years
+	level1End := now.AddDate(2, 0, 0) // 2 years
 	level2End := now.AddDate(6, 0, 0) // 6 years
 
 	var level1Sum, level2Sum, level3Sum float64
@@ -71,8 +71,8 @@ func (s service) BondsPortfolio(ctx context.Context, chatID int64) error {
 	// Build message
 	msg := fmt.Sprintf("📊 *Бонд-портфель анализ*\n\n")
 	msg += fmt.Sprintf("💰 *Общая стоимость:* %.2f RUB\n", totalBondSum)
-	msg += fmt.Sprintf("📅 *0-3 года:* %.2f RUB (%.2f%%)\n", level1Sum, level1Sum/totalBondSum*100)
-	msg += fmt.Sprintf("📅 *3-6 лет:* %.2f RUB (%.2f%%)\n", level2Sum, level2Sum/totalBondSum*100)
+	msg += fmt.Sprintf("📅 *0-2 года:* %.2f RUB (%.2f%%)\n", level1Sum, level1Sum/totalBondSum*100)
+	msg += fmt.Sprintf("📅 *2-6 лет:* %.2f RUB (%.2f%%)\n", level2Sum, level2Sum/totalBondSum*100)
 	msg += fmt.Sprintf("📅 *6+ лет:* %.2f RUB (%.2f%%)\n\n", level3Sum, level3Sum/totalBondSum*100)
 	msg += fmt.Sprintf("🏢 *По эмитентам:*\n")
 	for issuer, sum := range issuerSums {
