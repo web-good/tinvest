@@ -17,7 +17,6 @@ type service struct {
 	operationsServiceClient grpc.OperationsServiceClient
 	usersServiceClient      grpc.UsersServiceClient
 	tgClient                telegram.Client
-	snapshots               *snapshotStore
 	manualStartValue        float64
 }
 
@@ -32,7 +31,6 @@ func NewService(
 		operationsServiceClient: operationsServiceClient,
 		usersServiceClient:      usersServiceClient,
 		tgClient:                tgClient,
-		snapshots:               newSnapshotStore(cfg.SnapshotPath),
 		manualStartValue:        cfg.ManualStartValue,
 	}
 }

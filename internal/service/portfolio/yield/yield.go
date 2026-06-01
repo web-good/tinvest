@@ -9,11 +9,10 @@ import (
 	"tinvest/internal/service/portfolio/yield/notification"
 	"tinvest/pkg/client/grpc/model"
 	"tinvest/pkg/indicators"
-	"tinvest/pkg/logger"
 )
 
-// PortfolioYieldYTD computes the year-to-date portfolio yield, stores a snapshot,
-// and sends the result to the given Telegram chat.
+// PortfolioYieldYTD computes the year-to-date portfolio yield and sends the
+// result to the given Telegram chat.
 func (s *service) PortfolioYieldYTD(ctx context.Context, chatID int64) error {
 	now := time.Now()
 	year := now.Year()
@@ -49,20 +48,11 @@ func (s *service) PortfolioYieldYTD(ctx context.Context, chatID int64) error {
 	flows, deposits, withdrawals := toCashFlows(allOps)
 	netDeposits := deposits - withdrawals
 
-	// Read start-of-year value BEFORE appending today's snapshot.
-	// Pass periodStart (local-timezone Jan 1) so snapshot comparisons use the
-	// same timezone as time.Now()-based snapshot timestamps — preventing a
-	// positive-offset timezone (e.g. MSK=UTC+3) from misclassifying a Jan 1
-	// 02:00 local snapshot as a prior-year closing value.
-	vStart, ok, err := s.snapshots.valueAtYearStart(periodStart, s.manualStartValue)
-	if err != nil {
-		return fmt.Errorf("failed to read snapshot store: %w", err)
-	}
-
-	// Always append today's snapshot (best-effort; don't fail the whole run).
-	if appendErr := s.snapshots.append(Snapshot{Date: now, TotalValue: vEnd}); appendErr != nil {
-		logger.ErrorContext(ctx, "failed to append portfolio snapshot", "error", appendErr)
-	}
+	// Start-of-year portfolio value is supplied manually via configuration
+	// (PORTFOLIO_YTD_START_VALUE): the Tinkoff API does not expose historical
+	// portfolio value, so it cannot be derived automatically.
+	vStart := s.manualStartValue
+	ok := vStart > 0
 
 	y := domain.PortfolioYield{
 		PeriodStart: periodStart,
@@ -75,7 +65,7 @@ func (s *service) PortfolioYieldYTD(ctx context.Context, chatID int64) error {
 
 	if !ok {
 		y.XIRRAvailable = false
-		y.Note = "Недостаточно данных: стоимость портфеля на начало года неизвестна. Снимок сохранён — расчёт станет доступен в следующем периоде."
+		y.Note = "Недостаточно данных: укажите стоимость портфеля на начало года в переменной PORTFOLIO_YTD_START_VALUE."
 	} else {
 		y.StartValue = vStart
 
