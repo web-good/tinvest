@@ -33,6 +33,7 @@ func (a *App) initConfig(ctx context.Context) error {
 		AppName:        "T-invest",
 		GrpcClient:     config.NewGrpcClientConfig(),
 		TelegramClient: config.NewTelegramClientConfig(),
+		PortfolioYield: config.NewPortfolioYieldConfig(),
 	}
 	err = confita.NewLoader(
 		env.NewBackend(),
