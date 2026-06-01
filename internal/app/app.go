@@ -7,6 +7,7 @@ import (
 	"tinvest/internal/config"
 	"tinvest/internal/enum"
 	analyzescheduler "tinvest/internal/service/portfolio/analyze/scheduler"
+	yieldscheduler "tinvest/internal/service/portfolio/yield/scheduler"
 	bondsscheduler "tinvest/internal/service/trading_strategy/bonds/scheduler"
 	goldenx "tinvest/internal/service/trading_strategy/golden_x/dto"
 	gxmodel "tinvest/internal/service/trading_strategy/golden_x/model"
@@ -193,7 +194,7 @@ func (a *App) runDev(ctx context.Context) {
 
 func (a *App) runProd(ctx context.Context) {
 	wg := sync.WaitGroup{}
-	wg.Add(4)
+	wg.Add(5)
 	/*go func() {
 		defer wg.Done()
 		sh := mr.NewSchedulerService(a.sp.GetMacdRsiTradingService())
@@ -225,6 +226,13 @@ func (a *App) runProd(ctx context.Context) {
 		err := analyzescheduler.NewScheduler(a.sp.GetAnalyze()).BondsPortfolio(ctx, a.config.TelegramClient.ChatID[0])
 		if err != nil {
 			logger.ErrorContext(ctx, "Error in worker Bonds Portfolio Analyze", err.Error())
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		err := yieldscheduler.NewScheduler(a.sp.GetPortfolioYield()).PortfolioYieldYTD(ctx, a.config.TelegramClient.ChatID[0])
+		if err != nil {
+			logger.ErrorContext(ctx, "Error in worker Portfolio Yield YTD", err.Error())
 		}
 	}()
 	go func() {

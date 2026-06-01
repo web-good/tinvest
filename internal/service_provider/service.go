@@ -8,6 +8,7 @@ import (
 	"tinvest/internal/service/instrument/volatility"
 	"tinvest/internal/service/notification/purchase_shares"
 	"tinvest/internal/service/portfolio/analyze"
+	"tinvest/internal/service/portfolio/yield"
 	"tinvest/internal/service/trading_strategy/bonds"
 	"tinvest/internal/service/trading_strategy/ema200"
 	"tinvest/internal/service/trading_strategy/golden_x"
@@ -30,6 +31,7 @@ type service struct {
 	MACDInstrument            macd.Instrument
 	volatilityInstrument      volatility.Instrument
 	analyze                   analyze.Analyze
+	portfolioYield            yield.Yield
 }
 
 func (*ServiceProvider) GetPurchaseSharesService() purchase_shares.PurchaseShares {
@@ -187,4 +189,19 @@ func (*ServiceProvider) GetAnalyze() analyze.Analyze {
 	}
 
 	return serviceProvider.service.analyze
+}
+
+func (*ServiceProvider) GetPortfolioYield() yield.Yield {
+	if serviceProvider.service.portfolioYield == nil {
+		grpcClient, _ := serviceProvider.GetGrpcClient()
+		tgClient, _ := serviceProvider.GetTelegramBotClient()
+		serviceProvider.service.portfolioYield = yield.NewService(
+			grpcClient.OperationsServiceClient(),
+			grpcClient.UserServiceClient(),
+			tgClient,
+			serviceProvider.appConfig.PortfolioYield,
+		)
+	}
+
+	return serviceProvider.service.portfolioYield
 }
