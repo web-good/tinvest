@@ -50,7 +50,11 @@ func (s *service) PortfolioYieldYTD(ctx context.Context, chatID int64) error {
 	netDeposits := deposits - withdrawals
 
 	// Read start-of-year value BEFORE appending today's snapshot.
-	vStart, ok, err := s.snapshots.valueAtYearStart(year, s.manualStartValue)
+	// Pass periodStart (local-timezone Jan 1) so snapshot comparisons use the
+	// same timezone as time.Now()-based snapshot timestamps — preventing a
+	// positive-offset timezone (e.g. MSK=UTC+3) from misclassifying a Jan 1
+	// 02:00 local snapshot as a prior-year closing value.
+	vStart, ok, err := s.snapshots.valueAtYearStart(periodStart, s.manualStartValue)
 	if err != nil {
 		return fmt.Errorf("failed to read snapshot store: %w", err)
 	}

@@ -16,6 +16,12 @@ func makeSnap(dateStr string, value float64) Snapshot {
 	return Snapshot{Date: t.UTC(), TotalValue: value}
 }
 
+// yearStart builds the Jan-1 00:00:00 boundary in the given location,
+// mirroring how yield.go constructs periodStart.
+func yearStart(year int, loc *time.Location) time.Time {
+	return time.Date(year, time.January, 1, 0, 0, 0, 0, loc)
+}
+
 func TestLoad_NonExistentFile(t *testing.T) {
 	dir := t.TempDir()
 	store := newSnapshotStore(filepath.Join(dir, "snapshots.json"))
@@ -115,7 +121,7 @@ func TestValueAtYearStart_LastOnOrBefore(t *testing.T) {
 	_ = store.append(makeSnap("2024-12-30", 111111.0))
 	_ = store.append(makeSnap("2025-01-05", 222222.0))
 
-	value, ok, err := store.valueAtYearStart(2025, 0)
+	value, ok, err := store.valueAtYearStart(yearStart(2025, time.UTC), 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -134,7 +140,7 @@ func TestValueAtYearStart_EarlyJanuaryFallback(t *testing.T) {
 
 	_ = store.append(makeSnap("2025-01-03", 99999.0))
 
-	value, ok, err := store.valueAtYearStart(2025, 0)
+	value, ok, err := store.valueAtYearStart(yearStart(2025, time.UTC), 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -153,7 +159,7 @@ func TestValueAtYearStart_EarlyJanuaryFallback_OutsideTolerance(t *testing.T) {
 
 	_ = store.append(makeSnap("2025-01-10", 99999.0))
 
-	_, ok, err := store.valueAtYearStart(2025, 0)
+	_, ok, err := store.valueAtYearStart(yearStart(2025, time.UTC), 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -170,7 +176,7 @@ func TestValueAtYearStart_ManualOverride(t *testing.T) {
 	_ = store.append(makeSnap("2024-01-01", 50000.0)) // too old for 2025 start
 
 	// No Dec 2024 or early Jan 2025 snapshot.
-	value, ok, err := store.valueAtYearStart(2025, 77777.0)
+	value, ok, err := store.valueAtYearStart(yearStart(2025, time.UTC), 77777.0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -186,7 +192,7 @@ func TestValueAtYearStart_NoDataNoOverride(t *testing.T) {
 	dir := t.TempDir()
 	store := newSnapshotStore(filepath.Join(dir, "snapshots.json"))
 
-	value, ok, err := store.valueAtYearStart(2025, 0)
+	value, ok, err := store.valueAtYearStart(yearStart(2025, time.UTC), 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -213,7 +219,7 @@ func TestValueAtYearStart_OutOfOrderSnapshots(t *testing.T) {
 	_ = os.WriteFile(path, data, 0o644)
 
 	store := newSnapshotStore(path)
-	value, ok, err := store.valueAtYearStart(2025, 0)
+	value, ok, err := store.valueAtYearStart(yearStart(2025, time.UTC), 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -235,7 +241,7 @@ func TestValueAtYearStart_MultipleBeforeTarget_PicksLast(t *testing.T) {
 	_ = store.append(makeSnap("2024-12-31", 120000.0))
 	_ = store.append(makeSnap("2025-01-10", 130000.0))
 
-	value, ok, err := store.valueAtYearStart(2025, 0)
+	value, ok, err := store.valueAtYearStart(yearStart(2025, time.UTC), 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -255,7 +261,7 @@ func TestValueAtYearStart_MultipleEarlyJanuary_PicksEarliest(t *testing.T) {
 	_ = store.append(makeSnap("2025-01-05", 222222.0))
 	_ = store.append(makeSnap("2025-01-02", 111111.0)) // earliest
 
-	value, ok, err := store.valueAtYearStart(2025, 0)
+	value, ok, err := store.valueAtYearStart(yearStart(2025, time.UTC), 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -264,5 +270,51 @@ func TestValueAtYearStart_MultipleEarlyJanuary_PicksEarliest(t *testing.T) {
 	}
 	if value != 111111.0 {
 		t.Errorf("value = %v, want 111111 (Jan 2 snapshot)", value)
+	}
+}
+
+// TestValueAtYearStart_NonUTCTimezone_PositiveOffset is a regression test for the
+// timezone mismatch bug. When the system is in a positive UTC offset (e.g. MSK =
+// UTC+3), a snapshot taken at Jan 1 02:00 local time is Dec 31 23:00 UTC. With
+// the old code that built target in time.UTC, that snapshot would be treated as
+// "on or before Jan 1 UTC" and incorrectly selected as the prior-year closing
+// value. The fix passes yearStart in the caller's location, so the comparison is
+// timezone-consistent and the Dec 31 snapshot is correctly picked instead.
+func TestValueAtYearStart_NonUTCTimezone_PositiveOffset(t *testing.T) {
+	loc := time.FixedZone("MSK", 3*3600) // UTC+3
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "snapshots.json")
+
+	// Dec 31 2024 22:00 MSK = Dec 31 2024 19:00 UTC — unambiguously prior year.
+	dec31 := time.Date(2024, time.December, 31, 22, 0, 0, 0, loc)
+	// Jan 1 2025 02:00 MSK = Dec 31 2024 23:00 UTC. The bug would pick this as
+	// "on or before Jan 1 UTC" — selecting the wrong (current-year) snapshot.
+	jan1Morning := time.Date(2025, time.January, 1, 2, 0, 0, 0, loc)
+
+	snaps := []Snapshot{
+		{Date: dec31, TotalValue: 100000.0},
+		{Date: jan1Morning, TotalValue: 200000.0},
+	}
+	data, _ := json.MarshalIndent(snaps, "", "  ")
+	_ = os.WriteFile(path, data, 0o644)
+
+	store := newSnapshotStore(path)
+
+	// yearStart in MSK: Jan 1 2025 00:00 MSK.
+	ys := time.Date(2025, time.January, 1, 0, 0, 0, 0, loc)
+	value, ok, err := store.valueAtYearStart(ys, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	// Must return the Dec 31 22:00 MSK snapshot (100000), NOT the Jan 1 02:00
+	// MSK one (200000). The Jan 1 02:00 MSK snapshot is after midnight local
+	// time and falls into the early-January fallback window, but since there IS
+	// a valid prior-year snapshot it should never be selected as yearStart value.
+	if value != 100000.0 {
+		t.Errorf("value = %v, want 100000 (Dec 31 MSK snapshot); got current-year snapshot instead — timezone bug not fixed", value)
 	}
 }

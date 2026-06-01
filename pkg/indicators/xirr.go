@@ -9,13 +9,13 @@ import (
 
 // Solver tuning constants.
 const (
-	xirrMaxNewtonIter    = 100     // max Newton–Raphson iterations
-	xirrNPVTol           = 1e-7   // NPV convergence tolerance (shared by Newton and bisection)
-	xirrDerivZeroGuard   = 1e-15  // treat derivative as zero below this threshold
-	xirrBisectLo         = -0.999999 // bisection initial lower bound
-	xirrBisectHi         = 100.0  // bisection initial upper bound
-	xirrBisectWidenCap   = 1e6    // widen hi up to this cap
-	xirrBisectWidthTol   = 1e-9   // stop bisection when interval width falls below this
+	xirrMaxNewtonIter  = 100       // max Newton–Raphson iterations
+	xirrNPVTol         = 1e-7      // NPV convergence tolerance (shared by Newton and bisection)
+	xirrDerivZeroGuard = 1e-15     // treat derivative as zero below this threshold
+	xirrBisectLo       = -0.999999 // bisection initial lower bound
+	xirrBisectHi       = 100.0     // bisection initial upper bound
+	xirrBisectWidenCap = 1e6       // widen hi up to this cap
+	xirrBisectWidthTol = 1e-9      // stop bisection when interval width falls below this
 )
 
 // Sentinel errors for XIRR.

@@ -70,17 +70,20 @@ func (s *snapshotStore) append(snap Snapshot) error {
 
 // valueAtYearStart determines the portfolio value at the start of the given
 // calendar year using the following precedence:
-//  1. Last snapshot whose Date is on or before Jan 1 of year (closing value of prior year).
-//  2. Earliest snapshot within the first 7 days of January of year.
+//  1. Last snapshot whose Date is on or before yearStart (closing value of prior year).
+//  2. Earliest snapshot within the first 7 days after yearStart.
 //  3. manualOverride if > 0.
 //  4. (0, false, nil) — no data available.
-func (s *snapshotStore) valueAtYearStart(year int, manualOverride float64) (value float64, ok bool, err error) {
+//
+// yearStart must be Jan 1 00:00:00 in the caller's local timezone so that
+// comparisons are consistent with snapshot timestamps (which use time.Now()).
+func (s *snapshotStore) valueAtYearStart(yearStart time.Time, manualOverride float64) (value float64, ok bool, err error) {
 	snaps, err := s.load()
 	if err != nil {
 		return 0, false, err
 	}
 
-	target := time.Date(year, time.January, 1, 0, 0, 0, 0, time.UTC)
+	target := yearStart
 	tolerance := target.AddDate(0, 0, 7) // 7-day window into January
 	// Only consider snapshots from within the three months before target as
 	// "prior year closing value". Snapshots older than that are not a reliable
