@@ -21,3 +21,10 @@ type Operation struct {
 	InstrumentID string
 	Type         string
 }
+
+type CashOperation struct {
+	Date    time.Time
+	Type    string  // OperationType.String()
+	TypeID  int32   // raw OperationType enum value, for robust classification
+	Payment float64 // RUB amount from MoneyValue (units + nano/1e9)
+}

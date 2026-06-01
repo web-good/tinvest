@@ -51,3 +51,26 @@ func convertPositionFromBpToOperation(op *investapi.Operation) *model.Operation 
 		Type:         op.OperationType.String(),
 	}
 }
+
+// ConvertCursorItemsToCashOperations maps a slice of cursor-paginated OperationItem
+// (from GetOperationsByCursor) into the flat CashOperation model used for XIRR/yield
+// calculations. Payment is computed inline as units + nano/1e9 to avoid import cycles.
+func ConvertCursorItemsToCashOperations(items []*investapi.OperationItem) []model.CashOperation {
+	res := make([]model.CashOperation, 0, len(items))
+
+	for _, item := range items {
+		var payment float64
+		if p := item.GetPayment(); p != nil {
+			payment = float64(p.GetUnits()) + float64(p.GetNano())/1e9
+		}
+
+		res = append(res, model.CashOperation{
+			Date:    item.GetDate().AsTime(),
+			Type:    item.GetType().String(),
+			TypeID:  int32(item.GetType()),
+			Payment: payment,
+		})
+	}
+
+	return res
+}
