@@ -27,4 +27,5 @@ type CashOperation struct {
 	Type    string  // OperationType.String()
 	TypeID  int32   // raw OperationType enum value, for robust classification
 	Payment float64 // RUB amount from MoneyValue (units + nano/1e9)
+	Yield   float64 // realized P&L of the operation (units + nano/1e9); meaningful for trades (SELL)
 }

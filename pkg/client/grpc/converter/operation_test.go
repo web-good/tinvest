@@ -173,3 +173,34 @@ func TestConvertCursorItemsToCashOperations(t *testing.T) {
 		})
 	}
 }
+
+func TestConvertCursorItemsToCashOperations_Yield(t *testing.T) {
+	ts := time.Date(2026, 4, 10, 12, 0, 0, 0, time.UTC)
+	items := []*investapi.OperationItem{
+		{
+			Date:    timestamppb.New(ts),
+			Type:    investapi.OperationType_OPERATION_TYPE_SELL,
+			Payment: &investapi.MoneyValue{Units: 1000, Nano: 0},
+			Yield:   &investapi.MoneyValue{Units: 120, Nano: 500000000},
+		},
+		{
+			Date:    timestamppb.New(ts),
+			Type:    investapi.OperationType_OPERATION_TYPE_COUPON,
+			Payment: &investapi.MoneyValue{Units: 50, Nano: 0},
+			Yield:   nil, // нет Yield → 0
+		},
+	}
+
+	got := ConvertCursorItemsToCashOperations(items)
+	if len(got) != 2 {
+		t.Fatalf("got %d items, want 2", len(got))
+	}
+
+	const tol = 1e-9
+	if d := got[0].Yield - 120.5; d < -tol || d > tol {
+		t.Errorf("item[0].Yield = %v, want 120.5", got[0].Yield)
+	}
+	if d := got[1].Yield - 0; d < -tol || d > tol {
+		t.Errorf("item[1].Yield = %v, want 0", got[1].Yield)
+	}
+}

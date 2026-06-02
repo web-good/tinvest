@@ -64,11 +64,17 @@ func ConvertCursorItemsToCashOperations(items []*investapi.OperationItem) []mode
 			payment = float64(p.GetUnits()) + float64(p.GetNano())/1e9
 		}
 
+		var yield float64
+		if y := item.GetYield(); y != nil {
+			yield = float64(y.GetUnits()) + float64(y.GetNano())/1e9
+		}
+
 		res = append(res, model.CashOperation{
 			Date:    item.GetDate().AsTime(),
 			Type:    item.GetType().String(),
 			TypeID:  int32(item.GetType()),
 			Payment: payment,
+			Yield:   yield,
 		})
 	}
 
