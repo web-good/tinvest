@@ -25,7 +25,7 @@ func (f *fakeOperationsClient) GetOperation(_ context.Context, _ string, _ strin
 	return nil, nil
 }
 
-func (f *fakeOperationsClient) GetCashFlowOperations(_ context.Context, _ string, _, _ time.Time) ([]grpcmodel.CashOperation, error) {
+func (f *fakeOperationsClient) GetCashOperations(_ context.Context, _ string, _, _ time.Time) ([]grpcmodel.CashOperation, error) {
 	return f.cashOps, nil
 }
 

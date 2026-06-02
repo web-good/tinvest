@@ -38,9 +38,9 @@ func (s *service) PortfolioYieldYTD(ctx context.Context, chatID int64) error {
 		}
 		vEnd += total
 
-		ops, err := s.operationsServiceClient.GetCashFlowOperations(ctx, acc.ID, periodStart, periodEnd)
+		ops, err := s.operationsServiceClient.GetCashOperations(ctx, acc.ID, periodStart, periodEnd)
 		if err != nil {
-			return fmt.Errorf("failed to get cash flow operations for account %s: %w", acc.ID, err)
+			return fmt.Errorf("failed to get cash operations for account %s: %w", acc.ID, err)
 		}
 		allOps = append(allOps, ops...)
 	}

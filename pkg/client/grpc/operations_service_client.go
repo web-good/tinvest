@@ -15,7 +15,7 @@ import (
 type OperationsServiceClient interface {
 	GetPortfolio(ctx context.Context, accountID string) ([]*model.Position, error)
 	GetOperation(ctx context.Context, accountID string, figi string) ([]*model.Operation, error)
-	GetCashFlowOperations(ctx context.Context, accountID string, from, to time.Time) ([]model.CashOperation, error)
+	GetCashOperations(ctx context.Context, accountID string, from, to time.Time) ([]model.CashOperation, error)
 	GetPortfolioTotal(ctx context.Context, accountID string) (float64, error)
 }
 
@@ -64,9 +64,10 @@ func (o *operationsServiceClient) GetOperation(ctx context.Context, accountID st
 	return converter.ConvertOperationFromBp(resp.Operations), nil
 }
 
-// depositWithdrawalTypes lists the operation types that represent cash moving
-// into or out of the account. Used as the filter for GetCashFlowOperations.
-var depositWithdrawalTypes = []investapi.OperationType{
+// relevantOperationTypes lists the operation types fetched for portfolio-yield
+// calculation: cash deposits/withdrawals (for XIRR) plus income operations
+// (coupons, dividends, sales) and their taxes (for the income breakdown).
+var relevantOperationTypes = []investapi.OperationType{
 	// Deposits
 	investapi.OperationType_OPERATION_TYPE_INPUT,
 	investapi.OperationType_OPERATION_TYPE_INPUT_SWIFT,
@@ -77,11 +78,25 @@ var depositWithdrawalTypes = []investapi.OperationType{
 	investapi.OperationType_OPERATION_TYPE_OUTPUT_SWIFT,
 	investapi.OperationType_OPERATION_TYPE_OUTPUT_ACQUIRING,
 	investapi.OperationType_OPERATION_TYPE_OUT_MULTI,
+	// Coupons + tax
+	investapi.OperationType_OPERATION_TYPE_COUPON,
+	investapi.OperationType_OPERATION_TYPE_BOND_TAX,
+	investapi.OperationType_OPERATION_TYPE_BOND_TAX_PROGRESSIVE,
+	// Dividends + tax
+	investapi.OperationType_OPERATION_TYPE_DIVIDEND,
+	investapi.OperationType_OPERATION_TYPE_DIV_EXT,
+	investapi.OperationType_OPERATION_TYPE_DIVIDEND_TAX,
+	investapi.OperationType_OPERATION_TYPE_DIVIDEND_TAX_PROGRESSIVE,
+	// Sales (realized profit via Yield)
+	investapi.OperationType_OPERATION_TYPE_SELL,
+	investapi.OperationType_OPERATION_TYPE_SELL_CARD,
+	investapi.OperationType_OPERATION_TYPE_SELL_MARGIN,
 }
 
-// GetCashFlowOperations fetches all executed deposit/withdrawal operations for
-// the given account and time range using cursor-based pagination.
-func (o *operationsServiceClient) GetCashFlowOperations(ctx context.Context, accountID string, from, to time.Time) ([]model.CashOperation, error) {
+// GetCashOperations fetches all executed operations relevant to portfolio-yield
+// computation (deposits/withdrawals, coupons, dividends, sales and their taxes)
+// for the given account and time range using cursor-based pagination.
+func (o *operationsServiceClient) GetCashOperations(ctx context.Context, accountID string, from, to time.Time) ([]model.CashOperation, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
@@ -100,7 +115,7 @@ func (o *operationsServiceClient) GetCashFlowOperations(ctx context.Context, acc
 			To:             toPb,
 			State:          &state,
 			Limit:          &limit,
-			OperationTypes: depositWithdrawalTypes,
+			OperationTypes: relevantOperationTypes,
 		}
 		if cursor != "" {
 			req.Cursor = &cursor
