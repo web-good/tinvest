@@ -34,6 +34,7 @@ func (a *App) initConfig(ctx context.Context) error {
 		GrpcClient:     config.NewGrpcClientConfig(),
 		TelegramClient: config.NewTelegramClientConfig(),
 		PortfolioYield: config.NewPortfolioYieldConfig(),
+		Scalping:       config.NewScalpingConfig(),
 	}
 	err = confita.NewLoader(
 		env.NewBackend(),
