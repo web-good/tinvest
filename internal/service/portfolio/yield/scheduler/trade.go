@@ -27,10 +27,10 @@ func (s *schedulerService) PortfolioYieldYTD(ctx context.Context, chatID int64) 
 			logger.ErrorContext(ctx, "Ошибка в ходе работы job", err)
 		}
 	})
-	s.sh.Start()
 	if err != nil {
 		return err
 	}
+	s.sh.Start()
 	defer s.sh.Stop()
 
 	for {
@@ -38,9 +38,7 @@ func (s *schedulerService) PortfolioYieldYTD(ctx context.Context, chatID int64) 
 		case <-ctx.Done():
 			return nil
 		case <-jobTicker.C:
-			logger.InfoContext(ctx, "Worker Portfolio Yield YTD is running")
-		default:
-			time.Sleep(10 * time.Second)
+			logger.InfoContext(ctx, "Воркер Portfolio Yield YTD работает")
 		}
 	}
 }
