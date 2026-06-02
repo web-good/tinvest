@@ -24,7 +24,10 @@ func Send(y domain.PortfolioYield) string {
 	b.WriteString("💼 <b>Стоимость на начало года:</b> " + formatMoney(y.StartValue) + " ₽\n")
 	b.WriteString("💼 <b>Текущая стоимость:</b> " + formatMoney(y.EndValue) + " ₽\n")
 	b.WriteString("➕ <b>Пополнения:</b> " + formatMoney(y.Deposits) + " ₽\n")
-	b.WriteString("➖ <b>Выводы:</b> " + formatMoney(y.Withdrawals) + " ₽\n\n")
+	b.WriteString("➖ <b>Выводы:</b> " + formatMoney(y.Withdrawals) + " ₽\n")
+	b.WriteString("💰 <b>Купоны (чистыми):</b> " + formatMoney(y.CouponsNet) + " ₽\n")
+	b.WriteString("💎 <b>Дивиденды (чистыми):</b> " + formatMoney(y.DividendsNet) + " ₽\n")
+	b.WriteString("📈 <b>Прибыль от продаж:</b> " + formatSignedMoney(y.RealizedSaleProfit) + "\n\n")
 
 	// Returns
 	periodLine := "📊 <b>Доходность за период:</b> " + formatPercent(y.PeriodReturn*100)

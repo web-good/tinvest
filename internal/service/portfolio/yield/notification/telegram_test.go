@@ -17,10 +17,13 @@ func makeYield(xirr float64, xirrAvailable bool, note string) domain.PortfolioYi
 		Deposits:       50000.0,
 		Withdrawals:    10000.0,
 		NetDeposits:    40000.0,
-		AnnualizedXIRR: xirr,
-		PeriodReturn:   0.16,
-		XIRRAvailable:  xirrAvailable,
-		Note:           note,
+		AnnualizedXIRR:     xirr,
+		PeriodReturn:       0.16,
+		XIRRAvailable:      xirrAvailable,
+		Note:               note,
+		CouponsNet:         3200.0,
+		DividendsNet:       5800.0,
+		RealizedSaleProfit: -1500.0,
 	}
 }
 
@@ -52,6 +55,13 @@ func TestSend_XIRRAvailable(t *testing.T) {
 		"+80 000 ₽",
 		// Annual XIRR projection: 0.154 * (500000 + 40000) = 83160
 		"+83 160 ₽/год",
+		// Income breakdown
+		"Купоны (чистыми):",
+		"3 200",
+		"Дивиденды (чистыми):",
+		"5 800",
+		"Прибыль от продаж:",
+		"−1 500 ₽",
 		// Footer
 		"📌 Данные актуальны на",
 	}
