@@ -42,6 +42,7 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) error {
 			InstrumentName: sh.Name,
 			Ticker:         sh.Ticker,
 			ATRPercent:     atrItem.Value / sh.LastPriceRub * 100,
+			ATR:            atrItem.Value,
 		})
 	}
 	top := universe.TopN(scored, s.settings.UniverseSize)
@@ -93,12 +94,6 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) error {
 		closeQ := candles[len(candles)-1].Close
 		price := utils.CombinePrice(closeQ.Units, closeQ.Nano)
 
-		atrItem, atrErr := s.atr.TechAnalyse(ctx, &id, interval, dateNow)
-		if atrErr != nil {
-			logger.ErrorContext(ctx, fmt.Sprintf("scalping: atr %s skipped", item.Ticker))
-			continue
-		}
-
 		purchase, hasPos := posByID[id]
 
 		sig := Decide(Candidate{
@@ -106,7 +101,7 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) error {
 			InstrumentName: item.InstrumentName,
 			Ticker:         item.Ticker,
 			Price:          price,
-			ATR:            atrItem.Value,
+			ATR:            item.ATR,
 			AboveEMA:       price > emaVal,
 			RSIPrev:        rsiPrev,
 			RSINow:         rsiNow,

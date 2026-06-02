@@ -205,7 +205,6 @@ func (a *App) runDev(ctx context.Context) {
 	go func() {
 		defer wg.Done()
 		err := a.sp.GetScalpingTradingService().Trade(ctx, scalpingdto.Trade{
-			Interval:  enum.Hour1,
 			Scheduler: "0 8-23 * * 1-5",
 		})
 		if err != nil {
@@ -305,7 +304,6 @@ func (a *App) runProd(ctx context.Context) {
 		err := scalpingscheduler.NewSchedulerService(a.sp.GetScalpingTradingService()).Trade(
 			ctx,
 			scalpingdto.Trade{
-				Interval:  enum.Hour1,
 				Scheduler: "1 8-23 * * 1-5",
 			},
 		)
