@@ -87,7 +87,7 @@ func formatSignedMoney(value float64) string {
 	return sign + groupThousands(rounded) + " ₽"
 }
 
-// groupThousands inserts a thin space every three digits of an unsigned integer string.
+// groupThousands inserts a space every three digits of an unsigned integer string.
 func groupThousands(intPart string) string {
 	if len(intPart) <= 3 {
 		return intPart
