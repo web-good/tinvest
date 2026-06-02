@@ -1,6 +1,7 @@
 package notification
 
 import (
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -26,10 +27,23 @@ func Send(y domain.PortfolioYield) string {
 	b.WriteString("➖ <b>Выводы:</b> " + formatMoney(y.Withdrawals) + " ₽\n\n")
 
 	// Returns
-	b.WriteString("📊 <b>Доходность за период:</b> " + formatPercent(y.PeriodReturn*100) + "\n")
+	periodLine := "📊 <b>Доходность за период:</b> " + formatPercent(y.PeriodReturn*100)
+	if y.StartValue > 0 {
+		// Actual realized profit since the start of the year, in rubles.
+		periodProfit := y.EndValue - y.StartValue - y.NetDeposits
+		periodLine += " (≈ " + formatSignedMoney(periodProfit) + ")"
+	}
+	b.WriteString(periodLine + "\n")
 
 	if y.XIRRAvailable {
-		b.WriteString("📐 <b>Годовая (XIRR):</b> " + formatPercent(y.AnnualizedXIRR*100) + "\n")
+		xirrLine := "📐 <b>Годовая (XIRR):</b> " + formatPercent(y.AnnualizedXIRR*100)
+		if y.StartValue > 0 {
+			// Projected full-year profit at the current annualized pace:
+			// rate applied to the invested capital (start value + net deposits).
+			annualProjection := y.AnnualizedXIRR * (y.StartValue + y.NetDeposits)
+			xirrLine += " (≈ " + formatSignedMoney(annualProjection) + "/год)"
+		}
+		b.WriteString(xirrLine + "\n")
 	} else {
 		note := y.Note
 		if note == "" {
@@ -56,6 +70,33 @@ func htmlEscape(s string) string {
 // formatPercent formats a value already in percent units (e.g. 12.3 → "12.3%").
 func formatPercent(value float64) string {
 	return strconv.FormatFloat(value, 'f', 1, 64) + "%"
+}
+
+// formatSignedMoney formats a signed amount rounded to whole rubles, with an explicit
+// +/− sign and the ₽ symbol (e.g. 12858.7 → "+12 859 ₽", -500.4 → "−500 ₽").
+// Used for the approximate (≈) figures shown next to the percentages.
+func formatSignedMoney(value float64) string {
+	sign := "+"
+	if value < 0 {
+		sign = "−" // U+2212 minus sign
+	}
+	rounded := strconv.FormatFloat(math.Round(math.Abs(value)), 'f', 0, 64)
+	return sign + groupThousands(rounded) + " ₽"
+}
+
+// groupThousands inserts a thin space every three digits of an unsigned integer string.
+func groupThousands(intPart string) string {
+	if len(intPart) <= 3 {
+		return intPart
+	}
+	var b strings.Builder
+	for i, ch := range intPart {
+		if i > 0 && (len(intPart)-i)%3 == 0 {
+			b.WriteString(" ")
+		}
+		b.WriteRune(ch)
+	}
+	return b.String()
 }
 
 // formatMoney formats a number with thousands separators and one decimal place.

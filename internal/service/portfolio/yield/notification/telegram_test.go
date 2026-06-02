@@ -48,6 +48,10 @@ func TestSend_XIRRAvailable(t *testing.T) {
 		"15.4%",
 		// XIRR label appears when available
 		"Годовая (XIRR):",
+		// Period profit in rubles: 620000 - 500000 - 40000 = 80000
+		"+80 000 ₽",
+		// Annual XIRR projection: 0.154 * (500000 + 40000) = 83160
+		"+83 160 ₽/год",
 		// Footer
 		"📌 Данные актуальны на",
 	}
