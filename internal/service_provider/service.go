@@ -13,6 +13,7 @@ import (
 	"tinvest/internal/service/trading_strategy/ema200"
 	"tinvest/internal/service/trading_strategy/golden_x"
 	"tinvest/internal/service/trading_strategy/macd_rsi"
+	"tinvest/internal/service/trading_strategy/scalping"
 	"tinvest/internal/service/trading_strategy/scalping_rsi"
 	"tinvest/internal/service/trading_strategy/super_trend"
 )
@@ -21,6 +22,7 @@ type service struct {
 	purchaseSharesService     purchase_shares.PurchaseShares
 	macdRsiTradingService     macd_rsi.MacdRsi
 	scalpingRsiTradingService scalping_rsi.ScalpingRsi
+	scalpingTradingService    scalping.Scalping
 	superTrendTradingService  super_trend.SuperTrend
 	goldenXTradingService     golden_x.GoldenX
 	bondsTradingService       bonds.Bonds
@@ -204,4 +206,23 @@ func (*ServiceProvider) GetPortfolioYield() yield.Yield {
 	}
 
 	return serviceProvider.service.portfolioYield
+}
+
+func (*ServiceProvider) GetScalpingTradingService() scalping.Scalping {
+	if serviceProvider.service.scalpingTradingService == nil {
+		grpcClient, _ := serviceProvider.GetGrpcClient()
+		tgClient, _ := serviceProvider.GetTelegramBotClient()
+		serviceProvider.service.scalpingTradingService = scalping.NewService(
+			serviceProvider.Ema(),
+			serviceProvider.RSI(),
+			serviceProvider.Atr(),
+			grpcClient.InstrumentsServiceClient(),
+			grpcClient.MarketDataServiceClient(),
+			grpcClient.OperationsServiceClient(),
+			tgClient,
+			serviceProvider.appConfig.Scalping.AccountID,
+		)
+	}
+
+	return serviceProvider.service.scalpingTradingService
 }
