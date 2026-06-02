@@ -12,6 +12,8 @@ import (
 	goldenx "tinvest/internal/service/trading_strategy/golden_x/dto"
 	gxmodel "tinvest/internal/service/trading_strategy/golden_x/model"
 	"tinvest/internal/service/trading_strategy/golden_x/scheduler"
+	scalpingdto "tinvest/internal/service/trading_strategy/scalping/dto"
+	scalpingscheduler "tinvest/internal/service/trading_strategy/scalping/scheduler"
 	"tinvest/internal/service_provider"
 	"tinvest/pkg/closer"
 	"tinvest/pkg/logger"
@@ -199,12 +201,23 @@ func (a *App) runDev(ctx context.Context) {
 			}
 		}()
 	*/
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err := a.sp.GetScalpingTradingService().Trade(ctx, scalpingdto.Trade{
+			Interval:  enum.Hour1,
+			Scheduler: "0 8-23 * * 1-5",
+		})
+		if err != nil {
+			logger.ErrorContext(ctx, "Error in worker Scalping", err.Error())
+		}
+	}()
 	wg.Wait()
 }
 
 func (a *App) runProd(ctx context.Context) {
 	wg := sync.WaitGroup{}
-	wg.Add(5)
+	wg.Add(6)
 	/*go func() {
 		defer wg.Done()
 		sh := mr.NewSchedulerService(a.sp.GetMacdRsiTradingService())
@@ -285,6 +298,19 @@ func (a *App) runProd(ctx context.Context) {
 		)
 		if err != nil {
 			logger.ErrorContext(ctx, "Error in worker golden X strategy ShareTip:2", err.Error())
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		err := scalpingscheduler.NewSchedulerService(a.sp.GetScalpingTradingService()).Trade(
+			ctx,
+			scalpingdto.Trade{
+				Interval:  enum.Hour1,
+				Scheduler: "1 8-23 * * 1-5",
+			},
+		)
+		if err != nil {
+			logger.ErrorContext(ctx, "Error in worker Scalping", err.Error())
 		}
 	}()
 	wg.Wait()
