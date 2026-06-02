@@ -91,6 +91,17 @@ func TestDecide(t *testing.T) {
 			openCount: 1,
 			wantKind:  model.SignalNone,
 		},
+		{
+			name: "sell TP even when open cap is reached",
+			cand: Candidate{
+				Price: 104, ATR: 2, HasPosition: true, PurchasePrice: 100,
+			},
+			openCount:  5,
+			wantKind:   model.SignalSell,
+			wantTP:     103,
+			wantSL:     98,
+			wantReason: "TP",
+		},
 	}
 
 	for _, tt := range tests {

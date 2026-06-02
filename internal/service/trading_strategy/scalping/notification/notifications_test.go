@@ -33,3 +33,14 @@ func TestTrade_OnlyBuysOmitsSellSection(t *testing.T) {
 		t.Errorf("sell section should be absent\n---\n%s", got)
 	}
 }
+
+func TestTrade_NoSignals(t *testing.T) {
+	got := Trade(nil)
+
+	if strings.Contains(got, "покупку") {
+		t.Errorf("buy section should be absent for nil signals\n---\n%s", got)
+	}
+	if strings.Contains(got, "продажу") {
+		t.Errorf("sell section should be absent for nil signals\n---\n%s", got)
+	}
+}
