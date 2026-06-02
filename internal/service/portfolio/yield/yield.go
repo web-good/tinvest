@@ -46,6 +46,7 @@ func (s *service) PortfolioYieldYTD(ctx context.Context, chatID int64) error {
 	}
 
 	flows, deposits, withdrawals := toCashFlows(allOps)
+	couponsNet, dividendsNet, realizedSaleProfit := aggregateIncome(allOps)
 	netDeposits := deposits - withdrawals
 
 	// Start-of-year portfolio value is supplied manually via configuration
@@ -55,12 +56,15 @@ func (s *service) PortfolioYieldYTD(ctx context.Context, chatID int64) error {
 	ok := vStart > 0
 
 	y := domain.PortfolioYield{
-		PeriodStart: periodStart,
-		PeriodEnd:   periodEnd,
-		EndValue:    vEnd,
-		Deposits:    deposits,
-		Withdrawals: withdrawals,
-		NetDeposits: netDeposits,
+		PeriodStart:        periodStart,
+		PeriodEnd:          periodEnd,
+		EndValue:           vEnd,
+		Deposits:           deposits,
+		Withdrawals:        withdrawals,
+		NetDeposits:        netDeposits,
+		CouponsNet:         couponsNet,
+		DividendsNet:       dividendsNet,
+		RealizedSaleProfit: realizedSaleProfit,
 	}
 
 	if !ok {
