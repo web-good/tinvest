@@ -163,3 +163,33 @@ func TestToCashFlows_ReturnType(t *testing.T) {
 	flows, _, _ := toCashFlows([]model.CashOperation{makeOp(1, 100)})
 	var _ = flows // use flows to satisfy compiler
 }
+
+func TestAggregateIncome(t *testing.T) {
+	ops := []model.CashOperation{
+		{TypeID: 23, Payment: 1000}, // COUPON gross
+		{TypeID: 23, Payment: 500},  // COUPON gross
+		{TypeID: 2, Payment: -195},  // BOND_TAX (приходит отрицательным)
+		{TypeID: 33, Payment: -30},  // BOND_TAX_PROGRESSIVE
+		{TypeID: 21, Payment: 2000}, // DIVIDEND gross
+		{TypeID: 43, Payment: 300},  // DIV_EXT gross
+		{TypeID: 8, Payment: -260},  // DIVIDEND_TAX
+		{TypeID: 34, Payment: -40},  // DIVIDEND_TAX_PROGRESSIVE
+		{TypeID: 22, Yield: 1200},   // SELL realized profit
+		{TypeID: 7, Yield: -300},    // SELL_CARD realized loss
+		{TypeID: 18, Yield: 50},     // SELL_MARGIN
+		{TypeID: 1, Payment: 99999}, // INPUT — должен игнорироваться
+	}
+
+	couponsNet, dividendsNet, saleProfit := aggregateIncome(ops)
+
+	const tol = 1e-9
+	if d := couponsNet - (1500 - 225); d < -tol || d > tol {
+		t.Errorf("couponsNet = %v, want 1275", couponsNet)
+	}
+	if d := dividendsNet - (2300 - 300); d < -tol || d > tol {
+		t.Errorf("dividendsNet = %v, want 2000", dividendsNet)
+	}
+	if d := saleProfit - (1200 - 300 + 50); d < -tol || d > tol {
+		t.Errorf("saleProfit = %v, want 950", saleProfit)
+	}
+}
