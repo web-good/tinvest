@@ -145,9 +145,58 @@ func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 	return sig
 }
 
-// decide is the pure decision core. STUB: filled in Task 4.
+// decide is the pure decision core over already-computed indicator values.
 func (s *Strategy) decide(in decideInput) model.Signal {
-	return model.Signal{Price: in.price, RSI: in.rsiNow}
+	sig := model.Signal{Price: in.price, RSI: in.rsiNow}
+	reg := s.regimeOf(in.adx)
+
+	// Manage an open position (long-only): exits are regime-dependent.
+	if in.pos != nil {
+		hardSL := in.pos.PurchasePrice - s.p.SLMult*in.atr
+		if reg == regimeTrend {
+			chandelier := in.chandelierHigh - s.p.TrailMult*in.atr
+			// Report the protective floor even on a hold (mirrors the range branch).
+			// Trend has no fixed take-profit — the chandelier trails instead, so TakeProfit stays 0.
+			sig.StopLoss = hardSL
+			switch {
+			case in.price <= hardSL:
+				sig.Kind, sig.Reason = model.SignalSell, "SL"
+			case in.price <= chandelier:
+				sig.Kind, sig.Reason, sig.StopLoss = model.SignalSell, "TRAIL", chandelier
+			}
+			return sig
+		}
+		// range or dead zone -> mean-reversion management.
+		mid := (in.donUpper + in.donLower) / 2
+		sig.StopLoss = hardSL
+		sig.TakeProfit = mid
+		switch {
+		case in.price <= hardSL:
+			sig.Kind, sig.Reason = model.SignalSell, "SL"
+		case in.price >= mid && mid > 0:
+			sig.Kind, sig.Reason = model.SignalSell, "TP"
+		}
+		return sig
+	}
+
+	// Flat -> regime-specific entries (long only).
+	switch reg {
+	case regimeTrend:
+		crossedUp := in.rsiPrev < s.p.RSITrendLevel && in.rsiNow >= s.p.RSITrendLevel
+		if in.diPlus > in.diMinus && in.emaTouched && crossedUp && in.price > in.emaNow {
+			sig.Kind = model.SignalBuy
+			sig.StopLoss = in.price - s.p.SLMult*in.atr
+			sig.TakeProfit = in.price + s.p.TrailMult*in.atr
+		}
+	case regimeRange:
+		crossedUp := in.rsiPrev < s.p.RSIRangeLevel && in.rsiNow >= s.p.RSIRangeLevel
+		if in.price <= in.donLower*(1+s.p.BandTol) && crossedUp {
+			sig.Kind = model.SignalBuy
+			sig.StopLoss = in.price - s.p.SLMult*in.atr
+			sig.TakeProfit = (in.donUpper + in.donLower) / 2
+		}
+	}
+	return sig
 }
 
 // emaTouched reports whether a low dipped to the EMA (within tol) on any of the last

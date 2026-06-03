@@ -107,3 +107,192 @@ func TestDecide_FlatUptrendIsNone(t *testing.T) {
 		t.Errorf("Ticker = %q, want RUAL", got.Ticker)
 	}
 }
+
+// testParams uses clean levels/multipliers so expected stops/targets are exact.
+// Indicator periods are irrelevant here: decide() consumes pre-computed scalars.
+func testParams() Params {
+	return Params{
+		EMAPeriod: 3, ADXPeriod: 2, ADXTrendLevel: 25, ADXRangeLevel: 20,
+		RSIPeriod: 2, RSITrendLevel: 45, RSIRangeLevel: 35,
+		PullbackWindow: 5, DonchianPeriod: 3, ATRPeriod: 2,
+		SLMult: 1.0, TrailMult: 2.0, ChandelierWindow: 3,
+		EMATouchTol: 0.002, BandTol: 0.003,
+	}
+}
+
+func TestDecideCore(t *testing.T) {
+	s := NewWithParams(testParams())
+
+	tests := []struct {
+		name       string
+		in         decideInput
+		wantKind   model.SignalKind
+		wantReason string
+		wantTP     float64
+		wantSL     float64
+	}{
+		{
+			name: "trend entry: pullback + rsi cross + di+",
+			in: decideInput{
+				price: 100, atr: 2, emaNow: 99, rsiPrev: 40, rsiNow: 46,
+				adx: 30, diPlus: 25, diMinus: 10, emaTouched: true,
+			},
+			wantKind: model.SignalBuy, wantTP: 104, wantSL: 98, // 100+2*2 ; 100-1*2
+		},
+		{
+			name: "trend no pullback -> none",
+			in: decideInput{
+				price: 100, atr: 2, emaNow: 99, rsiPrev: 40, rsiNow: 46,
+				adx: 30, diPlus: 25, diMinus: 10, emaTouched: false,
+			},
+			wantKind: model.SignalNone,
+		},
+		{
+			name: "trend di+ < di- -> none",
+			in: decideInput{
+				price: 100, atr: 2, emaNow: 99, rsiPrev: 40, rsiNow: 46,
+				adx: 30, diPlus: 10, diMinus: 25, emaTouched: true,
+			},
+			wantKind: model.SignalNone,
+		},
+		{
+			name: "trend rsi did not cross -> none",
+			in: decideInput{
+				price: 100, atr: 2, emaNow: 99, rsiPrev: 46, rsiNow: 50,
+				adx: 30, diPlus: 25, diMinus: 10, emaTouched: true,
+			},
+			wantKind: model.SignalNone,
+		},
+		{
+			name: "trend entry blocked when price not above ema",
+			in: decideInput{
+				price: 100, atr: 2, emaNow: 101, rsiPrev: 40, rsiNow: 46,
+				adx: 30, diPlus: 25, diMinus: 10, emaTouched: true,
+			},
+			wantKind: model.SignalNone, // price 100 <= emaNow 101 -> trend not intact -> no entry
+		},
+		{
+			name: "range entry: at lower band + rsi cross",
+			in: decideInput{
+				price: 100, atr: 2, rsiPrev: 30, rsiNow: 36,
+				adx: 15, donUpper: 110, donLower: 99.8, // 100 <= 99.8*1.003 = 100.0994
+			},
+			wantKind: model.SignalBuy, wantTP: 104.9, wantSL: 98, // mid=(110+99.8)/2 ; 100-2
+		},
+		{
+			name: "range mid-channel (not near lower) -> none",
+			in: decideInput{
+				price: 105, atr: 2, rsiPrev: 30, rsiNow: 36,
+				adx: 15, donUpper: 110, donLower: 99.8,
+			},
+			wantKind: model.SignalNone,
+		},
+		{
+			name: "dead zone flat -> none",
+			in: decideInput{
+				price: 100, atr: 2, emaNow: 99, rsiPrev: 30, rsiNow: 46,
+				adx: 22, diPlus: 25, diMinus: 10, emaTouched: true,
+				donUpper: 110, donLower: 99.8,
+			},
+			wantKind: model.SignalNone,
+		},
+		{
+			name: "range exit: take profit at mid",
+			in: decideInput{
+				price: 106, atr: 2, adx: 15, donUpper: 110, donLower: 100, // mid=105
+				pos: &strategy.Position{PurchasePrice: 100},
+			},
+			wantKind: model.SignalSell, wantReason: "TP", wantTP: 105, wantSL: 98,
+		},
+		{
+			name: "range exit: stop loss",
+			in: decideInput{
+				price: 97, atr: 2, adx: 15, donUpper: 110, donLower: 100, // mid=105
+				pos: &strategy.Position{PurchasePrice: 100},
+			},
+			wantKind: model.SignalSell, wantReason: "SL", wantTP: 105, wantSL: 98,
+		},
+		{
+			name: "range exit: degenerate donchian does not fire spurious TP",
+			in: decideInput{
+				price: 99, atr: 2, adx: 15, donUpper: 0, donLower: 0, // mid=0
+				pos: &strategy.Position{PurchasePrice: 100}, // hardSL=98, price 99 > 98 (no SL)
+			},
+			wantKind: model.SignalNone, // mid=0 guard prevents a bogus take-profit
+		},
+		{
+			name: "trend exit: chandelier trail",
+			in: decideInput{
+				price: 105, atr: 2, adx: 30, chandelierHigh: 110, // chandelier=110-2*2=106
+				pos: &strategy.Position{PurchasePrice: 100}, // hardSL=98, price 105 > 98
+			},
+			wantKind: model.SignalSell, wantReason: "TRAIL", wantSL: 106,
+		},
+		{
+			name: "trend exit: initial stop wins over trail",
+			in: decideInput{
+				price: 97.5, atr: 2, adx: 30, chandelierHigh: 101, // chandelier=97, hardSL=98
+				pos: &strategy.Position{PurchasePrice: 100}, // 97.5 <= 98 -> SL first
+			},
+			wantKind: model.SignalSell, wantReason: "SL", wantSL: 98,
+		},
+		{
+			name: "trend hold while rising -> none",
+			in: decideInput{
+				price: 118, atr: 2, adx: 30, chandelierHigh: 120, // chandelier=116, hardSL=98
+				pos: &strategy.Position{PurchasePrice: 100},
+			},
+			wantKind: model.SignalNone,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := s.decide(tt.in)
+			if got.Kind != tt.wantKind {
+				t.Fatalf("Kind = %v, want %v", got.Kind, tt.wantKind)
+			}
+			if tt.wantKind == model.SignalNone {
+				return
+			}
+			if got.Reason != tt.wantReason {
+				t.Errorf("Reason = %q, want %q", got.Reason, tt.wantReason)
+			}
+			if tt.wantTP != 0 && got.TakeProfit != tt.wantTP {
+				t.Errorf("TakeProfit = %v, want %v", got.TakeProfit, tt.wantTP)
+			}
+			if tt.wantSL != 0 && got.StopLoss != tt.wantSL {
+				t.Errorf("StopLoss = %v, want %v", got.StopLoss, tt.wantSL)
+			}
+		})
+	}
+}
+
+// TestDecide_CrushedPriceIsSL: with an open position and a collapsed price, the hard
+// ATR stop fires regardless of regime — exercises the full Decide wiring end-to-end.
+func TestDecide_CrushedPriceIsSL(t *testing.T) {
+	s := New()
+	highs := make([]float64, 200)
+	lows := make([]float64, 200)
+	closes := make([]float64, 200)
+	for i := 0; i < 200; i++ {
+		base := 100.0 + float64(i%5) // choppy, bounded
+		highs[i] = base + 1
+		lows[i] = base - 1
+		closes[i] = base
+	}
+	md := strategy.MarketData{
+		Price:    1, // crushed far below any stop
+		Highs:    highs,
+		Lows:     lows,
+		Closes:   closes,
+		Position: &strategy.Position{PurchasePrice: 100, Quantity: 1},
+	}
+	got := s.Decide(md)
+	if got.Kind != model.SignalSell || got.Reason != "SL" {
+		t.Fatalf("got Kind=%v Reason=%q, want Sell/SL", got.Kind, got.Reason)
+	}
+	if got.Ticker != "RUAL" {
+		t.Errorf("Ticker = %q, want RUAL", got.Ticker)
+	}
+}
