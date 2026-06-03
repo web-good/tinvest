@@ -52,6 +52,11 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) error {
 			continue
 		}
 		id := sh.ID
+		if in.SellOnly {
+			if _, held := posByID[id]; !held {
+				continue
+			}
+		}
 		lookback := st.Lookback()
 		limit := int32(lookback)
 
@@ -72,6 +77,9 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) error {
 		if sig.Kind == model.SignalNone {
 			continue
 		}
+		if in.SellOnly && sig.Kind != model.SignalSell {
+			continue
+		}
 		sig.InstrumentID = sh.ID
 		sig.InstrumentName = sh.Name
 		signals = append(signals, sig)
@@ -82,7 +90,11 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) error {
 		return nil
 	}
 
-	if err := s.tgClient.SendMessage(notification.Trade(signals)); err != nil {
+	msg := notification.Trade(signals)
+	if in.SellOnly {
+		msg = notification.SellWatch(signals)
+	}
+	if err := s.tgClient.SendMessage(msg); err != nil {
 		return fmt.Errorf("scalping: send message: %w", err)
 	}
 	return nil
