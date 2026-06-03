@@ -13,6 +13,7 @@ import (
 	gxmodel "tinvest/internal/service/trading_strategy/golden_x/model"
 	"tinvest/internal/service/trading_strategy/golden_x/scheduler"
 	scalpingdto "tinvest/internal/service/trading_strategy/scalping/dto"
+	scalpingscheduler "tinvest/internal/service/trading_strategy/scalping/scheduler"
 	"tinvest/internal/service_provider"
 	"tinvest/pkg/closer"
 	"tinvest/pkg/logger"
@@ -210,6 +211,17 @@ func (a *App) runDev(ctx context.Context) {
 			logger.ErrorContext(ctx, "Error in worker Scalping", err.Error())
 		}
 	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err := a.sp.GetScalpingTradingService().Trade(ctx, scalpingdto.Trade{
+			Scheduler: "*/5 8-23 * * 1-5",
+			SellOnly:  true,
+		})
+		if err != nil {
+			logger.ErrorContext(ctx, "Error in worker Scalping sell-watch", err.Error())
+		}
+	}()
 	wg.Wait()
 }
 
@@ -229,7 +241,7 @@ func (a *App) runProd(ctx context.Context) {
 	/*go func() {
 	defer wg.Done()
 	sh := mr.NewSchedulerService(a.sp.GetMacdRsiTradingService())
-	err := sh.TakeProfit(ctx, dto.TakeProfit{Interval: enum.Hour1, ATRInterval: enum.Day1, Scheduler: "*/ //2 8-23 * * *"})
+	err := sh.TakeProfit(ctx, dto.TakeProfit{Interval: enum.Hour1, ATRInterval: enum.Day1, Scheduler: "*///2 8-23 * * *"})
 
 	/*if err != nil {
 			logger.ErrorContext(ctx, "Error in worker macd rsi 1H take profit", err.Error())
@@ -310,5 +322,18 @@ func (a *App) runProd(ctx context.Context) {
 			logger.ErrorContext(ctx, "Error in worker Scalping", err.Error())
 		}
 	}()*/
+	go func() {
+		defer wg.Done()
+		err := scalpingscheduler.NewSchedulerService(a.sp.GetScalpingTradingService()).Trade(
+			ctx,
+			scalpingdto.Trade{
+				Scheduler: "*/5 8-23 * * 1-5",
+				SellOnly:  true,
+			},
+		)
+		if err != nil {
+			logger.ErrorContext(ctx, "Error in worker Scalping sell-watch", err.Error())
+		}
+	}()
 	wg.Wait()
 }
