@@ -37,6 +37,13 @@ func WithSettings(s model.Settings) Option {
 	}
 }
 
+// WithStrategies overrides the per-share strategy set (used in tests).
+func WithStrategies(s []strategy.Strategy) Option {
+	return func(svc *service) {
+		svc.strategies = s
+	}
+}
+
 type service struct {
 	instrumentsClient instrumentsClient
 	marketDataClient  marketDataClient
