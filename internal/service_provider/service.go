@@ -213,9 +213,6 @@ func (*ServiceProvider) GetScalpingTradingService() scalping.Scalping {
 		grpcClient, _ := serviceProvider.GetGrpcClient()
 		tgClient, _ := serviceProvider.GetTelegramBotClient()
 		serviceProvider.service.scalpingTradingService = scalping.NewService(
-			serviceProvider.Ema(),
-			serviceProvider.RSI(),
-			serviceProvider.Atr(),
 			grpcClient.InstrumentsServiceClient(),
 			grpcClient.MarketDataServiceClient(),
 			grpcClient.OperationsServiceClient(),
