@@ -7,8 +7,17 @@ import (
 	"tinvest/internal/service/trading_strategy/scalping/model"
 )
 
-// Trade renders an aggregated HTML Telegram message for the given signals.
+// Trade renders an aggregated HTML Telegram message for the hourly run.
 func Trade(signals []model.Signal) string {
+	return render("⚡️ <b>Скальпинг (1H)</b>\n\n", signals)
+}
+
+// SellWatch renders an aggregated HTML Telegram message for the out-of-schedule exit-monitor run.
+func SellWatch(signals []model.Signal) string {
+	return render("⚠️ <b>Мониторинг выхода (1H)</b>\n\n", signals)
+}
+
+func render(header string, signals []model.Signal) string {
 	var buys, sells []model.Signal
 	for _, s := range signals {
 		switch s.Kind {
@@ -20,7 +29,7 @@ func Trade(signals []model.Signal) string {
 	}
 
 	b := strings.Builder{}
-	b.WriteString("⚡️ <b>Скальпинг (1H)</b>\n\n")
+	b.WriteString(header)
 
 	if len(buys) > 0 {
 		b.WriteString("<u><b>Сигналы на покупку:</b></u>\n")

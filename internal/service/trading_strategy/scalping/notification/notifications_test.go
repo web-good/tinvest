@@ -44,3 +44,20 @@ func TestTrade_NoSignals(t *testing.T) {
 		t.Errorf("sell section should be absent for nil signals\n---\n%s", got)
 	}
 }
+
+func TestSellWatch_UsesMonitorHeaderAndRendersSells(t *testing.T) {
+	signals := []model.Signal{
+		{Kind: model.SignalSell, InstrumentName: "Gazprom", Ticker: "GAZP", Price: 104, TakeProfit: 103, StopLoss: 98, Reason: "TP"},
+	}
+
+	got := SellWatch(signals)
+
+	for _, want := range []string{"Мониторинг выхода", "продажу", "Gazprom", "GAZP", "TP"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("message missing %q\n---\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "Скальпинг (1H)") {
+		t.Errorf("sell-watch must not use the hourly header\n---\n%s", got)
+	}
+}
