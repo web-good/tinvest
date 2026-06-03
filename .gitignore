@@ -4,3 +4,5 @@
 .continue
 qdrant_data
 /cache
+data/candles/
+reports/
