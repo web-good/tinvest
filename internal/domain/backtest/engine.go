@@ -1,16 +1,51 @@
 package backtest
 
 import (
+	"time"
+
 	"tinvest/internal/service/trading_strategy/scalping/model"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 )
+
+// mskLoc anchors the trading-day boundary used to decide which daily candles are
+// already closed at a given intraday bar. Fallback to UTC if the tz DB is absent.
+var mskLoc = func() *time.Location {
+	loc, err := time.LoadLocation("Europe/Moscow")
+	if err != nil {
+		return time.UTC
+	}
+	return loc
+}()
+
+// startOfDay returns midnight of t's calendar day in loc.
+func startOfDay(t time.Time, loc *time.Location) time.Time {
+	tl := t.In(loc)
+	return time.Date(tl.Year(), tl.Month(), tl.Day(), 0, 0, 0, 0, loc)
+}
+
+// visibleDailyCloses returns closes of daily candles whose UTC calendar date is
+// strictly before t's UTC calendar date — i.e. days that have fully closed by t.
+// This is the no-lookahead rule: a candle whose date equals t's UTC date is still
+// forming and is never visible. loc is accepted for API consistency but daily candle
+// timestamps are compared using their UTC date.
+func visibleDailyCloses(daily []Candle, t time.Time, loc *time.Location) []float64 {
+	_ = loc // UTC dates are used so that stored-at-UTC-midnight candles align correctly
+	bound := startOfDay(t, time.UTC)
+	out := make([]float64, 0, len(daily))
+	for _, c := range daily {
+		if c.Time.Before(bound) {
+			out = append(out, c.Close)
+		}
+	}
+	return out
+}
 
 // Run replays a strategy over oldest-first candles on a mock portfolio and
 // returns the raw result. It mirrors the live runner: per bar it builds a
 // lookback-sized MarketData, calls Decide, and acts only on Buy (when flat) or
 // Sell (when in position), filling at the bar's close. An open position at the
 // end is marked-to-market, never force-closed.
-func Run(s strategy.Strategy, candles []Candle, cfg Config) Result {
+func Run(s strategy.Strategy, candles []Candle, dailyCandles []Candle, cfg Config) Result {
 	res := Result{InitialCash: cfg.InitialCash, FinalEquity: cfg.InitialCash}
 	l := s.Lookback()
 	if l <= 0 || len(candles) < l {
@@ -21,6 +56,7 @@ func Run(s strategy.Strategy, candles []Candle, cfg Config) Result {
 	for i := l - 1; i < len(candles); i++ {
 		p.bar = i
 		md := buildMarketData(candles[i-l+1 : i+1])
+		md.DailyCloses = visibleDailyCloses(dailyCandles, candles[i].Time, mskLoc)
 		md.Position = p.strategyPosition()
 
 		c := candles[i]

@@ -44,7 +44,7 @@ func TestEngineBuysFlatSellsInPosition(t *testing.T) {
 		}
 		return model.Signal{Kind: model.SignalNone}
 	}}
-	res := Run(s, candles, Config{InitialCash: 100000, Fraction: 1.0, Commission: 0, Lot: 1})
+	res := Run(s, candles, nil, Config{InitialCash: 100000, Fraction: 1.0, Commission: 0, Lot: 1})
 	if len(res.Trades) != 1 {
 		t.Fatalf("trades = %d, want 1", len(res.Trades))
 	}
@@ -63,7 +63,7 @@ func TestEngineIgnoresBuyInPositionAndSellWhenFlat(t *testing.T) {
 	buys := scriptedStrategy{lookback: 1, decide: func(md strategy.MarketData) model.Signal {
 		return model.Signal{Kind: model.SignalBuy}
 	}}
-	res := Run(buys, candles, Config{InitialCash: 100000, Fraction: 1.0, Commission: 0, Lot: 1})
+	res := Run(buys, candles, nil, Config{InitialCash: 100000, Fraction: 1.0, Commission: 0, Lot: 1})
 	if len(res.Trades) != 0 {
 		t.Fatalf("trades = %d, want 0 (never sold)", len(res.Trades))
 	}
@@ -75,7 +75,7 @@ func TestEngineIgnoresBuyInPositionAndSellWhenFlat(t *testing.T) {
 	sells := scriptedStrategy{lookback: 1, decide: func(md strategy.MarketData) model.Signal {
 		return model.Signal{Kind: model.SignalSell, Reason: "SL"}
 	}}
-	res2 := Run(sells, candles, Config{InitialCash: 100000, Fraction: 1.0, Commission: 0, Lot: 1})
+	res2 := Run(sells, candles, nil, Config{InitialCash: 100000, Fraction: 1.0, Commission: 0, Lot: 1})
 	if len(res2.Trades) != 0 || res2.BarsInMarket != 0 {
 		t.Fatalf("sell-when-flat changed state: trades=%d inMarket=%d", len(res2.Trades), res2.BarsInMarket)
 	}
@@ -86,7 +86,7 @@ func TestEngineEmptyWhenNotEnoughHistory(t *testing.T) {
 	s := scriptedStrategy{lookback: 5, decide: func(md strategy.MarketData) model.Signal {
 		return model.Signal{Kind: model.SignalBuy}
 	}}
-	res := Run(s, candles, Config{InitialCash: 100000, Fraction: 1.0, Commission: 0, Lot: 1})
+	res := Run(s, candles, nil, Config{InitialCash: 100000, Fraction: 1.0, Commission: 0, Lot: 1})
 	if len(res.Trades) != 0 || len(res.Equity) != 0 {
 		t.Fatalf("expected empty result, got %d trades %d equity", len(res.Trades), len(res.Equity))
 	}
@@ -104,7 +104,7 @@ func TestEngineMarksOpenPositionToMarketAtEnd(t *testing.T) {
 		}
 		return model.Signal{Kind: model.SignalNone}
 	}}
-	res := Run(s, candles, Config{InitialCash: 100000, Fraction: 1.0, Commission: 0, Lot: 1})
+	res := Run(s, candles, nil, Config{InitialCash: 100000, Fraction: 1.0, Commission: 0, Lot: 1})
 	// qty = floor(100000/100) = 1000; cash 0; final close 200 -> equity 200000.
 	if res.FinalEquity != 200000 {
 		t.Fatalf("FinalEquity = %f, want 200000 (mark-to-market open position)", res.FinalEquity)
@@ -118,8 +118,64 @@ func TestEngineWindowIsLookbackSized(t *testing.T) {
 		seen = len(md.Closes) // must always equal lookback
 		return model.Signal{Kind: model.SignalNone}
 	}}
-	Run(s, candles, Config{InitialCash: 1000, Fraction: 1.0, Lot: 1})
+	Run(s, candles, nil, Config{InitialCash: 1000, Fraction: 1.0, Lot: 1})
 	if seen != 3 {
 		t.Fatalf("window size = %d, want 3", seen)
+	}
+}
+
+func TestVisibleDailyCloses(t *testing.T) {
+	msk, _ := time.LoadLocation("Europe/Moscow")
+	day := func(y int, m time.Month, d int) Candle {
+		return Candle{Time: time.Date(y, m, d, 0, 0, 0, 0, time.UTC), Close: float64(d)}
+	}
+	daily := []Candle{day(2026, 1, 1), day(2026, 1, 2), day(2026, 1, 3)}
+
+	t3 := time.Date(2026, 1, 3, 12, 0, 0, 0, time.UTC)
+	got := visibleDailyCloses(daily, t3, msk)
+	if len(got) != 2 || got[0] != 1 || got[1] != 2 {
+		t.Fatalf("visible on Jan 3 = %v, want [1 2]", got)
+	}
+
+	t1 := time.Date(2026, 1, 1, 23, 0, 0, 0, time.UTC)
+	if got := visibleDailyCloses(daily, t1, msk); len(got) != 0 {
+		t.Fatalf("visible on Jan 1 = %v, want []", got)
+	}
+
+	t9 := time.Date(2026, 1, 9, 0, 0, 0, 0, time.UTC)
+	if got := visibleDailyCloses(daily, t9, msk); len(got) != 3 {
+		t.Fatalf("visible on Jan 9 = %v, want 3 closes", got)
+	}
+}
+
+func TestEngineSuppliesDailyCloses(t *testing.T) {
+	candles := []Candle{
+		{Time: time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC), Open: 10, High: 10, Low: 10, Close: 10, Volume: 1},
+		{Time: time.Date(2026, 1, 2, 10, 0, 0, 0, time.UTC), Open: 10, High: 10, Low: 10, Close: 10, Volume: 1},
+		{Time: time.Date(2026, 1, 3, 10, 0, 0, 0, time.UTC), Open: 10, High: 10, Low: 10, Close: 10, Volume: 1},
+	}
+	daily := []Candle{
+		{Time: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), Close: 1},
+		{Time: time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC), Close: 2},
+	}
+
+	var seen [][]float64
+	s := scriptedStrategy{lookback: 1, decide: func(md strategy.MarketData) model.Signal {
+		seen = append(seen, append([]float64(nil), md.DailyCloses...))
+		return model.Signal{Kind: model.SignalNone}
+	}}
+	Run(s, candles, daily, Config{InitialCash: 100000, Fraction: 1.0, Commission: 0, Lot: 1})
+
+	if len(seen) != 3 {
+		t.Fatalf("decided %d bars, want 3", len(seen))
+	}
+	if len(seen[0]) != 0 {
+		t.Errorf("bar on Jan 1 daily = %v, want empty", seen[0])
+	}
+	if len(seen[1]) != 1 || seen[1][0] != 1 {
+		t.Errorf("bar on Jan 2 daily = %v, want [1]", seen[1])
+	}
+	if len(seen[2]) != 2 || seen[2][1] != 2 {
+		t.Errorf("bar on Jan 3 daily = %v, want [1 2]", seen[2])
 	}
 }
