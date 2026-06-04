@@ -25,8 +25,9 @@ type Params struct {
 	SLMult           float64 // initial stop = entry - SLMult*ATR
 	TrailMult        float64 // chandelier = max(High over window) - TrailMult*ATR
 	ChandelierWindow int     // window for the chandelier high
-	EMATouchTol      float64 // EMA touch tolerance (fraction, e.g. 0.002 = 0.2%)
-	BandTol          float64 // lower-band proximity tolerance (fraction)
+	EMATouchTol       float64 // EMA touch tolerance (fraction, e.g. 0.002 = 0.2%)
+	BandTol           float64 // lower-band proximity tolerance (fraction)
+	TrendFilterPeriod int     // daily EMA period for the higher-timeframe long filter; 0 disables
 }
 
 // DefaultParams returns standard, NOT-yet-calibrated starting values.
@@ -45,8 +46,9 @@ func DefaultParams() Params {
 		SLMult:           1.0,
 		TrailMult:        2.5,
 		ChandelierWindow: 20,
-		EMATouchTol:      0.002,
-		BandTol:          0.003,
+		EMATouchTol:       0.002,
+		BandTol:           0.003,
+		TrendFilterPeriod: 200,
 	}
 }
 
@@ -102,6 +104,8 @@ type decideInput struct {
 	emaTouched     bool
 	chandelierHigh float64
 	pos            *strategy.Position
+	trendFilterOn  bool
+	trendUp        bool
 }
 
 // Decide computes every indicator from md, packs them, and delegates to the pure core.
@@ -124,6 +128,14 @@ func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 		rsiPrev = rsiSeries[n-2]
 	}
 
+	trendFilterOn := s.p.TrendFilterPeriod > 0
+	trendUp := false
+	if trendFilterOn && len(md.DailyCloses) >= s.p.TrendFilterPeriod {
+		emaD := ema.Compute(md.DailyCloses, s.p.TrendFilterPeriod)
+		lastDaily := md.DailyCloses[len(md.DailyCloses)-1]
+		trendUp = lastDaily > emaD[len(emaD)-1]
+	}
+
 	in := decideInput{
 		price:          md.Price,
 		atr:            atr,
@@ -138,6 +150,8 @@ func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 		emaTouched:     emaTouched(md.Lows, emaSeries, s.p.PullbackWindow, s.p.EMATouchTol),
 		chandelierHigh: recentHigh(md.Highs, s.p.ChandelierWindow),
 		pos:            md.Position,
+		trendFilterOn:  trendFilterOn,
+		trendUp:        trendUp,
 	}
 
 	sig := s.decide(in)
@@ -183,14 +197,16 @@ func (s *Strategy) decide(in decideInput) model.Signal {
 	switch reg {
 	case regimeTrend:
 		crossedUp := in.rsiPrev < s.p.RSITrendLevel && in.rsiNow >= s.p.RSITrendLevel
-		if in.diPlus > in.diMinus && in.emaTouched && crossedUp && in.price > in.emaNow {
+		if in.diPlus > in.diMinus && in.emaTouched && crossedUp && in.price > in.emaNow &&
+			(!in.trendFilterOn || in.trendUp) {
 			sig.Kind = model.SignalBuy
 			sig.StopLoss = in.price - s.p.SLMult*in.atr
 			sig.TakeProfit = in.price + s.p.TrailMult*in.atr
 		}
 	case regimeRange:
 		crossedUp := in.rsiPrev < s.p.RSIRangeLevel && in.rsiNow >= s.p.RSIRangeLevel
-		if in.price <= in.donLower*(1+s.p.BandTol) && crossedUp {
+		if in.price <= in.donLower*(1+s.p.BandTol) && crossedUp &&
+			(!in.trendFilterOn || in.trendUp) {
 			sig.Kind = model.SignalBuy
 			sig.StopLoss = in.price - s.p.SLMult*in.atr
 			sig.TakeProfit = (in.donUpper + in.donLower) / 2

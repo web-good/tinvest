@@ -180,6 +180,42 @@ func TestDecideCore(t *testing.T) {
 			wantKind: model.SignalBuy, wantTP: 104.9, wantSL: 98, // mid=(110+99.8)/2 ; 100-2
 		},
 		{
+			name: "trend entry blocked by HTF filter (filter on, trend down)",
+			in: decideInput{
+				price: 100, atr: 2, emaNow: 99, rsiPrev: 40, rsiNow: 46,
+				adx: 30, diPlus: 25, diMinus: 10, emaTouched: true,
+				trendFilterOn: true, trendUp: false,
+			},
+			wantKind: model.SignalNone,
+		},
+		{
+			name: "trend entry allowed when HTF filter passes",
+			in: decideInput{
+				price: 100, atr: 2, emaNow: 99, rsiPrev: 40, rsiNow: 46,
+				adx: 30, diPlus: 25, diMinus: 10, emaTouched: true,
+				trendFilterOn: true, trendUp: true,
+			},
+			wantKind: model.SignalBuy, wantTP: 104, wantSL: 98,
+		},
+		{
+			name: "range entry blocked by HTF filter (filter on, trend down)",
+			in: decideInput{
+				price: 100, atr: 2, rsiPrev: 30, rsiNow: 36,
+				adx: 15, donUpper: 110, donLower: 99.8,
+				trendFilterOn: true, trendUp: false,
+			},
+			wantKind: model.SignalNone,
+		},
+		{
+			name: "range entry allowed when HTF filter passes",
+			in: decideInput{
+				price: 100, atr: 2, rsiPrev: 30, rsiNow: 36,
+				adx: 15, donUpper: 110, donLower: 99.8,
+				trendFilterOn: true, trendUp: true,
+			},
+			wantKind: model.SignalBuy, wantTP: 104.9, wantSL: 98,
+		},
+		{
 			name: "range mid-channel (not near lower) -> none",
 			in: decideInput{
 				price: 105, atr: 2, rsiPrev: 30, rsiNow: 36,
@@ -265,6 +301,48 @@ func TestDecideCore(t *testing.T) {
 				t.Errorf("StopLoss = %v, want %v", got.StopLoss, tt.wantSL)
 			}
 		})
+	}
+}
+
+func TestDecide_DailyFilterGate(t *testing.T) {
+	p := testParams()
+	p.TrendFilterPeriod = 3 // tiny period so a short daily series is enough
+
+	highs := make([]float64, 200)
+	lows := make([]float64, 200)
+	closes := make([]float64, 200)
+	for i := 0; i < 200; i++ {
+		base := 100.0 + float64(i)
+		highs[i] = base + 1
+		lows[i] = base - 1
+		closes[i] = base
+	}
+
+	upDaily := []float64{10, 20, 30, 40}
+	downDaily := []float64{40, 30, 20, 10}
+
+	mk := func(daily []float64) strategy.MarketData {
+		return strategy.MarketData{
+			Price: closes[199], Highs: highs, Lows: lows, Closes: closes,
+			DailyCloses: daily,
+		}
+	}
+
+	s := NewWithParams(p)
+	if got := s.Decide(mk(upDaily)); got.Kind == model.SignalBuy {
+		t.Fatalf("unexpected Buy on rising-only market (up daily)")
+	}
+	if got := s.Decide(mk(downDaily)); got.Kind == model.SignalBuy {
+		t.Fatalf("unexpected Buy on rising-only market (down daily)")
+	}
+	if got := s.Decide(mk([]float64{1, 2})); got.Kind == model.SignalBuy {
+		t.Fatalf("unexpected Buy on cold-start daily series")
+	}
+
+	p0 := testParams()
+	p0.TrendFilterPeriod = 0
+	if got := NewWithParams(p0).Decide(mk(nil)); got.Kind != model.SignalNone {
+		t.Fatalf("filter off changed behavior: got %v, want None", got.Kind)
 	}
 }
 

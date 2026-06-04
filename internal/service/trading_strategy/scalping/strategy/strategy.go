@@ -16,7 +16,11 @@ type MarketData struct {
 	Lows     []float64
 	Closes   []float64
 	Volumes  []int64
-	Position *Position // nil when flat
+	// DailyCloses are oldest-first closes of COMPLETED daily candles, aligned so the
+	// last element is the most recent day closed at/before the current bar. Empty if
+	// no higher-timeframe data is supplied or the filter is disabled.
+	DailyCloses []float64
+	Position    *Position // nil when flat
 }
 
 // Strategy is the per-share trading rule. Decide must be pure: it computes its own
