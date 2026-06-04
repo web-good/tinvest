@@ -101,6 +101,7 @@ func run(ticker string, months int, cash, fraction, commission float64,
 		return runCalibration(binding, calibratePath, candles, cfg, metric, periodDays, base,
 			metaCommon(ticker, interval, from, to, cfg))
 	}
+
 	return runSingle(binding, paramsPath, candles, cfg, periodDays, base,
 		metaCommon(ticker, interval, from, to, cfg))
 }
@@ -209,9 +210,6 @@ func resolveShare(ctx context.Context, client grpcclient.GrpcClient, ticker stri
 	}
 	for _, s := range shares {
 		if s.Ticker == ticker {
-			if !s.Trading {
-				return shareInfo{}, fmt.Errorf("share %s is not trading", ticker)
-			}
 			return shareInfo{ID: s.ID, Lot: s.Lot}, nil
 		}
 	}
