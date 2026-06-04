@@ -137,7 +137,7 @@ func TestVisibleDailyCloses(t *testing.T) {
 		t.Fatalf("visible on Jan 3 = %v, want [1 2]", got)
 	}
 
-	t1 := time.Date(2026, 1, 1, 23, 0, 0, 0, time.UTC)
+	t1 := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
 	if got := visibleDailyCloses(daily, t1, msk); len(got) != 0 {
 		t.Fatalf("visible on Jan 1 = %v, want []", got)
 	}

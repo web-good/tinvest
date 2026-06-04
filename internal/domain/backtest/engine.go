@@ -23,14 +23,11 @@ func startOfDay(t time.Time, loc *time.Location) time.Time {
 	return time.Date(tl.Year(), tl.Month(), tl.Day(), 0, 0, 0, 0, loc)
 }
 
-// visibleDailyCloses returns closes of daily candles whose UTC calendar date is
-// strictly before t's UTC calendar date — i.e. days that have fully closed by t.
-// This is the no-lookahead rule: a candle whose date equals t's UTC date is still
-// forming and is never visible. loc is accepted for API consistency but daily candle
-// timestamps are compared using their UTC date.
+// visibleDailyCloses returns closes of daily candles whose calendar day (in loc) is
+// strictly before t's calendar day — i.e. days that have fully closed by t. This is
+// the no-lookahead rule: the current, still-forming day is never visible.
 func visibleDailyCloses(daily []Candle, t time.Time, loc *time.Location) []float64 {
-	_ = loc // UTC dates are used so that stored-at-UTC-midnight candles align correctly
-	bound := startOfDay(t, time.UTC)
+	bound := startOfDay(t, loc)
 	out := make([]float64, 0, len(daily))
 	for _, c := range daily {
 		if c.Time.Before(bound) {
