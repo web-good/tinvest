@@ -48,7 +48,7 @@ func DefaultParams() Params {
 		ChandelierWindow: 20,
 		EMATouchTol:       0.002,
 		BandTol:           0.003,
-		TrendFilterPeriod: 200,
+		TrendFilterPeriod: 100, // calibrated: beats 0/50/200 across 6/12/18/24mo windows
 	}
 }
 
