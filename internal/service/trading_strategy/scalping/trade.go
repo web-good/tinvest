@@ -7,6 +7,7 @@ import (
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"tinvest/internal/enum"
 	imodel "tinvest/internal/model"
 	"tinvest/internal/service/trading_strategy/scalping/dto"
 	"tinvest/internal/service/trading_strategy/scalping/model"
@@ -69,6 +70,18 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) error {
 		}
 
 		md := buildMarketData(candles)
+
+		const dailyLookback = 250 // ~trading days of lead-in to warm the daily EMA(200)
+		dailyLimit := int32(dailyLookback)
+		time.Sleep(300 * time.Millisecond)
+		dailyCandles, dailyErr := s.marketDataClient.GetCandles(ctx, &id, enum.Day1.ToNumberInvestApi(),
+			utils.TimeStampPbGenerator(dateNow, -int64(dailyLookback), enum.Day1), timestamppb.New(dateNow), &dailyLimit, true)
+		if dailyErr != nil {
+			logger.ErrorContext(ctx, fmt.Sprintf("scalping: daily candles %s skipped", st.Ticker()))
+		} else {
+			md.DailyCloses = completedDailyCloses(dailyCandles)
+		}
+
 		if pos, held := posByID[id]; held {
 			md.Position = &pos
 		}
@@ -98,6 +111,19 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) error {
 		return fmt.Errorf("scalping: send message: %w", err)
 	}
 	return nil
+}
+
+// completedDailyCloses returns oldest-first closes of completed daily candles only,
+// dropping the still-forming current day so the strategy never sees an unclosed bar.
+func completedDailyCloses(candles []*imodel.CandleItemTechAnalyse) []float64 {
+	out := make([]float64, 0, len(candles))
+	for _, c := range candles {
+		if !c.IsComplete {
+			continue
+		}
+		out = append(out, utils.CombinePrice(c.Close.Units, c.Close.Nano))
+	}
+	return out
 }
 
 // buildMarketData converts an oldest-first candle series into a strategy snapshot.
