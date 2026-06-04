@@ -21,8 +21,8 @@ type CalibResult struct {
 
 // RunGrid runs the engine for every combination in the grid and returns the
 // results ranked by metric (best first). periodDays feeds CAGR.
-func RunGrid(b Binding, grid Grid, candles []backtest.Candle, cfg backtest.Config,
-	metric string, periodDays float64,
+func RunGrid(b Binding, grid Grid, candles []backtest.Candle, dailyCandles []backtest.Candle,
+	cfg backtest.Config, metric string, periodDays float64,
 ) ([]CalibResult, error) {
 	if err := validateMetric(metric); err != nil {
 		return nil, err
@@ -33,7 +33,7 @@ func RunGrid(b Binding, grid Grid, candles []backtest.Candle, cfg backtest.Confi
 	}
 	results := make([]CalibResult, 0, len(combos))
 	for _, params := range combos {
-		res := backtest.Run(b.Build(params), candles, cfg)
+		res := backtest.Run(b.Build(params), candles, dailyCandles, cfg)
 		m := backtest.Compute(res, res.BarsInMarket, len(res.Equity), periodDays)
 		results = append(results, CalibResult{Params: params, Metrics: m})
 	}

@@ -53,7 +53,7 @@ func TestRunGridCartesianProduct(t *testing.T) {
 		"SLMult":    {1.0, 1.5, 2.0},
 	}
 	cfg := backtest.Config{InitialCash: 100000, Fraction: 1.0, Commission: 0.0005, Lot: 1}
-	results, err := RunGrid(b, grid, tinyCandles(400), cfg, "profit_factor", 16)
+	results, err := RunGrid(b, grid, tinyCandles(400), nil, cfg, "profit_factor", 16)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +82,7 @@ func TestRunGridRanksByMetric(t *testing.T) {
 func TestRunGridUnknownMetricErrors(t *testing.T) {
 	b, _ := Lookup("RUAL")
 	cfg := backtest.Config{InitialCash: 100000, Fraction: 1.0, Lot: 1}
-	if _, err := RunGrid(b, Grid{}, tinyCandles(400), cfg, "sharpe", 16); err == nil {
+	if _, err := RunGrid(b, Grid{}, tinyCandles(400), nil, cfg, "sharpe", 16); err == nil {
 		t.Fatal("expected error for unknown metric")
 	}
 }
@@ -90,7 +90,7 @@ func TestRunGridUnknownMetricErrors(t *testing.T) {
 func TestRunGridUnknownFieldErrors(t *testing.T) {
 	b, _ := Lookup("RUAL")
 	cfg := backtest.Config{InitialCash: 100000, Fraction: 1.0, Lot: 1}
-	if _, err := RunGrid(b, Grid{"Bogus": {1, 2}}, tinyCandles(400), cfg, "profit_factor", 16); err == nil {
+	if _, err := RunGrid(b, Grid{"Bogus": {1, 2}}, tinyCandles(400), nil, cfg, "profit_factor", 16); err == nil {
 		t.Fatal("expected error for unknown grid field")
 	}
 }

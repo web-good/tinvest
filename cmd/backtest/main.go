@@ -88,6 +88,12 @@ func run(ticker string, months int, cash, fraction, commission float64,
 		return err
 	}
 
+	dailyFrom := from.AddDate(-1, 0, 0) // ~250 trading days of lead-in to warm the daily EMA
+	dailyCandles, err := provider.Load(ctx, ticker, share.ID, enum.Day1, dailyFrom, to, refresh)
+	if err != nil {
+		return err
+	}
+
 	cfg := domain.Config{InitialCash: cash, Fraction: fraction, Commission: commission, Lot: share.Lot}
 	periodDays := to.Sub(from).Hours() / 24
 
@@ -98,16 +104,16 @@ func run(ticker string, months int, cash, fraction, commission float64,
 	base := filepath.Join(outDir, fmt.Sprintf("%s_%s_%s", ticker, interval.String(), stamp))
 
 	if calibratePath != "" {
-		return runCalibration(binding, calibratePath, candles, cfg, metric, periodDays, base,
+		return runCalibration(binding, calibratePath, candles, dailyCandles, cfg, metric, periodDays, base,
 			metaCommon(ticker, interval, from, to, cfg))
 	}
 
-	return runSingle(binding, paramsPath, candles, cfg, periodDays, base,
+	return runSingle(binding, paramsPath, candles, dailyCandles, cfg, periodDays, base,
 		metaCommon(ticker, interval, from, to, cfg))
 }
 
-func runSingle(b svc.Binding, paramsPath string, candles []domain.Candle, cfg domain.Config,
-	periodDays float64, base string, meta domain.Meta,
+func runSingle(b svc.Binding, paramsPath string, candles []domain.Candle, dailyCandles []domain.Candle,
+	cfg domain.Config, periodDays float64, base string, meta domain.Meta,
 ) error {
 	params := b.DefaultParams()
 	if paramsPath != "" {
@@ -125,7 +131,7 @@ func runSingle(b svc.Binding, paramsPath string, candles []domain.Candle, cfg do
 		fmt.Printf("⚠️ not enough candles (%d) for lookback; empty report\n", len(candles))
 	}
 
-	res := domain.Run(b.Build(params), candles, cfg)
+	res := domain.Run(b.Build(params), candles, dailyCandles, cfg)
 	m := domain.Compute(res, res.BarsInMarket, len(res.Equity), periodDays)
 
 	meta.Params = svc.ParamRows(params)
@@ -144,8 +150,8 @@ func runSingle(b svc.Binding, paramsPath string, candles []domain.Candle, cfg do
 	return nil
 }
 
-func runCalibration(b svc.Binding, gridPath string, candles []domain.Candle, cfg domain.Config,
-	metric string, periodDays float64, base string, meta domain.Meta,
+func runCalibration(b svc.Binding, gridPath string, candles []domain.Candle, dailyCandles []domain.Candle,
+	cfg domain.Config, metric string, periodDays float64, base string, meta domain.Meta,
 ) error {
 	raw, err := os.ReadFile(gridPath)
 	if err != nil {
@@ -156,7 +162,7 @@ func runCalibration(b svc.Binding, gridPath string, candles []domain.Candle, cfg
 		return fmt.Errorf("parse grid: %w", err)
 	}
 
-	results, err := svc.RunGrid(b, grid, candles, cfg, metric, periodDays)
+	results, err := svc.RunGrid(b, grid, candles, dailyCandles, cfg, metric, periodDays)
 	if err != nil {
 		return err
 	}
@@ -168,7 +174,7 @@ func runCalibration(b svc.Binding, gridPath string, candles []domain.Candle, cfg
 	// Also emit the full single-run report for the best combination.
 	if len(results) > 0 {
 		best := results[0].Params
-		res := domain.Run(b.Build(best), candles, cfg)
+		res := domain.Run(b.Build(best), candles, dailyCandles, cfg)
 		m := domain.Compute(res, res.BarsInMarket, len(res.Equity), periodDays)
 		meta.Params = svc.ParamRows(best)
 		meta.OpenPosition = openPosition(res)
