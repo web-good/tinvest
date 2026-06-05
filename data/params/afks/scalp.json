@@ -1,0 +1,18 @@
+{
+  "EMAPeriod": 21,
+  "ADXPeriod": 14,
+  "ADXTrendLevel": 25,
+  "ADXRangeLevel": 20,
+  "RSIPeriod": 14,
+  "RSITrendLevel": 45,
+  "RSIRangeLevel": 35,
+  "PullbackWindow": 5,
+  "DonchianPeriod": 20,
+  "ATRPeriod": 14,
+  "SLMult": 1.0,
+  "TrailMult": 2.5,
+  "ChandelierWindow": 20,
+  "EMATouchTol": 0.002,
+  "BandTol": 0.003,
+  "TrendFilterPeriod": 0
+}
