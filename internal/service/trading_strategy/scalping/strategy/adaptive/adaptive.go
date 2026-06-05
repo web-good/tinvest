@@ -147,6 +147,8 @@ func (s *Strategy) decide(in decideInput) model.Signal {
 		hardSL := in.pos.PurchasePrice - s.p.SLMult*in.atr
 		if reg == regimeTrend {
 			chandelier := in.chandelierHigh - s.p.TrailMult*in.atr
+			// Report the protective floor even on a hold (mirrors the range branch).
+			// Trend has no fixed take-profit — the chandelier trails instead, so TakeProfit stays 0.
 			sig.StopLoss = hardSL
 			switch {
 			case in.price <= hardSL:
