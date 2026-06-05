@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"tinvest/internal/domain/backtest"
+	"tinvest/internal/service/trading_strategy/scalping/strategy/adaptive"
 	"tinvest/internal/service/trading_strategy/scalping/strategy/rusal"
 )
 
@@ -28,15 +29,15 @@ func TestApplyFieldIntAndFloat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated.(rusal.Params).EMAPeriod != 50 {
-		t.Fatalf("EMAPeriod = %d, want 50", updated.(rusal.Params).EMAPeriod)
+	if updated.(adaptive.Params).EMAPeriod != 50 {
+		t.Fatalf("EMAPeriod = %d, want 50", updated.(adaptive.Params).EMAPeriod)
 	}
 	updated2, err := applyField(p, "SLMult", 2.5) // float64 field
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated2.(rusal.Params).SLMult != 2.5 {
-		t.Fatalf("SLMult = %f, want 2.5", updated2.(rusal.Params).SLMult)
+	if updated2.(adaptive.Params).SLMult != 2.5 {
+		t.Fatalf("SLMult = %f, want 2.5", updated2.(adaptive.Params).SLMult)
 	}
 }
 

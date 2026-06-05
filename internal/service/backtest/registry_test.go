@@ -3,6 +3,7 @@ package backtest
 import (
 	"testing"
 
+	"tinvest/internal/service/trading_strategy/scalping/strategy/adaptive"
 	"tinvest/internal/service/trading_strategy/scalping/strategy/rusal"
 )
 
@@ -10,32 +11,35 @@ func TestLookupKnownAndUnknown(t *testing.T) {
 	if _, ok := Lookup("NOPE"); ok {
 		t.Fatal("expected unknown ticker to miss")
 	}
-	b, ok := Lookup("RUAL")
-	if !ok {
-		t.Fatal("expected RUAL binding")
-	}
-	if b.DefaultParams == nil || b.Build == nil || b.ParseParams == nil {
-		t.Fatal("binding has nil funcs")
-	}
-}
-
-func TestRUALBindingBuildsStrategy(t *testing.T) {
-	b, _ := Lookup("RUAL")
-	def := b.DefaultParams()
-	s := b.Build(def)
-	if s.Ticker() != "RUAL" {
-		t.Fatalf("built strategy ticker = %q, want RUAL", s.Ticker())
+	for _, tk := range []string{"RUAL", "AFKS"} {
+		b, ok := Lookup(tk)
+		if !ok {
+			t.Fatalf("expected %s binding", tk)
+		}
+		if b.DefaultParams == nil || b.Build == nil || b.ParseParams == nil {
+			t.Fatalf("%s binding has nil funcs", tk)
+		}
 	}
 }
 
-func TestRUALParseParamsOverridesDefaults(t *testing.T) {
+func TestBindingsBuildStrategy(t *testing.T) {
+	for _, tk := range []string{"RUAL", "AFKS"} {
+		b, _ := Lookup(tk)
+		s := b.Build(b.DefaultParams())
+		if s.Ticker() != tk {
+			t.Fatalf("built strategy ticker = %q, want %s", s.Ticker(), tk)
+		}
+	}
+}
+
+func TestParseParamsOverridesDefaults(t *testing.T) {
 	b, _ := Lookup("RUAL")
 	raw := []byte(`{"EMAPeriod": 50}`)
 	parsed, err := b.ParseParams(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := parsed.(rusal.Params)
+	p := parsed.(adaptive.Params)
 	if p.EMAPeriod != 50 {
 		t.Fatalf("EMAPeriod = %d, want 50 (override)", p.EMAPeriod)
 	}
