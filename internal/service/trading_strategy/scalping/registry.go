@@ -2,6 +2,7 @@ package scalping
 
 import (
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
+	"tinvest/internal/service/trading_strategy/scalping/strategy/afks"
 	"tinvest/internal/service/trading_strategy/scalping/strategy/rusal"
 )
 
@@ -9,5 +10,6 @@ import (
 func defaultStrategies() []strategy.Strategy {
 	return []strategy.Strategy{
 		rusal.New(),
+		afks.New(),
 	}
 }
