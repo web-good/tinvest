@@ -280,6 +280,35 @@ func TestDecide_RangeMidBelowEntryNoPhantomTP(t *testing.T) {
 	}
 }
 
+func TestDecide_TrailArmsOnlyInProfit(t *testing.T) {
+	p := testParams()
+	p.TrailArmATR = 1.0 // arm only after +1 ATR of profit
+	s := NewWithParams("TST", p)
+
+	// Not yet armed: profit 0.5 < 1*ATR(2). Price is below the chandelier
+	// (chandelierHigh 105 - TrailMult 2*ATR 2 = 101) but trail must NOT fire.
+	notArmed := decideInput{
+		price: 100.5, atr: 2, adx: 30, chandelierHigh: 105,
+		pos: &strategy.Position{PurchasePrice: 100},
+	}
+	if got := s.decide(notArmed); got.Kind != model.SignalNone {
+		t.Fatalf("unarmed trail fired: Kind = %v, want None", got.Kind)
+	}
+
+	// Armed: profit 3 >= 1*ATR(2). chandelierHigh 110 - 4 = 106; price 103 <= 106.
+	armed := decideInput{
+		price: 103, atr: 2, adx: 30, chandelierHigh: 110,
+		pos: &strategy.Position{PurchasePrice: 100},
+	}
+	got := s.decide(armed)
+	if got.Kind != model.SignalSell || got.Reason != "TRAIL" {
+		t.Fatalf("armed trail did not fire: Kind=%v Reason=%q, want Sell/TRAIL", got.Kind, got.Reason)
+	}
+	if got.StopLoss != 106 {
+		t.Errorf("StopLoss = %v, want 106 (chandelier)", got.StopLoss)
+	}
+}
+
 func TestDecide_DailyFilterGate(t *testing.T) {
 	p := testParams()
 	p.TrendFilterPeriod = 3 // tiny period so a short daily series is enough

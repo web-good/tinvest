@@ -27,6 +27,7 @@ type Params struct {
 	EMATouchTol       float64 // EMA touch tolerance (fraction, e.g. 0.002 = 0.2%)
 	BandTol           float64 // lower-band proximity tolerance (fraction)
 	TrendFilterPeriod int     // daily EMA period for the higher-timeframe long filter; 0 disables
+	TrailArmATR       float64 // chandelier trail arms only after price >= entry + TrailArmATR*ATR; <=0 arms immediately
 }
 
 // Strategy trades a single instrument adaptively: it picks a regime from ADX and
@@ -150,10 +151,15 @@ func (s *Strategy) decide(in decideInput) model.Signal {
 			// Report the protective floor even on a hold (mirrors the range branch).
 			// Trend has no fixed take-profit — the chandelier trails instead, so TakeProfit stays 0.
 			sig.StopLoss = hardSL
+			// The trail only arms once the trade is in profit by TrailArmATR*ATR, so a
+			// fresh entry near a recent high is not stopped out on the first down-tick.
+			// TrailArmATR<=0 arms immediately (preserves the original always-on trail).
+			armed := s.p.TrailArmATR <= 0 ||
+				in.price >= in.pos.PurchasePrice+s.p.TrailArmATR*in.atr
 			switch {
 			case in.price <= hardSL:
 				sig.Kind, sig.Reason = model.SignalSell, "SL"
-			case in.price <= chandelier:
+			case armed && in.price <= chandelier:
 				sig.Kind, sig.Reason, sig.StopLoss = model.SignalSell, "TRAIL", chandelier
 			}
 			return sig
