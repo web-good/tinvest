@@ -164,15 +164,21 @@ func runCalibration(b svc.Binding, gridPath string, candles []domain.Candle, dai
 	gridCandles, gridDaily := candles, dailyCandles
 	bestCandles, bestDaily := candles, dailyCandles
 	bestDays := periodDays
+	gridDays := periodDays
+	var boundary time.Time
 	if testMonths > 0 {
-		boundary := to.AddDate(0, -testMonths, 0)
+		boundary = to.AddDate(0, -testMonths, 0)
+		testDays := to.Sub(boundary).Hours() / 24
+		if testDays >= periodDays {
+			return fmt.Errorf("test-months window (%.0f days) must be smaller than the backtest window (%.0f days)", testDays, periodDays)
+		}
 		gridCandles, bestCandles = svc.SplitByTime(candles, boundary)
-		gridDaily, _ = svc.SplitByTime(dailyCandles, boundary)
-		_, bestDaily = svc.SplitByTime(dailyCandles, boundary)
-		bestDays = float64(testMonths) * 30.0
+		gridDaily, bestDaily = svc.SplitByTime(dailyCandles, boundary)
+		bestDays = testDays
+		gridDays = periodDays - testDays
 	}
 
-	results, err := svc.RunGrid(b, grid, gridCandles, gridDaily, cfg, metric, minTrades, periodDays)
+	results, err := svc.RunGrid(b, grid, gridCandles, gridDaily, cfg, metric, minTrades, gridDays)
 	if err != nil {
 		return err
 	}
@@ -186,9 +192,13 @@ func runCalibration(b svc.Binding, gridPath string, candles []domain.Candle, dai
 		best := results[0].Params
 		res := domain.Run(b.Build(best), bestCandles, bestDaily, cfg)
 		m := domain.Compute(res, res.BarsInMarket, len(res.Equity), bestDays)
-		meta.Params = svc.ParamRows(best)
-		meta.OpenPosition = openPosition(res)
-		if err := writeFile(base+"_best.md", domain.RenderMarkdown(meta, m, res.Trades, res.Equity)); err != nil {
+		bestMeta := meta
+		bestMeta.Params = svc.ParamRows(best)
+		bestMeta.OpenPosition = openPosition(res)
+		if testMonths > 0 {
+			bestMeta.From = boundary
+		}
+		if err := writeFile(base+"_best.md", domain.RenderMarkdown(bestMeta, m, res.Trades, res.Equity)); err != nil {
 			return err
 		}
 	}
