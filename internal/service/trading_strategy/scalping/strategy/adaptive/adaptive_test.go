@@ -340,6 +340,10 @@ func TestDecide_EntryQualityGate(t *testing.T) {
 		if got := NewWithParams("TST", p).decide(in); got.Kind != model.SignalNone {
 			t.Fatalf("Kind = %v, want None (adx below margin)", got.Kind)
 		}
+		in.adx = 30 // exact boundary: >= 30 must pass
+		if got := NewWithParams("TST", p).decide(in); got.Kind != model.SignalBuy {
+			t.Fatalf("Kind = %v, want Buy (adx == threshold, >= must pass at boundary)", got.Kind)
+		}
 		in.adx = 31
 		if got := NewWithParams("TST", p).decide(in); got.Kind != model.SignalBuy {
 			t.Fatalf("Kind = %v, want Buy (adx clears margin)", got.Kind)
@@ -367,6 +371,21 @@ func TestDecide_EntryQualityGate(t *testing.T) {
 		p.MinATRFrac = 0.01
 		if got := NewWithParams("TST", p).decide(base); got.Kind != model.SignalBuy {
 			t.Fatalf("Kind = %v, want Buy (atr frac 0.02 >= 0.01)", got.Kind)
+		}
+	})
+
+	t.Run("min reward:risk rejects non-positive risk", func(t *testing.T) {
+		// atr=0 → stop = price - SLMult*0 = price → risk = price - stop = 0.
+		// MinATRFrac is left at 0 (default) so the ATR check does not fire first.
+		// The trend entry conditions (diPlus>diMinus, emaTouched, RSI cross,
+		// price>emaNow, adx>=threshold) are all satisfied by the base input even
+		// with atr=0, so entryQualifies is reached and the risk<=0 guard fires.
+		p := testParams()
+		p.MinRR = 1.5 // enable the RR check; risk==0 must trip the guard
+		in := base
+		in.atr = 0
+		if got := NewWithParams("TST", p).decide(in); got.Kind != model.SignalNone {
+			t.Fatalf("Kind = %v, want None (risk=0 must be rejected by risk<=0 guard)", got.Kind)
 		}
 	})
 }

@@ -28,7 +28,7 @@ type Params struct {
 	BandTol           float64 // lower-band proximity tolerance (fraction)
 	TrendFilterPeriod int     // daily EMA period for the higher-timeframe long filter; 0 disables
 	TrailArmATR       float64 // chandelier trail arms only after price >= entry + TrailArmATR*ATR; <=0 arms immediately
-	ADXMargin         float64 // entry needs ADX past its regime threshold by this margin; 0 = no extra margin
+	ADXMargin         float64 // entry needs ADX past its regime threshold by this margin; <=0 = no extra margin
 	MinRR             float64 // reject entry if (target-price) < MinRR*(price-stop); <=0 disables
 	MinATRFrac        float64 // reject entry if ATR < MinATRFrac*price (anti-churn); <=0 disables
 }
@@ -221,6 +221,10 @@ func (s *Strategy) entryQualifies(price, stop, target, atr float64) bool {
 	}
 	if s.p.MinRR > 0 {
 		risk := price - stop
+		// A non-positive risk (stop >= price) is rejected by the risk<=0 guard.
+		// A negative reward (target <= price) is implicitly rejected by the same
+		// (target-price) < MinRR*risk comparison: a negative LHS is always less
+		// than a positive RHS, so no separate branch is needed.
 		if risk <= 0 || (target-price) < s.p.MinRR*risk {
 			return false
 		}
