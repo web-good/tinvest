@@ -323,52 +323,5 @@ func TestDecideIntegrationNoSetup(t *testing.T) {
 	}
 }
 
-func TestRecentBounceOff(t *testing.T) {
-	// level 100, tol 0.5 (absolute), confirmFrac 0.5.
-	// Bars: [0] bounce off 100 (low 99.6, bullish close 101 above level),
-	//       [1] no touch (low 101), [2] current bar (excluded from the scan).
-	highs := []float64{101.5, 101.5, 101.5}
-	lows := []float64{99.6, 101.0, 99.6}
-	closes := []float64{101.0, 101.0, 101.0}
-
-	tests := []struct {
-		name     string
-		lookback int
-		want     bool
-	}{
-		{"sees the bounce two bars back", 5, true},
-		{"lookback 1 only sees bar[1] (no touch)", 1, false},
-		{"lookback 0 disabled", 0, false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := recentBounceOff(highs, lows, closes, 100, 0.5, 0.5, tt.lookback)
-			if got != tt.want {
-				t.Fatalf("recentBounceOff = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestRecentBounceOffExcludesCurrentBar(t *testing.T) {
-	// Only the current (last) bar is a bounce; it must NOT count.
-	highs := []float64{100.5, 101.5}
-	lows := []float64{101.0, 99.6} // bar[0] no touch, bar[1]=current bounces
-	closes := []float64{100.2, 101.0}
-	if recentBounceOff(highs, lows, closes, 100, 0.5, 0.5, 5) {
-		t.Fatal("current bar must be excluded from the cooldown scan")
-	}
-}
-
-func TestRecentBounceOffOtherLevel(t *testing.T) {
-	// A bounce off 100 must not trigger cooldown for a candidate level 110.
-	highs := []float64{101.5, 110.0}
-	lows := []float64{99.6, 109.0}
-	closes := []float64{101.0, 109.5}
-	if recentBounceOff(highs, lows, closes, 110, 0.5, 0.5, 5) {
-		t.Fatal("bounce off a different level must not count")
-	}
-}
-
 // Interface satisfaction.
 var _ strategy.Strategy = (*Strategy)(nil)

@@ -256,32 +256,6 @@ func recentlyBelowLevel(closes []float64, level float64, lookback int) bool {
 	return false
 }
 
-// recentBounceOff reports whether any of the last `lookback` completed bars
-// (excluding the current bar) was itself a bounce off `level`: its low touched the
-// level within tol AND it closed bullishly back above the level. It cools down
-// repeated entries on a level that just stopped the strategy out. tol is absolute
-// (LevelTolATR*ATR); confirmFrac mirrors the entry's bullish-close test. A
-// non-positive lookback disables the check.
-func recentBounceOff(highs, lows, closes []float64, level, tol, confirmFrac float64, lookback int) bool {
-	n := len(closes)
-	if n < 2 || lookback <= 0 {
-		return false
-	}
-	end := n - 1 // exclude the current bar
-	start := end - lookback
-	if start < 0 {
-		start = 0
-	}
-	for i := start; i < end; i++ {
-		touched := lows[i] <= level+tol
-		bullish := bullishClose(highs[i], lows[i], closes[i], confirmFrac) && closes[i] > level
-		if touched && bullish {
-			return true
-		}
-	}
-	return false
-}
-
 // recentHigh returns the highest high over the last `window` bars (all bars if fewer).
 // A non-positive window is clamped to the last bar so it can never index out of range.
 func recentHigh(highs []float64, window int) float64 {
