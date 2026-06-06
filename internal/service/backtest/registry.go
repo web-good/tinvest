@@ -49,6 +49,29 @@ func Lookup(ticker string) (Binding, bool) {
 	return b, ok
 }
 
+// genericDefaults are neutral baseline params for tickers without a dedicated config,
+// used for basket validation. HTF filter on; quality knobs opted in at starting values.
+func genericDefaults() adaptive.Params {
+	return adaptive.Params{
+		EMAPeriod: 21, ADXPeriod: 14, ADXTrendLevel: 25, ADXRangeLevel: 20,
+		RSIPeriod: 14, RSITrendLevel: 45, RSIRangeLevel: 35,
+		PullbackWindow: 5, DonchianPeriod: 20, ATRPeriod: 14,
+		SLMult: 1.0, TrailMult: 2.5, ChandelierWindow: 20,
+		EMATouchTol: 0.002, BandTol: 0.003, TrendFilterPeriod: 100,
+		TrailArmATR: 1.0, ADXMargin: 2.0, MinRR: 1.5, MinATRFrac: 0.003,
+	}
+}
+
+// LookupOrGeneric returns the registered binding for a ticker, or a generic binding
+// bound to that ticker (with genericDefaults) when none is registered. This lets the
+// backtest command validate the strategy on any ticker without a dedicated package.
+func LookupOrGeneric(ticker string) Binding {
+	if b, ok := registry[ticker]; ok {
+		return b
+	}
+	return bindingFor(ticker, genericDefaults)
+}
+
 // ParamRows reflects a params struct into report rows (field name -> value).
 func ParamRows(params any) []backtest.ParamLine {
 	v := reflect.ValueOf(params)

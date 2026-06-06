@@ -63,3 +63,25 @@ func TestParamRows(t *testing.T) {
 		t.Fatal("expected EMAPeriod=21 row")
 	}
 }
+
+func TestLookupOrGenericFallback(t *testing.T) {
+	// A registered ticker keeps its own binding.
+	b := LookupOrGeneric("RUAL")
+	if s := b.Build(b.DefaultParams()); s.Ticker() != "RUAL" {
+		t.Fatalf("RUAL built ticker = %q, want RUAL", s.Ticker())
+	}
+	// An unregistered ticker gets a generic binding bound to that ticker.
+	g := LookupOrGeneric("SBER")
+	if g.DefaultParams == nil || g.Build == nil || g.ParseParams == nil {
+		t.Fatal("generic binding has nil funcs")
+	}
+	s := g.Build(g.DefaultParams())
+	if s.Ticker() != "SBER" {
+		t.Fatalf("generic built ticker = %q, want SBER", s.Ticker())
+	}
+	// Generic defaults must keep the HTF filter on and the quality knobs opted in.
+	p := g.DefaultParams().(adaptive.Params)
+	if p.TrendFilterPeriod <= 0 || p.MinRR <= 0 || p.TrailArmATR <= 0 {
+		t.Fatalf("generic defaults must opt into quality knobs: %+v", p)
+	}
+}

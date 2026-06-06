@@ -69,10 +69,7 @@ func run(ticker string, months int, cash, fraction, commission float64,
 	}
 
 	ctx := context.Background()
-	binding, ok := svc.Lookup(ticker)
-	if !ok {
-		return fmt.Errorf("no strategy binding registered for ticker %q", ticker)
-	}
+	binding := svc.LookupOrGeneric(ticker)
 
 	share, err := resolveShare(ctx, client, ticker)
 	if err != nil {
