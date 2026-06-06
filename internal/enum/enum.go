@@ -12,6 +12,7 @@ const (
 	Hour1     Interval = 4
 	Hour4     Interval = 11
 	Minutes15 Interval = 3
+	Minutes30 Interval = 9
 	Week1     Interval = 12
 )
 
@@ -20,6 +21,7 @@ var intervalNames = map[Interval]string{
 	4:  "Hour1",
 	11: "Hour4",
 	3:  "Minutes15",
+	9:  "Minutes30",
 	12: "Week1",
 }
 
@@ -40,6 +42,8 @@ func (i Interval) ToTimeDuration() time.Duration {
 		interval = time.Hour
 	case Minutes15:
 		interval = time.Minute * 15
+	case Minutes30:
+		interval = time.Minute * 30
 	case Week1:
 		interval = time.Hour * 24 * 7
 
@@ -51,6 +55,10 @@ func (i Interval) ToTimeDuration() time.Duration {
 func (i Interval) ToNumberInvestApi() int32 {
 	if i == Minutes15 {
 		return 3
+	}
+
+	if i == Minutes30 {
+		return 9
 	}
 
 	if i == Hour1 {

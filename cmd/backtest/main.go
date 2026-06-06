@@ -20,6 +20,7 @@ import (
 	"tinvest/internal/enum"
 	svc "tinvest/internal/service/backtest"
 	grpcclient "tinvest/pkg/client/grpc"
+	"tinvest/pkg/logger"
 )
 
 const (
@@ -30,6 +31,7 @@ const (
 func main() {
 	var (
 		ticker     = flag.String("ticker", "", "ticker, e.g. RUAL (required)")
+		intervalS  = flag.String("interval", "Hour1", "candle timeframe: Minutes15|Minutes30|Hour1|Hour4|Day1|Week1")
 		months     = flag.Int("months", 12, "lookback period in months")
 		cash       = flag.Float64("cash", 100000, "starting mock cash")
 		fraction   = flag.Float64("fraction", 1.0, "fraction of cash per Buy")
@@ -43,14 +45,40 @@ func main() {
 		refresh    = flag.Bool("refresh", false, "force candle refetch (ignore cache)")
 	)
 	flag.Parse()
+	logger.Init() // candle fetcher logs chunk errors via the package logger
 
-	if err := run(*ticker, *months, *cash, *fraction, *commission,
+	interval, err := parseInterval(*intervalS)
+	if err != nil {
+		log.Fatalf("backtest: %v", err)
+	}
+
+	if err := run(*ticker, interval, *months, *cash, *fraction, *commission,
 		*paramsPath, *calibrate, *metric, *minTrades, *testMonths, *outDir, *refresh); err != nil {
 		log.Fatalf("backtest: %v", err)
 	}
 }
 
-func run(ticker string, months int, cash, fraction, commission float64,
+// parseInterval maps a timeframe flag string to the enum the candle API uses.
+func parseInterval(s string) (enum.Interval, error) {
+	switch s {
+	case "Minutes15":
+		return enum.Minutes15, nil
+	case "Minutes30":
+		return enum.Minutes30, nil
+	case "Hour1":
+		return enum.Hour1, nil
+	case "Hour4":
+		return enum.Hour4, nil
+	case "Day1":
+		return enum.Day1, nil
+	case "Week1":
+		return enum.Week1, nil
+	default:
+		return 0, fmt.Errorf("unknown interval %q (want Minutes15|Hour1|Hour4|Day1|Week1)", s)
+	}
+}
+
+func run(ticker string, interval enum.Interval, months int, cash, fraction, commission float64,
 	paramsPath, calibratePath, metric string, minTrades, testMonths int, outDir string, refresh bool,
 ) error {
 	if ticker == "" {
@@ -79,7 +107,6 @@ func run(ticker string, months int, cash, fraction, commission float64,
 
 	to := time.Now()
 	from := to.AddDate(0, -months, 0)
-	interval := enum.Hour1
 
 	provider := svc.NewCandleProvider(client.MarketDataServiceClient(), cacheDir)
 	candles, err := provider.Load(ctx, ticker, share.ID, interval, from, to, refresh)

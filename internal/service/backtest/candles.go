@@ -22,12 +22,21 @@ import (
 	"tinvest/pkg/logger"
 )
 
-// chunkDays bounds each GetCandles request window; H1 over a long range must be
-// fetched in pieces. fetchPause throttles requests to respect API limits.
-const (
-	chunkDays  = 30
-	fetchPause = 300 * time.Millisecond
-)
+// fetchPause throttles requests to respect API limits.
+const fetchPause = 300 * time.Millisecond
+
+// chunkDaysFor bounds each GetCandles request window per interval, since the API
+// caps the span per request by interval: sub-hour candles allow up to 3 weeks,
+// hour-and-up allow months. We stay safely under the cap to fetch long ranges in
+// pieces. Values are in days.
+func chunkDaysFor(i enum.Interval) int {
+	switch i {
+	case enum.Minutes15, enum.Minutes30:
+		return 14 // API cap is ~3 weeks for sub-hour candles
+	default:
+		return 30 // hour-and-up allow months; 30 is comfortable
+	}
+}
 
 // candleFetcher is the slice of the gRPC market-data client the provider needs.
 // The real grpc.MarketDataServiceClient satisfies it.
@@ -95,15 +104,16 @@ func (p *CandleProvider) Load(ctx context.Context, ticker, instrumentID string,
 	return sliceWindow(cached, from, to), nil
 }
 
-// fetchRange pulls [from, to] in chunkDays windows, converting and merging.
+// fetchRange pulls [from, to] in per-interval windows, converting and merging.
 func (p *CandleProvider) fetchRange(ctx context.Context, instrumentID string,
 	interval enum.Interval, from, to time.Time,
 ) ([]backtest.Candle, error) {
 	var all []backtest.Candle
 	id := instrumentID
 	num := interval.ToNumberInvestApi()
+	chunk := time.Duration(chunkDaysFor(interval)) * 24 * time.Hour
 	for winFrom := from; winFrom.Before(to); {
-		winTo := winFrom.Add(chunkDays * 24 * time.Hour)
+		winTo := winFrom.Add(chunk)
 		if winTo.After(to) {
 			winTo = to
 		}
