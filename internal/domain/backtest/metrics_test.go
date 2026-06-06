@@ -106,3 +106,12 @@ func TestComputeSortinoNoDownside(t *testing.T) {
 		t.Fatalf("Sortino = %f, want 40", m.Sortino)
 	}
 }
+
+func TestComputeSortinoAllBreakeven(t *testing.T) {
+	// All break-even: no downside (dd=0) and mean=0 -> Sortino 0 (default branch).
+	r := Result{Trades: []Trade{{PnL: 0}, {PnL: 0}}, InitialCash: 1000, FinalEquity: 1000}
+	m := Compute(r, 0, 0, 0)
+	if m.Sortino != 0 {
+		t.Fatalf("Sortino = %f, want 0 (break-even has no edge)", m.Sortino)
+	}
+}

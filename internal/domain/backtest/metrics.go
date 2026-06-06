@@ -83,7 +83,9 @@ func maxDrawdown(eq []EquityPoint) (abs, pct float64) {
 // sortino returns mean trade PnL divided by the downside deviation of trade PnL
 // (the root-mean-square of the negative PnLs). With no losing trades the downside
 // deviation is zero; a positive mean then returns the mean itself (mirrors the
-// ProfitFactor convention), otherwise 0.
+// ProfitFactor convention), otherwise 0. The squared losses are divided by n
+// (total trades), not by the loser count, so the metric also penalises a scarcity
+// of winners.
 func sortino(trades []Trade, mean float64) float64 {
 	n := len(trades)
 	if n == 0 {
