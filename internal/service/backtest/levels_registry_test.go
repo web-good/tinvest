@@ -28,20 +28,7 @@ func TestLevelsLookupOrGenericUnknown(t *testing.T) {
 	if b.DefaultParams == nil || b.Build == nil || b.ParseParams == nil {
 		t.Fatal("generic levels binding has nil funcs")
 	}
-	// DefaultParams must be genericLevelsDefaults, not levelsrusal.DefaultParams.
 	got := b.DefaultParams().(core.Params)
-	if got == levelsrusal.DefaultParams() {
-		// If they happen to be equal, at least confirm the binding still builds a
-		// working strategy for the unknown ticker.
-		s := b.Build(got)
-		if s == nil {
-			t.Fatal("generic Build returned nil")
-		}
-		if s.Ticker() != "UNKNOWN" {
-			t.Fatalf("generic strategy ticker = %q, want UNKNOWN", s.Ticker())
-		}
-	}
-	// Confirm an unknown ticker produces a usable binding.
 	s := b.Build(got)
 	if s == nil {
 		t.Fatal("generic Build returned nil")
@@ -51,6 +38,17 @@ func TestLevelsLookupOrGenericUnknown(t *testing.T) {
 	}
 	if s.Lookback() <= 0 {
 		t.Fatalf("generic strategy Lookback() = %d, want > 0", s.Lookback())
+	}
+}
+
+// genericLevelsDefaults currently equals levelsrusal.DefaultParams by design: there is
+// only one registered levels ticker, so the neutral baseline starts from RUAL's starting
+// values. They are kept as independent code paths so calibrating RUAL never drifts the
+// generic baseline; this test documents that today they coincide on purpose.
+func TestGenericLevelsDefaultsMatchRusalToday(t *testing.T) {
+	if genericLevelsDefaults() != levelsrusal.DefaultParams() {
+		t.Fatal("generic levels defaults diverged from RUAL starting values; " +
+			"if this is an intentional RUAL recalibration, update this test's expectation")
 	}
 }
 
