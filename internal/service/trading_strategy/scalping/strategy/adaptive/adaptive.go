@@ -28,6 +28,9 @@ type Params struct {
 	BandTol           float64 // lower-band proximity tolerance (fraction)
 	TrendFilterPeriod int     // daily EMA period for the higher-timeframe long filter; 0 disables
 	TrailArmATR       float64 // chandelier trail arms only after price >= entry + TrailArmATR*ATR; <=0 arms immediately
+	ADXMargin         float64 // entry needs ADX past its regime threshold by this margin; 0 = no extra margin
+	MinRR             float64 // reject entry if (target-price) < MinRR*(price-stop); <=0 disables
+	MinATRFrac        float64 // reject entry if ATR < MinATRFrac*price (anti-churn); <=0 disables
 }
 
 // Strategy trades a single instrument adaptively: it picks a regime from ADX and
@@ -183,26 +186,46 @@ func (s *Strategy) decide(in decideInput) model.Signal {
 		return sig
 	}
 
-	// Flat -> regime-specific entries (long only).
+	// Flat -> regime-specific entries (long only), each filtered by the quality gate.
 	switch reg {
 	case regimeTrend:
 		crossedUp := in.rsiPrev < s.p.RSITrendLevel && in.rsiNow >= s.p.RSITrendLevel
 		if in.diPlus > in.diMinus && in.emaTouched && crossedUp && in.price > in.emaNow &&
-			(!in.trendFilterOn || in.trendUp) {
-			sig.Kind = model.SignalBuy
-			sig.StopLoss = in.price - s.p.SLMult*in.atr
-			sig.TakeProfit = in.price + s.p.TrailMult*in.atr
+			(!in.trendFilterOn || in.trendUp) && in.adx >= s.p.ADXTrendLevel+s.p.ADXMargin {
+			stop := in.price - s.p.SLMult*in.atr
+			target := in.price + s.p.TrailMult*in.atr
+			if s.entryQualifies(in.price, stop, target, in.atr) {
+				sig.Kind, sig.StopLoss, sig.TakeProfit = model.SignalBuy, stop, target
+			}
 		}
 	case regimeRange:
 		crossedUp := in.rsiPrev < s.p.RSIRangeLevel && in.rsiNow >= s.p.RSIRangeLevel
 		if in.price <= in.donLower*(1+s.p.BandTol) && crossedUp &&
-			(!in.trendFilterOn || in.trendUp) {
-			sig.Kind = model.SignalBuy
-			sig.StopLoss = in.price - s.p.SLMult*in.atr
-			sig.TakeProfit = (in.donUpper + in.donLower) / 2
+			(!in.trendFilterOn || in.trendUp) && in.adx <= s.p.ADXRangeLevel-s.p.ADXMargin {
+			stop := in.price - s.p.SLMult*in.atr
+			target := (in.donUpper + in.donLower) / 2
+			if s.entryQualifies(in.price, stop, target, in.atr) {
+				sig.Kind, sig.StopLoss, sig.TakeProfit = model.SignalBuy, stop, target
+			}
 		}
 	}
 	return sig
+}
+
+// entryQualifies applies the trade-quality gates: a minimum ATR (anti-churn) and a
+// minimum reward:risk ratio. Either check is skipped when its param is <= 0, so the
+// zero-value Params reproduce the pre-gate behavior.
+func (s *Strategy) entryQualifies(price, stop, target, atr float64) bool {
+	if s.p.MinATRFrac > 0 && atr < s.p.MinATRFrac*price {
+		return false
+	}
+	if s.p.MinRR > 0 {
+		risk := price - stop
+		if risk <= 0 || (target-price) < s.p.MinRR*risk {
+			return false
+		}
+	}
+	return true
 }
 
 // emaTouched reports whether a low dipped to the EMA (within tol) on any of the last

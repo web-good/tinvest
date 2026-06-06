@@ -325,6 +325,52 @@ func TestDecide_TrailArmsOnlyInProfit(t *testing.T) {
 	}
 }
 
+func TestDecide_EntryQualityGate(t *testing.T) {
+	// Base: a trend entry that fires under testParams (TP 104, SL 98, reward 4 / risk 2 = RR 2).
+	base := decideInput{
+		price: 100, atr: 2, emaNow: 99, rsiPrev: 40, rsiNow: 46,
+		adx: 30, diPlus: 25, diMinus: 10, emaTouched: true,
+	}
+
+	t.Run("ADX margin blocks a barely-trending entry", func(t *testing.T) {
+		p := testParams()
+		p.ADXMargin = 5 // need adx >= ADXTrendLevel(25)+5 = 30
+		in := base
+		in.adx = 28 // regime still trend (>=25) but below 30
+		if got := NewWithParams("TST", p).decide(in); got.Kind != model.SignalNone {
+			t.Fatalf("Kind = %v, want None (adx below margin)", got.Kind)
+		}
+		in.adx = 31
+		if got := NewWithParams("TST", p).decide(in); got.Kind != model.SignalBuy {
+			t.Fatalf("Kind = %v, want Buy (adx clears margin)", got.Kind)
+		}
+	})
+
+	t.Run("min reward:risk blocks a thin-edge entry", func(t *testing.T) {
+		p := testParams() // TrailMult 2 -> reward 4, risk 2, RR 2
+		p.MinRR = 3
+		if got := NewWithParams("TST", p).decide(base); got.Kind != model.SignalNone {
+			t.Fatalf("Kind = %v, want None (RR 2 < MinRR 3)", got.Kind)
+		}
+		p.MinRR = 1.5
+		if got := NewWithParams("TST", p).decide(base); got.Kind != model.SignalBuy {
+			t.Fatalf("Kind = %v, want Buy (RR 2 >= MinRR 1.5)", got.Kind)
+		}
+	})
+
+	t.Run("min ATR fraction blocks a low-volatility entry", func(t *testing.T) {
+		p := testParams() // price 100, atr 2 -> frac 0.02
+		p.MinATRFrac = 0.03
+		if got := NewWithParams("TST", p).decide(base); got.Kind != model.SignalNone {
+			t.Fatalf("Kind = %v, want None (atr frac 0.02 < 0.03)", got.Kind)
+		}
+		p.MinATRFrac = 0.01
+		if got := NewWithParams("TST", p).decide(base); got.Kind != model.SignalBuy {
+			t.Fatalf("Kind = %v, want Buy (atr frac 0.02 >= 0.01)", got.Kind)
+		}
+	})
+}
+
 func TestDecide_DailyFilterGate(t *testing.T) {
 	p := testParams()
 	p.TrendFilterPeriod = 3 // tiny period so a short daily series is enough
