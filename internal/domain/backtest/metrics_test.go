@@ -84,3 +84,25 @@ func TestComputeCAGR(t *testing.T) {
 	}
 	_ = math.Pi
 }
+
+func TestComputeSortino(t *testing.T) {
+	// Trades 100,-40,60,-20: mean=25; downside sq mean = (40^2+20^2)/4 = 500;
+	// downside dev = sqrt(500) = 22.360679...; Sortino = 25 / 22.360679 = 1.118034.
+	r := Result{
+		Trades:      []Trade{{PnL: 100}, {PnL: -40}, {PnL: 60}, {PnL: -20}},
+		InitialCash: 1000, FinalEquity: 1100,
+	}
+	m := Compute(r, 0, 0, 0)
+	if !approx(m.Sortino, 25.0/math.Sqrt(500)) {
+		t.Fatalf("Sortino = %f, want %f", m.Sortino, 25.0/math.Sqrt(500))
+	}
+}
+
+func TestComputeSortinoNoDownside(t *testing.T) {
+	// All winners: downside dev 0, mean > 0 -> Sortino = mean (mirrors PF convention).
+	r := Result{Trades: []Trade{{PnL: 50}, {PnL: 30}}, InitialCash: 1000, FinalEquity: 1080}
+	m := Compute(r, 0, 0, 0)
+	if !approx(m.Sortino, 40) { // mean = (50+30)/2
+		t.Fatalf("Sortino = %f, want 40", m.Sortino)
+	}
+}

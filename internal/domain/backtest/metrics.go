@@ -31,6 +31,7 @@ func Compute(r Result, barsInMarket, totalBars int, periodDays float64) Metrics 
 		m.WinRate = float64(m.Wins) / float64(m.TotalTrades)
 		m.LossRate = float64(m.Losses) / float64(m.TotalTrades)
 		m.Expectancy = (m.GrossProfit - m.GrossLoss) / float64(m.TotalTrades)
+		m.Sortino = sortino(r.Trades, m.Expectancy)
 	}
 	if m.Wins > 0 {
 		m.AvgWin = m.GrossProfit / float64(m.Wins)
@@ -77,4 +78,30 @@ func maxDrawdown(eq []EquityPoint) (abs, pct float64) {
 		}
 	}
 	return abs, pct
+}
+
+// sortino returns mean trade PnL divided by the downside deviation of trade PnL
+// (the root-mean-square of the negative PnLs). With no losing trades the downside
+// deviation is zero; a positive mean then returns the mean itself (mirrors the
+// ProfitFactor convention), otherwise 0.
+func sortino(trades []Trade, mean float64) float64 {
+	n := len(trades)
+	if n == 0 {
+		return 0
+	}
+	var sqSum float64
+	for _, t := range trades {
+		if t.PnL < 0 {
+			sqSum += t.PnL * t.PnL
+		}
+	}
+	dd := math.Sqrt(sqSum / float64(n))
+	switch {
+	case dd > 0:
+		return mean / dd
+	case mean > 0:
+		return mean
+	default:
+		return 0
+	}
 }

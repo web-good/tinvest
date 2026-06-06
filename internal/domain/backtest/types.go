@@ -66,6 +66,7 @@ type Metrics struct {
 	AvgWin         float64
 	AvgLoss        float64
 	Expectancy     float64 // average PnL per trade
+	Sortino        float64 // mean trade PnL / downside deviation of trade PnL
 	BestTrade      float64
 	WorstTrade     float64
 	ExposurePct    float64 // fraction of bars in market
