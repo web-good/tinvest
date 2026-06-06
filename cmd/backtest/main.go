@@ -38,19 +38,20 @@ func main() {
 		calibrate  = flag.String("calibrate", "", "path to grid JSON (grid-search mode)")
 		metric     = flag.String("metric", "expectancy", "ranking metric: profit_factor|net_pnl|win_rate|max_drawdown|expectancy|sortino")
 		minTrades  = flag.Int("min-trades", 15, "calibration: combos with fewer trades sink below qualified ones")
+		testMonths = flag.Int("test-months", 0, "walk-forward: calibrate on the earlier window, report best on the last N months")
 		outDir     = flag.String("out", "reports", "report output directory")
 		refresh    = flag.Bool("refresh", false, "force candle refetch (ignore cache)")
 	)
 	flag.Parse()
 
 	if err := run(*ticker, *months, *cash, *fraction, *commission,
-		*paramsPath, *calibrate, *metric, *minTrades, *outDir, *refresh); err != nil {
+		*paramsPath, *calibrate, *metric, *minTrades, *testMonths, *outDir, *refresh); err != nil {
 		log.Fatalf("backtest: %v", err)
 	}
 }
 
 func run(ticker string, months int, cash, fraction, commission float64,
-	paramsPath, calibratePath, metric string, minTrades int, outDir string, refresh bool,
+	paramsPath, calibratePath, metric string, minTrades, testMonths int, outDir string, refresh bool,
 ) error {
 	if ticker == "" {
 		return fmt.Errorf("-ticker is required")
@@ -102,8 +103,8 @@ func run(ticker string, months int, cash, fraction, commission float64,
 	base := filepath.Join(outDir, fmt.Sprintf("%s_%s_%s", ticker, interval.String(), stamp))
 
 	if calibratePath != "" {
-		return runCalibration(binding, calibratePath, candles, dailyCandles, cfg, metric, minTrades, periodDays, base,
-			metaCommon(ticker, interval, from, to, cfg))
+		return runCalibration(binding, calibratePath, candles, dailyCandles, cfg, metric, minTrades, testMonths, periodDays, base,
+			metaCommon(ticker, interval, from, to, cfg), to)
 	}
 
 	return runSingle(binding, paramsPath, candles, dailyCandles, cfg, periodDays, base,
@@ -149,7 +150,7 @@ func runSingle(b svc.Binding, paramsPath string, candles []domain.Candle, dailyC
 }
 
 func runCalibration(b svc.Binding, gridPath string, candles []domain.Candle, dailyCandles []domain.Candle,
-	cfg domain.Config, metric string, minTrades int, periodDays float64, base string, meta domain.Meta,
+	cfg domain.Config, metric string, minTrades, testMonths int, periodDays float64, base string, meta domain.Meta, to time.Time,
 ) error {
 	raw, err := os.ReadFile(gridPath)
 	if err != nil {
@@ -160,7 +161,18 @@ func runCalibration(b svc.Binding, gridPath string, candles []domain.Candle, dai
 		return fmt.Errorf("parse grid: %w", err)
 	}
 
-	results, err := svc.RunGrid(b, grid, candles, dailyCandles, cfg, metric, minTrades, periodDays)
+	gridCandles, gridDaily := candles, dailyCandles
+	bestCandles, bestDaily := candles, dailyCandles
+	bestDays := periodDays
+	if testMonths > 0 {
+		boundary := to.AddDate(0, -testMonths, 0)
+		gridCandles, bestCandles = svc.SplitByTime(candles, boundary)
+		gridDaily, _ = svc.SplitByTime(dailyCandles, boundary)
+		_, bestDaily = svc.SplitByTime(dailyCandles, boundary)
+		bestDays = float64(testMonths) * 30.0
+	}
+
+	results, err := svc.RunGrid(b, grid, gridCandles, gridDaily, cfg, metric, minTrades, periodDays)
 	if err != nil {
 		return err
 	}
@@ -172,15 +184,15 @@ func runCalibration(b svc.Binding, gridPath string, candles []domain.Candle, dai
 	// Also emit the full single-run report for the best combination.
 	if len(results) > 0 {
 		best := results[0].Params
-		res := domain.Run(b.Build(best), candles, dailyCandles, cfg)
-		m := domain.Compute(res, res.BarsInMarket, len(res.Equity), periodDays)
+		res := domain.Run(b.Build(best), bestCandles, bestDaily, cfg)
+		m := domain.Compute(res, res.BarsInMarket, len(res.Equity), bestDays)
 		meta.Params = svc.ParamRows(best)
 		meta.OpenPosition = openPosition(res)
 		if err := writeFile(base+"_best.md", domain.RenderMarkdown(meta, m, res.Trades, res.Equity)); err != nil {
 			return err
 		}
 	}
-	fmt.Printf("calibration: %s (combos=%d)\n", calibPath, len(results))
+	fmt.Printf("calibration: %s (combos=%d, test_months=%d)\n", calibPath, len(results), testMonths)
 	return nil
 }
 
