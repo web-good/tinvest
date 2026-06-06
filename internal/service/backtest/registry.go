@@ -52,6 +52,7 @@ func Lookup(ticker string) (Binding, bool) {
 // genericDefaults are neutral baseline params for tickers without a dedicated config,
 // used for basket validation. HTF filter on; quality knobs opted in at starting values.
 func genericDefaults() adaptive.Params {
+	// Intentionally independent of afks.DefaultParams: the generic baseline must not drift when AFKS is calibrated to ticker-specific values.
 	return adaptive.Params{
 		EMAPeriod: 21, ADXPeriod: 14, ADXTrendLevel: 25, ADXRangeLevel: 20,
 		RSIPeriod: 14, RSITrendLevel: 45, RSIRangeLevel: 35,

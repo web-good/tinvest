@@ -84,4 +84,17 @@ func TestLookupOrGenericFallback(t *testing.T) {
 	if p.TrendFilterPeriod <= 0 || p.MinRR <= 0 || p.TrailArmATR <= 0 {
 		t.Fatalf("generic defaults must opt into quality knobs: %+v", p)
 	}
+	// ParseParams on a generic binding must apply overrides on top of genericDefaults,
+	// not on a zero struct — so unaffected fields must remain non-zero.
+	parsed, err := g.ParseParams([]byte(`{"EMAPeriod":50}`))
+	if err != nil {
+		t.Fatalf("generic ParseParams error: %v", err)
+	}
+	gp := parsed.(adaptive.Params)
+	if gp.EMAPeriod != 50 {
+		t.Errorf("EMAPeriod = %d, want 50 (override applied)", gp.EMAPeriod)
+	}
+	if gp.TrendFilterPeriod <= 0 || gp.MinRR <= 0 {
+		t.Errorf("base genericDefaults lost under partial override: %+v", gp)
+	}
 }
