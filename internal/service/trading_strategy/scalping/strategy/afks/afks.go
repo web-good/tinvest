@@ -7,8 +7,8 @@ import (
 // Ticker is the instrument this config targets.
 const Ticker = "AFKS"
 
-// DefaultParams returns generic, NOT-yet-calibrated starting values for AFKS.
-// The HTF daily trend filter is disabled (0) until calibration justifies it.
+// DefaultParams returns generic, NOT-yet-calibrated starting values for AFKS with the
+// quality knobs opted in and the HTF daily trend filter on. Calibration refines these.
 func DefaultParams() adaptive.Params {
 	return adaptive.Params{
 		EMAPeriod:         21,
@@ -26,7 +26,11 @@ func DefaultParams() adaptive.Params {
 		ChandelierWindow:  20,
 		EMATouchTol:       0.002,
 		BandTol:           0.003,
-		TrendFilterPeriod: 0,
+		TrendFilterPeriod: 100,
+		TrailArmATR:       1.0,
+		ADXMargin:         2.0,
+		MinRR:             1.5,
+		MinATRFrac:        0.003,
 	}
 }
 

@@ -14,7 +14,10 @@ func TestTickerAndDefaults(t *testing.T) {
 	if p.EMAPeriod <= 0 || p.ADXPeriod <= 0 || p.RSIPeriod <= 0 || p.DonchianPeriod <= 0 || p.ATRPeriod <= 0 {
 		t.Errorf("all periods must be positive: %+v", p)
 	}
-	if p.TrendFilterPeriod != 0 {
-		t.Errorf("TrendFilterPeriod = %d, want 0 (filter off until calibrated)", p.TrendFilterPeriod)
+	if p.TrendFilterPeriod <= 0 {
+		t.Errorf("TrendFilterPeriod = %d, want > 0 (HTF filter on by default)", p.TrendFilterPeriod)
+	}
+	if p.TrailArmATR <= 0 || p.MinRR <= 0 || p.MinATRFrac <= 0 {
+		t.Errorf("quality knobs must be opted in (non-zero): %+v", p)
 	}
 }

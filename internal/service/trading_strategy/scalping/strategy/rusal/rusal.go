@@ -26,6 +26,10 @@ func DefaultParams() adaptive.Params {
 		EMATouchTol:       0.002,
 		BandTol:           0.003,
 		TrendFilterPeriod: 100, // calibrated: beats 0/50/200 across 6/12/18/24mo windows
+		TrailArmATR:       1.0, // arm trail after +1 ATR profit (kills bar-1 stop-outs)
+		ADXMargin:         2.0, // require ADX to clear its regime threshold by 2
+		MinRR:             1.5, // skip setups whose target is < 1.5x the risk
+		MinATRFrac:        0.003, // skip sub-0.3%-ATR setups (anti-churn)
 	}
 }
 

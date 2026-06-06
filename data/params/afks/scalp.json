@@ -14,5 +14,9 @@
   "ChandelierWindow": 20,
   "EMATouchTol": 0.002,
   "BandTol": 0.003,
-  "TrendFilterPeriod": 0
+  "TrendFilterPeriod": 100,
+  "TrailArmATR": 1.0,
+  "ADXMargin": 2.0,
+  "MinRR": 1.5,
+  "MinATRFrac": 0.003
 }
