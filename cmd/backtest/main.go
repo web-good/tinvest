@@ -1,5 +1,5 @@
-// Command backtest replays the per-share scalping strategy over historical
-// candles, simulates a mock portfolio, and writes Markdown + CSV reports.
+// Command backtest replays a per-share trading strategy (scalping or levels) over
+// historical candles, simulates a mock portfolio, and writes Markdown + CSV reports.
 // It supports a single run (default params or -params) and grid calibration
 // (-calibrate). All gRPC/file I/O is here; the engine and metrics are pure.
 package main
@@ -30,19 +30,20 @@ const (
 
 func main() {
 	var (
-		ticker     = flag.String("ticker", "", "ticker, e.g. RUAL (required)")
-		intervalS  = flag.String("interval", "Hour1", "candle timeframe: Minutes15|Minutes30|Hour1|Hour4|Day1|Week1")
-		months     = flag.Int("months", 12, "lookback period in months")
-		cash       = flag.Float64("cash", 100000, "starting mock cash")
-		fraction   = flag.Float64("fraction", 1.0, "fraction of cash per Buy")
-		commission = flag.Float64("commission", 0.0005, "commission as a fraction of turnover")
-		paramsPath = flag.String("params", "", "path to JSON Params (default: DefaultParams)")
-		calibrate  = flag.String("calibrate", "", "path to grid JSON (grid-search mode)")
-		metric     = flag.String("metric", "expectancy", "ranking metric: profit_factor|net_pnl|win_rate|max_drawdown|expectancy|sortino")
-		minTrades  = flag.Int("min-trades", 15, "calibration: combos with fewer trades sink below qualified ones")
-		testMonths = flag.Int("test-months", 0, "walk-forward: calibrate on the earlier window, report best on the last N months")
-		outDir     = flag.String("out", "reports", "report output directory")
-		refresh    = flag.Bool("refresh", false, "force candle refetch (ignore cache)")
+		ticker       = flag.String("ticker", "", "ticker, e.g. RUAL (required)")
+		intervalS    = flag.String("interval", "Hour1", "candle timeframe: Minutes15|Minutes30|Hour1|Hour4|Day1|Week1")
+		strategyName = flag.String("strategy", "scalping", "strategy engine: scalping|levels")
+		months       = flag.Int("months", 12, "lookback period in months")
+		cash         = flag.Float64("cash", 100000, "starting mock cash")
+		fraction     = flag.Float64("fraction", 1.0, "fraction of cash per Buy")
+		commission   = flag.Float64("commission", 0.0005, "commission as a fraction of turnover")
+		paramsPath   = flag.String("params", "", "path to JSON Params (default: DefaultParams)")
+		calibrate    = flag.String("calibrate", "", "path to grid JSON (grid-search mode)")
+		metric       = flag.String("metric", "expectancy", "ranking metric: profit_factor|net_pnl|win_rate|max_drawdown|expectancy|sortino")
+		minTrades    = flag.Int("min-trades", 15, "calibration: combos with fewer trades sink below qualified ones")
+		testMonths   = flag.Int("test-months", 0, "walk-forward: calibrate on the earlier window, report best on the last N months")
+		outDir       = flag.String("out", "reports", "report output directory")
+		refresh      = flag.Bool("refresh", false, "force candle refetch (ignore cache)")
 	)
 	flag.Parse()
 	logger.Init() // candle fetcher logs chunk errors via the package logger
@@ -52,7 +53,7 @@ func main() {
 		log.Fatalf("backtest: %v", err)
 	}
 
-	if err := run(*ticker, interval, *months, *cash, *fraction, *commission,
+	if err := run(*ticker, *strategyName, interval, *months, *cash, *fraction, *commission,
 		*paramsPath, *calibrate, *metric, *minTrades, *testMonths, *outDir, *refresh); err != nil {
 		log.Fatalf("backtest: %v", err)
 	}
@@ -78,7 +79,7 @@ func parseInterval(s string) (enum.Interval, error) {
 	}
 }
 
-func run(ticker string, interval enum.Interval, months int, cash, fraction, commission float64,
+func run(ticker, strategyName string, interval enum.Interval, months int, cash, fraction, commission float64,
 	paramsPath, calibratePath, metric string, minTrades, testMonths int, outDir string, refresh bool,
 ) error {
 	if ticker == "" {
@@ -98,7 +99,15 @@ func run(ticker string, interval enum.Interval, months int, cash, fraction, comm
 	}
 
 	ctx := context.Background()
-	binding := svc.LookupOrGeneric(ticker)
+	var binding svc.Binding
+	switch strategyName {
+	case "levels":
+		binding = svc.LevelsLookupOrGeneric(ticker)
+	case "scalping":
+		binding = svc.LookupOrGeneric(ticker)
+	default:
+		return fmt.Errorf("unknown strategy %q (want scalping|levels)", strategyName)
+	}
 
 	share, err := resolveShare(ctx, client, ticker)
 	if err != nil {
@@ -127,7 +136,7 @@ func run(ticker string, interval enum.Interval, months int, cash, fraction, comm
 		return fmt.Errorf("mkdir out dir: %w", err)
 	}
 	stamp := time.Now().Format("20060102_150405")
-	base := filepath.Join(outDir, fmt.Sprintf("%s_%s_%s", ticker, interval.String(), stamp))
+	base := filepath.Join(outDir, fmt.Sprintf("%s_%s_%s_%s", ticker, strategyName, interval.String(), stamp))
 
 	if calibratePath != "" {
 		return runCalibration(binding, calibratePath, candles, dailyCandles, cfg, metric, minTrades, testMonths, periodDays, base,
