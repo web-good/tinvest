@@ -161,11 +161,17 @@ func (s *Strategy) decide(in decideInput) model.Signal {
 		// range or dead zone -> mean-reversion management.
 		mid := (in.donUpper + in.donLower) / 2
 		sig.StopLoss = hardSL
-		sig.TakeProfit = mid
+		// The Donchian mid is a take-profit only when it sits above the entry price.
+		// In a sliding channel mid can fall below entry, which previously dumped the
+		// position at a loss mislabeled "TP". Below entry, only the hard stop manages.
+		validTP := mid > in.pos.PurchasePrice
+		if validTP {
+			sig.TakeProfit = mid
+		}
 		switch {
 		case in.price <= hardSL:
 			sig.Kind, sig.Reason = model.SignalSell, "SL"
-		case in.price >= mid && mid > 0:
+		case validTP && in.price >= mid:
 			sig.Kind, sig.Reason = model.SignalSell, "TP"
 		}
 		return sig

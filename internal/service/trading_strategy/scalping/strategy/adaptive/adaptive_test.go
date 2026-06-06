@@ -260,6 +260,26 @@ func TestDecideCore(t *testing.T) {
 	}
 }
 
+func TestDecide_RangeMidBelowEntryNoPhantomTP(t *testing.T) {
+	s := NewWithParams("TST", testParams()) // SLMult 1, ATR via input
+	// Open long at 100; channel has slid so mid = (102+96)/2 = 99 < entry.
+	in := decideInput{
+		price: 99, atr: 2, adx: 15, donUpper: 102, donLower: 96,
+		pos: &strategy.Position{PurchasePrice: 100},
+	}
+	got := s.decide(in)
+	if got.Kind != model.SignalNone {
+		t.Fatalf("Kind = %v, want None (mid below entry must not TP)", got.Kind)
+	}
+	if got.TakeProfit != 0 {
+		t.Errorf("TakeProfit = %v, want 0 (no phantom target below entry)", got.TakeProfit)
+	}
+	// Hard stop must still be reported (entry - SLMult*ATR = 100 - 1*2 = 98).
+	if got.StopLoss != 98 {
+		t.Errorf("StopLoss = %v, want 98", got.StopLoss)
+	}
+}
+
 func TestDecide_DailyFilterGate(t *testing.T) {
 	p := testParams()
 	p.TrendFilterPeriod = 3 // tiny period so a short daily series is enough
