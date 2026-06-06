@@ -285,8 +285,9 @@ func TestDecide_TrailArmsOnlyInProfit(t *testing.T) {
 	p.TrailArmATR = 1.0 // arm only after +1 ATR of profit
 	s := NewWithParams("TST", p)
 
-	// Not yet armed: profit 0.5 < 1*ATR(2). Price is below the chandelier
-	// (chandelierHigh 105 - TrailMult 2*ATR 2 = 101) but trail must NOT fire.
+	// Unarmed: profit 0.5 < TrailArmATR(1)*ATR(2) = 2 — trail must NOT fire.
+	// chandelier = chandelierHigh(105) - TrailMult(2)*ATR(2) = 101;
+	// price 100.5 <= 101 would fire IF armed, so the sub-threshold profit is the only guard.
 	notArmed := decideInput{
 		price: 100.5, atr: 2, adx: 30, chandelierHigh: 105,
 		pos: &strategy.Position{PurchasePrice: 100},
@@ -295,7 +296,8 @@ func TestDecide_TrailArmsOnlyInProfit(t *testing.T) {
 		t.Fatalf("unarmed trail fired: Kind = %v, want None", got.Kind)
 	}
 
-	// Armed: profit 3 >= 1*ATR(2). chandelierHigh 110 - 4 = 106; price 103 <= 106.
+	// Armed: profit 3 >= TrailArmATR(1)*ATR(2) = 2.
+	// chandelier = chandelierHigh(110) - TrailMult(2)*ATR(2) = 106; price 103 <= 106, so TRAIL fires.
 	armed := decideInput{
 		price: 103, atr: 2, adx: 30, chandelierHigh: 110,
 		pos: &strategy.Position{PurchasePrice: 100},
@@ -306,6 +308,20 @@ func TestDecide_TrailArmsOnlyInProfit(t *testing.T) {
 	}
 	if got.StopLoss != 106 {
 		t.Errorf("StopLoss = %v, want 106 (chandelier)", got.StopLoss)
+	}
+
+	// Exact boundary: profit == TrailArmATR(1)*ATR(2) = 2; predicate is >=, so it must arm.
+	// chandelier = chandelierHigh(110) - TrailMult(2)*ATR(2) = 106; price 102 <= 106, so TRAIL fires.
+	boundary := decideInput{
+		price: 102, atr: 2, adx: 30, chandelierHigh: 110,
+		pos: &strategy.Position{PurchasePrice: 100},
+	}
+	gotB := s.decide(boundary)
+	if gotB.Kind != model.SignalSell || gotB.Reason != "TRAIL" {
+		t.Fatalf("boundary trail did not fire: Kind=%v Reason=%q, want Sell/TRAIL", gotB.Kind, gotB.Reason)
+	}
+	if gotB.StopLoss != 106 {
+		t.Errorf("boundary StopLoss = %v, want 106 (chandelier)", gotB.StopLoss)
 	}
 }
 
