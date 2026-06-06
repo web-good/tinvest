@@ -36,20 +36,21 @@ func main() {
 		commission = flag.Float64("commission", 0.0005, "commission as a fraction of turnover")
 		paramsPath = flag.String("params", "", "path to JSON Params (default: DefaultParams)")
 		calibrate  = flag.String("calibrate", "", "path to grid JSON (grid-search mode)")
-		metric     = flag.String("metric", "profit_factor", "ranking metric for calibration")
+		metric     = flag.String("metric", "expectancy", "ranking metric: profit_factor|net_pnl|win_rate|max_drawdown|expectancy|sortino")
+		minTrades  = flag.Int("min-trades", 15, "calibration: combos with fewer trades sink below qualified ones")
 		outDir     = flag.String("out", "reports", "report output directory")
 		refresh    = flag.Bool("refresh", false, "force candle refetch (ignore cache)")
 	)
 	flag.Parse()
 
 	if err := run(*ticker, *months, *cash, *fraction, *commission,
-		*paramsPath, *calibrate, *metric, *outDir, *refresh); err != nil {
+		*paramsPath, *calibrate, *metric, *minTrades, *outDir, *refresh); err != nil {
 		log.Fatalf("backtest: %v", err)
 	}
 }
 
 func run(ticker string, months int, cash, fraction, commission float64,
-	paramsPath, calibratePath, metric, outDir string, refresh bool,
+	paramsPath, calibratePath, metric string, minTrades int, outDir string, refresh bool,
 ) error {
 	if ticker == "" {
 		return fmt.Errorf("-ticker is required")
@@ -104,7 +105,7 @@ func run(ticker string, months int, cash, fraction, commission float64,
 	base := filepath.Join(outDir, fmt.Sprintf("%s_%s_%s", ticker, interval.String(), stamp))
 
 	if calibratePath != "" {
-		return runCalibration(binding, calibratePath, candles, dailyCandles, cfg, metric, periodDays, base,
+		return runCalibration(binding, calibratePath, candles, dailyCandles, cfg, metric, minTrades, periodDays, base,
 			metaCommon(ticker, interval, from, to, cfg))
 	}
 
@@ -151,7 +152,7 @@ func runSingle(b svc.Binding, paramsPath string, candles []domain.Candle, dailyC
 }
 
 func runCalibration(b svc.Binding, gridPath string, candles []domain.Candle, dailyCandles []domain.Candle,
-	cfg domain.Config, metric string, periodDays float64, base string, meta domain.Meta,
+	cfg domain.Config, metric string, minTrades int, periodDays float64, base string, meta domain.Meta,
 ) error {
 	raw, err := os.ReadFile(gridPath)
 	if err != nil {
@@ -162,7 +163,7 @@ func runCalibration(b svc.Binding, gridPath string, candles []domain.Candle, dai
 		return fmt.Errorf("parse grid: %w", err)
 	}
 
-	results, err := svc.RunGrid(b, grid, candles, dailyCandles, cfg, metric, periodDays)
+	results, err := svc.RunGrid(b, grid, candles, dailyCandles, cfg, metric, minTrades, periodDays)
 	if err != nil {
 		return err
 	}

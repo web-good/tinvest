@@ -54,7 +54,7 @@ func TestRunGridCartesianProduct(t *testing.T) {
 		"SLMult":    {1.0, 1.5, 2.0},
 	}
 	cfg := backtest.Config{InitialCash: 100000, Fraction: 1.0, Commission: 0.0005, Lot: 1}
-	results, err := RunGrid(b, grid, tinyCandles(400), nil, cfg, "profit_factor", 16)
+	results, err := RunGrid(b, grid, tinyCandles(400), nil, cfg, "profit_factor", 0, 16)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,26 +64,47 @@ func TestRunGridCartesianProduct(t *testing.T) {
 }
 
 func TestRunGridRanksByMetric(t *testing.T) {
-	// Hand-built results to exercise ranking only.
 	in := []CalibResult{
-		{Metrics: backtest.Metrics{ProfitFactor: 1.2, MaxDrawdown: 500}},
-		{Metrics: backtest.Metrics{ProfitFactor: 2.5, MaxDrawdown: 900}},
-		{Metrics: backtest.Metrics{ProfitFactor: 0.8, MaxDrawdown: 100}},
+		{Metrics: backtest.Metrics{ProfitFactor: 1.2, MaxDrawdown: 500, TotalTrades: 30}},
+		{Metrics: backtest.Metrics{ProfitFactor: 2.5, MaxDrawdown: 900, TotalTrades: 30}},
+		{Metrics: backtest.Metrics{ProfitFactor: 0.8, MaxDrawdown: 100, TotalTrades: 30}},
 	}
-	byPF := rankResults(append([]CalibResult(nil), in...), "profit_factor")
+	byPF := rankResults(append([]CalibResult(nil), in...), "profit_factor", 0)
 	if byPF[0].Metrics.ProfitFactor != 2.5 {
 		t.Fatalf("top PF = %f, want 2.5", byPF[0].Metrics.ProfitFactor)
 	}
-	byDD := rankResults(append([]CalibResult(nil), in...), "max_drawdown")
-	if byDD[0].Metrics.MaxDrawdown != 100 { // smaller is better
+	byDD := rankResults(append([]CalibResult(nil), in...), "max_drawdown", 0)
+	if byDD[0].Metrics.MaxDrawdown != 100 {
 		t.Fatalf("top DD = %f, want 100", byDD[0].Metrics.MaxDrawdown)
+	}
+}
+
+func TestRankResultsMinTradesFloor(t *testing.T) {
+	in := []CalibResult{
+		{Metrics: backtest.Metrics{ProfitFactor: 3.0, TotalTrades: 2}},  // high PF, too few trades
+		{Metrics: backtest.Metrics{ProfitFactor: 1.2, TotalTrades: 25}}, // qualified
+	}
+	got := rankResults(append([]CalibResult(nil), in...), "profit_factor", 10)
+	if got[0].Metrics.TotalTrades != 25 {
+		t.Fatalf("top trades = %d, want 25 (qualified combo ranks ahead of a 2-trade fluke)", got[0].Metrics.TotalTrades)
+	}
+}
+
+func TestRankResultsSortino(t *testing.T) {
+	in := []CalibResult{
+		{Metrics: backtest.Metrics{Sortino: 0.5, TotalTrades: 30}},
+		{Metrics: backtest.Metrics{Sortino: 1.5, TotalTrades: 30}},
+	}
+	got := rankResults(append([]CalibResult(nil), in...), "sortino", 0)
+	if got[0].Metrics.Sortino != 1.5 {
+		t.Fatalf("top sortino = %f, want 1.5", got[0].Metrics.Sortino)
 	}
 }
 
 func TestRunGridUnknownMetricErrors(t *testing.T) {
 	b, _ := Lookup("RUAL")
 	cfg := backtest.Config{InitialCash: 100000, Fraction: 1.0, Lot: 1}
-	if _, err := RunGrid(b, Grid{}, tinyCandles(400), nil, cfg, "sharpe", 16); err == nil {
+	if _, err := RunGrid(b, Grid{}, tinyCandles(400), nil, cfg, "sharpe", 0, 16); err == nil {
 		t.Fatal("expected error for unknown metric")
 	}
 }
@@ -91,7 +112,7 @@ func TestRunGridUnknownMetricErrors(t *testing.T) {
 func TestRunGridUnknownFieldErrors(t *testing.T) {
 	b, _ := Lookup("RUAL")
 	cfg := backtest.Config{InitialCash: 100000, Fraction: 1.0, Lot: 1}
-	if _, err := RunGrid(b, Grid{"Bogus": {1, 2}}, tinyCandles(400), nil, cfg, "profit_factor", 16); err == nil {
+	if _, err := RunGrid(b, Grid{"Bogus": {1, 2}}, tinyCandles(400), nil, cfg, "profit_factor", 0, 16); err == nil {
 		t.Fatal("expected error for unknown grid field")
 	}
 }

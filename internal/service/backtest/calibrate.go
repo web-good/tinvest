@@ -20,9 +20,10 @@ type CalibResult struct {
 }
 
 // RunGrid runs the engine for every combination in the grid and returns the
-// results ranked by metric (best first). periodDays feeds CAGR.
+// results ranked by metric (best first). minTrades is the floor: combos with
+// fewer trades sink below all qualified combos. periodDays feeds CAGR.
 func RunGrid(b Binding, grid Grid, candles []backtest.Candle, dailyCandles []backtest.Candle,
-	cfg backtest.Config, metric string, periodDays float64,
+	cfg backtest.Config, metric string, minTrades int, periodDays float64,
 ) ([]CalibResult, error) {
 	if err := validateMetric(metric); err != nil {
 		return nil, err
@@ -37,7 +38,7 @@ func RunGrid(b Binding, grid Grid, candles []backtest.Candle, dailyCandles []bac
 		m := backtest.Compute(res, res.BarsInMarket, len(res.Equity), periodDays)
 		results = append(results, CalibResult{Params: params, Metrics: m})
 	}
-	return rankResults(results, metric), nil
+	return rankResults(results, metric, minTrades), nil
 }
 
 // expandGrid builds the cartesian product of the grid, applying each field over
@@ -105,14 +106,23 @@ func metricValue(m backtest.Metrics, metric string) float64 {
 		return m.MaxDrawdown
 	case "expectancy":
 		return m.Expectancy
+	case "sortino":
+		return m.Sortino
 	default: // profit_factor
 		return m.ProfitFactor
 	}
 }
 
-// rankResults sorts best-first: ascending for max_drawdown, descending otherwise.
-func rankResults(results []CalibResult, metric string) []CalibResult {
+// rankResults sorts best-first. Combos with fewer than minTrades trades are treated
+// as statistically unreliable and sink below all qualified combos, regardless of
+// their metric. Within each group: ascending for max_drawdown, descending otherwise.
+func rankResults(results []CalibResult, metric string, minTrades int) []CalibResult {
+	qualifies := func(m backtest.Metrics) bool { return m.TotalTrades >= minTrades }
 	sort.SliceStable(results, func(i, j int) bool {
+		qi, qj := qualifies(results[i].Metrics), qualifies(results[j].Metrics)
+		if qi != qj {
+			return qi // qualified ranks ahead of unqualified
+		}
 		a, b := metricValue(results[i].Metrics, metric), metricValue(results[j].Metrics, metric)
 		if metric == "max_drawdown" {
 			return a < b
@@ -123,12 +133,12 @@ func rankResults(results []CalibResult, metric string) []CalibResult {
 }
 
 var supportedMetrics = map[string]struct{}{
-	"profit_factor": {}, "net_pnl": {}, "win_rate": {}, "max_drawdown": {}, "expectancy": {},
+	"profit_factor": {}, "net_pnl": {}, "win_rate": {}, "max_drawdown": {}, "expectancy": {}, "sortino": {},
 }
 
 func validateMetric(metric string) error {
 	if _, ok := supportedMetrics[metric]; !ok {
-		return fmt.Errorf("backtest: unknown metric %q (want profit_factor|net_pnl|win_rate|max_drawdown|expectancy)", metric)
+		return fmt.Errorf("backtest: unknown metric %q (want profit_factor|net_pnl|win_rate|max_drawdown|expectancy|sortino)", metric)
 	}
 	return nil
 }
