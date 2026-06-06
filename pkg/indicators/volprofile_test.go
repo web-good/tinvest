@@ -83,6 +83,13 @@ func TestComputeVolumeProfile_Degenerate(t *testing.T) {
 			volumes: []int64{0, 0},
 			bins:    5,
 		},
+		{
+			name:    "negative volume entry",
+			highs:   []float64{12, 14},
+			lows:    []float64{10, 12},
+			volumes: []int64{100, -1},
+			bins:    5,
+		},
 	}
 
 	for _, tc := range tests {
@@ -204,8 +211,8 @@ func TestComputeVolumeProfile_ClearPOCAndVA(t *testing.T) {
 	// Tied POC at Bin1 and Bin2 (both 120). First max encountered = Bin1, center=13.
 	// VA expansion from Bin1:
 	//   accumulated = 120 < 252.
-	//   Below: none (Bin0 is below). Above: Bin2 (120). Both neighbors: lo=-1 (unavail), hi=Bin2(120).
-	//   Add Bin2: accumulated = 240 < 252.
+	//   First VA iteration from POC=Bin1: canExpandDown=true (binVol[0]=20), canExpandUp=true (binVol[2]=120);
+	//   upVol(120) >= downVol(20) -> expand up to Bin2, accumulated=240.
 	//   Below: Bin0(20), Above: Bin3(80). 80 > 20 → add Bin3: accumulated = 320 >= 252.
 	//   Done. VALow = 13 (Bin1), VAHigh = 17 (Bin3).
 	highs := []float64{20, 15, 18}

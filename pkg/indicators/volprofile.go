@@ -8,8 +8,8 @@ type VolumeProfile struct {
 	BinCenter []float64 // center price of each bin, ascending (low price → high price)
 	BinVol    []float64 // volume attributed to each bin, aligned with BinCenter
 	POC       float64   // price (bin center) of the bin holding the most volume
-	VAHigh    float64   // upper edge (bin center) of the value area
-	VALow     float64   // lower edge (bin center) of the value area
+	VAHigh    float64   // center price of the highest bin in the value area
+	VALow     float64   // center price of the lowest bin in the value area
 }
 
 // ComputeVolumeProfile builds a volume profile from a window of OHLCV bars.
@@ -32,7 +32,8 @@ type VolumeProfile struct {
 //
 // Returns a zero-value VolumeProfile (empty slices, zero scalars) for any
 // invalid or degenerate input: bins <= 0, empty slices, mismatched slice
-// lengths, no price range (max(highs) <= min(lows)), or zero total volume.
+// lengths, no price range (max(highs) <= min(lows)), zero total volume, or
+// any negative volume entry (treated as invalid input).
 func ComputeVolumeProfile(highs, lows []float64, volumes []int64, bins int) VolumeProfile {
 	// Validate inputs.
 	if bins <= 0 {
@@ -58,9 +59,12 @@ func ComputeVolumeProfile(highs, lows []float64, volumes []int64, bins int) Volu
 		return VolumeProfile{}
 	}
 
-	// Check total volume.
+	// Check total volume; reject negative entries.
 	var totalVol int64
 	for _, v := range volumes {
+		if v < 0 {
+			return VolumeProfile{}
+		}
 		totalVol += v
 	}
 	if totalVol == 0 {
@@ -82,7 +86,7 @@ func ComputeVolumeProfile(highs, lows []float64, volumes []int64, bins int) Volu
 
 		if lo == hi {
 			// Zero-range candle: dump all volume into the single containing bin.
-			b := priceTobin(lo, priceMin, binWidth, bins)
+			b := priceToBin(lo, priceMin, binWidth, bins)
 			binVol[b] += vol
 			continue
 		}
@@ -151,8 +155,8 @@ func ComputeVolumeProfile(highs, lows []float64, volumes []int64, bins int) Volu
 	}
 }
 
-// priceTobin returns the bin index for a given price. Clamps to [0, bins-1].
-func priceTobin(price, priceMin, binWidth float64, bins int) int {
+// priceToBin returns the bin index for a given price. Clamps to [0, bins-1].
+func priceToBin(price, priceMin, binWidth float64, bins int) int {
 	b := int((price - priceMin) / binWidth)
 	if b < 0 {
 		return 0
@@ -165,6 +169,7 @@ func priceTobin(price, priceMin, binWidth float64, bins int) int {
 
 // overlapLen returns the length of the intersection of two closed/half-open
 // intervals [aLo, aHi) and [bLo, bHi). Returns 0 when there is no overlap.
+// The last bin is effectively closed at its upper edge (priceMax).
 func overlapLen(aLo, aHi, bLo, bHi float64) float64 {
 	lo := aLo
 	if bLo > lo {
