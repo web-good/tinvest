@@ -209,6 +209,16 @@ func TestExtractLevels_ExactMeanIsHVN(t *testing.T) {
 	}
 }
 
+// All bin volumes are zero → totalVol == 0; ExtractLevels must return nil
+// to avoid NaN from 0/0 division.
+func TestExtractLevels_AllZeroVolumes_NilResult(t *testing.T) {
+	vp := makeProfile([]float64{10, 20}, []float64{0, 0})
+	got := ExtractLevels(vp, 1.5)
+	if got != nil {
+		t.Fatalf("all-zero volumes: want nil, got %v", got)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // NearestSupportBelow
 // ---------------------------------------------------------------------------

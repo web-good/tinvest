@@ -13,7 +13,7 @@ type Level struct {
 // >= hvnFactor * mean(BinVol). Runs of adjacent HVN bins are merged into one
 // level whose Price is the volume-weighted average of the member bin centers
 // and whose Strength is the cluster's volume divided by the profile's total volume.
-// Returns nil for a degenerate profile (no bins) or non-positive hvnFactor.
+// Returns nil for a degenerate profile (no bins or all-zero volumes) or non-positive hvnFactor.
 func ExtractLevels(vp indicators.VolumeProfile, hvnFactor float64) []Level {
 	n := len(vp.BinCenter)
 	if n == 0 || hvnFactor <= 0 {
@@ -24,6 +24,9 @@ func ExtractLevels(vp indicators.VolumeProfile, hvnFactor float64) []Level {
 	var totalVol float64
 	for _, v := range vp.BinVol {
 		totalVol += v
+	}
+	if totalVol == 0 {
+		return nil
 	}
 	mean := totalVol / float64(n)
 	threshold := hvnFactor * mean
