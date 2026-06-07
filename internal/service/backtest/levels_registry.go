@@ -45,6 +45,7 @@ func genericLevelsDefaults() core.Params {
 		RoomATR:           2.0,
 		MaxExtensionATR:   1.0,
 		SLMult:            1.0,
+		SwingLowWindow:    10,
 		TrailMult:         2.5,
 		ChandelierWindow:  20,
 		TrailArmATR:       1.0,

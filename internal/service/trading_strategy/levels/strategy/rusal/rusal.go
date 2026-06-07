@@ -19,6 +19,7 @@ func DefaultParams() core.Params {
 		RoomATR:           2.0,   // need >= 2 ATR of runway to resistance
 		MaxExtensionATR:   1.0,   // skip entries > 1 ATR above support (chasing)
 		SLMult:            1.0,   // hard stop 1 ATR below support
+		SwingLowWindow:    10,    // ~1.5 sessions of bars for the structural stop low
 		TrailMult:         2.5,   // chandelier trail at 2.5 ATR below the recent high
 		ChandelierWindow:  20,    // recent-high window for the trail
 		TrailArmATR:       1.0,   // arm trail after +1 ATR profit (kills bar-1 stop-outs)
