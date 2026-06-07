@@ -9,16 +9,18 @@ import (
 
 // portfolio is the long-only mock account the engine trades against.
 type portfolio struct {
-	cfg         Config
-	cash        float64
-	qty         int64
-	entryPrice  float64
-	entryTime   time.Time
-	entryBar    int
-	entryLevel  float64 // support level captured at entry
-	entryTarget float64 // resistance/target captured at entry
-	entryATR    float64 // ATR captured at entry
-	bar         int     // current bar index, set by the engine each iteration
+	cfg          Config
+	cash         float64
+	qty          int64
+	entryPrice   float64
+	entryTime    time.Time
+	entryBar     int
+	entryLevel   float64 // support level captured at entry
+	entryTarget  float64 // resistance/target captured at entry
+	entryATR     float64 // ATR captured at entry
+	entryStop    float64 // hard stop frozen at entry
+	maxFavorable float64 // highest close seen since entry (monotonic)
+	bar          int     // current bar index, set by the engine each iteration
 }
 
 func newPortfolio(cfg Config) *portfolio {
@@ -27,7 +29,7 @@ func newPortfolio(cfg Config) *portfolio {
 
 // open deploys cfg.Fraction of cash into whole lots at price. No-op if already
 // in a position or if there is not enough cash for a single lot.
-func (p *portfolio) open(price float64, t time.Time, level, target, atr float64) {
+func (p *portfolio) open(price float64, t time.Time, level, target, atr, stop float64) {
 	if p.qty != 0 {
 		return
 	}
@@ -51,6 +53,19 @@ func (p *portfolio) open(price float64, t time.Time, level, target, atr float64)
 	p.entryLevel = level
 	p.entryTarget = target
 	p.entryATR = atr
+	p.entryStop = stop
+	p.maxFavorable = price
+}
+
+// mark raises the running favourable-price maximum toward price. No-op when flat
+// or when price is not a new high, which keeps maxFavorable monotonic.
+func (p *portfolio) mark(price float64) {
+	if p.qty == 0 {
+		return
+	}
+	if price > p.maxFavorable {
+		p.maxFavorable = price
+	}
 }
 
 // close sells the whole position at price and returns the round-trip trade.
@@ -83,6 +98,8 @@ func (p *portfolio) close(price float64, t time.Time, reason string) Trade {
 	p.entryLevel = 0
 	p.entryTarget = 0
 	p.entryATR = 0
+	p.entryStop = 0
+	p.maxFavorable = 0
 	return tr
 }
 
@@ -91,7 +108,13 @@ func (p *portfolio) strategyPosition() *strategy.Position {
 	if p.qty == 0 {
 		return nil
 	}
-	return &strategy.Position{PurchasePrice: p.entryPrice, Quantity: p.qty}
+	return &strategy.Position{
+		PurchasePrice:     p.entryPrice,
+		Quantity:          p.qty,
+		StopLoss:          p.entryStop,
+		EntryATR:          p.entryATR,
+		MaxFavorablePrice: p.maxFavorable,
+	}
 }
 
 // equity is cash plus the position marked at price.

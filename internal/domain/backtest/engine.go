@@ -54,6 +54,9 @@ func Run(s strategy.Strategy, candles []Candle, dailyCandles []Candle, cfg Confi
 		p.bar = i
 		md := buildMarketData(candles[i-l+1 : i+1])
 		md.DailyCloses = visibleDailyCloses(dailyCandles, candles[i].Time, mskLoc)
+		if p.qty != 0 {
+			p.mark(candles[i].Close)
+		}
 		md.Position = p.strategyPosition()
 
 		c := candles[i]
@@ -61,7 +64,7 @@ func Run(s strategy.Strategy, candles []Candle, dailyCandles []Candle, cfg Confi
 		switch sig.Kind {
 		case model.SignalBuy:
 			if p.qty == 0 {
-				p.open(c.Close, c.Time, sig.Level, sig.TakeProfit, sig.ATR)
+				p.open(c.Close, c.Time, sig.Level, sig.TakeProfit, sig.ATR, sig.StopLoss)
 			}
 		case model.SignalSell:
 			if p.qty != 0 {
