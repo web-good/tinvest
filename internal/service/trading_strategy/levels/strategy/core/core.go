@@ -197,6 +197,7 @@ func (s *Strategy) decide(in decideInput) model.Signal {
 		target := resist.Price
 		if s.entryQualifies(in.price, stop, target, in.atr) {
 			sig.Kind, sig.StopLoss, sig.TakeProfit = model.SignalBuy, stop, target
+			sig.Level, sig.ATR = support.Price, in.atr
 			if in.recentlyBelow {
 				sig.Reason = "RETEST"
 			} else {

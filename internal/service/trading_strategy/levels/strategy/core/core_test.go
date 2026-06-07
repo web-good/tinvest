@@ -71,6 +71,20 @@ func TestDecideBounceBuy(t *testing.T) {
 	}
 }
 
+func TestDecideBuySetsLevelAndATR(t *testing.T) {
+	s := newCore()
+	sig := s.decide(bounceInput())
+	if sig.Kind != model.SignalBuy {
+		t.Fatalf("want Buy, got %v", sig.Kind)
+	}
+	if sig.Level != 100 {
+		t.Errorf("level = %v, want support 100", sig.Level)
+	}
+	if sig.ATR != 1.0 {
+		t.Errorf("atr = %v, want 1.0", sig.ATR)
+	}
+}
+
 func TestDecideRetestBuy(t *testing.T) {
 	s := newCore()
 	in := bounceInput()

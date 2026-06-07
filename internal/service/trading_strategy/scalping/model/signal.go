@@ -19,5 +19,7 @@ type Signal struct {
 	TakeProfit     float64
 	StopLoss       float64
 	RSI            float64
-	Reason         string // "TP" or "SL" for sells
+	Level          float64 // entry support level (HVN); 0 when n/a
+	ATR            float64 // ATR at entry; 0 when n/a
+	Reason         string  // "TP" or "SL" for sells
 }
