@@ -206,9 +206,9 @@ func TestDecideFlatNoSetup(t *testing.T) {
 func TestDecideHardStopExit(t *testing.T) {
 	s := newCore()
 	in := bounceInput()
-	in.pos = &strategy.Position{PurchasePrice: 100, Quantity: 1}
-	in.price = 98.4  // <= recentLow(99.5) - SLMult*atr = 98.5
-	in.barLow = 98.4 // low тоже пробил hard SL
+	in.pos = &strategy.Position{PurchasePrice: 100, Quantity: 1, StopLoss: 98.5, EntryATR: 1}
+	in.price = 98.4
+	in.barLow = 98.4 // <= frozen hard SL 98.5
 	sig := s.decide(in)
 	if sig.Kind != model.SignalSell || sig.Reason != "SL" {
 		t.Fatalf("want Sell/SL, got %v/%q", sig.Kind, sig.Reason)
@@ -221,11 +221,10 @@ func TestDecideHardStopExit(t *testing.T) {
 func TestDecideTrailExit(t *testing.T) {
 	s := newCore()
 	in := bounceInput()
-	in.pos = &strategy.Position{PurchasePrice: 100, Quantity: 1}
+	in.pos = &strategy.Position{PurchasePrice: 100, Quantity: 1, StopLoss: 90, EntryATR: 1, MaxFavorablePrice: 101}
 	in.recentHigh = 110
-	// armed: price >= entry + TrailArmATR*atr = 101. chandelier = 110 - 2.5 = 107.5.
 	in.price = 107
-	in.barLow = 107 // low на уровне триггера трейла
+	in.barLow = 107 // chandelier 107.5
 	sig := s.decide(in)
 	if sig.Kind != model.SignalSell || sig.Reason != "TRAIL" {
 		t.Fatalf("want Sell/TRAIL, got %v/%q", sig.Kind, sig.Reason)
@@ -238,10 +237,10 @@ func TestDecideTrailExit(t *testing.T) {
 func TestDecideTrailNotArmed(t *testing.T) {
 	s := newCore()
 	in := bounceInput()
-	in.pos = &strategy.Position{PurchasePrice: 100, Quantity: 1}
+	in.pos = &strategy.Position{PurchasePrice: 100, Quantity: 1, StopLoss: 90, EntryATR: 1, MaxFavorablePrice: 100.5}
 	in.recentHigh = 110 // chandelier 107.5
-	in.price = 100.5    // below entry + 1 ATR -> not armed, above hard SL -> hold
-	in.barLow = 100.5   // low выше hard SL (99) -> ничего не триггерит
+	in.price = 100.5
+	in.barLow = 100.5 // below chandelier but unarmed -> hold
 	sig := s.decide(in)
 	if sig.Kind != model.SignalNone {
 		t.Fatalf("unarmed trail with price above hard SL must hold, got %v/%q", sig.Kind, sig.Reason)
@@ -251,10 +250,10 @@ func TestDecideTrailNotArmed(t *testing.T) {
 func TestDecideInProfitHold(t *testing.T) {
 	s := newCore()
 	in := bounceInput()
-	in.pos = &strategy.Position{PurchasePrice: 100, Quantity: 1}
+	in.pos = &strategy.Position{PurchasePrice: 100, Quantity: 1, StopLoss: 90, EntryATR: 1, MaxFavorablePrice: 111}
 	in.recentHigh = 110 // chandelier 107.5
-	in.price = 108.5    // armed (>=101) но close выше chandelier
-	in.barLow = 108.0   // low тоже выше chandelier -> hold
+	in.price = 108.5
+	in.barLow = 108.0 // above chandelier -> hold
 	sig := s.decide(in)
 	if sig.Kind != model.SignalNone {
 		t.Fatalf("in-profit above chandelier must hold, got %v/%q", sig.Kind, sig.Reason)
@@ -345,9 +344,9 @@ func TestDecideIntegrationNoSetup(t *testing.T) {
 func TestDecideHardStopOnLowWhileCloseAbove(t *testing.T) {
 	s := newCore()
 	in := bounceInput()
-	in.pos = &strategy.Position{PurchasePrice: 100, Quantity: 1}
-	in.price = 99.0  // close выше hard SL (98.5) — по close выхода бы не было
-	in.barLow = 98.4 // но low пробил hard SL внутри бара
+	in.pos = &strategy.Position{PurchasePrice: 100, Quantity: 1, StopLoss: 98.5, EntryATR: 1}
+	in.price = 99.0  // close above the stop
+	in.barLow = 98.4 // low pierces the frozen hard SL
 	sig := s.decide(in)
 	if sig.Kind != model.SignalSell || sig.Reason != "SL" {
 		t.Fatalf("low pierce of hard SL must sell SL, got %v/%q", sig.Kind, sig.Reason)
@@ -360,10 +359,10 @@ func TestDecideHardStopOnLowWhileCloseAbove(t *testing.T) {
 func TestDecideTrailOnLowWhileCloseAbove(t *testing.T) {
 	s := newCore()
 	in := bounceInput()
-	in.pos = &strategy.Position{PurchasePrice: 100, Quantity: 1}
+	in.pos = &strategy.Position{PurchasePrice: 100, Quantity: 1, StopLoss: 90, EntryATR: 1, MaxFavorablePrice: 108}
 	in.recentHigh = 110 // chandelier = 110 - 2.5 = 107.5
-	in.price = 108      // close выше chandelier и armed (>= entry+1ATR=101)
-	in.barLow = 107.0   // low пробил chandelier внутри бара
+	in.price = 108
+	in.barLow = 107.0 // low pierces the chandelier
 	sig := s.decide(in)
 	if sig.Kind != model.SignalSell || sig.Reason != "TRAIL" {
 		t.Fatalf("low pierce of chandelier must sell TRAIL, got %v/%q", sig.Kind, sig.Reason)
@@ -376,23 +375,23 @@ func TestDecideTrailOnLowWhileCloseAbove(t *testing.T) {
 func TestDecideNoStopWhenLowAboveStops(t *testing.T) {
 	s := newCore()
 	in := bounceInput()
-	in.pos = &strategy.Position{PurchasePrice: 100, Quantity: 1}
+	in.pos = &strategy.Position{PurchasePrice: 100, Quantity: 1, StopLoss: 90, EntryATR: 1, MaxFavorablePrice: 108}
 	in.recentHigh = 110 // chandelier 107.5
 	in.price = 108
-	in.barLow = 107.8 // low остался выше chandelier и hard SL -> держим
+	in.barLow = 107.8 // above chandelier and hard SL -> hold
 	sig := s.decide(in)
 	if sig.Kind != model.SignalNone {
 		t.Fatalf("low above both stops must hold, got %v/%q", sig.Kind, sig.Reason)
 	}
 }
 
-func TestDecideTrailArmStaysOnClose(t *testing.T) {
+func TestDecideTrailUnarmedByMaxFavorableHolds(t *testing.T) {
 	s := newCore()
 	in := bounceInput()
-	in.pos = &strategy.Position{PurchasePrice: 100, Quantity: 1}
+	in.pos = &strategy.Position{PurchasePrice: 100, Quantity: 1, StopLoss: 90, EntryATR: 1, MaxFavorablePrice: 100.5}
 	in.recentHigh = 110 // chandelier 107.5
-	in.price = 100.5    // close < entry+1ATR=101 -> трейл НЕ взведён
-	in.barLow = 100.2   // low ниже chandelier, но выше hard SL (99) -> арминг держит
+	in.price = 100.5    // never reached the arm threshold (101) -> unarmed
+	in.barLow = 100.2   // below chandelier but above hard SL (90) -> arming holds
 	sig := s.decide(in)
 	if sig.Kind != model.SignalNone {
 		t.Fatalf("unarmed trail must hold even if low below chandelier, got %v/%q", sig.Kind, sig.Reason)
@@ -434,50 +433,74 @@ func TestLookbackIncludesSwingLowWindow(t *testing.T) {
 	}
 }
 
-func TestDecideHardStopUsesSwingLow(t *testing.T) {
+func TestDecideHardStopUsesFrozenStop(t *testing.T) {
 	s := newCore()
 	in := bounceInput()
-	in.pos = &strategy.Position{PurchasePrice: 100, Quantity: 1}
-	in.recentLow = 97 // deep structural low -> stop 97 - 1*1 = 96, wider than entry-1ATR
+	in.pos = &strategy.Position{PurchasePrice: 100, Quantity: 1, StopLoss: 96, EntryATR: 1}
 	in.price = 95.9
-	in.barLow = 95.9 // pierces the structural stop 96
+	in.barLow = 95.9 // pierces the frozen stop 96
 	sig := s.decide(in)
 	if sig.Kind != model.SignalSell || sig.Reason != "SL" {
 		t.Fatalf("want Sell/SL, got %v/%q", sig.Kind, sig.Reason)
 	}
 	if sig.StopLoss != 96 {
-		t.Errorf("stop = %v, want 96 (recentLow 97 - SLMult 1 * atr 1)", sig.StopLoss)
-	}
-}
-
-func TestDecideHardStopWiderThanEntryAnchor(t *testing.T) {
-	s := newCore()
-	in := bounceInput()
-	in.pos = &strategy.Position{PurchasePrice: 100, Quantity: 1}
-	in.recentLow = 97 // structural stop 96; the old entry-anchored stop would be 99
-	in.price = 98     // below old stop 99 but above new structural stop 96
-	in.barLow = 98
-	sig := s.decide(in)
-	if sig.Kind != model.SignalNone {
-		t.Fatalf("structural stop must hold where entry-anchored stop would have fired, got %v/%q", sig.Kind, sig.Reason)
+		t.Errorf("stop = %v, want 96 (frozen pos.StopLoss)", sig.StopLoss)
 	}
 }
 
 func TestDecideEntryAndLiveStopShareAnchor(t *testing.T) {
 	s := newCore()
-	in := bounceInput() // recentLow 99.5, atr 1, SLMult 1 -> stop 98.5
+	in := bounceInput() // recentLow 99.5, atr 1, SLMult 1 -> entry stop 98.5
 	entrySig := s.decide(in)
 	if entrySig.Kind != model.SignalBuy {
 		t.Fatalf("want Buy entry, got %v", entrySig.Kind)
 	}
-	// Same bar, now holding: the live management stop must use the same anchor.
-	in.pos = &strategy.Position{PurchasePrice: in.price, Quantity: 1}
+	if entrySig.StopLoss != 98.5 {
+		t.Errorf("entry stop = %v, want 98.5 (recentLow 99.5 - SLMult 1 * atr 1)", entrySig.StopLoss)
+	}
+	// The engine freezes entrySig.StopLoss into the position; the live branch must
+	// surface that same level.
+	in.pos = &strategy.Position{PurchasePrice: in.price, Quantity: 1, StopLoss: entrySig.StopLoss, EntryATR: in.atr}
 	liveSig := s.decide(in)
 	if liveSig.StopLoss != entrySig.StopLoss {
-		t.Fatalf("live stop %v != entry stop %v (anchors diverged)", liveSig.StopLoss, entrySig.StopLoss)
+		t.Fatalf("live stop %v != frozen entry stop %v", liveSig.StopLoss, entrySig.StopLoss)
 	}
-	if entrySig.StopLoss != 98.5 {
-		t.Errorf("stop = %v, want 98.5 (recentLow 99.5 - SLMult 1 * atr 1)", entrySig.StopLoss)
+}
+
+func TestDecideHardStopFrozenIgnoresRecentLow(t *testing.T) {
+	s := newCore()
+	in := bounceInput()
+	// Frozen entry stop is 98.5. recentLow is far below; the old code would
+	// recompute hardSL = 80 - 1 = 79 and hold. The fix must use the frozen 98.5.
+	in.pos = &strategy.Position{PurchasePrice: 100, Quantity: 1, StopLoss: 98.5, EntryATR: 1}
+	in.recentLow = 80
+	in.price = 98.4
+	in.barLow = 98.4 // > 79 (old: hold) but <= 98.5 (new: SL)
+	sig := s.decide(in)
+	if sig.Kind != model.SignalSell || sig.Reason != "SL" {
+		t.Fatalf("frozen stop must fire SL, got %v/%q", sig.Kind, sig.Reason)
+	}
+	if sig.StopLoss != 98.5 {
+		t.Errorf("stop = %v, want 98.5 (frozen, not recomputed from recentLow)", sig.StopLoss)
+	}
+}
+
+func TestDecideArmIsMonotonic(t *testing.T) {
+	s := newCore()
+	in := bounceInput()
+	// Price is back below the arm threshold (entry+1*ATR = 101), but the trade
+	// already reached 102, so MaxFavorablePrice latches the trail armed. The old
+	// code (armed from current price) would hold; the fix must TRAIL.
+	in.pos = &strategy.Position{PurchasePrice: 100, Quantity: 1, StopLoss: 90, EntryATR: 1, MaxFavorablePrice: 102}
+	in.recentHigh = 110 // chandelier = 110 - 2.5 = 107.5
+	in.price = 100.5    // below the arm threshold
+	in.barLow = 107     // <= chandelier
+	sig := s.decide(in)
+	if sig.Kind != model.SignalSell || sig.Reason != "TRAIL" {
+		t.Fatalf("monotonic arm must let the trail fire, got %v/%q", sig.Kind, sig.Reason)
+	}
+	if sig.StopLoss != 107.5 {
+		t.Errorf("trail stop = %v, want 107.5", sig.StopLoss)
 	}
 }
 

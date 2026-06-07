@@ -149,15 +149,23 @@ func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 func (s *Strategy) decide(in decideInput) model.Signal {
 	sig := model.Signal{Price: in.price}
 
-	// Manage an open long position: hard stop then armed chandelier trail.
+	// Manage an open long position: hard stop then armed chandelier trail. Both
+	// protective levels are anchored at entry and carried through Position — the
+	// hard stop is frozen (it must not slide down with price) and the trail's arm
+	// latch is monotonic via MaxFavorablePrice (it must not disarm on a pullback).
 	if in.pos != nil {
 		entry := in.pos.PurchasePrice
-		hardSL := in.recentLow - s.p.SLMult*in.atr
+		// hardSL is the entry-frozen stop carried by the backtest engine. A zero
+		// value means no frozen stop was recorded (live trading does not yet
+		// persist entry state — see the entry-locked-stops spec); the hard stop
+		// is then inert and only the trail can exit. Live wiring is a separate,
+		// deferred iteration and MUST be done before levels trades live.
+		hardSL := in.pos.StopLoss
 		chandelier := in.recentHigh - s.p.TrailMult*in.atr
-		// The trail only arms once the trade is in profit by TrailArmATR*ATR, so a
-		// fresh entry near a recent high is not stopped out on the first down-tick.
+		// The trail arms once the trade has been in profit by TrailArmATR*EntryATR
+		// at any point since entry; MaxFavorablePrice makes that latch monotonic.
 		// TrailArmATR<=0 arms immediately.
-		armed := s.p.TrailArmATR <= 0 || in.price >= entry+s.p.TrailArmATR*in.atr
+		armed := s.p.TrailArmATR <= 0 || in.pos.MaxFavorablePrice >= entry+s.p.TrailArmATR*in.pos.EntryATR
 		sig.StopLoss = hardSL
 		switch {
 		case in.barLow <= hardSL:
