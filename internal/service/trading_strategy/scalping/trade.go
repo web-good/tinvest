@@ -38,6 +38,11 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) error {
 	posByID := make(map[string]strategy.Position, len(positions))
 	for _, p := range positions {
 		if p.InstrumentType == "share" && p.Quantity > 0 {
+			// NOTE: only PurchasePrice/Quantity come from the broker. The levels
+			// strategy's entry-locked fields (StopLoss/EntryATR/MaxFavorablePrice)
+			// stay zero here, so its protective hard stop and trail arming are
+			// DISABLED live. Per-position entry state must be persisted before
+			// levels trades live — see docs/superpowers/specs/2026-06-08-levels-entry-locked-stops-design.md.
 			posByID[p.ShareID] = strategy.Position{
 				PurchasePrice: utils.CombinePrice(p.PurchasePrice.Units, p.PurchasePrice.Nano),
 				Quantity:      p.Quantity,
