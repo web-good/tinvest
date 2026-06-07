@@ -244,3 +244,24 @@ func TestEngineNonStopSellFillsAtClose(t *testing.T) {
 		t.Fatalf("exit = %v, want 98.5 (non-stop sell fills at close)", got)
 	}
 }
+
+func TestEngineStampsEntryContextOnTrade(t *testing.T) {
+	candles := flatCandles([]float64{10, 100, 110})
+	s := scriptedStrategy{lookback: 1, decide: func(md strategy.MarketData) model.Signal {
+		if md.Position == nil && md.Price == 100 {
+			return model.Signal{Kind: model.SignalBuy, Level: 98, TakeProfit: 108, ATR: 1.5}
+		}
+		if md.Position != nil && md.Price == 110 {
+			return model.Signal{Kind: model.SignalSell, Reason: "TP"}
+		}
+		return model.Signal{Kind: model.SignalNone}
+	}}
+	res := Run(s, candles, nil, Config{InitialCash: 100000, Fraction: 1.0, Lot: 1})
+	if len(res.Trades) != 1 {
+		t.Fatalf("trades = %d, want 1", len(res.Trades))
+	}
+	tr := res.Trades[0]
+	if tr.SupportLevel != 98 || tr.ResistanceLevel != 108 || tr.ATR != 1.5 {
+		t.Fatalf("entry context = {%v %v %v}, want {98 108 1.5}", tr.SupportLevel, tr.ResistanceLevel, tr.ATR)
+	}
+}

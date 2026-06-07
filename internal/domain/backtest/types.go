@@ -24,15 +24,18 @@ type Config struct {
 
 // Trade is one completed round-trip (entry -> exit).
 type Trade struct {
-	EntryTime  time.Time
-	EntryPrice float64
-	ExitTime   time.Time
-	ExitPrice  float64
-	Quantity   int64   // shares (lots * Lot)
-	Reason     string  // exit reason: "SL" / "TRAIL" / "TP"
-	PnL        float64 // net of commission, in currency
-	PnLPct     float64 // PnL relative to entry cost
-	BarsHeld   int
+	EntryTime       time.Time
+	EntryPrice      float64
+	ExitTime        time.Time
+	ExitPrice       float64
+	Quantity        int64   // shares (lots * Lot)
+	Reason          string  // exit reason: "SL" / "TRAIL" / "TP"
+	PnL             float64 // net of commission, in currency
+	PnLPct          float64 // PnL relative to entry cost
+	BarsHeld        int
+	SupportLevel    float64 // HVN support the entry bounced off; 0 when n/a
+	ResistanceLevel float64 // HVN resistance / target at entry; 0 when n/a
+	ATR             float64 // ATR at entry; 0 when n/a
 }
 
 // EquityPoint is portfolio value at one bar.

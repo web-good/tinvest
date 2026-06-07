@@ -9,13 +9,16 @@ import (
 
 // portfolio is the long-only mock account the engine trades against.
 type portfolio struct {
-	cfg        Config
-	cash       float64
-	qty        int64
-	entryPrice float64
-	entryTime  time.Time
-	entryBar   int
-	bar        int // current bar index, set by the engine each iteration
+	cfg         Config
+	cash        float64
+	qty         int64
+	entryPrice  float64
+	entryTime   time.Time
+	entryBar    int
+	entryLevel  float64 // support level captured at entry
+	entryTarget float64 // resistance/target captured at entry
+	entryATR    float64 // ATR captured at entry
+	bar         int     // current bar index, set by the engine each iteration
 }
 
 func newPortfolio(cfg Config) *portfolio {
@@ -24,7 +27,7 @@ func newPortfolio(cfg Config) *portfolio {
 
 // open deploys cfg.Fraction of cash into whole lots at price. No-op if already
 // in a position or if there is not enough cash for a single lot.
-func (p *portfolio) open(price float64, t time.Time) {
+func (p *portfolio) open(price float64, t time.Time, level, target, atr float64) {
 	if p.qty != 0 {
 		return
 	}
@@ -45,6 +48,9 @@ func (p *portfolio) open(price float64, t time.Time) {
 	p.entryPrice = price
 	p.entryTime = t
 	p.entryBar = p.bar
+	p.entryLevel = level
+	p.entryTarget = target
+	p.entryATR = atr
 }
 
 // close sells the whole position at price and returns the round-trip trade.
@@ -59,18 +65,24 @@ func (p *portfolio) close(price float64, t time.Time, reason string) Trade {
 		pnlPct = pnl / entryCost
 	}
 	tr := Trade{
-		EntryTime:  p.entryTime,
-		EntryPrice: p.entryPrice,
-		ExitTime:   t,
-		ExitPrice:  price,
-		Quantity:   p.qty,
-		Reason:     reason,
-		PnL:        pnl,
-		PnLPct:     pnlPct,
-		BarsHeld:   p.bar - p.entryBar,
+		EntryTime:       p.entryTime,
+		EntryPrice:      p.entryPrice,
+		ExitTime:        t,
+		ExitPrice:       price,
+		Quantity:        p.qty,
+		Reason:          reason,
+		PnL:             pnl,
+		PnLPct:          pnlPct,
+		BarsHeld:        p.bar - p.entryBar,
+		SupportLevel:    p.entryLevel,
+		ResistanceLevel: p.entryTarget,
+		ATR:             p.entryATR,
 	}
 	p.qty = 0
 	p.entryPrice = 0
+	p.entryLevel = 0
+	p.entryTarget = 0
+	p.entryATR = 0
 	return tr
 }
 
