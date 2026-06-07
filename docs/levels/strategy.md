@@ -152,6 +152,17 @@ slippage). Арминг трейла остаётся по цене закрыт
 
 Все эти числа — **стартовые** и подлежат калибровке на истории RUAL.
 
+**Калибровка под RUAL** (grid-search по ширине стопа/трейла, walk-forward против переобучения):
+
+```
+go run ./cmd/backtest -ticker RUAL -strategy levels -interval Hour1 -months 25 \
+  -calibrate data/params/rusal/levels_grid.json -metric expectancy -min-trades 20 -test-months 3
+```
+
+Победитель — в `reports/..._best.md`; его значения переносятся в `rusal.go` → `DefaultParams()`.
+
+**Журнал сделок** (Markdown и `_trades.csv`) для каждой сделки показывает уровень входа **Support** (HVN-поддержка), цель **Resist** (HVN-сопротивление) и **ATR** на момент входа — виден контекст риск/прибыли и волатильность.
+
 > Параметр `CooldownBars` (cooldown по уровню) — пока **только предложение**, в коде его нет.
 > См. §7.
 
