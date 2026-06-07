@@ -48,6 +48,7 @@ func bounceInput() decideInput {
 		barLow:        99.8, // dipped to support (100) within LevelTolATR*ATR
 		barClose:      101,  // closed in top half and above support
 		recentHigh:    102,
+		recentLow:     99.5, // structural low below the bounce (<= barLow 99.8)
 		downtrend:     false,
 		recentlyBelow: false,
 		pos:           nil,
@@ -63,8 +64,8 @@ func TestDecideBounceBuy(t *testing.T) {
 	if sig.Reason != "BOUNCE" {
 		t.Errorf("want reason BOUNCE, got %q", sig.Reason)
 	}
-	if sig.StopLoss != 100-1.0*1.0 {
-		t.Errorf("stop = %v, want %v", sig.StopLoss, 99.0)
+	if sig.StopLoss != 99.5-1.0*1.0 {
+		t.Errorf("stop = %v, want %v (recentLow 99.5 - SLMult*atr)", sig.StopLoss, 98.5)
 	}
 	if sig.TakeProfit != 110 {
 		t.Errorf("target = %v, want resistance 110", sig.TakeProfit)
@@ -177,7 +178,7 @@ func TestDecideBlockedByMinRR(t *testing.T) {
 	s := newCore()
 	in := bounceInput()
 	// Resistance close enough for room (2 ATR) but reward/risk under MinRR:
-	// price 101, stop 99 (risk 2), target 103 (reward 2) -> RR 1 < 1.5.
+	// price 101, stop 98.5 (risk 2.5), target 103 (reward 2) -> RR 0.8 < 1.5.
 	in.levels = []levels.Level{{Price: 100, Strength: 0.4}, {Price: 103, Strength: 0.4}}
 	if sig := s.decide(in); sig.Kind != model.SignalNone {
 		t.Fatalf("sub-MinRR setup must block entry, got %v", sig.Kind)
@@ -206,14 +207,14 @@ func TestDecideHardStopExit(t *testing.T) {
 	s := newCore()
 	in := bounceInput()
 	in.pos = &strategy.Position{PurchasePrice: 100, Quantity: 1}
-	in.price = 98.9  // <= entry - SLMult*atr = 99
-	in.barLow = 98.9 // low тоже пробил hard SL
+	in.price = 98.4  // <= recentLow(99.5) - SLMult*atr = 98.5
+	in.barLow = 98.4 // low тоже пробил hard SL
 	sig := s.decide(in)
 	if sig.Kind != model.SignalSell || sig.Reason != "SL" {
 		t.Fatalf("want Sell/SL, got %v/%q", sig.Kind, sig.Reason)
 	}
-	if sig.StopLoss != 99 {
-		t.Errorf("stop = %v, want 99", sig.StopLoss)
+	if sig.StopLoss != 98.5 {
+		t.Errorf("stop = %v, want 98.5", sig.StopLoss)
 	}
 }
 
@@ -345,14 +346,14 @@ func TestDecideHardStopOnLowWhileCloseAbove(t *testing.T) {
 	s := newCore()
 	in := bounceInput()
 	in.pos = &strategy.Position{PurchasePrice: 100, Quantity: 1}
-	in.price = 99.5  // close ещё выше hard SL (99) — по close выхода бы не было
-	in.barLow = 98.8 // но low пробил hard SL внутри бара
+	in.price = 99.0  // close выше hard SL (98.5) — по close выхода бы не было
+	in.barLow = 98.4 // но low пробил hard SL внутри бара
 	sig := s.decide(in)
 	if sig.Kind != model.SignalSell || sig.Reason != "SL" {
 		t.Fatalf("low pierce of hard SL must sell SL, got %v/%q", sig.Kind, sig.Reason)
 	}
-	if sig.StopLoss != 99 {
-		t.Errorf("stop = %v, want 99", sig.StopLoss)
+	if sig.StopLoss != 98.5 {
+		t.Errorf("stop = %v, want 98.5", sig.StopLoss)
 	}
 }
 
@@ -430,6 +431,53 @@ func TestLookbackIncludesSwingLowWindow(t *testing.T) {
 	s := NewWithParams("TEST", p)
 	if got := s.Lookback(); got != 105 {
 		t.Fatalf("Lookback = %d, want 105 (SwingLowWindow 100 + margin 5)", got)
+	}
+}
+
+func TestDecideHardStopUsesSwingLow(t *testing.T) {
+	s := newCore()
+	in := bounceInput()
+	in.pos = &strategy.Position{PurchasePrice: 100, Quantity: 1}
+	in.recentLow = 97 // deep structural low -> stop 97 - 1*1 = 96, wider than entry-1ATR
+	in.price = 95.9
+	in.barLow = 95.9 // pierces the structural stop 96
+	sig := s.decide(in)
+	if sig.Kind != model.SignalSell || sig.Reason != "SL" {
+		t.Fatalf("want Sell/SL, got %v/%q", sig.Kind, sig.Reason)
+	}
+	if sig.StopLoss != 96 {
+		t.Errorf("stop = %v, want 96 (recentLow 97 - SLMult 1 * atr 1)", sig.StopLoss)
+	}
+}
+
+func TestDecideHardStopWiderThanEntryAnchor(t *testing.T) {
+	s := newCore()
+	in := bounceInput()
+	in.pos = &strategy.Position{PurchasePrice: 100, Quantity: 1}
+	in.recentLow = 97 // structural stop 96; the old entry-anchored stop would be 99
+	in.price = 98     // below old stop 99 but above new structural stop 96
+	in.barLow = 98
+	sig := s.decide(in)
+	if sig.Kind != model.SignalNone {
+		t.Fatalf("structural stop must hold where entry-anchored stop would have fired, got %v/%q", sig.Kind, sig.Reason)
+	}
+}
+
+func TestDecideEntryAndLiveStopShareAnchor(t *testing.T) {
+	s := newCore()
+	in := bounceInput() // recentLow 99.5, atr 1, SLMult 1 -> stop 98.5
+	entrySig := s.decide(in)
+	if entrySig.Kind != model.SignalBuy {
+		t.Fatalf("want Buy entry, got %v", entrySig.Kind)
+	}
+	// Same bar, now holding: the live management stop must use the same anchor.
+	in.pos = &strategy.Position{PurchasePrice: in.price, Quantity: 1}
+	liveSig := s.decide(in)
+	if liveSig.StopLoss != entrySig.StopLoss {
+		t.Fatalf("live stop %v != entry stop %v (anchors diverged)", liveSig.StopLoss, entrySig.StopLoss)
+	}
+	if entrySig.StopLoss != 98.5 {
+		t.Errorf("stop = %v, want 98.5 (recentLow 99.5 - SLMult 1 * atr 1)", entrySig.StopLoss)
 	}
 }
 

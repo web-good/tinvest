@@ -152,7 +152,7 @@ func (s *Strategy) decide(in decideInput) model.Signal {
 	// Manage an open long position: hard stop then armed chandelier trail.
 	if in.pos != nil {
 		entry := in.pos.PurchasePrice
-		hardSL := entry - s.p.SLMult*in.atr
+		hardSL := in.recentLow - s.p.SLMult*in.atr
 		chandelier := in.recentHigh - s.p.TrailMult*in.atr
 		// The trail only arms once the trade is in profit by TrailArmATR*ATR, so a
 		// fresh entry near a recent high is not stopped out on the first down-tick.
@@ -199,7 +199,7 @@ func (s *Strategy) decide(in decideInput) model.Signal {
 		in.barClose > support.Price
 
 	if touched && notExtended && bullish {
-		stop := support.Price - s.p.SLMult*in.atr
+		stop := in.recentLow - s.p.SLMult*in.atr
 		target := resist.Price
 		if s.entryQualifies(in.price, stop, target, in.atr) {
 			sig.Kind, sig.StopLoss, sig.TakeProfit = model.SignalBuy, stop, target
