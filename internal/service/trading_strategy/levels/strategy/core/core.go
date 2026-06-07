@@ -280,6 +280,29 @@ func recentHigh(highs []float64, window int) float64 {
 	return h
 }
 
+// recentLow returns the lowest low over the last `window` bars (all bars if fewer).
+// A non-positive window is clamped to the last bar so it can never index out of range.
+func recentLow(lows []float64, window int) float64 {
+	n := len(lows)
+	if n == 0 {
+		return 0
+	}
+	start := n - window
+	if start < 0 {
+		start = 0
+	}
+	if start > n-1 {
+		start = n - 1
+	}
+	l := lows[start]
+	for i := start + 1; i < n; i++ {
+		if lows[i] < l {
+			l = lows[i]
+		}
+	}
+	return l
+}
+
 // tailF returns the last `window` elements of xs (all if fewer or window<=0).
 func tailF(xs []float64, window int) []float64 {
 	if window <= 0 || len(xs) <= window {

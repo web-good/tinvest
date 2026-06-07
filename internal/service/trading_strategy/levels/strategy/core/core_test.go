@@ -398,5 +398,27 @@ func TestDecideTrailArmStaysOnClose(t *testing.T) {
 	}
 }
 
+func TestRecentLow(t *testing.T) {
+	cases := []struct {
+		name   string
+		lows   []float64
+		window int
+		want   float64
+	}{
+		{"window smaller than series", []float64{5, 4, 6, 3, 7}, 3, 3},
+		{"window larger than series", []float64{5, 4, 6}, 10, 4},
+		{"full series", []float64{9, 2, 8}, 3, 2},
+		{"non-positive window clamps to last bar", []float64{9, 2, 8}, 0, 8},
+		{"empty series", nil, 5, 0},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := recentLow(c.lows, c.window); got != c.want {
+				t.Fatalf("recentLow(%v, %d) = %v, want %v", c.lows, c.window, got, c.want)
+			}
+		})
+	}
+}
+
 // Interface satisfaction.
 var _ strategy.Strategy = (*Strategy)(nil)
