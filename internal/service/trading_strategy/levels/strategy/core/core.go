@@ -154,9 +154,9 @@ func (s *Strategy) decide(in decideInput) model.Signal {
 		armed := s.p.TrailArmATR <= 0 || in.price >= entry+s.p.TrailArmATR*in.atr
 		sig.StopLoss = hardSL
 		switch {
-		case in.price <= hardSL:
+		case in.barLow <= hardSL:
 			sig.Kind, sig.Reason = model.SignalSell, "SL"
-		case armed && in.price <= chandelier:
+		case armed && in.barLow <= chandelier:
 			sig.Kind, sig.Reason, sig.StopLoss = model.SignalSell, "TRAIL", chandelier
 		}
 		return sig

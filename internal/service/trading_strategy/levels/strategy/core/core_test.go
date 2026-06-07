@@ -192,7 +192,8 @@ func TestDecideHardStopExit(t *testing.T) {
 	s := newCore()
 	in := bounceInput()
 	in.pos = &strategy.Position{PurchasePrice: 100, Quantity: 1}
-	in.price = 98.9 // <= entry - SLMult*atr = 99
+	in.price = 98.9  // <= entry - SLMult*atr = 99
+	in.barLow = 98.9 // low тоже пробил hard SL
 	sig := s.decide(in)
 	if sig.Kind != model.SignalSell || sig.Reason != "SL" {
 		t.Fatalf("want Sell/SL, got %v/%q", sig.Kind, sig.Reason)
@@ -209,6 +210,7 @@ func TestDecideTrailExit(t *testing.T) {
 	in.recentHigh = 110
 	// armed: price >= entry + TrailArmATR*atr = 101. chandelier = 110 - 2.5 = 107.5.
 	in.price = 107
+	in.barLow = 107 // low на уровне триггера трейла
 	sig := s.decide(in)
 	if sig.Kind != model.SignalSell || sig.Reason != "TRAIL" {
 		t.Fatalf("want Sell/TRAIL, got %v/%q", sig.Kind, sig.Reason)
@@ -224,6 +226,7 @@ func TestDecideTrailNotArmed(t *testing.T) {
 	in.pos = &strategy.Position{PurchasePrice: 100, Quantity: 1}
 	in.recentHigh = 110 // chandelier 107.5
 	in.price = 100.5    // below entry + 1 ATR -> not armed, above hard SL -> hold
+	in.barLow = 100.5   // low выше hard SL (99) -> ничего не триггерит
 	sig := s.decide(in)
 	if sig.Kind != model.SignalNone {
 		t.Fatalf("unarmed trail with price above hard SL must hold, got %v/%q", sig.Kind, sig.Reason)
@@ -235,7 +238,8 @@ func TestDecideInProfitHold(t *testing.T) {
 	in := bounceInput()
 	in.pos = &strategy.Position{PurchasePrice: 100, Quantity: 1}
 	in.recentHigh = 110 // chandelier 107.5
-	in.price = 108.5    // armed (>=101) but above chandelier -> hold
+	in.price = 108.5    // armed (>=101) но close выше chandelier
+	in.barLow = 108.0   // low тоже выше chandelier -> hold
 	sig := s.decide(in)
 	if sig.Kind != model.SignalNone {
 		t.Fatalf("in-profit above chandelier must hold, got %v/%q", sig.Kind, sig.Reason)
@@ -320,6 +324,63 @@ func TestDecideIntegrationNoSetup(t *testing.T) {
 	}
 	if sig := s.Decide(md); sig.Kind != model.SignalNone {
 		t.Fatalf("integration: flat uniform profile should yield None, got %v/%q", sig.Kind, sig.Reason)
+	}
+}
+
+func TestDecideHardStopOnLowWhileCloseAbove(t *testing.T) {
+	s := newCore()
+	in := bounceInput()
+	in.pos = &strategy.Position{PurchasePrice: 100, Quantity: 1}
+	in.price = 99.5  // close ещё выше hard SL (99) — по close выхода бы не было
+	in.barLow = 98.8 // но low пробил hard SL внутри бара
+	sig := s.decide(in)
+	if sig.Kind != model.SignalSell || sig.Reason != "SL" {
+		t.Fatalf("low pierce of hard SL must sell SL, got %v/%q", sig.Kind, sig.Reason)
+	}
+	if sig.StopLoss != 99 {
+		t.Errorf("stop = %v, want 99", sig.StopLoss)
+	}
+}
+
+func TestDecideTrailOnLowWhileCloseAbove(t *testing.T) {
+	s := newCore()
+	in := bounceInput()
+	in.pos = &strategy.Position{PurchasePrice: 100, Quantity: 1}
+	in.recentHigh = 110 // chandelier = 110 - 2.5 = 107.5
+	in.price = 108      // close выше chandelier и armed (>= entry+1ATR=101)
+	in.barLow = 107.0   // low пробил chandelier внутри бара
+	sig := s.decide(in)
+	if sig.Kind != model.SignalSell || sig.Reason != "TRAIL" {
+		t.Fatalf("low pierce of chandelier must sell TRAIL, got %v/%q", sig.Kind, sig.Reason)
+	}
+	if sig.StopLoss != 107.5 {
+		t.Errorf("trail stop = %v, want 107.5", sig.StopLoss)
+	}
+}
+
+func TestDecideNoStopWhenLowAboveStops(t *testing.T) {
+	s := newCore()
+	in := bounceInput()
+	in.pos = &strategy.Position{PurchasePrice: 100, Quantity: 1}
+	in.recentHigh = 110 // chandelier 107.5
+	in.price = 108
+	in.barLow = 107.8 // low остался выше chandelier и hard SL -> держим
+	sig := s.decide(in)
+	if sig.Kind != model.SignalNone {
+		t.Fatalf("low above both stops must hold, got %v/%q", sig.Kind, sig.Reason)
+	}
+}
+
+func TestDecideTrailArmStaysOnClose(t *testing.T) {
+	s := newCore()
+	in := bounceInput()
+	in.pos = &strategy.Position{PurchasePrice: 100, Quantity: 1}
+	in.recentHigh = 110 // chandelier 107.5
+	in.price = 100.5    // close < entry+1ATR=101 -> трейл НЕ взведён
+	in.barLow = 100.2   // low ниже chandelier, но выше hard SL (99) -> арминг держит
+	sig := s.decide(in)
+	if sig.Kind != model.SignalNone {
+		t.Fatalf("unarmed trail must hold even if low below chandelier, got %v/%q", sig.Kind, sig.Reason)
 	}
 }
 
