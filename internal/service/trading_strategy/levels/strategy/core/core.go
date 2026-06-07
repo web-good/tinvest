@@ -25,6 +25,7 @@ type Params struct {
 	RoomATR           float64 // require resistance above to be >= RoomATR*ATR away (runway)
 	MaxExtensionATR   float64 // reject entry if price is > MaxExtensionATR*ATR above the support
 	SLMult            float64 // initial stop = support - SLMult*ATR
+	SwingLowWindow    int     // bars scanned for the structural low anchoring the hard stop
 	TrailMult         float64 // chandelier = recentHigh(ChandelierWindow) - TrailMult*ATR
 	ChandelierWindow  int     // window for the chandelier high
 	TrailArmATR       float64 // trail arms only after price >= entry + TrailArmATR*ATR; <=0 arms immediately
@@ -62,6 +63,9 @@ func (s *Strategy) Lookback() int {
 	if s.p.BreakoutLookback+1 > m {
 		m = s.p.BreakoutLookback + 1
 	}
+	if s.p.SwingLowWindow > m {
+		m = s.p.SwingLowWindow
+	}
 	return m + 5
 }
 
@@ -74,6 +78,7 @@ type decideInput struct {
 	barLow        float64 // most-recent bar's low
 	barClose      float64 // most-recent bar's close
 	recentHigh    float64 // chandelier high over ChandelierWindow
+	recentLow     float64 // structural low over SwingLowWindow
 	downtrend     bool    // HTF soft downtrend flag (blocks entries only)
 	recentlyBelow bool    // some close within BreakoutLookback was below the support level
 	pos           *strategy.Position
@@ -129,6 +134,7 @@ func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 		barLow:        barLow,
 		barClose:      barClose,
 		recentHigh:    recentHigh(md.Highs, s.p.ChandelierWindow),
+		recentLow:     recentLow(md.Lows, s.p.SwingLowWindow),
 		downtrend:     downtrend,
 		recentlyBelow: recentlyBelow,
 		pos:           md.Position,

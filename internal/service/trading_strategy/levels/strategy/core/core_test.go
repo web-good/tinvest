@@ -420,5 +420,18 @@ func TestRecentLow(t *testing.T) {
 	}
 }
 
+func TestLookbackIncludesSwingLowWindow(t *testing.T) {
+	p := testParams()
+	p.ProfileWindow = 30
+	p.ChandelierWindow = 20
+	p.ATRPeriod = 14
+	p.BreakoutLookback = 10
+	p.SwingLowWindow = 100 // now the hungriest consumer
+	s := NewWithParams("TEST", p)
+	if got := s.Lookback(); got != 105 {
+		t.Fatalf("Lookback = %d, want 105 (SwingLowWindow 100 + margin 5)", got)
+	}
+}
+
 // Interface satisfaction.
 var _ strategy.Strategy = (*Strategy)(nil)
