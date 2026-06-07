@@ -6,6 +6,15 @@ import "tinvest/internal/service/trading_strategy/scalping/model"
 type Position struct {
 	PurchasePrice float64
 	Quantity      int64
+	// StopLoss is the hard stop frozen at entry. Zero means "not set" (e.g. live
+	// trading, which does not yet persist entry state — see the levels
+	// entry-locked-stops spec). The backtest engine always populates it.
+	StopLoss float64
+	// EntryATR is the ATR captured at entry, used as the arm threshold unit.
+	EntryATR float64
+	// MaxFavorablePrice is the highest close seen since entry (monotonic
+	// non-decreasing); it makes the trail's arming latch monotonic.
+	MaxFavorablePrice float64
 }
 
 // MarketData is the raw, per-instrument snapshot the runner hands to a strategy.
