@@ -27,7 +27,7 @@ func TestRenderMarkdownHasSections(t *testing.T) {
 	}}
 	eq := eqCurve([]float64{100000, 101000})
 	out := RenderMarkdown(sampleMeta(), m, trades, eq)
-	for _, want := range []string{"RUAL", "EMAPeriod", "Сводка метрик", "Журнал сделок", "Движение капитала", "TP"} {
+	for _, want := range []string{"RUAL", "EMAPeriod", "Сводка метрик", "Журнал сделок", "Движение капитала", "TP", "Support"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("markdown missing %q", want)
 		}
@@ -38,6 +38,7 @@ func TestRenderTradesCSVHeaderAndRow(t *testing.T) {
 	trades := []Trade{{
 		EntryTime: time.Unix(0, 0), EntryPrice: 100, ExitTime: time.Unix(3600, 0),
 		ExitPrice: 110, Quantity: 10, Reason: "TP", PnL: 100, PnLPct: 0.1, BarsHeld: 1,
+		SupportLevel: 99, ResistanceLevel: 112, ATR: 1.25,
 	}}
 	out := RenderTradesCSV(trades)
 	lines := strings.Split(strings.TrimSpace(out), "\n")
@@ -45,10 +46,16 @@ func TestRenderTradesCSVHeaderAndRow(t *testing.T) {
 		t.Fatalf("csv lines = %d, want 2 (header + 1 row)", len(lines))
 	}
 	if !strings.HasPrefix(lines[0], "idx,entry_time,entry_price") {
-		t.Fatalf("unexpected header: %q", lines[0])
+		t.Fatalf("header lost leading columns: %q", lines[0])
 	}
 	if !strings.Contains(lines[1], "TP") {
 		t.Fatalf("row missing reason: %q", lines[1])
+	}
+	if !strings.HasSuffix(lines[0], "support_level,resistance_level,atr") {
+		t.Fatalf("header missing new columns: %q", lines[0])
+	}
+	if !strings.Contains(lines[1], "99.000000,112.000000,1.250000") {
+		t.Fatalf("row missing entry-context values: %q", lines[1])
 	}
 }
 
