@@ -179,3 +179,68 @@ func TestEngineSuppliesDailyCloses(t *testing.T) {
 		t.Errorf("bar on Jan 3 daily = %v, want [1 2]", seen[2])
 	}
 }
+
+// stopExitStrategy buys on the first bar (when flat), then on every subsequent
+// bar returns Sell with the configured reason and StopLoss.
+type stopExitStrategy struct {
+	reason   string
+	stopLoss float64
+}
+
+func (s stopExitStrategy) Ticker() string { return "TEST" }
+func (s stopExitStrategy) Lookback() int  { return 1 }
+func (s stopExitStrategy) Decide(md strategy.MarketData) model.Signal {
+	if md.Position == nil {
+		return model.Signal{Kind: model.SignalBuy}
+	}
+	return model.Signal{Kind: model.SignalSell, Reason: s.reason, StopLoss: s.stopLoss}
+}
+
+func TestEngineStopFillsAtLevelOnIntrabarPierce(t *testing.T) {
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	candles := []Candle{
+		{Time: base, Open: 100, High: 100, Low: 100, Close: 100, Volume: 1},                  // buy here
+		{Time: base.Add(time.Hour), Open: 100, High: 100.5, Low: 98, Close: 98.5, Volume: 1}, // SL pierced intrabar
+	}
+	s := stopExitStrategy{reason: "SL", stopLoss: 99}
+	res := Run(s, candles, nil, Config{InitialCash: 100000, Fraction: 1.0, Lot: 1})
+	if len(res.Trades) != 1 {
+		t.Fatalf("trades = %d, want 1", len(res.Trades))
+	}
+	if got := res.Trades[0].ExitPrice; got != 99 {
+		t.Fatalf("exit = %v, want 99 (filled at stop level, not close 98.5)", got)
+	}
+}
+
+func TestEngineStopFillsAtOpenOnGapDown(t *testing.T) {
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	candles := []Candle{
+		{Time: base, Open: 100, High: 100, Low: 100, Close: 100, Volume: 1},              // buy here
+		{Time: base.Add(time.Hour), Open: 97, High: 97, Low: 96, Close: 96.5, Volume: 1}, // gap below stop
+	}
+	s := stopExitStrategy{reason: "SL", stopLoss: 99}
+	res := Run(s, candles, nil, Config{InitialCash: 100000, Fraction: 1.0, Lot: 1})
+	if len(res.Trades) != 1 {
+		t.Fatalf("trades = %d, want 1", len(res.Trades))
+	}
+	if got := res.Trades[0].ExitPrice; got != 97 {
+		t.Fatalf("exit = %v, want 97 (filled at gap open, worse than stop 99)", got)
+	}
+}
+
+func TestEngineNonStopSellFillsAtClose(t *testing.T) {
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	candles := []Candle{
+		{Time: base, Open: 100, High: 100, Low: 100, Close: 100, Volume: 1},                // buy here
+		{Time: base.Add(time.Hour), Open: 100, High: 101, Low: 98, Close: 98.5, Volume: 1}, // TP-style exit
+	}
+	// StopLoss is set but must be ignored for a non-stop reason.
+	s := stopExitStrategy{reason: "TP", stopLoss: 99}
+	res := Run(s, candles, nil, Config{InitialCash: 100000, Fraction: 1.0, Lot: 1})
+	if len(res.Trades) != 1 {
+		t.Fatalf("trades = %d, want 1", len(res.Trades))
+	}
+	if got := res.Trades[0].ExitPrice; got != 98.5 {
+		t.Fatalf("exit = %v, want 98.5 (non-stop sell fills at close)", got)
+	}
+}

@@ -65,7 +65,14 @@ func Run(s strategy.Strategy, candles []Candle, dailyCandles []Candle, cfg Confi
 			}
 		case model.SignalSell:
 			if p.qty != 0 {
-				res.Trades = append(res.Trades, p.close(c.Close, c.Time, sig.Reason))
+				exitPrice := c.Close
+				// Stop exits fill at the stop level, adjusted for a gap-down open:
+				// min(level, open) lands inside the bar (always >= c.Low) and charges
+				// real gap risk when the bar opened below the stop.
+				if sig.Reason == "SL" || sig.Reason == "TRAIL" {
+					exitPrice = min(sig.StopLoss, c.Open)
+				}
+				res.Trades = append(res.Trades, p.close(exitPrice, c.Time, sig.Reason))
 			}
 		}
 
