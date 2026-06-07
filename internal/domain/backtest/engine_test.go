@@ -265,3 +265,32 @@ func TestEngineStampsEntryContextOnTrade(t *testing.T) {
 		t.Fatalf("entry context = {%v %v %v}, want {98 108 1.5}", tr.SupportLevel, tr.ResistanceLevel, tr.ATR)
 	}
 }
+
+func TestEngineFreezesEntryStopAndTracksFavorable(t *testing.T) {
+	candles := flatCandles([]float64{10, 100, 105, 98})
+	// Buy at price 100 (bar 1) with a frozen stop of 95. On bar 2 (price 105) the
+	// favourable max should rise to 105; on bar 3 (price 98) the position must
+	// still carry the frozen stop 95 and the latched max 105, then sell SL.
+	s := scriptedStrategy{lookback: 1, decide: func(md strategy.MarketData) model.Signal {
+		if md.Position == nil && md.Price == 100 {
+			return model.Signal{Kind: model.SignalBuy, StopLoss: 95}
+		}
+		if md.Position != nil && md.Price == 98 {
+			if md.Position.StopLoss != 95 {
+				t.Errorf("frozen StopLoss = %v, want 95", md.Position.StopLoss)
+			}
+			if md.Position.MaxFavorablePrice != 105 {
+				t.Errorf("MaxFavorablePrice = %v, want 105 (latched high)", md.Position.MaxFavorablePrice)
+			}
+			return model.Signal{Kind: model.SignalSell, Reason: "SL", StopLoss: 95}
+		}
+		return model.Signal{Kind: model.SignalNone}
+	}}
+	res := Run(s, candles, nil, Config{InitialCash: 100000, Fraction: 1.0, Commission: 0, Lot: 1})
+	if len(res.Trades) != 1 {
+		t.Fatalf("trades = %d, want 1", len(res.Trades))
+	}
+	if res.Trades[0].Reason != "SL" {
+		t.Fatalf("exit reason = %q, want SL", res.Trades[0].Reason)
+	}
+}
