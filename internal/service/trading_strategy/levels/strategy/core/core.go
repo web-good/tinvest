@@ -24,7 +24,7 @@ type Params struct {
 	LevelTolATR       float64 // proximity to a level counts as a touch within LevelTolATR*ATR
 	RoomATR           float64 // require resistance above to be >= RoomATR*ATR away (runway)
 	MaxExtensionATR   float64 // reject entry if price is > MaxExtensionATR*ATR above the support
-	SLMult            float64 // initial stop = support - SLMult*ATR
+	SLMult            float64 // initial stop = recentLow - SLMult*ATR
 	SwingLowWindow    int     // bars scanned for the structural low anchoring the hard stop
 	TrailMult         float64 // chandelier = recentHigh(ChandelierWindow) - TrailMult*ATR
 	ChandelierWindow  int     // window for the chandelier high
