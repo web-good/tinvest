@@ -3,6 +3,5 @@
   "TrailArmATR": [0.5, 1.0, 1.5],
   "TrailMult": [2.0, 2.5, 3.0],
   "MinRR": [1.2, 1.5, 2.0],
-  "RoomATR": [1.5, 2.0, 2.5],
   "SwingLowWindow": [5, 10, 15, 20]
 }

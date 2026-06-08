@@ -171,12 +171,16 @@ DailyTrendPeriod   int     = 0      // доп. идея, выкл
 
 ## 9. Первый тикер и запуск
 
-- Реестр: `MomentumLookupOrGeneric` + `genericMomentumDefaults` (значения = дефолты выше),
-  как `LevelsLookupOrGeneric`/`genericLevelsDefaults`.
-- Любой тикер запускается сразу:
+- **Первый per-ticker пакет: RUAL** (`momentum/strategy/rusal/rusal.go`) — преемственность
+  с levels/scalping и готовый кэш свечей. Оговорка: RUAL в даунтренде, трендовая логика даст
+  мало входов; это ожидаемо (работа фильтров), не баг. Стартовые `DefaultParams` = дефолты §8,
+  калибруются позже.
+- Реестр: `MomentumLookupOrGeneric` + `genericMomentumDefaults` (значения = дефолты §8),
+  как `LevelsLookupOrGeneric`/`genericLevelsDefaults`; любой другой тикер работает через фоллбек.
+- Запуск:
   `go run ./cmd/backtest -ticker RUAL -strategy momentum -interval Hour1 -months 12`
-- Калибровка как у levels: `-calibrate data/params/<ticker>/momentum_grid.json`,
-  затем зашить победителя в per-ticker пакет (MACD-периоды — индивидуально).
+- Калибровка как у levels: `-calibrate data/params/rusal/momentum_grid.json`,
+  затем зашить победителя в `rusal.go` (MACD-периоды — индивидуально).
 
 ## 10. Тестирование (TDD)
 

@@ -41,14 +41,34 @@ func TestLevelsLookupOrGenericUnknown(t *testing.T) {
 	}
 }
 
-// genericLevelsDefaults currently equals levelsrusal.DefaultParams by design: there is
-// only one registered levels ticker, so the neutral baseline starts from RUAL's starting
-// values. They are kept as independent code paths so calibrating RUAL never drifts the
-// generic baseline; this test documents that today they coincide on purpose.
-func TestGenericLevelsDefaultsMatchRusalToday(t *testing.T) {
-	if genericLevelsDefaults() != levelsrusal.DefaultParams() {
-		t.Fatal("generic levels defaults diverged from RUAL starting values; " +
-			"if this is an intentional RUAL recalibration, update this test's expectation")
+// genericLevelsDefaults is the frozen neutral baseline for tickers without a dedicated
+// levels config. It is intentionally decoupled from levelsrusal.DefaultParams so that
+// calibrating RUAL never drifts the generic baseline. RUAL has since been recalibrated
+// away from these starting values, so the two no longer coincide; this test pins the
+// neutral baseline explicitly to catch accidental drift of the generic path itself.
+func TestGenericLevelsDefaultsAreNeutralBaseline(t *testing.T) {
+	want := core.Params{
+		ProfileWindow:     120,
+		ProfileBins:       40,
+		HVNFactor:         1.5,
+		ATRPeriod:         14,
+		LevelTolATR:       0.5,
+		RoomATR:           2.0,
+		MaxExtensionATR:   1.0,
+		SLMult:            1.0,
+		SwingLowWindow:    10,
+		TrailMult:         2.5,
+		ChandelierWindow:  20,
+		TrailArmATR:       1.0,
+		BreakoutLookback:  10,
+		TrendFilterPeriod: 50,
+		TrendSlopeTol:     0.0,
+		ConfirmCloseFrac:  0.5,
+		MinATRFrac:        0.003,
+		MinRR:             1.5,
+	}
+	if got := genericLevelsDefaults(); got != want {
+		t.Fatalf("generic levels defaults = %+v, want neutral baseline %+v", got, want)
 	}
 }
 

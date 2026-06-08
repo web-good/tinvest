@@ -16,13 +16,13 @@ func DefaultParams() core.Params {
 		HVNFactor:         1.5,   // HVN when a bin holds >= 1.5x the mean bin volume
 		ATRPeriod:         14,    // ATR for stops/room/anti-churn
 		LevelTolATR:       0.5,   // a touch counts within 0.5 ATR of the level
-		RoomATR:           2.0,   // need >= 2 ATR of runway to resistance
+		RoomATR:           1.5,   // need >= 1.5 ATR of runway to resistance
 		MaxExtensionATR:   1.0,   // skip entries > 1 ATR above support (chasing)
-		SLMult:            1.0,   // hard stop 1 ATR below support
+		SLMult:            1.5,   // hard stop 1.5 ATR below the structural low
 		SwingLowWindow:    10,    // ~1.5 sessions of bars for the structural stop low
-		TrailMult:         2.5,   // chandelier trail at 2.5 ATR below the recent high
+		TrailMult:         3.0,   // chandelier trail at 3 ATR below the recent high
 		ChandelierWindow:  20,    // recent-high window for the trail
-		TrailArmATR:       1.0,   // arm trail after +1 ATR profit (kills bar-1 stop-outs)
+		TrailArmATR:       1.5,   // arm trail after +1.5 ATR profit (kills bar-1 stop-outs)
 		BreakoutLookback:  10,    // bars back to classify a retest vs a bounce
 		TrendFilterPeriod: 50,    // daily EMA for the HTF downtrend filter
 		TrendSlopeTol:     0.0,   // any falling EMA with price below it counts as downtrend
