@@ -55,3 +55,18 @@ func TestMACDLineEqualsFastMinusSlowEMA(t *testing.T) {
 		t.Fatalf("macd[last]=%f want fast-slow=%f", m[last], fast[last]-slow[last])
 	}
 }
+
+func TestEMAHandComputed(t *testing.T) {
+	// ema([1,2,3,4], period=2): seed out[1]=SMA(1,2)=1.5; k=2/3.
+	// out[2]=(3-1.5)*2/3+1.5=2.5; out[3]=(4-2.5)*2/3+2.5=3.5. out[0]=0 (pre-seed).
+	got := ema([]float64{1, 2, 3, 4}, 2)
+	want := []float64{0, 1.5, 2.5, 3.5}
+	if len(got) != len(want) {
+		t.Fatalf("len=%d want %d", len(got), len(want))
+	}
+	for i := range want {
+		if !approx(got[i], want[i]) {
+			t.Fatalf("ema[%d]=%f want %f", i, got[i], want[i])
+		}
+	}
+}
