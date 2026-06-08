@@ -25,12 +25,14 @@ func TestRenderMarkdownShowsEntryReason(t *testing.T) {
 }
 
 func TestRenderTradesCSVShowsEntryReason(t *testing.T) {
-	trades := []Trade{{Reason: "SL", EntryReason: "пробой; объём 2×"}}
+	trades := []Trade{{Reason: "SL", EntryReason: `пробой " key" уровня; объём 2×`}}
 	out := RenderTradesCSV(trades)
 	if !strings.Contains(out, "entry_reason") {
 		t.Fatal("csv header missing entry_reason")
 	}
-	if !strings.Contains(out, "пробой; объём 2×") {
-		t.Fatal("csv missing EntryReason value")
+	// A value with an embedded double-quote must be RFC 4180 quoted: wrapped in
+	// double-quotes with inner quotes DOUBLED (not backslash-escaped).
+	if !strings.Contains(out, `"пробой "" key"" уровня; объём 2×"`) {
+		t.Fatalf("csv entry_reason not RFC4180-quoted; got:\n%s", out)
 	}
 }
