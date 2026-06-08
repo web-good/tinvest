@@ -1,0 +1,275 @@
+// Package core implements a long-only hourly trend-momentum strategy: enter when
+// price is above a long EMA (uptrend), MACD just crossed up (optionally below
+// zero), volume is above its recent average, and the day still has room left
+// within its typical daily-ATR range. Exits on a frozen structural ATR stop, a
+// fixed reward-multiple take-profit, or an optional chandelier trail. The decision
+// logic is pure and ticker-agnostic; per-share packages supply ticker + Params.
+package core
+
+import (
+	"fmt"
+
+	"tinvest/internal/domain/ema"
+	"tinvest/internal/service/trading_strategy/scalping/model"
+	"tinvest/internal/service/trading_strategy/scalping/strategy"
+	"tinvest/pkg/indicators"
+)
+
+// Params holds every tunable. All fields are int or float64 (flags as int 0/1)
+// so reflection grid calibration can sweep them.
+type Params struct {
+	EMAPeriod         int     // long EMA trend filter (hourly)
+	MACDFast          int     // MACD fast EMA period
+	MACDSlow          int     // MACD slow EMA period
+	MACDSignal        int     // MACD signal EMA period
+	MACDBelowZeroOnly int     // 1 = require macd<0 at the cross; 0 = any bullish cross
+	VolLookback       int     // SMA window for the volume baseline
+	VolMultiplier     float64 // last volume must exceed VolMultiplier*SMA(volume)
+	DailyATRPeriod    int     // ATR period over completed daily candles
+	MaxDailyATRUsed   float64 // block entry if today's range >= MaxDailyATRUsed*dailyATR
+	ATRPeriod         int     // hourly ATR period (stops, anti-churn)
+	SwingLowWindow    int     // bars scanned for the structural low anchoring the stop
+	SLMult            float64 // stop = swingLow - SLMult*ATR
+	TakeProfitRR      float64 // TP = entry + TakeProfitRR*(entry-stop)
+	MinRR             float64 // reject entry if (TP-price) < MinRR*risk; <=0 disables
+	MinATRFrac        float64 // reject entry if ATR < MinATRFrac*price; <=0 disables
+	UseTrail          int     // 1 = trail instead of fixed TP
+	TrailMult         float64 // chandelier = recentHigh(ChandelierWindow) - TrailMult*ATR
+	ChandelierWindow  int     // window for the chandelier high
+	TrailArmATR       float64 // trail arms after MaxFavorable >= entry + TrailArmATR*EntryATR
+	CooldownBars      int     // reserved; not yet enforced
+	DailyTrendPeriod  int     // reserved; not yet enforced
+}
+
+// Strategy trades a single instrument with the momentum rules. Ticker-agnostic.
+type Strategy struct {
+	ticker string
+	p      Params
+}
+
+// NewWithParams returns the momentum strategy for a ticker with explicit params.
+func NewWithParams(ticker string, p Params) *Strategy { return &Strategy{ticker: ticker, p: p} }
+
+func (s *Strategy) Ticker() string { return s.ticker }
+
+// Lookback sizes the candle window to feed the hungriest consumer.
+func (s *Strategy) Lookback() int {
+	m := s.p.EMAPeriod
+	for _, c := range []int{
+		s.p.MACDSlow + s.p.MACDSignal,
+		s.p.VolLookback + 1,
+		s.p.ATRPeriod + 1,
+		s.p.SwingLowWindow,
+		s.p.ChandelierWindow,
+	} {
+		if c > m {
+			m = c
+		}
+	}
+	return m + 5
+}
+
+// decideInput carries already-computed indicator values into the pure core.
+type decideInput struct {
+	price      float64
+	atr        float64
+	dailyATR   float64
+	emaTrend   float64
+	macdNow    float64
+	crossUp    bool
+	volumeOK   bool
+	todayRange float64
+	barHigh    float64
+	barLow     float64
+	recentLow  float64
+	recentHigh float64
+	pos        *strategy.Position
+}
+
+// Decide computes every indicator from md, packs them, and delegates to the pure core.
+func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
+	atr := indicators.ATR(md.Highs, md.Lows, md.Closes, s.p.ATRPeriod)
+	dailyATR := indicators.ATR(md.DailyHighs, md.DailyLows, md.DailyCloses, s.p.DailyATRPeriod)
+
+	emaTrend := 0.0
+	if e := ema.Compute(md.Closes, s.p.EMAPeriod); len(e) > 0 {
+		emaTrend = e[len(e)-1]
+	}
+
+	macdNow, crossUp := 0.0, false
+	if m, sg := indicators.MACD(md.Closes, s.p.MACDFast, s.p.MACDSlow, s.p.MACDSignal); len(m) >= 2 {
+		prevDiff := m[len(m)-2] - sg[len(sg)-2]
+		currDiff := m[len(m)-1] - sg[len(sg)-1]
+		macdNow = m[len(m)-1]
+		crossUp = prevDiff <= 0 && currDiff > 0
+	}
+
+	var barHigh, barLow float64
+	if n := len(md.Highs); n > 0 {
+		barHigh = md.Highs[n-1]
+	}
+	if n := len(md.Lows); n > 0 {
+		barLow = md.Lows[n-1]
+	}
+
+	in := decideInput{
+		price:      md.Price,
+		atr:        atr,
+		dailyATR:   dailyATR,
+		emaTrend:   emaTrend,
+		macdNow:    macdNow,
+		crossUp:    crossUp,
+		volumeOK:   indicators.VolumeConfirmed(md.Volumes, s.p.VolLookback, s.p.VolMultiplier),
+		todayRange: md.TodayHigh - md.TodayLow,
+		barHigh:    barHigh,
+		barLow:     barLow,
+		recentLow:  recentLow(md.Lows, s.p.SwingLowWindow),
+		recentHigh: recentHigh(md.Highs, s.p.ChandelierWindow),
+		pos:        md.Position,
+	}
+
+	sig := s.decide(in)
+	sig.Ticker = s.ticker
+	return sig
+}
+
+// decide is the pure decision core over already-computed indicator values.
+func (s *Strategy) decide(in decideInput) model.Signal {
+	sig := model.Signal{Price: in.price}
+
+	if in.pos != nil {
+		return s.manage(in, sig)
+	}
+
+	// Entry gates (all must pass).
+	if !(in.emaTrend > 0 && in.price > in.emaTrend) {
+		return sig // not an uptrend
+	}
+	if !in.crossUp {
+		return sig
+	}
+	if s.p.MACDBelowZeroOnly == 1 && in.macdNow >= 0 {
+		return sig
+	}
+	if !in.volumeOK {
+		return sig
+	}
+	// Daily-ATR room: pass when daily data is absent (dailyATR<=0), else require room.
+	if in.dailyATR > 0 && in.todayRange >= s.p.MaxDailyATRUsed*in.dailyATR {
+		return sig
+	}
+	if s.p.MinATRFrac > 0 && in.atr < s.p.MinATRFrac*in.price {
+		return sig
+	}
+
+	stop := in.recentLow - s.p.SLMult*in.atr
+	risk := in.price - stop
+	if risk <= 0 {
+		return sig
+	}
+	target := in.price + s.p.TakeProfitRR*risk
+	if s.p.MinRR > 0 && (target-in.price) < s.p.MinRR*risk {
+		return sig
+	}
+
+	sig.Kind = model.SignalBuy
+	sig.StopLoss = stop
+	sig.TakeProfit = target
+	sig.ATR = in.atr
+	sig.EntryReason = s.entryReason(in, stop, target, risk)
+	return sig
+}
+
+// entryReason renders the human-readable rationale shown in the trade journal.
+func (s *Strategy) entryReason(in decideInput, stop, target, risk float64) string {
+	zero := "над нулём"
+	if in.macdNow < 0 {
+		zero = "под нулём"
+	}
+	roomPct := 0.0
+	if in.dailyATR > 0 {
+		roomPct = (1 - in.todayRange/in.dailyATR) * 100
+	}
+	return fmt.Sprintf(
+		"Тренд↑ (close %.4f > EMA%d %.4f); MACD бычий кросс %s (%.4f); объём > %.2g×ср(%d); дневной ATR-запас %.0f%% (прошло %.4f из %.4f); ATR(ч)=%.4f, ATR(д)=%.4f; SL=%.4f (-%.4f); TP=%.4f (+%.4f, %.2gR)",
+		in.price, s.p.EMAPeriod, in.emaTrend, zero, in.macdNow,
+		s.p.VolMultiplier, s.p.VolLookback,
+		roomPct, in.todayRange, in.dailyATR,
+		in.atr, in.dailyATR,
+		stop, risk, target, target-in.price, s.p.TakeProfitRR,
+	)
+}
+
+// manage handles an open long: frozen hard stop, fixed take-profit (reconstructed
+// from the frozen entry stop), or an optional armed chandelier trail.
+func (s *Strategy) manage(in decideInput, sig model.Signal) model.Signal {
+	entry := in.pos.PurchasePrice
+	hardSL := in.pos.StopLoss
+	// TP is reconstructed from the frozen entry stop (Position carries no target):
+	// risk and stop are both fixed at entry, so this is deterministic.
+	risk := entry - hardSL
+	tp := entry + s.p.TakeProfitRR*risk
+
+	sig.StopLoss = hardSL
+	sig.TakeProfit = tp
+
+	switch {
+	case in.barLow <= hardSL:
+		sig.Kind, sig.Reason = model.SignalSell, "SL"
+	case s.p.UseTrail == 0 && in.barHigh >= tp:
+		sig.Kind, sig.Reason = model.SignalSell, "TP"
+	case s.p.UseTrail == 1:
+		chandelier := in.recentHigh - s.p.TrailMult*in.atr
+		armed := s.p.TrailArmATR <= 0 || in.pos.MaxFavorablePrice >= entry+s.p.TrailArmATR*in.pos.EntryATR
+		if armed && in.barLow <= chandelier {
+			sig.Kind, sig.Reason, sig.StopLoss = model.SignalSell, "TRAIL", chandelier
+		}
+	}
+	return sig
+}
+
+// recentLow returns the lowest low over the last window bars (all if fewer);
+// a non-positive window is clamped to the last bar.
+func recentLow(lows []float64, window int) float64 {
+	n := len(lows)
+	if n == 0 {
+		return 0
+	}
+	start := n - window
+	if start < 0 {
+		start = 0
+	}
+	if start > n-1 {
+		start = n - 1
+	}
+	l := lows[start]
+	for i := start + 1; i < n; i++ {
+		if lows[i] < l {
+			l = lows[i]
+		}
+	}
+	return l
+}
+
+// recentHigh returns the highest high over the last window bars (all if fewer);
+// a non-positive window is clamped to the last bar.
+func recentHigh(highs []float64, window int) float64 {
+	n := len(highs)
+	if n == 0 {
+		return 0
+	}
+	start := n - window
+	if start < 0 {
+		start = 0
+	}
+	if start > n-1 {
+		start = n - 1
+	}
+	h := highs[start]
+	for i := start + 1; i < n; i++ {
+		if highs[i] > h {
+			h = highs[i]
+		}
+	}
+	return h
+}
