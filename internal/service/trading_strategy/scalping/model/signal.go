@@ -21,5 +21,6 @@ type Signal struct {
 	RSI            float64
 	Level          float64 // entry support level (HVN); 0 when n/a
 	ATR            float64 // ATR at entry; 0 when n/a
-	Reason         string  // "TP" or "SL" for sells
+	Reason         string  // exit reason: "TP"/"SL"/"TRAIL"; ignored for entries
+	EntryReason    string  // human-readable entry rationale (set on Buy); empty for sells
 }

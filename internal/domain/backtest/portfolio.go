@@ -19,6 +19,7 @@ type portfolio struct {
 	entryTarget  float64 // resistance/target captured at entry
 	entryATR     float64 // ATR captured at entry
 	entryStop    float64 // hard stop frozen at entry
+	entryReason  string  // human-readable entry rationale captured at entry
 	maxFavorable float64 // highest close seen since entry (monotonic)
 	bar          int     // current bar index, set by the engine each iteration
 }
@@ -29,7 +30,7 @@ func newPortfolio(cfg Config) *portfolio {
 
 // open deploys cfg.Fraction of cash into whole lots at price. No-op if already
 // in a position or if there is not enough cash for a single lot.
-func (p *portfolio) open(price float64, t time.Time, level, target, atr, stop float64) {
+func (p *portfolio) open(price float64, t time.Time, level, target, atr, stop float64, entryReason string) {
 	if p.qty != 0 {
 		return
 	}
@@ -54,6 +55,7 @@ func (p *portfolio) open(price float64, t time.Time, level, target, atr, stop fl
 	p.entryTarget = target
 	p.entryATR = atr
 	p.entryStop = stop
+	p.entryReason = entryReason
 	p.maxFavorable = price
 }
 
@@ -92,6 +94,7 @@ func (p *portfolio) close(price float64, t time.Time, reason string) Trade {
 		SupportLevel:    p.entryLevel,
 		ResistanceLevel: p.entryTarget,
 		ATR:             p.entryATR,
+		EntryReason:     p.entryReason,
 	}
 	p.qty = 0
 	p.entryPrice = 0
@@ -99,6 +102,7 @@ func (p *portfolio) close(price float64, t time.Time, reason string) Trade {
 	p.entryTarget = 0
 	p.entryATR = 0
 	p.entryStop = 0
+	p.entryReason = ""
 	p.maxFavorable = 0
 	return tr
 }
