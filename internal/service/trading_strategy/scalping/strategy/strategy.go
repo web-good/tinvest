@@ -20,22 +20,30 @@ type Position struct {
 // MarketData is the raw, per-instrument snapshot the runner hands to a strategy.
 // All series are oldest-first and aligned to the same candles; Price is the last close.
 type MarketData struct {
-	Price    float64
-	Highs    []float64
-	Lows     []float64
-	Closes   []float64
-	Volumes  []int64
+	Price   float64
+	Highs   []float64
+	Lows    []float64
+	Closes  []float64
+	Volumes []int64
 	// DailyCloses are oldest-first closes of COMPLETED daily candles, aligned so the
 	// last element is the most recent day closed at/before the current bar. Empty if
 	// no higher-timeframe data is supplied or the filter is disabled.
 	DailyCloses []float64
-	Position    *Position // nil when flat
+	// DailyHighs / DailyLows are oldest-first highs/lows of the same COMPLETED daily
+	// candles as DailyCloses (aligned index-for-index). Empty when no daily data.
+	DailyHighs []float64
+	DailyLows  []float64
+	// TodayHigh / TodayLow are the high/low across all bars of the current MSK
+	// calendar day up to and including the current bar (no lookahead). Zero when n/a.
+	TodayHigh float64
+	TodayLow  float64
+	Position  *Position // nil when flat
 }
 
 // Strategy is the per-share trading rule. Decide must be pure: it computes its own
 // indicators from md and performs no I/O.
 type Strategy interface {
 	Ticker() string // e.g. "RUAL"
-	Lookback() int   // number of candles it needs
+	Lookback() int  // number of candles it needs
 	Decide(md MarketData) model.Signal
 }

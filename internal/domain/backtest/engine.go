@@ -37,6 +37,43 @@ func visibleDailyCloses(daily []Candle, t time.Time, loc *time.Location) []float
 	return out
 }
 
+// visibleDailyHighsLows returns highs and lows of daily candles whose calendar day
+// (in loc) is strictly before t's calendar day — the same completed days as
+// visibleDailyCloses, so the three series are index-aligned.
+func visibleDailyHighsLows(daily []Candle, t time.Time, loc *time.Location) (highs, lows []float64) {
+	bound := startOfDay(t, loc)
+	for _, c := range daily {
+		if c.Time.Before(bound) {
+			highs = append(highs, c.High)
+			lows = append(lows, c.Low)
+		}
+	}
+	return highs, lows
+}
+
+// todayExtent returns the high and low across all bars sharing candles[i]'s MSK
+// calendar day, scanning back from i only (no lookahead). Returns (0,0) when i is
+// out of range.
+func todayExtent(candles []Candle, i int, loc *time.Location) (high, low float64) {
+	if i < 0 || i >= len(candles) {
+		return 0, 0
+	}
+	day := startOfDay(candles[i].Time, loc)
+	high, low = candles[i].High, candles[i].Low
+	for j := i - 1; j >= 0; j-- {
+		if startOfDay(candles[j].Time, loc).Before(day) {
+			break
+		}
+		if candles[j].High > high {
+			high = candles[j].High
+		}
+		if candles[j].Low < low {
+			low = candles[j].Low
+		}
+	}
+	return high, low
+}
+
 // Run replays a strategy over oldest-first candles on a mock portfolio and
 // returns the raw result. It mirrors the live runner: per bar it builds a
 // lookback-sized MarketData, calls Decide, and acts only on Buy (when flat) or
@@ -54,6 +91,8 @@ func Run(s strategy.Strategy, candles []Candle, dailyCandles []Candle, cfg Confi
 		p.bar = i
 		md := buildMarketData(candles[i-l+1 : i+1])
 		md.DailyCloses = visibleDailyCloses(dailyCandles, candles[i].Time, mskLoc)
+		md.DailyHighs, md.DailyLows = visibleDailyHighsLows(dailyCandles, candles[i].Time, mskLoc)
+		md.TodayHigh, md.TodayLow = todayExtent(candles, i, mskLoc)
 		if p.qty != 0 {
 			p.mark(candles[i].Close)
 		}

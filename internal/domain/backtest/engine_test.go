@@ -292,6 +292,47 @@ func TestEngineFillsTPAtTarget(t *testing.T) {
 	}
 }
 
+func TestEngineSuppliesDailyHighsLowsAndTodayExtent(t *testing.T) {
+	msk := mskLoc
+	mk := func(y, mo, d, h int, o, hi, lo, c float64) Candle {
+		return Candle{Time: time.Date(y, time.Month(mo), d, h, 0, 0, 0, msk), Open: o, High: hi, Low: lo, Close: c, Volume: 1}
+	}
+	candles := []Candle{
+		mk(2026, 1, 2, 10, 10, 12, 9, 11),
+		mk(2026, 1, 2, 11, 11, 15, 8, 14),  // day1 running extent now H=15 L=8
+		mk(2026, 1, 3, 10, 14, 16, 13, 15), // new day: extent resets to this bar
+	}
+	daily := []Candle{
+		mk(2026, 1, 1, 0, 100, 110, 90, 105),
+		mk(2026, 1, 2, 0, 105, 120, 100, 118),
+	}
+	var seenHi, seenLo []float64
+	var seenDailyHighs [][]float64
+	s := scriptedStrategy{lookback: 1, decide: func(md strategy.MarketData) model.Signal {
+		seenHi = append(seenHi, md.TodayHigh)
+		seenLo = append(seenLo, md.TodayLow)
+		seenDailyHighs = append(seenDailyHighs, append([]float64(nil), md.DailyHighs...))
+		return model.Signal{Kind: model.SignalNone}
+	}}
+	Run(s, candles, daily, Config{InitialCash: 1000, Fraction: 1, Commission: 0, Lot: 1})
+
+	if seenHi[0] != 12 || seenLo[0] != 9 {
+		t.Fatalf("bar0 extent H=%v L=%v want 12/9", seenHi[0], seenLo[0])
+	}
+	if seenHi[1] != 15 || seenLo[1] != 8 {
+		t.Fatalf("bar1 extent H=%v L=%v want 15/8", seenHi[1], seenLo[1])
+	}
+	if seenHi[2] != 16 || seenLo[2] != 13 {
+		t.Fatalf("bar2 extent H=%v L=%v want 16/13", seenHi[2], seenLo[2])
+	}
+	if len(seenDailyHighs[0]) != 1 || seenDailyHighs[0][0] != 110 {
+		t.Fatalf("bar0 daily highs=%v want [110]", seenDailyHighs[0])
+	}
+	if len(seenDailyHighs[2]) != 2 {
+		t.Fatalf("bar2 daily highs len=%d want 2", len(seenDailyHighs[2]))
+	}
+}
+
 func TestEngineFreezesEntryStopAndTracksFavorable(t *testing.T) {
 	candles := flatCandles([]float64{10, 100, 105, 98})
 	// Buy at price 100 (bar 1) with a frozen stop of 95. On bar 2 (price 105) the
