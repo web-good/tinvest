@@ -32,7 +32,7 @@ func main() {
 	var (
 		ticker       = flag.String("ticker", "", "ticker, e.g. RUAL (required)")
 		intervalS    = flag.String("interval", "Hour1", "candle timeframe: Minutes15|Minutes30|Hour1|Hour4|Day1|Week1")
-		strategyName = flag.String("strategy", "scalping", "strategy engine: scalping|levels")
+		strategyName = flag.String("strategy", "scalping", "strategy engine: scalping|levels|momentum")
 		months       = flag.Int("months", 12, "lookback period in months")
 		cash         = flag.Float64("cash", 100000, "starting mock cash")
 		fraction     = flag.Float64("fraction", 1.0, "fraction of cash per Buy")
@@ -103,10 +103,12 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 	switch strategyName {
 	case "levels":
 		binding = svc.LevelsLookupOrGeneric(ticker)
+	case "momentum":
+		binding = svc.MomentumLookupOrGeneric(ticker)
 	case "scalping":
 		binding = svc.LookupOrGeneric(ticker)
 	default:
-		return fmt.Errorf("unknown strategy %q (want scalping|levels)", strategyName)
+		return fmt.Errorf("unknown strategy %q (want scalping|levels|momentum)", strategyName)
 	}
 
 	share, err := resolveShare(ctx, client, ticker)
