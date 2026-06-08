@@ -159,8 +159,8 @@ func TestADX(t *testing.T) {
 func TestADX_MixedExercisesBlending(t *testing.T) {
 	// Alternating but net-up series: both directional indicators receive contributions,
 	// so neither DI collapses to zero and neither dominates completely.
-	highs  := []float64{10, 12, 11, 13, 12, 14}
-	lows   := []float64{8, 9, 8, 10, 9, 11}
+	highs := []float64{10, 12, 11, 13, 12, 14}
+	lows := []float64{8, 9, 8, 10, 9, 11}
 	closes := []float64{9, 11, 9, 12, 10, 13}
 	period := 2
 

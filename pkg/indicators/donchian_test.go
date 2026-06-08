@@ -4,12 +4,12 @@ import "testing"
 
 func TestDonchian(t *testing.T) {
 	tests := []struct {
-		name       string
-		highs      []float64
-		lows       []float64
-		period     int
-		wantUpper  float64
-		wantLower  float64
+		name      string
+		highs     []float64
+		lows      []float64
+		period    int
+		wantUpper float64
+		wantLower float64
 	}{
 		{
 			name:      "last 3 bars window",
