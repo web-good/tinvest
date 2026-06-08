@@ -266,6 +266,32 @@ func TestEngineStampsEntryContextOnTrade(t *testing.T) {
 	}
 }
 
+func TestEngineFillsTPAtTarget(t *testing.T) {
+	// Bar 1 buys at 100; bar 2 has a high of 130 reaching the TP=120, closing at 110.
+	// The TP exit must fill at the target (120), not the close (110).
+	candles := []Candle{
+		{Time: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), Open: 10, High: 10, Low: 10, Close: 10, Volume: 1},
+		{Time: time.Date(2026, 1, 1, 1, 0, 0, 0, time.UTC), Open: 100, High: 100, Low: 100, Close: 100, Volume: 1},
+		{Time: time.Date(2026, 1, 1, 2, 0, 0, 0, time.UTC), Open: 105, High: 130, Low: 104, Close: 110, Volume: 1},
+	}
+	s := scriptedStrategy{lookback: 1, decide: func(md strategy.MarketData) model.Signal {
+		if md.Position == nil && md.Price == 100 {
+			return model.Signal{Kind: model.SignalBuy, TakeProfit: 120, StopLoss: 90}
+		}
+		if md.Position != nil {
+			return model.Signal{Kind: model.SignalSell, Reason: "TP", TakeProfit: 120}
+		}
+		return model.Signal{Kind: model.SignalNone}
+	}}
+	res := Run(s, candles, nil, Config{InitialCash: 100000, Fraction: 1.0, Commission: 0, Lot: 1})
+	if len(res.Trades) != 1 {
+		t.Fatalf("trades=%d want 1", len(res.Trades))
+	}
+	if res.Trades[0].ExitPrice != 120 {
+		t.Fatalf("TP exit price=%f want 120 (filled at target)", res.Trades[0].ExitPrice)
+	}
+}
+
 func TestEngineFreezesEntryStopAndTracksFavorable(t *testing.T) {
 	candles := flatCandles([]float64{10, 100, 105, 98})
 	// Buy at price 100 (bar 1) with a frozen stop of 95. On bar 2 (price 105) the

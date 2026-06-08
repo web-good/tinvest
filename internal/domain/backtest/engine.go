@@ -70,10 +70,16 @@ func Run(s strategy.Strategy, candles []Candle, dailyCandles []Candle, cfg Confi
 			if p.qty != 0 {
 				exitPrice := c.Close
 				// Stop exits fill at the stop level, adjusted for a gap-down open:
-				// min(level, open) lands inside the bar (always >= c.Low) and charges
-				// real gap risk when the bar opened below the stop.
-				if sig.Reason == "SL" || sig.Reason == "TRAIL" {
+				// min(level, open) lands inside the bar and charges real gap risk.
+				// TP exits fill at the target, adjusted for a gap-up open: max(target,
+				// open) is the limit fill and rewards a gap through the target.
+				switch sig.Reason {
+				case "SL", "TRAIL":
 					exitPrice = min(sig.StopLoss, c.Open)
+				case "TP":
+					if sig.TakeProfit > 0 {
+						exitPrice = max(sig.TakeProfit, c.Open)
+					}
 				}
 				res.Trades = append(res.Trades, p.close(exitPrice, c.Time, sig.Reason))
 			}
