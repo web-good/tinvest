@@ -8,14 +8,21 @@ import (
 
 func TestMomentumLookupRegisteredRUAL(t *testing.T) {
 	b := MomentumLookupOrGeneric("RUAL")
-	p, ok := b.DefaultParams().(core.Params)
+	got, ok := b.DefaultParams().(core.Params)
 	if !ok {
 		t.Fatalf("DefaultParams type = %T want core.Params", b.DefaultParams())
 	}
-	if p.MACDBelowZeroOnly != 1 {
-		t.Fatalf("RUAL MACDBelowZeroOnly=%d want 1", p.MACDBelowZeroOnly)
+	want := core.Params{
+		EMAPeriod: 200, MACDFast: 12, MACDSlow: 26, MACDSignal: 9, MACDBelowZeroOnly: 1,
+		VolLookback: 20, VolMultiplier: 1.2, DailyATRPeriod: 14, MaxDailyATRUsed: 0.6,
+		ATRPeriod: 14, SwingLowWindow: 10, SLMult: 0.5, TakeProfitRR: 2.0, MinRR: 1.5,
+		MinATRFrac: 0.003, UseTrail: 0, TrailMult: 2.5, ChandelierWindow: 20, TrailArmATR: 1.0,
+		CooldownBars: 0, DailyTrendPeriod: 0,
 	}
-	if s := b.Build(p); s.Ticker() != "RUAL" {
+	if got != want {
+		t.Fatalf("RUAL defaults = %+v\nwant %+v", got, want)
+	}
+	if s := b.Build(got); s.Ticker() != "RUAL" {
 		t.Fatalf("ticker=%q want RUAL", s.Ticker())
 	}
 }
@@ -24,6 +31,31 @@ func TestMomentumLookupGenericFallback(t *testing.T) {
 	b := MomentumLookupOrGeneric("UNKNOWN")
 	if s := b.Build(b.DefaultParams()); s.Ticker() != "UNKNOWN" {
 		t.Fatalf("ticker=%q want UNKNOWN", s.Ticker())
+	}
+	// ParseParams must layer the override on top of genericMomentumDefaults, not a zero struct.
+	got, err := b.ParseParams([]byte(`{"SLMult": 1.5}`))
+	if err != nil {
+		t.Fatalf("ParseParams: %v", err)
+	}
+	p := got.(core.Params)
+	if p.SLMult != 1.5 {
+		t.Fatalf("SLMult=%f want 1.5 (override)", p.SLMult)
+	}
+	if p.EMAPeriod != 200 || p.MACDSlow != 26 {
+		t.Fatalf("generic defaults not preserved: EMAPeriod=%d MACDSlow=%d want 200/26", p.EMAPeriod, p.MACDSlow)
+	}
+}
+
+func TestGenericMomentumDefaultsAreFrozenBaseline(t *testing.T) {
+	want := core.Params{
+		EMAPeriod: 200, MACDFast: 12, MACDSlow: 26, MACDSignal: 9, MACDBelowZeroOnly: 1,
+		VolLookback: 20, VolMultiplier: 1.2, DailyATRPeriod: 14, MaxDailyATRUsed: 0.6,
+		ATRPeriod: 14, SwingLowWindow: 10, SLMult: 0.5, TakeProfitRR: 2.0, MinRR: 1.5,
+		MinATRFrac: 0.003, UseTrail: 0, TrailMult: 2.5, ChandelierWindow: 20, TrailArmATR: 1.0,
+		CooldownBars: 0, DailyTrendPeriod: 0,
+	}
+	if got := genericMomentumDefaults(); got != want {
+		t.Fatalf("genericMomentumDefaults drifted = %+v\nwant %+v", got, want)
 	}
 }
 
