@@ -16,10 +16,15 @@ import (
 	"tinvest/pkg/indicators"
 )
 
-// dailyTrendSlopeBars is the fixed horizon (in completed daily candles) over which
-// the daily-EMA slope filter measures direction. Held as an in-package policy
-// constant (not a grid knob) to keep calibration combinatorics small.
-const dailyTrendSlopeBars = 3
+const (
+	// dailyTrendSlopeBars is the fixed horizon (in completed daily candles) over which
+	// the daily-EMA slope filter measures direction. Held as an in-package policy
+	// constant (not a grid knob) to keep calibration combinatorics small.
+	dailyTrendSlopeBars = 3
+	// cooldownSaturate seeds and caps barsSinceExit so it never overflows and starts
+	// "cooldown satisfied" (no entry blocked before the first exit).
+	cooldownSaturate = 1 << 30
+)
 
 // Params holds every tunable. All fields are int or float64 (flags as int 0/1)
 // so reflection grid calibration can sweep them.
@@ -43,18 +48,25 @@ type Params struct {
 	TrailMult         float64 // chandelier = recentHigh(ChandelierWindow) - TrailMult*ATR
 	ChandelierWindow  int     // window for the chandelier high
 	TrailArmATR       float64 // trail arms after MaxFavorable >= entry + TrailArmATR*EntryATR
-	CooldownBars      int     // reserved; not yet enforced
+	CooldownBars      int     // bars to block re-entry after a position exits; 0 disables
 	DailyTrendPeriod  int     // daily-EMA period for the higher-timeframe slope filter (0 disables)
 }
 
 // Strategy trades a single instrument with the momentum rules. Ticker-agnostic.
+// It carries the cooldown counter as mutable state in the impure shell; the pure
+// decide() core stays a function of its input. Not safe for concurrent use; the
+// backtest and live runners drive Decide sequentially, one bar at a time.
 type Strategy struct {
-	ticker string
-	p      Params
+	ticker         string
+	p              Params
+	barsSinceExit  int  // bars elapsed since the last exit; gates re-entry
+	prevInPosition bool // whether the previous Decide saw an open position
 }
 
 // NewWithParams returns the momentum strategy for a ticker with explicit params.
-func NewWithParams(ticker string, p Params) *Strategy { return &Strategy{ticker: ticker, p: p} }
+func NewWithParams(ticker string, p Params) *Strategy {
+	return &Strategy{ticker: ticker, p: p, barsSinceExit: cooldownSaturate}
+}
 
 func (s *Strategy) Ticker() string { return s.ticker }
 
@@ -92,14 +104,31 @@ type decideInput struct {
 	dailyEMANow     float64 // last daily-EMA value (0 if unavailable)
 	dailyEMAPast    float64 // daily-EMA value dailyTrendSlopeBars back (0 if unavailable)
 	dailyTrendKnown bool    // true when daily history sufficed to compute both points
+	barsSinceExit   int     // bars since the last exit, for the cooldown gate
 	pos             *strategy.Position
 }
 
 // Decide computes every indicator from md, packs them, and delegates to the pure core.
 func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
+	s.trackCooldown(md.Position)
 	sig := s.decide(s.buildInput(md))
 	sig.Ticker = s.ticker
 	return sig
+}
+
+// trackCooldown advances the post-exit bar counter. It detects the in-position ->
+// flat edge to reset the counter, then increments while flat. Called once per bar
+// from Decide (the trading path); Explain never mutates this state.
+func (s *Strategy) trackCooldown(pos *strategy.Position) {
+	switch {
+	case pos != nil:
+		// In a position: cooldown is irrelevant, leave the counter as-is.
+	case s.prevInPosition:
+		s.barsSinceExit = 0 // just exited this bar
+	case s.barsSinceExit < cooldownSaturate:
+		s.barsSinceExit++
+	}
+	s.prevInPosition = pos != nil
 }
 
 // buildInput computes every indicator from md and packs them for the pure core.
@@ -152,6 +181,7 @@ func (s *Strategy) buildInput(md strategy.MarketData) decideInput {
 		dailyEMANow:     dailyEMANow,
 		dailyEMAPast:    dailyEMAPast,
 		dailyTrendKnown: dailyTrendKnown,
+		barsSinceExit:   s.barsSinceExit,
 		pos:             md.Position,
 	}
 }
@@ -255,6 +285,10 @@ func (s *Strategy) decide(in decideInput) model.Signal {
 
 	if in.pos != nil {
 		return s.manage(in, sig)
+	}
+
+	if s.p.CooldownBars > 0 && in.barsSinceExit < s.p.CooldownBars {
+		return sig // still cooling down after the last exit
 	}
 
 	// Entry gates (all must pass).

@@ -250,3 +250,42 @@ func TestExplainReportsDailyTrendBlock(t *testing.T) {
 		t.Fatalf("Explain should mention daily trend gate, got: %q", out)
 	}
 }
+
+func TestCooldownBlocksReentryAfterExit(t *testing.T) {
+	p := defaultParams()
+	p.CooldownBars = 3
+	s := NewWithParams("TEST", p)
+
+	// Бар 1: открываем позицию (md.Position == nil).
+	if sig := s.Decide(buildEntryMD()); sig.Kind != model.SignalBuy {
+		t.Fatal("expected entry on bar 1")
+	}
+	// Бар 2: в позиции, ловим SL -> выход.
+	pos := &strategy.Position{PurchasePrice: 100, StopLoss: 95, EntryATR: 1, MaxFavorablePrice: 100}
+	if sig := s.Decide(inPositionMD(94, 101, 100, pos)); sig.Reason != "SL" {
+		t.Fatalf("expected SL exit, got %q", sig.Reason)
+	}
+	// Бары 3-5: flat, кулдаун активен (barsSinceExit 0,1,2 < 3) -> вход блокируется.
+	for i := 0; i < 3; i++ {
+		if sig := s.Decide(buildEntryMD()); sig.Kind == model.SignalBuy {
+			t.Fatalf("entry should be blocked during cooldown, offset %d", i)
+		}
+	}
+	// Бар 6: кулдаун истёк (barsSinceExit 3 >= 3) -> вход снова разрешён.
+	if sig := s.Decide(buildEntryMD()); sig.Kind != model.SignalBuy {
+		t.Fatal("entry should fire after cooldown elapses")
+	}
+}
+
+func TestCooldownDisabledAllowsImmediateReentry(t *testing.T) {
+	p := defaultParams() // CooldownBars = 0
+	s := NewWithParams("TEST", p)
+	if sig := s.Decide(buildEntryMD()); sig.Kind != model.SignalBuy {
+		t.Fatal("expected entry on bar 1")
+	}
+	pos := &strategy.Position{PurchasePrice: 100, StopLoss: 95, EntryATR: 1, MaxFavorablePrice: 100}
+	s.Decide(inPositionMD(94, 101, 100, pos)) // выход по SL
+	if sig := s.Decide(buildEntryMD()); sig.Kind != model.SignalBuy {
+		t.Fatal("entry should fire immediately when cooldown disabled")
+	}
+}
