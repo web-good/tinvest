@@ -9,5 +9,7 @@
   "EMAPeriod": [200, 150, 100],
   "MACDFast": [12, 10, 8],
   "UseTrail": [0, 1],
-  "DailyTrendPeriod": [0, 10, 20]
+  "DailyTrendPeriod": [0, 10, 20],
+  "SignalValidBars": [0, 2, 4],
+  "MaxDriftATR": [0, 1.0]
 }
