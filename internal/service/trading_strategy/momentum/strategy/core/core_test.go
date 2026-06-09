@@ -400,7 +400,7 @@ func TestDeferredEntryExpiresAfterWindow(t *testing.T) {
 func TestDeferredEntryBlockedByPriceDrift(t *testing.T) {
 	p := defaultParams()
 	p.SignalValidBars = 2
-	p.MaxDriftATR = 0.01 // ~zero tolerance: any drift from the cross price blocks
+	p.MaxDriftATR = 0.01 // cap = 0.01×ATR; the +0.2 drift exceeds it so entry is blocked
 	s := NewWithParams("TEST", p)
 	bars := deferredBars(2, 1) // holding bar nudges price +0.2 from the cross
 	s.Decide(bars[0])          // arm at the cross price
@@ -409,6 +409,9 @@ func TestDeferredEntryBlockedByPriceDrift(t *testing.T) {
 	}
 }
 
+// TestDeferredEntryAllowedWithinDrift is the control case for the drift cap: same
+// fixture as the blocked case, but a generous MaxDriftATR proves the +0.2 drift is
+// what the cap (not volume or the window) gates on.
 func TestDeferredEntryAllowedWithinDrift(t *testing.T) {
 	p := defaultParams()
 	p.SignalValidBars = 2
