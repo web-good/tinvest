@@ -236,3 +236,17 @@ func TestDailyTrendFilterPassesWithInsufficientHistory(t *testing.T) {
 		t.Fatal("entry should fire (filter passes) when daily history is insufficient")
 	}
 }
+
+func TestExplainReportsDailyTrendBlock(t *testing.T) {
+	md := buildEntryMD()
+	for i := range md.DailyCloses {
+		md.DailyCloses[i] = 110 // плоско -> фильтр блокирует
+	}
+	p := defaultParams()
+	p.DailyTrendPeriod = 5
+	s := NewWithParams("TEST", p)
+	out := s.Explain(md)
+	if !strings.Contains(out, "Дневной тренд") {
+		t.Fatalf("Explain should mention daily trend gate, got: %q", out)
+	}
+}

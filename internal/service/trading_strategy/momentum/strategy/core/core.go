@@ -181,6 +181,19 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 	}
 	pass("Тренд: close %.4f > EMA%d %.4f", in.price, s.p.EMAPeriod, in.emaTrend)
 
+	// 1b. Daily trend slope.
+	if s.p.DailyTrendPeriod > 0 {
+		switch {
+		case !in.dailyTrendKnown:
+			pass("Дневной тренд: недостаточно дневной истории — фильтр пропущен")
+		case !(in.dailyEMANow > in.dailyEMAPast):
+			return block("Дневной тренд: EMA%d не растёт (%.4f ≤ %.4f, %d дн назад)",
+				s.p.DailyTrendPeriod, in.dailyEMANow, in.dailyEMAPast, dailyTrendSlopeBars)
+		default:
+			pass("Дневной тренд: EMA%d растёт (%.4f > %.4f)", s.p.DailyTrendPeriod, in.dailyEMANow, in.dailyEMAPast)
+		}
+	}
+
 	// 2. MACD bullish cross.
 	if !in.crossUp {
 		return block("MACD: нет бычьего кросса на этом баре (MACD=%.4f)", in.macdNow)
