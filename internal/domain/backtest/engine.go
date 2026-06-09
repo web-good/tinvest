@@ -174,6 +174,11 @@ func Trace(s strategy.Strategy, candles []Candle, dailyCandles []Candle, cfg Con
 				sb.WriteString("Состояние: вне позиции (flat)\n")
 			}
 			sb.WriteString("--- фильтры входа ---\n")
+			// Advance per-bar strategy state (e.g. the momentum cooldown counter) for
+			// the target bar exactly as Run does, so Explain reads the same state the
+			// real Decide path sees on this bar. The returned signal is discarded; it
+			// is a no-op for stateless strategies.
+			s.Decide(md)
 			if ex, ok := s.(explainer); ok {
 				sb.WriteString(ex.Explain(md))
 			} else {

@@ -306,3 +306,17 @@ func TestExplainReportsCooldownBlock(t *testing.T) {
 		t.Fatalf("Explain should report cooldown BLOCK, got: %q", out)
 	}
 }
+
+func TestExplainReportsCooldownPass(t *testing.T) {
+	p := defaultParams()
+	p.CooldownBars = 3
+	s := NewWithParams("TEST", p)
+	// Свежая стратегия: barsSinceExit насыщен (≥ CooldownBars) -> кулдаун пройден.
+	out := s.Explain(buildEntryMD())
+	if !strings.Contains(out, "Кулдаун") {
+		t.Fatalf("Explain should mention cooldown gate, got: %q", out)
+	}
+	if strings.Contains(out, "ВХОДА НЕТ") {
+		t.Fatalf("cooldown should PASS on a fresh strategy, got a block: %q", out)
+	}
+}

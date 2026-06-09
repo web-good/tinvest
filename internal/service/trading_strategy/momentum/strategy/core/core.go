@@ -158,12 +158,14 @@ func (s *Strategy) buildInput(md strategy.MarketData) decideInput {
 		barLow = md.Lows[n-1]
 	}
 
+	// ema.Compute returns a same-length slice, so guard on the input length: we need
+	// DailyTrendPeriod+dailyTrendSlopeBars completed daily candles for both the
+	// current and the lagged EMA point to be seeded (non-zero) values.
 	dailyEMANow, dailyEMAPast, dailyTrendKnown := 0.0, 0.0, false
-	if s.p.DailyTrendPeriod > 0 {
-		if de := ema.Compute(md.DailyCloses, s.p.DailyTrendPeriod); len(de) >= s.p.DailyTrendPeriod+dailyTrendSlopeBars {
-			n := len(de)
-			dailyEMANow, dailyEMAPast, dailyTrendKnown = de[n-1], de[n-1-dailyTrendSlopeBars], true
-		}
+	if s.p.DailyTrendPeriod > 0 && len(md.DailyCloses) >= s.p.DailyTrendPeriod+dailyTrendSlopeBars {
+		de := ema.Compute(md.DailyCloses, s.p.DailyTrendPeriod)
+		n := len(de)
+		dailyEMANow, dailyEMAPast, dailyTrendKnown = de[n-1], de[n-1-dailyTrendSlopeBars], true
 	}
 
 	return decideInput{
