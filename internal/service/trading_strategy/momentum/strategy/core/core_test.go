@@ -423,3 +423,101 @@ func TestDeferredEntryAllowedWithinDrift(t *testing.T) {
 		t.Fatal("entry should be allowed when price stayed within the drift cap")
 	}
 }
+
+// armInput is a minimal decideInput that satisfies qualifiesAsTrigger:
+// fresh cross, clear uptrend, MACD above signal, daily filter not engaged.
+func armInput() decideInput {
+	return decideInput{price: 100, emaTrend: 90, atr: 1, crossUp: true, macdAboveSignal: true}
+}
+
+func TestAdvanceArmArmsOnQualifyingCross(t *testing.T) {
+	p := defaultParams()
+	p.SignalValidBars = 3
+	s := NewWithParams("TEST", p)
+	s.advanceArm(armInput())
+	if s.armedCrossPrice != 100 || s.barsSinceArm != 0 {
+		t.Fatalf("want armed at 100 age 0, got price=%f age=%d", s.armedCrossPrice, s.barsSinceArm)
+	}
+}
+
+func TestAdvanceArmExpiresAfterWindow(t *testing.T) {
+	p := defaultParams()
+	p.SignalValidBars = 1
+	s := NewWithParams("TEST", p)
+	s.advanceArm(armInput()) // age 0
+	hold := decideInput{price: 100.1, emaTrend: 90, atr: 1, macdAboveSignal: true}
+	s.advanceArm(hold) // age 1, still within window
+	if s.armedCrossPrice == 0 {
+		t.Fatal("should still be armed at age 1 with window 1")
+	}
+	s.advanceArm(hold) // age 2 > window 1 -> cancel
+	if s.armedCrossPrice != 0 {
+		t.Fatal("should cancel once age exceeds SignalValidBars")
+	}
+}
+
+func TestAdvanceArmCancelsOnMomentumDeath(t *testing.T) {
+	p := defaultParams()
+	p.SignalValidBars = 5
+	s := NewWithParams("TEST", p)
+	s.advanceArm(armInput())
+	dead := decideInput{price: 100.1, emaTrend: 90, atr: 1, macdAboveSignal: false}
+	s.advanceArm(dead)
+	if s.armedCrossPrice != 0 {
+		t.Fatal("should cancel when MACD line falls back below the signal line")
+	}
+}
+
+func TestAdvanceArmCancelsOnTrendBreak(t *testing.T) {
+	p := defaultParams()
+	p.SignalValidBars = 5
+	s := NewWithParams("TEST", p)
+	s.advanceArm(armInput())
+	below := decideInput{price: 80, emaTrend: 90, atr: 1, macdAboveSignal: true} // price < EMA
+	s.advanceArm(below)
+	if s.armedCrossPrice != 0 {
+		t.Fatal("should cancel when price falls back below the trend EMA")
+	}
+}
+
+func TestAdvanceArmCancelsOnDailyTrendStall(t *testing.T) {
+	p := defaultParams()
+	p.SignalValidBars = 5
+	p.DailyTrendPeriod = 5
+	s := NewWithParams("TEST", p)
+	armed := armInput()
+	armed.dailyTrendKnown = true
+	armed.dailyEMANow, armed.dailyEMAPast = 110, 100 // rising at arm time
+	s.advanceArm(armed)
+	stall := decideInput{price: 100.1, emaTrend: 90, atr: 1, macdAboveSignal: true,
+		dailyTrendKnown: true, dailyEMANow: 100, dailyEMAPast: 110} // now falling
+	s.advanceArm(stall)
+	if s.armedCrossPrice != 0 {
+		t.Fatal("should cancel when the daily trend stops rising")
+	}
+}
+
+func TestAdvanceArmDoesNotArmDuringCooldown(t *testing.T) {
+	p := defaultParams()
+	p.SignalValidBars = 5
+	p.CooldownBars = 3
+	s := NewWithParams("TEST", p)
+	in := armInput()
+	in.barsSinceExit = 1 // inside cooldown (1 < 3)
+	s.advanceArm(in)
+	if s.armedCrossPrice != 0 {
+		t.Fatal("should not arm a signal while cooling down")
+	}
+}
+
+func TestAdvanceArmClearsWhenInPosition(t *testing.T) {
+	p := defaultParams()
+	p.SignalValidBars = 5
+	s := NewWithParams("TEST", p)
+	s.advanceArm(armInput()) // arm
+	in := decideInput{price: 100, emaTrend: 90, atr: 1, pos: &strategy.Position{PurchasePrice: 100}}
+	s.advanceArm(in)
+	if s.armedCrossPrice != 0 {
+		t.Fatal("should clear the armed signal while a position is open")
+	}
+}
