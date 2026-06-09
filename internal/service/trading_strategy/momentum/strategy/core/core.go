@@ -205,6 +205,14 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 		return b.String()
 	}
 
+	// 0. Cooldown.
+	if s.p.CooldownBars > 0 {
+		if in.barsSinceExit < s.p.CooldownBars {
+			return block("Кулдаун: после выхода прошло %d бар(ов) из %d", in.barsSinceExit, s.p.CooldownBars)
+		}
+		pass("Кулдаун: после выхода прошло %d бар(ов) ≥ %d", in.barsSinceExit, s.p.CooldownBars)
+	}
+
 	// 1. Uptrend.
 	if !(in.emaTrend > 0 && in.price > in.emaTrend) {
 		return block("Тренд: close %.4f ≤ EMA%d %.4f (нужно выше)", in.price, s.p.EMAPeriod, in.emaTrend)

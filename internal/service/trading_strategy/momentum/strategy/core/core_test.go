@@ -289,3 +289,20 @@ func TestCooldownDisabledAllowsImmediateReentry(t *testing.T) {
 		t.Fatal("entry should fire immediately when cooldown disabled")
 	}
 }
+
+func TestExplainReportsCooldownBlock(t *testing.T) {
+	p := defaultParams()
+	p.CooldownBars = 3
+	s := NewWithParams("TEST", p)
+	// Открыть позицию, затем выйти по SL.
+	s.Decide(buildEntryMD())
+	pos := &strategy.Position{PurchasePrice: 100, StopLoss: 95, EntryATR: 1, MaxFavorablePrice: 100}
+	s.Decide(inPositionMD(94, 101, 100, pos)) // выход; prevInPosition=true
+	// Первый flat-бар после выхода обнуляет barsSinceExit (edge ловится в Decide).
+	s.Decide(buildEntryMD()) // barsSinceExit -> 0, вход заблокирован кулдауном
+	// Теперь Explain должен показать БЛОК кулдауна (0 из 3), а не pass.
+	out := s.Explain(buildEntryMD())
+	if !strings.Contains(out, "Кулдаун") || !strings.Contains(out, "ВХОДА НЕТ") {
+		t.Fatalf("Explain should report cooldown BLOCK, got: %q", out)
+	}
+}
