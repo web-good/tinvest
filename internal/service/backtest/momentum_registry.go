@@ -6,6 +6,7 @@ import (
 
 	momentumafks "tinvest/internal/service/trading_strategy/momentum/strategy/afks"
 	"tinvest/internal/service/trading_strategy/momentum/strategy/core"
+	momentumplzl "tinvest/internal/service/trading_strategy/momentum/strategy/plzl"
 	momentumrusal "tinvest/internal/service/trading_strategy/momentum/strategy/rusal"
 	momentumydex "tinvest/internal/service/trading_strategy/momentum/strategy/ydex"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
@@ -33,6 +34,7 @@ var momentumRegistry = map[string]Binding{
 	momentumrusal.Ticker: momentumBindingFor(momentumrusal.Ticker, momentumrusal.DefaultParams),
 	momentumafks.Ticker:  momentumBindingFor(momentumafks.Ticker, momentumafks.DefaultParams),
 	momentumydex.Ticker:  momentumBindingFor(momentumydex.Ticker, momentumydex.DefaultParams),
+	momentumplzl.Ticker:  momentumBindingFor(momentumplzl.Ticker, momentumplzl.DefaultParams),
 }
 
 // genericMomentumDefaults are neutral baseline params for tickers without a dedicated
