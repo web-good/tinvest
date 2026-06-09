@@ -396,3 +396,27 @@ func TestDeferredEntryExpiresAfterWindow(t *testing.T) {
 		t.Fatal("signal must expire after SignalValidBars and block the late entry")
 	}
 }
+
+func TestDeferredEntryBlockedByPriceDrift(t *testing.T) {
+	p := defaultParams()
+	p.SignalValidBars = 2
+	p.MaxDriftATR = 0.01 // ~zero tolerance: any drift from the cross price blocks
+	s := NewWithParams("TEST", p)
+	bars := deferredBars(2, 1) // holding bar nudges price +0.2 from the cross
+	s.Decide(bars[0])          // arm at the cross price
+	if sig := s.Decide(bars[1]); sig.Kind == model.SignalBuy {
+		t.Fatal("entry must be blocked when price drifted beyond MaxDriftATR*ATR")
+	}
+}
+
+func TestDeferredEntryAllowedWithinDrift(t *testing.T) {
+	p := defaultParams()
+	p.SignalValidBars = 2
+	p.MaxDriftATR = 5 // generous tolerance
+	s := NewWithParams("TEST", p)
+	bars := deferredBars(2, 1)
+	s.Decide(bars[0])
+	if sig := s.Decide(bars[1]); sig.Kind != model.SignalBuy {
+		t.Fatal("entry should be allowed when price stayed within the drift cap")
+	}
+}
