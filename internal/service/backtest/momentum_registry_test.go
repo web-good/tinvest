@@ -94,3 +94,27 @@ func TestMomentumParseParamsPartialOverride(t *testing.T) {
 		t.Fatalf("MACDSlow=%d want 26 (default kept)", p.MACDSlow)
 	}
 }
+
+func TestMomentumLookupRegisteredYDEX(t *testing.T) {
+	if _, ok := momentumRegistry["YDEX"]; !ok {
+		t.Fatal("YDEX not registered in momentumRegistry")
+	}
+	b := MomentumLookupOrGeneric("YDEX")
+	got, ok := b.DefaultParams().(core.Params)
+	if !ok {
+		t.Fatalf("DefaultParams type = %T want core.Params", b.DefaultParams())
+	}
+	want := core.Params{
+		EMAPeriod: 200, MACDFast: 12, MACDSlow: 26, MACDSignal: 9, MACDBelowZeroOnly: 1,
+		VolLookback: 20, VolMultiplier: 1.2, DailyATRPeriod: 14, MaxDailyATRUsed: 0.6,
+		ATRPeriod: 14, SwingLowWindow: 10, SLMult: 0.5, TakeProfitRR: 2.0, MinRR: 1.5,
+		MinATRFrac: 0.003, UseTrail: 0, TrailMult: 2.5, ChandelierWindow: 20, TrailArmATR: 1.0,
+		CooldownBars: 0, DailyTrendPeriod: 0,
+	}
+	if got != want {
+		t.Fatalf("YDEX defaults = %+v\nwant %+v", got, want)
+	}
+	if s := b.Build(got); s.Ticker() != "YDEX" {
+		t.Fatalf("ticker=%q want YDEX", s.Ticker())
+	}
+}
