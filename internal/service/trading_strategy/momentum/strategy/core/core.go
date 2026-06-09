@@ -61,12 +61,14 @@ type Params struct {
 // decide() core stays a function of its input. Not safe for concurrent use; the
 // backtest and live runners drive Decide sequentially, one bar at a time.
 type Strategy struct {
-	ticker          string
-	p               Params
-	barsSinceExit   int     // bars elapsed since the last exit; gates re-entry
-	prevInPosition  bool    // whether the previous Decide saw an open position
-	armedCrossPrice float64 // close at the bar that armed a deferred signal; 0 = no armed signal
-	barsSinceArm    int     // bars elapsed since the signal was armed
+	ticker           string
+	p                Params
+	barsSinceExit    int     // bars elapsed since the last exit; gates re-entry
+	prevInPosition   bool    // whether the previous Decide saw an open position
+	armedCrossPrice  float64 // close at the bar that armed a deferred signal; 0 = no armed signal
+	barsSinceArm     int     // bars elapsed since the signal was armed
+	consumedArmPrice float64 // arm price of a deferred entry consumed on the last Decide; kept only so Explain (called after Decide) stays faithful
+	consumedArmBars  int     // age of that consumed arm
 }
 
 // NewWithParams returns the momentum strategy for a ticker with explicit params.
@@ -126,7 +128,10 @@ func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 	in.barsSinceArm = s.barsSinceArm
 	sig := s.decide(in)
 	if sig.Kind == model.SignalBuy {
-		s.clearArm() // consumed
+		s.consumedArmPrice, s.consumedArmBars = s.armedCrossPrice, s.barsSinceArm
+		s.clearArm() // consumed; snapshot retained so Explain (called after Decide) stays faithful
+	} else {
+		s.consumedArmPrice, s.consumedArmBars = 0, 0
 	}
 	sig.Ticker = s.ticker
 	return sig
@@ -305,13 +310,20 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 	}
 
 	// 2. MACD trigger: a fresh bullish cross, or a still-armed deferred signal.
-	armed := s.p.SignalValidBars > 0 && s.armedCrossPrice > 0
+	// Use the live armed signal, or—if decide just consumed it into an entry on this
+	// same bar (the engine calls Decide before Explain)—the consumed snapshot, so
+	// Explain faithfully reports a deferred entry instead of a phantom block.
+	armPrice, armBars := s.armedCrossPrice, s.barsSinceArm
+	if armPrice == 0 {
+		armPrice, armBars = s.consumedArmPrice, s.consumedArmBars
+	}
+	armed := s.p.SignalValidBars > 0 && armPrice > 0
 	switch {
 	case in.crossUp:
 		pass("MACD: бычий кросс (MACD=%.4f)", in.macdNow)
 	case armed:
 		pass("MACD: сигнал взведён %d бар(ов) назад по цене %.4f (окно %d), MACD над сигнальной: %v",
-			s.barsSinceArm, s.armedCrossPrice, s.p.SignalValidBars, in.macdAboveSignal)
+			armBars, armPrice, s.p.SignalValidBars, in.macdAboveSignal)
 	default:
 		return block("MACD: нет бычьего кросса и нет взведённого сигнала (MACD=%.4f)", in.macdNow)
 	}
@@ -326,10 +338,10 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 
 	// 3b. Price-drift cap (only while a deferred signal is armed).
 	if armed && s.p.MaxDriftATR > 0 {
-		drift := math.Abs(in.price - s.armedCrossPrice)
+		drift := math.Abs(in.price - armPrice)
 		if drift > s.p.MaxDriftATR*in.atr {
 			return block("Снос цены: |%.4f − %.4f| = %.4f > %.2g×ATR %.4f",
-				in.price, s.armedCrossPrice, drift, s.p.MaxDriftATR, in.atr)
+				in.price, armPrice, drift, s.p.MaxDriftATR, in.atr)
 		}
 		pass("Снос цены: %.4f ≤ %.2g×ATR %.4f", drift, s.p.MaxDriftATR, in.atr)
 	}

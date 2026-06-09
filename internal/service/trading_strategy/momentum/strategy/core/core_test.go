@@ -562,3 +562,24 @@ func TestExplainReportsArmedWaitingSignal(t *testing.T) {
 		t.Fatalf("Explain should report the armed waiting signal, got: %q", out)
 	}
 }
+
+func TestExplainReportsDeferredEntryBar(t *testing.T) {
+	p := defaultParams()
+	p.SignalValidBars = 2
+	p.MaxDriftATR = 5
+	s := NewWithParams("TEST", p)
+	bars := deferredBars(2, 1)
+	s.Decide(bars[0])        // arm, no entry (weak volume)
+	sig := s.Decide(bars[1]) // deferred entry fires here
+	if sig.Kind != model.SignalBuy {
+		t.Fatalf("expected a deferred entry on bar 1, got kind=%v", sig.Kind)
+	}
+	// Engine calls Explain AFTER Decide on the same bar; the arm was just consumed.
+	out := s.Explain(bars[1])
+	if strings.Contains(out, "ВХОДА НЕТ") {
+		t.Fatalf("Explain must not report a block on a bar where a deferred entry fired: %q", out)
+	}
+	if !strings.Contains(out, "взвед") {
+		t.Fatalf("Explain should show the armed signal that produced the entry: %q", out)
+	}
+}
