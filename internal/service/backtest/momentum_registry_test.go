@@ -13,17 +13,38 @@ func TestMomentumLookupRegisteredRUAL(t *testing.T) {
 		t.Fatalf("DefaultParams type = %T want core.Params", b.DefaultParams())
 	}
 	want := core.Params{
-		EMAPeriod: 200, MACDFast: 12, MACDSlow: 26, MACDSignal: 9, MACDBelowZeroOnly: 1,
-		VolLookback: 20, VolMultiplier: 1.2, DailyATRPeriod: 14, MaxDailyATRUsed: 0.6,
-		ATRPeriod: 14, SwingLowWindow: 10, SLMult: 0.5, TakeProfitRR: 2.0, MinRR: 1.5,
+		EMAPeriod: 100, MACDFast: 12, MACDSlow: 26, MACDSignal: 9, MACDBelowZeroOnly: 0,
+		VolLookback: 20, VolMultiplier: 1.0, DailyATRPeriod: 14, MaxDailyATRUsed: 0.7,
+		ATRPeriod: 14, SwingLowWindow: 10, SLMult: 1.0, TakeProfitRR: 2.0, MinRR: 1.5,
 		MinATRFrac: 0.003, UseTrail: 0, TrailMult: 2.5, ChandelierWindow: 20, TrailArmATR: 1.0,
-		CooldownBars: 0, DailyTrendPeriod: 0,
+		CooldownBars: 0, DailyTrendPeriod: 20,
 	}
 	if got != want {
 		t.Fatalf("RUAL defaults = %+v\nwant %+v", got, want)
 	}
 	if s := b.Build(got); s.Ticker() != "RUAL" {
 		t.Fatalf("ticker=%q want RUAL", s.Ticker())
+	}
+}
+
+func TestMomentumLookupRegisteredAFKS(t *testing.T) {
+	b := MomentumLookupOrGeneric("AFKS")
+	got, ok := b.DefaultParams().(core.Params)
+	if !ok {
+		t.Fatalf("DefaultParams type = %T want core.Params", b.DefaultParams())
+	}
+	want := core.Params{
+		EMAPeriod: 200, MACDFast: 10, MACDSlow: 26, MACDSignal: 9, MACDBelowZeroOnly: 0,
+		VolLookback: 20, VolMultiplier: 1.0, DailyATRPeriod: 14, MaxDailyATRUsed: 0.6,
+		ATRPeriod: 14, SwingLowWindow: 10, SLMult: 1.0, TakeProfitRR: 2.0, MinRR: 1.5,
+		MinATRFrac: 0.003, UseTrail: 0, TrailMult: 2.5, ChandelierWindow: 20, TrailArmATR: 1.0,
+		CooldownBars: 0, DailyTrendPeriod: 0,
+	}
+	if got != want {
+		t.Fatalf("AFKS defaults = %+v\nwant %+v", got, want)
+	}
+	if s := b.Build(got); s.Ticker() != "AFKS" {
+		t.Fatalf("ticker=%q want AFKS", s.Ticker())
 	}
 }
 

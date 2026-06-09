@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	momentumafks "tinvest/internal/service/trading_strategy/momentum/strategy/afks"
 	"tinvest/internal/service/trading_strategy/momentum/strategy/core"
 	momentumrusal "tinvest/internal/service/trading_strategy/momentum/strategy/rusal"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
@@ -29,6 +30,7 @@ func momentumBindingFor(ticker string, defaults func() core.Params) Binding {
 
 var momentumRegistry = map[string]Binding{
 	momentumrusal.Ticker: momentumBindingFor(momentumrusal.Ticker, momentumrusal.DefaultParams),
+	momentumafks.Ticker:  momentumBindingFor(momentumafks.Ticker, momentumafks.DefaultParams),
 }
 
 // genericMomentumDefaults are neutral baseline params for tickers without a dedicated
