@@ -320,3 +320,79 @@ func TestExplainReportsCooldownPass(t *testing.T) {
 		t.Fatalf("cooldown should PASS on a fresh strategy, got a block: %q", out)
 	}
 }
+
+// deferredBars returns numBars consecutive hourly snapshots simulating the bars
+// after a fresh MACD bullish cross. Snapshot 0 is the cross bar. Each later
+// snapshot appends one "holding" bar that nudges price up slightly (no new cross,
+// MACD stays bullish). Confirming volume (5000) is placed only on the snapshot at
+// index volumeAtBar; every other last-bar volume is weak (100). Feed the snapshots
+// to one Strategy in order to drive the arming state machine.
+func deferredBars(numBars, volumeAtBar int) []strategy.MarketData {
+	base := buildEntryMD()
+	snaps := make([]strategy.MarketData, numBars)
+	for k := 0; k < numBars; k++ {
+		closes := append([]float64(nil), base.Closes...)
+		highs := append([]float64(nil), base.Highs...)
+		lows := append([]float64(nil), base.Lows...)
+		vols := append([]int64(nil), base.Volumes...)
+		last := closes[len(closes)-1]
+		for j := 0; j < k; j++ { // append k holding bars
+			last += 0.2
+			closes = append(closes, last)
+			highs = append(highs, last+0.5)
+			lows = append(lows, last-0.2)
+			vols = append(vols, 100)
+		}
+		if k == volumeAtBar {
+			vols[len(vols)-1] = 5000
+		} else {
+			vols[len(vols)-1] = 100
+		}
+		md := base
+		md.Closes, md.Highs, md.Lows, md.Volumes = closes, highs, lows, vols
+		md.Price = closes[len(closes)-1]
+		md.TodayHigh = md.Price + 0.5
+		md.TodayLow = md.Price - 0.5
+		snaps[k] = md
+	}
+	return snaps
+}
+
+func TestDeferredEntryFiresWhenVolumeArrivesWithinWindow(t *testing.T) {
+	p := defaultParams()
+	p.SignalValidBars = 2
+	p.MaxDriftATR = 5 // generous; drift is tested separately
+	s := NewWithParams("TEST", p)
+	bars := deferredBars(2, 1) // cross bar weak volume; volume on bar 1
+	if sig := s.Decide(bars[0]); sig.Kind == model.SignalBuy {
+		t.Fatal("should NOT enter on the cross bar (volume weak)")
+	}
+	if sig := s.Decide(bars[1]); sig.Kind != model.SignalBuy {
+		t.Fatal("should enter on the next bar when volume confirms within the window")
+	}
+}
+
+func TestDeferredDisabledIgnoresLateVolume(t *testing.T) {
+	p := defaultParams() // SignalValidBars == 0 -> deferral off
+	s := NewWithParams("TEST", p)
+	bars := deferredBars(2, 1)
+	if sig := s.Decide(bars[0]); sig.Kind == model.SignalBuy {
+		t.Fatal("no entry on cross bar (weak volume)")
+	}
+	if sig := s.Decide(bars[1]); sig.Kind == model.SignalBuy {
+		t.Fatal("with deferral off, late volume must NOT produce an entry")
+	}
+}
+
+func TestDeferredEntryExpiresAfterWindow(t *testing.T) {
+	p := defaultParams()
+	p.SignalValidBars = 1
+	p.MaxDriftATR = 5
+	s := NewWithParams("TEST", p)
+	bars := deferredBars(3, 2) // cross(0) weak, hold(1) weak, volume(2) too late
+	s.Decide(bars[0])          // arm
+	s.Decide(bars[1])          // age to 1 (still within window=1), no volume
+	if sig := s.Decide(bars[2]); sig.Kind == model.SignalBuy {
+		t.Fatal("signal must expire after SignalValidBars and block the late entry")
+	}
+}

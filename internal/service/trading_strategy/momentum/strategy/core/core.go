@@ -9,6 +9,7 @@ package core
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	"tinvest/internal/domain/ema"
@@ -51,6 +52,8 @@ type Params struct {
 	TrailArmATR       float64 // trail arms after MaxFavorable >= entry + TrailArmATR*EntryATR
 	CooldownBars      int     // bars to block re-entry after a position exits; 0 disables
 	DailyTrendPeriod  int     // daily-EMA period for the higher-timeframe slope filter (0 disables)
+	SignalValidBars   int     // bars a MACD-cross trigger stays "armed" awaiting confirmation; 0 = enter only on the cross bar (no deferral)
+	MaxDriftATR       float64 // max |price - crossPrice| in hourly-ATR units to still take a deferred entry; <=0 disables the drift cap
 }
 
 // Strategy trades a single instrument with the momentum rules. Ticker-agnostic.
@@ -58,10 +61,12 @@ type Params struct {
 // decide() core stays a function of its input. Not safe for concurrent use; the
 // backtest and live runners drive Decide sequentially, one bar at a time.
 type Strategy struct {
-	ticker         string
-	p              Params
-	barsSinceExit  int  // bars elapsed since the last exit; gates re-entry
-	prevInPosition bool // whether the previous Decide saw an open position
+	ticker          string
+	p               Params
+	barsSinceExit   int     // bars elapsed since the last exit; gates re-entry
+	prevInPosition  bool    // whether the previous Decide saw an open position
+	armedCrossPrice float64 // close at the bar that armed a deferred signal; 0 = no armed signal
+	barsSinceArm    int     // bars elapsed since the signal was armed
 }
 
 // NewWithParams returns the momentum strategy for a ticker with explicit params.
@@ -96,6 +101,7 @@ type decideInput struct {
 	emaTrend        float64
 	macdNow         float64
 	crossUp         bool
+	macdAboveSignal bool // MACD line currently above the signal line (momentum still bullish)
 	volumeOK        bool
 	todayRange      float64
 	barHigh         float64
@@ -106,13 +112,22 @@ type decideInput struct {
 	dailyEMAPast    float64 // daily-EMA value dailyTrendSlopeBars back (0 if unavailable)
 	dailyTrendKnown bool    // true when daily history sufficed to compute both points
 	barsSinceExit   int     // bars since the last exit, for the cooldown gate
+	armedCrossPrice float64 // armed deferred-signal price (0 = none); copied from the shell
+	barsSinceArm    int     // age of the armed deferred signal; copied from the shell
 	pos             *strategy.Position
 }
 
 // Decide computes every indicator from md, packs them, and delegates to the pure core.
 func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 	s.trackCooldown(md.Position)
-	sig := s.decide(s.buildInput(md))
+	in := s.buildInput(md)
+	s.advanceArm(in)
+	in.armedCrossPrice = s.armedCrossPrice
+	in.barsSinceArm = s.barsSinceArm
+	sig := s.decide(in)
+	if sig.Kind == model.SignalBuy {
+		s.clearArm() // consumed
+	}
 	sig.Ticker = s.ticker
 	return sig
 }
@@ -132,6 +147,58 @@ func (s *Strategy) trackCooldown(pos *strategy.Position) {
 	s.prevInPosition = pos != nil
 }
 
+// advanceArm runs the deferred-entry state machine in the impure shell: it ages an
+// armed signal, cancels it when the validity window lapses or the trigger thesis
+// breaks (trend down, daily trend stalls, momentum dies), then (re)arms on a fresh
+// qualifying MACD cross at this bar's price. Called once per bar from Decide,
+// before decide reads the armed state. Explain never calls this (no mutation).
+func (s *Strategy) advanceArm(in decideInput) {
+	// In a position, or cooling down after an exit: no signal may live. Cooldown
+	// has priority so we never enter on a stale cross right as cooldown lapses.
+	if in.pos != nil || (s.p.CooldownBars > 0 && in.barsSinceExit < s.p.CooldownBars) {
+		s.clearArm()
+		return
+	}
+	if s.armedCrossPrice > 0 {
+		s.barsSinceArm++
+		trendBroke := !(in.emaTrend > 0 && in.price > in.emaTrend)
+		dailyBroke := s.p.DailyTrendPeriod > 0 && in.dailyTrendKnown && !(in.dailyEMANow > in.dailyEMAPast)
+		if s.barsSinceArm > s.p.SignalValidBars || trendBroke || dailyBroke || !in.macdAboveSignal {
+			s.clearArm()
+		}
+	}
+	if s.qualifiesAsTrigger(in) {
+		s.armedCrossPrice = in.price
+		s.barsSinceArm = 0
+	}
+}
+
+// qualifiesAsTrigger reports whether this bar is a fresh MACD cross that meets the
+// trigger filters (uptrend, rising daily trend if enabled, below-zero if required).
+// These are the conditions that arm a deferred signal; confirmation gates (volume,
+// ATR-room, RR, drift) are checked later in decide.
+func (s *Strategy) qualifiesAsTrigger(in decideInput) bool {
+	if !in.crossUp {
+		return false
+	}
+	if !(in.emaTrend > 0 && in.price > in.emaTrend) {
+		return false
+	}
+	if s.p.DailyTrendPeriod > 0 && in.dailyTrendKnown && !(in.dailyEMANow > in.dailyEMAPast) {
+		return false
+	}
+	if s.p.MACDBelowZeroOnly == 1 && in.macdNow >= 0 {
+		return false
+	}
+	return true
+}
+
+// clearArm drops any armed deferred signal.
+func (s *Strategy) clearArm() {
+	s.armedCrossPrice = 0
+	s.barsSinceArm = 0
+}
+
 // buildInput computes every indicator from md and packs them for the pure core.
 func (s *Strategy) buildInput(md strategy.MarketData) decideInput {
 	atr := indicators.ATR(md.Highs, md.Lows, md.Closes, s.p.ATRPeriod)
@@ -142,12 +209,13 @@ func (s *Strategy) buildInput(md strategy.MarketData) decideInput {
 		emaTrend = e[len(e)-1]
 	}
 
-	macdNow, crossUp := 0.0, false
+	macdNow, crossUp, macdAboveSignal := 0.0, false, false
 	if m, sg := indicators.MACD(md.Closes, s.p.MACDFast, s.p.MACDSlow, s.p.MACDSignal); len(m) >= 2 {
 		prevDiff := m[len(m)-2] - sg[len(sg)-2]
 		currDiff := m[len(m)-1] - sg[len(sg)-1]
 		macdNow = m[len(m)-1]
 		crossUp = prevDiff <= 0 && currDiff > 0
+		macdAboveSignal = currDiff > 0
 	}
 
 	var barHigh, barLow float64
@@ -175,6 +243,7 @@ func (s *Strategy) buildInput(md strategy.MarketData) decideInput {
 		emaTrend:        emaTrend,
 		macdNow:         macdNow,
 		crossUp:         crossUp,
+		macdAboveSignal: macdAboveSignal,
 		volumeOK:        indicators.VolumeConfirmed(md.Volumes, s.p.VolLookback, s.p.VolMultiplier),
 		todayRange:      md.TodayHigh - md.TodayLow,
 		barHigh:         barHigh,
@@ -302,19 +371,20 @@ func (s *Strategy) decide(in decideInput) model.Signal {
 		return sig // still cooling down after the last exit
 	}
 
-	// Entry gates (all must pass).
-	if !(in.emaTrend > 0 && in.price > in.emaTrend) {
-		return sig // not an uptrend
-	}
-	if s.p.DailyTrendPeriod > 0 && in.dailyTrendKnown && !(in.dailyEMANow > in.dailyEMAPast) {
-		return sig // daily trend not rising
-	}
-	if !in.crossUp {
+	// Require a live armed signal. advanceArm arms it from a qualifying cross and
+	// cancels it on window expiry / broken trend / dead momentum. With
+	// SignalValidBars==0 a signal is armed only on the bar of the cross itself, so
+	// this reduces to the original "the cross must be on this bar" behavior.
+	if in.armedCrossPrice <= 0 {
 		return sig
 	}
-	if s.p.MACDBelowZeroOnly == 1 && in.macdNow >= 0 {
+
+	// Drift cap: don't chase — price must be within MaxDriftATR*ATR of the cross.
+	if s.p.MaxDriftATR > 0 && math.Abs(in.price-in.armedCrossPrice) > s.p.MaxDriftATR*in.atr {
 		return sig
 	}
+
+	// Confirmation gates.
 	if !in.volumeOK {
 		return sig
 	}
