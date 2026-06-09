@@ -44,6 +44,7 @@ func main() {
 		testMonths   = flag.Int("test-months", 0, "walk-forward: calibrate on the earlier window, report best on the last N months")
 		outDir       = flag.String("out", "reports", "report output directory")
 		refresh      = flag.Bool("refresh", false, "force candle refetch (ignore cache)")
+		explain      = flag.String("explain", "", "diagnose one bar: MSK time 'YYYY-MM-DD HH:MM'; prints why the strategy did/didn't enter")
 	)
 	flag.Parse()
 	logger.Init() // candle fetcher logs chunk errors via the package logger
@@ -54,7 +55,7 @@ func main() {
 	}
 
 	if err := run(*ticker, *strategyName, interval, *months, *cash, *fraction, *commission,
-		*paramsPath, *calibrate, *metric, *minTrades, *testMonths, *outDir, *refresh); err != nil {
+		*paramsPath, *calibrate, *metric, *minTrades, *testMonths, *outDir, *refresh, *explain); err != nil {
 		log.Fatalf("backtest: %v", err)
 	}
 }
@@ -80,7 +81,7 @@ func parseInterval(s string) (enum.Interval, error) {
 }
 
 func run(ticker, strategyName string, interval enum.Interval, months int, cash, fraction, commission float64,
-	paramsPath, calibratePath, metric string, minTrades, testMonths int, outDir string, refresh bool,
+	paramsPath, calibratePath, metric string, minTrades, testMonths int, outDir string, refresh bool, explain string,
 ) error {
 	if ticker == "" {
 		return fmt.Errorf("-ticker is required")
@@ -133,6 +134,19 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 
 	cfg := domain.Config{InitialCash: cash, Fraction: fraction, Commission: commission, Lot: share.Lot}
 	periodDays := to.Sub(from).Hours() / 24
+
+	if explain != "" {
+		mskLoc, err := time.LoadLocation("Europe/Moscow")
+		if err != nil {
+			mskLoc = time.UTC
+		}
+		target, err := time.ParseInLocation("2006-01-02 15:04", explain, mskLoc)
+		if err != nil {
+			return fmt.Errorf("parse -explain time %q (want 'YYYY-MM-DD HH:MM' MSK): %w", explain, err)
+		}
+		fmt.Println(domain.Trace(binding.Build(binding.DefaultParams()), candles, dailyCandles, cfg, target))
+		return nil
+	}
 
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return fmt.Errorf("mkdir out dir: %w", err)

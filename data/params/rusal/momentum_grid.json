@@ -1,10 +1,12 @@
 {
-  "MACDFast": [8, 12],
   "MACDSlow": [21, 26],
   "MACDSignal": [9],
   "MACDBelowZeroOnly": [0, 1],
   "SLMult": [0.5, 1.0],
   "TakeProfitRR": [1.5, 2.0, 3.0],
   "VolMultiplier": [1.0, 1.2, 1.5],
-  "MaxDailyATRUsed": [0.5, 0.6, 0.7]
+  "MaxDailyATRUsed": [0.5, 0.6, 0.7],
+  "EMAPeriod": [200, 150, 100],
+  "MACDFast": [12, 10, 8],
+  "UseTrail": [0, 1]
 }

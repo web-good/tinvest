@@ -1,6 +1,8 @@
 package backtest
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
 	"tinvest/internal/service/trading_strategy/scalping/model"
@@ -132,6 +134,76 @@ func Run(s strategy.Strategy, candles []Candle, dailyCandles []Candle, cfg Confi
 	}
 	res.FinalEquity = p.equity(lastClose)
 	return res
+}
+
+// explainer is the optional gate-level diagnostic a strategy may implement.
+type explainer interface {
+	Explain(md strategy.MarketData) string
+}
+
+// Trace replays the strategy exactly like Run but, at the bar whose timestamp
+// equals target, captures the live position state and (if the strategy
+// implements explainer) the gate-by-gate verdict. It returns a human-readable
+// diagnostic. Used to answer "why did/didn't it act at this bar?". Replaying
+// from the start means the reported position state is the real one.
+func Trace(s strategy.Strategy, candles []Candle, dailyCandles []Candle, cfg Config, target time.Time) string {
+	l := s.Lookback()
+	if l <= 0 || len(candles) < l {
+		return "недостаточно свечей для lookback"
+	}
+	p := newPortfolio(cfg)
+	for i := l - 1; i < len(candles); i++ {
+		p.bar = i
+		md := buildMarketData(candles[i-l+1 : i+1])
+		md.DailyCloses = visibleDailyCloses(dailyCandles, candles[i].Time, mskLoc)
+		md.DailyHighs, md.DailyLows = visibleDailyHighsLows(dailyCandles, candles[i].Time, mskLoc)
+		md.TodayHigh, md.TodayLow = todayExtent(candles, i, mskLoc)
+		if p.qty != 0 {
+			p.mark(candles[i].Close)
+		}
+		md.Position = p.strategyPosition()
+
+		c := candles[i]
+		if c.Time.Equal(target) {
+			var sb strings.Builder
+			fmt.Fprintf(&sb, "Бар %s (MSK %s)\n", c.Time.Format(time.RFC3339), c.Time.In(mskLoc).Format("2006-01-02 15:04"))
+			fmt.Fprintf(&sb, "OHLC: O=%.4f H=%.4f L=%.4f C=%.4f V=%d\n", c.Open, c.High, c.Low, c.Close, c.Volume)
+			if p.qty != 0 {
+				fmt.Fprintf(&sb, "Состояние: В ПОЗИЦИИ (qty=%d, вход %.4f)\n", p.qty, p.entryPrice)
+			} else {
+				sb.WriteString("Состояние: вне позиции (flat)\n")
+			}
+			sb.WriteString("--- фильтры входа ---\n")
+			if ex, ok := s.(explainer); ok {
+				sb.WriteString(ex.Explain(md))
+			} else {
+				sb.WriteString("стратегия не поддерживает Explain")
+			}
+			return sb.String()
+		}
+
+		sig := s.Decide(md)
+		switch sig.Kind {
+		case model.SignalBuy:
+			if p.qty == 0 {
+				p.open(c.Close, c.Time, sig.Level, sig.TakeProfit, sig.ATR, sig.StopLoss, sig.EntryReason)
+			}
+		case model.SignalSell:
+			if p.qty != 0 {
+				exitPrice := c.Close
+				switch sig.Reason {
+				case "SL", "TRAIL":
+					exitPrice = min(sig.StopLoss, c.Open)
+				case "TP":
+					if sig.TakeProfit > 0 {
+						exitPrice = max(sig.TakeProfit, c.Open)
+					}
+				}
+				p.close(exitPrice, c.Time, sig.Reason)
+			}
+		}
+	}
+	return fmt.Sprintf("бар с временем %s не найден в свечах", target.Format(time.RFC3339))
 }
 
 // buildMarketData converts an oldest-first window into a strategy snapshot,

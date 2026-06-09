@@ -8,6 +8,7 @@ package core
 
 import (
 	"fmt"
+	"strings"
 
 	"tinvest/internal/domain/ema"
 	"tinvest/internal/service/trading_strategy/scalping/model"
@@ -88,6 +89,13 @@ type decideInput struct {
 
 // Decide computes every indicator from md, packs them, and delegates to the pure core.
 func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
+	sig := s.decide(s.buildInput(md))
+	sig.Ticker = s.ticker
+	return sig
+}
+
+// buildInput computes every indicator from md and packs them for the pure core.
+func (s *Strategy) buildInput(md strategy.MarketData) decideInput {
 	atr := indicators.ATR(md.Highs, md.Lows, md.Closes, s.p.ATRPeriod)
 	dailyATR := indicators.ATR(md.DailyHighs, md.DailyLows, md.DailyCloses, s.p.DailyATRPeriod)
 
@@ -112,7 +120,7 @@ func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 		barLow = md.Lows[n-1]
 	}
 
-	in := decideInput{
+	return decideInput{
 		price:      md.Price,
 		atr:        atr,
 		dailyATR:   dailyATR,
@@ -127,10 +135,86 @@ func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 		recentHigh: recentHigh(md.Highs, s.p.ChandelierWindow),
 		pos:        md.Position,
 	}
+}
 
-	sig := s.decide(in)
-	sig.Ticker = s.ticker
-	return sig
+// Explain re-runs the entry gates over md and reports each gate's value and
+// verdict (✓ pass / ✗ block) in entry order, stopping the chain at the first
+// blocker — the same short-circuit order decide uses. Diagnostic only; never
+// part of the trading path.
+func (s *Strategy) Explain(md strategy.MarketData) string {
+	in := s.buildInput(md)
+
+	if in.pos != nil {
+		return "позиция уже открыта — вход не рассматривается"
+	}
+
+	var b strings.Builder
+	pass := func(format string, args ...any) { fmt.Fprintf(&b, "✓ "+format+"\n", args...) }
+	block := func(format string, args ...any) string {
+		fmt.Fprintf(&b, "✗ "+format+"\n", args...)
+		fmt.Fprintf(&b, "→ ВХОДА НЕТ: заблокировал этот фильтр")
+		return b.String()
+	}
+
+	// 1. Uptrend.
+	if !(in.emaTrend > 0 && in.price > in.emaTrend) {
+		return block("Тренд: close %.4f ≤ EMA%d %.4f (нужно выше)", in.price, s.p.EMAPeriod, in.emaTrend)
+	}
+	pass("Тренд: close %.4f > EMA%d %.4f", in.price, s.p.EMAPeriod, in.emaTrend)
+
+	// 2. MACD bullish cross.
+	if !in.crossUp {
+		return block("MACD: нет бычьего кросса на этом баре (MACD=%.4f)", in.macdNow)
+	}
+	pass("MACD: бычий кросс (MACD=%.4f)", in.macdNow)
+
+	// 3. Below-zero requirement.
+	if s.p.MACDBelowZeroOnly == 1 && in.macdNow >= 0 {
+		return block("MACD: кросс над нулём (%.4f), а требуется под нулём (MACDBelowZeroOnly=1)", in.macdNow)
+	}
+	if s.p.MACDBelowZeroOnly == 1 {
+		pass("MACD: кросс под нулём (%.4f)", in.macdNow)
+	}
+
+	// 4. Volume.
+	if !in.volumeOK {
+		return block("Объём: ниже %.2g×ср(%d) — подтверждения нет", s.p.VolMultiplier, s.p.VolLookback)
+	}
+	pass("Объём: выше %.2g×ср(%d)", s.p.VolMultiplier, s.p.VolLookback)
+
+	// 5. Daily-ATR room.
+	if in.dailyATR > 0 && in.todayRange >= s.p.MaxDailyATRUsed*in.dailyATR {
+		roomPct := (1 - in.todayRange/in.dailyATR) * 100
+		return block("Запас дневного ATR: день уже прошёл %.4f из %.4f (осталось %.0f%%, лимит входа %.0f%%)",
+			in.todayRange, in.dailyATR, roomPct, (1-s.p.MaxDailyATRUsed)*100)
+	}
+	if in.dailyATR > 0 {
+		roomPct := (1 - in.todayRange/in.dailyATR) * 100
+		pass("Запас дневного ATR: прошло %.4f из %.4f (осталось %.0f%%)", in.todayRange, in.dailyATR, roomPct)
+	} else {
+		pass("Запас дневного ATR: дневных данных нет — фильтр пропущен")
+	}
+
+	// 6. Anti-churn.
+	if s.p.MinATRFrac > 0 && in.atr < s.p.MinATRFrac*in.price {
+		return block("Анти-черн: ATR(ч) %.4f < %.4g×цена %.4f", in.atr, s.p.MinATRFrac, in.price)
+	}
+	pass("Анти-черн: ATR(ч) %.4f ≥ порога", in.atr)
+
+	// 7. Risk / RR sanity.
+	stop := in.recentLow - s.p.SLMult*in.atr
+	risk := in.price - stop
+	if risk <= 0 {
+		return block("Риск: SL=%.4f ≥ цены %.4f (risk ≤ 0)", stop, in.price)
+	}
+	target := in.price + s.p.TakeProfitRR*risk
+	if s.p.MinRR > 0 && (target-in.price) < s.p.MinRR*risk {
+		return block("RR: цель %.4f даёт %.2gR < MinRR %.2g", target, (target-in.price)/risk, s.p.MinRR)
+	}
+	pass("Риск: SL=%.4f, TP=%.4f, %.2gR", stop, target, (target-in.price)/risk)
+
+	fmt.Fprintf(&b, "→ ВХОД: все фильтры пройдены, должна быть покупка")
+	return b.String()
 }
 
 // decide is the pure decision core over already-computed indicator values.
