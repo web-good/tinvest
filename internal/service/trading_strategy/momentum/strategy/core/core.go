@@ -1,7 +1,8 @@
 // Package core implements a long-only hourly trend-momentum strategy: enter when
 // price is above a long EMA (uptrend), MACD just crossed up (optionally below
-// zero), volume is above its recent average, and the day still has room left
-// within its typical daily-ATR range. Exits on a frozen structural ATR stop, a
+// zero), volume is above its recent average, the higher-timeframe daily EMA is
+// sloping up, the day still has room left within its typical daily-ATR range,
+// and any post-exit cooldown has elapsed. Exits on a frozen structural ATR stop, a
 // fixed reward-multiple take-profit, or an optional chandelier trail. The decision
 // logic is pure and ticker-agnostic; per-share packages supply ticker + Params.
 package core
