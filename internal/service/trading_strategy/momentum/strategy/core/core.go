@@ -304,18 +304,34 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 		}
 	}
 
-	// 2. MACD bullish cross.
-	if !in.crossUp {
-		return block("MACD: нет бычьего кросса на этом баре (MACD=%.4f)", in.macdNow)
+	// 2. MACD trigger: a fresh bullish cross, or a still-armed deferred signal.
+	armed := s.p.SignalValidBars > 0 && s.armedCrossPrice > 0
+	switch {
+	case in.crossUp:
+		pass("MACD: бычий кросс (MACD=%.4f)", in.macdNow)
+	case armed:
+		pass("MACD: сигнал взведён %d бар(ов) назад по цене %.4f (окно %d), MACD над сигнальной: %v",
+			s.barsSinceArm, s.armedCrossPrice, s.p.SignalValidBars, in.macdAboveSignal)
+	default:
+		return block("MACD: нет бычьего кросса и нет взведённого сигнала (MACD=%.4f)", in.macdNow)
 	}
-	pass("MACD: бычий кросс (MACD=%.4f)", in.macdNow)
 
-	// 3. Below-zero requirement.
-	if s.p.MACDBelowZeroOnly == 1 && in.macdNow >= 0 {
-		return block("MACD: кросс над нулём (%.4f), а требуется под нулём (MACDBelowZeroOnly=1)", in.macdNow)
-	}
-	if s.p.MACDBelowZeroOnly == 1 {
+	// 3. Below-zero requirement (a trigger condition — checked only on a fresh cross).
+	if s.p.MACDBelowZeroOnly == 1 && in.crossUp {
+		if in.macdNow >= 0 {
+			return block("MACD: кросс над нулём (%.4f), а требуется под нулём (MACDBelowZeroOnly=1)", in.macdNow)
+		}
 		pass("MACD: кросс под нулём (%.4f)", in.macdNow)
+	}
+
+	// 3b. Price-drift cap (only while a deferred signal is armed).
+	if armed && s.p.MaxDriftATR > 0 {
+		drift := math.Abs(in.price - s.armedCrossPrice)
+		if drift > s.p.MaxDriftATR*in.atr {
+			return block("Снос цены: |%.4f − %.4f| = %.4f > %.2g×ATR %.4f",
+				in.price, s.armedCrossPrice, drift, s.p.MaxDriftATR, in.atr)
+		}
+		pass("Снос цены: %.4f ≤ %.2g×ATR %.4f", drift, s.p.MaxDriftATR, in.atr)
 	}
 
 	// 4. Volume.
@@ -424,7 +440,7 @@ func (s *Strategy) entryReason(in decideInput, stop, target, risk float64) strin
 	if in.dailyATR > 0 {
 		roomPct = (1 - in.todayRange/in.dailyATR) * 100
 	}
-	return fmt.Sprintf(
+	reason := fmt.Sprintf(
 		"Тренд↑ (close %.4f > EMA%d %.4f); MACD бычий кросс %s (%.4f); объём > %.2g×ср(%d); дневной ATR-запас %.0f%% (прошло %.4f из %.4f); ATR(ч)=%.4f, ATR(д)=%.4f; SL=%.4f (-%.4f); TP=%.4f (+%.4f, %.2gR)",
 		in.price, s.p.EMAPeriod, in.emaTrend, zero, in.macdNow,
 		s.p.VolMultiplier, s.p.VolLookback,
@@ -432,6 +448,11 @@ func (s *Strategy) entryReason(in decideInput, stop, target, risk float64) strin
 		in.atr, in.dailyATR,
 		stop, risk, target, target-in.price, s.p.TakeProfitRR,
 	)
+	if in.barsSinceArm > 0 {
+		reason += fmt.Sprintf("; отложенный вход: ждали %d бар(ов), снос от цены кросса %+.4f",
+			in.barsSinceArm, in.price-in.armedCrossPrice)
+	}
+	return reason
 }
 
 // manage handles an open long: frozen hard stop, fixed take-profit (reconstructed

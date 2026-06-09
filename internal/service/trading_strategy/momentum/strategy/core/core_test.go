@@ -521,3 +521,44 @@ func TestAdvanceArmClearsWhenInPosition(t *testing.T) {
 		t.Fatal("should clear the armed signal while a position is open")
 	}
 }
+
+func TestEntryReasonNotesDeferral(t *testing.T) {
+	p := defaultParams()
+	p.SignalValidBars = 2
+	p.MaxDriftATR = 5
+	s := NewWithParams("TEST", p)
+	bars := deferredBars(2, 1)
+	s.Decide(bars[0]) // arm
+	sig := s.Decide(bars[1])
+	if sig.Kind != model.SignalBuy {
+		t.Fatalf("expected deferred entry, got kind=%v", sig.Kind)
+	}
+	if !strings.Contains(sig.EntryReason, "отложенный вход") {
+		t.Fatalf("EntryReason should note the deferral, got: %q", sig.EntryReason)
+	}
+}
+
+func TestImmediateEntryReasonHasNoDeferralNote(t *testing.T) {
+	p := defaultParams() // SignalValidBars == 0 -> immediate entry only
+	s := NewWithParams("TEST", p)
+	sig := s.Decide(buildEntryMD())
+	if sig.Kind != model.SignalBuy {
+		t.Fatalf("expected immediate entry, got kind=%v", sig.Kind)
+	}
+	if strings.Contains(sig.EntryReason, "отложенный вход") {
+		t.Fatalf("immediate entry must not carry a deferral note, got: %q", sig.EntryReason)
+	}
+}
+
+func TestExplainReportsArmedWaitingSignal(t *testing.T) {
+	p := defaultParams()
+	p.SignalValidBars = 2
+	p.MaxDriftATR = 5
+	s := NewWithParams("TEST", p)
+	bars := deferredBars(3, 2)
+	s.Decide(bars[0]) // arm; bar[1] has no fresh cross and weak volume
+	out := s.Explain(bars[1])
+	if !strings.Contains(out, "взвед") {
+		t.Fatalf("Explain should report the armed waiting signal, got: %q", out)
+	}
+}
