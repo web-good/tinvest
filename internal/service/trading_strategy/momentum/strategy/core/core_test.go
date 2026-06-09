@@ -189,3 +189,50 @@ func TestExitTrailWhenEnabled(t *testing.T) {
 		t.Fatalf("kind=%v reason=%q want Sell/TRAIL", sig.Kind, sig.Reason)
 	}
 }
+
+func TestEntryFiresWithRisingDailyTrend(t *testing.T) {
+	p := defaultParams()
+	p.DailyTrendPeriod = 5 // дневные closes в buildEntryMD растут -> наклон вверх
+	s := NewWithParams("TEST", p)
+	if sig := s.Decide(buildEntryMD()); sig.Kind != model.SignalBuy {
+		t.Fatal("entry should fire when daily EMA slope is up")
+	}
+}
+
+func TestEntryBlockedByDailyTrendFilter(t *testing.T) {
+	md := buildEntryMD()
+	for i := range md.DailyCloses { // плоские дневные closes -> EMA не растёт
+		md.DailyCloses[i] = 110
+	}
+	p := defaultParams()
+	p.DailyTrendPeriod = 5
+	s := NewWithParams("TEST", p)
+	if sig := s.Decide(md); sig.Kind == model.SignalBuy {
+		t.Fatal("entry should be blocked when daily EMA is not rising")
+	}
+}
+
+func TestDailyTrendFilterDisabledIgnoresSlope(t *testing.T) {
+	md := buildEntryMD()
+	for i := range md.DailyCloses { // падающие дневные closes
+		md.DailyCloses[i] = 200 - float64(i)
+	}
+	p := defaultParams() // DailyTrendPeriod = 0 -> фильтр выключен
+	s := NewWithParams("TEST", p)
+	if sig := s.Decide(md); sig.Kind != model.SignalBuy {
+		t.Fatal("entry should fire when daily filter is disabled, regardless of slope")
+	}
+}
+
+func TestDailyTrendFilterPassesWithInsufficientHistory(t *testing.T) {
+	md := buildEntryMD()
+	md.DailyCloses = md.DailyCloses[:5] // меньше, чем period+slopeBars (5+3=8)
+	md.DailyHighs = md.DailyHighs[:5]
+	md.DailyLows = md.DailyLows[:5]
+	p := defaultParams()
+	p.DailyTrendPeriod = 5
+	s := NewWithParams("TEST", p)
+	if sig := s.Decide(md); sig.Kind != model.SignalBuy {
+		t.Fatal("entry should fire (filter passes) when daily history is insufficient")
+	}
+}

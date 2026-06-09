@@ -16,6 +16,11 @@ import (
 	"tinvest/pkg/indicators"
 )
 
+// dailyTrendSlopeBars is the fixed horizon (in completed daily candles) over which
+// the daily-EMA slope filter measures direction. Held as an in-package policy
+// constant (not a grid knob) to keep calibration combinatorics small.
+const dailyTrendSlopeBars = 3
+
 // Params holds every tunable. All fields are int or float64 (flags as int 0/1)
 // so reflection grid calibration can sweep them.
 type Params struct {
@@ -39,7 +44,7 @@ type Params struct {
 	ChandelierWindow  int     // window for the chandelier high
 	TrailArmATR       float64 // trail arms after MaxFavorable >= entry + TrailArmATR*EntryATR
 	CooldownBars      int     // reserved; not yet enforced
-	DailyTrendPeriod  int     // reserved; not yet enforced
+	DailyTrendPeriod  int     // daily-EMA period for the higher-timeframe slope filter (0 disables)
 }
 
 // Strategy trades a single instrument with the momentum rules. Ticker-agnostic.
@@ -72,19 +77,22 @@ func (s *Strategy) Lookback() int {
 
 // decideInput carries already-computed indicator values into the pure core.
 type decideInput struct {
-	price      float64
-	atr        float64
-	dailyATR   float64
-	emaTrend   float64
-	macdNow    float64
-	crossUp    bool
-	volumeOK   bool
-	todayRange float64
-	barHigh    float64
-	barLow     float64
-	recentLow  float64
-	recentHigh float64
-	pos        *strategy.Position
+	price           float64
+	atr             float64
+	dailyATR        float64
+	emaTrend        float64
+	macdNow         float64
+	crossUp         bool
+	volumeOK        bool
+	todayRange      float64
+	barHigh         float64
+	barLow          float64
+	recentLow       float64
+	recentHigh      float64
+	dailyEMANow     float64 // last daily-EMA value (0 if unavailable)
+	dailyEMAPast    float64 // daily-EMA value dailyTrendSlopeBars back (0 if unavailable)
+	dailyTrendKnown bool    // true when daily history sufficed to compute both points
+	pos             *strategy.Position
 }
 
 // Decide computes every indicator from md, packs them, and delegates to the pure core.
@@ -120,20 +128,31 @@ func (s *Strategy) buildInput(md strategy.MarketData) decideInput {
 		barLow = md.Lows[n-1]
 	}
 
+	dailyEMANow, dailyEMAPast, dailyTrendKnown := 0.0, 0.0, false
+	if s.p.DailyTrendPeriod > 0 {
+		if de := ema.Compute(md.DailyCloses, s.p.DailyTrendPeriod); len(de) >= s.p.DailyTrendPeriod+dailyTrendSlopeBars {
+			n := len(de)
+			dailyEMANow, dailyEMAPast, dailyTrendKnown = de[n-1], de[n-1-dailyTrendSlopeBars], true
+		}
+	}
+
 	return decideInput{
-		price:      md.Price,
-		atr:        atr,
-		dailyATR:   dailyATR,
-		emaTrend:   emaTrend,
-		macdNow:    macdNow,
-		crossUp:    crossUp,
-		volumeOK:   indicators.VolumeConfirmed(md.Volumes, s.p.VolLookback, s.p.VolMultiplier),
-		todayRange: md.TodayHigh - md.TodayLow,
-		barHigh:    barHigh,
-		barLow:     barLow,
-		recentLow:  recentLow(md.Lows, s.p.SwingLowWindow),
-		recentHigh: recentHigh(md.Highs, s.p.ChandelierWindow),
-		pos:        md.Position,
+		price:           md.Price,
+		atr:             atr,
+		dailyATR:        dailyATR,
+		emaTrend:        emaTrend,
+		macdNow:         macdNow,
+		crossUp:         crossUp,
+		volumeOK:        indicators.VolumeConfirmed(md.Volumes, s.p.VolLookback, s.p.VolMultiplier),
+		todayRange:      md.TodayHigh - md.TodayLow,
+		barHigh:         barHigh,
+		barLow:          barLow,
+		recentLow:       recentLow(md.Lows, s.p.SwingLowWindow),
+		recentHigh:      recentHigh(md.Highs, s.p.ChandelierWindow),
+		dailyEMANow:     dailyEMANow,
+		dailyEMAPast:    dailyEMAPast,
+		dailyTrendKnown: dailyTrendKnown,
+		pos:             md.Position,
 	}
 }
 
@@ -228,6 +247,9 @@ func (s *Strategy) decide(in decideInput) model.Signal {
 	// Entry gates (all must pass).
 	if !(in.emaTrend > 0 && in.price > in.emaTrend) {
 		return sig // not an uptrend
+	}
+	if s.p.DailyTrendPeriod > 0 && in.dailyTrendKnown && !(in.dailyEMANow > in.dailyEMAPast) {
+		return sig // daily trend not rising
 	}
 	if !in.crossUp {
 		return sig
