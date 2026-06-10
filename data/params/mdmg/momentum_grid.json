@@ -1,0 +1,27 @@
+{
+  "phases": [
+    {
+      "name": "core",
+      "keepTop": 5,
+      "grid": {
+        "EMAPeriod": [200, 150, 100],
+        "SLMult": [1.0, 1.5],
+        "TakeProfitRR": [1.5, 2.0, 3.0],
+        "VolMultiplier": [1.2, 1.5],
+        "MaxDailyATRUsed": [0.5, 0.7],
+        "MACDBelowZeroOnly": [0, 1]
+      }
+    },
+    {
+      "name": "gates",
+      "grid": {
+        "MACDFast": [12, 8],
+        "MACDSlow": [26, 21],
+        "CooldownBars": [12, 24],
+        "DailyTrendPeriod": [10, 20],
+        "SignalValidBars": [0, 2, 4],
+        "MaxDriftATR": [0, 1.0]
+      }
+    }
+  ]
+}
