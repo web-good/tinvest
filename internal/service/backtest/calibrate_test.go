@@ -241,3 +241,40 @@ func TestRunPhasesEmptyErrors(t *testing.T) {
 		t.Fatal("expected error for empty phases")
 	}
 }
+
+func TestParsePhasesPhasedFormat(t *testing.T) {
+	raw := []byte(`{"phases":[{"name":"core","keepTop":3,"grid":{"EMAPeriod":[44,55]}},{"grid":{"SLMult":[1.0,1.5]}}]}`)
+	phases, err := ParsePhases(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(phases) != 2 {
+		t.Fatalf("phases = %d, want 2", len(phases))
+	}
+	if phases[0].Name != "core" || phases[0].KeepTop != 3 {
+		t.Fatalf("phase 0 = %+v, want name=core keepTop=3", phases[0])
+	}
+	if got := phases[0].Grid["EMAPeriod"]; len(got) != 2 || got[0] != 44 {
+		t.Fatalf("phase 0 grid EMAPeriod = %v, want [44 55]", got)
+	}
+}
+
+func TestParsePhasesLegacyFlatFormat(t *testing.T) {
+	raw := []byte(`{"EMAPeriod":[44,55],"SLMult":[1.0,1.5]}`)
+	phases, err := ParsePhases(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(phases) != 1 {
+		t.Fatalf("phases = %d, want 1 (flat wrapped as single phase)", len(phases))
+	}
+	if got := phases[0].Grid["EMAPeriod"]; len(got) != 2 {
+		t.Fatalf("flat grid EMAPeriod = %v, want 2 values", got)
+	}
+}
+
+func TestParsePhasesMalformedErrors(t *testing.T) {
+	if _, err := ParsePhases([]byte(`{not json`)); err == nil {
+		t.Fatal("expected error for malformed JSON")
+	}
+}

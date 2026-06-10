@@ -1,6 +1,7 @@
 package backtest
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"sort"
@@ -74,6 +75,21 @@ func RunGrid(b Binding, grid Grid, candles []backtest.Candle, dailyCandles []bac
 	}
 	results := runCombos(b, combos, candles, dailyCandles, cfg, periodDays)
 	return rankResults(results, metric, minTrades), nil
+}
+
+// ParsePhases decodes a calibration grid file into ordered phases. It accepts the
+// phased format ({"phases":[{grid, keepTop, name}, ...]}) and the legacy flat format
+// ({"Field":[...], ...}), wrapping the latter as a single phase.
+func ParsePhases(raw []byte) ([]Phase, error) {
+	var pg PhasedGrid
+	if err := json.Unmarshal(raw, &pg); err == nil && len(pg.Phases) > 0 {
+		return pg.Phases, nil
+	}
+	var flat Grid
+	if err := json.Unmarshal(raw, &flat); err != nil {
+		return nil, fmt.Errorf("backtest: parse grid: %w", err)
+	}
+	return []Phase{{Grid: flat}}, nil
 }
 
 // RunPhases runs a staged calibration: phase k+1 sweeps its grid over the top-KeepTop
