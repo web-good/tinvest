@@ -6,8 +6,12 @@ import (
 
 	momentumafks "tinvest/internal/service/trading_strategy/momentum/strategy/afks"
 	"tinvest/internal/service/trading_strategy/momentum/strategy/core"
+	momentumgazp "tinvest/internal/service/trading_strategy/momentum/strategy/gazp"
+	momentummdmg "tinvest/internal/service/trading_strategy/momentum/strategy/mdmg"
+	momentumnvtk "tinvest/internal/service/trading_strategy/momentum/strategy/nvtk"
 	momentumplzl "tinvest/internal/service/trading_strategy/momentum/strategy/plzl"
 	momentumrusal "tinvest/internal/service/trading_strategy/momentum/strategy/rusal"
+	momentumsber "tinvest/internal/service/trading_strategy/momentum/strategy/sber"
 	momentumydex "tinvest/internal/service/trading_strategy/momentum/strategy/ydex"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 )
@@ -35,6 +39,10 @@ var momentumRegistry = map[string]Binding{
 	momentumafks.Ticker:  momentumBindingFor(momentumafks.Ticker, momentumafks.DefaultParams),
 	momentumydex.Ticker:  momentumBindingFor(momentumydex.Ticker, momentumydex.DefaultParams),
 	momentumplzl.Ticker:  momentumBindingFor(momentumplzl.Ticker, momentumplzl.DefaultParams),
+	momentumsber.Ticker:  momentumBindingFor(momentumsber.Ticker, momentumsber.DefaultParams),
+	momentumgazp.Ticker:  momentumBindingFor(momentumgazp.Ticker, momentumgazp.DefaultParams),
+	momentumnvtk.Ticker:  momentumBindingFor(momentumnvtk.Ticker, momentumnvtk.DefaultParams),
+	momentummdmg.Ticker:  momentumBindingFor(momentummdmg.Ticker, momentummdmg.DefaultParams),
 }
 
 // genericMomentumDefaults are neutral baseline params for tickers without a dedicated

@@ -4,6 +4,10 @@ import (
 	"testing"
 
 	"tinvest/internal/service/trading_strategy/momentum/strategy/core"
+	momentumgazp "tinvest/internal/service/trading_strategy/momentum/strategy/gazp"
+	momentummdmg "tinvest/internal/service/trading_strategy/momentum/strategy/mdmg"
+	momentumnvtk "tinvest/internal/service/trading_strategy/momentum/strategy/nvtk"
+	momentumsber "tinvest/internal/service/trading_strategy/momentum/strategy/sber"
 )
 
 func TestMomentumLookupRegisteredRUAL(t *testing.T) {
@@ -140,5 +144,73 @@ func TestMomentumLookupRegisteredPLZL(t *testing.T) {
 	}
 	if s := b.Build(got); s.Ticker() != "PLZL" {
 		t.Fatalf("ticker=%q want PLZL", s.Ticker())
+	}
+}
+
+func TestMomentumLookupRegisteredSBER(t *testing.T) {
+	if _, ok := momentumRegistry[momentumsber.Ticker]; !ok {
+		t.Fatalf("SBER not registered in momentumRegistry")
+	}
+	b := MomentumLookupOrGeneric(momentumsber.Ticker)
+	got, ok := b.DefaultParams().(core.Params)
+	if !ok {
+		t.Fatalf("DefaultParams type = %T want core.Params", b.DefaultParams())
+	}
+	if got != momentumsber.DefaultParams() {
+		t.Fatalf("SBER defaults = %+v\nwant %+v", got, momentumsber.DefaultParams())
+	}
+	if s := b.Build(got); s.Ticker() != "SBER" {
+		t.Fatalf("ticker=%q want SBER", s.Ticker())
+	}
+}
+
+func TestMomentumLookupRegisteredGAZP(t *testing.T) {
+	if _, ok := momentumRegistry[momentumgazp.Ticker]; !ok {
+		t.Fatalf("GAZP not registered in momentumRegistry")
+	}
+	b := MomentumLookupOrGeneric(momentumgazp.Ticker)
+	got, ok := b.DefaultParams().(core.Params)
+	if !ok {
+		t.Fatalf("DefaultParams type = %T want core.Params", b.DefaultParams())
+	}
+	if got != momentumgazp.DefaultParams() {
+		t.Fatalf("GAZP defaults = %+v\nwant %+v", got, momentumgazp.DefaultParams())
+	}
+	if s := b.Build(got); s.Ticker() != "GAZP" {
+		t.Fatalf("ticker=%q want GAZP", s.Ticker())
+	}
+}
+
+func TestMomentumLookupRegisteredNVTK(t *testing.T) {
+	if _, ok := momentumRegistry[momentumnvtk.Ticker]; !ok {
+		t.Fatalf("NVTK not registered in momentumRegistry")
+	}
+	b := MomentumLookupOrGeneric(momentumnvtk.Ticker)
+	got, ok := b.DefaultParams().(core.Params)
+	if !ok {
+		t.Fatalf("DefaultParams type = %T want core.Params", b.DefaultParams())
+	}
+	if got != momentumnvtk.DefaultParams() {
+		t.Fatalf("NVTK defaults = %+v\nwant %+v", got, momentumnvtk.DefaultParams())
+	}
+	if s := b.Build(got); s.Ticker() != "NVTK" {
+		t.Fatalf("ticker=%q want NVTK", s.Ticker())
+	}
+}
+
+func TestMomentumLookupRegisteredMDMG(t *testing.T) {
+	if _, ok := momentumRegistry[momentummdmg.Ticker]; !ok {
+		t.Fatalf("MDMG not registered in momentumRegistry")
+	}
+	b := MomentumLookupOrGeneric(momentummdmg.Ticker)
+	got, ok := b.DefaultParams().(core.Params)
+	if !ok {
+		t.Fatalf("DefaultParams type = %T want core.Params", b.DefaultParams())
+	}
+	if got != momentummdmg.DefaultParams() {
+		t.Fatalf("MDMG defaults = %+v\nwant %+v", got, momentummdmg.DefaultParams())
+	}
+	if s := b.Build(got); s.Ticker() != "MDMG" {
+		t.Fatalf("ticker=%q want MDMG", s.Ticker())
 	}
 }
