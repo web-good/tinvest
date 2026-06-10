@@ -12,7 +12,7 @@ type BasketEntry struct {
 	NetPnL         float64
 	NetPnLPct      float64
 	MaxDrawdownPct float64
-	WinRate        float64
+	WinRate        float64              // fraction 0–1 (Wins/TotalTrades)
 	Params         []backtest.ParamLine // winning calibrated params for this ticker
 	Skipped        bool                 // true when the ticker produced no OOS result
 	Note           string               // reason when skipped or no trades
@@ -28,6 +28,10 @@ type BasketSummary struct {
 // multiple instruments. It reuses backtest.Compute with a synthetic Result carrying
 // only trades; equity-based fields (MaxDrawdown, CAGR, NetPnL, Exposure) come out zero
 // because a pool spanning separate capital bases has no single equity curve.
+// Mechanically: FinalEquity==InitialCash==0 zeroes NetPnL/NetPnLPct, periodDays==0
+// zeroes CAGR, totalBars==0 zeroes ExposurePct, and the empty Equity slice zeroes
+// drawdown. If Compute ever derives those fields from trade PnL when no equity curve
+// is present, the equity-zero assertions in basket_test.go will catch the regression.
 func PooledMetrics(trades []backtest.Trade) backtest.Metrics {
 	return backtest.Compute(backtest.Result{Trades: trades}, 0, 0, 0)
 }

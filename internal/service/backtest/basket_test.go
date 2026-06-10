@@ -29,8 +29,17 @@ func TestPooledMetrics(t *testing.T) {
 	if m.BestTrade != 100 || m.WorstTrade != -40 {
 		t.Fatalf("Best/Worst=%.0f/%.0f want 100/-40", m.BestTrade, m.WorstTrade)
 	}
-	if m.MaxDrawdown != 0 || m.CAGR != 0 || m.NetPnL != 0 {
-		t.Fatalf("equity fields must be zero: DD=%.3f CAGR=%.3f Net=%.3f", m.MaxDrawdown, m.CAGR, m.NetPnL)
+	if m.WinRate != 0.5 || m.LossRate != 0.5 {
+		t.Fatalf("WinRate/LossRate=%.3f/%.3f want 0.5/0.5", m.WinRate, m.LossRate)
+	}
+	if m.AvgWin != 75 || m.AvgLoss != 25 {
+		t.Fatalf("AvgWin/AvgLoss=%.3f/%.3f want 75/25", m.AvgWin, m.AvgLoss)
+	}
+	// Equity-based fields have no meaning across a pool and must stay zero — this guards
+	// the PooledMetrics contract against future changes to Compute (see basket.go).
+	if m.MaxDrawdown != 0 || m.MaxDrawdownPct != 0 || m.CAGR != 0 || m.NetPnL != 0 || m.NetPnLPct != 0 || m.ExposurePct != 0 {
+		t.Fatalf("equity fields must be zero: DD=%.3f DD%%=%.3f CAGR=%.3f Net=%.3f Net%%=%.3f Exp=%.3f",
+			m.MaxDrawdown, m.MaxDrawdownPct, m.CAGR, m.NetPnL, m.NetPnLPct, m.ExposurePct)
 	}
 }
 
