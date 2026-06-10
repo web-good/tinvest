@@ -1,6 +1,7 @@
 package backtest
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -147,5 +148,96 @@ func TestRenderCalibrationMarkdownTopParams(t *testing.T) {
 	}
 	if !strings.Contains(out, "99") {
 		t.Fatalf("runner-up params (EMAPeriod=99) not rendered:\n%s", out)
+	}
+}
+
+func TestRunPhasesNarrowsAndCarriesSeeds(t *testing.T) {
+	b, _ := Lookup("RUAL")
+	cfg := backtest.Config{InitialCash: 100000, Fraction: 1.0, Commission: 0.0005, Lot: 1}
+	phases := []Phase{
+		{Name: "core", KeepTop: 2, Grid: Grid{"EMAPeriod": {44, 55}}},
+		{Name: "gates", Grid: Grid{"SLMult": {1.0, 1.5, 2.0}}},
+	}
+	var prog []PhaseProgress
+	results, err := RunPhases(b, phases, tinyCandles(400), nil, cfg, "profit_factor", 0, 16,
+		func(p PhaseProgress) { prog = append(prog, p) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(prog) != 2 {
+		t.Fatalf("want 2 phase callbacks, got %d", len(prog))
+	}
+	if prog[0].Combos != 2 {
+		t.Fatalf("phase 1 combos = %d, want 2", prog[0].Combos)
+	}
+	if prog[0].Kept != 2 {
+		t.Fatalf("phase 1 kept = %d, want 2", prog[0].Kept)
+	}
+	if prog[1].Combos != 6 {
+		t.Fatalf("phase 2 combos = %d, want 6", prog[1].Combos)
+	}
+	if len(results) != 6 {
+		t.Fatalf("final results = %d, want 6", len(results))
+	}
+	for i, r := range results {
+		ema := r.Params.(adaptive.Params).EMAPeriod
+		if ema != 44 && ema != 55 {
+			t.Fatalf("result %d EMAPeriod = %d, want carried 44 or 55", i, ema)
+		}
+	}
+}
+
+func TestRunPhasesKeepTopDefaultsAndClamps(t *testing.T) {
+	b, _ := Lookup("RUAL")
+	cfg := backtest.Config{InitialCash: 100000, Fraction: 1.0, Commission: 0.0005, Lot: 1}
+	phases := []Phase{
+		{Grid: Grid{"EMAPeriod": {44, 55}}},
+		{Grid: Grid{"SLMult": {1.0, 1.5}}},
+	}
+	var prog []PhaseProgress
+	results, err := RunPhases(b, phases, tinyCandles(400), nil, cfg, "profit_factor", 0, 16,
+		func(p PhaseProgress) { prog = append(prog, p) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prog[0].Kept != 2 {
+		t.Fatalf("phase 1 kept = %d, want 2 (default 5 clamped to 2 results)", prog[0].Kept)
+	}
+	if prog[1].Combos != 4 {
+		t.Fatalf("phase 2 combos = %d, want 4", prog[1].Combos)
+	}
+	if len(results) != 4 {
+		t.Fatalf("final results = %d, want 4", len(results))
+	}
+	if prog[0].Name != "phase-1" {
+		t.Fatalf("phase 1 default name = %q, want phase-1", prog[0].Name)
+	}
+}
+
+func TestRunPhasesSinglePhaseMatchesRunGrid(t *testing.T) {
+	b, _ := Lookup("RUAL")
+	cfg := backtest.Config{InitialCash: 100000, Fraction: 1.0, Commission: 0.0005, Lot: 1}
+	grid := Grid{"EMAPeriod": {44, 55}, "SLMult": {1.0, 1.5}}
+	want, err := RunGrid(b, grid, tinyCandles(400), nil, cfg, "profit_factor", 0, 16)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := RunPhases(b, []Phase{{Grid: grid}}, tinyCandles(400), nil, cfg, "profit_factor", 0, 16, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != len(want) {
+		t.Fatalf("len(got) = %d, want %d", len(got), len(want))
+	}
+	if !reflect.DeepEqual(got[0].Params, want[0].Params) {
+		t.Fatalf("top params differ:\ngot  %+v\nwant %+v", got[0].Params, want[0].Params)
+	}
+}
+
+func TestRunPhasesEmptyErrors(t *testing.T) {
+	b, _ := Lookup("RUAL")
+	cfg := backtest.Config{InitialCash: 100000, Fraction: 1.0, Lot: 1}
+	if _, err := RunPhases(b, nil, tinyCandles(400), nil, cfg, "profit_factor", 0, 16, nil); err == nil {
+		t.Fatal("expected error for empty phases")
 	}
 }

@@ -19,6 +19,46 @@ type CalibResult struct {
 	Metrics backtest.Metrics
 }
 
+// defaultKeepTop is how many top-ranked parameter sets carry into the next phase
+// when a phase does not set KeepTop.
+const defaultKeepTop = 5
+
+// Phase is one stage of a staged calibration: a sub-grid plus how many top-ranked
+// parameter sets survive into the next phase.
+type Phase struct {
+	Name    string `json:"name"`
+	KeepTop int    `json:"keepTop"`
+	Grid    Grid   `json:"grid"`
+}
+
+// PhasedGrid is the ordered list of calibration phases.
+type PhasedGrid struct {
+	Phases []Phase `json:"phases"`
+}
+
+// PhaseProgress reports one phase's outcome to a RunPhases caller (e.g. for stdout).
+type PhaseProgress struct {
+	Index      int     // 1-based phase index
+	Name       string  // phase name (defaults to phase-<index>)
+	Combos     int     // combinations run in this phase
+	Kept       int     // survivors carried forward (clamped to results; full ranking on the last phase)
+	BestMetric float64 // best metric value after this phase
+}
+
+// runCombos runs the engine once per parameter combination and pairs each with its
+// metrics. periodDays feeds CAGR. The result is unranked.
+func runCombos(b Binding, combos []any, candles, dailyCandles []backtest.Candle,
+	cfg backtest.Config, periodDays float64,
+) []CalibResult {
+	results := make([]CalibResult, 0, len(combos))
+	for _, params := range combos {
+		res := backtest.Run(b.Build(params), candles, dailyCandles, cfg)
+		m := backtest.Compute(res, res.BarsInMarket, len(res.Equity), periodDays)
+		results = append(results, CalibResult{Params: params, Metrics: m})
+	}
+	return results
+}
+
 // RunGrid runs the engine for every combination in the grid and returns the
 // results ranked by metric (best first). minTrades is the floor: combos with
 // fewer trades sink below all qualified combos. periodDays feeds CAGR.
@@ -32,13 +72,64 @@ func RunGrid(b Binding, grid Grid, candles []backtest.Candle, dailyCandles []bac
 	if err != nil {
 		return nil, err
 	}
-	results := make([]CalibResult, 0, len(combos))
-	for _, params := range combos {
-		res := backtest.Run(b.Build(params), candles, dailyCandles, cfg)
-		m := backtest.Compute(res, res.BarsInMarket, len(res.Equity), periodDays)
-		results = append(results, CalibResult{Params: params, Metrics: m})
-	}
+	results := runCombos(b, combos, candles, dailyCandles, cfg, periodDays)
 	return rankResults(results, metric, minTrades), nil
+}
+
+// RunPhases runs a staged calibration: phase k+1 sweeps its grid over the top-KeepTop
+// survivors of phase k. It returns the final phase's full ranking (best first).
+// onProgress, when non-nil, is called once per phase. metric and minTrades are global
+// across phases; minTrades floors every phase's ranking so a low-trade fluke cannot
+// survive forward.
+func RunPhases(b Binding, phases []Phase, candles, dailyCandles []backtest.Candle,
+	cfg backtest.Config, metric string, minTrades int, periodDays float64,
+	onProgress func(PhaseProgress),
+) ([]CalibResult, error) {
+	if err := validateMetric(metric); err != nil {
+		return nil, err
+	}
+	if len(phases) == 0 {
+		return nil, fmt.Errorf("backtest: phased grid has no phases")
+	}
+	seeds := []any{b.DefaultParams()}
+	var results []CalibResult
+	for i, ph := range phases {
+		combos := make([]any, 0, len(seeds))
+		for _, seed := range seeds {
+			expanded, err := expandGrid(seed, ph.Grid)
+			if err != nil {
+				return nil, err
+			}
+			combos = append(combos, expanded...)
+		}
+		results = rankResults(runCombos(b, combos, candles, dailyCandles, cfg, periodDays), metric, minTrades)
+
+		keep := ph.KeepTop
+		if keep <= 0 {
+			keep = defaultKeepTop
+		}
+		if keep > len(results) {
+			keep = len(results)
+		}
+		if onProgress != nil {
+			name := ph.Name
+			if name == "" {
+				name = fmt.Sprintf("phase-%d", i+1)
+			}
+			var best float64
+			if len(results) > 0 {
+				best = metricValue(results[0].Metrics, metric)
+			}
+			onProgress(PhaseProgress{Index: i + 1, Name: name, Combos: len(combos), Kept: keep, BestMetric: best})
+		}
+		if i < len(phases)-1 {
+			seeds = make([]any, 0, keep)
+			for _, r := range results[:keep] {
+				seeds = append(seeds, r.Params)
+			}
+		}
+	}
+	return results, nil
 }
 
 // expandGrid builds the cartesian product of the grid, applying each field over
