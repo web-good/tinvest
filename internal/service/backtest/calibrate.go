@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 
 	"tinvest/internal/domain/backtest"
 )
@@ -23,6 +24,10 @@ type CalibResult struct {
 // defaultKeepTop is how many top-ranked parameter sets carry into the next phase
 // when a phase does not set KeepTop.
 const defaultKeepTop = 5
+
+// calibWorkers bounds the goroutine pool that evaluates grid combinations in
+// runCombos. Kept conservative so a calibration run does not peg the whole machine.
+const calibWorkers = 4
 
 // Phase is one stage of a staged calibration: a sub-grid plus how many top-ranked
 // parameter sets survive into the next phase.
@@ -47,16 +52,41 @@ type PhaseProgress struct {
 }
 
 // runCombos runs the engine once per parameter combination and pairs each with its
-// metrics. periodDays feeds CAGR. The result is unranked.
+// metrics. periodDays feeds CAGR. The result is unranked but its order matches combos
+// exactly (results[i] is combos[i]), so ranking downstream is deterministic.
+//
+// Combinations are independent — each gets a fresh strategy via b.Build, its own
+// portfolio inside backtest.Run, and only reads the shared candle slices — so they run
+// on a bounded pool of calibWorkers goroutines. Each result slot has a single writer
+// (its own index), so no mutex is needed.
 func runCombos(b Binding, combos []any, candles, dailyCandles []backtest.Candle,
 	cfg backtest.Config, periodDays float64,
 ) []CalibResult {
-	results := make([]CalibResult, 0, len(combos))
-	for _, params := range combos {
-		res := backtest.Run(b.Build(params), candles, dailyCandles, cfg)
-		m := backtest.Compute(res, res.BarsInMarket, len(res.Equity), periodDays)
-		results = append(results, CalibResult{Params: params, Metrics: m})
+	results := make([]CalibResult, len(combos))
+
+	jobs := make(chan int)
+	var wg sync.WaitGroup
+	workers := calibWorkers
+	if workers > len(combos) {
+		workers = len(combos)
 	}
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range jobs {
+				res := backtest.Run(b.Build(combos[i]), candles, dailyCandles, cfg)
+				m := backtest.Compute(res, res.BarsInMarket, len(res.Equity), periodDays)
+				results[i] = CalibResult{Params: combos[i], Metrics: m}
+			}
+		}()
+	}
+	for i := range combos {
+		jobs <- i
+	}
+	close(jobs)
+	wg.Wait()
+
 	return results
 }
 
