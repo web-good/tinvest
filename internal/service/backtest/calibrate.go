@@ -66,10 +66,7 @@ func runCombos(b Binding, combos []any, candles, dailyCandles []backtest.Candle,
 
 	jobs := make(chan int)
 	var wg sync.WaitGroup
-	workers := calibWorkers
-	if workers > len(combos) {
-		workers = len(combos)
-	}
+	workers := min(calibWorkers, len(combos))
 	for w := 0; w < workers; w++ {
 		wg.Add(1)
 		go func() {

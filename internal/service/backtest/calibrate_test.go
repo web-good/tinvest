@@ -309,5 +309,8 @@ func TestRunGridDeterministicOrder(t *testing.T) {
 		if tr1 != tr2 {
 			t.Fatalf("run mismatch at rank %d: trades %d != %d", i, tr1, tr2)
 		}
+		if !reflect.DeepEqual(first[i].Params, second[i].Params) {
+			t.Fatalf("run mismatch at rank %d: params %v != %v", i, first[i].Params, second[i].Params)
+		}
 	}
 }
