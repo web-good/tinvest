@@ -6,7 +6,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -208,9 +207,9 @@ func runCalibration(b svc.Binding, gridPath string, candles []domain.Candle, dai
 	if err != nil {
 		return fmt.Errorf("read grid: %w", err)
 	}
-	var grid svc.Grid
-	if err := json.Unmarshal(raw, &grid); err != nil {
-		return fmt.Errorf("parse grid: %w", err)
+	phases, err := svc.ParsePhases(raw)
+	if err != nil {
+		return err
 	}
 
 	gridCandles, gridDaily := candles, dailyCandles
@@ -230,7 +229,10 @@ func runCalibration(b svc.Binding, gridPath string, candles []domain.Candle, dai
 		gridDays = periodDays - testDays
 	}
 
-	results, err := svc.RunGrid(b, grid, gridCandles, gridDaily, cfg, metric, minTrades, gridDays)
+	results, err := svc.RunPhases(b, phases, gridCandles, gridDaily, cfg, metric, minTrades, gridDays,
+		func(p svc.PhaseProgress) {
+			fmt.Printf("phase %s: %d combos -> kept %d (best %s=%.4g)\n", p.Name, p.Combos, p.Kept, metric, p.BestMetric)
+		})
 	if err != nil {
 		return err
 	}
