@@ -158,9 +158,17 @@ func RenderCalibrationMarkdown(metric string, results []CalibResult, topN int) s
 			i+1, metricValue(m, metric), m.ProfitFactor, m.NetPnL, m.WinRate*100, m.MaxDrawdown, m.TotalTrades)
 	}
 	if len(results) > 0 {
-		b.WriteString("\n## Лучшая комбинация — параметры\n\n| Параметр | Значение |\n|---|---|\n")
-		for _, row := range ParamRows(results[0].Params) {
-			fmt.Fprintf(&b, "| %s | %s |\n", row.Name, row.Value)
+		b.WriteString("\n## Параметры топ-комбинаций\n")
+		for i, r := range results {
+			if i >= topN {
+				break
+			}
+			m := r.Metrics
+			fmt.Fprintf(&b, "\n### #%d — %s %.4g, сделок %d\n\n| Параметр | Значение |\n|---|---|\n",
+				i+1, metric, metricValue(m, metric), m.TotalTrades)
+			for _, row := range ParamRows(r.Params) {
+				fmt.Fprintf(&b, "| %s | %s |\n", row.Name, row.Value)
+			}
 		}
 	}
 	return b.String()

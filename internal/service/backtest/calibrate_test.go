@@ -126,3 +126,26 @@ func TestRenderCalibrationMarkdown(t *testing.T) {
 		t.Fatalf("calibration markdown missing headers:\n%s", out)
 	}
 }
+
+func TestRenderCalibrationMarkdownTopParams(t *testing.T) {
+	first := rusal.DefaultParams()
+	second, err := applyField(first, "EMAPeriod", 99)
+	if err != nil {
+		t.Fatal(err)
+	}
+	results := []CalibResult{
+		{Params: first, Metrics: backtest.Metrics{ProfitFactor: 2.0, TotalTrades: 30}},
+		{Params: second, Metrics: backtest.Metrics{ProfitFactor: 1.5, TotalTrades: 25}},
+	}
+	out := RenderCalibrationMarkdown("profit_factor", results, 10)
+	// Both the best and the runner-up combos must have their own params block.
+	if strings.Count(out, "| Параметр | Значение |") != 2 {
+		t.Fatalf("want a params table per top combo (2), got:\n%s", out)
+	}
+	if !strings.Contains(out, "#2") {
+		t.Fatalf("runner-up combo not rendered:\n%s", out)
+	}
+	if !strings.Contains(out, "99") {
+		t.Fatalf("runner-up params (EMAPeriod=99) not rendered:\n%s", out)
+	}
+}
