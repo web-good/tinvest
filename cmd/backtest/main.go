@@ -90,6 +90,9 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 	if paramsPath != "" && calibratePath != "" {
 		return fmt.Errorf("-params and -calibrate are mutually exclusive")
 	}
+	if basketCSV != "" && calibratePath != "" {
+		return fmt.Errorf("-basket and -calibrate are mutually exclusive (-basket uses per-ticker grids from -grid-dir)")
+	}
 
 	token, err := loadToken()
 	if err != nil {
@@ -365,6 +368,18 @@ func runBasket(ctx context.Context, client grpcclient.GrpcClient, tickers []stri
 	periodDays := to.Sub(from).Hours() / 24
 	testDays := to.Sub(boundary).Hours() / 24
 	gridDays := periodDays - testDays
+	if testDays >= periodDays {
+		return fmt.Errorf("-test-months window (%.0f days) must be smaller than the -months window (%.0f days)", testDays, periodDays)
+	}
+
+	shares, err := client.InstrumentsServiceClient().Shares(ctx)
+	if err != nil {
+		return fmt.Errorf("load shares: %w", err)
+	}
+	byTicker := make(map[string]shareInfo, len(shares))
+	for _, s := range shares {
+		byTicker[s.Ticker] = shareInfo{ID: s.ID, Lot: s.Lot}
+	}
 
 	var pooled []domain.Trade
 	var summary svc.BasketSummary
@@ -386,9 +401,9 @@ func runBasket(ctx context.Context, client grpcclient.GrpcClient, tickers []stri
 			continue
 		}
 
-		share, err := resolveShare(ctx, client, ticker)
-		if err != nil {
-			entry.Skipped, entry.Note = true, fmt.Sprintf("инструмент не найден: %v", err)
+		share, ok := byTicker[ticker]
+		if !ok {
+			entry.Skipped, entry.Note = true, "инструмент не найден в Shares()"
 			summary.Entries = append(summary.Entries, entry)
 			continue
 		}
@@ -437,6 +452,18 @@ func runBasket(ctx context.Context, client grpcclient.GrpcClient, tickers []stri
 	}
 
 	summary.Pooled = svc.PooledMetrics(pooled)
+
+	if len(pooled) == 0 {
+		skipped := 0
+		for _, e := range summary.Entries {
+			if e.Skipped {
+				skipped++
+			}
+		}
+		if skipped == len(summary.Entries) {
+			return fmt.Errorf("basket: every ticker was skipped (no grids / instruments not found); nothing to report")
+		}
+	}
 
 	basketDir := filepath.Join(outDir, "basket")
 	if err := os.MkdirAll(basketDir, 0o755); err != nil {
