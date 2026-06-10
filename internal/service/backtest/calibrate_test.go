@@ -318,10 +318,10 @@ func TestRunGridDeterministicOrder(t *testing.T) {
 func BenchmarkRunGrid(b *testing.B) {
 	bind, _ := Lookup("RUAL")
 	grid := Grid{
-		"EMAPeriod":     {12, 21, 30, 50},
-		"SLMult":        {1.0, 1.5, 2.0},
-		"RSIPeriod":     {12, 14, 21},
-		"ATRPeriod":     {10, 14, 20},
+		"EMAPeriod": {12, 21, 30, 50},
+		"SLMult":    {1.0, 1.5, 2.0},
+		"RSIPeriod": {12, 14, 21},
+		"ATRPeriod": {10, 14, 20},
 	}
 	cfg := backtest.Config{InitialCash: 100000, Fraction: 1.0, Commission: 0.0005, Lot: 1}
 	candles := tinyCandles(2000)
