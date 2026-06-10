@@ -278,3 +278,36 @@ func TestParsePhasesMalformedErrors(t *testing.T) {
 		t.Fatal("expected error for malformed JSON")
 	}
 }
+
+func TestRunGridDeterministicOrder(t *testing.T) {
+	b, _ := Lookup("RUAL")
+	grid := Grid{
+		"EMAPeriod": {12, 21, 30},
+		"SLMult":    {1.0, 1.5, 2.0},
+	}
+	cfg := backtest.Config{InitialCash: 100000, Fraction: 1.0, Commission: 0.0005, Lot: 1}
+	candles := tinyCandles(600)
+
+	// Run twice; the ranked output must be byte-stable across runs.
+	first, err := RunGrid(b, grid, candles, nil, cfg, "profit_factor", 0, 16)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := RunGrid(b, grid, candles, nil, cfg, "profit_factor", 0, 16)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first) != 9 || len(second) != 9 { // 3 * 3
+		t.Fatalf("combos = %d/%d, want 9", len(first), len(second))
+	}
+	for i := range first {
+		pf1, pf2 := first[i].Metrics.ProfitFactor, second[i].Metrics.ProfitFactor
+		if pf1 != pf2 {
+			t.Fatalf("run mismatch at rank %d: PF %v != %v", i, pf1, pf2)
+		}
+		tr1, tr2 := first[i].Metrics.TotalTrades, second[i].Metrics.TotalTrades
+		if tr1 != tr2 {
+			t.Fatalf("run mismatch at rank %d: trades %d != %d", i, tr1, tr2)
+		}
+	}
+}
