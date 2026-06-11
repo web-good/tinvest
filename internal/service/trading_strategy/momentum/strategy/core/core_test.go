@@ -180,7 +180,8 @@ func TestExitHoldsWhenNeitherHit(t *testing.T) {
 func TestExitTrailWhenEnabled(t *testing.T) {
 	p := defaultParams()
 	p.UseTrail = 1
-	p.TrailArmATR = 0 // arm immediately
+	p.TrailArmATR = 0  // arm immediately
+	p.TakeProfitRR = 0 // isolate trail: no fixed TP so only TRAIL can fire
 	pos := &strategy.Position{PurchasePrice: 100, StopLoss: 95, EntryATR: 1, MaxFavorablePrice: 120}
 	s := NewWithParams("TEST", p)
 	// recentHigh 120, ATR≈1, TrailMult 2.5 -> chandelier≈117.5; barLow 117 <= chandelier.
@@ -624,5 +625,42 @@ func TestExplainDailyATRRoomDisabledReportsFilterOff(t *testing.T) {
 	}
 	if strings.Contains(out, "ВХОДА НЕТ") {
 		t.Fatalf("Explain must not block when daily-ATR gate is disabled, got: %q", out)
+	}
+}
+
+func TestEntryFiresWithFixedTPDisabled(t *testing.T) {
+	p := defaultParams()
+	p.TakeProfitRR = 0 // no fixed TP -> MinRR filter must not block the entry
+	s := NewWithParams("TEST", p)
+	if sig := s.Decide(buildEntryMD()); sig.Kind != model.SignalBuy {
+		t.Fatal("entry should fire when TakeProfitRR=0 (MinRR check skipped)")
+	}
+}
+
+func TestNoTakeProfitExitWhenDisabled(t *testing.T) {
+	p := defaultParams()
+	p.TakeProfitRR = 0 // fixed TP disabled
+	pos := &strategy.Position{PurchasePrice: 100, StopLoss: 95, EntryATR: 1, MaxFavorablePrice: 100}
+	s := NewWithParams("TEST", p)
+	// barHigh 999 would smash any fixed TP; with TakeProfitRR=0 there must be no TP exit.
+	sig := s.Decide(inPositionMD(100, 999, 100, pos))
+	if sig.Kind == model.SignalSell && sig.Reason == "TP" {
+		t.Fatal("no TP exit should fire when TakeProfitRR=0")
+	}
+}
+
+func TestFixedTPFiresEvenWithTrailEnabled(t *testing.T) {
+	// New behavior: TP and trail are independent. Trail on, but TP target hit first.
+	p := defaultParams()
+	p.UseTrail = 1
+	p.TrailArmATR = 0  // armed immediately
+	p.TakeProfitRR = 2 // TP = 100 + 2*5 = 110
+	pos := &strategy.Position{PurchasePrice: 100, StopLoss: 95, EntryATR: 1, MaxFavorablePrice: 100}
+	s := NewWithParams("TEST", p)
+	// recentHigh 100 -> chandelier ~97.5; barLow 111 stays above it (no trail);
+	// barHigh 111 >= TP 110 -> fixed TP must still fire even though UseTrail=1.
+	sig := s.Decide(inPositionMD(111, 111, 100, pos))
+	if sig.Kind != model.SignalSell || sig.Reason != "TP" {
+		t.Fatalf("kind=%v reason=%q want Sell/TP (TP independent of trail)", sig.Kind, sig.Reason)
 	}
 }

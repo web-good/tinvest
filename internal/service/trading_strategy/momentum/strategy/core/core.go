@@ -379,7 +379,7 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 		return block("Риск: SL=%.4f ≥ цены %.4f (risk ≤ 0)", stop, in.price)
 	}
 	target := in.price + s.p.TakeProfitRR*risk
-	if s.p.MinRR > 0 && (target-in.price) < s.p.MinRR*risk {
+	if s.p.TakeProfitRR > 0 && s.p.MinRR > 0 && (target-in.price) < s.p.MinRR*risk {
 		return block("RR: цель %.4f даёт %.2gR < MinRR %.2g", target, (target-in.price)/risk, s.p.MinRR)
 	}
 	pass("Риск: SL=%.4f, TP=%.4f, %.2gR", stop, target, (target-in.price)/risk)
@@ -432,7 +432,9 @@ func (s *Strategy) decide(in decideInput) model.Signal {
 		return sig
 	}
 	target := in.price + s.p.TakeProfitRR*risk
-	if s.p.MinRR > 0 && (target-in.price) < s.p.MinRR*risk {
+	// MinRR only gates the fixed-TP reward. With no fixed TP (TakeProfitRR<=0) the
+	// trade is managed by trail/MACD/RSI exits, so the RR filter does not apply.
+	if s.p.TakeProfitRR > 0 && s.p.MinRR > 0 && (target-in.price) < s.p.MinRR*risk {
 		return sig
 	}
 
@@ -478,21 +480,23 @@ func (s *Strategy) manage(in decideInput, sig model.Signal) model.Signal {
 	// risk and stop are both fixed at entry, so this is deterministic.
 	risk := entry - hardSL
 	tp := entry + s.p.TakeProfitRR*risk
+	chandelier := in.recentHigh - s.p.TrailMult*in.atr
+	trailArmed := s.p.TrailArmATR <= 0 || in.pos.MaxFavorablePrice >= entry+s.p.TrailArmATR*in.pos.EntryATR
 
 	sig.StopLoss = hardSL
-	sig.TakeProfit = tp
+	if s.p.TakeProfitRR > 0 {
+		sig.TakeProfit = tp
+	}
 
+	// Exit on the first trigger; protective/intrabar stops are checked first so the
+	// worst case for the position wins ties on a bar. MACD/RSI are close-confirmed.
 	switch {
 	case in.barLow <= hardSL:
 		sig.Kind, sig.Reason = model.SignalSell, "SL"
-	case s.p.UseTrail == 0 && in.barHigh >= tp:
+	case s.p.UseTrail == 1 && trailArmed && in.barLow <= chandelier:
+		sig.Kind, sig.Reason, sig.StopLoss = model.SignalSell, "TRAIL", chandelier
+	case s.p.TakeProfitRR > 0 && in.barHigh >= tp:
 		sig.Kind, sig.Reason = model.SignalSell, "TP"
-	case s.p.UseTrail == 1:
-		chandelier := in.recentHigh - s.p.TrailMult*in.atr
-		armed := s.p.TrailArmATR <= 0 || in.pos.MaxFavorablePrice >= entry+s.p.TrailArmATR*in.pos.EntryATR
-		if armed && in.barLow <= chandelier {
-			sig.Kind, sig.Reason, sig.StopLoss = model.SignalSell, "TRAIL", chandelier
-		}
 	}
 	return sig
 }
