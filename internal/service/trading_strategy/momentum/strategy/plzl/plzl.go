@@ -22,5 +22,6 @@ func DefaultParams() core.Params {
 		ATRPeriod: 14, SwingLowWindow: 10, SLMult: 0.5, TakeProfitRR: 2.0, MinRR: 1.5,
 		MinATRFrac: 0.003, UseTrail: 0, TrailMult: 2.5, ChandelierWindow: 20, TrailArmATR: 1.0,
 		CooldownBars: 0, DailyTrendPeriod: 0,
+		UseMACDExit: 0, RSIPeriod: 0, RSIOverbought: 70,
 	}
 }

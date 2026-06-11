@@ -18,10 +18,20 @@
       "grid": {
         "MACDFast": [12, 10, 8],
         "MACDSlow": [21, 26, 18],
-        "CooldownBars": [0,6,12, 24],
+        "CooldownBars": [0, 6, 12, 24],
         "DailyTrendPeriod": [0, 10, 20],
         "SignalValidBars": [0, 2, 4],
         "MaxDriftATR": [0, 1.0]
+      }
+    },
+    {
+      "name": "exits",
+      "grid": {
+        "UseTrail": [0, 1],
+        "TakeProfitRR": [0, 2.0, 3.0],
+        "UseMACDExit": [0, 1],
+        "RSIPeriod": [0, 14],
+        "RSIOverbought": [70]
       }
     }
   ]
