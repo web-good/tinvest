@@ -24,6 +24,17 @@ import (
 // until each signal actually happens.
 const signalSaturate = 1 << 30
 
+// adxPeriod / adxThreshold define the regime gate: entry is allowed only when the
+// hourly ADX(adxPeriod) is at least adxThreshold, i.e. the instrument is trending
+// rather than ranging. The threshold is a fixed in-package constant — deliberately
+// NOT a Params field — so grid calibration can never tune it per ticker. This makes
+// the basket walk-forward an honest test of whether filtering chop yields real edge.
+// Ablation: set adxThreshold to 0 to disable the gate.
+const (
+	adxPeriod    = 14
+	adxThreshold = 25.0
+)
+
 // Params holds every tunable. All fields are int or float64 (flags as int 0/1)
 // so reflection grid calibration can sweep them.
 type Params struct {
@@ -79,6 +90,7 @@ func (s *Strategy) Lookback() int {
 		s.p.SwingLowWindow,
 		s.p.ChandelierWindow,
 		s.p.RSIPeriod + 1,
+		2*adxPeriod + 1,
 	} {
 		if c > m {
 			m = c
@@ -92,6 +104,7 @@ type decideInput struct {
 	price         float64
 	atr           float64
 	emaTrend      float64
+	adx           float64 // hourly ADX(adxPeriod); the regime gate requires adx >= adxThreshold
 	macdNow       float64
 	macdFired     bool    // a qualifying MACD bullish cross happened on this bar (honours MACDBelowZeroOnly)
 	macdCrossDown bool    // MACD line just crossed below its signal line (bearish exit)
@@ -142,6 +155,7 @@ func (s *Strategy) advanceSignals(in decideInput) {
 // buildInput computes every indicator from md and packs them for the pure core.
 func (s *Strategy) buildInput(md strategy.MarketData) decideInput {
 	atr := indicators.ATR(md.Highs, md.Lows, md.Closes, s.p.ATRPeriod)
+	adx, _, _ := indicators.ADX(md.Highs, md.Lows, md.Closes, adxPeriod)
 
 	emaTrend := 0.0
 	if e := ema.Compute(md.Closes, s.p.EMAPeriod); len(e) > 0 {
@@ -178,6 +192,7 @@ func (s *Strategy) buildInput(md strategy.MarketData) decideInput {
 		price:         md.Price,
 		atr:           atr,
 		emaTrend:      emaTrend,
+		adx:           adx,
 		macdNow:       macdNow,
 		macdFired:     macdFired,
 		macdCrossDown: crossDown,
@@ -283,6 +298,12 @@ func (s *Strategy) decide(in decideInput) model.Signal {
 
 	if in.pos != nil {
 		return s.manage(in, sig)
+	}
+
+	// Regime gate: only trade when the instrument is trending (ADX >= threshold),
+	// never in chop. Fixed threshold, identical for every ticker, never calibrated.
+	if in.adx < adxThreshold {
+		return sig
 	}
 
 	// Entry trigger: a fresh MACD↔RSI confluence on this bar. Edge-triggered, so it

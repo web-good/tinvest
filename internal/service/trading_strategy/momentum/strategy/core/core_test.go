@@ -62,6 +62,7 @@ func passingInput() decideInput {
 		price:              100,
 		emaTrend:           90,
 		atr:                1,
+		adx:                30,
 		volumeOK:           true,
 		recentLow:          98,
 		barsSinceMACDCross: signalSaturate,
@@ -235,6 +236,38 @@ func TestGateBlocks(t *testing.T) {
 	})
 }
 
+// --- ADX regime gate ---
+
+func TestADXRegimeGate(t *testing.T) {
+	p := defaultParams()
+	p.SignalValidBars = 0
+
+	// A fully entry-qualifying input (confluence + trend + volume + RR all pass).
+	base := passingInput()
+	base.macdFired = true
+	base.rsiFired = true
+	base.barsSinceMACDCross = 0
+	base.barsSinceRSICross = 0
+
+	t.Run("blocks_below_threshold", func(t *testing.T) {
+		s := NewWithParams("TEST", p)
+		in := base
+		in.adx = 20 // < 25 -> chop -> no entry despite full confluence
+		if sig := s.decide(in); sig.Kind == model.SignalBuy {
+			t.Fatal("want no Buy when ADX below threshold (chop)")
+		}
+	})
+
+	t.Run("allows_at_threshold", func(t *testing.T) {
+		s := NewWithParams("TEST", p)
+		in := base
+		in.adx = adxThreshold // exactly 25 -> allowed (gate is >=)
+		if sig := s.decide(in); sig.Kind != model.SignalBuy {
+			t.Fatalf("want Buy when ADX == threshold, got kind=%v", sig.Kind)
+		}
+	})
+}
+
 // --- e) buildInput wiring ---
 
 func TestBuildInputWiring(t *testing.T) {
@@ -286,6 +319,15 @@ func TestBuildInputWiring(t *testing.T) {
 		in := s.buildInput(md)
 		if in.rsiFired {
 			t.Fatal("want rsiFired=false when RSIPeriod=0")
+		}
+	})
+
+	t.Run("adx_above_threshold_on_trending_fixture", func(t *testing.T) {
+		p := defaultParams()
+		s := NewWithParams("TEST", p)
+		in := s.buildInput(buildEntryMD())
+		if in.adx < adxThreshold {
+			t.Fatalf("buildEntryMD ADX=%.2f want >= %.0f (sustained uptrend should be strongly trending)", in.adx, adxThreshold)
 		}
 	})
 }
