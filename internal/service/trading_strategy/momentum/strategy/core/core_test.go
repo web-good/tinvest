@@ -806,3 +806,70 @@ func TestNoRSIExitWhenLineNotCrossed(t *testing.T) {
 		t.Fatalf("no RSI exit when line %.2f is below both prev=%.2f now=%.2f", now-5, prev, now)
 	}
 }
+
+func TestExitReasonSL(t *testing.T) {
+	pos := &strategy.Position{PurchasePrice: 100, StopLoss: 95, EntryATR: 1, MaxFavorablePrice: 100}
+	s := NewWithParams("TEST", defaultParams())
+	sig := s.Decide(inPositionMD(94, 101, 100, pos)) // barLow 94 <= SL 95
+	if sig.Reason != "SL" || !strings.Contains(sig.ExitReason, "стоп") {
+		t.Fatalf("reason=%q exitReason=%q want SL with 'стоп'", sig.Reason, sig.ExitReason)
+	}
+}
+
+func TestExitReasonTP(t *testing.T) {
+	pos := &strategy.Position{PurchasePrice: 100, StopLoss: 95, EntryATR: 1, MaxFavorablePrice: 100}
+	s := NewWithParams("TEST", defaultParams())
+	sig := s.Decide(inPositionMD(100, 111, 100, pos)) // barHigh 111 >= TP 110
+	if sig.Reason != "TP" || !strings.Contains(sig.ExitReason, "цель") {
+		t.Fatalf("reason=%q exitReason=%q want TP with 'цель'", sig.Reason, sig.ExitReason)
+	}
+}
+
+func TestExitReasonTrail(t *testing.T) {
+	p := defaultParams()
+	p.UseTrail = 1
+	p.TrailArmATR = 0
+	p.TakeProfitRR = 0 // isolate trail
+	pos := &strategy.Position{PurchasePrice: 100, StopLoss: 95, EntryATR: 1, MaxFavorablePrice: 120}
+	s := NewWithParams("TEST", p)
+	sig := s.Decide(inPositionMD(117, 121, 120, pos)) // barLow 117 <= chandelier ~117.5
+	if sig.Reason != "TRAIL" || !strings.Contains(sig.ExitReason, "шанделье") {
+		t.Fatalf("reason=%q exitReason=%q want TRAIL with 'шанделье'", sig.Reason, sig.ExitReason)
+	}
+}
+
+func TestExitReasonMACD(t *testing.T) {
+	closes := risingThenDropCloses(60, 100, 0.5, 6)
+	p := defaultParams()
+	p.UseMACDExit = 1
+	p.TakeProfitRR = 0
+	p.UseTrail = 0
+	pos := &strategy.Position{PurchasePrice: closes[0], StopLoss: 1, EntryATR: 1, MaxFavorablePrice: 1000}
+	s := NewWithParams("TEST", p)
+	sig := s.Decide(inPositionMDWithCloses(closes, pos))
+	if sig.Reason != "MACD" || !strings.Contains(sig.ExitReason, "кросс") {
+		t.Fatalf("reason=%q exitReason=%q want MACD with 'кросс'", sig.Reason, sig.ExitReason)
+	}
+}
+
+func TestExitReasonRSI(t *testing.T) {
+	const period = 14
+	closes := risingThenDropCloses(40, 100, 1.0, 4)
+	r := indicators.RSISeries(closes, period)
+	prev, now := r[len(r)-2], r[len(r)-1]
+	if !(prev > now) {
+		t.Fatalf("test setup: need prev RSI > now RSI, got prev=%v now=%v", prev, now)
+	}
+	p := defaultParams()
+	p.RSIPeriod = period
+	p.RSIOverbought = (prev + now) / 2
+	p.TakeProfitRR = 0
+	p.UseTrail = 0
+	p.UseMACDExit = 0
+	pos := &strategy.Position{PurchasePrice: closes[0], StopLoss: 1, EntryATR: 1, MaxFavorablePrice: 1000}
+	s := NewWithParams("TEST", p)
+	sig := s.Decide(inPositionMDWithCloses(closes, pos))
+	if sig.Reason != "RSI" || !strings.Contains(sig.ExitReason, "пересёк границу") {
+		t.Fatalf("reason=%q exitReason=%q want RSI with 'пересёк границу'", sig.Reason, sig.ExitReason)
+	}
+}

@@ -511,14 +511,21 @@ func (s *Strategy) manage(in decideInput, sig model.Signal) model.Signal {
 	switch {
 	case in.barLow <= hardSL:
 		sig.Kind, sig.Reason = model.SignalSell, "SL"
+		sig.ExitReason = fmt.Sprintf("SL: low %.4f ≤ стоп %.4f (зафиксирован на входе)", in.barLow, hardSL)
 	case s.p.UseTrail == 1 && trailArmed && in.barLow <= chandelier:
 		sig.Kind, sig.Reason, sig.StopLoss = model.SignalSell, "TRAIL", chandelier
+		sig.ExitReason = fmt.Sprintf("TRAIL: low %.4f ≤ шанделье %.4f (recentHigh %.4f − %.2g×ATR %.4f)",
+			in.barLow, chandelier, in.recentHigh, s.p.TrailMult, in.atr)
 	case s.p.TakeProfitRR > 0 && in.barHigh >= tp:
 		sig.Kind, sig.Reason = model.SignalSell, "TP"
+		sig.ExitReason = fmt.Sprintf("TP: high %.4f ≥ цель %.4f (%.2gR)", in.barHigh, tp, s.p.TakeProfitRR)
 	case s.p.UseMACDExit == 1 && in.macdCrossDown:
 		sig.Kind, sig.Reason = model.SignalSell, "MACD"
+		sig.ExitReason = fmt.Sprintf("MACD: медвежий кросс сигнальной линии (MACD=%.4f)", in.macdNow)
 	case s.p.RSIPeriod > 0 && in.rsiPrev > s.p.RSIOverbought && in.rsiNow <= s.p.RSIOverbought:
 		sig.Kind, sig.Reason = model.SignalSell, "RSI"
+		sig.ExitReason = fmt.Sprintf("RSI: %.2f → %.2f, пересёк границу %.2g сверху вниз",
+			in.rsiPrev, in.rsiNow, s.p.RSIOverbought)
 	}
 	return sig
 }
