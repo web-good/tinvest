@@ -583,3 +583,46 @@ func TestExplainReportsDeferredEntryBar(t *testing.T) {
 		t.Fatalf("Explain should show the armed signal that produced the entry: %q", out)
 	}
 }
+
+func TestDailyATRRoomDisabledAllowsEntry(t *testing.T) {
+	// Same setup as TestEntryBlockedByDailyATRRoom: consumed range far exceeds any
+	// ATR threshold. With MaxDailyATRUsed=0 the gate must be skipped and the entry
+	// must fire; with a positive value it must block (control case).
+	md := buildEntryMD()
+	md.TodayHigh = md.Price + 50
+	md.TodayLow = md.Price - 50
+
+	// Gate disabled: entry fires despite exhausted daily range.
+	p := defaultParams()
+	p.MaxDailyATRUsed = 0
+	s := NewWithParams("TEST", p)
+	if sig := s.Decide(md); sig.Kind != model.SignalBuy {
+		t.Fatal("entry should fire when MaxDailyATRUsed=0 disables the daily-ATR gate")
+	}
+
+	// Control: gate enabled (positive value) -> same range blocks.
+	p2 := defaultParams() // MaxDailyATRUsed=0.6
+	s2 := NewWithParams("TEST", p2)
+	if sig := s2.Decide(md); sig.Kind == model.SignalBuy {
+		t.Fatal("entry should be blocked when MaxDailyATRUsed>0 and daily range is exhausted")
+	}
+}
+
+func TestExplainDailyATRRoomDisabledReportsFilterOff(t *testing.T) {
+	// With MaxDailyATRUsed=0, Explain must report the "фильтр выключен" pass message
+	// even when today's range would normally block.
+	md := buildEntryMD()
+	md.TodayHigh = md.Price + 50
+	md.TodayLow = md.Price - 50
+
+	p := defaultParams()
+	p.MaxDailyATRUsed = 0
+	s := NewWithParams("TEST", p)
+	out := s.Explain(md)
+	if !strings.Contains(out, "фильтр выключен") {
+		t.Fatalf("Explain should report 'фильтр выключен' when MaxDailyATRUsed<=0, got: %q", out)
+	}
+	if strings.Contains(out, "ВХОДА НЕТ") {
+		t.Fatalf("Explain must not block when daily-ATR gate is disabled, got: %q", out)
+	}
+}

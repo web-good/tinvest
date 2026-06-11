@@ -39,7 +39,7 @@ type Params struct {
 	VolLookback       int     // SMA window for the volume baseline
 	VolMultiplier     float64 // last volume must exceed VolMultiplier*SMA(volume)
 	DailyATRPeriod    int     // ATR period over completed daily candles
-	MaxDailyATRUsed   float64 // block entry if today's range >= MaxDailyATRUsed*dailyATR
+	MaxDailyATRUsed   float64 // block entry if today's range >= MaxDailyATRUsed*dailyATR; <=0 disables
 	ATRPeriod         int     // hourly ATR period (stops, anti-churn)
 	SwingLowWindow    int     // bars scanned for the structural low anchoring the stop
 	SLMult            float64 // stop = swingLow - SLMult*ATR
@@ -353,12 +353,13 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 	pass("Объём: выше %.2g×ср(%d)", s.p.VolMultiplier, s.p.VolLookback)
 
 	// 5. Daily-ATR room.
-	if in.dailyATR > 0 && in.todayRange >= s.p.MaxDailyATRUsed*in.dailyATR {
+	if s.p.MaxDailyATRUsed <= 0 {
+		pass("Запас дневного ATR: фильтр выключен (MaxDailyATRUsed ≤ 0)")
+	} else if in.dailyATR > 0 && in.todayRange >= s.p.MaxDailyATRUsed*in.dailyATR {
 		roomPct := (1 - in.todayRange/in.dailyATR) * 100
 		return block("Запас дневного ATR: день уже прошёл %.4f из %.4f (осталось %.0f%%, лимит входа %.0f%%)",
 			in.todayRange, in.dailyATR, roomPct, (1-s.p.MaxDailyATRUsed)*100)
-	}
-	if in.dailyATR > 0 {
+	} else if in.dailyATR > 0 {
 		roomPct := (1 - in.todayRange/in.dailyATR) * 100
 		pass("Запас дневного ATR: прошло %.4f из %.4f (осталось %.0f%%)", in.todayRange, in.dailyATR, roomPct)
 	} else {
@@ -416,8 +417,9 @@ func (s *Strategy) decide(in decideInput) model.Signal {
 	if !in.volumeOK {
 		return sig
 	}
-	// Daily-ATR room: pass when daily data is absent (dailyATR<=0), else require room.
-	if in.dailyATR > 0 && in.todayRange >= s.p.MaxDailyATRUsed*in.dailyATR {
+	// Daily-ATR room: MaxDailyATRUsed<=0 disables the gate entirely; when enabled,
+	// pass when daily data is absent (dailyATR<=0), else require room.
+	if s.p.MaxDailyATRUsed > 0 && in.dailyATR > 0 && in.todayRange >= s.p.MaxDailyATRUsed*in.dailyATR {
 		return sig
 	}
 	if s.p.MinATRFrac > 0 && in.atr < s.p.MinATRFrac*in.price {
