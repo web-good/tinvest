@@ -51,7 +51,7 @@ func TestPortfolioCloseComputesPnLAndBarsHeld(t *testing.T) {
 	p.bar = 3
 	p.open(100, time.Unix(3, 0), 0, 0, 0, 0, "") // qty = 1000, cash = 0
 	p.bar = 8
-	tr := p.close(110, time.Unix(8, 0), "TP")
+	tr := p.close(110, time.Unix(8, 0), "TP", "")
 	// revenue 110000; entryCost 100000; PnL 10000; PnLPct 0.1.
 	if !approx(tr.PnL, 10000) || !approx(tr.PnLPct, 0.1) {
 		t.Fatalf("PnL=%f PnLPct=%f, want 10000 / 0.1", tr.PnL, tr.PnLPct)
@@ -136,7 +136,7 @@ func TestPortfolioCloseResetsEntryState(t *testing.T) {
 	p.open(100, time.Unix(0, 0), 0, 0, 1, 95, "")
 	p.mark(110)
 	p.bar = 2
-	p.close(108, time.Unix(1, 0), "TRAIL")
+	p.close(108, time.Unix(1, 0), "TRAIL", "")
 	if !approx(p.entryStop, 0) || !approx(p.maxFavorable, 0) {
 		t.Fatalf("entryStop=%v maxFavorable=%v, want 0/0 after close", p.entryStop, p.maxFavorable)
 	}

@@ -39,6 +39,7 @@ func TestRenderTradesCSVHeaderAndRow(t *testing.T) {
 		EntryTime: time.Unix(0, 0), EntryPrice: 100, ExitTime: time.Unix(3600, 0),
 		ExitPrice: 110, Quantity: 10, Reason: "TP", PnL: 100, PnLPct: 0.1, BarsHeld: 1,
 		SupportLevel: 99, ResistanceLevel: 112, ATR: 1.25,
+		ExitReason: "TP: high 110.0000 ≥ цель 110.0000 (2R)",
 	}}
 	out := RenderTradesCSV(trades)
 	lines := strings.Split(strings.TrimSpace(out), "\n")
@@ -51,11 +52,30 @@ func TestRenderTradesCSVHeaderAndRow(t *testing.T) {
 	if !strings.Contains(lines[1], "TP") {
 		t.Fatalf("row missing reason: %q", lines[1])
 	}
-	if !strings.HasSuffix(lines[0], "support_level,resistance_level,atr,entry_reason") {
+	if !strings.HasSuffix(lines[0], "support_level,resistance_level,atr,entry_reason,exit_reason") {
 		t.Fatalf("header missing new columns: %q", lines[0])
+	}
+	if !strings.Contains(lines[1], "цель") {
+		t.Fatalf("row missing exit reason: %q", lines[1])
 	}
 	if !strings.Contains(lines[1], "99.000000,112.000000,1.250000") {
 		t.Fatalf("row missing entry-context values: %q", lines[1])
+	}
+}
+
+func TestRenderMarkdownHasExitReason(t *testing.T) {
+	m := Metrics{TotalTrades: 1, Wins: 1, WinRate: 1.0, ProfitFactor: 2.0, NetPnL: 100}
+	trades := []Trade{{
+		EntryTime: time.Unix(0, 0), EntryPrice: 100, ExitTime: time.Unix(3600, 0),
+		ExitPrice: 110, Quantity: 10, Reason: "TP", PnL: 100, PnLPct: 0.1, BarsHeld: 1,
+		EntryReason: "Тренд↑ вход", ExitReason: "TP: high 110.0000 ≥ цель 110.0000 (2R)",
+	}}
+	out := RenderMarkdown(sampleMeta(), m, trades, eqCurve([]float64{100000, 100100}))
+	if !strings.Contains(out, "Причина выхода") {
+		t.Fatalf("markdown missing 'Причина выхода' header: %q", out)
+	}
+	if !strings.Contains(out, "TP: high 110.0000 ≥ цель 110.0000 (2R)") {
+		t.Fatalf("markdown missing exit reason text: %q", out)
 	}
 }
 

@@ -23,4 +23,5 @@ type Signal struct {
 	ATR            float64 // ATR at entry; 0 when n/a
 	Reason         string  // exit reason: "TP"/"SL"/"TRAIL"; ignored for entries
 	EntryReason    string  // human-readable entry rationale (set on Buy); empty for sells
+	ExitReason     string  // human-readable exit rationale (set on Sell); empty for buys
 }

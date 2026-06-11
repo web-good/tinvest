@@ -122,7 +122,7 @@ func Run(s strategy.Strategy, candles []Candle, dailyCandles []Candle, cfg Confi
 						exitPrice = max(sig.TakeProfit, c.Open)
 					}
 				}
-				res.Trades = append(res.Trades, p.close(exitPrice, c.Time, sig.Reason))
+				res.Trades = append(res.Trades, p.close(exitPrice, c.Time, sig.Reason, sig.ExitReason))
 			}
 		}
 
@@ -204,7 +204,7 @@ func Trace(s strategy.Strategy, candles []Candle, dailyCandles []Candle, cfg Con
 						exitPrice = max(sig.TakeProfit, c.Open)
 					}
 				}
-				p.close(exitPrice, c.Time, sig.Reason)
+				p.close(exitPrice, c.Time, sig.Reason, sig.ExitReason)
 			}
 		}
 	}

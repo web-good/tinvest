@@ -71,7 +71,7 @@ func (p *portfolio) mark(price float64) {
 }
 
 // close sells the whole position at price and returns the round-trip trade.
-func (p *portfolio) close(price float64, t time.Time, reason string) Trade {
+func (p *portfolio) close(price float64, t time.Time, reason, exitReason string) Trade {
 	revenue := float64(p.qty) * price
 	commission := revenue * p.cfg.Commission
 	p.cash += revenue - commission
@@ -95,6 +95,7 @@ func (p *portfolio) close(price float64, t time.Time, reason string) Trade {
 		ResistanceLevel: p.entryTarget,
 		ATR:             p.entryATR,
 		EntryReason:     p.entryReason,
+		ExitReason:      exitReason,
 	}
 	p.qty = 0
 	p.entryPrice = 0

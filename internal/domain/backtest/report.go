@@ -39,12 +39,12 @@ func RenderMarkdown(meta Meta, m Metrics, trades []Trade, equity []EquityPoint) 
 	fmt.Fprintf(&b, "| Exposure | %.2f%% |\n", m.ExposurePct*100)
 	fmt.Fprintf(&b, "| CAGR | %.2f%% |\n", m.CAGR*100)
 
-	b.WriteString("\n## Журнал сделок\n\n| № | Вход | Цена входа | Выход | Цена выхода | Причина | Баров | PnL | PnL %% | Support | Resist | ATR | Причина входа |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+	b.WriteString("\n## Журнал сделок\n\n| № | Вход | Цена входа | Выход | Цена выхода | Причина | Баров | PnL | PnL %% | Support | Resist | ATR | Причина входа | Причина выхода |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	for i, t := range trades {
-		fmt.Fprintf(&b, "| %d | %s | %.4f | %s | %.4f | %s | %d | %.2f | %.2f%% | %.4f | %.4f | %.4f | %s |\n",
+		fmt.Fprintf(&b, "| %d | %s | %.4f | %s | %.4f | %s | %d | %.2f | %.2f%% | %.4f | %.4f | %.4f | %s | %s |\n",
 			i+1, t.EntryTime.Format(tsLayout), t.EntryPrice, t.ExitTime.Format(tsLayout),
 			t.ExitPrice, t.Reason, t.BarsHeld, t.PnL, t.PnLPct*100,
-			t.SupportLevel, t.ResistanceLevel, t.ATR, t.EntryReason)
+			t.SupportLevel, t.ResistanceLevel, t.ATR, t.EntryReason, t.ExitReason)
 	}
 
 	b.WriteString("\n## Движение капитала\n\n")
@@ -80,13 +80,13 @@ func csvField(s string) string {
 // RenderTradesCSV renders the trade journal as CSV.
 func RenderTradesCSV(trades []Trade) string {
 	var b strings.Builder
-	b.WriteString("idx,entry_time,entry_price,exit_time,exit_price,qty,reason,pnl,pnl_pct,bars_held,support_level,resistance_level,atr,entry_reason\n")
+	b.WriteString("idx,entry_time,entry_price,exit_time,exit_price,qty,reason,pnl,pnl_pct,bars_held,support_level,resistance_level,atr,entry_reason,exit_reason\n")
 	for i, t := range trades {
-		fmt.Fprintf(&b, "%d,%s,%.6f,%s,%.6f,%d,%s,%.6f,%.6f,%d,%.6f,%.6f,%.6f,%s\n",
+		fmt.Fprintf(&b, "%d,%s,%.6f,%s,%.6f,%d,%s,%.6f,%.6f,%d,%.6f,%.6f,%.6f,%s,%s\n",
 			i+1, t.EntryTime.UTC().Format(time.RFC3339), t.EntryPrice,
 			t.ExitTime.UTC().Format(time.RFC3339), t.ExitPrice, t.Quantity,
 			t.Reason, t.PnL, t.PnLPct, t.BarsHeld,
-			t.SupportLevel, t.ResistanceLevel, t.ATR, csvField(t.EntryReason))
+			t.SupportLevel, t.ResistanceLevel, t.ATR, csvField(t.EntryReason), csvField(t.ExitReason))
 	}
 	return b.String()
 }

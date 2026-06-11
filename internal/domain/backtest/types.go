@@ -37,6 +37,7 @@ type Trade struct {
 	ResistanceLevel float64 // HVN resistance / target at entry; 0 when n/a
 	ATR             float64 // ATR at entry; 0 when n/a
 	EntryReason     string  // human-readable entry rationale captured at entry
+	ExitReason      string  // human-readable exit rationale captured at exit; empty when n/a
 }
 
 // EquityPoint is portfolio value at one bar.
