@@ -29,7 +29,8 @@ const signalSaturate = 1 << 30
 // rather than ranging. The threshold is a fixed in-package constant — deliberately
 // NOT a Params field — so grid calibration can never tune it per ticker. This makes
 // the basket walk-forward an honest test of whether filtering chop yields real edge.
-// Ablation: set adxThreshold to 0 to disable the gate.
+// Ablation: set adxThreshold to 0 to disable the gate (note: insufficient-history
+// bars, where ADX returns 0, then also pass).
 const (
 	adxPeriod    = 14
 	adxThreshold = 25.0
@@ -257,26 +258,32 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 		rsiAge = 0
 	}
 
-	// 1. MACD↔RSI confluence (the entry trigger).
+	// 1. Regime gate (ADX).
+	if in.adx < adxThreshold {
+		return block("ADX %.1f < %.0f — боковик, торговля запрещена", in.adx, adxThreshold)
+	}
+	pass("ADX %.1f ≥ %.0f (тренд подтверждён)", in.adx, adxThreshold)
+
+	// 2. MACD↔RSI confluence (the entry trigger).
 	if !confluence(in, s.p.SignalValidBars) {
 		return block("Confluence: нет свежей пары MACD↔RSI (MACD %d бар(ов) назад, RSI %d бар(ов) назад, окно %d)",
 			macdAge, rsiAge, s.p.SignalValidBars)
 	}
 	pass("Confluence: MACD %d бар(ов) назад, RSI %d бар(ов) назад (окно %d)", macdAge, rsiAge, s.p.SignalValidBars)
 
-	// 2. Uptrend.
+	// 3. Uptrend.
 	if !(in.emaTrend > 0 && in.price > in.emaTrend) {
 		return block("Тренд: close %.4f ≤ EMA%d %.4f (нужно выше)", in.price, s.p.EMAPeriod, in.emaTrend)
 	}
 	pass("Тренд: close %.4f > EMA%d %.4f", in.price, s.p.EMAPeriod, in.emaTrend)
 
-	// 3. Volume.
+	// 4. Volume.
 	if !in.volumeOK {
 		return block("Объём: ниже %.2g×ср(%d) — подтверждения нет", s.p.VolMultiplier, s.p.VolLookback)
 	}
 	pass("Объём: выше %.2g×ср(%d)", s.p.VolMultiplier, s.p.VolLookback)
 
-	// 4. Risk / RR sanity.
+	// 5. Risk / RR sanity.
 	stop := in.recentLow - s.p.SLMult*in.atr
 	risk := in.price - stop
 	if risk <= 0 {
@@ -356,7 +363,8 @@ func (s *Strategy) entryReason(in decideInput, stop, target, risk float64) strin
 		rsiAge = 0
 	}
 	return fmt.Sprintf(
-		"Тренд↑ (close %.4f > EMA%d %.4f); MACD бычий кросс (%s, %.4f) %d бар(ов) назад; RSI пересёк %.0f↑ (%.2f→%.2f) %d бар(ов) назад, зазор ≤ %d; объём > %.2g×ср(%d); SL=%.4f (-%.4f); TP=%.4f (+%.4f, %.2gR)",
+		"ADX %.1f ≥ %.0f (тренд подтверждён); Тренд↑ (close %.4f > EMA%d %.4f); MACD бычий кросс (%s, %.4f) %d бар(ов) назад; RSI пересёк %.0f↑ (%.2f→%.2f) %d бар(ов) назад, зазор ≤ %d; объём > %.2g×ср(%d); SL=%.4f (-%.4f); TP=%.4f (+%.4f, %.2gR)",
+		in.adx, adxThreshold,
 		in.price, s.p.EMAPeriod, in.emaTrend, zero, in.macdNow, macdAge,
 		s.p.RSICrossLevel, in.rsiPrev, in.rsiNow, rsiAge, s.p.SignalValidBars,
 		s.p.VolMultiplier, s.p.VolLookback,

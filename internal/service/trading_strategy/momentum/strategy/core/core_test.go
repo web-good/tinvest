@@ -355,6 +355,9 @@ func TestEndToEndEntryDecide(t *testing.T) {
 		if !strings.Contains(sig.EntryReason, "MACD") || !strings.Contains(sig.EntryReason, "RSI") {
 			t.Fatalf("EntryReason missing MACD or RSI: %q", sig.EntryReason)
 		}
+		if !strings.Contains(sig.EntryReason, "ADX") {
+			t.Fatalf("EntryReason missing ADX prefix: %q", sig.EntryReason)
+		}
 	})
 
 	t.Run("blocked_flat_closes_price_below_ema", func(t *testing.T) {
@@ -413,6 +416,30 @@ func TestExplain(t *testing.T) {
 		}
 		if !strings.Contains(out, "ВХОД") {
 			t.Fatalf("Explain should report ВХОД when all gates pass, got: %q", out)
+		}
+		if !strings.Contains(out, "ADX") {
+			t.Fatalf("Explain should report the ADX gate, got: %q", out)
+		}
+	})
+
+	t.Run("low_adx_reports_blocked", func(t *testing.T) {
+		// Flatten all bars -> real ADX = 0 < threshold -> regime gate blocks first.
+		md := buildEntryMD()
+		for i := range md.Closes {
+			md.Closes[i] = 50
+			md.Highs[i] = 50.3
+			md.Lows[i] = 49.7
+		}
+		md.Price = 50
+		p := defaultParams()
+		p.RSICrossLevel = 75
+		s := NewWithParams("TEST", p)
+		out := s.Explain(md)
+		if !strings.Contains(out, "ADX") {
+			t.Fatalf("Explain should mention the ADX gate, got: %q", out)
+		}
+		if !strings.Contains(out, "ВХОДА НЕТ") {
+			t.Fatalf("Explain should report ВХОДА НЕТ when ADX below threshold, got: %q", out)
 		}
 	})
 }
