@@ -6,6 +6,7 @@ import (
 
 	"tinvest/internal/service/trading_strategy/scalping/model"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
+	"tinvest/pkg/indicators"
 )
 
 func defaultParams() Params {
@@ -747,5 +748,61 @@ func TestExitStopLossWinsOverMACD(t *testing.T) {
 	s := NewWithParams("TEST", p)
 	if sig := s.Decide(inPositionMDWithCloses(closes, pos)); sig.Reason != "SL" {
 		t.Fatalf("reason=%q want SL (priority over MACD)", sig.Reason)
+	}
+}
+
+func TestExitRSIOverboughtCrossDown(t *testing.T) {
+	const period = 14
+	closes := risingThenDropCloses(40, 100, 1.0, 4) // rise then a drop -> RSI falls last bar
+	r := indicators.RSISeries(closes, period)
+	prev, now := r[len(r)-2], r[len(r)-1]
+	if !(prev > now) {
+		t.Fatalf("test setup: need prev RSI > now RSI, got prev=%v now=%v", prev, now)
+	}
+	ob := (prev + now) / 2 // overbought line strictly between -> a top-down cross
+
+	p := defaultParams()
+	p.RSIPeriod = period
+	p.RSIOverbought = ob
+	p.TakeProfitRR = 0
+	p.UseTrail = 0
+	p.UseMACDExit = 0
+	pos := &strategy.Position{PurchasePrice: closes[0], StopLoss: 1, EntryATR: 1, MaxFavorablePrice: 1000}
+	s := NewWithParams("TEST", p)
+	sig := s.Decide(inPositionMDWithCloses(closes, pos))
+	if sig.Kind != model.SignalSell || sig.Reason != "RSI" {
+		t.Fatalf("kind=%v reason=%q want Sell/RSI (prev=%.2f now=%.2f ob=%.2f)", sig.Kind, sig.Reason, prev, now, ob)
+	}
+}
+
+func TestNoRSIExitWhenDisabled(t *testing.T) {
+	closes := risingThenDropCloses(40, 100, 1.0, 4)
+	p := defaultParams()
+	p.RSIPeriod = 0 // RSI exit disabled
+	p.TakeProfitRR = 0
+	p.UseTrail = 0
+	p.UseMACDExit = 0
+	pos := &strategy.Position{PurchasePrice: closes[0], StopLoss: 1, EntryATR: 1, MaxFavorablePrice: 1000}
+	s := NewWithParams("TEST", p)
+	if sig := s.Decide(inPositionMDWithCloses(closes, pos)); sig.Kind == model.SignalSell && sig.Reason == "RSI" {
+		t.Fatal("no RSI exit should fire when RSIPeriod=0")
+	}
+}
+
+func TestNoRSIExitWhenLineNotCrossed(t *testing.T) {
+	const period = 14
+	closes := risingThenDropCloses(40, 100, 1.0, 4)
+	r := indicators.RSISeries(closes, period)
+	prev, now := r[len(r)-2], r[len(r)-1]
+	p := defaultParams()
+	p.RSIPeriod = period
+	p.RSIOverbought = now - 5 // line below both values -> no top-down cross
+	p.TakeProfitRR = 0
+	p.UseTrail = 0
+	p.UseMACDExit = 0
+	pos := &strategy.Position{PurchasePrice: closes[0], StopLoss: 1, EntryATR: 1, MaxFavorablePrice: 1000}
+	s := NewWithParams("TEST", p)
+	if sig := s.Decide(inPositionMDWithCloses(closes, pos)); sig.Kind == model.SignalSell && sig.Reason == "RSI" {
+		t.Fatalf("no RSI exit when line %.2f is below both prev=%.2f now=%.2f", now-5, prev, now)
 	}
 }

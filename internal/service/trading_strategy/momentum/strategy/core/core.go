@@ -48,6 +48,8 @@ type Params struct {
 	MinATRFrac        float64 // reject entry if ATR < MinATRFrac*price; <=0 disables
 	UseTrail          int     // 1 = trail instead of fixed TP
 	UseMACDExit       int     // 1 = exit when MACD crosses below its signal line
+	RSIPeriod         int     // RSI length for the overbought-exit; 0 disables the RSI exit
+	RSIOverbought     float64 // RSI overbought line for the exit (e.g. 70); used when RSIPeriod>0
 	TrailMult         float64 // chandelier = recentHigh(ChandelierWindow) - TrailMult*ATR
 	ChandelierWindow  int     // window for the chandelier high
 	TrailArmATR       float64 // trail arms after MaxFavorable >= entry + TrailArmATR*EntryATR
@@ -88,6 +90,7 @@ func (s *Strategy) Lookback() int {
 		s.p.ATRPeriod + 1,
 		s.p.SwingLowWindow,
 		s.p.ChandelierWindow,
+		s.p.RSIPeriod + 1,
 	} {
 		if c > m {
 			m = c
@@ -104,8 +107,10 @@ type decideInput struct {
 	emaTrend        float64
 	macdNow         float64
 	crossUp         bool
-	macdAboveSignal bool // MACD line currently above the signal line (momentum still bullish)
-	macdCrossDown   bool // MACD line just crossed below its signal line (bearish)
+	macdAboveSignal bool    // MACD line currently above the signal line (momentum still bullish)
+	macdCrossDown   bool    // MACD line just crossed below its signal line (bearish)
+	rsiNow          float64 // latest RSI value (0 when RSI exit disabled / insufficient history)
+	rsiPrev         float64 // previous-bar RSI value
 	volumeOK        bool
 	todayRange      float64
 	barHigh         float64
@@ -226,6 +231,13 @@ func (s *Strategy) buildInput(md strategy.MarketData) decideInput {
 		macdAboveSignal = currDiff > 0
 	}
 
+	var rsiNow, rsiPrev float64
+	if s.p.RSIPeriod > 0 {
+		if r := indicators.RSISeries(md.Closes, s.p.RSIPeriod); len(r) >= 2 {
+			rsiNow, rsiPrev = r[len(r)-1], r[len(r)-2]
+		}
+	}
+
 	var barHigh, barLow float64
 	if n := len(md.Highs); n > 0 {
 		barHigh = md.Highs[n-1]
@@ -253,6 +265,8 @@ func (s *Strategy) buildInput(md strategy.MarketData) decideInput {
 		crossUp:         crossUp,
 		macdAboveSignal: macdAboveSignal,
 		macdCrossDown:   crossDown,
+		rsiNow:          rsiNow,
+		rsiPrev:         rsiPrev,
 		volumeOK:        indicators.VolumeConfirmed(md.Volumes, s.p.VolLookback, s.p.VolMultiplier),
 		todayRange:      md.TodayHigh - md.TodayLow,
 		barHigh:         barHigh,
@@ -503,6 +517,8 @@ func (s *Strategy) manage(in decideInput, sig model.Signal) model.Signal {
 		sig.Kind, sig.Reason = model.SignalSell, "TP"
 	case s.p.UseMACDExit == 1 && in.macdCrossDown:
 		sig.Kind, sig.Reason = model.SignalSell, "MACD"
+	case s.p.RSIPeriod > 0 && in.rsiPrev > s.p.RSIOverbought && in.rsiNow <= s.p.RSIOverbought:
+		sig.Kind, sig.Reason = model.SignalSell, "RSI"
 	}
 	return sig
 }
