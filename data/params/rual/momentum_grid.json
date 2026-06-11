@@ -4,10 +4,11 @@
       "name": "core",
       "keepTop": 5,
       "grid": {
-        "EMAPeriod": [200, 100],
+        "EMAPeriod": [200, 150, 100],
         "SLMult": [0.5, 1.0, 1.5],
         "TakeProfitRR": [1.5, 2.0, 3.0],
         "VolMultiplier": [1.0, 1.2, 1.5],
+        "CooldownBars": [0,6,12, 24],
         "MaxDailyATRUsed": [0.5, 0.7],
         "MACDBelowZeroOnly": [0, 1]
       }
@@ -15,7 +16,9 @@
     {
       "name": "gates",
       "grid": {
-        "MACDFast": [12, 8],
+        "MACDFast": [12, 10, 8],
+        "MACDSlow": [21, 26, 18],
+        "CooldownBars": [0,6,12, 24],
         "DailyTrendPeriod": [0, 10, 20],
         "SignalValidBars": [0, 2, 4],
         "MaxDriftATR": [0, 1.0]

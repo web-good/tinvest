@@ -43,3 +43,5 @@ Go-based trading/investment application built around the Tinkoff Invest gRPC API
 
 ## Configuration
 Loaded via `heetch/confita` from environment variables and/or files. See `internal/config/config.go` for the full schema.
+
+go run ./cmd/backtest -ticker AFKS -strategy momentum -calibrate data/params/afks/momentum_grid.json -out ./reports/AFKS -months 24 -min-trades 20 -test-months 6 -metric profit_factor
