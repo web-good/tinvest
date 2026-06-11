@@ -80,7 +80,7 @@ func RenderBasketMarkdown(metric string, s BasketSummary, from, to time.Time) st
 
 // paramSummary renders the handful of params that matter most for a quick scan.
 func paramSummary(rows []backtest.ParamLine) string {
-	keys := []string{"EMAPeriod", "SLMult", "TakeProfitRR", "CooldownBars", "DailyTrendPeriod"}
+	keys := []string{"EMAPeriod", "SLMult", "TakeProfitRR", "SignalValidBars", "RSICrossLevel"}
 	idx := make(map[string]string, len(rows))
 	for _, r := range rows {
 		idx[r.Name] = r.Value

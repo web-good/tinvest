@@ -3,11 +3,15 @@ package backtest
 import (
 	"testing"
 
+	momentumafks "tinvest/internal/service/trading_strategy/momentum/strategy/afks"
 	"tinvest/internal/service/trading_strategy/momentum/strategy/core"
 	momentumgazp "tinvest/internal/service/trading_strategy/momentum/strategy/gazp"
 	momentummdmg "tinvest/internal/service/trading_strategy/momentum/strategy/mdmg"
 	momentumnvtk "tinvest/internal/service/trading_strategy/momentum/strategy/nvtk"
+	momentumplzl "tinvest/internal/service/trading_strategy/momentum/strategy/plzl"
+	momentumrusal "tinvest/internal/service/trading_strategy/momentum/strategy/rusal"
 	momentumsber "tinvest/internal/service/trading_strategy/momentum/strategy/sber"
+	momentumydex "tinvest/internal/service/trading_strategy/momentum/strategy/ydex"
 )
 
 func TestMomentumLookupRegisteredRUAL(t *testing.T) {
@@ -16,15 +20,8 @@ func TestMomentumLookupRegisteredRUAL(t *testing.T) {
 	if !ok {
 		t.Fatalf("DefaultParams type = %T want core.Params", b.DefaultParams())
 	}
-	want := core.Params{
-		EMAPeriod: 100, MACDFast: 12, MACDSlow: 26, MACDSignal: 9, MACDBelowZeroOnly: 0,
-		VolLookback: 20, VolMultiplier: 1.0, DailyATRPeriod: 14, MaxDailyATRUsed: 0.7,
-		ATRPeriod: 14, SwingLowWindow: 10, SLMult: 1.0, TakeProfitRR: 2.0, MinRR: 1.5,
-		MinATRFrac: 0.003, UseTrail: 0, TrailMult: 2.5, ChandelierWindow: 20, TrailArmATR: 1.0,
-		CooldownBars: 0, DailyTrendPeriod: 20,
-	}
-	if got != want {
-		t.Fatalf("RUAL defaults = %+v\nwant %+v", got, want)
+	if got != momentumrusal.DefaultParams() {
+		t.Fatalf("RUAL defaults = %+v\nwant %+v", got, momentumrusal.DefaultParams())
 	}
 	if s := b.Build(got); s.Ticker() != "RUAL" {
 		t.Fatalf("ticker=%q want RUAL", s.Ticker())
@@ -37,15 +34,8 @@ func TestMomentumLookupRegisteredAFKS(t *testing.T) {
 	if !ok {
 		t.Fatalf("DefaultParams type = %T want core.Params", b.DefaultParams())
 	}
-	want := core.Params{
-		EMAPeriod: 200, MACDFast: 10, MACDSlow: 26, MACDSignal: 9, MACDBelowZeroOnly: 0,
-		VolLookback: 20, VolMultiplier: 1.0, DailyATRPeriod: 14, MaxDailyATRUsed: 0.6,
-		ATRPeriod: 14, SwingLowWindow: 10, SLMult: 1.0, TakeProfitRR: 2.0, MinRR: 1.5,
-		MinATRFrac: 0.003, UseTrail: 0, TrailMult: 2.5, ChandelierWindow: 20, TrailArmATR: 1.0,
-		CooldownBars: 0, DailyTrendPeriod: 0,
-	}
-	if got != want {
-		t.Fatalf("AFKS defaults = %+v\nwant %+v", got, want)
+	if got != momentumafks.DefaultParams() {
+		t.Fatalf("AFKS defaults = %+v\nwant %+v", got, momentumafks.DefaultParams())
 	}
 	if s := b.Build(got); s.Ticker() != "AFKS" {
 		t.Fatalf("ticker=%q want AFKS", s.Ticker())
@@ -74,10 +64,11 @@ func TestMomentumLookupGenericFallback(t *testing.T) {
 func TestGenericMomentumDefaultsAreFrozenBaseline(t *testing.T) {
 	want := core.Params{
 		EMAPeriod: 200, MACDFast: 12, MACDSlow: 26, MACDSignal: 9, MACDBelowZeroOnly: 1,
-		VolLookback: 20, VolMultiplier: 1.2, DailyATRPeriod: 14, MaxDailyATRUsed: 0.6,
+		VolLookback: 20, VolMultiplier: 1.2,
 		ATRPeriod: 14, SwingLowWindow: 10, SLMult: 0.5, TakeProfitRR: 2.0, MinRR: 1.5,
-		MinATRFrac: 0.003, UseTrail: 0, TrailMult: 2.5, ChandelierWindow: 20, TrailArmATR: 1.0,
-		CooldownBars: 0, DailyTrendPeriod: 0,
+		UseTrail: 0, TrailMult: 2.5, ChandelierWindow: 20, TrailArmATR: 1.0,
+		RSIPeriod: 14, RSICrossLevel: 50, RSIOverbought: 70,
+		SignalValidBars: 0,
 	}
 	if got := genericMomentumDefaults(); got != want {
 		t.Fatalf("genericMomentumDefaults drifted = %+v\nwant %+v", got, want)
@@ -108,15 +99,8 @@ func TestMomentumLookupRegisteredYDEX(t *testing.T) {
 	if !ok {
 		t.Fatalf("DefaultParams type = %T want core.Params", b.DefaultParams())
 	}
-	want := core.Params{
-		EMAPeriod: 200, MACDFast: 12, MACDSlow: 26, MACDSignal: 9, MACDBelowZeroOnly: 1,
-		VolLookback: 20, VolMultiplier: 1.2, DailyATRPeriod: 14, MaxDailyATRUsed: 0.6,
-		ATRPeriod: 14, SwingLowWindow: 10, SLMult: 0.5, TakeProfitRR: 2.0, MinRR: 1.5,
-		MinATRFrac: 0.003, UseTrail: 0, TrailMult: 2.5, ChandelierWindow: 20, TrailArmATR: 1.0,
-		CooldownBars: 0, DailyTrendPeriod: 0,
-	}
-	if got != want {
-		t.Fatalf("YDEX defaults = %+v\nwant %+v", got, want)
+	if got != momentumydex.DefaultParams() {
+		t.Fatalf("YDEX defaults = %+v\nwant %+v", got, momentumydex.DefaultParams())
 	}
 	if s := b.Build(got); s.Ticker() != "YDEX" {
 		t.Fatalf("ticker=%q want YDEX", s.Ticker())
@@ -132,15 +116,8 @@ func TestMomentumLookupRegisteredPLZL(t *testing.T) {
 	if !ok {
 		t.Fatalf("DefaultParams type = %T want core.Params", b.DefaultParams())
 	}
-	want := core.Params{
-		EMAPeriod: 200, MACDFast: 12, MACDSlow: 26, MACDSignal: 9, MACDBelowZeroOnly: 1,
-		VolLookback: 20, VolMultiplier: 1.2, DailyATRPeriod: 14, MaxDailyATRUsed: 0.6,
-		ATRPeriod: 14, SwingLowWindow: 10, SLMult: 0.5, TakeProfitRR: 2.0, MinRR: 1.5,
-		MinATRFrac: 0.003, UseTrail: 0, TrailMult: 2.5, ChandelierWindow: 20, TrailArmATR: 1.0,
-		CooldownBars: 0, DailyTrendPeriod: 0,
-	}
-	if got != want {
-		t.Fatalf("PLZL defaults = %+v\nwant %+v", got, want)
+	if got != momentumplzl.DefaultParams() {
+		t.Fatalf("PLZL defaults = %+v\nwant %+v", got, momentumplzl.DefaultParams())
 	}
 	if s := b.Build(got); s.Ticker() != "PLZL" {
 		t.Fatalf("ticker=%q want PLZL", s.Ticker())

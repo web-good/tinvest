@@ -9,19 +9,25 @@ import (
 	"tinvest/pkg/indicators"
 )
 
+// defaultParams returns a valid entry-capable Params for tests.
+// RSIPeriod=14, RSICrossLevel=50 — on the fixture the RSI does NOT fire at 50
+// (rsiPrev≈70.99 is already above 50), so callers that need confluence must use 75.
 func defaultParams() Params {
 	return Params{
 		EMAPeriod: 200, MACDFast: 12, MACDSlow: 26, MACDSignal: 9, MACDBelowZeroOnly: 0,
-		VolLookback: 20, VolMultiplier: 1.2, DailyATRPeriod: 14, MaxDailyATRUsed: 0.6,
+		VolLookback: 20, VolMultiplier: 1.2,
 		ATRPeriod: 14, SwingLowWindow: 10, SLMult: 0.5, TakeProfitRR: 2.0, MinRR: 1.5,
-		MinATRFrac: 0.0, UseTrail: 0, TrailMult: 2.5, ChandelierWindow: 20, TrailArmATR: 1.0,
+		UseTrail: 0, TrailMult: 2.5, ChandelierWindow: 20, TrailArmATR: 1.0,
+		RSIPeriod: 14, RSICrossLevel: 50, RSIOverbought: 70,
+		SignalValidBars: 0,
 	}
 }
 
-// buildEntryMD constructs a snapshot engineered to pass all entry gates:
-//   - 260 rising-then-dipping closes so close>EMA200 and a fresh bullish MACD cross,
-//   - last bar volume well above the VolLookback average,
-//   - daily series giving a positive ATR with plenty of remaining room.
+// buildEntryMD constructs a snapshot engineered to trigger a bullish MACD cross on the last bar.
+// 260 rising-then-dip-then-pop closes keep close > EMA200; last-bar volume is well above average.
+// Empirically: rsiPrev≈70.99, rsiNow≈88.07, macdNow≈3.54 (crossUp=true).
+// With RSICrossLevel=75 both MACD and RSI fire (confluence).
+// With RSICrossLevel=50 RSI does NOT fire (already above 50 on the prev bar).
 func buildEntryMD() strategy.MarketData {
 	n := 260
 	closes := make([]float64, n)
@@ -29,7 +35,7 @@ func buildEntryMD() strategy.MarketData {
 	lows := make([]float64, n)
 	vols := make([]int64, n)
 	for i := 0; i < n; i++ {
-		base := 100.0 + float64(i)*0.5 // strong uptrend keeps close>EMA200
+		base := 100.0 + float64(i)*0.5
 		closes[i] = base
 		highs[i] = base + 0.3
 		lows[i] = base - 0.3
@@ -39,85 +45,339 @@ func buildEntryMD() strategy.MarketData {
 	closes[n-4], closes[n-3], closes[n-2] = closes[n-5]-1, closes[n-5]-2, closes[n-5]-2.5
 	highs[n-4], highs[n-3], highs[n-2] = closes[n-4]+0.3, closes[n-3]+0.3, closes[n-2]+0.3
 	lows[n-4], lows[n-3], lows[n-2] = closes[n-4]-0.3, closes[n-3]-0.3, closes[n-2]-0.3
-	closes[n-1] = closes[n-5] + 8 // strong pop -> MACD crosses up
+	closes[n-1] = closes[n-5] + 8 // strong pop -> MACD crosses up, RSI spikes to ~88
 	highs[n-1] = closes[n-1] + 0.5
 	lows[n-1] = closes[n-1] - 0.5
 	vols[n-1] = 5000 // above 1.2x average
-
-	dailyH := []float64{105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120}
-	dailyL := []float64{100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115}
-	dailyC := []float64{104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119}
-
 	return strategy.MarketData{
 		Price: closes[n-1], Highs: highs, Lows: lows, Closes: closes, Volumes: vols,
-		DailyHighs: dailyH, DailyLows: dailyL, DailyCloses: dailyC,
-		TodayHigh: closes[n-1] + 0.5, TodayLow: closes[n-1] - 0.5, // tiny consumed range -> room OK
 	}
 }
 
-func TestEntryFiresWhenAllGatesPass(t *testing.T) {
-	s := NewWithParams("TEST", defaultParams())
-	sig := s.Decide(buildEntryMD())
-	if sig.Kind != model.SignalBuy {
-		t.Fatalf("kind=%v want Buy", sig.Kind)
-	}
-	if sig.StopLoss <= 0 || sig.TakeProfit <= sig.Price {
-		t.Fatalf("SL=%f TP=%f price=%f want SL>0 and TP>price", sig.StopLoss, sig.TakeProfit, sig.Price)
-	}
-	if sig.ATR <= 0 {
-		t.Fatalf("ATR=%f want >0", sig.ATR)
-	}
-	if sig.Ticker != "TEST" {
-		t.Fatalf("ticker=%q want TEST", sig.Ticker)
-	}
-	if !strings.Contains(sig.EntryReason, "MACD") || !strings.Contains(sig.EntryReason, "ATR") {
-		t.Fatalf("EntryReason missing detail: %q", sig.EntryReason)
+// passingInput returns a decideInput that passes all gates (trend, volume, RR) with
+// both signal counters saturated and no fresh events. The pure decide() core should
+// return no signal unless we override macdFired/rsiFired and the counters.
+func passingInput() decideInput {
+	return decideInput{
+		price:              100,
+		emaTrend:           90,
+		atr:                1,
+		volumeOK:           true,
+		recentLow:          98,
+		barsSinceMACDCross: signalSaturate,
+		barsSinceRSICross:  signalSaturate,
 	}
 }
 
-func TestEntryBlockedByTrendFilter(t *testing.T) {
-	md := buildEntryMD()
-	for i := range md.Closes { // flat-low series -> price below EMA200
-		md.Closes[i] = 50
-		md.Highs[i] = 50.3
-		md.Lows[i] = 49.7
-	}
-	md.Price = 50
-	s := NewWithParams("TEST", defaultParams())
-	if sig := s.Decide(md); sig.Kind == model.SignalBuy {
-		t.Fatal("entry should be blocked when close < EMA200")
-	}
-}
+// --- a) Confluence pairing via decide() ---
 
-func TestEntryBlockedByVolume(t *testing.T) {
-	md := buildEntryMD()
-	md.Volumes[len(md.Volumes)-1] = 100 // below average
-	s := NewWithParams("TEST", defaultParams())
-	if sig := s.Decide(md); sig.Kind == model.SignalBuy {
-		t.Fatal("entry should be blocked on weak volume")
+func TestConfluencePairing(t *testing.T) {
+	cases := []struct {
+		name               string
+		macdFired          bool
+		rsiFired           bool
+		barsSinceMACDCross int
+		barsSinceRSICross  int
+		window             int
+		wantBuy            bool
+	}{
+		// same bar, window 0 -> Buy
+		{"same_bar_w0", true, true, signalSaturate, signalSaturate, 0, true},
+		// same bar, window 4 -> Buy
+		{"same_bar_w4", true, true, signalSaturate, signalSaturate, 4, true},
+		// RSI earlier (age 2), MACD fires now, window 2 -> Buy
+		{"rsi_earlier_macd_now_w2", true, false, signalSaturate, 2, 2, true},
+		// RSI earlier (age 2), MACD fires now, window 1 -> no (gap 2 > window 1)
+		{"rsi_earlier_macd_now_w1", true, false, signalSaturate, 2, 1, false},
+		// MACD earlier (age 2), RSI fires now, window 2 -> Buy
+		{"macd_earlier_rsi_now_w2", false, true, 2, signalSaturate, 2, true},
+		// MACD earlier (age 2), RSI fires now, window 1 -> no
+		{"macd_earlier_rsi_now_w1", false, true, 2, signalSaturate, 1, false},
+		// gap exceeds window: rsiFired now, macd age 3, window 2 -> no
+		{"gap_exceeds_window", false, true, 3, signalSaturate, 2, false},
+		// window 0, gap 1: macdFired now, rsiAge 1 -> no
+		{"w0_gap1_no", true, false, signalSaturate, 1, 0, false},
+		// no fresh event (both fired=false, counters 0,0) -> no (edge-trigger)
+		{"no_fresh_event_edge_trigger", false, false, 0, 0, 4, false},
 	}
-}
 
-func TestEntryBlockedByDailyATRRoom(t *testing.T) {
-	md := buildEntryMD()
-	// Make today's consumed range exceed MaxDailyATRUsed*dailyATR.
-	md.TodayHigh = md.Price + 50
-	md.TodayLow = md.Price - 50
-	s := NewWithParams("TEST", defaultParams())
-	if sig := s.Decide(md); sig.Kind == model.SignalBuy {
-		t.Fatal("entry should be blocked when daily ATR room is used up")
-	}
-}
-
-func TestEntryBlockedByMACDBelowZeroFlag(t *testing.T) {
-	md := buildEntryMD()
 	p := defaultParams()
-	p.MACDBelowZeroOnly = 1 // a strong uptrend has MACD>0, so the cross is above zero -> blocked
-	s := NewWithParams("TEST", p)
-	if sig := s.Decide(md); sig.Kind == model.SignalBuy {
-		t.Fatal("entry should be blocked when MACDBelowZeroOnly=1 and macd>0")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p.SignalValidBars = tc.window
+			s := NewWithParams("TEST", p)
+			in := passingInput()
+			in.macdFired = tc.macdFired
+			in.rsiFired = tc.rsiFired
+			in.barsSinceMACDCross = tc.barsSinceMACDCross
+			in.barsSinceRSICross = tc.barsSinceRSICross
+			sig := s.decide(in)
+			if tc.wantBuy && sig.Kind != model.SignalBuy {
+				t.Fatalf("want Buy, got kind=%v", sig.Kind)
+			}
+			if !tc.wantBuy && sig.Kind == model.SignalBuy {
+				t.Fatalf("want no Buy, got Buy")
+			}
+		})
 	}
 }
+
+// --- b) advanceSignals mechanics ---
+
+func TestAdvanceSignalsMechanics(t *testing.T) {
+	p := defaultParams()
+	s := NewWithParams("TEST", p)
+
+	// Fresh strategy: both counters start at signalSaturate.
+	if s.barsSinceMACDCross != signalSaturate {
+		t.Fatalf("initial barsSinceMACDCross=%d want %d", s.barsSinceMACDCross, signalSaturate)
+	}
+	if s.barsSinceRSICross != signalSaturate {
+		t.Fatalf("initial barsSinceRSICross=%d want %d", s.barsSinceRSICross, signalSaturate)
+	}
+
+	// A bar with macdFired: barsSinceMACDCross -> 0, barsSinceRSICross stays saturated.
+	in1 := decideInput{macdFired: true}
+	s.advanceSignals(in1)
+	if s.barsSinceMACDCross != 0 {
+		t.Fatalf("after macdFired: barsSinceMACDCross=%d want 0", s.barsSinceMACDCross)
+	}
+	if s.barsSinceRSICross != signalSaturate {
+		t.Fatalf("after macdFired: barsSinceRSICross=%d want %d (saturated, no overflow)", s.barsSinceRSICross, signalSaturate)
+	}
+
+	// Next bar with no events: barsSinceMACDCross increments to 1.
+	in2 := decideInput{}
+	s.advanceSignals(in2)
+	if s.barsSinceMACDCross != 1 {
+		t.Fatalf("after no-event bar: barsSinceMACDCross=%d want 1", s.barsSinceMACDCross)
+	}
+}
+
+// --- c) Edge-once integration ---
+
+func TestEdgeOnceIntegration(t *testing.T) {
+	p := defaultParams()
+	p.SignalValidBars = 0
+	s := NewWithParams("TEST", p)
+
+	// Bar A: both signals fire on the same bar -> Buy.
+	a := passingInput()
+	a.macdFired = true
+	a.rsiFired = true
+	s.advanceSignals(a)
+	a.barsSinceMACDCross = s.barsSinceMACDCross
+	a.barsSinceRSICross = s.barsSinceRSICross
+	sigA := s.decide(a)
+	if sigA.Kind != model.SignalBuy {
+		t.Fatalf("bar A: want Buy, got kind=%v", sigA.Kind)
+	}
+
+	// Bar B: no fresh events, both counters advanced to age 1 -> no Buy (edge-trigger).
+	s.advanceSignals(decideInput{}) // advance: macd age 1, rsi age 1
+	b := passingInput()
+	b.macdFired = false
+	b.rsiFired = false
+	b.barsSinceMACDCross = s.barsSinceMACDCross
+	b.barsSinceRSICross = s.barsSinceRSICross
+	sigB := s.decide(b)
+	if sigB.Kind == model.SignalBuy {
+		t.Fatal("bar B: no fresh event, should NOT Buy (edge-trigger)")
+	}
+}
+
+// --- d) Gate blocks via decide() synthetic ---
+
+func TestGateBlocks(t *testing.T) {
+	p := defaultParams()
+	p.SignalValidBars = 0
+
+	base := passingInput()
+	base.macdFired = true
+	base.rsiFired = true
+	base.barsSinceMACDCross = 0
+	base.barsSinceRSICross = 0
+
+	t.Run("trend_block", func(t *testing.T) {
+		s := NewWithParams("TEST", p)
+		in := base
+		in.emaTrend = 110 // price 100 < ema 110
+		if sig := s.decide(in); sig.Kind == model.SignalBuy {
+			t.Fatal("want no Buy when price < EMA")
+		}
+	})
+
+	t.Run("volume_block", func(t *testing.T) {
+		s := NewWithParams("TEST", p)
+		in := base
+		in.volumeOK = false
+		if sig := s.decide(in); sig.Kind == model.SignalBuy {
+			t.Fatal("want no Buy on weak volume")
+		}
+	})
+
+	t.Run("risk_zero_block", func(t *testing.T) {
+		s := NewWithParams("TEST", p)
+		in := base
+		in.recentLow = 200 // stop = 200 - 0.5*1 = 199.5 > price 100 -> risk <= 0
+		if sig := s.decide(in); sig.Kind == model.SignalBuy {
+			t.Fatal("want no Buy when risk <= 0")
+		}
+	})
+
+	t.Run("minrr_block", func(t *testing.T) {
+		pp := p
+		pp.MinRR = 10 // TakeProfitRR=2 gives 2R < 10 -> reject
+		s := NewWithParams("TEST", pp)
+		if sig := s.decide(base); sig.Kind == model.SignalBuy {
+			t.Fatal("want no Buy when RR < MinRR")
+		}
+	})
+}
+
+// --- e) buildInput wiring ---
+
+func TestBuildInputWiring(t *testing.T) {
+	md := buildEntryMD()
+
+	t.Run("macdFired_true_belowZeroOff", func(t *testing.T) {
+		p := defaultParams() // MACDBelowZeroOnly=0
+		s := NewWithParams("TEST", p)
+		in := s.buildInput(md)
+		if !in.macdFired {
+			t.Fatalf("want macdFired=true with MACDBelowZeroOnly=0 and crossUp")
+		}
+	})
+
+	t.Run("macdFired_false_belowZeroOn_macdPositive", func(t *testing.T) {
+		p := defaultParams()
+		p.MACDBelowZeroOnly = 1 // macdNow ≈ 3.54 > 0 -> cross doesn't count
+		s := NewWithParams("TEST", p)
+		in := s.buildInput(md)
+		if in.macdFired {
+			t.Fatalf("want macdFired=false with MACDBelowZeroOnly=1 and macdNow>0 (got %.4f)", in.macdNow)
+		}
+	})
+
+	t.Run("rsiFired_true_crossLevel75", func(t *testing.T) {
+		p := defaultParams()
+		p.RSICrossLevel = 75 // rsiPrev≈70.99 <= 75, rsiNow≈88.07 > 75 -> fires
+		s := NewWithParams("TEST", p)
+		in := s.buildInput(md)
+		if !in.rsiFired {
+			t.Fatalf("want rsiFired=true with RSICrossLevel=75 (rsiPrev=%.2f rsiNow=%.2f)", in.rsiPrev, in.rsiNow)
+		}
+	})
+
+	t.Run("rsiFired_false_crossLevel50", func(t *testing.T) {
+		p := defaultParams()
+		p.RSICrossLevel = 50 // rsiPrev≈70.99 > 50 -> no cross
+		s := NewWithParams("TEST", p)
+		in := s.buildInput(md)
+		if in.rsiFired {
+			t.Fatalf("want rsiFired=false with RSICrossLevel=50 (rsiPrev=%.2f already above 50)", in.rsiPrev)
+		}
+	})
+
+	t.Run("rsiFired_false_rsiPeriodZero", func(t *testing.T) {
+		p := defaultParams()
+		p.RSIPeriod = 0
+		s := NewWithParams("TEST", p)
+		in := s.buildInput(md)
+		if in.rsiFired {
+			t.Fatal("want rsiFired=false when RSIPeriod=0")
+		}
+	})
+}
+
+// --- f) End-to-end entry through Decide ---
+
+func TestEndToEndEntryDecide(t *testing.T) {
+	t.Run("fires_with_rsiCrossLevel75", func(t *testing.T) {
+		p := defaultParams()
+		p.RSICrossLevel = 75
+		s := NewWithParams("TEST", p)
+		sig := s.Decide(buildEntryMD())
+		if sig.Kind != model.SignalBuy {
+			t.Fatalf("want Buy, got kind=%v", sig.Kind)
+		}
+		if sig.StopLoss <= 0 || sig.TakeProfit <= sig.Price {
+			t.Fatalf("SL=%f TP=%f price=%f want SL>0 and TP>price", sig.StopLoss, sig.TakeProfit, sig.Price)
+		}
+		if sig.ATR <= 0 {
+			t.Fatalf("ATR=%f want >0", sig.ATR)
+		}
+		if sig.Ticker != "TEST" {
+			t.Fatalf("ticker=%q want TEST", sig.Ticker)
+		}
+		if !strings.Contains(sig.EntryReason, "MACD") || !strings.Contains(sig.EntryReason, "RSI") {
+			t.Fatalf("EntryReason missing MACD or RSI: %q", sig.EntryReason)
+		}
+	})
+
+	t.Run("blocked_flat_closes_price_below_ema", func(t *testing.T) {
+		md := buildEntryMD()
+		for i := range md.Closes {
+			md.Closes[i] = 50
+			md.Highs[i] = 50.3
+			md.Lows[i] = 49.7
+		}
+		md.Price = 50
+		p := defaultParams()
+		p.RSICrossLevel = 75
+		s := NewWithParams("TEST", p)
+		if sig := s.Decide(md); sig.Kind == model.SignalBuy {
+			t.Fatal("entry should be blocked when all closes flat at 50 (price below EMA)")
+		}
+	})
+
+	t.Run("blocked_weak_volume", func(t *testing.T) {
+		md := buildEntryMD()
+		md.Volumes[len(md.Volumes)-1] = 100 // below average -> volume gate fails
+		p := defaultParams()
+		p.RSICrossLevel = 75
+		s := NewWithParams("TEST", p)
+		if sig := s.Decide(md); sig.Kind == model.SignalBuy {
+			t.Fatal("entry should be blocked on weak last-bar volume")
+		}
+	})
+}
+
+// --- g) Explain ---
+
+func TestExplain(t *testing.T) {
+	t.Run("no_rsi_fire_at_level50_reports_blocked", func(t *testing.T) {
+		// RSICrossLevel=50 -> RSI does not fire (already above 50 on prev bar) -> confluence blocked
+		p := defaultParams()
+		p.RSICrossLevel = 50
+		s := NewWithParams("TEST", p)
+		out := s.Explain(buildEntryMD())
+		if !strings.Contains(out, "Confluence") {
+			t.Fatalf("Explain should mention Confluence, got: %q", out)
+		}
+		if !strings.Contains(out, "ВХОДА НЕТ") {
+			t.Fatalf("Explain should report ВХОДА НЕТ when RSI doesn't fire at 50, got: %q", out)
+		}
+	})
+
+	t.Run("rsi_fires_at_level75_all_pass", func(t *testing.T) {
+		// RSICrossLevel=75 -> both MACD and RSI fire -> all gates pass -> ВХОД
+		p := defaultParams()
+		p.RSICrossLevel = 75
+		s := NewWithParams("TEST", p)
+		out := s.Explain(buildEntryMD())
+		if !strings.Contains(out, "Confluence") {
+			t.Fatalf("Explain should mention Confluence, got: %q", out)
+		}
+		if !strings.Contains(out, "ВХОД") {
+			t.Fatalf("Explain should report ВХОД when all gates pass, got: %q", out)
+		}
+	})
+}
+
+// ============================================================
+// EXIT tests — carried verbatim from core_test.go.bak
+// ============================================================
 
 func inPositionMD(barLow, barHigh, recentHigh float64, pos *strategy.Position) strategy.MarketData {
 	// 30 tight flat bars around the recentHigh level so ATR is small and
@@ -189,452 +449,6 @@ func TestExitTrailWhenEnabled(t *testing.T) {
 	sig := s.Decide(inPositionMD(117, 121, 120, pos))
 	if sig.Kind != model.SignalSell || sig.Reason != "TRAIL" {
 		t.Fatalf("kind=%v reason=%q want Sell/TRAIL", sig.Kind, sig.Reason)
-	}
-}
-
-func TestEntryFiresWithRisingDailyTrend(t *testing.T) {
-	p := defaultParams()
-	p.DailyTrendPeriod = 5 // дневные closes в buildEntryMD растут -> наклон вверх
-	s := NewWithParams("TEST", p)
-	if sig := s.Decide(buildEntryMD()); sig.Kind != model.SignalBuy {
-		t.Fatal("entry should fire when daily EMA slope is up")
-	}
-}
-
-func TestEntryBlockedByDailyTrendFilter(t *testing.T) {
-	md := buildEntryMD()
-	for i := range md.DailyCloses { // плоские дневные closes -> EMA не растёт
-		md.DailyCloses[i] = 110
-	}
-	p := defaultParams()
-	p.DailyTrendPeriod = 5
-	s := NewWithParams("TEST", p)
-	if sig := s.Decide(md); sig.Kind == model.SignalBuy {
-		t.Fatal("entry should be blocked when daily EMA is not rising")
-	}
-}
-
-func TestDailyTrendFilterDisabledIgnoresSlope(t *testing.T) {
-	md := buildEntryMD()
-	for i := range md.DailyCloses { // падающие дневные closes
-		md.DailyCloses[i] = 200 - float64(i)
-	}
-	p := defaultParams() // DailyTrendPeriod = 0 -> фильтр выключен
-	s := NewWithParams("TEST", p)
-	if sig := s.Decide(md); sig.Kind != model.SignalBuy {
-		t.Fatal("entry should fire when daily filter is disabled, regardless of slope")
-	}
-}
-
-func TestDailyTrendFilterPassesWithInsufficientHistory(t *testing.T) {
-	md := buildEntryMD()
-	md.DailyCloses = md.DailyCloses[:5] // меньше, чем period+slopeBars (5+3=8)
-	md.DailyHighs = md.DailyHighs[:5]
-	md.DailyLows = md.DailyLows[:5]
-	p := defaultParams()
-	p.DailyTrendPeriod = 5
-	s := NewWithParams("TEST", p)
-	if sig := s.Decide(md); sig.Kind != model.SignalBuy {
-		t.Fatal("entry should fire (filter passes) when daily history is insufficient")
-	}
-}
-
-func TestExplainReportsDailyTrendBlock(t *testing.T) {
-	md := buildEntryMD()
-	for i := range md.DailyCloses {
-		md.DailyCloses[i] = 110 // плоско -> фильтр блокирует
-	}
-	p := defaultParams()
-	p.DailyTrendPeriod = 5
-	s := NewWithParams("TEST", p)
-	out := s.Explain(md)
-	if !strings.Contains(out, "Дневной тренд") {
-		t.Fatalf("Explain should mention daily trend gate, got: %q", out)
-	}
-}
-
-func TestCooldownBlocksReentryAfterExit(t *testing.T) {
-	p := defaultParams()
-	p.CooldownBars = 3
-	s := NewWithParams("TEST", p)
-
-	// Бар 1: открываем позицию (md.Position == nil).
-	if sig := s.Decide(buildEntryMD()); sig.Kind != model.SignalBuy {
-		t.Fatal("expected entry on bar 1")
-	}
-	// Бар 2: в позиции, ловим SL -> выход.
-	pos := &strategy.Position{PurchasePrice: 100, StopLoss: 95, EntryATR: 1, MaxFavorablePrice: 100}
-	if sig := s.Decide(inPositionMD(94, 101, 100, pos)); sig.Reason != "SL" {
-		t.Fatalf("expected SL exit, got %q", sig.Reason)
-	}
-	// Бары 3-5: flat, кулдаун активен (barsSinceExit 0,1,2 < 3) -> вход блокируется.
-	for i := 0; i < 3; i++ {
-		if sig := s.Decide(buildEntryMD()); sig.Kind == model.SignalBuy {
-			t.Fatalf("entry should be blocked during cooldown, offset %d", i)
-		}
-	}
-	// Бар 6: кулдаун истёк (barsSinceExit 3 >= 3) -> вход снова разрешён.
-	if sig := s.Decide(buildEntryMD()); sig.Kind != model.SignalBuy {
-		t.Fatal("entry should fire after cooldown elapses")
-	}
-}
-
-func TestCooldownDisabledAllowsImmediateReentry(t *testing.T) {
-	p := defaultParams() // CooldownBars = 0
-	s := NewWithParams("TEST", p)
-	if sig := s.Decide(buildEntryMD()); sig.Kind != model.SignalBuy {
-		t.Fatal("expected entry on bar 1")
-	}
-	pos := &strategy.Position{PurchasePrice: 100, StopLoss: 95, EntryATR: 1, MaxFavorablePrice: 100}
-	s.Decide(inPositionMD(94, 101, 100, pos)) // выход по SL
-	if sig := s.Decide(buildEntryMD()); sig.Kind != model.SignalBuy {
-		t.Fatal("entry should fire immediately when cooldown disabled")
-	}
-}
-
-func TestExplainReportsCooldownBlock(t *testing.T) {
-	p := defaultParams()
-	p.CooldownBars = 3
-	s := NewWithParams("TEST", p)
-	// Открыть позицию, затем выйти по SL.
-	s.Decide(buildEntryMD())
-	pos := &strategy.Position{PurchasePrice: 100, StopLoss: 95, EntryATR: 1, MaxFavorablePrice: 100}
-	s.Decide(inPositionMD(94, 101, 100, pos)) // выход; prevInPosition=true
-	// Первый flat-бар после выхода обнуляет barsSinceExit (edge ловится в Decide).
-	s.Decide(buildEntryMD()) // barsSinceExit -> 0, вход заблокирован кулдауном
-	// Теперь Explain должен показать БЛОК кулдауна (0 из 3), а не pass.
-	out := s.Explain(buildEntryMD())
-	if !strings.Contains(out, "Кулдаун") || !strings.Contains(out, "ВХОДА НЕТ") {
-		t.Fatalf("Explain should report cooldown BLOCK, got: %q", out)
-	}
-}
-
-func TestExplainReportsCooldownPass(t *testing.T) {
-	p := defaultParams()
-	p.CooldownBars = 3
-	s := NewWithParams("TEST", p)
-	// Свежая стратегия: barsSinceExit насыщен (≥ CooldownBars) -> кулдаун пройден.
-	out := s.Explain(buildEntryMD())
-	if !strings.Contains(out, "Кулдаун") {
-		t.Fatalf("Explain should mention cooldown gate, got: %q", out)
-	}
-	if strings.Contains(out, "ВХОДА НЕТ") {
-		t.Fatalf("cooldown should PASS on a fresh strategy, got a block: %q", out)
-	}
-}
-
-// deferredBars returns numBars consecutive hourly snapshots simulating the bars
-// after a fresh MACD bullish cross. Snapshot 0 is the cross bar. Each later
-// snapshot appends one "holding" bar that nudges price up slightly (no new cross,
-// MACD stays bullish). Confirming volume (5000) is placed only on the snapshot at
-// index volumeAtBar; every other last-bar volume is weak (100). Feed the snapshots
-// to one Strategy in order to drive the arming state machine.
-func deferredBars(numBars, volumeAtBar int) []strategy.MarketData {
-	base := buildEntryMD()
-	snaps := make([]strategy.MarketData, numBars)
-	for k := 0; k < numBars; k++ {
-		closes := append([]float64(nil), base.Closes...)
-		highs := append([]float64(nil), base.Highs...)
-		lows := append([]float64(nil), base.Lows...)
-		vols := append([]int64(nil), base.Volumes...)
-		last := closes[len(closes)-1]
-		for j := 0; j < k; j++ { // append k holding bars
-			last += 0.2
-			closes = append(closes, last)
-			highs = append(highs, last+0.5)
-			lows = append(lows, last-0.2)
-			vols = append(vols, 100)
-		}
-		if k == volumeAtBar {
-			vols[len(vols)-1] = 5000
-		} else {
-			vols[len(vols)-1] = 100
-		}
-		md := base
-		md.Closes, md.Highs, md.Lows, md.Volumes = closes, highs, lows, vols
-		md.Price = closes[len(closes)-1]
-		md.TodayHigh = md.Price + 0.5
-		md.TodayLow = md.Price - 0.5
-		snaps[k] = md
-	}
-	return snaps
-}
-
-func TestDeferredEntryFiresWhenVolumeArrivesWithinWindow(t *testing.T) {
-	p := defaultParams()
-	p.SignalValidBars = 2
-	p.MaxDriftATR = 5 // generous; drift is tested separately
-	s := NewWithParams("TEST", p)
-	bars := deferredBars(2, 1) // cross bar weak volume; volume on bar 1
-	if sig := s.Decide(bars[0]); sig.Kind == model.SignalBuy {
-		t.Fatal("should NOT enter on the cross bar (volume weak)")
-	}
-	if sig := s.Decide(bars[1]); sig.Kind != model.SignalBuy {
-		t.Fatal("should enter on the next bar when volume confirms within the window")
-	}
-}
-
-func TestDeferredDisabledIgnoresLateVolume(t *testing.T) {
-	p := defaultParams() // SignalValidBars == 0 -> deferral off
-	s := NewWithParams("TEST", p)
-	bars := deferredBars(2, 1)
-	if sig := s.Decide(bars[0]); sig.Kind == model.SignalBuy {
-		t.Fatal("no entry on cross bar (weak volume)")
-	}
-	if sig := s.Decide(bars[1]); sig.Kind == model.SignalBuy {
-		t.Fatal("with deferral off, late volume must NOT produce an entry")
-	}
-}
-
-func TestDeferredEntryExpiresAfterWindow(t *testing.T) {
-	p := defaultParams()
-	p.SignalValidBars = 1
-	p.MaxDriftATR = 5
-	s := NewWithParams("TEST", p)
-	bars := deferredBars(3, 2) // cross(0) weak, hold(1) weak, volume(2) too late
-	s.Decide(bars[0])          // arm
-	s.Decide(bars[1])          // age to 1 (still within window=1), no volume
-	if sig := s.Decide(bars[2]); sig.Kind == model.SignalBuy {
-		t.Fatal("signal must expire after SignalValidBars and block the late entry")
-	}
-}
-
-func TestDeferredEntryBlockedByPriceDrift(t *testing.T) {
-	p := defaultParams()
-	p.SignalValidBars = 2
-	p.MaxDriftATR = 0.01 // cap = 0.01×ATR; the +0.2 drift exceeds it so entry is blocked
-	s := NewWithParams("TEST", p)
-	bars := deferredBars(2, 1) // holding bar nudges price +0.2 from the cross
-	s.Decide(bars[0])          // arm at the cross price
-	if sig := s.Decide(bars[1]); sig.Kind == model.SignalBuy {
-		t.Fatal("entry must be blocked when price drifted beyond MaxDriftATR*ATR")
-	}
-}
-
-// TestDeferredEntryAllowedWithinDrift is the control case for the drift cap: same
-// fixture as the blocked case, but a generous MaxDriftATR proves the +0.2 drift is
-// what the cap (not volume or the window) gates on.
-func TestDeferredEntryAllowedWithinDrift(t *testing.T) {
-	p := defaultParams()
-	p.SignalValidBars = 2
-	p.MaxDriftATR = 5 // generous tolerance
-	s := NewWithParams("TEST", p)
-	bars := deferredBars(2, 1)
-	s.Decide(bars[0])
-	if sig := s.Decide(bars[1]); sig.Kind != model.SignalBuy {
-		t.Fatal("entry should be allowed when price stayed within the drift cap")
-	}
-}
-
-// armInput is a minimal decideInput that satisfies qualifiesAsTrigger:
-// fresh cross, clear uptrend, MACD above signal, daily filter not engaged.
-func armInput() decideInput {
-	return decideInput{price: 100, emaTrend: 90, atr: 1, crossUp: true, macdAboveSignal: true}
-}
-
-func TestAdvanceArmArmsOnQualifyingCross(t *testing.T) {
-	p := defaultParams()
-	p.SignalValidBars = 3
-	s := NewWithParams("TEST", p)
-	s.advanceArm(armInput())
-	if s.armedCrossPrice != 100 || s.barsSinceArm != 0 {
-		t.Fatalf("want armed at 100 age 0, got price=%f age=%d", s.armedCrossPrice, s.barsSinceArm)
-	}
-}
-
-func TestAdvanceArmExpiresAfterWindow(t *testing.T) {
-	p := defaultParams()
-	p.SignalValidBars = 1
-	s := NewWithParams("TEST", p)
-	s.advanceArm(armInput()) // age 0
-	hold := decideInput{price: 100.1, emaTrend: 90, atr: 1, macdAboveSignal: true}
-	s.advanceArm(hold) // age 1, still within window
-	if s.armedCrossPrice == 0 {
-		t.Fatal("should still be armed at age 1 with window 1")
-	}
-	s.advanceArm(hold) // age 2 > window 1 -> cancel
-	if s.armedCrossPrice != 0 {
-		t.Fatal("should cancel once age exceeds SignalValidBars")
-	}
-}
-
-func TestAdvanceArmCancelsOnMomentumDeath(t *testing.T) {
-	p := defaultParams()
-	p.SignalValidBars = 5
-	s := NewWithParams("TEST", p)
-	s.advanceArm(armInput())
-	dead := decideInput{price: 100.1, emaTrend: 90, atr: 1, macdAboveSignal: false}
-	s.advanceArm(dead)
-	if s.armedCrossPrice != 0 {
-		t.Fatal("should cancel when MACD line falls back below the signal line")
-	}
-}
-
-func TestAdvanceArmCancelsOnTrendBreak(t *testing.T) {
-	p := defaultParams()
-	p.SignalValidBars = 5
-	s := NewWithParams("TEST", p)
-	s.advanceArm(armInput())
-	below := decideInput{price: 80, emaTrend: 90, atr: 1, macdAboveSignal: true} // price < EMA
-	s.advanceArm(below)
-	if s.armedCrossPrice != 0 {
-		t.Fatal("should cancel when price falls back below the trend EMA")
-	}
-}
-
-func TestAdvanceArmCancelsOnDailyTrendStall(t *testing.T) {
-	p := defaultParams()
-	p.SignalValidBars = 5
-	p.DailyTrendPeriod = 5
-	s := NewWithParams("TEST", p)
-	armed := armInput()
-	armed.dailyTrendKnown = true
-	armed.dailyEMANow, armed.dailyEMAPast = 110, 100 // rising at arm time
-	s.advanceArm(armed)
-	stall := decideInput{price: 100.1, emaTrend: 90, atr: 1, macdAboveSignal: true,
-		dailyTrendKnown: true, dailyEMANow: 100, dailyEMAPast: 110} // now falling
-	s.advanceArm(stall)
-	if s.armedCrossPrice != 0 {
-		t.Fatal("should cancel when the daily trend stops rising")
-	}
-}
-
-func TestAdvanceArmDoesNotArmDuringCooldown(t *testing.T) {
-	p := defaultParams()
-	p.SignalValidBars = 5
-	p.CooldownBars = 3
-	s := NewWithParams("TEST", p)
-	in := armInput()
-	in.barsSinceExit = 1 // inside cooldown (1 < 3)
-	s.advanceArm(in)
-	if s.armedCrossPrice != 0 {
-		t.Fatal("should not arm a signal while cooling down")
-	}
-}
-
-func TestAdvanceArmClearsWhenInPosition(t *testing.T) {
-	p := defaultParams()
-	p.SignalValidBars = 5
-	s := NewWithParams("TEST", p)
-	s.advanceArm(armInput()) // arm
-	in := decideInput{price: 100, emaTrend: 90, atr: 1, pos: &strategy.Position{PurchasePrice: 100}}
-	s.advanceArm(in)
-	if s.armedCrossPrice != 0 {
-		t.Fatal("should clear the armed signal while a position is open")
-	}
-}
-
-func TestEntryReasonNotesDeferral(t *testing.T) {
-	p := defaultParams()
-	p.SignalValidBars = 2
-	p.MaxDriftATR = 5
-	s := NewWithParams("TEST", p)
-	bars := deferredBars(2, 1)
-	s.Decide(bars[0]) // arm
-	sig := s.Decide(bars[1])
-	if sig.Kind != model.SignalBuy {
-		t.Fatalf("expected deferred entry, got kind=%v", sig.Kind)
-	}
-	if !strings.Contains(sig.EntryReason, "отложенный вход") {
-		t.Fatalf("EntryReason should note the deferral, got: %q", sig.EntryReason)
-	}
-}
-
-func TestImmediateEntryReasonHasNoDeferralNote(t *testing.T) {
-	p := defaultParams() // SignalValidBars == 0 -> immediate entry only
-	s := NewWithParams("TEST", p)
-	sig := s.Decide(buildEntryMD())
-	if sig.Kind != model.SignalBuy {
-		t.Fatalf("expected immediate entry, got kind=%v", sig.Kind)
-	}
-	if strings.Contains(sig.EntryReason, "отложенный вход") {
-		t.Fatalf("immediate entry must not carry a deferral note, got: %q", sig.EntryReason)
-	}
-}
-
-func TestExplainReportsArmedWaitingSignal(t *testing.T) {
-	p := defaultParams()
-	p.SignalValidBars = 2
-	p.MaxDriftATR = 5
-	s := NewWithParams("TEST", p)
-	bars := deferredBars(3, 2)
-	s.Decide(bars[0]) // arm; bar[1] has no fresh cross and weak volume
-	out := s.Explain(bars[1])
-	if !strings.Contains(out, "взвед") {
-		t.Fatalf("Explain should report the armed waiting signal, got: %q", out)
-	}
-}
-
-func TestExplainReportsDeferredEntryBar(t *testing.T) {
-	p := defaultParams()
-	p.SignalValidBars = 2
-	p.MaxDriftATR = 5
-	s := NewWithParams("TEST", p)
-	bars := deferredBars(2, 1)
-	s.Decide(bars[0])        // arm, no entry (weak volume)
-	sig := s.Decide(bars[1]) // deferred entry fires here
-	if sig.Kind != model.SignalBuy {
-		t.Fatalf("expected a deferred entry on bar 1, got kind=%v", sig.Kind)
-	}
-	// Engine calls Explain AFTER Decide on the same bar; the arm was just consumed.
-	out := s.Explain(bars[1])
-	if strings.Contains(out, "ВХОДА НЕТ") {
-		t.Fatalf("Explain must not report a block on a bar where a deferred entry fired: %q", out)
-	}
-	if !strings.Contains(out, "взвед") {
-		t.Fatalf("Explain should show the armed signal that produced the entry: %q", out)
-	}
-}
-
-func TestDailyATRRoomDisabledAllowsEntry(t *testing.T) {
-	// Same setup as TestEntryBlockedByDailyATRRoom: consumed range far exceeds any
-	// ATR threshold. With MaxDailyATRUsed=0 the gate must be skipped and the entry
-	// must fire; with a positive value it must block (control case).
-	md := buildEntryMD()
-	md.TodayHigh = md.Price + 50
-	md.TodayLow = md.Price - 50
-
-	// Gate disabled: entry fires despite exhausted daily range.
-	p := defaultParams()
-	p.MaxDailyATRUsed = 0
-	s := NewWithParams("TEST", p)
-	if sig := s.Decide(md); sig.Kind != model.SignalBuy {
-		t.Fatal("entry should fire when MaxDailyATRUsed=0 disables the daily-ATR gate")
-	}
-
-	// Control: gate enabled (positive value) -> same range blocks.
-	p2 := defaultParams() // MaxDailyATRUsed=0.6
-	s2 := NewWithParams("TEST", p2)
-	if sig := s2.Decide(md); sig.Kind == model.SignalBuy {
-		t.Fatal("entry should be blocked when MaxDailyATRUsed>0 and daily range is exhausted")
-	}
-}
-
-func TestExplainDailyATRRoomDisabledReportsFilterOff(t *testing.T) {
-	// With MaxDailyATRUsed=0, Explain must report the "фильтр выключен" pass message
-	// even when today's range would normally block.
-	md := buildEntryMD()
-	md.TodayHigh = md.Price + 50
-	md.TodayLow = md.Price - 50
-
-	p := defaultParams()
-	p.MaxDailyATRUsed = 0
-	s := NewWithParams("TEST", p)
-	out := s.Explain(md)
-	if !strings.Contains(out, "фильтр выключен") {
-		t.Fatalf("Explain should report 'фильтр выключен' when MaxDailyATRUsed<=0, got: %q", out)
-	}
-	if strings.Contains(out, "ВХОДА НЕТ") {
-		t.Fatalf("Explain must not block when daily-ATR gate is disabled, got: %q", out)
-	}
-}
-
-func TestEntryFiresWithFixedTPDisabled(t *testing.T) {
-	p := defaultParams()
-	p.TakeProfitRR = 0 // no fixed TP -> MinRR filter must not block the entry
-	s := NewWithParams("TEST", p)
-	if sig := s.Decide(buildEntryMD()); sig.Kind != model.SignalBuy {
-		t.Fatal("entry should fire when TakeProfitRR=0 (MinRR check skipped)")
 	}
 }
 
@@ -871,5 +685,17 @@ func TestExitReasonRSI(t *testing.T) {
 	sig := s.Decide(inPositionMDWithCloses(closes, pos))
 	if sig.Reason != "RSI" || !strings.Contains(sig.ExitReason, "пересёк границу") {
 		t.Fatalf("reason=%q exitReason=%q want RSI with 'пересёк границу'", sig.Reason, sig.ExitReason)
+	}
+}
+
+// TestEntryFiresWithFixedTPDisabled checks that TakeProfitRR=0 does not block entry.
+// Needs RSICrossLevel=75 for confluence to fire.
+func TestEntryFiresWithFixedTPDisabled(t *testing.T) {
+	p := defaultParams()
+	p.TakeProfitRR = 0 // no fixed TP -> MinRR filter must not block the entry
+	p.RSICrossLevel = 75
+	s := NewWithParams("TEST", p)
+	if sig := s.Decide(buildEntryMD()); sig.Kind != model.SignalBuy {
+		t.Fatal("entry should fire when TakeProfitRR=0 (MinRR check skipped)")
 	}
 }

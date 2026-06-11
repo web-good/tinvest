@@ -9,13 +9,15 @@ import "tinvest/internal/service/trading_strategy/momentum/strategy/core"
 const Ticker = "SBER"
 
 // DefaultParams returns SBER's momentum parameters (uncalibrated baseline).
+// Entry fires on a MACD↔RSI confluence. EMAPeriod=150 and MACDSlow=18 are
+// SBER-specific; all other fields use the generic baseline.
 func DefaultParams() core.Params {
 	return core.Params{
 		EMAPeriod: 150, MACDFast: 12, MACDSlow: 18, MACDSignal: 9, MACDBelowZeroOnly: 1,
-		VolLookback: 20, VolMultiplier: 1.2, DailyATRPeriod: 14, MaxDailyATRUsed: 0.6,
+		VolLookback: 20, VolMultiplier: 1.2,
 		ATRPeriod: 14, SwingLowWindow: 10, SLMult: 0.5, TakeProfitRR: 2.0, MinRR: 1.5,
-		MinATRFrac: 0.003, UseTrail: 0, TrailMult: 2.5, ChandelierWindow: 20, TrailArmATR: 1.0,
-		CooldownBars: 0, DailyTrendPeriod: 0,
-		UseMACDExit: 0, RSIPeriod: 0, RSIOverbought: 70,
+		UseTrail: 0, TrailMult: 2.5, ChandelierWindow: 20, TrailArmATR: 1.0,
+		UseMACDExit: 0, RSIPeriod: 14, RSICrossLevel: 50, RSIOverbought: 70,
+		SignalValidBars: 0,
 	}
 }

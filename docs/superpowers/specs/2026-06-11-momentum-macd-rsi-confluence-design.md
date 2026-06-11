@@ -145,80 +145,32 @@ Per-ticker дефолты (8 файлов): `rusal`, `gazp`, `nvtk`, `mdmg`, `af
 `plzl`, `ydex` — убрать удалённые поля, добавить `RSICrossLevel`, проставить
 `RSIPeriod>0`.
 
-Калибровочные сетки (8 файлов) `data/params/<ticker>/momentum_grid.json` —
-удалить ключи `CooldownBars`, `MaxDailyATRUsed`, `MaxDriftATR`,
-`DailyTrendPeriod`; добавить sweep `RSICrossLevel` и/или `SignalValidBars`.
+Калибровочные сетки (`data/params/<ticker>/momentum_grid.json`) — переписывает
+пользователь отдельно (см. раздел «Калибровочные сетки (grid)»).
 
 Отчётность:
 - `internal/service/backtest/basket.go` — в `paramSummary` заменить ключи
   `CooldownBars`/`DailyTrendPeriod` на `SignalValidBars`/`RSICrossLevel`.
 
-## Обновление калибровочных сеток (grid)
+## Калибровочные сетки (grid)
 
-Правила трансформации каждого `data/params/<ticker>/momentum_grid.json`:
+Сам механизм перебора параметров через grid **сохраняется без изменений**:
+запуск `-calibrate data/params/<ticker>/momentum_grid.json`, структура фаз
+(`phases`/`name`/`keepTop`), параллельный перебор (`calibWorkers`) и логика
+отбора лучших комбинаций остаются как есть. Перебор по-прежнему свипает все поля
+`Params`, перечисленные в сетке.
 
-1. Удалить ключи свипа: `MaxDailyATRUsed`, `MaxDriftATR`, `DailyTrendPeriod`,
-   `CooldownBars` (из всех фаз).
-2. Добавить свип новых входных параметров: `RSICrossLevel` (уровень пересечения),
-   `RSIPeriod` (теперь обязателен для входа — должен быть в сетке у каждого
-   тикера). `SignalValidBars` сохраняется, но трактуется как зазор пары MACD↔RSI.
-3. Сохранить существующие диапазоны `EMAPeriod`/`SLMult`/`TakeProfitRR`/
-   `VolMultiplier`/`MACDFast`/`MACDSlow`/`MACDBelowZeroOnly`/трейл-ключей.
-4. Починить невалидный JSON: убрать висячие запятые в `mdmg` и `nvtk`.
-5. Структуру фаз (`name`/`keepTop`) и их число сохранить; переименовать фазу не
-   требуется.
+Меняется лишь *множество свипаемых ключей* и их значения:
 
-Канонический набор свипаемых входных ключей после правки: `EMAPeriod`, `SLMult`,
-`TakeProfitRR`, `VolMultiplier`, `MACDBelowZeroOnly`, `MACDFast`, `MACDSlow`,
-`RSIPeriod`, `RSICrossLevel`, `SignalValidBars` (+ трейл-ключи там, где были).
+- Удалённые поля (`CooldownBars`, `MaxDailyATRUsed`, `MaxDriftATR`,
+  `DailyTrendPeriod`, `MinATRFrac`, `DailyATRPeriod`) больше не существуют в
+  `Params`, поэтому не могут присутствовать в сетках — ни одна сетка
+  `data/params/<ticker>/momentum_grid.json` не должна на них ссылаться.
+- Новые входные ключи (`RSICrossLevel`, обязательный `RSIPeriod`) и
+  переосмысленный `SignalValidBars` становятся свипаемыми.
 
-Рекомендуемые диапазоны новых ключей: `RSICrossLevel: [45, 50, 55]`,
-`RSIPeriod: [9, 14]` (у `rual` сохранить `[9, 14, 10]`),
-`SignalValidBars: [0, 2, 4]`.
-
-Целевые сетки по тикерам:
-
-**afks** — core: `EMAPeriod [200,150,100]`, `SLMult [0.5,1.0,1.5]`,
-`TakeProfitRR [1.5,2.0,3.0]`, `VolMultiplier [1.0,1.2,1.5]`,
-`RSICrossLevel [45,50,55]`; gates: `MACDFast [12,10,8]`, `MACDSlow [21,26,18]`,
-`SignalValidBars [0,2,4]`, `RSIPeriod [9,14]`.
-
-**gazp** — core: `EMAPeriod [200,150,100]`, `SLMult [1.0,1.5,2.0]`,
-`TakeProfitRR [2.0,3.0]`, `VolMultiplier [1.0,1.2,1.5]`,
-`MACDBelowZeroOnly [0,1]`, `RSICrossLevel [45,50,55]`; gates:
-`MACDFast [12,8]`, `MACDSlow [26,21]`, `SignalValidBars [0,2,4]`,
-`RSIPeriod [9,14]`.
-
-**mdmg** — core: `EMAPeriod [200,150,100]`, `SLMult [1.0,1.5]`,
-`TakeProfitRR [1.5,2.0,3.0]`, `VolMultiplier [1.2,1.5]`,
-`RSICrossLevel [45,50,55]`; gates: `MACDFast [12,8]`, `MACDSlow [26,21]`,
-`SignalValidBars [0,2,4]`, `RSIPeriod [9,14]`. (Убрать висячие запятые.)
-
-**nvtk** — core: `EMAPeriod [200,150,100]`, `SLMult [1.0,1.5,2.0]`,
-`TakeProfitRR [2.0,3.0]`, `VolMultiplier [1.0,1.2,1.5]`,
-`RSICrossLevel [45,50,55]`; gates: `MACDFast [12,8]`, `MACDSlow [26,21]`,
-`SignalValidBars [0,2,4]`, `RSIPeriod [9,14]`. (Убрать висячие запятые.)
-
-**plzl** — core: `EMAPeriod [200,100,150]`, `SLMult [0.5,1.0,1.5]`,
-`TakeProfitRR [2.0,3.0]`, `VolMultiplier [1.0,1.2]`, `MACDBelowZeroOnly [0,1]`,
-`RSICrossLevel [45,50,55]`; signals: `MACDFast [12,10,8]`,
-`MACDSlow [21,26,18]`, `SignalValidBars [0,2,4]`, `RSIPeriod [9,14]`; exits:
-`UseTrail [0,1]`, `TrailMult [2.0,2.5,3.0]`, `TrailArmATR [1.0,1.5]`.
-
-**rual** — core: `EMAPeriod [200,150,100]`, `SLMult [0.5,1.0,1.5]`,
-`VolMultiplier [1.0,1.2,1.5]`, `RSIPeriod [9,14,10]`,
-`RSICrossLevel [45,50,55]`, `SignalValidBars [0,2,4]`.
-
-**sber** — core: `EMAPeriod [70]`, `SLMult [0.8,1.0,1.5]`,
-`TakeProfitRR [2.0,3.0]`, `VolMultiplier [1.0,1.2,1.5]`,
-`RSICrossLevel [45,50,55]`; gates: `MACDFast [12,8]`, `MACDSlow [26,18]`,
-`SignalValidBars [0,2,4]`, `RSIPeriod [9,14]`.
-
-**ydex** — core: `EMAPeriod [200,150,100]`, `SLMult [1.0,1.5,2.0]`,
-`TakeProfitRR [2.0,3.0]`, `VolMultiplier [1.2,1.5]`, `MACDBelowZeroOnly [0,1]`,
-`RSICrossLevel [45,50,55]`; momentum: `MACDFast [12,10,8]`,
-`MACDSlow [21,26,18]`, `SignalValidBars [0,2,4]`, `RSIPeriod [9,14]`; exits:
-`UseTrail [0,1]`, `TrailMult [2.5,3.0]`.
+Конкретные диапазоны свипа и значения по каждому тикеру задаёт пользователь и
+переписывает сетки сам — эта спека их не фиксирует.
 
 ## Тестирование
 
