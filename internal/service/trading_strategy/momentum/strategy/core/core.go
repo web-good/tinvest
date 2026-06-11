@@ -47,6 +47,7 @@ type Params struct {
 	MinRR             float64 // reject entry if (TP-price) < MinRR*risk; <=0 disables
 	MinATRFrac        float64 // reject entry if ATR < MinATRFrac*price; <=0 disables
 	UseTrail          int     // 1 = trail instead of fixed TP
+	UseMACDExit       int     // 1 = exit when MACD crosses below its signal line
 	TrailMult         float64 // chandelier = recentHigh(ChandelierWindow) - TrailMult*ATR
 	ChandelierWindow  int     // window for the chandelier high
 	TrailArmATR       float64 // trail arms after MaxFavorable >= entry + TrailArmATR*EntryATR
@@ -104,6 +105,7 @@ type decideInput struct {
 	macdNow         float64
 	crossUp         bool
 	macdAboveSignal bool // MACD line currently above the signal line (momentum still bullish)
+	macdCrossDown   bool // MACD line just crossed below its signal line (bearish)
 	volumeOK        bool
 	todayRange      float64
 	barHigh         float64
@@ -214,12 +216,13 @@ func (s *Strategy) buildInput(md strategy.MarketData) decideInput {
 		emaTrend = e[len(e)-1]
 	}
 
-	macdNow, crossUp, macdAboveSignal := 0.0, false, false
+	macdNow, crossUp, crossDown, macdAboveSignal := 0.0, false, false, false
 	if m, sg := indicators.MACD(md.Closes, s.p.MACDFast, s.p.MACDSlow, s.p.MACDSignal); len(m) >= 2 {
 		prevDiff := m[len(m)-2] - sg[len(sg)-2]
 		currDiff := m[len(m)-1] - sg[len(sg)-1]
 		macdNow = m[len(m)-1]
 		crossUp = prevDiff <= 0 && currDiff > 0
+		crossDown = prevDiff >= 0 && currDiff < 0
 		macdAboveSignal = currDiff > 0
 	}
 
@@ -249,6 +252,7 @@ func (s *Strategy) buildInput(md strategy.MarketData) decideInput {
 		macdNow:         macdNow,
 		crossUp:         crossUp,
 		macdAboveSignal: macdAboveSignal,
+		macdCrossDown:   crossDown,
 		volumeOK:        indicators.VolumeConfirmed(md.Volumes, s.p.VolLookback, s.p.VolMultiplier),
 		todayRange:      md.TodayHigh - md.TodayLow,
 		barHigh:         barHigh,
@@ -497,6 +501,8 @@ func (s *Strategy) manage(in decideInput, sig model.Signal) model.Signal {
 		sig.Kind, sig.Reason, sig.StopLoss = model.SignalSell, "TRAIL", chandelier
 	case s.p.TakeProfitRR > 0 && in.barHigh >= tp:
 		sig.Kind, sig.Reason = model.SignalSell, "TP"
+	case s.p.UseMACDExit == 1 && in.macdCrossDown:
+		sig.Kind, sig.Reason = model.SignalSell, "MACD"
 	}
 	return sig
 }

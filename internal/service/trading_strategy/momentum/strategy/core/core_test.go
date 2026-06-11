@@ -664,3 +664,88 @@ func TestFixedTPFiresEvenWithTrailEnabled(t *testing.T) {
 		t.Fatalf("kind=%v reason=%q want Sell/TP (TP independent of trail)", sig.Kind, sig.Reason)
 	}
 }
+
+// inPositionMDWithCloses builds an in-position snapshot from an explicit close
+// series so indicator-driven exits (MACD/RSI) can be engineered. Highs/lows
+// straddle each close by 0.3; the last bar's high/low are taken from the series
+// too. Position keys the manage branch.
+func inPositionMDWithCloses(closes []float64, pos *strategy.Position) strategy.MarketData {
+	n := len(closes)
+	highs := make([]float64, n)
+	lows := make([]float64, n)
+	vols := make([]int64, n)
+	for i := 0; i < n; i++ {
+		highs[i], lows[i], vols[i] = closes[i]+0.3, closes[i]-0.3, 1000
+	}
+	return strategy.MarketData{
+		Price: closes[n-1], Highs: highs, Lows: lows, Closes: closes, Volumes: vols, Position: pos,
+	}
+}
+
+// risingThenDropCloses builds an uptrend of `up` bars (+step each), with a
+// 3-bar dip / 3-bar recovery embedded before the last bar so that MACD is above
+// its signal on the penultimate bar, followed by a single sharp drop of `drop`
+// that forces a bearish MACD cross on the last bar.
+func risingThenDropCloses(up int, start, step, drop float64) []float64 {
+	closes := make([]float64, up+1)
+	pureRise := up - 6
+	if pureRise < 1 {
+		pureRise = 1
+	}
+	for i := 0; i < pureRise; i++ {
+		closes[i] = start + float64(i)*step
+	}
+	peak := closes[pureRise-1]
+	for i := 0; i < 3; i++ {
+		closes[pureRise+i] = peak - float64(i+1)*1.0
+	}
+	dipLow := closes[pureRise+2]
+	for i := 0; i < 3; i++ {
+		closes[pureRise+3+i] = dipLow + float64(i+1)*3.0
+	}
+	closes[up] = closes[up-1] - drop
+	return closes
+}
+
+func TestExitMACDBearishCross(t *testing.T) {
+	closes := risingThenDropCloses(60, 100, 0.5, 6) // long rise, then -6 last bar
+	p := defaultParams()
+	p.UseMACDExit = 1
+	p.TakeProfitRR = 0 // isolate: no TP
+	p.UseTrail = 0
+	// SL far below the last bar low so only the MACD exit can fire.
+	pos := &strategy.Position{PurchasePrice: closes[0], StopLoss: 1, EntryATR: 1, MaxFavorablePrice: 1000}
+	s := NewWithParams("TEST", p)
+	sig := s.Decide(inPositionMDWithCloses(closes, pos))
+	if sig.Kind != model.SignalSell || sig.Reason != "MACD" {
+		t.Fatalf("kind=%v reason=%q want Sell/MACD", sig.Kind, sig.Reason)
+	}
+}
+
+func TestNoMACDExitWhenDisabled(t *testing.T) {
+	closes := risingThenDropCloses(60, 100, 0.5, 6)
+	p := defaultParams()
+	p.UseMACDExit = 0 // disabled
+	p.TakeProfitRR = 0
+	p.UseTrail = 0
+	pos := &strategy.Position{PurchasePrice: closes[0], StopLoss: 1, EntryATR: 1, MaxFavorablePrice: 1000}
+	s := NewWithParams("TEST", p)
+	if sig := s.Decide(inPositionMDWithCloses(closes, pos)); sig.Kind == model.SignalSell && sig.Reason == "MACD" {
+		t.Fatal("no MACD exit should fire when UseMACDExit=0")
+	}
+}
+
+func TestExitStopLossWinsOverMACD(t *testing.T) {
+	closes := risingThenDropCloses(60, 100, 0.5, 6)
+	p := defaultParams()
+	p.UseMACDExit = 1
+	p.TakeProfitRR = 0
+	p.UseTrail = 0
+	// StopLoss above the last bar low (lastClose-0.3) so SL triggers on the same bar.
+	last := closes[len(closes)-1]
+	pos := &strategy.Position{PurchasePrice: closes[0], StopLoss: last + 0.1, EntryATR: 1, MaxFavorablePrice: 1000}
+	s := NewWithParams("TEST", p)
+	if sig := s.Decide(inPositionMDWithCloses(closes, pos)); sig.Reason != "SL" {
+		t.Fatalf("reason=%q want SL (priority over MACD)", sig.Reason)
+	}
+}
