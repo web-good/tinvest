@@ -25,15 +25,16 @@ func defaultParams() Params {
 // confirmed RSI up-cross through 40, volume OK, stochastic well oversold.
 func passingInput() decideInput {
 	return decideInput{
-		price:    100,
-		atr:      1,
-		emaFast:  95,
-		emaSlow:  90,
-		rsiPrev:  38, // below 40
-		rsiNow:   45, // above 40 -> confirmed up-cross fires
-		stochK:   10,
-		volumeOK: true,
-		barLow:   100,
+		price:      100,
+		atr:        1,
+		emaFast:    95,
+		emaSlow:    90,
+		rsiPrev:    38, // below 40
+		rsiNow:     45, // above 40 -> confirmed up-cross fires
+		stochK:     10,
+		stochValid: true,
+		volumeOK:   true,
+		barLow:     100,
 	}
 }
 
@@ -173,6 +174,17 @@ func TestProtectiveStopWinsTie(t *testing.T) {
 	sig := s.decide(in)
 	if sig.Reason != "SL" {
 		t.Fatalf("protective first: want SL, got %q", sig.Reason)
+	}
+}
+
+func TestStochGateBlocksDuringWarmup(t *testing.T) {
+	p := defaultParams()
+	p.UseStoch = 1
+	s := NewWithParams("TEST", p)
+	in := passingInput()
+	in.stochK, in.stochValid = 0, false // insufficient history -> not a real oversold reading
+	if sig := s.decide(in); sig.Kind == model.SignalBuy {
+		t.Fatalf("stoch warm-up (invalid): want no Buy")
 	}
 }
 

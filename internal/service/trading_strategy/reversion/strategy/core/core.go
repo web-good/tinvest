@@ -78,17 +78,18 @@ func (s *Strategy) Lookback() int {
 
 // decideInput carries already-computed indicator values into the pure core.
 type decideInput struct {
-	price     float64
-	atr       float64 // display only
-	emaFast   float64
-	emaSlow   float64
-	rsiNow    float64
-	rsiPrev   float64
-	stochK    float64 // computed only when UseStoch == 1
-	volumeOK  bool
-	barLow    float64
-	pos       *strategy.Position
-	barsInPos int
+	price      float64
+	atr        float64 // display only
+	emaFast    float64
+	emaSlow    float64
+	rsiNow     float64
+	rsiPrev    float64
+	stochK     float64 // computed only when UseStoch == 1
+	stochValid bool    // true only when there is enough history for a real %K
+	volumeOK   bool
+	barLow     float64
+	pos        *strategy.Position
+	barsInPos  int
 }
 
 // Decide computes every indicator from md, advances the position-age counter, and
@@ -125,9 +126,10 @@ func (s *Strategy) buildInput(md strategy.MarketData) decideInput {
 		}
 	}
 
-	stochK := 0.0
-	if s.p.UseStoch == 1 {
+	stochK, stochValid := 0.0, false
+	if s.p.UseStoch == 1 && s.p.StochPeriod > 0 && len(md.Closes) >= s.p.StochPeriod {
 		stochK, _ = indicators.Stochastic(md.Highs, md.Lows, md.Closes, s.p.StochPeriod, s.p.StochSmooth)
+		stochValid = true
 	}
 
 	var barLow float64
@@ -136,16 +138,17 @@ func (s *Strategy) buildInput(md strategy.MarketData) decideInput {
 	}
 
 	return decideInput{
-		price:    md.Price,
-		atr:      atr,
-		emaFast:  emaFast,
-		emaSlow:  emaSlow,
-		rsiNow:   rsiNow,
-		rsiPrev:  rsiPrev,
-		stochK:   stochK,
-		volumeOK: indicators.VolumeConfirmed(md.Volumes, s.p.VolLookback, s.p.VolMultiplier),
-		barLow:   barLow,
-		pos:      md.Position,
+		price:      md.Price,
+		atr:        atr,
+		emaFast:    emaFast,
+		emaSlow:    emaSlow,
+		rsiNow:     rsiNow,
+		rsiPrev:    rsiPrev,
+		stochK:     stochK,
+		stochValid: stochValid,
+		volumeOK:   indicators.VolumeConfirmed(md.Volumes, s.p.VolLookback, s.p.VolMultiplier),
+		barLow:     barLow,
+		pos:        md.Position,
 	}
 }
 
@@ -187,8 +190,10 @@ func (s *Strategy) decide(in decideInput) model.Signal {
 	if !in.volumeOK {
 		return sig
 	}
-	// 4. Optional Stochastic oversold confirmation.
-	if s.p.UseStoch == 1 && !(in.stochK < s.p.StochOversold) {
+	// 4. Optional Stochastic oversold confirmation. A 0 from insufficient history is
+	// NOT oversold — require a valid reading so UseStoch never silently no-ops during
+	// the indicator's warm-up window.
+	if s.p.UseStoch == 1 && (!in.stochValid || in.stochK >= s.p.StochOversold) {
 		return sig
 	}
 	// 5. Protective-stop sanity: a hard stop is mandatory.
