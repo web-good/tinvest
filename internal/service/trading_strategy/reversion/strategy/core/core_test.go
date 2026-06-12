@@ -1,7 +1,6 @@
 package core
 
 import (
-	"math"
 	"strings"
 	"testing"
 
@@ -9,34 +8,35 @@ import (
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 )
 
-// defaultParams returns valid, entry-capable params: trend on, RSI/Stoch oversold 20,
-// overbought 70/80, ATR stop = 1x ATR.
+// defaultParams returns valid, entry-capable params: trend on, RSI/Stoch oversold 20.
 func defaultParams() Params {
 	return Params{
 		UseTrend: 1, FastEMA: 50, SlowEMA: 200,
-		RSIPeriod: 14, RSIOversold: 20, RSIOverbought: 70,
-		StochKPeriod: 14, StochDSmooth: 3, StochOversold: 20, StochOverbought: 80,
-		ATRPeriod: 14, ATRMult: 1.0,
+		RSIPeriod: 14, RSIOversold: 20,
+		StochKPeriod: 14, StochDSmooth: 3, StochOversold: 20,
 	}
 }
 
 // passingInput clears every entry gate: uptrend; RSI crosses DOWN into oversold while
-// Stoch %D is already in the oversold zone; ATR positive.
+// Stoch %D is already in the oversold zone. EMA prev == now so no spurious cross.
 func passingInput() decideInput {
 	return decideInput{
-		price: 100, atr: 2, emaFast: 95, emaSlow: 90,
+		price: 100,
+		emaFast: 95, emaFastPrev: 95, emaSlow: 90, emaSlowPrev: 90,
 		rsiPrev: 25, rsiNow: 15, rsiOK: true, // crossDown through 20 (RSI enters oversold)
 		stochPrev: 10, stochNow: 8, stochOK: true, // already < 20 (Stoch already in zone)
-		barLow: 100,
 	}
 }
 
-// openInput is an open position above its stop with neutral oscillators (no exit).
+// openInput is an open position holding, with neutral signals (no exit): RSI above 50
+// and rising, fast EMA above slow on both bars.
 func openInput() decideInput {
 	in := passingInput()
-	in.pos = &strategy.Position{PurchasePrice: 100, StopLoss: 98}
-	in.rsiPrev, in.rsiNow = 50, 55
+	in.pos = &strategy.Position{PurchasePrice: 100}
+	in.rsiPrev, in.rsiNow = 60, 62
 	in.stochPrev, in.stochNow = 50, 55
+	in.emaFast, in.emaFastPrev = 95, 95
+	in.emaSlow, in.emaSlowPrev = 90, 90
 	return in
 }
 
@@ -66,9 +66,6 @@ func TestEntryAllGatesPass(t *testing.T) {
 	sig := s.decide(passingInput())
 	if sig.Kind != model.SignalBuy {
 		t.Fatalf("want Buy, got kind=%v", sig.Kind)
-	}
-	if math.Abs(sig.StopLoss-98) > 1e-9 { // 100 - 1.0*2
-		t.Fatalf("StopLoss=%v want 98", sig.StopLoss)
 	}
 	if !strings.Contains(sig.EntryReason, "RSI(14)") || !strings.Contains(sig.EntryReason, "Stoch") {
 		t.Fatalf("EntryReason missing dual detail: %q", sig.EntryReason)
@@ -127,83 +124,61 @@ func TestTrendFilterToggles(t *testing.T) {
 	}
 }
 
-func TestExitDualOverbought(t *testing.T) {
+func TestExitRSI50(t *testing.T) {
 	s := NewWithParams("TEST", defaultParams())
 
-	// RSI crosses UP through 70 while Stoch already > 80 -> sell.
+	// RSI crosses 50 downward -> sell RSI50.
 	in := openInput()
-	in.rsiPrev, in.rsiNow = 65, 75
-	in.stochPrev, in.stochNow = 85, 85
-	if sig := s.decide(in); sig.Kind != model.SignalSell || sig.Reason != "XOVER" {
-		t.Fatalf("dual overbought: want XOVER sell, got kind=%v reason=%q", sig.Kind, sig.Reason)
+	in.rsiPrev, in.rsiNow = 55, 45
+	if sig := s.decide(in); sig.Kind != model.SignalSell || sig.Reason != "RSI50" {
+		t.Fatalf("RSI down-cross 50: want RSI50 sell, got kind=%v reason=%q", sig.Kind, sig.Reason)
 	}
 
-	// RSI crosses up but Stoch not high -> no sell.
+	// RSI stays above 50 -> no sell.
 	in = openInput()
-	in.rsiPrev, in.rsiNow = 65, 75
-	in.stochPrev, in.stochNow = 50, 55
+	in.rsiPrev, in.rsiNow = 55, 52
 	if sig := s.decide(in); sig.Kind == model.SignalSell {
-		t.Fatalf("RSI high but Stoch low: should NOT sell")
+		t.Fatalf("RSI above 50: should NOT sell")
+	}
+}
+
+func TestExitEMACross(t *testing.T) {
+	s := NewWithParams("TEST", defaultParams())
+
+	// Fast EMA drops below slow EMA, RSI neutral (no 50 cross) -> sell EMAX.
+	in := openInput()
+	in.rsiPrev, in.rsiNow = 60, 58 // no 50 cross
+	in.emaFastPrev, in.emaSlowPrev = 95, 90
+	in.emaFast, in.emaSlow = 88, 90 // fast now below slow
+	if sig := s.decide(in); sig.Kind != model.SignalSell || sig.Reason != "EMAX" {
+		t.Fatalf("bearish EMA cross: want EMAX sell, got kind=%v reason=%q", sig.Kind, sig.Reason)
 	}
 
-	// Stoch crosses up while RSI already high -> sell (mirror branch).
+	// Fast stays above slow -> no EMA exit.
 	in = openInput()
-	in.rsiPrev, in.rsiNow = 75, 75     // already > 70, no cross
-	in.stochPrev, in.stochNow = 75, 85 // crossUp through 80
-	if sig := s.decide(in); sig.Kind != model.SignalSell || sig.Reason != "XOVER" {
-		t.Fatalf("Stoch cross + RSI already high: want XOVER sell, got %v/%q", sig.Kind, sig.Reason)
+	in.rsiPrev, in.rsiNow = 60, 58
+	in.emaFastPrev, in.emaSlowPrev = 95, 90
+	in.emaFast, in.emaSlow = 94, 90
+	if sig := s.decide(in); sig.Kind == model.SignalSell {
+		t.Fatalf("fast above slow: should NOT sell")
 	}
 }
 
-func TestStopSanityBlocksWhenNoStop(t *testing.T) {
-	p := defaultParams()
-	p.ATRMult = 0
-	s := NewWithParams("TEST", p)
-	if sig := s.decide(passingInput()); sig.Kind == model.SignalBuy {
-		t.Fatalf("ATRMult=0: want no Buy (safety mandatory)")
-	}
-	s2 := NewWithParams("TEST", defaultParams())
-	in := passingInput()
-	in.atr = 0
-	if sig := s2.decide(in); sig.Kind == model.SignalBuy {
-		t.Fatalf("atr=0: want no Buy")
-	}
-}
-
-func TestStopLevelUsesATRMult(t *testing.T) {
-	p := defaultParams()
-	p.ATRMult = 1.5
-	s := NewWithParams("TEST", p)
-	in := passingInput()
-	in.atr = 2 // stop = 100 - 1.5*2 = 97
-	sig := s.decide(in)
-	if sig.Kind != model.SignalBuy {
-		t.Fatalf("want Buy, got %v", sig.Kind)
-	}
-	if math.Abs(sig.StopLoss-97) > 1e-9 {
-		t.Fatalf("StopLoss=%v want 97", sig.StopLoss)
-	}
-}
-
-func TestExitSL(t *testing.T) {
+func TestExitPrecedenceRSIWhenBoth(t *testing.T) {
 	s := NewWithParams("TEST", defaultParams())
 	in := openInput()
-	in.barLow = 97 // <= stop 98
-	sig := s.decide(in)
-	if sig.Kind != model.SignalSell || sig.Reason != "SL" {
-		t.Fatalf("want SL sell, got kind=%v reason=%q", sig.Kind, sig.Reason)
+	in.rsiPrev, in.rsiNow = 55, 45     // RSI50 fires
+	in.emaFastPrev, in.emaSlowPrev = 95, 90
+	in.emaFast, in.emaSlow = 88, 90 // EMAX also fires
+	if sig := s.decide(in); sig.Reason != "RSI50" {
+		t.Fatalf("both fire: want RSI50 precedence, got %q", sig.Reason)
 	}
 }
 
-func TestProtectiveStopWinsTie(t *testing.T) {
+func TestNoExitWhenHolding(t *testing.T) {
 	s := NewWithParams("TEST", defaultParams())
-	in := openInput()
-	in.barLow = 97                 // SL hit (stop 98)
-	in.rsiPrev, in.rsiNow = 65, 75 // overbought cross too
-	in.stochPrev, in.stochNow = 85, 85
-	sig := s.decide(in)
-	if sig.Reason != "SL" {
-		t.Fatalf("protective first: want SL, got %q", sig.Reason)
+	if sig := s.decide(openInput()); sig.Kind == model.SignalSell {
+		t.Fatalf("neutral signals: should hold, got sell %q", sig.Reason)
 	}
 }
 
@@ -237,7 +212,7 @@ func TestExplainPositionOpen(t *testing.T) {
 	md := strategy.MarketData{
 		Price: 100, Highs: []float64{100}, Lows: []float64{100},
 		Closes: []float64{100}, Volumes: []int64{1},
-		Position: &strategy.Position{PurchasePrice: 100, StopLoss: 98},
+		Position: &strategy.Position{PurchasePrice: 100},
 	}
 	if out := s.Explain(md); !strings.Contains(out, "позиция уже открыта") {
 		t.Fatalf("Explain with open position: %q", out)

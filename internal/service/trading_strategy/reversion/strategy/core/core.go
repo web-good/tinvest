@@ -1,10 +1,11 @@
 // Package core implements a long-only mean-reversion strategy on the daily timeframe,
 // driven by the agreement of two oscillators: RSI and the Stochastic %D line. It buys
-// when one oscillator is already inside its oversold zone and the other crosses into it,
-// and exits (XOVER) when one is already overbought and the other crosses up into the
-// overbought zone. The protective ATR stop is frozen at entry and checked first. An
-// optional trend filter restricts buys to a confirmed uptrend. The decision logic is pure
-// and ticker-agnostic; per-share packages supply ticker + Params. Run with `-interval Day1`.
+// when one oscillator is already inside its oversold zone and the other crosses into it.
+// It exits an open long on either momentum-fade signal: RSI crossing the 50 line downward
+// (the primary exit), or a bearish EMA cross (FastEMA dropping below SlowEMA) as a
+// regime-break backstop. There is no protective stop. An optional trend filter restricts
+// buys to a confirmed uptrend. The decision logic is pure and ticker-agnostic; per-share
+// packages supply ticker + Params. Run with `-interval Day1`.
 package core
 
 import (
@@ -17,21 +18,20 @@ import (
 	"tinvest/pkg/indicators"
 )
 
+// rsiExitLevel is the fixed RSI midline: an open long exits when RSI crosses it downward.
+const rsiExitLevel = 50.0
+
 // Params holds every tunable. All fields are int or float64 (flags as int 0/1) so
 // reflection grid calibration can sweep them.
 type Params struct {
-	UseTrend        int     // 1 = require uptrend before buying; 0 = ignore trend
-	FastEMA         int     // fast regime EMA (e.g. 50)
-	SlowEMA         int     // slow regime EMA + price floor (e.g. 200)
-	RSIPeriod       int     // RSI length; required (>0)
-	RSIOversold     float64 // RSI oversold zone (entry side)
-	RSIOverbought   float64 // RSI overbought zone (exit side)
-	StochKPeriod    int     // Stochastic %K lookback; required (>0)
-	StochDSmooth    int     // Stochastic %D smoothing; required (>0); 1 = raw %K
-	StochOversold   float64 // Stochastic oversold zone (entry side)
-	StochOverbought float64 // Stochastic overbought zone (exit side)
-	ATRPeriod       int     // ATR length for the stop
-	ATRMult         float64 // stop = entry - ATRMult*ATR; must be > 0
+	UseTrend      int     // 1 = require uptrend before buying; 0 = ignore trend
+	FastEMA       int     // fast regime EMA (e.g. 50); also the bearish-cross exit fast line
+	SlowEMA       int     // slow regime EMA + price floor (e.g. 200); bearish-cross exit slow line
+	RSIPeriod     int     // RSI length; required (>0)
+	RSIOversold   float64 // RSI oversold zone (entry side)
+	StochKPeriod  int     // Stochastic %K lookback; required (>0)
+	StochDSmooth  int     // Stochastic %D smoothing; required (>0); 1 = raw %K
+	StochOversold float64 // Stochastic oversold zone (entry side)
 }
 
 // Strategy trades a single instrument with the dual-confirmation rules. Ticker-agnostic
@@ -55,7 +55,6 @@ func (s *Strategy) Lookback() int {
 		s.p.FastEMA,
 		s.p.RSIPeriod + 1,
 		s.p.StochKPeriod + s.p.StochDSmooth + 1,
-		s.p.ATRPeriod + 1,
 	} {
 		if c > m {
 			m = c
@@ -65,22 +64,23 @@ func (s *Strategy) Lookback() int {
 }
 
 // decideInput carries already-computed indicator values into the pure core. stochNow/Prev
-// are the %D line (smoothed %K). rsiOK/stochOK report whether each oscillator produced a
-// valid two-bar reading; when false the (now/prev) values are warm-up sentinels (0) and
+// are the %D line (smoothed %K). emaFastPrev/emaSlowPrev are the previous-bar EMA values,
+// needed to detect the bearish cross. rsiOK/stochOK report whether each oscillator produced
+// a valid two-bar reading; when false the (now/prev) values are warm-up sentinels (0) and
 // must NOT be treated as a real in-zone reading.
 type decideInput struct {
-	price     float64
-	atr       float64
-	emaFast   float64
-	emaSlow   float64
-	rsiNow    float64
-	rsiPrev   float64
-	rsiOK     bool
-	stochNow  float64
-	stochPrev float64
-	stochOK   bool
-	barLow    float64
-	pos       *strategy.Position
+	price       float64
+	emaFast     float64
+	emaFastPrev float64
+	emaSlow     float64
+	emaSlowPrev float64
+	rsiNow      float64
+	rsiPrev     float64
+	rsiOK       bool
+	stochNow    float64
+	stochPrev   float64
+	stochOK     bool
+	pos         *strategy.Position
 }
 
 // Decide computes every indicator from md and delegates to the pure core.
@@ -92,15 +92,8 @@ func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 
 // buildInput computes every indicator from md and packs them for the pure core.
 func (s *Strategy) buildInput(md strategy.MarketData) decideInput {
-	atr := indicators.ATR(md.Highs, md.Lows, md.Closes, s.p.ATRPeriod)
-
-	emaFast, emaSlow := 0.0, 0.0
-	if e := ema.Compute(md.Closes, s.p.FastEMA); len(e) > 0 {
-		emaFast = e[len(e)-1]
-	}
-	if e := ema.Compute(md.Closes, s.p.SlowEMA); len(e) > 0 {
-		emaSlow = e[len(e)-1]
-	}
+	emaFast, emaFastPrev := lastTwoEMA(md.Closes, s.p.FastEMA)
+	emaSlow, emaSlowPrev := lastTwoEMA(md.Closes, s.p.SlowEMA)
 
 	var rsiNow, rsiPrev float64
 	rsiOK := false
@@ -120,29 +113,35 @@ func (s *Strategy) buildInput(md strategy.MarketData) decideInput {
 		}
 	}
 
-	var barLow float64
-	if n := len(md.Lows); n > 0 {
-		barLow = md.Lows[n-1]
-	}
-
 	return decideInput{
-		price:     md.Price,
-		atr:       atr,
-		emaFast:   emaFast,
-		emaSlow:   emaSlow,
-		rsiNow:    rsiNow,
-		rsiPrev:   rsiPrev,
-		rsiOK:     rsiOK,
-		stochNow:  stochNow,
-		stochPrev: stochPrev,
-		stochOK:   stochOK,
-		barLow:    barLow,
-		pos:       md.Position,
+		price:       md.Price,
+		emaFast:     emaFast,
+		emaFastPrev: emaFastPrev,
+		emaSlow:     emaSlow,
+		emaSlowPrev: emaSlowPrev,
+		rsiNow:      rsiNow,
+		rsiPrev:     rsiPrev,
+		rsiOK:       rsiOK,
+		stochNow:    stochNow,
+		stochPrev:   stochPrev,
+		stochOK:     stochOK,
+		pos:         md.Position,
 	}
 }
 
-// crossUp reports an up-cross of level: prev at/below, now above.
-func crossUp(prev, now, level float64) bool { return prev <= level && now > level }
+// lastTwoEMA returns the latest and previous EMA values for the period. When the series
+// has fewer than two points, prev equals now (or both are 0), so no false cross is seen.
+func lastTwoEMA(closes []float64, period int) (now, prev float64) {
+	e := ema.Compute(closes, period)
+	switch {
+	case len(e) >= 2:
+		return e[len(e)-1], e[len(e)-2]
+	case len(e) == 1:
+		return e[0], e[0]
+	default:
+		return 0, 0
+	}
+}
 
 // crossDown reports a down-cross of level: prev at/above, now below.
 func crossDown(prev, now, level float64) bool { return prev >= level && now < level }
@@ -168,19 +167,6 @@ func (s *Strategy) entryFired(in decideInput) bool {
 	return (rsiCrossIn && stochIn) || (stochCrossIn && rsiIn)
 }
 
-// exitFired reports the dual overbought confirmation: one oscillator crosses UP into its
-// overbought zone while the other is already above its overbought zone.
-func (s *Strategy) exitFired(in decideInput) bool {
-	if !indicatorsReady(in) {
-		return false
-	}
-	rsiCrossUp := crossUp(in.rsiPrev, in.rsiNow, s.p.RSIOverbought)
-	stochCrossUp := crossUp(in.stochPrev, in.stochNow, s.p.StochOverbought)
-	rsiHigh := in.rsiNow > s.p.RSIOverbought
-	stochHigh := in.stochNow > s.p.StochOverbought
-	return (rsiCrossUp && stochHigh) || (stochCrossUp && rsiHigh)
-}
-
 // uptrend reports the regime gate: fast EMA above slow EMA and price above the slow EMA.
 func uptrend(in decideInput) bool {
 	return in.emaFast > in.emaSlow && in.emaSlow > 0 && in.price > in.emaSlow
@@ -202,56 +188,42 @@ func (s *Strategy) decide(in decideInput) model.Signal {
 	if !s.entryFired(in) {
 		return sig
 	}
-	// 3. ATR stop is mandatory and must size a positive risk.
-	if s.p.ATRMult <= 0 || in.atr <= 0 {
-		return sig
-	}
-	stop := in.price - s.p.ATRMult*in.atr
-	risk := in.price - stop
-	if risk <= 0 {
-		return sig
-	}
 
 	sig.Kind = model.SignalBuy
-	sig.StopLoss = stop
-	sig.ATR = in.atr
 	sig.RSI = in.rsiNow
-	sig.EntryReason = s.entryReason(in, stop, risk)
+	sig.EntryReason = s.entryReason(in)
 	return sig
 }
 
 // entryReason renders the human-readable rationale shown in the trade journal.
-func (s *Strategy) entryReason(in decideInput, stop, risk float64) string {
+func (s *Strategy) entryReason(in decideInput) string {
 	trend := "выкл"
 	if s.p.UseTrend == 1 {
 		trend = fmt.Sprintf("EMA%d %.4f > EMA%d %.4f, close %.4f > EMA%d",
 			s.p.FastEMA, in.emaFast, s.p.SlowEMA, in.emaSlow, in.price, s.p.SlowEMA)
 	}
 	return fmt.Sprintf(
-		"Тренд: %s; двойное подтверждение перепроданности: RSI(%d) %.2f→%.2f (зона <%.0f) + Stoch%%D(%d,%d) %.2f→%.2f (зона <%.0f); SL=%.4f (−%.2g×ATR %.4f, риск %.4f)",
+		"Тренд: %s; двойное подтверждение перепроданности: RSI(%d) %.2f→%.2f (зона <%.0f) + Stoch%%D(%d,%d) %.2f→%.2f (зона <%.0f)",
 		trend,
 		s.p.RSIPeriod, in.rsiPrev, in.rsiNow, s.p.RSIOversold,
 		s.p.StochKPeriod, s.p.StochDSmooth, in.stochPrev, in.stochNow, s.p.StochOversold,
-		stop, s.p.ATRMult, in.atr, risk,
 	)
 }
 
-// manage handles an open long: the frozen ATR stop first, then the dual overbought exit.
-// Protective stops are checked first so the worst case for the position wins ties.
+// manage handles an open long. There is no protective stop. It exits on either a downward
+// RSI-50 cross (primary momentum fade) or a bearish EMA cross (FastEMA below SlowEMA). When
+// both fire on the same bar RSI50 wins; the fill price (close) is identical either way.
 func (s *Strategy) manage(in decideInput, sig model.Signal) model.Signal {
-	hardSL := in.pos.StopLoss
-	sig.StopLoss = hardSL
 	sig.RSI = in.rsiNow
 
 	switch {
-	case in.barLow <= hardSL:
-		sig.Kind, sig.Reason = model.SignalSell, "SL"
-		sig.ExitReason = fmt.Sprintf("SL: low %.4f ≤ стоп %.4f (зафиксирован на входе)", in.barLow, hardSL)
-	case s.exitFired(in):
-		sig.Kind, sig.Reason = model.SignalSell, "XOVER"
-		sig.ExitReason = fmt.Sprintf(
-			"XOVER: RSI %.2f→%.2f (зона >%.0f) + Stoch%%D %.2f→%.2f (зона >%.0f) — двойное подтверждение перекупленности",
-			in.rsiPrev, in.rsiNow, s.p.RSIOverbought, in.stochPrev, in.stochNow, s.p.StochOverbought)
+	case in.rsiOK && crossDown(in.rsiPrev, in.rsiNow, rsiExitLevel):
+		sig.Kind, sig.Reason = model.SignalSell, "RSI50"
+		sig.ExitReason = fmt.Sprintf("RSI50: RSI %.2f→%.2f пересёк 50 сверху вниз", in.rsiPrev, in.rsiNow)
+	case crossDown(in.emaFastPrev-in.emaSlowPrev, in.emaFast-in.emaSlow, 0):
+		sig.Kind, sig.Reason = model.SignalSell, "EMAX"
+		sig.ExitReason = fmt.Sprintf("EMAX: FastEMA%d %.4f ушла под SlowEMA%d %.4f (медвежий кросс)",
+			s.p.FastEMA, in.emaFast, s.p.SlowEMA, in.emaSlow)
 	}
 	return sig
 }
@@ -289,16 +261,6 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 	}
 	pass("Двойное подтверждение: RSI(%d) %.2f→%.2f + Stoch%%D %.2f→%.2f в зоне перепроданности",
 		s.p.RSIPeriod, in.rsiPrev, in.rsiNow, in.stochPrev, in.stochNow)
-
-	// 3. ATR stop.
-	if s.p.ATRMult <= 0 {
-		return block("Стоп: ATRMult=%.2g ≤ 0 — защита не задана", s.p.ATRMult)
-	}
-	if in.atr <= 0 {
-		return block("Стоп: ATR=%.4f ≤ 0 — нельзя рассчитать стоп", in.atr)
-	}
-	stop := in.price - s.p.ATRMult*in.atr
-	pass("Стоп: SL=%.4f (−%.2g×ATR %.4f)", stop, s.p.ATRMult, in.atr)
 
 	fmt.Fprintf(&b, "→ ВХОД: все фильтры пройдены, должна быть покупка")
 	return b.String()

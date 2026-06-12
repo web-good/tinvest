@@ -51,7 +51,7 @@ func TestReversionLookupGenericFallback(t *testing.T) {
 
 func TestReversionDefaultsValid(t *testing.T) {
 	p := genericReversionDefaults()
-	if p.ATRMult <= 0 || p.SlowEMA <= p.FastEMA || p.RSIPeriod <= 0 || p.StochKPeriod <= 0 || p.StochDSmooth <= 0 {
+	if p.SlowEMA <= p.FastEMA || p.RSIPeriod <= 0 || p.StochKPeriod <= 0 || p.StochDSmooth <= 0 {
 		t.Fatalf("invalid generic defaults: %+v", p)
 	}
 }
