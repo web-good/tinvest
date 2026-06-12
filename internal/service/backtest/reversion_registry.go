@@ -52,7 +52,7 @@ func genericReversionDefaults() core.Params {
 	return core.Params{
 		UseTrend: 1, FastEMA: 50, SlowEMA: 200,
 		RSIPeriod: 14, RSIOversold: 20, RSIOverbought: 70,
-		EntryMode: 1, ExitMode: 0,
+		StochKPeriod: 14, StochDSmooth: 3, StochOversold: 20, StochOverbought: 80,
 		ATRPeriod: 14, ATRMult: 1.0,
 	}
 }
