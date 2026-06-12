@@ -37,6 +37,7 @@ func openInput() decideInput {
 	in.stochPrev, in.stochNow = 50, 55
 	in.emaFast, in.emaFastPrev = 95, 95
 	in.emaSlow, in.emaSlowPrev = 90, 90
+	in.emaOK = true
 	return in
 }
 
@@ -179,6 +180,33 @@ func TestNoExitWhenHolding(t *testing.T) {
 	s := NewWithParams("TEST", defaultParams())
 	if sig := s.decide(openInput()); sig.Kind == model.SignalSell {
 		t.Fatalf("neutral signals: should hold, got sell %q", sig.Reason)
+	}
+}
+
+func TestExitNoFalseEMACrossAtWarmup(t *testing.T) {
+	p := defaultParams()
+	p.UseTrend = 0
+	s := NewWithParams("TEST", p)
+
+	// Exactly SlowEMA(200) closes: the slow EMA is valid only on the last bar, so
+	// emaSlowPrev is the warm-up zero sentinel. A monotone decline would make the
+	// fast-minus-slow diff cross below zero purely from that sentinel; the emaOK guard
+	// must suppress the spurious EMAX exit.
+	n := 200
+	closes := make([]float64, n)
+	for i := 0; i < n; i++ {
+		closes[i] = float64(300 - i) // strictly declining
+	}
+	md := strategy.MarketData{
+		Price:    closes[n-1],
+		Highs:    closes,
+		Lows:     closes,
+		Closes:   closes,
+		Volumes:  make([]int64, n),
+		Position: &strategy.Position{PurchasePrice: closes[n-1]},
+	}
+	if sig := s.Decide(md); sig.Kind == model.SignalSell && sig.Reason == "EMAX" {
+		t.Fatalf("warm-up slow EMA sentinel produced a false EMAX exit")
 	}
 }
 

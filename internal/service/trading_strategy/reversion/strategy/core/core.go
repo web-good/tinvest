@@ -67,13 +67,16 @@ func (s *Strategy) Lookback() int {
 // are the %D line (smoothed %K). emaFastPrev/emaSlowPrev are the previous-bar EMA values,
 // needed to detect the bearish cross. rsiOK/stochOK report whether each oscillator produced
 // a valid two-bar reading; when false the (now/prev) values are warm-up sentinels (0) and
-// must NOT be treated as a real in-zone reading.
+// must NOT be treated as a real in-zone reading. emaOK reports whether both EMA readings are
+// warmed (non-zero); the EMAX exit gates on it so the warm-up zero sentinel cannot fake a
+// fresh cross — mirroring the rsiOK/stochOK discipline.
 type decideInput struct {
 	price       float64
 	emaFast     float64
 	emaFastPrev float64
 	emaSlow     float64
 	emaSlowPrev float64
+	emaOK       bool
 	rsiNow      float64
 	rsiPrev     float64
 	rsiOK       bool
@@ -92,8 +95,8 @@ func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 
 // buildInput computes every indicator from md and packs them for the pure core.
 func (s *Strategy) buildInput(md strategy.MarketData) decideInput {
-	emaFast, emaFastPrev := lastTwoEMA(md.Closes, s.p.FastEMA)
-	emaSlow, emaSlowPrev := lastTwoEMA(md.Closes, s.p.SlowEMA)
+	emaFast, emaFastPrev, fastOK := lastTwoEMA(md.Closes, s.p.FastEMA)
+	emaSlow, emaSlowPrev, slowOK := lastTwoEMA(md.Closes, s.p.SlowEMA)
 
 	var rsiNow, rsiPrev float64
 	rsiOK := false
@@ -119,6 +122,7 @@ func (s *Strategy) buildInput(md strategy.MarketData) decideInput {
 		emaFastPrev: emaFastPrev,
 		emaSlow:     emaSlow,
 		emaSlowPrev: emaSlowPrev,
+		emaOK:       fastOK && slowOK,
 		rsiNow:      rsiNow,
 		rsiPrev:     rsiPrev,
 		rsiOK:       rsiOK,
@@ -129,18 +133,19 @@ func (s *Strategy) buildInput(md strategy.MarketData) decideInput {
 	}
 }
 
-// lastTwoEMA returns the latest and previous EMA values for the period. When the series
-// has fewer than two points, prev equals now (or both are 0), so no false cross is seen.
-func lastTwoEMA(closes []float64, period int) (now, prev float64) {
+// lastTwoEMA returns the latest and previous EMA values for the period, plus ok=true only
+// when BOTH are genuinely warmed. ema.Compute returns a slice the same length as closes
+// with leading zeros before index period-1, so at the bar where the EMA first becomes
+// valid the previous value is still the zero sentinel. Prices are positive, so a real EMA
+// is never 0; a 0 reliably means "not warmed". ok=false (with prev still returned) lets the
+// caller suppress a spurious cross at the warm-up boundary.
+func lastTwoEMA(closes []float64, period int) (now, prev float64, ok bool) {
 	e := ema.Compute(closes, period)
-	switch {
-	case len(e) >= 2:
-		return e[len(e)-1], e[len(e)-2]
-	case len(e) == 1:
-		return e[0], e[0]
-	default:
-		return 0, 0
+	if len(e) < 2 {
+		return 0, 0, false
 	}
+	now, prev = e[len(e)-1], e[len(e)-2]
+	return now, prev, now != 0 && prev != 0
 }
 
 // crossDown reports a down-cross of level: prev at/above, now below.
@@ -220,7 +225,7 @@ func (s *Strategy) manage(in decideInput, sig model.Signal) model.Signal {
 	case in.rsiOK && crossDown(in.rsiPrev, in.rsiNow, rsiExitLevel):
 		sig.Kind, sig.Reason = model.SignalSell, "RSI50"
 		sig.ExitReason = fmt.Sprintf("RSI50: RSI %.2f→%.2f пересёк 50 сверху вниз", in.rsiPrev, in.rsiNow)
-	case crossDown(in.emaFastPrev-in.emaSlowPrev, in.emaFast-in.emaSlow, 0):
+	case in.emaOK && crossDown(in.emaFastPrev-in.emaSlowPrev, in.emaFast-in.emaSlow, 0):
 		sig.Kind, sig.Reason = model.SignalSell, "EMAX"
 		sig.ExitReason = fmt.Sprintf("EMAX: FastEMA%d %.4f ушла под SlowEMA%d %.4f (медвежий кросс)",
 			s.p.FastEMA, in.emaFast, s.p.SlowEMA, in.emaSlow)
