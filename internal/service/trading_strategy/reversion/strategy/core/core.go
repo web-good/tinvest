@@ -1,10 +1,10 @@
-// Package core implements a long-only mean-reversion strategy driven purely by
-// RSI on the daily timeframe. It buys when RSI crosses the oversold zone and exits
-// when RSI crosses the overbought zone; the exact moment (entering vs exiting each
-// zone) is configurable per side. An optional trend filter restricts buys to a
-// confirmed uptrend. The protective stop is a daily-ATR stop frozen at entry. The
-// decision logic is pure and ticker-agnostic; per-share packages supply ticker +
-// Params. Run it with `-interval Day1`.
+// Package core implements a long-only mean-reversion strategy on the daily timeframe,
+// driven by the agreement of two oscillators: RSI and the Stochastic %D line. It buys
+// when one oscillator is already inside its oversold zone and the other crosses into it,
+// and exits (XOVER) when one is already overbought and the other crosses up into the
+// overbought zone. The protective ATR stop is frozen at entry and checked first. An
+// optional trend filter restricts buys to a confirmed uptrend. The decision logic is pure
+// and ticker-agnostic; per-share packages supply ticker + Params. Run with `-interval Day1`.
 package core
 
 import (
@@ -17,29 +17,24 @@ import (
 	"tinvest/pkg/indicators"
 )
 
-// Trigger modes for EntryMode (oversold zone) and ExitMode (overbought zone).
-// The semantics are shared: 0 fires when price enters the zone, 1 when it exits.
-const (
-	triggerEnterZone = 0 // RSI crosses into the zone
-	triggerExitZone  = 1 // RSI crosses out of the zone
-)
-
 // Params holds every tunable. All fields are int or float64 (flags as int 0/1) so
 // reflection grid calibration can sweep them.
 type Params struct {
-	UseTrend      int     // 1 = require uptrend before buying; 0 = ignore trend
-	FastEMA       int     // fast regime EMA (e.g. 50)
-	SlowEMA       int     // slow regime EMA + price floor (e.g. 200)
-	RSIPeriod     int     // RSI length; required (>0)
-	RSIOversold   float64 // oversold zone boundary (entry side)
-	RSIOverbought float64 // overbought zone boundary (exit side)
-	EntryMode     int     // 0 = buy when RSI enters oversold; 1 = when it exits
-	ExitMode      int     // 0 = sell when RSI enters overbought; 1 = when it exits
-	ATRPeriod     int     // ATR length for the stop
-	ATRMult       float64 // stop = entry - ATRMult*ATR; must be > 0
+	UseTrend        int     // 1 = require uptrend before buying; 0 = ignore trend
+	FastEMA         int     // fast regime EMA (e.g. 50)
+	SlowEMA         int     // slow regime EMA + price floor (e.g. 200)
+	RSIPeriod       int     // RSI length; required (>0)
+	RSIOversold     float64 // RSI oversold zone (entry side)
+	RSIOverbought   float64 // RSI overbought zone (exit side)
+	StochKPeriod    int     // Stochastic %K lookback; required (>0)
+	StochDSmooth    int     // Stochastic %D smoothing; required (>0); 1 = raw %K
+	StochOversold   float64 // Stochastic oversold zone (entry side)
+	StochOverbought float64 // Stochastic overbought zone (exit side)
+	ATRPeriod       int     // ATR length for the stop
+	ATRMult         float64 // stop = entry - ATRMult*ATR; must be > 0
 }
 
-// Strategy trades a single instrument with the mean-reversion rules. Ticker-agnostic
+// Strategy trades a single instrument with the dual-confirmation rules. Ticker-agnostic
 // and pure: decide() is a function of its input. Not safe for concurrent use.
 type Strategy struct {
 	ticker string
@@ -59,6 +54,7 @@ func (s *Strategy) Lookback() int {
 	for _, c := range []int{
 		s.p.FastEMA,
 		s.p.RSIPeriod + 1,
+		s.p.StochKPeriod + s.p.StochDSmooth + 1,
 		s.p.ATRPeriod + 1,
 	} {
 		if c > m {
@@ -68,16 +64,19 @@ func (s *Strategy) Lookback() int {
 	return m + 5
 }
 
-// decideInput carries already-computed indicator values into the pure core.
+// decideInput carries already-computed indicator values into the pure core. stochNow/Prev
+// are the %D line (smoothed %K).
 type decideInput struct {
-	price   float64
-	atr     float64
-	emaFast float64
-	emaSlow float64
-	rsiNow  float64
-	rsiPrev float64
-	barLow  float64
-	pos     *strategy.Position
+	price     float64
+	atr       float64
+	emaFast   float64
+	emaSlow   float64
+	rsiNow    float64
+	rsiPrev   float64
+	stochNow  float64
+	stochPrev float64
+	barLow    float64
+	pos       *strategy.Position
 }
 
 // Decide computes every indicator from md and delegates to the pure core.
@@ -106,20 +105,29 @@ func (s *Strategy) buildInput(md strategy.MarketData) decideInput {
 		}
 	}
 
+	var stochNow, stochPrev float64
+	if s.p.StochKPeriod > 0 && s.p.StochDSmooth > 0 {
+		if _, d := indicators.StochasticSeries(md.Highs, md.Lows, md.Closes, s.p.StochKPeriod, s.p.StochDSmooth); len(d) >= 2 {
+			stochNow, stochPrev = d[len(d)-1], d[len(d)-2]
+		}
+	}
+
 	var barLow float64
 	if n := len(md.Lows); n > 0 {
 		barLow = md.Lows[n-1]
 	}
 
 	return decideInput{
-		price:   md.Price,
-		atr:     atr,
-		emaFast: emaFast,
-		emaSlow: emaSlow,
-		rsiNow:  rsiNow,
-		rsiPrev: rsiPrev,
-		barLow:  barLow,
-		pos:     md.Position,
+		price:     md.Price,
+		atr:       atr,
+		emaFast:   emaFast,
+		emaSlow:   emaSlow,
+		rsiNow:    rsiNow,
+		rsiPrev:   rsiPrev,
+		stochNow:  stochNow,
+		stochPrev: stochPrev,
+		barLow:    barLow,
+		pos:       md.Position,
 	}
 }
 
@@ -129,28 +137,36 @@ func crossUp(prev, now, level float64) bool { return prev <= level && now > leve
 // crossDown reports a down-cross of level: prev at/above, now below.
 func crossDown(prev, now, level float64) bool { return prev >= level && now < level }
 
-// entryFired reports whether the RSI entry trigger fires, honouring EntryMode.
-// enter zone: RSI crosses DOWN through oversold. exit zone: crosses UP through it.
-func (s *Strategy) entryFired(in decideInput) bool {
-	if s.p.RSIPeriod <= 0 {
-		return false
-	}
-	if s.p.EntryMode == triggerEnterZone {
-		return crossDown(in.rsiPrev, in.rsiNow, s.p.RSIOversold)
-	}
-	return crossUp(in.rsiPrev, in.rsiNow, s.p.RSIOversold)
+// indicatorsReady reports that both oscillators are configured (valid readings possible).
+func (s *Strategy) indicatorsReady() bool {
+	return s.p.RSIPeriod > 0 && s.p.StochKPeriod > 0 && s.p.StochDSmooth > 0
 }
 
-// exitFired reports whether the RSI exit trigger fires, honouring ExitMode.
-// enter zone: RSI crosses UP through overbought. exit zone: crosses DOWN through it.
-func (s *Strategy) exitFired(in decideInput) bool {
-	if s.p.RSIPeriod <= 0 {
+// entryFired reports the dual oversold confirmation: one oscillator crosses DOWN into its
+// oversold zone while the other is already inside its oversold zone. Simultaneous entry
+// (both cross the same bar) satisfies this because the "already inside" test reads now.
+func (s *Strategy) entryFired(in decideInput) bool {
+	if !s.indicatorsReady() {
 		return false
 	}
-	if s.p.ExitMode == triggerEnterZone {
-		return crossUp(in.rsiPrev, in.rsiNow, s.p.RSIOverbought)
+	rsiCrossIn := crossDown(in.rsiPrev, in.rsiNow, s.p.RSIOversold)
+	stochCrossIn := crossDown(in.stochPrev, in.stochNow, s.p.StochOversold)
+	rsiIn := in.rsiNow < s.p.RSIOversold
+	stochIn := in.stochNow < s.p.StochOversold
+	return (rsiCrossIn && stochIn) || (stochCrossIn && rsiIn)
+}
+
+// exitFired reports the dual overbought confirmation: one oscillator crosses UP into its
+// overbought zone while the other is already above its overbought zone.
+func (s *Strategy) exitFired(in decideInput) bool {
+	if !s.indicatorsReady() {
+		return false
 	}
-	return crossDown(in.rsiPrev, in.rsiNow, s.p.RSIOverbought)
+	rsiCrossUp := crossUp(in.rsiPrev, in.rsiNow, s.p.RSIOverbought)
+	stochCrossUp := crossUp(in.stochPrev, in.stochNow, s.p.StochOverbought)
+	rsiHigh := in.rsiNow > s.p.RSIOverbought
+	stochHigh := in.stochNow > s.p.StochOverbought
+	return (rsiCrossUp && stochHigh) || (stochCrossUp && rsiHigh)
 }
 
 // uptrend reports the regime gate: fast EMA above slow EMA and price above the slow EMA.
@@ -170,7 +186,7 @@ func (s *Strategy) decide(in decideInput) model.Signal {
 	if s.p.UseTrend == 1 && !uptrend(in) {
 		return sig
 	}
-	// 2. RSI entry trigger.
+	// 2. Dual oversold confirmation.
 	if !s.entryFired(in) {
 		return sig
 	}
@@ -192,14 +208,6 @@ func (s *Strategy) decide(in decideInput) model.Signal {
 	return sig
 }
 
-// zoneWord renders the trigger mode for a zone in human terms.
-func zoneWord(mode int) string {
-	if mode == triggerEnterZone {
-		return "вход в зону"
-	}
-	return "выход из зоны"
-}
-
 // entryReason renders the human-readable rationale shown in the trade journal.
 func (s *Strategy) entryReason(in decideInput, stop, risk float64) string {
 	trend := "выкл"
@@ -208,14 +216,15 @@ func (s *Strategy) entryReason(in decideInput, stop, risk float64) string {
 			s.p.FastEMA, in.emaFast, s.p.SlowEMA, in.emaSlow, in.price, s.p.SlowEMA)
 	}
 	return fmt.Sprintf(
-		"Тренд: %s; RSI(%d) %s перепроданности %.0f (%.2f→%.2f); SL=%.4f (−%.2g×ATR %.4f, риск %.4f)",
+		"Тренд: %s; двойное подтверждение перепроданности: RSI(%d) %.2f→%.2f (зона <%.0f) + Stoch%%D(%d,%d) %.2f→%.2f (зона <%.0f); SL=%.4f (−%.2g×ATR %.4f, риск %.4f)",
 		trend,
-		s.p.RSIPeriod, zoneWord(s.p.EntryMode), s.p.RSIOversold, in.rsiPrev, in.rsiNow,
+		s.p.RSIPeriod, in.rsiPrev, in.rsiNow, s.p.RSIOversold,
+		s.p.StochKPeriod, s.p.StochDSmooth, in.stochPrev, in.stochNow, s.p.StochOversold,
 		stop, s.p.ATRMult, in.atr, risk,
 	)
 }
 
-// manage handles an open long: the frozen ATR stop first, then the RSI exit trigger.
+// manage handles an open long: the frozen ATR stop first, then the dual overbought exit.
 // Protective stops are checked first so the worst case for the position wins ties.
 func (s *Strategy) manage(in decideInput, sig model.Signal) model.Signal {
 	hardSL := in.pos.StopLoss
@@ -227,8 +236,10 @@ func (s *Strategy) manage(in decideInput, sig model.Signal) model.Signal {
 		sig.Kind, sig.Reason = model.SignalSell, "SL"
 		sig.ExitReason = fmt.Sprintf("SL: low %.4f ≤ стоп %.4f (зафиксирован на входе)", in.barLow, hardSL)
 	case s.exitFired(in):
-		sig.Kind, sig.Reason = model.SignalSell, "RSI"
-		sig.ExitReason = fmt.Sprintf("RSI: %.2f → %.2f, %s перекупленности %.0f", in.rsiPrev, in.rsiNow, zoneWord(s.p.ExitMode), s.p.RSIOverbought)
+		sig.Kind, sig.Reason = model.SignalSell, "XOVER"
+		sig.ExitReason = fmt.Sprintf(
+			"XOVER: RSI %.2f→%.2f (зона >%.0f) + Stoch%%D %.2f→%.2f (зона >%.0f) — двойное подтверждение перекупленности",
+			in.rsiPrev, in.rsiNow, s.p.RSIOverbought, in.stochPrev, in.stochNow, s.p.StochOverbought)
 	}
 	return sig
 }
@@ -259,12 +270,13 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 		pass("Тренд↑: EMA%d %.4f > EMA%d %.4f, close %.4f > EMA%d", s.p.FastEMA, in.emaFast, s.p.SlowEMA, in.emaSlow, in.price, s.p.SlowEMA)
 	}
 
-	// 2. RSI entry trigger.
+	// 2. Dual oversold confirmation.
 	if !s.entryFired(in) {
-		return block("RSI(%d): нет события (%s перепроданности %.0f), %.2f→%.2f",
-			s.p.RSIPeriod, zoneWord(s.p.EntryMode), s.p.RSIOversold, in.rsiPrev, in.rsiNow)
+		return block("Двойное подтверждение: нет (RSI(%d) %.2f→%.2f зона<%.0f; Stoch%%D %.2f→%.2f зона<%.0f) — нужен кросс одного в зону при другом уже в зоне",
+			s.p.RSIPeriod, in.rsiPrev, in.rsiNow, s.p.RSIOversold, in.stochPrev, in.stochNow, s.p.StochOversold)
 	}
-	pass("RSI(%d): %s перепроданности %.0f (%.2f→%.2f)", s.p.RSIPeriod, zoneWord(s.p.EntryMode), s.p.RSIOversold, in.rsiPrev, in.rsiNow)
+	pass("Двойное подтверждение: RSI(%d) %.2f→%.2f + Stoch%%D %.2f→%.2f в зоне перепроданности",
+		s.p.RSIPeriod, in.rsiPrev, in.rsiNow, in.stochPrev, in.stochNow)
 
 	// 3. ATR stop.
 	if s.p.ATRMult <= 0 {
