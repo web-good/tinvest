@@ -4,30 +4,22 @@
       "name": "entry",
       "keepTop": 5,
       "grid": {
+        "UseTrend": [0, 1],
         "FastEMA": [50],
         "SlowEMA": [200],
-        "RSIPeriod": [4, 6, 9],
-        "RSIOversold": [30, 35, 40],
-        "EntryMode": [0, 1],
-        "VolMultiplier": [1.0, 1.2, 1.5]
+        "RSIPeriod": [4, 5, 10, 12, 14],
+        "RSIOversold": [15, 20, 35],
+        "EntryMode": [0, 1]
       }
     },
     {
-      "name": "exits",
+      "name": "exit",
       "keepTop": 5,
       "grid": {
-        "RSIOverbought": [65, 70, 75],
-        "StopLossPct": [0.02, 0.03, 0.05],
-        "MaxHoldBars": [12, 24, 48]
-      }
-    },
-    {
-      "name": "stoch",
-      "grid": {
-        "UseStoch": [0, 1],
-        "StochPeriod": [14],
-        "StochSmooth": [3],
-        "StochOversold": [15, 20, 25]
+        "RSIOverbought": [65, 70, 85],
+        "ExitMode": [0, 1],
+        "ATRMult": [1.0, 1.5, 2.0],
+        "ATRPeriod": [14]
       }
     }
   ]
