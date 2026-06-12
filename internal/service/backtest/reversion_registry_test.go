@@ -36,13 +36,13 @@ func TestReversionLookupGenericFallback(t *testing.T) {
 		t.Fatalf("ticker=%q want UNKNOWN", s.Ticker())
 	}
 	// ParseParams must layer the override on top of genericReversionDefaults.
-	got, err := b.ParseParams([]byte(`{"StopLossPct": 0.05}`))
+	got, err := b.ParseParams([]byte(`{"ATRMult": 2.0}`))
 	if err != nil {
 		t.Fatalf("ParseParams: %v", err)
 	}
 	p := got.(core.Params)
-	if p.StopLossPct != 0.05 {
-		t.Fatalf("StopLossPct=%v want 0.05 (override)", p.StopLossPct)
+	if p.ATRMult != 2.0 {
+		t.Fatalf("ATRMult=%v want 2.0 (override)", p.ATRMult)
 	}
 	if p.FastEMA != 50 || p.SlowEMA != 200 {
 		t.Fatalf("generic defaults not preserved: FastEMA=%d SlowEMA=%d want 50/200", p.FastEMA, p.SlowEMA)
@@ -50,7 +50,7 @@ func TestReversionLookupGenericFallback(t *testing.T) {
 }
 
 func TestReversionDefaultsValid(t *testing.T) {
-	if p := genericReversionDefaults(); p.StopLossPct <= 0 || p.SlowEMA <= p.FastEMA {
+	if p := genericReversionDefaults(); p.ATRMult <= 0 || p.SlowEMA <= p.FastEMA || p.RSIPeriod <= 0 {
 		t.Fatalf("invalid generic defaults: %+v", p)
 	}
 }
