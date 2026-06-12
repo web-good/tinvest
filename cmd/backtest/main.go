@@ -32,7 +32,7 @@ func main() {
 	var (
 		ticker       = flag.String("ticker", "", "ticker, e.g. RUAL (required)")
 		intervalS    = flag.String("interval", "Hour1", "candle timeframe: Minutes15|Minutes30|Hour1|Hour4|Day1|Week1")
-		strategyName = flag.String("strategy", "scalping", "strategy engine: scalping|levels|momentum")
+		strategyName = flag.String("strategy", "scalping", "strategy engine: scalping|levels|momentum|reversion")
 		months       = flag.Int("months", 12, "lookback period in months")
 		cash         = flag.Float64("cash", 100000, "starting mock cash")
 		fraction     = flag.Float64("fraction", 1.0, "fraction of cash per Buy")
@@ -45,8 +45,8 @@ func main() {
 		outDir       = flag.String("out", "reports", "report output directory")
 		refresh      = flag.Bool("refresh", false, "force candle refetch (ignore cache)")
 		explain      = flag.String("explain", "", "diagnose one bar: MSK time 'YYYY-MM-DD HH:MM'; prints why the strategy did/didn't enter")
-		basket  = flag.String("basket", "", "basket mode: comma-separated tickers; calibrates each on the early window and pools OOS trades (ignores -ticker)")
-		gridDir = flag.String("grid-dir", "data/params", "basket mode: directory holding <lower-ticker>/momentum_grid.json")
+		basket       = flag.String("basket", "", "basket mode: comma-separated tickers; calibrates each on the early window and pools OOS trades (ignores -ticker)")
+		gridDir      = flag.String("grid-dir", "data/params", "basket mode: directory holding <lower-ticker>/momentum_grid.json")
 	)
 	flag.Parse()
 	logger.Init() // candle fetcher logs chunk errors via the package logger
@@ -121,10 +121,12 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 		binding = svc.LevelsLookupOrGeneric(ticker)
 	case "momentum":
 		binding = svc.MomentumLookupOrGeneric(ticker)
+	case "reversion":
+		binding = svc.ReversionLookupOrGeneric(ticker)
 	case "scalping":
 		binding = svc.LookupOrGeneric(ticker)
 	default:
-		return fmt.Errorf("unknown strategy %q (want scalping|levels|momentum)", strategyName)
+		return fmt.Errorf("unknown strategy %q (want scalping|levels|momentum|reversion)", strategyName)
 	}
 
 	share, err := resolveShare(ctx, client, ticker)
