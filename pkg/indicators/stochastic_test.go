@@ -46,3 +46,47 @@ func TestStochastic_FewerThanSmoothReturnsZeroD(t *testing.T) {
 		t.Errorf("%%D = %v, want 0 (insufficient %%K history)", d)
 	}
 }
+
+func TestStochasticSeries_RampFixture(t *testing.T) {
+	// Same ramp as TestStochastic_RampFixture. Windows of 3:
+	//   %K = [50, 100, 100]; %D(smooth 3) only one full value: (50+100+100)/3 = 83.33
+	highs := []float64{10, 12, 11, 13, 14}
+	lows := []float64{10, 12, 11, 13, 14}
+	closes := []float64{10, 12, 11, 13, 14}
+
+	ks, ds := StochasticSeries(highs, lows, closes, 3, 3)
+	if len(ks) != 3 {
+		t.Fatalf("len(ks)=%d want 3", len(ks))
+	}
+	wantKs := []float64{50, 100, 100}
+	for i, w := range wantKs {
+		if math.Abs(ks[i]-w) > 1e-9 {
+			t.Fatalf("ks[%d]=%v want %v", i, ks[i], w)
+		}
+	}
+	if len(ds) != 1 {
+		t.Fatalf("len(ds)=%d want 1", len(ds))
+	}
+	if math.Abs(ds[0]-83.333333) > 1e-4 {
+		t.Fatalf("ds[0]=%v want ~83.33", ds[0])
+	}
+}
+
+func TestStochasticSeries_DSmoothTwoYieldsPrev(t *testing.T) {
+	// dSmooth=2 over the ramp gives ds of length 2 so a cross has prev+now.
+	highs := []float64{10, 12, 11, 13, 14}
+	lows := []float64{10, 12, 11, 13, 14}
+	closes := []float64{10, 12, 11, 13, 14}
+	_, ds := StochasticSeries(highs, lows, closes, 3, 2)
+	// ks=[50,100,100]; ds=[(50+100)/2=75, (100+100)/2=100]
+	if len(ds) != 2 || math.Abs(ds[0]-75) > 1e-9 || math.Abs(ds[1]-100) > 1e-9 {
+		t.Fatalf("ds=%v want [75 100]", ds)
+	}
+}
+
+func TestStochasticSeries_InsufficientHistory(t *testing.T) {
+	ks, ds := StochasticSeries([]float64{1, 2}, []float64{1, 2}, []float64{1, 2}, 5, 3)
+	if ks != nil || ds != nil {
+		t.Fatalf("want nil,nil for short history; got ks=%v ds=%v", ks, ds)
+	}
+}
