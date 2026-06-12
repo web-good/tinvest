@@ -23,14 +23,21 @@ gives the raw %K). Volume gating and the time-stop from earlier versions are gon
 
 ## Exit (first trigger wins)
 
-There is no protective stop. An open long exits on either signal, filled at the bar close:
+There is no protective price stop. An open long exits on any of three signals, filled
+at the bar close, in this precedence order:
 
 1. **RSI50:** RSI crosses the 50 line from above (`prev ≥ 50`, `now < 50`) — the primary
    momentum-fade exit.
-2. **EMAX:** bearish EMA cross — `EMA(FastEMA)` drops below `EMA(SlowEMA)`. A slow
+2. **RSIOS:** RSI crosses `RSIOversold` from above (`prev ≥ RSIOversold`,
+   `now < RSIOversold`) — the failed-bounce exit. The trade was opened on a dip; if RSI
+   breaks back down through the oversold zone the bounce has failed, so this acts as a
+   momentum-based stop replacement. It cannot fire on the bar right after entry, where RSI
+   is already below the zone (`prev < RSIOversold`).
+3. **EMAX:** bearish EMA cross — `EMA(FastEMA)` drops below `EMA(SlowEMA)`. A slow
    regime-break backstop; reuses the same EMAs as the trend filter.
 
-If both fire on the same bar, RSI50 is reported (the fill is identical either way).
+If several fire on the same bar the earliest in this order is reported; the fill (close)
+is identical either way.
 
 ## Run
 
