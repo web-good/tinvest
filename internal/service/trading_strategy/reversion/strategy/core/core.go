@@ -36,7 +36,7 @@ type Params struct {
 	VolMultiplier float64 // last volume must exceed VolMultiplier*SMA(volume)
 	UseStoch      int     // 1 = require Stochastic oversold confirmation; 0 = skip
 	StochPeriod   int     // %K lookback
-	StochSmooth   int     // %D smoothing of %K
+	StochSmooth   int     // %D smoothing of %K (reserved: %D is unused in v1, only %K gates)
 	StochOversold float64 // %K oversold threshold (e.g. 20)
 	StopLossPct   float64 // hard stop = entry*(1-StopLossPct); must be > 0
 	MaxHoldBars   int     // time-stop bar count; <= 0 disables
