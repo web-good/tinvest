@@ -2,10 +2,9 @@
 
 Long-only, **daily timeframe** (`-interval Day1`). A mean-reversion core driven by the
 agreement of two oscillators — RSI and the Stochastic %D line. It buys when one oscillator
-is already inside its oversold zone and the other crosses into it, and exits when one is
-already overbought and the other crosses up into the overbought zone. An optional trend
-filter restricts buys to a confirmed uptrend. The only protective stop is a daily-ATR stop
-frozen at entry.
+is already inside its oversold zone and the other crosses into it. It exits on either of
+two momentum-fade signals — RSI crossing 50 downward, or a bearish FastEMA/SlowEMA cross —
+and carries no protective stop. An optional trend filter restricts buys to a confirmed uptrend.
 
 The Stochastic working line is **%D** (SMA of %K over `StochDSmooth`; `StochDSmooth=1`
 gives the raw %K). Volume gating and the time-stop from earlier versions are gone.
@@ -21,17 +20,17 @@ gives the raw %K). Volume gating and the time-stop from earlier versions are gon
    - Stoch %D crosses **down** through `StochOversold` **and** RSI is already
      `< RSIOversold`.
    Both crossing into the zone on the same bar also fires.
-3. **Protective stop:** `ATRMult > 0` and `ATR > 0` required; stop =
-   `entry − ATRMult × ATR(ATRPeriod)`, frozen at entry.
 
-## Exit (first trigger wins; protective first)
+## Exit (first trigger wins)
 
-1. **SL:** bar low ≤ the frozen ATR stop.
-2. **XOVER** — at least one of:
-   - RSI crosses **up** through `RSIOverbought` **and** Stoch %D is already
-     `> StochOverbought`;
-   - Stoch %D crosses **up** through `StochOverbought` **and** RSI is already
-     `> RSIOverbought`.
+There is no protective stop. An open long exits on either signal, filled at the bar close:
+
+1. **RSI50:** RSI crosses the 50 line from above (`prev ≥ 50`, `now < 50`) — the primary
+   momentum-fade exit.
+2. **EMAX:** bearish EMA cross — `EMA(FastEMA)` drops below `EMA(SlowEMA)`. A slow
+   regime-break backstop; reuses the same EMAs as the trend filter.
+
+If both fire on the same bar, RSI50 is reported (the fill is identical either way).
 
 ## Run
 
@@ -52,10 +51,9 @@ go run ./cmd/backtest -ticker SBER -strategy reversion -interval Day1 \
 
 ## Params
 
-`UseTrend, FastEMA, SlowEMA, RSIPeriod, RSIOversold, RSIOverbought, StochKPeriod,
-StochDSmooth, StochOversold, StochOverbought, ATRPeriod, ATRMult`. Flags (`UseTrend`) are
-int `0/1`; the rest are int/float64 so the grid calibrator can sweep them — including the
-Stochastic zones and periods.
+`UseTrend, FastEMA, SlowEMA, RSIPeriod, RSIOversold, StochKPeriod, StochDSmooth,
+StochOversold`. Flags (`UseTrend`) are int `0/1`; the rest are int/float64 so the grid
+calibrator can sweep them. The RSI-50 exit level is a fixed constant, not a param.
 
 ## Not yet supported
 
