@@ -9,6 +9,7 @@ package core
 
 import (
 	"fmt"
+	"strings"
 
 	"tinvest/internal/domain/ema"
 	"tinvest/internal/service/trading_strategy/scalping/model"
@@ -254,4 +255,69 @@ func (s *Strategy) manage(in decideInput, sig model.Signal) model.Signal {
 		sig.ExitReason = fmt.Sprintf("RSI: %.2f → %.2f, пересёк %.2g вверх (отскок завершён)", in.rsiPrev, in.rsiNow, s.p.RSIOverbought)
 	}
 	return sig
+}
+
+// Explain re-runs the entry gates over md and reports each gate's value and verdict
+// (✓ pass / ✗ block) in entry order, stopping at the first blocker — the same
+// short-circuit order decide uses. Diagnostic only; never part of the trading path;
+// never mutates barsInPosition.
+func (s *Strategy) Explain(md strategy.MarketData) string {
+	in := s.buildInput(md)
+	in.barsInPos = s.barsInPosition
+
+	if in.pos != nil {
+		return "позиция уже открыта — вход не рассматривается"
+	}
+
+	var b strings.Builder
+	pass := func(format string, args ...any) { fmt.Fprintf(&b, "✓ "+format+"\n", args...) }
+	block := func(format string, args ...any) string {
+		fmt.Fprintf(&b, "✗ "+format+"\n", args...)
+		fmt.Fprintf(&b, "→ ВХОДА НЕТ: заблокировал этот фильтр")
+		return b.String()
+	}
+
+	// 1. Regime.
+	if !uptrend(in) {
+		return block("Тренд: нужно EMA%d > EMA%d и close > EMA%d (EMA%d=%.4f, EMA%d=%.4f, close=%.4f)",
+			s.p.FastEMA, s.p.SlowEMA, s.p.SlowEMA, s.p.FastEMA, in.emaFast, s.p.SlowEMA, in.emaSlow, in.price)
+	}
+	pass("Тренд↑: EMA%d %.4f > EMA%d %.4f, close %.4f > EMA%d", s.p.FastEMA, in.emaFast, s.p.SlowEMA, in.emaSlow, in.price, s.p.SlowEMA)
+
+	// 2. Dip trigger.
+	mode := "кросс вверх через"
+	if s.p.EntryMode == entryKnife {
+		mode = "кросс вниз через"
+	}
+	if !s.dipFired(in) {
+		return block("RSI(%d): нет события (%s %.0f), %.2f→%.2f", s.p.RSIPeriod, mode, s.p.RSIOversold, in.rsiPrev, in.rsiNow)
+	}
+	pass("RSI(%d): сработал триггер просадки (%s %.0f, %.2f→%.2f)", s.p.RSIPeriod, mode, s.p.RSIOversold, in.rsiPrev, in.rsiNow)
+
+	// 3. Volume.
+	if !in.volumeOK {
+		return block("Объём: ниже %.2g×ср(%d)", s.p.VolMultiplier, s.p.VolLookback)
+	}
+	pass("Объём: выше %.2g×ср(%d)", s.p.VolMultiplier, s.p.VolLookback)
+
+	// 4. Optional Stochastic. Mirror decide: a 0 from insufficient history is not oversold.
+	if s.p.UseStoch == 1 {
+		if !in.stochValid {
+			return block("Стохастик: недостаточно истории для %%K (нужно ≥ %d баров)", s.p.StochPeriod)
+		}
+		if in.stochK >= s.p.StochOversold {
+			return block("Стохастик: %%K %.1f ≥ %.0f (не в перепроданности)", in.stochK, s.p.StochOversold)
+		}
+		pass("Стохастик: %%K %.1f < %.0f", in.stochK, s.p.StochOversold)
+	}
+
+	// 5. Protective stop.
+	if s.p.StopLossPct <= 0 {
+		return block("Стоп: StopLossPct=%.2g ≤ 0 — защита не задана", s.p.StopLossPct)
+	}
+	stop := in.price * (1 - s.p.StopLossPct)
+	pass("Стоп: SL=%.4f (−%.2g%%)", stop, s.p.StopLossPct*100)
+
+	fmt.Fprintf(&b, "→ ВХОД: все фильтры пройдены, должна быть покупка")
+	return b.String()
 }

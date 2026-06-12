@@ -209,3 +209,30 @@ func TestDecideTimeStopCounter(t *testing.T) {
 		t.Fatalf("bar2: want TIME sell, got kind=%v reason=%q", sig.Kind, sig.Reason)
 	}
 }
+
+func TestExplainBlocksOnRegime(t *testing.T) {
+	s := NewWithParams("TEST", defaultParams())
+	md := strategy.MarketData{
+		Price:   1,
+		Highs:   []float64{1},
+		Lows:    []float64{1},
+		Closes:  []float64{1}, // no EMA history -> emaSlow 0 -> not uptrend
+		Volumes: []int64{1},
+	}
+	out := s.Explain(md)
+	if !strings.Contains(out, "Тренд") || !strings.Contains(out, "ВХОДА НЕТ") {
+		t.Fatalf("Explain should block on regime: %q", out)
+	}
+}
+
+func TestExplainPositionOpen(t *testing.T) {
+	s := NewWithParams("TEST", defaultParams())
+	md := strategy.MarketData{
+		Price: 100, Highs: []float64{100}, Lows: []float64{100},
+		Closes: []float64{100}, Volumes: []int64{1},
+		Position: &strategy.Position{PurchasePrice: 100, StopLoss: 97},
+	}
+	if out := s.Explain(md); !strings.Contains(out, "позиция уже открыта") {
+		t.Fatalf("Explain with open position: %q", out)
+	}
+}
