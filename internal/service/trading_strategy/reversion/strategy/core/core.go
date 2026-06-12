@@ -65,7 +65,9 @@ func (s *Strategy) Lookback() int {
 }
 
 // decideInput carries already-computed indicator values into the pure core. stochNow/Prev
-// are the %D line (smoothed %K).
+// are the %D line (smoothed %K). rsiOK/stochOK report whether each oscillator produced a
+// valid two-bar reading; when false the (now/prev) values are warm-up sentinels (0) and
+// must NOT be treated as a real in-zone reading.
 type decideInput struct {
 	price     float64
 	atr       float64
@@ -73,8 +75,10 @@ type decideInput struct {
 	emaSlow   float64
 	rsiNow    float64
 	rsiPrev   float64
+	rsiOK     bool
 	stochNow  float64
 	stochPrev float64
+	stochOK   bool
 	barLow    float64
 	pos       *strategy.Position
 }
@@ -99,16 +103,20 @@ func (s *Strategy) buildInput(md strategy.MarketData) decideInput {
 	}
 
 	var rsiNow, rsiPrev float64
+	rsiOK := false
 	if s.p.RSIPeriod > 0 {
 		if r := indicators.RSISeries(md.Closes, s.p.RSIPeriod); len(r) >= 2 {
 			rsiNow, rsiPrev = r[len(r)-1], r[len(r)-2]
+			rsiOK = true
 		}
 	}
 
 	var stochNow, stochPrev float64
+	stochOK := false
 	if s.p.StochKPeriod > 0 && s.p.StochDSmooth > 0 {
 		if _, d := indicators.StochasticSeries(md.Highs, md.Lows, md.Closes, s.p.StochKPeriod, s.p.StochDSmooth); len(d) >= 2 {
 			stochNow, stochPrev = d[len(d)-1], d[len(d)-2]
+			stochOK = true
 		}
 	}
 
@@ -124,8 +132,10 @@ func (s *Strategy) buildInput(md strategy.MarketData) decideInput {
 		emaSlow:   emaSlow,
 		rsiNow:    rsiNow,
 		rsiPrev:   rsiPrev,
+		rsiOK:     rsiOK,
 		stochNow:  stochNow,
 		stochPrev: stochPrev,
+		stochOK:   stochOK,
 		barLow:    barLow,
 		pos:       md.Position,
 	}
@@ -137,16 +147,18 @@ func crossUp(prev, now, level float64) bool { return prev <= level && now > leve
 // crossDown reports a down-cross of level: prev at/above, now below.
 func crossDown(prev, now, level float64) bool { return prev >= level && now < level }
 
-// indicatorsReady reports that both oscillators are configured (valid readings possible).
-func (s *Strategy) indicatorsReady() bool {
-	return s.p.RSIPeriod > 0 && s.p.StochKPeriod > 0 && s.p.StochDSmooth > 0
+// indicatorsReady reports that both oscillators produced valid two-bar readings. A warm-up
+// sentinel (rsiOK/stochOK false, values 0) must never count as an in-zone reading, or the
+// dual confirmation silently degrades to a single-oscillator gate.
+func indicatorsReady(in decideInput) bool {
+	return in.rsiOK && in.stochOK
 }
 
 // entryFired reports the dual oversold confirmation: one oscillator crosses DOWN into its
 // oversold zone while the other is already inside its oversold zone. Simultaneous entry
 // (both cross the same bar) satisfies this because the "already inside" test reads now.
 func (s *Strategy) entryFired(in decideInput) bool {
-	if !s.indicatorsReady() {
+	if !indicatorsReady(in) {
 		return false
 	}
 	rsiCrossIn := crossDown(in.rsiPrev, in.rsiNow, s.p.RSIOversold)
@@ -159,7 +171,7 @@ func (s *Strategy) entryFired(in decideInput) bool {
 // exitFired reports the dual overbought confirmation: one oscillator crosses UP into its
 // overbought zone while the other is already above its overbought zone.
 func (s *Strategy) exitFired(in decideInput) bool {
-	if !s.indicatorsReady() {
+	if !indicatorsReady(in) {
 		return false
 	}
 	rsiCrossUp := crossUp(in.rsiPrev, in.rsiNow, s.p.RSIOverbought)

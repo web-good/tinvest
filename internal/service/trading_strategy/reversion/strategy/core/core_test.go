@@ -25,8 +25,8 @@ func defaultParams() Params {
 func passingInput() decideInput {
 	return decideInput{
 		price: 100, atr: 2, emaFast: 95, emaSlow: 90,
-		rsiPrev: 25, rsiNow: 15, // crossDown through 20 (RSI enters oversold)
-		stochPrev: 10, stochNow: 8, // already < 20 (Stoch already in zone)
+		rsiPrev: 25, rsiNow: 15, rsiOK: true, // crossDown through 20 (RSI enters oversold)
+		stochPrev: 10, stochNow: 8, stochOK: true, // already < 20 (Stoch already in zone)
 		barLow: 100,
 	}
 }
@@ -38,6 +38,27 @@ func openInput() decideInput {
 	in.rsiPrev, in.rsiNow = 50, 55
 	in.stochPrev, in.stochNow = 50, 55
 	return in
+}
+
+func TestEntryBlockedWhenOscillatorInvalid(t *testing.T) {
+	s := NewWithParams("TEST", defaultParams())
+
+	// Stoch warm-up: no valid %D reading. The sentinel 0 < oversold(20) would otherwise
+	// masquerade as "already deep in zone" and degrade the dual gate to RSI-only.
+	in := passingInput()
+	in.stochOK = false
+	in.stochNow, in.stochPrev = 0, 0
+	if sig := s.decide(in); sig.Kind == model.SignalBuy {
+		t.Fatalf("invalid stoch reading: want no Buy (dual confirmation must require a real reading)")
+	}
+
+	// Symmetric: RSI warm-up also blocks.
+	in = passingInput()
+	in.rsiOK = false
+	in.rsiNow, in.rsiPrev = 0, 0
+	if sig := s.decide(in); sig.Kind == model.SignalBuy {
+		t.Fatalf("invalid rsi reading: want no Buy")
+	}
 }
 
 func TestEntryAllGatesPass(t *testing.T) {
@@ -66,7 +87,7 @@ func TestEntryRequiresBothIndicators(t *testing.T) {
 
 	// Stoch crosses in while RSI already in zone -> buy (the mirror branch).
 	in = passingInput()
-	in.rsiPrev, in.rsiNow = 15, 12 // already < 20, no fresh cross
+	in.rsiPrev, in.rsiNow = 15, 12     // already < 20, no fresh cross
 	in.stochPrev, in.stochNow = 25, 15 // crossDown through 20
 	if sig := s.decide(in); sig.Kind != model.SignalBuy {
 		t.Fatalf("Stoch cross + RSI already in: want Buy, got %v", sig.Kind)
@@ -76,7 +97,7 @@ func TestEntryRequiresBothIndicators(t *testing.T) {
 func TestSimultaneousEntry(t *testing.T) {
 	s := NewWithParams("TEST", defaultParams())
 	in := passingInput()
-	in.rsiPrev, in.rsiNow = 25, 15 // RSI crosses in
+	in.rsiPrev, in.rsiNow = 25, 15     // RSI crosses in
 	in.stochPrev, in.stochNow = 25, 15 // Stoch crosses in same bar
 	if sig := s.decide(in); sig.Kind != model.SignalBuy {
 		t.Fatalf("both cross into zone same bar: want Buy, got %v", sig.Kind)
@@ -127,7 +148,7 @@ func TestExitDualOverbought(t *testing.T) {
 
 	// Stoch crosses up while RSI already high -> sell (mirror branch).
 	in = openInput()
-	in.rsiPrev, in.rsiNow = 75, 75 // already > 70, no cross
+	in.rsiPrev, in.rsiNow = 75, 75     // already > 70, no cross
 	in.stochPrev, in.stochNow = 75, 85 // crossUp through 80
 	if sig := s.decide(in); sig.Kind != model.SignalSell || sig.Reason != "XOVER" {
 		t.Fatalf("Stoch cross + RSI already high: want XOVER sell, got %v/%q", sig.Kind, sig.Reason)
@@ -177,7 +198,7 @@ func TestExitSL(t *testing.T) {
 func TestProtectiveStopWinsTie(t *testing.T) {
 	s := NewWithParams("TEST", defaultParams())
 	in := openInput()
-	in.barLow = 97 // SL hit (stop 98)
+	in.barLow = 97                 // SL hit (stop 98)
 	in.rsiPrev, in.rsiNow = 65, 75 // overbought cross too
 	in.stochPrev, in.stochNow = 85, 85
 	sig := s.decide(in)
