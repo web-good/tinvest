@@ -1,11 +1,12 @@
 // Package core implements a long-only mean-reversion strategy on the daily timeframe,
 // driven by the agreement of two oscillators: RSI and the Stochastic %D line. It buys
 // when one oscillator is already inside its oversold zone and the other crosses into it.
-// It exits an open long on either momentum-fade signal: RSI crossing the 50 line downward
-// (the primary exit), or a bearish EMA cross (FastEMA dropping below SlowEMA) as a
-// regime-break backstop. There is no protective stop. An optional trend filter restricts
-// buys to a confirmed uptrend. The decision logic is pure and ticker-agnostic; per-share
-// packages supply ticker + Params. Run with `-interval Day1`.
+// It exits an open long on one of three signals: RSI crossing the 50 line downward
+// (primary momentum fade), RSI breaking back down through the oversold zone from above
+// (failed-bounce / RSI-oversold breakdown), or a bearish EMA cross (FastEMA dropping
+// below SlowEMA) as a regime-break backstop. There is no protective stop. An optional
+// trend filter restricts buys to a confirmed uptrend. The decision logic is pure and
+// ticker-agnostic; per-share packages supply ticker + Params. Run with `-interval Day1`.
 package core
 
 import (
@@ -215,9 +216,16 @@ func (s *Strategy) entryReason(in decideInput) string {
 	)
 }
 
-// manage handles an open long. There is no protective stop. It exits on either a downward
-// RSI-50 cross (primary momentum fade) or a bearish EMA cross (FastEMA below SlowEMA). When
-// both fire on the same bar RSI50 wins; the fill price (close) is identical either way.
+// manage handles an open long. There is no protective stop. It exits on one of three
+// signals, evaluated in precedence order (all fills at close):
+//   - RSI50: RSI crosses the 50 midline downward — primary momentum fade.
+//   - RSIOS: RSI breaks back down through the oversold zone from above — failed-bounce
+//     breakdown; fires when RSI was at or above RSIOversold the previous bar and is now
+//     below it, indicating the bounce has collapsed back into the oversold region.
+//   - EMAX: FastEMA drops below SlowEMA (bearish EMA cross) — regime-break backstop.
+//
+// When multiple signals fire on the same bar the first in the list wins; the fill price
+// (close) is identical either way.
 func (s *Strategy) manage(in decideInput, sig model.Signal) model.Signal {
 	sig.RSI = in.rsiNow
 
@@ -225,6 +233,10 @@ func (s *Strategy) manage(in decideInput, sig model.Signal) model.Signal {
 	case in.rsiOK && crossDown(in.rsiPrev, in.rsiNow, rsiExitLevel):
 		sig.Kind, sig.Reason = model.SignalSell, "RSI50"
 		sig.ExitReason = fmt.Sprintf("RSI50: RSI %.2f→%.2f пересёк 50 сверху вниз", in.rsiPrev, in.rsiNow)
+	case in.rsiOK && crossDown(in.rsiPrev, in.rsiNow, s.p.RSIOversold):
+		sig.Kind, sig.Reason = model.SignalSell, "RSIOS"
+		sig.ExitReason = fmt.Sprintf("RSIOS: RSI %.2f→%.2f пробил зону перепроданности %.0f сверху вниз",
+			in.rsiPrev, in.rsiNow, s.p.RSIOversold)
 	case in.emaOK && crossDown(in.emaFastPrev-in.emaSlowPrev, in.emaFast-in.emaSlow, 0):
 		sig.Kind, sig.Reason = model.SignalSell, "EMAX"
 		sig.ExitReason = fmt.Sprintf("EMAX: FastEMA%d %.4f ушла под SlowEMA%d %.4f (медвежий кросс)",

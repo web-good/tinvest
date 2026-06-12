@@ -210,6 +210,32 @@ func TestExitNoFalseEMACrossAtWarmup(t *testing.T) {
 	}
 }
 
+func TestExitRSIOversoldBreakdown(t *testing.T) {
+	s := NewWithParams("T", Params{FastEMA: 50, SlowEMA: 200, RSIPeriod: 14, RSIOversold: 30, StochKPeriod: 14, StochDSmooth: 3, StochOversold: 20})
+	in := openInput()
+	in.rsiOK = true
+	in.rsiPrev = 32 // above the oversold zone
+	in.rsiNow = 28  // crossed down through 30
+	sig := s.decide(in)
+	if sig.Kind != model.SignalSell || sig.Reason != "RSIOS" {
+		t.Fatalf("expected RSIOS sell, got kind=%v reason=%q", sig.Kind, sig.Reason)
+	}
+}
+
+func TestNoRSIOSExitJustAfterEntry(t *testing.T) {
+	// On/after the entry bar RSI is already below the oversold zone, so prev < level
+	// and crossDown must not fire.
+	s := NewWithParams("T", Params{FastEMA: 50, SlowEMA: 200, RSIPeriod: 14, RSIOversold: 30, StochKPeriod: 14, StochDSmooth: 3, StochOversold: 20})
+	in := openInput()
+	in.rsiOK = true
+	in.rsiPrev = 25 // already inside the zone
+	in.rsiNow = 22  // still falling, but no fresh down-cross of 30
+	sig := s.decide(in)
+	if sig.Kind == model.SignalSell && sig.Reason == "RSIOS" {
+		t.Fatalf("RSIOS must not fire when prev already below oversold (prev=%.0f now=%.0f)", in.rsiPrev, in.rsiNow)
+	}
+}
+
 func TestExplainBlocksOnTrend(t *testing.T) {
 	s := NewWithParams("TEST", defaultParams())
 	md := strategy.MarketData{
