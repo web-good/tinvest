@@ -1,0 +1,34 @@
+{
+  "phases": [
+    {
+      "name": "entry",
+      "keepTop": 5,
+      "grid": {
+        "FastEMA": [50],
+        "SlowEMA": [200],
+        "RSIPeriod": [4, 6, 9],
+        "RSIOversold": [30, 35, 40],
+        "EntryMode": [0, 1],
+        "VolMultiplier": [1.0, 1.2, 1.5]
+      }
+    },
+    {
+      "name": "exits",
+      "keepTop": 5,
+      "grid": {
+        "RSIOverbought": [65, 70, 75],
+        "StopLossPct": [0.02, 0.03, 0.05],
+        "MaxHoldBars": [12, 24, 48]
+      }
+    },
+    {
+      "name": "stoch",
+      "grid": {
+        "UseStoch": [0, 1],
+        "StochPeriod": [14],
+        "StochSmooth": [3],
+        "StochOversold": [15, 20, 25]
+      }
+    }
+  ]
+}
