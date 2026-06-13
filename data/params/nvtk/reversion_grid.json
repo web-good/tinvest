@@ -11,7 +11,10 @@
         "RSIOversold": [15, 20, 30],
         "StochKPeriod": [9, 14],
         "StochDSmooth": [1, 3],
-        "StochOversold": [15, 20, 25]
+        "StochOversold": [15, 20, 25],
+        "UseATRStop": [0, 1],
+        "ATRPeriod": [14],
+        "StopATRMult": [1.0, 1.5, 2.0]
       }
     }
   ]

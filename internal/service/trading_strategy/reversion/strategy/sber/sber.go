@@ -14,5 +14,6 @@ func DefaultParams() core.Params {
 		UseTrend: 1, FastEMA: 50, SlowEMA: 200,
 		RSIPeriod: 14, RSIOversold: 20,
 		StochKPeriod: 14, StochDSmooth: 3, StochOversold: 20,
+		UseATRStop: 0, ATRPeriod: 14, StopATRMult: 1.0,
 	}
 }
