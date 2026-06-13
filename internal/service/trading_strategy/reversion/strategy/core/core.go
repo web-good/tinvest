@@ -69,6 +69,9 @@ func (s *Strategy) Lookback() int {
 	if s.p.UseATRStop == 1 && s.p.ATRPeriod > 0 {
 		cands = append(cands, s.p.ATRPeriod+1)
 	}
+	if s.p.UseVolume == 1 && s.p.VolAvgPeriod > 0 {
+		cands = append(cands, s.p.VolAvgPeriod+1)
+	}
 	for _, c := range cands {
 		if c > m {
 			m = c
@@ -98,6 +101,9 @@ type decideInput struct {
 	stochPrev   float64
 	stochOK     bool
 	atr         float64 // daily ATR over the window (0 unless UseATRStop=1 and ATRPeriod>0); stamped onto sig.ATR at entry to freeze EntryATR
+	entryVol    float64 // entry (latest) bar's volume; 0 unless UseVolume=1 and a baseline was computed
+	avgVol      float64 // average volume of the preceding VolAvgPeriod bars (weekends excluded); 0 unless gate active
+	volOK       bool    // true when the volume baseline could be computed; false -> gate is skipped
 	pos         *strategy.Position
 }
 
@@ -136,6 +142,18 @@ func (s *Strategy) buildInput(md strategy.MarketData) decideInput {
 		atr = indicators.ATR(md.Highs, md.Lows, md.Closes, s.p.ATRPeriod)
 	}
 
+	var entryVol, avgVol float64
+	volOK := false
+	if s.p.UseVolume == 1 && s.p.VolAvgPeriod > 0 {
+		if n := len(md.Volumes); n > 0 && md.Volumes[n-1] > 0 {
+			if a, ok := averageVolumeExcludingWeekends(md.Volumes, md.Times, s.p.VolAvgPeriod); ok {
+				entryVol = float64(md.Volumes[n-1])
+				avgVol = a
+				volOK = true
+			}
+		}
+	}
+
 	return decideInput{
 		price:       md.Price,
 		emaFast:     emaFast,
@@ -150,6 +168,9 @@ func (s *Strategy) buildInput(md strategy.MarketData) decideInput {
 		stochPrev:   stochPrev,
 		stochOK:     stochOK,
 		atr:         atr,
+		entryVol:    entryVol,
+		avgVol:      avgVol,
+		volOK:       volOK,
 		pos:         md.Position,
 	}
 }

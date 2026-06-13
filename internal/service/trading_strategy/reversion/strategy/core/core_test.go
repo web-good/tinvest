@@ -479,3 +479,51 @@ func TestATRStopSkippedWhenMultZero(t *testing.T) {
 		t.Fatalf("StopATRMult=0 must skip ATRSL (zero-multiplier guard)")
 	}
 }
+
+func TestBuildInputVolumeGate(t *testing.T) {
+	n := 60
+	highs := make([]float64, n)
+	lows := make([]float64, n)
+	closes := make([]float64, n)
+	vols := make([]int64, n)
+	times := make([]time.Time, n)
+	base := mskDay(2026, 1, 1)
+	for i := 0; i < n; i++ {
+		closes[i] = 100 + float64(i)
+		highs[i] = closes[i] + 1
+		lows[i] = closes[i] - 1
+		vols[i] = 1000
+		times[i] = base.AddDate(0, 0, i)
+	}
+	md := strategy.MarketData{Price: closes[n-1], Highs: highs, Lows: lows, Closes: closes, Volumes: vols, Times: times}
+
+	p := defaultParams()
+	p.VolAvgPeriod = 20
+
+	p.UseVolume = 1
+	if in := NewWithParams("T", p).buildInput(md); !in.volOK || in.avgVol <= 0 || in.entryVol != 1000 {
+		t.Fatalf("UseVolume=1: want volOK, avgVol>0, entryVol=1000; got volOK=%v avg=%v entry=%v", in.volOK, in.avgVol, in.entryVol)
+	}
+
+	p.UseVolume = 0
+	if in := NewWithParams("T", p).buildInput(md); in.volOK || in.avgVol != 0 || in.entryVol != 0 {
+		t.Fatalf("UseVolume=0: volume inputs must stay zero, got volOK=%v avg=%v entry=%v", in.volOK, in.avgVol, in.entryVol)
+	}
+}
+
+func TestLookbackIncludesVolumeWindow(t *testing.T) {
+	p := defaultParams()
+	p.FastEMA, p.SlowEMA = 50, 200
+	p.RSIPeriod, p.StochKPeriod, p.StochDSmooth = 14, 14, 3
+	p.VolAvgPeriod = 300 // dominates SlowEMA when the filter is on
+
+	p.UseVolume = 1
+	if got := NewWithParams("T", p).Lookback(); got != 306 {
+		t.Fatalf("VolAvgPeriod=300 dominates: want 306, got %d", got)
+	}
+
+	p.UseVolume = 0
+	if got := NewWithParams("T", p).Lookback(); got != 205 {
+		t.Fatalf("UseVolume=0: VolAvgPeriod ignored, want SlowEMA+5=205, got %d", got)
+	}
+}
