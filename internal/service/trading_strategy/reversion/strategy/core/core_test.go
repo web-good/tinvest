@@ -333,3 +333,98 @@ func TestBuildInputATRGate(t *testing.T) {
 		t.Fatalf("UseATRStop=0: ATR must not be computed, want 0, got %v", in.atr)
 	}
 }
+
+// atrStopParams: ATR-stop branch on, multiplier 1.0, RSI oversold 30.
+func atrStopParams() Params {
+	p := defaultParams()
+	p.UseATRStop = 1
+	p.ATRPeriod = 14
+	p.StopATRMult = 1.0
+	p.RSIOversold = 30
+	return p
+}
+
+func TestExitATRStopFires(t *testing.T) {
+	s := NewWithParams("T", atrStopParams())
+	in := openInput() // neutral RSI/EMA: no RSI50, no EMAX
+	in.pos = &strategy.Position{PurchasePrice: 100, EntryATR: 5}
+	in.price = 94 // <= 100 - 1.0*5 = 95
+	sig := s.decide(in)
+	if sig.Kind != model.SignalSell || sig.Reason != "ATRSL" {
+		t.Fatalf("price below entry-ATR: want ATRSL sell, got kind=%v reason=%q", sig.Kind, sig.Reason)
+	}
+}
+
+func TestNoATRStopAboveThreshold(t *testing.T) {
+	s := NewWithParams("T", atrStopParams())
+	in := openInput()
+	in.pos = &strategy.Position{PurchasePrice: 100, EntryATR: 5}
+	in.price = 96 // > 95 threshold
+	if sig := s.decide(in); sig.Kind == model.SignalSell {
+		t.Fatalf("price above threshold: should hold, got sell %q", sig.Reason)
+	}
+}
+
+func TestATRStopSkippedWhenEntryATRZero(t *testing.T) {
+	// Live-trading guard: EntryATR is not persisted (0), so the stop must never fire,
+	// even though price (1) is far below PurchasePrice (100).
+	s := NewWithParams("T", atrStopParams())
+	in := openInput()
+	in.pos = &strategy.Position{PurchasePrice: 100, EntryATR: 0}
+	in.price = 1
+	if sig := s.decide(in); sig.Kind == model.SignalSell && sig.Reason == "ATRSL" {
+		t.Fatalf("EntryATR=0 must skip ATRSL (live-trading guard)")
+	}
+}
+
+func TestRSIOSInertWhenATRStopOn(t *testing.T) {
+	// With the ATR stop on, the RSIOS branch is disabled: an RSI break of the oversold
+	// zone must NOT produce a sell (price is above the ATR threshold).
+	s := NewWithParams("T", atrStopParams())
+	in := openInput()
+	in.pos = &strategy.Position{PurchasePrice: 100, EntryATR: 5}
+	in.price = 99 // above the 95 ATR threshold
+	in.rsiOK = true
+	in.rsiPrev, in.rsiNow = 32, 28 // would be an RSIOS down-cross of 30
+	if sig := s.decide(in); sig.Kind == model.SignalSell {
+		t.Fatalf("UseATRStop=1: RSIOS must be inert, got sell %q", sig.Reason)
+	}
+}
+
+func TestExitPrecedenceRSI50OverATR(t *testing.T) {
+	s := NewWithParams("T", atrStopParams())
+	in := openInput()
+	in.pos = &strategy.Position{PurchasePrice: 100, EntryATR: 5}
+	in.price = 94                  // ATRSL would fire
+	in.rsiPrev, in.rsiNow = 55, 45 // RSI50 also fires
+	if sig := s.decide(in); sig.Reason != "RSI50" {
+		t.Fatalf("RSI50 must win over ATRSL, got %q", sig.Reason)
+	}
+}
+
+func TestExitPrecedenceATROverEMA(t *testing.T) {
+	s := NewWithParams("T", atrStopParams())
+	in := openInput()
+	in.pos = &strategy.Position{PurchasePrice: 100, EntryATR: 5}
+	in.price = 94                  // ATRSL fires
+	in.rsiPrev, in.rsiNow = 60, 58 // no RSI50
+	in.emaFastPrev, in.emaSlowPrev = 95, 90
+	in.emaFast, in.emaSlow = 88, 90 // EMAX also fires
+	if sig := s.decide(in); sig.Reason != "ATRSL" {
+		t.Fatalf("ATRSL must win over EMAX, got %q", sig.Reason)
+	}
+}
+
+func TestATRStopSkippedWhenMultZero(t *testing.T) {
+	// Zero-multiplier guard: a 0 StopATRMult would put the threshold at PurchasePrice
+	// (a break-even stop), so the guard must keep ATRSL inert even below entry.
+	p := atrStopParams()
+	p.StopATRMult = 0
+	s := NewWithParams("T", p)
+	in := openInput()
+	in.pos = &strategy.Position{PurchasePrice: 100, EntryATR: 5}
+	in.price = 99 // below PurchasePrice but ATRSL must not fire
+	if sig := s.decide(in); sig.Kind == model.SignalSell && sig.Reason == "ATRSL" {
+		t.Fatalf("StopATRMult=0 must skip ATRSL (zero-multiplier guard)")
+	}
+}

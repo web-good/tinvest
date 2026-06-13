@@ -231,12 +231,18 @@ func (s *Strategy) entryReason(in decideInput) string {
 	)
 }
 
-// manage handles an open long. There is no protective stop. It exits on one of three
-// signals, evaluated in precedence order (all fills at close):
+// manage handles an open long. There is no protective price stop other than the optional
+// ATR stop below. It exits on one of three signals, evaluated in precedence order (all
+// fills at close):
 //   - RSI50: RSI crosses the 50 midline downward — primary momentum fade.
-//   - RSIOS: RSI breaks back down through the oversold zone from above — failed-bounce
-//     breakdown; fires when RSI was at or above RSIOversold the previous bar and is now
-//     below it, indicating the bounce has collapsed back into the oversold region.
+//   - middle branch, selected by UseATRStop:
+//     UseATRStop==0 -> RSIOS: RSI breaks back down through the oversold zone from above
+//     (failed-bounce breakdown); fires when RSI was at/above RSIOversold last bar and
+//     is now below it.
+//     UseATRStop==1 -> ATRSL: price has fallen to/below PurchasePrice - StopATRMult*EntryATR,
+//     where EntryATR is the daily ATR frozen at entry. Guarded by EntryATR>0 and
+//     StopATRMult>0 so it stays inert in live trading (EntryATR not persisted) and on
+//     a misconfigured zero multiplier.
 //   - EMAX: FastEMA drops below SlowEMA (bearish EMA cross) — regime-break backstop.
 //
 // When multiple signals fire on the same bar the first in the list wins; the fill price
@@ -248,10 +254,16 @@ func (s *Strategy) manage(in decideInput, sig model.Signal) model.Signal {
 	case in.rsiOK && crossDown(in.rsiPrev, in.rsiNow, rsiExitLevel):
 		sig.Kind, sig.Reason = model.SignalSell, "RSI50"
 		sig.ExitReason = fmt.Sprintf("RSI50: RSI %.2f→%.2f пересёк 50 сверху вниз", in.rsiPrev, in.rsiNow)
-	case in.rsiOK && crossDown(in.rsiPrev, in.rsiNow, s.p.RSIOversold):
+	case s.p.UseATRStop == 0 && in.rsiOK && crossDown(in.rsiPrev, in.rsiNow, s.p.RSIOversold):
 		sig.Kind, sig.Reason = model.SignalSell, "RSIOS"
 		sig.ExitReason = fmt.Sprintf("RSIOS: RSI %.2f→%.2f пробил зону перепроданности %.0f сверху вниз",
 			in.rsiPrev, in.rsiNow, s.p.RSIOversold)
+	case s.p.UseATRStop == 1 && in.pos.EntryATR > 0 && s.p.StopATRMult > 0 &&
+		in.price <= in.pos.PurchasePrice-s.p.StopATRMult*in.pos.EntryATR:
+		stop := in.pos.PurchasePrice - s.p.StopATRMult*in.pos.EntryATR
+		sig.Kind, sig.Reason = model.SignalSell, "ATRSL"
+		sig.ExitReason = fmt.Sprintf("ATRSL: цена %.4f ≤ вход %.4f − %.2g×ATR %.4f (порог %.4f)",
+			in.price, in.pos.PurchasePrice, s.p.StopATRMult, in.pos.EntryATR, stop)
 	case in.emaOK && crossDown(in.emaFastPrev-in.emaSlowPrev, in.emaFast-in.emaSlow, 0):
 		sig.Kind, sig.Reason = model.SignalSell, "EMAX"
 		sig.ExitReason = fmt.Sprintf("EMAX: FastEMA%d %.4f ушла под SlowEMA%d %.4f (медвежий кросс)",
