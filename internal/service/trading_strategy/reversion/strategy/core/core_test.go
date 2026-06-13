@@ -3,10 +3,61 @@ package core
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"tinvest/internal/service/trading_strategy/scalping/model"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 )
+
+// mskDay builds noon of a specific MSK calendar date for weekend-aware tests.
+func mskDay(y int, m time.Month, d int) time.Time {
+	return time.Date(y, m, d, 12, 0, 0, 0, mskLoc)
+}
+
+func TestAverageVolumeExcludesWeekends(t *testing.T) {
+	// Jun 13/14 2026 are Sat/Sun (MSK); Jun 15 is the entry bar (excluded from its avg).
+	vols := []int64{100, 200, 300, 9999, 9999, 50}
+	times := []time.Time{
+		mskDay(2026, 6, 10), // Wed
+		mskDay(2026, 6, 11), // Thu
+		mskDay(2026, 6, 12), // Fri
+		mskDay(2026, 6, 13), // Sat (excluded)
+		mskDay(2026, 6, 14), // Sun (excluded)
+		mskDay(2026, 6, 15), // Mon (entry bar, excluded from its own average)
+	}
+	avg, ok := averageVolumeExcludingWeekends(vols, times, 5)
+	if !ok {
+		t.Fatalf("want ok=true")
+	}
+	if avg != 200 { // mean(100,200,300)
+		t.Fatalf("want avg 200 (weekends + entry bar excluded), got %v", avg)
+	}
+}
+
+func TestAverageVolumeNoTimesKeepsAllBars(t *testing.T) {
+	vols := []int64{100, 200, 300, 9999, 9999, 50}
+	avg, ok := averageVolumeExcludingWeekends(vols, nil, 5)
+	if !ok {
+		t.Fatalf("want ok=true")
+	}
+	want := float64(100+200+300+9999+9999) / 5 // entry bar still excluded; no weekend drop
+	if avg != want {
+		t.Fatalf("no-times: want %v, got %v", want, avg)
+	}
+}
+
+func TestAverageVolumeNoSamplesNotOK(t *testing.T) {
+	// Window is entirely weekend bars -> no surviving sample.
+	vols := []int64{9999, 9999, 50}
+	times := []time.Time{
+		mskDay(2026, 6, 13), // Sat
+		mskDay(2026, 6, 14), // Sun
+		mskDay(2026, 6, 15), // Mon (entry)
+	}
+	if _, ok := averageVolumeExcludingWeekends(vols, times, 2); ok {
+		t.Fatalf("all-weekend window: want ok=false")
+	}
+}
 
 // defaultParams returns valid, entry-capable params: trend on, RSI/Stoch oversold 20.
 func defaultParams() Params {

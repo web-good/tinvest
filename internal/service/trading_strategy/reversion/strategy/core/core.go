@@ -14,6 +14,7 @@ package core
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"tinvest/internal/domain/ema"
 	"tinvest/internal/service/trading_strategy/scalping/model"
@@ -38,6 +39,9 @@ type Params struct {
 	UseATRStop    int     // 0 = RSIOS exit (RSI breaks oversold zone down); 1 = ATRSL exit (price below entry by the daily ATR)
 	ATRPeriod     int     // daily ATR length; consulted only when UseATRStop=1
 	StopATRMult   float64 // ATRSL distance: stop = PurchasePrice - StopATRMult*EntryATR (default 1.0)
+	UseVolume     int     // 0 = no volume filter; 1 = block entries below the average bar volume
+	VolAvgPeriod  int     // preceding-bar window for the average-volume baseline; consulted only when UseVolume=1
+	VolMult       float64 // entry requires entryVolume >= avg*VolMult (default 1.0)
 }
 
 // Strategy trades a single instrument with the dual-confirmation rules. Ticker-agnostic
@@ -167,6 +171,57 @@ func lastTwoEMA(closes []float64, period int) (now, prev float64, ok bool) {
 
 // crossDown reports a down-cross of level: prev at/above, now below.
 func crossDown(prev, now, level float64) bool { return prev >= level && now < level }
+
+// mskLoc anchors weekend detection to the Moscow trading calendar (UTC fallback if the
+// tz DB is absent), mirroring the backtest engine. Weekend trading sessions (Sat/Sun) on
+// MOEX trade at much lower volume and are excluded from the average-volume baseline.
+var mskLoc = func() *time.Location {
+	loc, err := time.LoadLocation("Europe/Moscow")
+	if err != nil {
+		return time.UTC
+	}
+	return loc
+}()
+
+// isWeekend reports whether t falls on Saturday or Sunday in mskLoc.
+func isWeekend(t time.Time) bool {
+	wd := t.In(mskLoc).Weekday()
+	return wd == time.Saturday || wd == time.Sunday
+}
+
+// averageVolumeExcludingWeekends averages the volumes of the `period` bars that PRECEDE
+// the final (entry) bar of vols. The entry bar is never part of its own average. When
+// times is supplied and index-aligned to vols, weekend bars (Sat/Sun MSK) are dropped;
+// when times is empty or misaligned, weekend exclusion is skipped (all preceding bars
+// count). Non-positive volumes are ignored. ok is false when no sample survives — the
+// caller must then skip the gate (never block an entry on missing data).
+func averageVolumeExcludingWeekends(vols []int64, times []time.Time, period int) (avg float64, ok bool) {
+	n := len(vols)
+	if n < 2 || period <= 0 {
+		return 0, false
+	}
+	lo := n - 1 - period // window = the `period` bars before the entry bar: [lo, n-1)
+	if lo < 0 {
+		lo = 0
+	}
+	haveTimes := len(times) == n
+	var sum float64
+	var count int
+	for j := lo; j < n-1; j++ {
+		if haveTimes && isWeekend(times[j]) {
+			continue
+		}
+		if vols[j] <= 0 {
+			continue
+		}
+		sum += float64(vols[j])
+		count++
+	}
+	if count == 0 {
+		return 0, false
+	}
+	return sum / float64(count), true
+}
 
 // indicatorsReady reports that both oscillators produced valid two-bar readings. A warm-up
 // sentinel (rsiOK/stochOK false, values 0) must never count as an in-zone reading, or the
