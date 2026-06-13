@@ -2,10 +2,12 @@
 // driven by the agreement of two oscillators: RSI and the Stochastic %D line. It buys
 // when one oscillator is already inside its oversold zone and the other crosses into it.
 // It exits an open long on one of three signals: RSI crossing the 50 line downward
-// (primary momentum fade), RSI breaking back down through the oversold zone from above
-// (failed-bounce / RSI-oversold breakdown), or a bearish EMA cross (FastEMA dropping
-// below SlowEMA) as a regime-break backstop. There is no protective stop. An optional
-// trend filter restricts buys to a confirmed uptrend. The decision logic is pure and
+// (primary momentum fade); a middle exit selected by the UseATRStop flag — either RSI
+// breaking back down through the oversold zone (RSIOS, failed bounce) or price falling
+// below the ATR stop PurchasePrice − StopATRMult×EntryATR with EntryATR frozen at entry
+// (ATRSL); and a bearish EMA cross (FastEMA below SlowEMA) as a regime-break backstop.
+// There is no protective stop unless UseATRStop=1. An optional trend filter restricts buys to
+// a confirmed uptrend. The decision logic is pure and
 // ticker-agnostic; per-share packages supply ticker + Params. Run with `-interval Day1`.
 package core
 
