@@ -219,12 +219,14 @@ func buildMarketData(window []Candle) strategy.MarketData {
 		Lows:    make([]float64, len(window)),
 		Closes:  make([]float64, len(window)),
 		Volumes: make([]int64, len(window)),
+		Times:   make([]time.Time, len(window)),
 	}
 	for i, c := range window {
 		md.Highs[i] = c.High
 		md.Lows[i] = c.Low
 		md.Closes[i] = c.Close
 		md.Volumes[i] = c.Volume
+		md.Times[i] = c.Time
 	}
 	if n := len(window); n > 0 {
 		md.Price = window[n-1].Close

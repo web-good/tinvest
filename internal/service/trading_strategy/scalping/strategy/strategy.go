@@ -1,6 +1,10 @@
 package strategy
 
-import "tinvest/internal/service/trading_strategy/scalping/model"
+import (
+	"time"
+
+	"tinvest/internal/service/trading_strategy/scalping/model"
+)
 
 // Position is an open long position in the strategy's instrument.
 type Position struct {
@@ -25,6 +29,10 @@ type MarketData struct {
 	Lows    []float64
 	Closes  []float64
 	Volumes []int64
+	// Times are oldest-first bar open-times, index-aligned to Closes/Volumes. Empty when
+	// the runner does not supply them (e.g. live trading); consumers must degrade
+	// gracefully (the reversion volume filter skips weekend exclusion when Times is empty).
+	Times []time.Time
 	// DailyCloses are oldest-first closes of COMPLETED daily candles, aligned so the
 	// last element is the most recent day closed at/before the current bar. Empty if
 	// no higher-timeframe data is supplied or the filter is disabled.

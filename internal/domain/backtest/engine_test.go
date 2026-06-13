@@ -333,6 +333,24 @@ func TestEngineSuppliesDailyHighsLowsAndTodayExtent(t *testing.T) {
 	}
 }
 
+func TestBuildMarketDataCopiesTimes(t *testing.T) {
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	window := []Candle{
+		{Time: base, Close: 10, High: 10, Low: 10, Volume: 1},
+		{Time: base.Add(time.Hour), Close: 11, High: 11, Low: 11, Volume: 2},
+		{Time: base.Add(2 * time.Hour), Close: 12, High: 12, Low: 12, Volume: 3},
+	}
+	md := buildMarketData(window)
+	if len(md.Times) != len(window) {
+		t.Fatalf("Times length: want %d, got %d", len(window), len(md.Times))
+	}
+	for i := range window {
+		if !md.Times[i].Equal(window[i].Time) {
+			t.Fatalf("Times[%d]: want %v, got %v", i, window[i].Time, md.Times[i])
+		}
+	}
+}
+
 func TestEngineFreezesEntryStopAndTracksFavorable(t *testing.T) {
 	candles := flatCandles([]float64{10, 100, 105, 98})
 	// Buy at price 100 (bar 1) with a frozen stop of 95. On bar 2 (price 105) the
