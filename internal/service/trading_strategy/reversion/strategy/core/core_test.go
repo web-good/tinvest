@@ -615,3 +615,86 @@ func TestExplainBlocksOnVolume(t *testing.T) {
 		t.Fatalf("Explain should block on volume, got: %q", out)
 	}
 }
+
+func TestExitOverbought(t *testing.T) {
+	p := defaultParams()
+	p.UseOverbought = 1
+	p.RSIOverbought, p.StochOverbought = 70, 80
+	s := NewWithParams("TEST", p)
+
+	// Both oscillators in their overbought zones -> sell OB.
+	in := openInput()
+	in.rsiPrev, in.rsiNow = 72, 75     // RSI >= 70
+	in.stochPrev, in.stochNow = 82, 85 // Stoch >= 80
+	if sig := s.decide(in); sig.Kind != model.SignalSell || sig.Reason != "OB" {
+		t.Fatalf("both overbought: want OB sell, got kind=%v reason=%q", sig.Kind, sig.Reason)
+	}
+}
+
+func TestNoOverboughtExitWhenOnlyOneZone(t *testing.T) {
+	p := defaultParams()
+	p.UseOverbought = 1
+	p.RSIOverbought, p.StochOverbought = 70, 80
+	s := NewWithParams("TEST", p)
+
+	// Only RSI in zone -> hold.
+	in := openInput()
+	in.rsiPrev, in.rsiNow = 72, 75
+	in.stochPrev, in.stochNow = 50, 55 // below 80
+	if sig := s.decide(in); sig.Kind == model.SignalSell {
+		t.Fatalf("only RSI overbought: should NOT sell, got %q", sig.Reason)
+	}
+
+	// Only Stoch in zone -> hold.
+	in = openInput()
+	in.rsiPrev, in.rsiNow = 60, 62 // below 70
+	in.stochPrev, in.stochNow = 82, 85
+	if sig := s.decide(in); sig.Kind == model.SignalSell {
+		t.Fatalf("only Stoch overbought: should NOT sell, got %q", sig.Reason)
+	}
+}
+
+func TestOverboughtExitOffByFlag(t *testing.T) {
+	p := defaultParams() // UseOverbought defaults to 0
+	p.RSIOverbought, p.StochOverbought = 70, 80
+	s := NewWithParams("TEST", p)
+
+	in := openInput()
+	in.rsiPrev, in.rsiNow = 72, 75
+	in.stochPrev, in.stochNow = 82, 85
+	if sig := s.decide(in); sig.Kind == model.SignalSell {
+		t.Fatalf("UseOverbought=0: should NOT sell, got %q", sig.Reason)
+	}
+}
+
+func TestOverboughtExitTakesPrecedence(t *testing.T) {
+	p := defaultParams()
+	p.UseOverbought = 1
+	p.RSIOverbought, p.StochOverbought = 70, 80
+	s := NewWithParams("TEST", p)
+
+	// Both overbought AND a bearish EMA cross also fires; OB must win.
+	in := openInput()
+	in.rsiPrev, in.rsiNow = 72, 75
+	in.stochPrev, in.stochNow = 82, 85
+	in.emaFastPrev, in.emaSlowPrev = 95, 90
+	in.emaFast, in.emaSlow = 88, 90 // EMAX would fire
+	if sig := s.decide(in); sig.Reason != "OB" {
+		t.Fatalf("both OB and EMAX fire: want OB precedence, got %q", sig.Reason)
+	}
+}
+
+func TestOverboughtExitSkippedAtWarmup(t *testing.T) {
+	p := defaultParams()
+	p.UseOverbought = 1
+	p.RSIOverbought, p.StochOverbought = 70, 80
+	s := NewWithParams("TEST", p)
+
+	in := openInput()
+	in.rsiPrev, in.rsiNow = 72, 75
+	in.stochPrev, in.stochNow = 82, 85
+	in.rsiOK = false // warm-up: no valid RSI reading
+	if sig := s.decide(in); sig.Kind == model.SignalSell && sig.Reason == "OB" {
+		t.Fatalf("rsiOK=false: OB must not fire")
+	}
+}

@@ -1,12 +1,13 @@
 // Package core implements a long-only mean-reversion strategy on the daily timeframe,
 // driven by the agreement of two oscillators: RSI and the Stochastic %D line. It buys
 // when one oscillator is already inside its oversold zone and the other crosses into it.
-// It exits an open long on one of three signals: RSI crossing the 50 line downward
-// (primary momentum fade); a middle exit selected by the UseATRStop flag — either RSI
-// breaking back down through the oversold zone (RSIOS, failed bounce) or price falling
-// below the ATR stop PurchasePrice − StopATRMult×EntryATR with EntryATR frozen at entry
-// (ATRSL); and a bearish EMA cross (FastEMA below SlowEMA) as a regime-break backstop.
-// There is no protective stop unless UseATRStop=1. An optional trend filter restricts buys to
+// It exits an open long on one of four signals: an overbought take-profit when both RSI
+// and Stochastic %D are simultaneously in their overbought zones (OB, gated by UseOverbought);
+// RSI crossing the 50 line downward (primary momentum fade); a middle exit selected by the
+// UseATRStop flag — either RSI breaking back down through the oversold zone (RSIOS, failed
+// bounce) or price falling below the ATR stop PurchasePrice − StopATRMult×EntryATR with
+// EntryATR frozen at entry (ATRSL); and a bearish EMA cross (FastEMA below SlowEMA) as a
+// regime-break backstop. There is no protective stop unless UseATRStop=1. An optional trend filter restricts buys to
 // a confirmed uptrend. An optional volume filter (UseVolume) additionally blocks a buy when the
 // entry bar's volume is below the average of the preceding VolAvgPeriod bars (weekend Sat/Sun
 // bars excluded), scaled by VolMult. The decision logic is pure and
@@ -30,20 +31,23 @@ const rsiExitLevel = 50.0
 // Params holds every tunable. All fields are int or float64 (flags as int 0/1) so
 // reflection grid calibration can sweep them.
 type Params struct {
-	UseTrend      int     // 1 = require uptrend before buying; 0 = ignore trend
-	FastEMA       int     // fast regime EMA (e.g. 50); also the bearish-cross exit fast line
-	SlowEMA       int     // slow regime EMA + price floor (e.g. 200); bearish-cross exit slow line
-	RSIPeriod     int     // RSI length; required (>0)
-	RSIOversold   float64 // RSI oversold zone (entry side)
-	StochKPeriod  int     // Stochastic %K lookback; required (>0)
-	StochDSmooth  int     // Stochastic %D smoothing; required (>0); 1 = raw %K
-	StochOversold float64 // Stochastic oversold zone (entry side)
-	UseATRStop    int     // 0 = RSIOS exit (RSI breaks oversold zone down); 1 = ATRSL exit (price below entry by the daily ATR)
-	ATRPeriod     int     // daily ATR length; consulted only when UseATRStop=1
-	StopATRMult   float64 // ATRSL distance: stop = PurchasePrice - StopATRMult*EntryATR (default 1.0)
-	UseVolume     int     // 0 = no volume filter; 1 = block entries below the average bar volume
-	VolAvgPeriod  int     // preceding-bar window for the average-volume baseline; consulted only when UseVolume=1
-	VolMult       float64 // entry requires entryVolume >= avg*VolMult (default 1.0)
+	UseTrend        int     // 1 = require uptrend before buying; 0 = ignore trend
+	FastEMA         int     // fast regime EMA (e.g. 50); also the bearish-cross exit fast line
+	SlowEMA         int     // slow regime EMA + price floor (e.g. 200); bearish-cross exit slow line
+	RSIPeriod       int     // RSI length; required (>0)
+	RSIOversold     float64 // RSI oversold zone (entry side)
+	StochKPeriod    int     // Stochastic %K lookback; required (>0)
+	StochDSmooth    int     // Stochastic %D smoothing; required (>0); 1 = raw %K
+	StochOversold   float64 // Stochastic oversold zone (entry side)
+	UseATRStop      int     // 0 = RSIOS exit (RSI breaks oversold zone down); 1 = ATRSL exit (price below entry by the daily ATR)
+	ATRPeriod       int     // daily ATR length; consulted only when UseATRStop=1
+	StopATRMult     float64 // ATRSL distance: stop = PurchasePrice - StopATRMult*EntryATR (default 1.0)
+	UseVolume       int     // 0 = no volume filter; 1 = block entries below the average bar volume
+	VolAvgPeriod    int     // preceding-bar window for the average-volume baseline; consulted only when UseVolume=1
+	VolMult         float64 // entry requires entryVolume >= avg*VolMult (default 1.0)
+	UseOverbought   int     // 1 = exit when RSI and Stoch are simultaneously overbought; 0 = off
+	RSIOverbought   float64 // RSI overbought zone for the OB exit (default 70); consulted only when UseOverbought=1
+	StochOverbought float64 // Stoch %D overbought zone for the OB exit (default 80); consulted only when UseOverbought=1
 }
 
 // Strategy trades a single instrument with the dual-confirmation rules. Ticker-agnostic
@@ -316,8 +320,10 @@ func (s *Strategy) entryReason(in decideInput) string {
 }
 
 // manage handles an open long. There is no protective price stop other than the optional
-// ATR stop below. It exits on one of three signals, evaluated in precedence order (all
+// ATR stop below. It exits on one of four signals, evaluated in precedence order (all
 // fills at close):
+//   - OB: RSI and Stochastic %D simultaneously in their overbought zones — take-profit
+//     (gated by UseOverbought=1). Highest precedence.
 //   - RSI50: RSI crosses the 50 midline downward — primary momentum fade.
 //   - middle branch, selected by UseATRStop:
 //     UseATRStop==0 -> RSIOS: RSI breaks back down through the oversold zone from above
@@ -335,6 +341,11 @@ func (s *Strategy) manage(in decideInput, sig model.Signal) model.Signal {
 	sig.RSI = in.rsiNow
 
 	switch {
+	case s.p.UseOverbought == 1 && in.rsiOK && in.stochOK &&
+		in.rsiNow >= s.p.RSIOverbought && in.stochNow >= s.p.StochOverbought:
+		sig.Kind, sig.Reason = model.SignalSell, "OB"
+		sig.ExitReason = fmt.Sprintf("OB: RSI %.2f ≥ %.0f и Stoch %.2f ≥ %.0f — обе зоны перекупленности",
+			in.rsiNow, s.p.RSIOverbought, in.stochNow, s.p.StochOverbought)
 	case in.rsiOK && crossDown(in.rsiPrev, in.rsiNow, rsiExitLevel):
 		sig.Kind, sig.Reason = model.SignalSell, "RSI50"
 		sig.ExitReason = fmt.Sprintf("RSI50: RSI %.2f→%.2f пересёк 50 сверху вниз", in.rsiPrev, in.rsiNow)
