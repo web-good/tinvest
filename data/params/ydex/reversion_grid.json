@@ -14,7 +14,10 @@
         "StochOversold": [15, 20, 25],
         "UseATRStop": [0, 1],
         "ATRPeriod": [14],
-        "StopATRMult": [1.0, 1.5, 2.0]
+        "StopATRMult": [1.0, 1.5, 2.0],
+        "UseVolume": [0, 1],
+        "VolAvgPeriod": [20],
+        "VolMult": [1.0, 1.5]
       }
     }
   ]
