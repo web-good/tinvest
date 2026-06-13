@@ -7,7 +7,9 @@
 // below the ATR stop PurchasePrice − StopATRMult×EntryATR with EntryATR frozen at entry
 // (ATRSL); and a bearish EMA cross (FastEMA below SlowEMA) as a regime-break backstop.
 // There is no protective stop unless UseATRStop=1. An optional trend filter restricts buys to
-// a confirmed uptrend. The decision logic is pure and
+// a confirmed uptrend. An optional volume filter (UseVolume) additionally blocks a buy when the
+// entry bar's volume is below the average of the preceding VolAvgPeriod bars (weekend Sat/Sun
+// bars excluded), scaled by VolMult. The decision logic is pure and
 // ticker-agnostic; per-share packages supply ticker + Params. Run with `-interval Day1`.
 package core
 

@@ -4,10 +4,12 @@ Long-only, **daily timeframe** (`-interval Day1`). A mean-reversion core driven 
 agreement of two oscillators — RSI and the Stochastic %D line. It buys when one oscillator
 is already inside its oversold zone and the other crosses into it. It exits on three signals
 — RSI crossing 50 downward, a flag-selected middle exit (RSIOS or ATR stop), and a bearish
-FastEMA/SlowEMA cross. An optional trend filter restricts buys to a confirmed uptrend.
+FastEMA/SlowEMA cross. Two optional entry filters narrow the buys: a trend filter (confirmed
+uptrend only) and a volume filter (above-average entry-bar volume only).
 
 The Stochastic working line is **%D** (SMA of %K over `StochDSmooth`; `StochDSmooth=1`
-gives the raw %K). Volume gating and the time-stop from earlier versions are gone.
+gives the raw %K). The time-stop and the mandatory fixed-% stop from earlier versions are
+gone; volume gating returns only as the optional `UseVolume` entry filter.
 
 ## Entry (gates in short-circuit order)
 
@@ -19,7 +21,17 @@ gives the raw %K). Volume gating and the time-stop from earlier versions are gon
      `< StochOversold`;
    - Stoch %D crosses **down** through `StochOversold` **and** RSI is already
      `< RSIOversold`.
-   Both crossing into the zone on the same bar also fires.
+   Both crossing into the zone on the same bar also fires. A warm-up bar without two valid
+   oscillator readings can never satisfy this gate (the sentinel `0` is not treated as
+   "in zone").
+3. **Volume filter (optional, `UseVolume`):** `0` (default) ignores volume; `1` blocks the
+   buy when the entry bar's volume is below `avg × VolMult`, where `avg` is the mean volume
+   of the preceding `VolAvgPeriod` bars with weekend (Sat/Sun MSK) bars excluded and the
+   entry bar itself excluded from its own average. The gate is skipped (entry **allowed**)
+   when the baseline cannot be trusted — no per-bar timestamps means weekends are not
+   excluded (the average still uses all preceding bars); no surviving sample or a
+   non-positive entry-bar volume means no block. This degradation keeps the filter inert in
+   live trading until per-bar timestamps are wired there.
 
 ## Exit (first trigger wins)
 
@@ -61,16 +73,45 @@ go run ./cmd/backtest -ticker SBER -strategy reversion -interval Day1 \
 
 ## Params
 
-`UseTrend, FastEMA, SlowEMA, RSIPeriod, RSIOversold, StochKPeriod, StochDSmooth,
-StochOversold, UseATRStop, ATRPeriod, StopATRMult`. Flags (`UseTrend`, `UseATRStop`) are
-int `0/1`; the rest are int/float64 so the grid calibrator can sweep them. The RSI-50
-exit level is a fixed constant, not a param.
+All 14 tunables live in `core.Params`. Every field is `int` or `float64` (flags encoded as
+int `0/1`) so the reflection-based grid calibrator can sweep any of them. The RSI-50 exit
+level is a fixed constant (`50`), **not** a param. Per-ticker starting values live in each
+`reversion/strategy/<ticker>` package; calibrate with `-calibrate` and hardcode the winners.
 
-- `UseATRStop` — `0` (default): use RSIOS as the middle exit; `1`: use the ATR-based hard
-  stop instead.
+**Trend filter**
+- `UseTrend` — `1` (default) requires a confirmed uptrend before any buy
+  (`EMA(FastEMA) > EMA(SlowEMA)` and `close > EMA(SlowEMA)`); `0` ignores trend.
+- `FastEMA` — fast regime EMA length (e.g. 50). Doubles as the fast line of the `EMAX`
+  bearish-cross exit.
+- `SlowEMA` — slow regime EMA length and price floor (e.g. 200). Doubles as the slow line
+  of the `EMAX` exit. Also the dominant term in the candle lookback window.
+
+**RSI (entry trigger + exits)**
+- `RSIPeriod` — RSI length; required (`> 0`).
+- `RSIOversold` — RSI oversold zone used on the entry side (dual confirmation) and, when
+  `UseATRStop=0`, as the `RSIOS` exit boundary.
+
+**Stochastic (entry trigger)**
+- `StochKPeriod` — Stochastic %K lookback; required (`> 0`).
+- `StochDSmooth` — %D smoothing (SMA of %K); required (`> 0`). `1` = raw %K. The working
+  line everywhere is %D.
+- `StochOversold` — Stochastic oversold zone on the entry side.
+
+**Middle exit selector (ATR stop)**
+- `UseATRStop` — `0` (default): use `RSIOS` as the middle exit; `1`: use the ATR-based hard
+  stop (`ATRSL`) instead.
 - `ATRPeriod` — daily ATR lookback length; consulted only when `UseATRStop=1`.
 - `StopATRMult` — stop distance multiplier: stop placed at `PurchasePrice − StopATRMult ×
   EntryATR`; default `1.0`; `0` disables the stop even when `UseATRStop=1`.
+
+**Volume filter (entry)**
+- `UseVolume` — `0` (default): no volume filter; `1`: block entries on below-average-volume
+  bars.
+- `VolAvgPeriod` — number of preceding bars averaged for the volume baseline (default `20`);
+  weekend (Sat/Sun MSK) bars are excluded from that average, and the entry bar is excluded
+  from its own average. Consulted only when `UseVolume=1`.
+- `VolMult` — entry-volume threshold multiplier: a buy needs `entryVolume ≥ avg × VolMult`;
+  default `1.0` (strictly at/above average). Raising it demands stronger participation.
 
 ## Not yet supported
 
