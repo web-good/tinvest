@@ -1,118 +1,121 @@
-# Reversion strategy (RSI + Stochastic dual confirmation)
+# Стратегия Reversion (двойное подтверждение RSI + Stochastic)
 
-Long-only, **daily timeframe** (`-interval Day1`). A mean-reversion core driven by the
-agreement of two oscillators — RSI and the Stochastic %D line. It buys when one oscillator
-is already inside its oversold zone and the other crosses into it. It exits on three signals
-— RSI crossing 50 downward, a flag-selected middle exit (RSIOS or ATR stop), and a bearish
-FastEMA/SlowEMA cross. Two optional entry filters narrow the buys: a trend filter (confirmed
-uptrend only) and a volume filter (above-average entry-bar volume only).
+Только лонг, **дневной таймфрейм** (`-interval Day1`). Ядро возврата к среднему
+(mean-reversion), управляемое согласием двух осцилляторов — RSI и линии %D Stochastic.
+Покупка происходит, когда один осциллятор уже находится в зоне перепроданности, а второй
+входит в неё. Выход — по одному из трёх сигналов: RSI пересекает 50 сверху вниз,
+переключаемый флагом средний выход (RSIOS или ATR-стоп) и медвежий кросс FastEMA/SlowEMA.
+Покупки дополнительно сужают два опциональных фильтра входа: фильтр тренда (только
+подтверждённый аптренд) и фильтр объёма (только бар входа с объёмом выше среднего).
 
-The Stochastic working line is **%D** (SMA of %K over `StochDSmooth`; `StochDSmooth=1`
-gives the raw %K). The time-stop and the mandatory fixed-% stop from earlier versions are
-gone; volume gating returns only as the optional `UseVolume` entry filter.
+Рабочая линия Stochastic — **%D** (SMA от %K за `StochDSmooth`; при `StochDSmooth=1`
+получается «сырой» %K). Тайм-стоп и обязательный фиксированный %-стоп из прежних версий
+убраны; фильтрация по объёму возвращается только как опциональный фильтр входа `UseVolume`.
 
-## Entry (gates in short-circuit order)
+## Вход (фильтры в порядке короткого замыкания)
 
-1. **Trend filter (optional, `UseTrend`):** `1` (default) requires
-   `EMA(FastEMA) > EMA(SlowEMA)` and `close > EMA(SlowEMA)` (defaults 50/200); `0` ignores
-   trend.
-2. **Dual oversold confirmation** — at least one of:
-   - RSI(`RSIPeriod`) crosses **down** through `RSIOversold` **and** Stoch %D is already
+1. **Фильтр тренда (опционально, `UseTrend`):** `1` (по умолчанию) требует
+   `EMA(FastEMA) > EMA(SlowEMA)` и `close > EMA(SlowEMA)` (по умолчанию 50/200); `0`
+   игнорирует тренд.
+2. **Двойное подтверждение перепроданности** — хотя бы одно из:
+   - RSI(`RSIPeriod`) пересекает **вниз** уровень `RSIOversold` **и** %D Stochastic уже
      `< StochOversold`;
-   - Stoch %D crosses **down** through `StochOversold` **and** RSI is already
+   - %D Stochastic пересекает **вниз** уровень `StochOversold` **и** RSI уже
      `< RSIOversold`.
-   Both crossing into the zone on the same bar also fires. A warm-up bar without two valid
-   oscillator readings can never satisfy this gate (the sentinel `0` is not treated as
-   "in zone").
-3. **Volume filter (optional, `UseVolume`):** `0` (default) ignores volume; `1` blocks the
-   buy when the entry bar's volume is below `avg × VolMult`, where `avg` is the mean volume
-   of the preceding `VolAvgPeriod` bars with weekend (Sat/Sun MSK) bars excluded and the
-   entry bar itself excluded from its own average. The gate is skipped (entry **allowed**)
-   when the baseline cannot be trusted — no per-bar timestamps means weekends are not
-   excluded (the average still uses all preceding bars); no surviving sample or a
-   non-positive entry-bar volume means no block. This degradation keeps the filter inert in
-   live trading until per-bar timestamps are wired there.
+   Если оба входят в зону на одном баре — тоже срабатывает. Бар на прогреве без двух
+   валидных значений осцилляторов никогда не проходит этот фильтр (сентинел `0` не
+   считается «в зоне»).
+3. **Фильтр объёма (опционально, `UseVolume`):** `0` (по умолчанию) игнорирует объём; `1`
+   блокирует покупку, если объём бара входа ниже `avg × VolMult`, где `avg` — средний
+   объём за `VolAvgPeriod` предыдущих баров с исключением баров выходных (сб/вс по MSK) и с
+   исключением самого бара входа из его собственного среднего. Фильтр пропускается (вход
+   **разрешён**), когда базу нельзя посчитать достоверно: нет таймстемпов баров — выходные
+   не исключаются (среднее всё равно считается по всем предыдущим барам); нет ни одного
+   валидного бара или объём бара входа не положителен — блокировки нет. Эта деградация
+   держит фильтр инертным в live-торговле, пока туда не проведены таймстемпы баров.
 
-## Exit (first trigger wins)
+## Выход (срабатывает первый по приоритету)
 
-The middle exit is selected by the `UseATRStop` flag. An open long exits on one of three
-signals, filled at the bar close, in this precedence order:
+Средний выход выбирается флагом `UseATRStop`. Открытый лонг закрывается по одному из трёх
+сигналов, исполнение по цене закрытия бара, в таком порядке приоритета:
 
-1. **RSI50:** RSI crosses the 50 line from above (`prev ≥ 50`, `now < 50`) — the primary
-   momentum-fade exit.
-2. **Middle exit (flag-selected):**
-   - `UseATRStop = 0` → **RSIOS:** RSI crosses `RSIOversold` from above
-     (`prev ≥ RSIOversold`, `now < RSIOversold`) — the failed-bounce exit. It cannot fire
-     on the bar right after entry, where RSI is already below the zone.
-   - `UseATRStop = 1` → **ATRSL:** price falls to/below `PurchasePrice − StopATRMult ×
-     EntryATR`, where `EntryATR` is the daily ATR (length `ATRPeriod`) frozen at entry.
-     Guarded by `EntryATR > 0` and `StopATRMult > 0`, so it stays inert in live trading
-     (entry ATR is not persisted) and on a zero multiplier.
-3. **EMAX:** bearish EMA cross — `EMA(FastEMA)` drops below `EMA(SlowEMA)`. A slow
-   regime-break backstop; reuses the same EMAs as the trend filter.
+1. **RSI50:** RSI пересекает уровень 50 сверху вниз (`prev ≥ 50`, `now < 50`) — основной
+   выход на затухании импульса.
+2. **Средний выход (выбирается флагом):**
+   - `UseATRStop = 0` → **RSIOS:** RSI пересекает `RSIOversold` сверху вниз
+     (`prev ≥ RSIOversold`, `now < RSIOversold`) — выход на несостоявшемся отскоке. Не
+     может сработать на баре сразу после входа, где RSI уже ниже зоны.
+   - `UseATRStop = 1` → **ATRSL:** цена падает до/ниже `PurchasePrice − StopATRMult ×
+     EntryATR`, где `EntryATR` — дневной ATR (длина `ATRPeriod`), зафиксированный на входе.
+     Защищён условиями `EntryATR > 0` и `StopATRMult > 0`, поэтому остаётся инертным в
+     live-торговле (ATR входа там не сохраняется) и при нулевом множителе.
+3. **EMAX:** медвежий кросс EMA — `EMA(FastEMA)` уходит ниже `EMA(SlowEMA)`. Медленный
+   бэкстоп на слом режима; переиспользует те же EMA, что и фильтр тренда.
 
-If several fire on the same bar the earliest in this order is reported; the fill (close)
-is identical either way.
+Если на одном баре срабатывает несколько — сообщается самый ранний по этому порядку; цена
+исполнения (закрытие) в любом случае одинакова.
 
-## Run
+## Запуск
 
 ```bash
-# single run (daily timeframe)
+# одиночный прогон (дневной таймфрейм)
 go run ./cmd/backtest -ticker SBER -strategy reversion -interval Day1 \
   -months 12 -out ./reports/SBER
 
-# grid calibration with walk-forward OOS (Stochastic zones/periods are swept)
+# калибровка по сетке с walk-forward OOS (свипаются зоны/периоды Stochastic и др.)
 go run ./cmd/backtest -ticker SBER -strategy reversion -interval Day1 \
   -calibrate data/params/sber/reversion_grid.json -out ./reports/SBER \
   -months 24 -test-months 6 -min-trades 20 -metric profit_factor
 
-# diagnose one bar
+# диагностика одного бара
 go run ./cmd/backtest -ticker SBER -strategy reversion -interval Day1 \
   -explain '2026-03-14 12:00' -months 12
 ```
 
-## Params
+## Параметры
 
-All 14 tunables live in `core.Params`. Every field is `int` or `float64` (flags encoded as
-int `0/1`) so the reflection-based grid calibrator can sweep any of them. The RSI-50 exit
-level is a fixed constant (`50`), **not** a param. Per-ticker starting values live in each
-`reversion/strategy/<ticker>` package; calibrate with `-calibrate` and hardcode the winners.
+Все 14 настраиваемых параметров лежат в `core.Params`. Каждое поле — `int` или `float64`
+(флаги кодируются как int `0/1`), поэтому калибратор сетки на рефлексии может свипать любой
+из них. Уровень выхода RSI-50 — фиксированная константа (`50`), **не** параметр. Стартовые
+значения по каждому тикеру лежат в пакете `reversion/strategy/<ticker>`; калибруй через
+`-calibrate` и зашивай победителей.
 
-**Trend filter**
-- `UseTrend` — `1` (default) requires a confirmed uptrend before any buy
-  (`EMA(FastEMA) > EMA(SlowEMA)` and `close > EMA(SlowEMA)`); `0` ignores trend.
-- `FastEMA` — fast regime EMA length (e.g. 50). Doubles as the fast line of the `EMAX`
-  bearish-cross exit.
-- `SlowEMA` — slow regime EMA length and price floor (e.g. 200). Doubles as the slow line
-  of the `EMAX` exit. Also the dominant term in the candle lookback window.
+**Фильтр тренда**
+- `UseTrend` — `1` (по умолчанию) требует подтверждённого аптренда перед любой покупкой
+  (`EMA(FastEMA) > EMA(SlowEMA)` и `close > EMA(SlowEMA)`); `0` игнорирует тренд.
+- `FastEMA` — длина быстрой режимной EMA (например, 50). Одновременно быстрая линия
+  медвежьего кросса-выхода `EMAX`.
+- `SlowEMA` — длина медленной режимной EMA и ценовой «пол» (например, 200). Одновременно
+  медленная линия выхода `EMAX`. Также доминирующий член в окне предыстории по свечам.
 
-**RSI (entry trigger + exits)**
-- `RSIPeriod` — RSI length; required (`> 0`).
-- `RSIOversold` — RSI oversold zone used on the entry side (dual confirmation) and, when
-  `UseATRStop=0`, as the `RSIOS` exit boundary.
+**RSI (триггер входа + выходы)**
+- `RSIPeriod` — длина RSI; обязателен (`> 0`).
+- `RSIOversold` — зона перепроданности RSI на стороне входа (двойное подтверждение) и, при
+  `UseATRStop=0`, граница выхода `RSIOS`.
 
-**Stochastic (entry trigger)**
-- `StochKPeriod` — Stochastic %K lookback; required (`> 0`).
-- `StochDSmooth` — %D smoothing (SMA of %K); required (`> 0`). `1` = raw %K. The working
-  line everywhere is %D.
-- `StochOversold` — Stochastic oversold zone on the entry side.
+**Stochastic (триггер входа)**
+- `StochKPeriod` — окно %K Stochastic; обязателен (`> 0`).
+- `StochDSmooth` — сглаживание %D (SMA от %K); обязателен (`> 0`). `1` = «сырой» %K. Рабочая
+  линия везде — %D.
+- `StochOversold` — зона перепроданности Stochastic на стороне входа.
 
-**Middle exit selector (ATR stop)**
-- `UseATRStop` — `0` (default): use `RSIOS` as the middle exit; `1`: use the ATR-based hard
-  stop (`ATRSL`) instead.
-- `ATRPeriod` — daily ATR lookback length; consulted only when `UseATRStop=1`.
-- `StopATRMult` — stop distance multiplier: stop placed at `PurchasePrice − StopATRMult ×
-  EntryATR`; default `1.0`; `0` disables the stop even when `UseATRStop=1`.
+**Селектор среднего выхода (ATR-стоп)**
+- `UseATRStop` — `0` (по умолчанию): использовать `RSIOS` как средний выход; `1`:
+  использовать вместо него жёсткий ATR-стоп (`ATRSL`).
+- `ATRPeriod` — длина окна дневного ATR; учитывается только при `UseATRStop=1`.
+- `StopATRMult` — множитель дистанции стопа: стоп ставится на `PurchasePrice − StopATRMult ×
+  EntryATR`; по умолчанию `1.0`; `0` отключает стоп даже при `UseATRStop=1`.
 
-**Volume filter (entry)**
-- `UseVolume` — `0` (default): no volume filter; `1`: block entries on below-average-volume
-  bars.
-- `VolAvgPeriod` — number of preceding bars averaged for the volume baseline (default `20`);
-  weekend (Sat/Sun MSK) bars are excluded from that average, and the entry bar is excluded
-  from its own average. Consulted only when `UseVolume=1`.
-- `VolMult` — entry-volume threshold multiplier: a buy needs `entryVolume ≥ avg × VolMult`;
-  default `1.0` (strictly at/above average). Raising it demands stronger participation.
+**Фильтр объёма (вход)**
+- `UseVolume` — `0` (по умолчанию): без фильтра объёма; `1`: блокировать входы на барах с
+  объёмом ниже среднего.
+- `VolAvgPeriod` — число предыдущих баров для усреднения базы объёма (по умолчанию `20`);
+  бары выходных (сб/вс по MSK) исключаются из этого среднего, а сам бар входа исключается из
+  своего собственного среднего. Учитывается только при `UseVolume=1`.
+- `VolMult` — множитель порога объёма входа: для покупки нужно `entryVolume ≥ avg × VolMult`;
+  по умолчанию `1.0` (строго на уровне среднего или выше). Повышение требует более сильного
+  участия.
 
-## Not yet supported
+## Пока не поддерживается
 
-`-basket` walk-forward (the basket runner is currently momentum-only).
+`-basket` walk-forward (раннер корзины сейчас только для momentum).
