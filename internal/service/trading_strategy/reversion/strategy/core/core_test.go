@@ -21,7 +21,7 @@ func defaultParams() Params {
 // Stoch %D is already in the oversold zone. EMA prev == now so no spurious cross.
 func passingInput() decideInput {
 	return decideInput{
-		price: 100,
+		price:   100,
 		emaFast: 95, emaFastPrev: 95, emaSlow: 90, emaSlowPrev: 90,
 		rsiPrev: 25, rsiNow: 15, rsiOK: true, // crossDown through 20 (RSI enters oversold)
 		stochPrev: 10, stochNow: 8, stochOK: true, // already < 20 (Stoch already in zone)
@@ -168,7 +168,7 @@ func TestExitEMACross(t *testing.T) {
 func TestExitPrecedenceRSIWhenBoth(t *testing.T) {
 	s := NewWithParams("TEST", defaultParams())
 	in := openInput()
-	in.rsiPrev, in.rsiNow = 55, 45     // RSI50 fires
+	in.rsiPrev, in.rsiNow = 55, 45 // RSI50 fires
 	in.emaFastPrev, in.emaSlowPrev = 95, 90
 	in.emaFast, in.emaSlow = 88, 90 // EMAX also fires
 	if sig := s.decide(in); sig.Reason != "RSI50" {
@@ -270,5 +270,66 @@ func TestExplainPositionOpen(t *testing.T) {
 	}
 	if out := s.Explain(md); !strings.Contains(out, "позиция уже открыта") {
 		t.Fatalf("Explain with open position: %q", out)
+	}
+}
+
+func TestEntryStampsEntryATR(t *testing.T) {
+	p := defaultParams()
+	p.UseATRStop = 1
+	p.ATRPeriod = 14
+	p.StopATRMult = 1.0
+	s := NewWithParams("TEST", p)
+
+	in := passingInput()
+	in.atr = 2.5
+	sig := s.decide(in)
+	if sig.Kind != model.SignalBuy {
+		t.Fatalf("want Buy, got kind=%v", sig.Kind)
+	}
+	if sig.ATR != 2.5 {
+		t.Fatalf("entry must stamp sig.ATR for freeze; want 2.5 got %v", sig.ATR)
+	}
+}
+
+func TestLookbackIncludesATRWhenStopOn(t *testing.T) {
+	p := defaultParams()
+	p.FastEMA, p.SlowEMA = 50, 200
+	p.RSIPeriod, p.StochKPeriod, p.StochDSmooth = 14, 14, 3
+	p.ATRPeriod = 300 // dominates SlowEMA when the stop is on
+
+	p.UseATRStop = 1
+	if got := NewWithParams("T", p).Lookback(); got != 306 {
+		t.Fatalf("ATRPeriod=300 dominates: want 306, got %d", got)
+	}
+
+	p.UseATRStop = 0
+	if got := NewWithParams("T", p).Lookback(); got != 205 {
+		t.Fatalf("UseATRStop=0: ATRPeriod ignored, want SlowEMA+5=205, got %d", got)
+	}
+}
+
+func TestBuildInputATRGate(t *testing.T) {
+	n := 60
+	highs := make([]float64, n)
+	lows := make([]float64, n)
+	closes := make([]float64, n)
+	for i := 0; i < n; i++ {
+		closes[i] = 100 + float64(i)
+		highs[i] = closes[i] + 1
+		lows[i] = closes[i] - 1
+	}
+	md := strategy.MarketData{Price: closes[n-1], Highs: highs, Lows: lows, Closes: closes, Volumes: make([]int64, n)}
+
+	p := defaultParams()
+	p.ATRPeriod = 14
+
+	p.UseATRStop = 1
+	if in := NewWithParams("T", p).buildInput(md); in.atr <= 0 {
+		t.Fatalf("UseATRStop=1: want atr>0, got %v", in.atr)
+	}
+
+	p.UseATRStop = 0
+	if in := NewWithParams("T", p).buildInput(md); in.atr != 0 {
+		t.Fatalf("UseATRStop=0: ATR must not be computed, want 0, got %v", in.atr)
 	}
 }

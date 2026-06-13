@@ -33,6 +33,9 @@ type Params struct {
 	StochKPeriod  int     // Stochastic %K lookback; required (>0)
 	StochDSmooth  int     // Stochastic %D smoothing; required (>0); 1 = raw %K
 	StochOversold float64 // Stochastic oversold zone (entry side)
+	UseATRStop    int     // 0 = RSIOS exit (RSI breaks oversold zone down); 1 = ATRSL exit (price below entry by the daily ATR)
+	ATRPeriod     int     // daily ATR length; consulted only when UseATRStop=1
+	StopATRMult   float64 // ATRSL distance: stop = PurchasePrice - StopATRMult*EntryATR (default 1.0)
 }
 
 // Strategy trades a single instrument with the dual-confirmation rules. Ticker-agnostic
@@ -52,11 +55,15 @@ func (s *Strategy) Ticker() string { return s.ticker }
 // Lookback sizes the candle window to feed the hungriest consumer.
 func (s *Strategy) Lookback() int {
 	m := s.p.SlowEMA
-	for _, c := range []int{
+	cands := []int{
 		s.p.FastEMA,
 		s.p.RSIPeriod + 1,
 		s.p.StochKPeriod + s.p.StochDSmooth + 1,
-	} {
+	}
+	if s.p.UseATRStop == 1 && s.p.ATRPeriod > 0 {
+		cands = append(cands, s.p.ATRPeriod+1)
+	}
+	for _, c := range cands {
 		if c > m {
 			m = c
 		}
@@ -84,6 +91,7 @@ type decideInput struct {
 	stochNow    float64
 	stochPrev   float64
 	stochOK     bool
+	atr         float64 // daily ATR over the window (0 unless UseATRStop=1 and ATRPeriod>0); stamped onto sig.ATR at entry to freeze EntryATR
 	pos         *strategy.Position
 }
 
@@ -117,6 +125,11 @@ func (s *Strategy) buildInput(md strategy.MarketData) decideInput {
 		}
 	}
 
+	var atr float64
+	if s.p.UseATRStop == 1 && s.p.ATRPeriod > 0 {
+		atr = indicators.ATR(md.Highs, md.Lows, md.Closes, s.p.ATRPeriod)
+	}
+
 	return decideInput{
 		price:       md.Price,
 		emaFast:     emaFast,
@@ -130,6 +143,7 @@ func (s *Strategy) buildInput(md strategy.MarketData) decideInput {
 		stochNow:    stochNow,
 		stochPrev:   stochPrev,
 		stochOK:     stochOK,
+		atr:         atr,
 		pos:         md.Position,
 	}
 }
@@ -198,6 +212,7 @@ func (s *Strategy) decide(in decideInput) model.Signal {
 	sig.Kind = model.SignalBuy
 	sig.RSI = in.rsiNow
 	sig.EntryReason = s.entryReason(in)
+	sig.ATR = in.atr
 	return sig
 }
 
