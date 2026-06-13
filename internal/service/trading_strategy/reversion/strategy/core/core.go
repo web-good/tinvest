@@ -286,6 +286,10 @@ func (s *Strategy) decide(in decideInput) model.Signal {
 	if !s.entryFired(in) {
 		return sig
 	}
+	// 3. Optional volume filter: block a buy on a below-average-volume bar.
+	if s.p.UseVolume == 1 && in.volOK && in.entryVol < in.avgVol*s.p.VolMult {
+		return sig
+	}
 
 	sig.Kind = model.SignalBuy
 	sig.RSI = in.rsiNow
@@ -353,8 +357,10 @@ func (s *Strategy) manage(in decideInput, sig model.Signal) model.Signal {
 // Explain re-runs the entry gates over md and reports each gate's value and verdict
 // (✓ pass / ✗ block) in entry order, stopping at the first blocker. Diagnostic only.
 func (s *Strategy) Explain(md strategy.MarketData) string {
-	in := s.buildInput(md)
+	return s.explainFrom(s.buildInput(md))
+}
 
+func (s *Strategy) explainFrom(in decideInput) string {
 	if in.pos != nil {
 		return "позиция уже открыта — вход не рассматривается"
 	}
@@ -383,6 +389,20 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 	}
 	pass("Двойное подтверждение: RSI(%d) %.2f→%.2f + Stoch%%D %.2f→%.2f в зоне перепроданности",
 		s.p.RSIPeriod, in.rsiPrev, in.rsiNow, in.stochPrev, in.stochNow)
+
+	// 3. Optional volume filter.
+	if s.p.UseVolume == 1 {
+		switch {
+		case in.volOK && in.entryVol < in.avgVol*s.p.VolMult:
+			return block("Объём: бар входа %.0f < порога %.0f (среднее %.0f × %.2g, бары выходных исключены)",
+				in.entryVol, in.avgVol*s.p.VolMult, in.avgVol, s.p.VolMult)
+		case in.volOK:
+			pass("Объём: бар входа %.0f ≥ порога %.0f (среднее %.0f × %.2g)",
+				in.entryVol, in.avgVol*s.p.VolMult, in.avgVol, s.p.VolMult)
+		default:
+			pass("Объём: фильтр включён, но базу не посчитать (нет данных) — пропуск")
+		}
+	}
 
 	fmt.Fprintf(&b, "→ ВХОД: все фильтры пройдены, должна быть покупка")
 	return b.String()

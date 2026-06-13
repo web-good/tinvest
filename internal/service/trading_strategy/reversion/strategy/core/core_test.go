@@ -527,3 +527,91 @@ func TestLookbackIncludesVolumeWindow(t *testing.T) {
 		t.Fatalf("UseVolume=0: VolAvgPeriod ignored, want SlowEMA+5=205, got %d", got)
 	}
 }
+
+func TestVolumeGateBlocksBelowAverage(t *testing.T) {
+	p := defaultParams()
+	p.UseVolume = 1
+	p.VolMult = 1.0
+	s := NewWithParams("T", p)
+
+	in := passingInput()
+	in.volOK = true
+	in.avgVol = 1000
+	in.entryVol = 800 // below average -> blocked
+	if sig := s.decide(in); sig.Kind == model.SignalBuy {
+		t.Fatalf("entry volume below average: want no Buy")
+	}
+}
+
+func TestVolumeGateAllowsAtOrAboveAverage(t *testing.T) {
+	p := defaultParams()
+	p.UseVolume = 1
+	p.VolMult = 1.0
+	s := NewWithParams("T", p)
+
+	in := passingInput()
+	in.volOK = true
+	in.avgVol = 1000
+	in.entryVol = 1000 // exactly at average -> allowed
+	if sig := s.decide(in); sig.Kind != model.SignalBuy {
+		t.Fatalf("entry volume at average: want Buy, got %v", sig.Kind)
+	}
+}
+
+func TestVolumeGateMultiplierRaisesBar(t *testing.T) {
+	p := defaultParams()
+	p.UseVolume = 1
+	p.VolMult = 1.5
+	s := NewWithParams("T", p)
+
+	in := passingInput()
+	in.volOK = true
+	in.avgVol = 1000
+	in.entryVol = 1200 // passes at 1.0, fails at 1.5 (threshold 1500)
+	if sig := s.decide(in); sig.Kind == model.SignalBuy {
+		t.Fatalf("VolMult=1.5: 1200 < 1500 threshold, want no Buy")
+	}
+}
+
+func TestVolumeGateOffIgnoresVolume(t *testing.T) {
+	p := defaultParams() // UseVolume defaults to 0
+	s := NewWithParams("T", p)
+
+	in := passingInput()
+	in.volOK = true
+	in.avgVol = 1000
+	in.entryVol = 1 // would be blocked if the gate were on
+	if sig := s.decide(in); sig.Kind != model.SignalBuy {
+		t.Fatalf("UseVolume=0: volume must be ignored, want Buy, got %v", sig.Kind)
+	}
+}
+
+func TestVolumeGateSkippedWhenNotOK(t *testing.T) {
+	p := defaultParams()
+	p.UseVolume = 1
+	s := NewWithParams("T", p)
+
+	in := passingInput()
+	in.volOK = false // baseline unavailable -> gate must not block
+	in.avgVol = 0
+	in.entryVol = 0
+	if sig := s.decide(in); sig.Kind != model.SignalBuy {
+		t.Fatalf("volOK=false: gate must be skipped, want Buy, got %v", sig.Kind)
+	}
+}
+
+func TestExplainBlocksOnVolume(t *testing.T) {
+	p := defaultParams()
+	p.UseVolume = 1
+	p.VolMult = 1.0
+	s := NewWithParams("T", p)
+
+	in := passingInput()
+	in.volOK = true
+	in.avgVol = 1000
+	in.entryVol = 800
+	out := s.explainFrom(in)
+	if !strings.Contains(out, "Объём") || !strings.Contains(out, "ВХОДА НЕТ") {
+		t.Fatalf("Explain should block on volume, got: %q", out)
+	}
+}
