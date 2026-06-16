@@ -44,3 +44,54 @@ func sliceByRange(candles []backtest.Candle, from, to time.Time) []backtest.Cand
 	head, _ := SplitByTime(tail, to)      // head: Time < to
 	return head
 }
+
+// tradesEnteredFrom keeps only trades whose entry is at or after t. Used to drop
+// warm-up trades whose entry fell inside the train lead-in of an OOS run.
+func tradesEnteredFrom(trades []backtest.Trade, t time.Time) []backtest.Trade {
+	out := make([]backtest.Trade, 0, len(trades))
+	for _, tr := range trades {
+		if !tr.EntryTime.Before(t) {
+			out = append(out, tr)
+		}
+	}
+	return out
+}
+
+// sumPnL totals net PnL across trades.
+func sumPnL(trades []backtest.Trade) float64 {
+	var s float64
+	for _, t := range trades {
+		s += t.PnL
+	}
+	return s
+}
+
+// tradeReplayDrawdownPct replays trade PnL as an equity curve starting at initialCash
+// and returns the maximum drawdown as a fraction (0–1) of the running peak. Trade-based
+// folds have no engine equity curve of their own, so the curve is reconstructed here.
+func tradeReplayDrawdownPct(trades []backtest.Trade, initialCash float64) float64 {
+	if initialCash <= 0 {
+		return 0
+	}
+	equity, peak, maxDD := initialCash, initialCash, 0.0
+	for _, t := range trades {
+		equity += t.PnL
+		if equity > peak {
+			peak = equity
+		}
+		if dd := (peak - equity) / peak; dd > maxDD {
+			maxDD = dd
+		}
+	}
+	return maxDD
+}
+
+// compoundReturns chains per-fold fractional returns into one cumulative return:
+// prod(1+r_i) - 1. Models reinvesting each fold's OOS result into the next.
+func compoundReturns(pcts []float64) float64 {
+	factor := 1.0
+	for _, p := range pcts {
+		factor *= 1 + p
+	}
+	return factor - 1
+}

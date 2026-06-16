@@ -84,3 +84,49 @@ func TestSliceByRange(t *testing.T) {
 		t.Fatalf("sliceByRange = %+v", got)
 	}
 }
+
+func TestTradesEnteredFrom(t *testing.T) {
+	tr := func(h int) backtest.Trade {
+		return backtest.Trade{EntryTime: date(2025, time.January, 1).Add(time.Duration(h) * time.Hour)}
+	}
+	trades := []backtest.Trade{tr(0), tr(1), tr(2), tr(3)}
+	boundary := date(2025, time.January, 1).Add(2 * time.Hour)
+	got := tradesEnteredFrom(trades, boundary)
+	// Keep entries at/after boundary: h=2 and h=3.
+	if len(got) != 2 || !got[0].EntryTime.Equal(tr(2).EntryTime) {
+		t.Fatalf("tradesEnteredFrom = %+v", got)
+	}
+}
+
+func TestSumPnL(t *testing.T) {
+	trades := []backtest.Trade{{PnL: 100}, {PnL: -40}, {PnL: 10}}
+	if got := sumPnL(trades); got != 70 {
+		t.Fatalf("sumPnL = %v, want 70", got)
+	}
+}
+
+func TestTradeReplayDrawdownPct(t *testing.T) {
+	// Equity from 1000: +200 -> 1200 (peak), -360 -> 840. DD = (1200-840)/1200 = 0.30.
+	trades := []backtest.Trade{{PnL: 200}, {PnL: -360}, {PnL: 60}}
+	got := tradeReplayDrawdownPct(trades, 1000)
+	if got < 0.2999 || got > 0.3001 {
+		t.Fatalf("tradeReplayDrawdownPct = %v, want ~0.30", got)
+	}
+	if tradeReplayDrawdownPct(nil, 1000) != 0 {
+		t.Fatalf("empty trades should give 0 drawdown")
+	}
+	if tradeReplayDrawdownPct(trades, 0) != 0 {
+		t.Fatalf("zero cash should give 0 drawdown (guard)")
+	}
+}
+
+func TestCompoundReturns(t *testing.T) {
+	// (1+0.10)(1-0.05)(1+0.20) - 1 = 0.254.
+	got := compoundReturns([]float64{0.10, -0.05, 0.20})
+	if got < 0.2539 || got > 0.2541 {
+		t.Fatalf("compoundReturns = %v, want ~0.254", got)
+	}
+	if compoundReturns(nil) != 0 {
+		t.Fatalf("empty should give 0")
+	}
+}
