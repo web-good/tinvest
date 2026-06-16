@@ -297,12 +297,26 @@ func uptrend(in decideInput) bool {
 	return in.emaFast > in.emaSlow && in.emaSlow > 0 && in.price > in.emaSlow
 }
 
+// htfUptrend reports the higher-timeframe (4H) trend gate: the last completed 4H close
+// is above its 4H EMA. htfOK must be true (the EMA is warmed); when false the trend is
+// NOT confirmed and the protective gate blocks the entry.
+func htfUptrend(in decideInput) bool {
+	return in.htfOK && in.htfClose > in.htfEMA
+}
+
 // decide is the pure decision core over already-computed indicator values.
 func (s *Strategy) decide(in decideInput) model.Signal {
 	sig := model.Signal{Price: in.price}
 
 	if in.pos != nil {
 		return s.manage(in, sig)
+	}
+
+	// 0. Optional higher-timeframe (4H) trend filter. When enabled, block the buy unless
+	// the 4H trend is confirmed up. Missing/un-warmed 4H data (htfOK=false) also blocks:
+	// a protective filter must not trade when it cannot confirm the higher trend.
+	if s.p.HTFTrendEMA > 0 && !htfUptrend(in) {
+		return sig
 	}
 
 	// 1. Optional trend filter.
@@ -332,9 +346,13 @@ func (s *Strategy) entryReason(in decideInput) string {
 		trend = fmt.Sprintf("EMA%d %.4f > EMA%d %.4f, close %.4f > EMA%d",
 			s.p.FastEMA, in.emaFast, s.p.SlowEMA, in.emaSlow, in.price, s.p.SlowEMA)
 	}
+	htf := "выкл"
+	if s.p.HTFTrendEMA > 0 {
+		htf = fmt.Sprintf("EMA%d(4H): close %.4f > EMA %.4f", s.p.HTFTrendEMA, in.htfClose, in.htfEMA)
+	}
 	return fmt.Sprintf(
-		"Тренд: %s; двойное подтверждение перепроданности: RSI(%d) %.2f→%.2f (зона <%.0f) + Stoch%%D(%d,%d) %.2f→%.2f (зона <%.0f)",
-		trend,
+		"HTF: %s; Тренд: %s; двойное подтверждение перепроданности: RSI(%d) %.2f→%.2f (зона <%.0f) + Stoch%%D(%d,%d) %.2f→%.2f (зона <%.0f)",
+		htf, trend,
 		s.p.RSIPeriod, in.rsiPrev, in.rsiNow, s.p.RSIOversold,
 		s.p.StochKPeriod, s.p.StochDSmooth, in.stochPrev, in.stochNow, s.p.StochOversold,
 	)
@@ -405,6 +423,15 @@ func (s *Strategy) explainFrom(in decideInput) string {
 		fmt.Fprintf(&b, "✗ "+format+"\n", args...)
 		fmt.Fprintf(&b, "→ ВХОДА НЕТ: заблокировал этот фильтр")
 		return b.String()
+	}
+
+	// 0. Optional higher-timeframe (4H) trend filter.
+	if s.p.HTFTrendEMA > 0 {
+		if !htfUptrend(in) {
+			return block("HTF(4H): нужно close > EMA%d при прогретой 4H-EMA (htfOK=%v, close=%.4f, EMA=%.4f)",
+				s.p.HTFTrendEMA, in.htfOK, in.htfClose, in.htfEMA)
+		}
+		pass("HTF↑(4H): close %.4f > EMA%d %.4f", in.htfClose, s.p.HTFTrendEMA, in.htfEMA)
 	}
 
 	// 1. Optional trend filter.

@@ -699,6 +699,89 @@ func TestOverboughtExitSkippedAtWarmup(t *testing.T) {
 	}
 }
 
+// htfPassingInput clears every gate AND has a confirmed up HTF trend.
+func htfPassingInput() decideInput {
+	in := passingInput()
+	in.htfOK = true
+	in.htfClose = 110
+	in.htfEMA = 100 // close > EMA -> uptrend
+	return in
+}
+
+func TestHTFGateOffWhenZero(t *testing.T) {
+	// HTFTrendEMA=0: gate не читает HTF, вход определяется остальными фильтрами.
+	s := NewWithParams("TEST", defaultParams()) // HTFTrendEMA=0
+	in := passingInput()                        // htfOK=false, но gate выключен
+	if sig := s.decide(in); sig.Kind != model.SignalBuy {
+		t.Fatalf("HTFTrendEMA=0: want Buy, got %v", sig.Kind)
+	}
+}
+
+func TestHTFGatePassesUptrend(t *testing.T) {
+	p := defaultParams()
+	p.HTFTrendEMA = 20
+	s := NewWithParams("TEST", p)
+	if sig := s.decide(htfPassingInput()); sig.Kind != model.SignalBuy {
+		t.Fatalf("HTF up + все фильтры пройдены: want Buy, got %v", sig.Kind)
+	}
+}
+
+func TestHTFGateBlocksDowntrend(t *testing.T) {
+	p := defaultParams()
+	p.HTFTrendEMA = 20
+	s := NewWithParams("TEST", p)
+	in := htfPassingInput()
+	in.htfClose, in.htfEMA = 90, 100 // close < EMA -> downtrend
+	if sig := s.decide(in); sig.Kind == model.SignalBuy {
+		t.Fatalf("HTF down: want no Buy несмотря на пройденные hour1-фильтры")
+	}
+}
+
+func TestHTFGateBlocksMissingData(t *testing.T) {
+	p := defaultParams()
+	p.HTFTrendEMA = 20
+	s := NewWithParams("TEST", p)
+	in := htfPassingInput()
+	in.htfOK = false // не хватило 4H-данных
+	if sig := s.decide(in); sig.Kind == model.SignalBuy {
+		t.Fatalf("htfOK=false при HTFTrendEMA>0: want no Buy (защитный фильтр блокирует)")
+	}
+}
+
+func TestHTFGateDoesNotAffectExits(t *testing.T) {
+	// Открытая позиция: путь manage не должен зависеть от HTF gate.
+	p := defaultParams()
+	p.HTFTrendEMA = 20
+	s := NewWithParams("TEST", p)
+	in := openInput()
+	in.htfOK, in.htfClose, in.htfEMA = false, 0, 0 // HTF "не подтверждён"
+	if sig := s.decide(in); sig.Kind == model.SignalBuy {
+		t.Fatalf("в позиции gate входа не применяется")
+	}
+	// Никакого ложного выхода от gate: openInput нейтрален -> SignalNone.
+	if sig := s.decide(in); sig.Kind == model.SignalSell {
+		t.Fatalf("HTF gate не должен порождать выход; got %v/%v", sig.Kind, sig.Reason)
+	}
+	// Позитивное доказательство: нормальный выход (RSI50) срабатывает даже при htfOK=false —
+	// путь manage полностью независим от HTF gate.
+	in.rsiPrev, in.rsiNow = 55, 45 // RSI пересекает 50 сверху вниз -> выход RSI50
+	if sig := s.decide(in); sig.Kind != model.SignalSell || sig.Reason != "RSI50" {
+		t.Fatalf("выход manage должен сработать независимо от HTF gate; got %v/%v", sig.Kind, sig.Reason)
+	}
+}
+
+func TestExplainHTFBlock(t *testing.T) {
+	p := defaultParams()
+	p.HTFTrendEMA = 20
+	s := NewWithParams("TEST", p)
+	in := htfPassingInput()
+	in.htfClose, in.htfEMA = 90, 100 // HTF вниз
+	out := s.explainFrom(in)
+	if !strings.Contains(out, "HTF") || !strings.Contains(out, "ВХОДА НЕТ") {
+		t.Fatalf("Explain должен показать блок по HTF: %q", out)
+	}
+}
+
 func TestBuildInputHTFGate(t *testing.T) {
 	htf := []float64{10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20} // 11 точек, растущие
 
