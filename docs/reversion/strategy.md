@@ -135,7 +135,8 @@ go run ./cmd/backtest -ticker SBER -strategy reversion -interval Hour1 \
 **Селектор среднего выхода (ATR-стоп)**
 - `UseATRStop` — `0` (по умолчанию): использовать `RSIOS` как средний выход; `1`:
   использовать вместо него жёсткий ATR-стоп (`ATRSL`).
-- `ATRPeriod` — длина окна ATR рабочего ТФ; учитывается только при `UseATRStop=1`.
+- `ATRPeriod` — длина окна ATR рабочего ТФ; учитывается при `UseATRStop=1` или `UseBreakeven=1`
+  (ATR нужен и для безубытка как единица порога взвода).
 - `StopATRMult` — множитель дистанции стопа: стоп ставится на `PurchasePrice − StopATRMult ×
   EntryATR`; по умолчанию `1.0`; `0` отключает стоп даже при `UseATRStop=1`.
 
