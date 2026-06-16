@@ -8,6 +8,13 @@
         "StopATRMult": [0.8, 0.9, 1.0],
         "HTFTrendEMA": [0, 20, 50, 100]
       }
+    },
+    {
+      "name": "breakeven",
+      "grid": {
+        "UseBreakeven": [0, 1],
+        "BreakevenArmATR": [0.5, 1.0, 1.5]
+      }
     }
   ]
 }
