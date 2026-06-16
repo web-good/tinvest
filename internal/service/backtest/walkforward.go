@@ -270,7 +270,9 @@ func RenderWalkForwardMarkdown(ticker, metric string, s WalkForwardSummary, trai
 		train := fmt.Sprintf("%s—%s", df(f.TrainFrom), df(f.TrainTo))
 		test := fmt.Sprintf("%s—%s", df(f.TestFrom), df(f.TestTo))
 		if f.WinnerRows == nil {
-			fmt.Fprintf(&b, "| %d | %s | %s | — | — | — | — | — | %s |\n", f.Index, train, test, f.Note)
+			// Skipped fold (no calibration winner): keep the row at 8 columns, surfacing
+			// the reason in the last cell instead of numeric OOS stats.
+			fmt.Fprintf(&b, "| %d | %s | %s | — | — | — | — | %s |\n", f.Index, train, test, f.Note)
 			continue
 		}
 		fmt.Fprintf(&b, "| %d | %s | %s | %.3f | %.3f | %d | %.2f%% | %.2f%% |\n",
