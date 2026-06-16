@@ -42,6 +42,7 @@ func main() {
 		metric       = flag.String("metric", "expectancy", "ranking metric: profit_factor|net_pnl|win_rate|max_drawdown|expectancy|sortino")
 		minTrades    = flag.Int("min-trades", 15, "calibration: combos with fewer trades sink below qualified ones")
 		testMonths   = flag.Int("test-months", 0, "walk-forward: calibrate on the earlier window, report best on the last N months")
+		trainMonths  = flag.Int("train-months", 0, "rolling walk-forward (with -calibrate): fixed train window in months; step = -test-months")
 		outDir       = flag.String("out", "reports", "report output directory")
 		refresh      = flag.Bool("refresh", false, "force candle refetch (ignore cache)")
 		explain      = flag.String("explain", "", "diagnose one bar: MSK time 'YYYY-MM-DD HH:MM'; prints why the strategy did/didn't enter")
@@ -57,7 +58,7 @@ func main() {
 	}
 
 	if err := run(*ticker, *strategyName, interval, *months, *cash, *fraction, *commission,
-		*paramsPath, *calibrate, *metric, *minTrades, *testMonths, *outDir, *refresh, *explain,
+		*paramsPath, *calibrate, *metric, *minTrades, *testMonths, *trainMonths, *outDir, *refresh, *explain,
 		*basket, *gridDir); err != nil {
 		log.Fatalf("backtest: %v", err)
 	}
@@ -84,7 +85,7 @@ func parseInterval(s string) (enum.Interval, error) {
 }
 
 func run(ticker, strategyName string, interval enum.Interval, months int, cash, fraction, commission float64,
-	paramsPath, calibratePath, metric string, minTrades, testMonths int, outDir string, refresh bool, explain string,
+	paramsPath, calibratePath, metric string, minTrades, testMonths, trainMonths int, outDir string, refresh bool, explain string,
 	basketCSV, gridDir string,
 ) error {
 	if paramsPath != "" && calibratePath != "" {
@@ -92,6 +93,9 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 	}
 	if basketCSV != "" && calibratePath != "" {
 		return fmt.Errorf("-basket and -calibrate are mutually exclusive (-basket uses per-ticker grids from -grid-dir)")
+	}
+	if trainMonths > 0 && calibratePath == "" {
+		return fmt.Errorf("-train-months requires -calibrate (walk-forward re-calibrates each fold from a grid)")
 	}
 
 	token, err := loadToken()
@@ -182,8 +186,8 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 	base := filepath.Join(outDir, fmt.Sprintf("%s_%s_%s_%s", ticker, strategyName, interval.String(), stamp))
 
 	if calibratePath != "" {
-		return runCalibration(binding, calibratePath, candles, dailyCandles, htfCandles, cfg, metric, minTrades, testMonths, periodDays, base,
-			metaCommon(ticker, interval, from, to, cfg), to)
+		return runCalibration(binding, calibratePath, candles, dailyCandles, htfCandles, cfg, metric, minTrades, testMonths, trainMonths, periodDays, base,
+			metaCommon(ticker, interval, from, to, cfg), from, to)
 	}
 
 	return runSingle(binding, paramsPath, candles, dailyCandles, htfCandles, cfg, periodDays, base,
@@ -229,8 +233,30 @@ func runSingle(b svc.Binding, paramsPath string, candles []domain.Candle, dailyC
 }
 
 func runCalibration(b svc.Binding, gridPath string, candles []domain.Candle, dailyCandles, htfCandles []domain.Candle,
-	cfg domain.Config, metric string, minTrades, testMonths int, periodDays float64, base string, meta domain.Meta, to time.Time,
+	cfg domain.Config, metric string, minTrades, testMonths, trainMonths int, periodDays float64, base string, meta domain.Meta, from, to time.Time,
 ) error {
+	if trainMonths > 0 {
+		raw, err := os.ReadFile(gridPath)
+		if err != nil {
+			return fmt.Errorf("read grid: %w", err)
+		}
+		phases, err := svc.ParsePhases(raw)
+		if err != nil {
+			return err
+		}
+		summary, err := svc.RunWalkForward(b, phases, candles, dailyCandles, htfCandles, cfg, metric, minTrades, from, to, trainMonths, testMonths)
+		if err != nil {
+			return err
+		}
+		wfPath := base + "_walkforward.md"
+		if err := writeFile(wfPath, svc.RenderWalkForwardMarkdown(meta.Ticker, metric, summary, trainMonths, testMonths)); err != nil {
+			return err
+		}
+		fmt.Printf("walk-forward: %s (folds=%d, pooled PF=%.3f, compounded=%.2f%%)\n",
+			wfPath, len(summary.Folds), summary.PooledOOS.ProfitFactor, summary.CompoundedReturnPct*100)
+		return nil
+	}
+
 	raw, err := os.ReadFile(gridPath)
 	if err != nil {
 		return fmt.Errorf("read grid: %w", err)
