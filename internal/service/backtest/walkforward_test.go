@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"tinvest/internal/domain/backtest"
+	"tinvest/internal/service/trading_strategy/scalping/model"
+	"tinvest/internal/service/trading_strategy/scalping/strategy"
 )
 
 func date(y int, m time.Month, d int) time.Time {
@@ -147,5 +149,88 @@ func TestParamStability(t *testing.T) {
 	got := varied["StopATRMult"]
 	if len(got) != 2 || got[0] != "0.8" || got[1] != "1.2" {
 		t.Errorf("StopATRMult varied = %v, want [0.8 1.2]", got)
+	}
+}
+
+// alternatingStrategy buys whenever flat and sells the next bar — it produces a trade
+// roughly every two bars across the whole series, at deterministic entry times. Lookback
+// 1 keeps warm-up trivial. It ignores params, so any swept grid value yields the same run.
+type alternatingStrategy struct{}
+
+func (alternatingStrategy) Ticker() string { return "TEST" }
+func (alternatingStrategy) Lookback() int  { return 1 }
+func (alternatingStrategy) Decide(md strategy.MarketData) model.Signal {
+	if md.Position == nil {
+		return model.Signal{Kind: model.SignalBuy}
+	}
+	return model.Signal{Kind: model.SignalSell, Reason: "TP"}
+}
+
+type fakeParams struct{ Threshold int }
+
+func fakeBinding() Binding {
+	return Binding{
+		DefaultParams: func() any { return fakeParams{Threshold: 1} },
+		Build:         func(any) strategy.Strategy { return alternatingStrategy{} },
+		ParseParams:   func([]byte) (any, error) { return fakeParams{}, nil },
+	}
+}
+
+// genHourly builds 1h candles over [from, to) with a slight up-drift so some trades
+// profit (keeps PooledMetrics non-degenerate).
+func genHourly(from, to time.Time) []backtest.Candle {
+	var out []backtest.Candle
+	price := 100.0
+	for ts, i := from, 0; ts.Before(to); ts, i = ts.Add(time.Hour), i+1 {
+		if i%2 == 0 {
+			price += 1
+		} else {
+			price -= 0.5
+		}
+		out = append(out, backtest.Candle{Time: ts, Open: price, High: price + 1, Low: price - 1, Close: price, Volume: 1})
+	}
+	return out
+}
+
+func TestRunWalkForward(t *testing.T) {
+	from, to := date(2025, time.January, 1), date(2025, time.October, 1) // 9 months
+	candles := genHourly(from, to)
+	phases := []Phase{{Grid: Grid{"Threshold": {1, 2}}}}
+	cfg := backtest.Config{InitialCash: 100000, Fraction: 1, Commission: 0.0005, Lot: 1}
+
+	s, err := RunWalkForward(fakeBinding(), phases, candles, nil, nil, cfg,
+		"profit_factor", 0, from, to, 3, 3)
+	if err != nil {
+		t.Fatalf("RunWalkForward: %v", err)
+	}
+	if len(s.Folds) != 2 {
+		t.Fatalf("folds = %d, want 2", len(s.Folds))
+	}
+	var oosSum int
+	for _, f := range s.Folds {
+		if f.Note != "" {
+			t.Fatalf("fold %d unexpectedly skipped: %s", f.Index, f.Note)
+		}
+		if f.OOSTrades == 0 {
+			t.Fatalf("fold %d has no OOS trades", f.Index)
+		}
+		if f.WinnerRows == nil {
+			t.Fatalf("fold %d missing winner rows", f.Index)
+		}
+		oosSum += f.OOSTrades
+	}
+	if s.PooledOOS.TotalTrades != oosSum {
+		t.Fatalf("pooled trades = %d, want sum of folds %d", s.PooledOOS.TotalTrades, oosSum)
+	}
+}
+
+func TestRunWalkForwardNoFold(t *testing.T) {
+	from, to := date(2025, time.January, 1), date(2025, time.April, 1) // 3 months
+	candles := genHourly(from, to)
+	cfg := backtest.Config{InitialCash: 100000, Fraction: 1, Commission: 0.0005, Lot: 1}
+	_, err := RunWalkForward(fakeBinding(), []Phase{{Grid: Grid{"Threshold": {1}}}}, candles, nil, nil, cfg,
+		"profit_factor", 0, from, to, 3, 3)
+	if err == nil {
+		t.Fatal("want error when no fold fits")
 	}
 }

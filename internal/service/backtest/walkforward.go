@@ -162,3 +162,79 @@ func paramStability(folds []WalkForwardFold) (stable map[string]string, varied m
 	}
 	return stable, varied
 }
+
+// RunWalkForward runs a rolling walk-forward for one ticker: for each fold it calibrates
+// the grid on the train window and runs that winner out-of-sample on the next window with
+// the train slice as indicator warm-up, keeping only trades entered at/after the OOS start.
+// It returns per-fold results plus the pooled-OOS aggregate and compounded fold return.
+func RunWalkForward(b Binding, phases []Phase, candles, dailyCandles, htfCandles []backtest.Candle,
+	cfg backtest.Config, metric string, minTrades int, from, to time.Time, trainMonths, testMonths int,
+) (WalkForwardSummary, error) {
+	if err := validateMetric(metric); err != nil {
+		return WalkForwardSummary{}, err
+	}
+	windows, err := walkForwardFolds(from, to, trainMonths, testMonths)
+	if err != nil {
+		return WalkForwardSummary{}, err
+	}
+	lookback := b.Build(b.DefaultParams()).Lookback()
+
+	var summary WalkForwardSummary
+	var pool []backtest.Trade
+	var foldPcts []float64
+
+	for i, w := range windows {
+		fold := WalkForwardFold{
+			Index:     i + 1,
+			TrainFrom: w.trainFrom, TrainTo: w.trainTo,
+			TestFrom: w.testFrom, TestTo: w.testTo,
+		}
+
+		trainSlice := sliceByRange(candles, w.trainFrom, w.trainTo)
+		if len(trainSlice) < lookback {
+			return WalkForwardSummary{}, fmt.Errorf(
+				"backtest: fold %d train window has %d candles, fewer than the strategy lookback %d: "+
+					"widen -train-months or fetch more history", i+1, len(trainSlice), lookback)
+		}
+		trainDays := w.trainTo.Sub(w.trainFrom).Hours() / 24
+
+		results, err := RunPhases(b, phases, trainSlice, dailyCandles, htfCandles, cfg, metric, minTrades, trainDays, nil)
+		if err != nil {
+			return WalkForwardSummary{}, fmt.Errorf("backtest: fold %d calibrate: %w", i+1, err)
+		}
+		if len(results) == 0 {
+			fold.Note = "калибровка не дала комбинаций"
+			summary.Folds = append(summary.Folds, fold)
+			continue
+		}
+
+		best := results[0]
+		fold.InSampleMetric = metricValue(best.Metrics, metric)
+		fold.InSamplePF = best.Metrics.ProfitFactor
+		fold.WinnerParams = best.Params
+		fold.WinnerRows = ParamRows(best.Params)
+
+		// Warm indicators across the train slice, then run through the OOS window.
+		warmSlice := sliceByRange(candles, w.trainFrom, w.testTo)
+		res := backtest.Run(b.Build(best.Params), warmSlice, dailyCandles, htfCandles, cfg)
+		oos := tradesEnteredFrom(res.Trades, w.testFrom)
+
+		fold.OOS = PooledMetrics(oos)
+		fold.OOSTrades = len(oos)
+		if cfg.InitialCash > 0 {
+			fold.OOSNetPnLPct = sumPnL(oos) / cfg.InitialCash
+		}
+		fold.OOSMaxDDPct = tradeReplayDrawdownPct(oos, cfg.InitialCash)
+		if len(oos) == 0 {
+			fold.Note = "0 OOS-сделок"
+		}
+
+		pool = append(pool, oos...)
+		foldPcts = append(foldPcts, fold.OOSNetPnLPct)
+		summary.Folds = append(summary.Folds, fold)
+	}
+
+	summary.PooledOOS = PooledMetrics(pool)
+	summary.CompoundedReturnPct = compoundReturns(foldPcts)
+	return summary, nil
+}
