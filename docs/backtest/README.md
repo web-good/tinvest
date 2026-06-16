@@ -1,25 +1,38 @@
-# Бэктест и калибровка скальпинг-стратегий
+# Бэктест и калибровка торговых стратегий
 
 Документация по инструменту `cmd/backtest` и пакетам `internal/domain/backtest`
 (чистое ядро) и `internal/service/backtest` (I/O-слой).
 
 ## Что это
 
-`cmd/backtest` прогоняет по-акционную скальпинг-стратегию
-(`internal/service/trading_strategy/scalping/strategy/...`) на исторических
-часовых (H1) свечах за указанный период, симулирует торговлю на мок-портфеле и
-пишет отчёт с журналом сделок, движением капитала и метриками качества.
+`cmd/backtest` прогоняет торговую стратегию на исторических свечах за указанный
+период, симулирует торговлю на мок-портфеле и пишет отчёт с журналом сделок,
+движением капитала и метриками качества.
 
-Поддерживаются два режима:
-- **одиночный прогон** одного набора параметров (`Params`);
-- **калибровка** — перебор по сетке (grid search) для подбора параметров.
+Стратегия выбирается флагом `-strategy`, таймфрейм — флагом `-interval`
+(дефолт `Hour1`):
 
-Ключевой принцип: **симулятор повторяет ровно путь живого раннера**
-(`scalping/trade.go`). На каждом баре он строит `MarketData` из окна свечей,
-вызывает `Decide`, действует только по `Buy`/`Sell` и исполняет по `close`
-текущего бара. Никаких интрабар-стопов: `SL`/`TRAIL`/`TP` срабатывают на закрытии
-бара — тогда, когда их вернёт сама стратегия. Это даёт результат, согласованный с
-тем, как система торгует в проде (живая система не ставит стоп-ордера).
+| `-strategy` | Движок | Пакет |
+|---|---|---|
+| `scalping` (дефолт) | RSI-скальпинг (ADX-режимы) | `internal/service/trading_strategy/scalping` |
+| `levels` | Volume-Profile / ATR-room | `internal/service/trading_strategy/levels` |
+| `momentum` | EMA200 + MACD + объём | `internal/service/trading_strategy/momentum` |
+| `reversion` | mean-reversion RSI + Stochastic | `internal/service/trading_strategy/reversion` |
+
+Поддерживаются режимы:
+- **одиночный прогон** одного набора параметров (`-params` / `DefaultParams`);
+- **калибровка** — перебор по сетке (`-calibrate`, grid search);
+- **walk-forward** — калибровка с проверкой вне выборки: одиночный holdout
+  (`-test-months`) или скользящий rolling (`-train-months`), см. ниже;
+- **basket** — пул OOS-сделок по нескольким тикерам (`-basket`, только `momentum`);
+- **explain** — диагностика одного бара (`-explain`): почему вошёл/не вошёл.
+
+Ключевой принцип: **симулятор повторяет ровно путь живого раннера**. На каждом
+баре он строит `MarketData` из окна свечей, вызывает `Decide`, действует только по
+`Buy`/`Sell` и исполняет по `close` текущего бара. Никаких интрабар-стопов:
+`SL`/`TRAIL`/`TP` и прочие выходы срабатывают на закрытии бара — тогда, когда их
+вернёт сама стратегия. Это даёт результат, согласованный с тем, как система
+торгует в проде (живая система не ставит стоп-ордера).
 
 ## Архитектура
 
@@ -52,30 +65,44 @@ cp env/local.env.example env/local.env   # если ещё не сделано
 
 ## Быстрый старт
 
-Одиночный прогон RUAL за 12 месяцев на дефолтных (НЕ откалиброванных) параметрах:
+Одиночный прогон RUAL за 12 месяцев на дефолтных (НЕ откалиброванных) параметрах
+скальпинг-стратегии:
 
 ```bash
 go run ./cmd/backtest -ticker RUAL -months 12
 ```
 
-В консоль выводится сводка, а в каталог `reports/` пишутся файлы (см. ниже).
+Reversion-стратегия на часовках:
+
+```bash
+go run ./cmd/backtest -ticker NVTK -strategy reversion -interval Hour1 -months 12 -out ./reports/NVTK
+```
+
+В консоль выводится сводка, а в каталог `-out` (дефолт `reports/`) пишутся файлы
+(см. ниже).
 
 ## Флаги CLI
 
 | Флаг | Дефолт | Назначение |
 |---|---|---|
-| `-ticker` | — | **обязательный.** Тикер; ищется через `Shares()` → `ID`, `Lot` |
+| `-ticker` | — | **обязательный** (кроме `-basket`). Тикер; ищется через `Shares()` → `ID`, `Lot`. RUSAL: тикер `RUAL` |
+| `-strategy` | `scalping` | движок: `scalping` \| `levels` \| `momentum` \| `reversion` |
+| `-interval` | `Hour1` | таймфрейм: `Minutes15` \| `Minutes30` \| `Hour1` \| `Hour4` \| `Day1` \| `Week1` |
 | `-months` | `12` | период прогона в месяцах (`from = now - N мес`, `to = now`) |
 | `-cash` | `100000` | стартовый кэш мок-портфеля |
 | `-fraction` | `1.0` | доля кэша на вход (`1.0` = весь кэш) |
 | `-commission` | `0.0005` | комиссия как доля оборота (≈0.05%) |
-| `-params` | — | путь к JSON c `Params` (по умолчанию `DefaultParams`) |
-| `-calibrate` | — | путь к grid JSON (режим перебора; взаимоисключающ с `-params`) |
-| `-metric` | `profit_factor` | метрика ранжирования при калибровке |
+| `-params` | — | путь к JSON c `Params` (поверх `DefaultParams`; взаимоисключающ с `-calibrate`) |
+| `-calibrate` | — | путь к grid JSON (режим перебора) |
+| `-metric` | `expectancy` | метрика ранжирования при калибровке (см. таблицу ниже) |
+| `-min-trades` | `15` | калибровка: комбинации с меньшим числом сделок тонут ниже квалифицированных |
+| `-test-months` | `0` | одиночный holdout: калибровка на ранней части, отчёт лучшей комбо на последних N мес |
+| `-train-months` | `0` | rolling walk-forward (вместе с `-calibrate`): фикс. длина train-окна в мес; шаг = `-test-months` |
 | `-out` | `reports/` | каталог отчётов |
 | `-refresh` | `false` | форсировать перезагрузку свечей (игнор кэша) |
-
-Таймфрейм фиксирован — H1 (`enum.Hour1`), как у живого скальпинг-раннера.
+| `-explain` | — | диагностика одного бара: MSK-время `'YYYY-MM-DD HH:MM'` |
+| `-basket` | — | basket-режим: список тикеров через запятую (только `momentum`; игнорирует `-ticker`) |
+| `-grid-dir` | `data/params` | basket: каталог с `<lower-ticker>/momentum_grid.json` |
 
 ## Одиночный прогон со своими параметрами
 
@@ -130,11 +157,78 @@ go run ./cmd/backtest -ticker RUAL -months 24 -calibrate grid.json \
 
 | Значение | Смысл | Лучше |
 |---|---|---|
-| `profit_factor` (дефолт) | gross profit / gross loss | больше |
+| `expectancy` (дефолт) | средний PnL на сделку | больше |
+| `profit_factor` | gross profit / gross loss | больше |
 | `net_pnl` | чистый PnL за период | больше |
 | `win_rate` | доля прибыльных сделок | больше |
-| `expectancy` | средний PnL на сделку | больше |
+| `sortino` | средний PnL / downside-отклонение PnL сделок | больше |
 | `max_drawdown` | максимальная просадка капитала | **меньше** |
+
+Гриды лежат по-тикерно: `data/params/<lower-ticker>/<strategy>_grid.json`
+(например `data/params/nvtk/reversion_grid.json`). Поддерживается как плоский
+формат (`{"Field":[...]}`), так и фазовый (`{"phases":[{"name","keepTop","grid"}]}`),
+где каждая следующая фаза свипует свою под-сетку поверх топ-`keepTop` выживших
+предыдущей.
+
+## Проверка вне выборки (walk-forward)
+
+Калибровка на всём периоде даёт **in-sample** результат — параметры подобраны на
+тех же данных, на которых и оцениваются, поэтому метрики завышены (переобучение).
+Чтобы оценить параметры честно, есть два режима out-of-sample (OOS).
+
+### Одиночный holdout (`-test-months`)
+
+Калибровка идёт на ранней части `[from, boundary)`, а лучшая комбинация
+прогоняется на последних `N` месяцах `[boundary, to)`, которые грид не видел.
+`_best.md` тогда показывает именно OOS-результат, а `_calibration.md` — in-sample
+ранжирование (train-окно). Сравнение этих двух чисел и есть диагностика
+переобучения.
+
+```bash
+go run ./cmd/backtest -ticker NVTK -strategy reversion \
+  -calibrate data/params/nvtk/reversion_grid.json \
+  -out ./reports/NVTK -months 24 -test-months 6 -min-trades 20 -metric profit_factor
+```
+
+Ограничение: окно одно — оценка чувствительна к тому, на какой рыночный режим
+пришёлся последний отрезок. Train-окно должно быть длиннее `Lookback` стратегии,
+иначе калибровка падает с ошибкой (для коротких историй уменьшите `-test-months`
+или возьмите больше истории через `-months`).
+
+### Скользящий rolling walk-forward (`-train-months`)
+
+`-train-months N` (только вместе с `-calibrate`) включает скользящий walk-forward:
+train-окно фиксированной длины `N` месяцев и OOS-окно длиной `-test-months`
+скользят вперёд вместе, OOS-окна идут встык без перекрытия. На КАЖДОМ фолде
+параметры подбираются заново на его train-окне и проверяются на следующем
+OOS-окне. Это честнее одиночного holdout: несколько независимых OOS-окон + видно,
+устойчивы ли параметры во времени.
+
+- **Шаг** = `-test-months`. **Число фолдов** = `⌊(months − train − test) / test⌋ + 1`.
+- **Прогрев индикаторов:** OOS-прогон каждого фолда получает свечи `[trainFrom, testTo)`
+  (train-часть прогревает EMA200 и т.п.), но в OOS-метрики идут только сделки со
+  **временем входа ≥ начала OOS-окна** — как в живой торговле.
+
+Пример `-months 24 -train-months 12 -test-months 3` → 4 фолда:
+`[0–12]→[12–15]`, `[3–15]→[15–18]`, `[6–18]→[18–21]`, `[9–21]→[21–24]`.
+
+```bash
+go run ./cmd/backtest -ticker NVTK -strategy reversion \
+  -calibrate data/params/nvtk/reversion_grid.json \
+  -out ./reports/NVTK -months 24 -train-months 12 -test-months 3 \
+  -min-trades 10 -metric profit_factor
+```
+
+Пишется один файл `<...>_walkforward.md` с тремя блоками:
+1. **Пул сделок (агрегат OOS)** — PF / win rate / expectancy / sortino / лучшая-худшая
+   сделка по всем склеенным OOS-сделкам + **compounded return** (компаунд по фолдам).
+2. **Результаты по фолдам** — даты train/test-окон, in-sample PF против OOS PF,
+   число OOS-сделок, OOS NetPnL%, OOS MaxDD%.
+3. **Стабильность параметров** — какие кнобы совпали во всех фолдах (стабильны), а
+   какие гуляли (с перечислением значений по фолдам). Если грид на каждом фолде
+   выбирает разные параметры — стратегия неустойчива/переобучена.
+
+При `-train-months 0` (дефолт) поведение `-calibrate`/`-test-months` не меняется.
 
 ## Что попадает в отчёт
 
@@ -149,19 +243,25 @@ go run ./cmd/backtest -ticker RUAL -months 24 -calibrate grid.json \
 | `..._<timestamp>_trades.csv` | журнал сделок построчно для внешнего анализа |
 | `..._<timestamp>_equity.csv` | кривая капитала (`time,equity`) для построения графика |
 
-**Калибровка:**
+**Калибровка** (и одиночный holdout `-test-months`):
 
 | Файл | Содержимое |
 |---|---|
-| `..._<timestamp>_calibration.md` | таблица топ-20 комбинаций по выбранной метрике + параметры лучшей |
-| `..._<timestamp>_best.md` | полный отчёт одиночного прогона для лучшей комбинации |
+| `..._<timestamp>_calibration.md` | таблица топ-20 комбинаций по выбранной метрике + параметры лучшей (in-sample / train-окно) |
+| `..._<timestamp>_best.md` | полный отчёт прогона лучшей комбинации (при `-test-months` — на OOS-окне) |
+
+**Rolling walk-forward** (`-train-months`):
+
+| Файл | Содержимое |
+|---|---|
+| `..._<timestamp>_walkforward.md` | пул OOS-сделок + compounded return, таблица по фолдам (in-sample PF vs OOS PF), стабильность параметров |
 
 ### Метрики в сводке
 
 `TotalTrades`, число выигрышных/проигрышных, `WinRate`/`LossRate`,
 `GrossProfit`/`GrossLoss`, `ProfitFactor`, чистый `NetPnL` (₽ и %), стартовый и
 финальный капитал, `MaxDrawdown` (₽ и %), средняя прибыль/убыток, `Expectancy`,
-лучшая/худшая сделка, `ExposurePct` (доля баров в рынке) и `CAGR`.
+`Sortino`, лучшая/худшая сделка, `ExposurePct` (доля баров в рынке) и `CAGR`.
 
 Особые случаи: при нулевом `GrossLoss` и положительной прибыли `ProfitFactor`
 равен `GrossProfit` (не делим на ноль); `CAGR` считается только при положительной
@@ -203,25 +303,24 @@ go run ./cmd/backtest -ticker RUAL -months 24 -calibrate grid.json \
 
 Каталоги `data/candles/` и `reports/` в `.gitignore` — это локальные артефакты.
 
-## Добавление новой стратегии в калибровку
+## Добавление новой стратегии/тикера в калибровку
 
-Движок (`Engine.Run`) общий и принимает любую `strategy.Strategy`. Калибровка же
-завязана на конкретный тип `Params` через реестр в
-`internal/service/backtest/registry.go`:
+Движок (`Run`) общий и принимает любую `strategy.Strategy`. Калибровка завязана на
+конкретный тип `Params` через `Binding` (`DefaultParams` / `Build` / `ParseParams`).
+У каждой стратегии свой реестр и lookup-функция, которую вызывает
+`cmd/backtest/main.go` по `-strategy`:
 
-```go
-var registry = map[string]Binding{
-    "RUAL": {
-        DefaultParams: func() any { return rusal.DefaultParams() },
-        Build:         func(p any) strategy.Strategy { return rusal.NewWithParams(p.(rusal.Params)) },
-        ParseParams:   func(raw []byte) (any, error) { /* json -> rusal.Params */ },
-    },
-}
-```
+| Стратегия | Реестр | Lookup |
+|---|---|---|
+| `scalping` | `registry.go` | `Lookup` / `LookupOrGeneric` |
+| `levels` | `levels_registry.go` | `LevelsLookupOrGeneric` |
+| `momentum` | `momentum_registry.go` | `MomentumLookupOrGeneric` |
+| `reversion` | `reversion_registry.go` | `ReversionLookupOrGeneric` |
 
-Чтобы добавить новую бумагу, реализуйте её `strategy.Strategy` с экспортированными
-`Params` (как у RUSAL) и зарегистрируйте `Binding`. Поля сетки применяются
-рефлексией по именам, поэтому достаточно, чтобы поля `Params` были `int`/`float64`.
+`...OrGeneric` означает: тикеры без выделенного конфига получают нейтральные
+дефолты стратегии. Чтобы добавить бумагу, реализуйте её `Params` (экспортированные
+`int`/`float64`-поля) и зарегистрируйте `Binding` в нужном реестре — поля грида
+применяются рефлексией по именам.
 
 ## Предупреждение о дефолтных параметрах
 
@@ -235,15 +334,20 @@ var registry = map[string]Binding{
 
 - Короткие позиции, плечо, несколько одновременных позиций.
 - Интрабар-исполнение `SL`/`TP` по `High`/`Low` (живая система не ставит стопы).
-- Оптимизаторы умнее grid search (genetic, walk-forward) — возможный follow-up.
+- Оптимизаторы умнее grid search (genetic и т.п.). Walk-forward (одиночный holdout
+  и rolling) **уже поддержан**, см. раздел выше.
 - Графики (есть только CSV equity для внешнего построения).
-- Калибровка не-RUSAL стратегий (биндинг добавляется по мере появления стратегий).
+- Известное ограничение одиночного holdout: OOS-прогон стартует с холодными
+  индикаторами на границе (rolling walk-forward этого лишён за счёт lead-in).
 
 ## Навигация
 
 | Документ | О чём |
 |---|---|
 | [../scalping/README.md](../scalping/README.md) | Архитектура скальпинг-сервиса и контракт стратегии |
-| [../scalping/strategy.md](../scalping/strategy.md) | Алгоритм RUSAL: режимы ADX, входы и выходы |
-| [../scalping/settings.md](../scalping/settings.md) | Все 15 параметров `Params` с дефолтами и рецептами |
+| [../scalping/settings.md](../scalping/settings.md) | Параметры `Params` скальпинга с дефолтами |
+| [../reversion/strategy.md](../reversion/strategy.md) | Стратегия reversion: входы/выходы и параметры |
+| [../momentum/](../momentum/) | Документация momentum-стратегии |
+| [../levels/](../levels/) | Документация levels-стратегии |
 | [../superpowers/specs/2026-06-03-scalping-backtest-design.md](../superpowers/specs/2026-06-03-scalping-backtest-design.md) | Дизайн-спецификация бэктеста |
+| [../superpowers/specs/2026-06-16-walk-forward-calibration-design.md](../superpowers/specs/2026-06-16-walk-forward-calibration-design.md) | Дизайн rolling walk-forward |
