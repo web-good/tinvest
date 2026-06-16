@@ -5,7 +5,8 @@
       "keepTop": 5,
       "grid": {
         "VolMult": [0.8, 0.9, 1.0, 1.1, 1.2],
-        "StopATRMult": [0.8, 0.9, 1.0]
+        "StopATRMult": [0.8, 0.9, 1.0],
+        "HTFTrendEMA": [0, 20, 50, 100]
       }
     }
   ]

@@ -17,7 +17,8 @@
         "StopATRMult": [1.0, 1.5, 2.0],
         "UseVolume": [0, 1],
         "VolAvgPeriod": [20],
-        "VolMult": [1.0, 1.5]
+        "VolMult": [1.0, 1.5],
+        "HTFTrendEMA": [0, 20, 50, 100]
       }
     }
   ]
