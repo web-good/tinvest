@@ -698,3 +698,43 @@ func TestOverboughtExitSkippedAtWarmup(t *testing.T) {
 		t.Fatalf("rsiOK=false: OB must not fire")
 	}
 }
+
+func TestBuildInputHTFGate(t *testing.T) {
+	htf := []float64{10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20} // 11 точек, растущие
+
+	// Минимальный валидный набор hour1-свечей для прочих индикаторов.
+	closes := make([]float64, 60)
+	for i := range closes {
+		closes[i] = 100
+	}
+	md := strategy.MarketData{
+		Price: 100, Closes: closes, Highs: closes, Lows: closes,
+		Volumes:   make([]int64, len(closes)),
+		HTFCloses: htf, HTFHighs: htf, HTFLows: htf,
+	}
+
+	// Gate выключен (HTFTrendEMA=0): htf-значения не читаются.
+	p := defaultParams()
+	if in := NewWithParams("T", p).buildInput(md); in.htfOK || in.htfEMA != 0 || in.htfClose != 0 {
+		t.Fatalf("HTFTrendEMA=0: want htfOK=false, htfEMA=0, htfClose=0; got %v/%v/%v", in.htfOK, in.htfEMA, in.htfClose)
+	}
+
+	// Gate включён: EMA посчитана, htfClose = последний 4H-close, htfOK=true.
+	p.HTFTrendEMA = 5
+	in := NewWithParams("T", p).buildInput(md)
+	if !in.htfOK {
+		t.Fatalf("HTFTrendEMA=5 с достаточными данными: want htfOK=true")
+	}
+	if in.htfClose != 20 {
+		t.Fatalf("htfClose = %v, want 20 (последний HTFCloses)", in.htfClose)
+	}
+	if in.htfEMA <= 0 {
+		t.Fatalf("htfEMA = %v, want >0", in.htfEMA)
+	}
+
+	// Недостаточно данных (len < HTFTrendEMA): htfOK=false.
+	p.HTFTrendEMA = 50
+	if in := NewWithParams("T", p).buildInput(md); in.htfOK {
+		t.Fatalf("HTFTrendEMA=50 при 11 точках: want htfOK=false")
+	}
+}

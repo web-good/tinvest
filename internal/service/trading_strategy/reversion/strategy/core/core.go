@@ -48,6 +48,7 @@ type Params struct {
 	UseOverbought   int     // 1 = exit when RSI and Stoch are simultaneously overbought; 0 = off
 	RSIOverbought   float64 // RSI overbought zone for the OB exit (default 70); consulted only when UseOverbought=1
 	StochOverbought float64 // Stoch %D overbought zone for the OB exit (default 80); consulted only when UseOverbought=1
+	HTFTrendEMA     int     // EMA period on the 4H timeframe for the higher-timeframe trend filter; 0 = off
 }
 
 // Strategy trades a single instrument with the dual-confirmation rules. Ticker-agnostic
@@ -110,6 +111,9 @@ type decideInput struct {
 	entryVol    float64 // entry (latest) bar's volume; 0 unless UseVolume=1 and a baseline was computed
 	avgVol      float64 // average volume of the preceding VolAvgPeriod bars (weekends excluded); 0 unless gate active
 	volOK       bool    // true when the volume baseline could be computed; false -> gate is skipped
+	htfClose    float64 // last completed 4H close (0 unless HTFTrendEMA>0 and enough data)
+	htfEMA      float64 // EMA(HTFCloses, HTFTrendEMA), latest value; 0 unless gate active
+	htfOK       bool    // true when the 4H EMA is warmed; false -> higher-timeframe trend not confirmed
 	pos         *strategy.Position
 }
 
@@ -160,6 +164,20 @@ func (s *Strategy) buildInput(md strategy.MarketData) decideInput {
 		}
 	}
 
+	var htfClose, htfEMA float64
+	htfOK := false
+	if s.p.HTFTrendEMA > 0 && len(md.HTFCloses) >= s.p.HTFTrendEMA {
+		if e := ema.Compute(md.HTFCloses, s.p.HTFTrendEMA); len(e) > 0 {
+			// Prices are positive, so a real EMA is never 0; a 0 means "not warmed"
+			// (same warm-up discipline as lastTwoEMA).
+			if v := e[len(e)-1]; v != 0 {
+				htfEMA = v
+				htfClose = md.HTFCloses[len(md.HTFCloses)-1]
+				htfOK = true
+			}
+		}
+	}
+
 	return decideInput{
 		price:       md.Price,
 		emaFast:     emaFast,
@@ -177,6 +195,9 @@ func (s *Strategy) buildInput(md strategy.MarketData) decideInput {
 		entryVol:    entryVol,
 		avgVol:      avgVol,
 		volOK:       volOK,
+		htfClose:    htfClose,
+		htfEMA:      htfEMA,
+		htfOK:       htfOK,
 		pos:         md.Position,
 	}
 }
