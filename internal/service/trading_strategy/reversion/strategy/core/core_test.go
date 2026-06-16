@@ -782,6 +782,51 @@ func TestExplainHTFBlock(t *testing.T) {
 	}
 }
 
+func TestBuildInputATRForBreakeven(t *testing.T) {
+	n := 60
+	highs := make([]float64, n)
+	lows := make([]float64, n)
+	closes := make([]float64, n)
+	for i := 0; i < n; i++ {
+		closes[i] = 100 + float64(i)
+		highs[i] = closes[i] + 1
+		lows[i] = closes[i] - 1
+	}
+	md := strategy.MarketData{Price: closes[n-1], Highs: highs, Lows: lows, Closes: closes, Volumes: make([]int64, n)}
+
+	p := defaultParams()
+	p.ATRPeriod = 14
+	p.UseATRStop = 0
+
+	p.UseBreakeven = 1
+	if in := NewWithParams("T", p).buildInput(md); in.atr <= 0 {
+		t.Fatalf("UseBreakeven=1: want atr>0 (BE needs EntryATR), got %v", in.atr)
+	}
+
+	p.UseBreakeven = 0
+	if in := NewWithParams("T", p).buildInput(md); in.atr != 0 {
+		t.Fatalf("UseBreakeven=0 & UseATRStop=0: ATR must not be computed, got %v", in.atr)
+	}
+}
+
+func TestLookbackIncludesATRForBreakeven(t *testing.T) {
+	p := defaultParams()
+	p.FastEMA, p.SlowEMA = 50, 200
+	p.RSIPeriod, p.StochKPeriod, p.StochDSmooth = 14, 14, 3
+	p.ATRPeriod = 300 // dominates SlowEMA when ATR is needed
+	p.UseATRStop = 0
+
+	p.UseBreakeven = 1
+	if got := NewWithParams("T", p).Lookback(); got != 306 {
+		t.Fatalf("UseBreakeven=1: ATRPeriod=300 dominates, want 306, got %d", got)
+	}
+
+	p.UseBreakeven = 0
+	if got := NewWithParams("T", p).Lookback(); got != 205 {
+		t.Fatalf("UseBreakeven=0: ATRPeriod ignored, want SlowEMA+5=205, got %d", got)
+	}
+}
+
 func TestBuildInputHTFGate(t *testing.T) {
 	htf := []float64{10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20} // 11 точек, растущие
 

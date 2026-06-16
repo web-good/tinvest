@@ -49,6 +49,8 @@ type Params struct {
 	RSIOverbought   float64 // RSI overbought zone for the OB exit (default 70); consulted only when UseOverbought=1
 	StochOverbought float64 // Stoch %D overbought zone for the OB exit (default 80); consulted only when UseOverbought=1
 	HTFTrendEMA     int     // EMA period on the 4H timeframe for the higher-timeframe trend filter; 0 = off
+	UseBreakeven    int     // 1 = after price runs BreakevenArmATR×EntryATR in favor, exit at the first close back at/below entry; 0 = off
+	BreakevenArmATR float64 // breakeven arm threshold in EntryATR multiples (e.g. 1.0); consulted only when UseBreakeven=1
 }
 
 // Strategy trades a single instrument with the dual-confirmation rules. Ticker-agnostic
@@ -73,7 +75,7 @@ func (s *Strategy) Lookback() int {
 		s.p.RSIPeriod + 1,
 		s.p.StochKPeriod + s.p.StochDSmooth + 1,
 	}
-	if s.p.UseATRStop == 1 && s.p.ATRPeriod > 0 {
+	if (s.p.UseATRStop == 1 || s.p.UseBreakeven == 1) && s.p.ATRPeriod > 0 {
 		cands = append(cands, s.p.ATRPeriod+1)
 	}
 	if s.p.UseVolume == 1 && s.p.VolAvgPeriod > 0 {
@@ -148,7 +150,7 @@ func (s *Strategy) buildInput(md strategy.MarketData) decideInput {
 	}
 
 	var atr float64
-	if s.p.UseATRStop == 1 && s.p.ATRPeriod > 0 {
+	if (s.p.UseATRStop == 1 || s.p.UseBreakeven == 1) && s.p.ATRPeriod > 0 {
 		atr = indicators.ATR(md.Highs, md.Lows, md.Closes, s.p.ATRPeriod)
 	}
 
