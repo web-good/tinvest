@@ -898,6 +898,19 @@ func TestNoBreakevenBeforeArm(t *testing.T) {
 	}
 }
 
+func TestBreakevenInertOnEntryBar(t *testing.T) {
+	// At entry the engine seeds MaxFavorablePrice to the entry price, so the armed
+	// threshold (entry + arm×ATR, arm>0) cannot be met on the entry bar even though
+	// price == entry satisfies the price<=entry leg. BE must not fire on the entry bar.
+	s := NewWithParams("T", breakevenParams())
+	in := openInput()
+	in.pos = &strategy.Position{PurchasePrice: 100, EntryATR: 5, MaxFavorablePrice: 100} // seeded to entry, not armed
+	in.price = 100
+	if sig := s.decide(in); sig.Kind == model.SignalSell && sig.Reason == "BE" {
+		t.Fatalf("entry bar (MaxFavorablePrice==entry) must not arm BE")
+	}
+}
+
 func TestBreakevenOffByFlag(t *testing.T) {
 	p := breakevenParams()
 	p.UseBreakeven = 0
@@ -905,8 +918,8 @@ func TestBreakevenOffByFlag(t *testing.T) {
 	in := openInput()
 	in.pos = &strategy.Position{PurchasePrice: 100, EntryATR: 5, MaxFavorablePrice: 106} // armed
 	in.price = 99
-	if sig := s.decide(in); sig.Kind == model.SignalSell && sig.Reason == "BE" {
-		t.Fatalf("UseBreakeven=0 must skip BE")
+	if sig := s.decide(in); sig.Kind == model.SignalSell {
+		t.Fatalf("UseBreakeven=0 must skip BE (and nothing else should fire here), got sell %q", sig.Reason)
 	}
 }
 
