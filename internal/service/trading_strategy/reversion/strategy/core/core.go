@@ -1,9 +1,13 @@
 // Package core implements a long-only mean-reversion strategy on the daily timeframe,
 // driven by the agreement of two oscillators: RSI and the Stochastic %D line. It buys
 // when one oscillator is already inside its oversold zone and the other crosses into it.
-// It exits an open long on one of four signals: an overbought take-profit when both RSI
+// It exits an open long on one of five signals: an overbought take-profit when both RSI
 // and Stochastic %D are simultaneously in their overbought zones (OB, gated by UseOverbought);
-// RSI crossing the 50 line downward (primary momentum fade); a middle exit selected by the
+// RSI crossing the 50 line downward (primary momentum fade);
+// a breakeven floor that, once price has run BreakevenArmATR×EntryATR in favor (armed via the
+// monotonic Position.MaxFavorablePrice), exits at the first close back at/below entry (BE, gated
+// by UseBreakeven);
+// a middle exit selected by the
 // UseATRStop flag — either RSI breaking back down through the oversold zone (RSIOS, failed
 // bounce) or price falling below the ATR stop PurchasePrice − StopATRMult×EntryATR with
 // EntryATR frozen at entry (ATRSL); and a bearish EMA cross (FastEMA below SlowEMA) as a

@@ -1,20 +1,38 @@
 {
   "phases": [
     {
-      "name": "entry",
+      "name": "ema",
       "keepTop": 5,
       "grid": {
         "FastEMA": [5,10],
-        "SlowEMA": [100,200,150, 120],
-        "RSIPeriod": [5,6,7, 8, 9,10,11,12,13,14],
-        "HTFTrendEMA": [0, 20, 50, 100]
+        "SlowEMA": [100,200,150, 120]
       }
     },
     {
-      "name": "signals",
+      "name": "rsi",
+      "keepTop": 5,
+      "grid": {
+        "RSIPeriod": [5,6,7, 8, 9,10,11,12,13,14]
+      }
+    },
+    {
+      "name": "vol-atr",
       "grid": {
         "VolMult": [0.7,0.8, 0.9, 1.0, 1.1, 1.2],
         "StopATRMult": [0.8, 0.9, 1.0]
+      }
+    },
+    {
+      "name": "HTFTrendEMA",
+      "grid": {
+        "HTFTrendEMA": [0, 10, 20, 50, 100]
+      }
+    },
+    {
+      "name": "breakeven",
+      "grid": {
+        "UseBreakeven": [0, 1],
+        "BreakevenArmATR": [0.5, 1.0, 1.5]
       }
     }
   ]
