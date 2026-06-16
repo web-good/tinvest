@@ -365,11 +365,15 @@ func (s *Strategy) entryReason(in decideInput) string {
 }
 
 // manage handles an open long. There is no protective price stop other than the optional
-// ATR stop below. It exits on one of four signals, evaluated in precedence order (all
-// fills at close):
+// ATR stop below. It exits on one of five signals, evaluated in precedence order
+// OB → RSI50 → BE → middle(RSIOS xor ATRSL) → EMAX (all fills at close):
 //   - OB: RSI and Stochastic %D simultaneously in their overbought zones — take-profit
 //     (gated by UseOverbought=1). Highest precedence.
 //   - RSI50: RSI crosses the 50 midline downward — primary momentum fade.
+//   - BE: after price ran BreakevenArmATR×EntryATR in favor (armed via the monotonic
+//     Position.MaxFavorablePrice), price has fallen back to/below PurchasePrice — pure
+//     breakeven floor (gated by UseBreakeven=1, EntryATR>0, BreakevenArmATR>0). Fills at
+//     close, so the exit is at the first close back at/below entry (may be a small loss).
 //   - middle branch, selected by UseATRStop:
 //     UseATRStop==0 -> RSIOS: RSI breaks back down through the oversold zone from above
 //     (failed-bounce breakdown); fires when RSI was at/above RSIOversold last bar and
@@ -394,6 +398,12 @@ func (s *Strategy) manage(in decideInput, sig model.Signal) model.Signal {
 	case in.rsiOK && crossDown(in.rsiPrev, in.rsiNow, rsiExitLevel):
 		sig.Kind, sig.Reason = model.SignalSell, "RSI50"
 		sig.ExitReason = fmt.Sprintf("RSI50: RSI %.2f→%.2f пересёк 50 сверху вниз", in.rsiPrev, in.rsiNow)
+	case s.p.UseBreakeven == 1 && in.pos.EntryATR > 0 && s.p.BreakevenArmATR > 0 &&
+		in.pos.MaxFavorablePrice >= in.pos.PurchasePrice+s.p.BreakevenArmATR*in.pos.EntryATR &&
+		in.price <= in.pos.PurchasePrice:
+		sig.Kind, sig.Reason = model.SignalSell, "BE"
+		sig.ExitReason = fmt.Sprintf("BE: цена %.4f ≤ вход %.4f после взвода (макс %.4f ≥ вход + %.2g×ATR %.4f)",
+			in.price, in.pos.PurchasePrice, in.pos.MaxFavorablePrice, s.p.BreakevenArmATR, in.pos.EntryATR)
 	case s.p.UseATRStop == 0 && in.rsiOK && crossDown(in.rsiPrev, in.rsiNow, s.p.RSIOversold):
 		sig.Kind, sig.Reason = model.SignalSell, "RSIOS"
 		sig.ExitReason = fmt.Sprintf("RSIOS: RSI %.2f→%.2f пробил зону перепроданности %.0f сверху вниз",

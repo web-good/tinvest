@@ -866,3 +866,99 @@ func TestBuildInputHTFGate(t *testing.T) {
 		t.Fatalf("HTFTrendEMA=50 при 11 точках: want htfOK=false")
 	}
 }
+
+// breakevenParams: breakeven exit on, arm at 1.0×ATR, RSI oversold 30. ATR stop OFF so
+// the middle exit is RSIOS and cannot mask the BE branch.
+func breakevenParams() Params {
+	p := defaultParams()
+	p.UseBreakeven = 1
+	p.BreakevenArmATR = 1.0
+	p.RSIOversold = 30
+	return p
+}
+
+func TestExitBreakevenFiresAfterArm(t *testing.T) {
+	s := NewWithParams("T", breakevenParams())
+	in := openInput() // neutral RSI/EMA: no RSI50, no EMAX
+	in.pos = &strategy.Position{PurchasePrice: 100, EntryATR: 5, MaxFavorablePrice: 106}
+	in.price = 99 // <= entry 100, armed (106 >= 100 + 1.0*5 = 105)
+	sig := s.decide(in)
+	if sig.Kind != model.SignalSell || sig.Reason != "BE" {
+		t.Fatalf("armed + price<=entry: want BE sell, got kind=%v reason=%q", sig.Kind, sig.Reason)
+	}
+}
+
+func TestNoBreakevenBeforeArm(t *testing.T) {
+	s := NewWithParams("T", breakevenParams())
+	in := openInput()
+	in.pos = &strategy.Position{PurchasePrice: 100, EntryATR: 5, MaxFavorablePrice: 103} // 103 < 105: not armed
+	in.price = 99
+	if sig := s.decide(in); sig.Kind == model.SignalSell {
+		t.Fatalf("not armed: should hold, got sell %q", sig.Reason)
+	}
+}
+
+func TestBreakevenOffByFlag(t *testing.T) {
+	p := breakevenParams()
+	p.UseBreakeven = 0
+	s := NewWithParams("T", p)
+	in := openInput()
+	in.pos = &strategy.Position{PurchasePrice: 100, EntryATR: 5, MaxFavorablePrice: 106} // armed
+	in.price = 99
+	if sig := s.decide(in); sig.Kind == model.SignalSell && sig.Reason == "BE" {
+		t.Fatalf("UseBreakeven=0 must skip BE")
+	}
+}
+
+func TestBreakevenInertWhenEntryATRZero(t *testing.T) {
+	// Live-trading guard: EntryATR not persisted (0). Without the guard the arm threshold
+	// collapses to PurchasePrice and BE would fire on any pullback.
+	s := NewWithParams("T", breakevenParams())
+	in := openInput()
+	in.pos = &strategy.Position{PurchasePrice: 100, EntryATR: 0, MaxFavorablePrice: 200}
+	in.price = 1
+	if sig := s.decide(in); sig.Kind == model.SignalSell && sig.Reason == "BE" {
+		t.Fatalf("EntryATR=0 must skip BE (live-trading guard)")
+	}
+}
+
+func TestBreakevenInertWhenArmZero(t *testing.T) {
+	// Zero arm: threshold equals PurchasePrice (armed immediately), turning BE into a plain
+	// entry-price stop. Guard keeps it inert.
+	p := breakevenParams()
+	p.BreakevenArmATR = 0
+	s := NewWithParams("T", p)
+	in := openInput()
+	in.pos = &strategy.Position{PurchasePrice: 100, EntryATR: 5, MaxFavorablePrice: 106}
+	in.price = 99
+	if sig := s.decide(in); sig.Kind == model.SignalSell && sig.Reason == "BE" {
+		t.Fatalf("BreakevenArmATR=0 must skip BE (zero-arm guard)")
+	}
+}
+
+func TestExitPrecedenceBreakevenOverMiddle(t *testing.T) {
+	// Armed, ATR stop also on. Price is below the ATR threshold (ATRSL would fire) AND
+	// below entry (BE fires). BE has higher precedence -> reason BE.
+	p := breakevenParams()
+	p.UseATRStop = 1
+	p.ATRPeriod = 14
+	p.StopATRMult = 1.0
+	s := NewWithParams("T", p)
+	in := openInput()
+	in.pos = &strategy.Position{PurchasePrice: 100, EntryATR: 5, MaxFavorablePrice: 106} // armed
+	in.price = 94 // <= 95 ATR threshold AND <= 100 entry
+	if sig := s.decide(in); sig.Reason != "BE" {
+		t.Fatalf("BE must win over ATRSL, got %q", sig.Reason)
+	}
+}
+
+func TestExitPrecedenceRSI50OverBreakeven(t *testing.T) {
+	s := NewWithParams("T", breakevenParams())
+	in := openInput()
+	in.pos = &strategy.Position{PurchasePrice: 100, EntryATR: 5, MaxFavorablePrice: 106} // armed
+	in.price = 99                  // BE would fire
+	in.rsiPrev, in.rsiNow = 55, 45 // RSI50 also fires
+	if sig := s.decide(in); sig.Reason != "RSI50" {
+		t.Fatalf("RSI50 must win over BE, got %q", sig.Reason)
+	}
+}
