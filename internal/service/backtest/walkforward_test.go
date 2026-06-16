@@ -130,3 +130,22 @@ func TestCompoundReturns(t *testing.T) {
 		t.Fatalf("empty should give 0")
 	}
 }
+
+func TestParamStability(t *testing.T) {
+	folds := []WalkForwardFold{
+		{WinnerRows: []backtest.ParamLine{{Name: "RSIPeriod", Value: "6"}, {Name: "StopATRMult", Value: "0.8"}}},
+		{WinnerRows: []backtest.ParamLine{{Name: "RSIPeriod", Value: "6"}, {Name: "StopATRMult", Value: "1.2"}}},
+		{Note: "0 OOS-сделок"}, // skipped fold: no WinnerRows, must be ignored
+	}
+	stable, varied := paramStability(folds)
+	if stable["RSIPeriod"] != "6" {
+		t.Errorf("RSIPeriod should be stable at 6, got %q", stable["RSIPeriod"])
+	}
+	if _, ok := stable["StopATRMult"]; ok {
+		t.Errorf("StopATRMult should not be stable")
+	}
+	got := varied["StopATRMult"]
+	if len(got) != 2 || got[0] != "0.8" || got[1] != "1.2" {
+		t.Errorf("StopATRMult varied = %v, want [0.8 1.2]", got)
+	}
+}

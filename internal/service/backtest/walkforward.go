@@ -95,3 +95,70 @@ func compoundReturns(pcts []float64) float64 {
 	}
 	return factor - 1
 }
+
+// WalkForwardFold is one fold's outcome: the calibration winner from its train window
+// and that winner's out-of-sample performance on the following test window.
+type WalkForwardFold struct {
+	Index          int
+	TrainFrom      time.Time
+	TrainTo        time.Time
+	TestFrom       time.Time
+	TestTo         time.Time
+	InSampleMetric float64              // ranking-metric value of the train winner
+	InSamplePF     float64              // train winner's profit factor (for the train-vs-OOS column)
+	OOS            backtest.Metrics     // trade-based metrics over this fold's OOS trades
+	OOSNetPnLPct   float64              // sum(OOS PnL) / InitialCash
+	OOSMaxDDPct    float64              // drawdown fraction from replaying OOS trades
+	OOSTrades      int                  // count of OOS trades
+	WinnerParams   any                  // train winner params (typed)
+	WinnerRows     []backtest.ParamLine // train winner params rendered for display/stability
+	Note           string               // reason when a fold is skipped or has no OOS trades
+}
+
+// WalkForwardSummary aggregates all folds: the pooled OOS trade metrics and the
+// compounded fold-over-fold return.
+type WalkForwardSummary struct {
+	Folds               []WalkForwardFold
+	PooledOOS           backtest.Metrics // PooledMetrics over every fold's OOS trades
+	CompoundedReturnPct float64
+}
+
+// paramStability splits the swept parameters into those that held the same winning value
+// across every fold with a winner (stable) and those that changed (varied -> per-fold
+// value strings in fold order). Folds without a winner (WinnerRows nil) are ignored.
+func paramStability(folds []WalkForwardFold) (stable map[string]string, varied map[string][]string) {
+	stable, varied = map[string]string{}, map[string][]string{}
+	var names []string
+	seen := map[string]bool{}
+	var perFold []map[string]string
+	for _, f := range folds {
+		if f.WinnerRows == nil {
+			continue
+		}
+		m := make(map[string]string, len(f.WinnerRows))
+		for _, r := range f.WinnerRows {
+			m[r.Name] = r.Value
+			if !seen[r.Name] {
+				seen[r.Name] = true
+				names = append(names, r.Name)
+			}
+		}
+		perFold = append(perFold, m)
+	}
+	for _, name := range names {
+		vals := make([]string, 0, len(perFold))
+		allSame := true
+		for i, m := range perFold {
+			vals = append(vals, m[name])
+			if i > 0 && m[name] != vals[0] {
+				allSame = false
+			}
+		}
+		if allSame && len(vals) > 0 {
+			stable[name] = vals[0]
+		} else {
+			varied[name] = vals
+		}
+	}
+	return stable, varied
+}
