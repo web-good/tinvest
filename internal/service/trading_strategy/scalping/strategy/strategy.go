@@ -41,6 +41,14 @@ type MarketData struct {
 	// candles as DailyCloses (aligned index-for-index). Empty when no daily data.
 	DailyHighs []float64
 	DailyLows  []float64
+	// HTFCloses are oldest-first closes of COMPLETED higher-timeframe (4H) candles,
+	// aligned so the last element is the most recent 4H bar fully closed at/before the
+	// current bar. Empty if no HTF data is supplied or the filter is disabled.
+	HTFCloses []float64
+	// HTFHighs / HTFLows are oldest-first highs/lows of the same COMPLETED 4H candles
+	// as HTFCloses (aligned index-for-index). Empty when no HTF data.
+	HTFHighs []float64
+	HTFLows  []float64
 	// TodayHigh / TodayLow are the high/low across all bars of the current MSK
 	// calendar day up to and including the current bar (no lookahead). Zero when n/a.
 	TodayHigh float64

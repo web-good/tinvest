@@ -9,6 +9,10 @@ import (
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 )
 
+// htfInterval is the fixed bar-span of the Hour4 HTF series; Run/Trace pass it to
+// visibleCompletedHTF at each bar to decide which 4H bars have fully closed.
+const htfInterval = 4 * time.Hour
+
 // mskLoc anchors the trading-day boundary used to decide which daily candles are
 // already closed at a given intraday bar. Fallback to UTC if the tz DB is absent.
 var mskLoc = func() *time.Location {
@@ -97,7 +101,7 @@ func todayExtent(candles []Candle, i int, loc *time.Location) (high, low float64
 // lookback-sized MarketData, calls Decide, and acts only on Buy (when flat) or
 // Sell (when in position), filling at the bar's close. An open position at the
 // end is marked-to-market, never force-closed.
-func Run(s strategy.Strategy, candles []Candle, dailyCandles []Candle, cfg Config) Result {
+func Run(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Candle, cfg Config) Result {
 	res := Result{InitialCash: cfg.InitialCash, FinalEquity: cfg.InitialCash}
 	l := s.Lookback()
 	if l <= 0 || len(candles) < l {
@@ -111,6 +115,7 @@ func Run(s strategy.Strategy, candles []Candle, dailyCandles []Candle, cfg Confi
 		md.DailyCloses = visibleDailyCloses(dailyCandles, candles[i].Time, mskLoc)
 		md.DailyHighs, md.DailyLows = visibleDailyHighsLows(dailyCandles, candles[i].Time, mskLoc)
 		md.TodayHigh, md.TodayLow = todayExtent(candles, i, mskLoc)
+		md.HTFCloses, md.HTFHighs, md.HTFLows = visibleCompletedHTF(htfCandles, candles[i].Time, htfInterval)
 		if p.qty != 0 {
 			p.mark(candles[i].Close)
 		}
@@ -162,7 +167,7 @@ type explainer interface {
 // implements explainer) the gate-by-gate verdict. It returns a human-readable
 // diagnostic. Used to answer "why did/didn't it act at this bar?". Replaying
 // from the start means the reported position state is the real one.
-func Trace(s strategy.Strategy, candles []Candle, dailyCandles []Candle, cfg Config, target time.Time) string {
+func Trace(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Candle, cfg Config, target time.Time) string {
 	l := s.Lookback()
 	if l <= 0 || len(candles) < l {
 		return "недостаточно свечей для lookback"
@@ -174,6 +179,7 @@ func Trace(s strategy.Strategy, candles []Candle, dailyCandles []Candle, cfg Con
 		md.DailyCloses = visibleDailyCloses(dailyCandles, candles[i].Time, mskLoc)
 		md.DailyHighs, md.DailyLows = visibleDailyHighsLows(dailyCandles, candles[i].Time, mskLoc)
 		md.TodayHigh, md.TodayLow = todayExtent(candles, i, mskLoc)
+		md.HTFCloses, md.HTFHighs, md.HTFLows = visibleCompletedHTF(htfCandles, candles[i].Time, htfInterval)
 		if p.qty != 0 {
 			p.mark(candles[i].Close)
 		}

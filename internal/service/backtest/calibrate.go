@@ -59,7 +59,7 @@ type PhaseProgress struct {
 // portfolio inside backtest.Run, and only reads the shared candle slices — so they run
 // on a bounded pool of calibWorkers goroutines. Each result slot has a single writer
 // (its own index), so no mutex is needed.
-func runCombos(b Binding, combos []any, candles, dailyCandles []backtest.Candle,
+func runCombos(b Binding, combos []any, candles, dailyCandles, htfCandles []backtest.Candle,
 	cfg backtest.Config, periodDays float64,
 ) []CalibResult {
 	results := make([]CalibResult, len(combos))
@@ -72,7 +72,7 @@ func runCombos(b Binding, combos []any, candles, dailyCandles []backtest.Candle,
 		go func() {
 			defer wg.Done()
 			for i := range jobs {
-				res := backtest.Run(b.Build(combos[i]), candles, dailyCandles, cfg)
+				res := backtest.Run(b.Build(combos[i]), candles, dailyCandles, htfCandles, cfg)
 				m := backtest.Compute(res, res.BarsInMarket, len(res.Equity), periodDays)
 				results[i] = CalibResult{Params: combos[i], Metrics: m}
 			}
@@ -90,7 +90,7 @@ func runCombos(b Binding, combos []any, candles, dailyCandles []backtest.Candle,
 // RunGrid runs the engine for every combination in the grid and returns the
 // results ranked by metric (best first). minTrades is the floor: combos with
 // fewer trades sink below all qualified combos. periodDays feeds CAGR.
-func RunGrid(b Binding, grid Grid, candles []backtest.Candle, dailyCandles []backtest.Candle,
+func RunGrid(b Binding, grid Grid, candles []backtest.Candle, dailyCandles, htfCandles []backtest.Candle,
 	cfg backtest.Config, metric string, minTrades int, periodDays float64,
 ) ([]CalibResult, error) {
 	if err := validateMetric(metric); err != nil {
@@ -100,7 +100,7 @@ func RunGrid(b Binding, grid Grid, candles []backtest.Candle, dailyCandles []bac
 	if err != nil {
 		return nil, err
 	}
-	results := runCombos(b, combos, candles, dailyCandles, cfg, periodDays)
+	results := runCombos(b, combos, candles, dailyCandles, htfCandles, cfg, periodDays)
 	return rankResults(results, metric, minTrades), nil
 }
 
@@ -124,7 +124,7 @@ func ParsePhases(raw []byte) ([]Phase, error) {
 // onProgress, when non-nil, is called once per phase. metric and minTrades are global
 // across phases; minTrades floors every phase's ranking so a low-trade fluke cannot
 // survive forward.
-func RunPhases(b Binding, phases []Phase, candles, dailyCandles []backtest.Candle,
+func RunPhases(b Binding, phases []Phase, candles, dailyCandles, htfCandles []backtest.Candle,
 	cfg backtest.Config, metric string, minTrades int, periodDays float64,
 	onProgress func(PhaseProgress),
 ) ([]CalibResult, error) {
@@ -145,7 +145,7 @@ func RunPhases(b Binding, phases []Phase, candles, dailyCandles []backtest.Candl
 			}
 			combos = append(combos, expanded...)
 		}
-		results = rankResults(runCombos(b, combos, candles, dailyCandles, cfg, periodDays), metric, minTrades)
+		results = rankResults(runCombos(b, combos, candles, dailyCandles, htfCandles, cfg, periodDays), metric, minTrades)
 
 		keep := ph.KeepTop
 		if keep <= 0 {

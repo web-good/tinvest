@@ -149,6 +149,16 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 		return err
 	}
 
+	// Reversion's optional 4H HTF trend filter needs real Hour4 candles, loaded with the
+	// same year lead-in as the daily series to warm the 4H EMA. Other strategies pass nil.
+	var htfCandles []domain.Candle
+	if strategyName == "reversion" {
+		htfCandles, err = provider.Load(ctx, ticker, share.ID, enum.Hour4, dailyFrom, to, refresh)
+		if err != nil {
+			return err
+		}
+	}
+
 	cfg := domain.Config{InitialCash: cash, Fraction: fraction, Commission: commission, Lot: share.Lot}
 	periodDays := to.Sub(from).Hours() / 24
 
@@ -161,7 +171,7 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 		if err != nil {
 			return fmt.Errorf("parse -explain time %q (want 'YYYY-MM-DD HH:MM' MSK): %w", explain, err)
 		}
-		fmt.Println(domain.Trace(binding.Build(binding.DefaultParams()), candles, dailyCandles, cfg, target))
+		fmt.Println(domain.Trace(binding.Build(binding.DefaultParams()), candles, dailyCandles, htfCandles, cfg, target))
 		return nil
 	}
 
@@ -172,15 +182,15 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 	base := filepath.Join(outDir, fmt.Sprintf("%s_%s_%s_%s", ticker, strategyName, interval.String(), stamp))
 
 	if calibratePath != "" {
-		return runCalibration(binding, calibratePath, candles, dailyCandles, cfg, metric, minTrades, testMonths, periodDays, base,
+		return runCalibration(binding, calibratePath, candles, dailyCandles, htfCandles, cfg, metric, minTrades, testMonths, periodDays, base,
 			metaCommon(ticker, interval, from, to, cfg), to)
 	}
 
-	return runSingle(binding, paramsPath, candles, dailyCandles, cfg, periodDays, base,
+	return runSingle(binding, paramsPath, candles, dailyCandles, htfCandles, cfg, periodDays, base,
 		metaCommon(ticker, interval, from, to, cfg))
 }
 
-func runSingle(b svc.Binding, paramsPath string, candles []domain.Candle, dailyCandles []domain.Candle,
+func runSingle(b svc.Binding, paramsPath string, candles []domain.Candle, dailyCandles, htfCandles []domain.Candle,
 	cfg domain.Config, periodDays float64, base string, meta domain.Meta,
 ) error {
 	params := b.DefaultParams()
@@ -199,7 +209,7 @@ func runSingle(b svc.Binding, paramsPath string, candles []domain.Candle, dailyC
 		fmt.Printf("⚠️ not enough candles (%d) for lookback; empty report\n", len(candles))
 	}
 
-	res := domain.Run(b.Build(params), candles, dailyCandles, cfg)
+	res := domain.Run(b.Build(params), candles, dailyCandles, htfCandles, cfg)
 	m := domain.Compute(res, res.BarsInMarket, len(res.Equity), periodDays)
 
 	meta.Params = svc.ParamRows(params)
@@ -218,7 +228,7 @@ func runSingle(b svc.Binding, paramsPath string, candles []domain.Candle, dailyC
 	return nil
 }
 
-func runCalibration(b svc.Binding, gridPath string, candles []domain.Candle, dailyCandles []domain.Candle,
+func runCalibration(b svc.Binding, gridPath string, candles []domain.Candle, dailyCandles, htfCandles []domain.Candle,
 	cfg domain.Config, metric string, minTrades, testMonths int, periodDays float64, base string, meta domain.Meta, to time.Time,
 ) error {
 	raw, err := os.ReadFile(gridPath)
@@ -230,8 +240,8 @@ func runCalibration(b svc.Binding, gridPath string, candles []domain.Candle, dai
 		return err
 	}
 
-	gridCandles, gridDaily := candles, dailyCandles
-	bestCandles, bestDaily := candles, dailyCandles
+	gridCandles, gridDaily, gridHTF := candles, dailyCandles, htfCandles
+	bestCandles, bestDaily, bestHTF := candles, dailyCandles, htfCandles
 	bestDays := periodDays
 	gridDays := periodDays
 	var boundary time.Time
@@ -243,6 +253,7 @@ func runCalibration(b svc.Binding, gridPath string, candles []domain.Candle, dai
 		}
 		gridCandles, bestCandles = svc.SplitByTime(candles, boundary)
 		gridDaily, bestDaily = svc.SplitByTime(dailyCandles, boundary)
+		gridHTF, bestHTF = svc.SplitByTime(htfCandles, boundary)
 		bestDays = testDays
 		gridDays = periodDays - testDays
 	}
@@ -258,7 +269,7 @@ func runCalibration(b svc.Binding, gridPath string, candles []domain.Candle, dai
 			len(gridCandles), lb)
 	}
 
-	results, err := svc.RunPhases(b, phases, gridCandles, gridDaily, cfg, metric, minTrades, gridDays,
+	results, err := svc.RunPhases(b, phases, gridCandles, gridDaily, gridHTF, cfg, metric, minTrades, gridDays,
 		func(p svc.PhaseProgress) {
 			fmt.Printf("phase %s: %d combos -> kept %d (best %s=%.4g)\n", p.Name, p.Combos, p.Kept, metric, p.BestMetric)
 		})
@@ -273,7 +284,7 @@ func runCalibration(b svc.Binding, gridPath string, candles []domain.Candle, dai
 	// Also emit the full single-run report for the best combination.
 	if len(results) > 0 {
 		best := results[0].Params
-		res := domain.Run(b.Build(best), bestCandles, bestDaily, cfg)
+		res := domain.Run(b.Build(best), bestCandles, bestDaily, bestHTF, cfg)
 		m := domain.Compute(res, res.BarsInMarket, len(res.Equity), bestDays)
 		bestMeta := meta
 		bestMeta.Params = svc.ParamRows(best)
@@ -435,7 +446,7 @@ func runBasket(ctx context.Context, client grpcclient.GrpcClient, tickers []stri
 		gridCandles, bestCandles := svc.SplitByTime(candles, boundary)
 		gridDaily, bestDaily := svc.SplitByTime(dailyCandles, boundary)
 
-		results, err := svc.RunPhases(binding, phases, gridCandles, gridDaily, cfg, metric, minTrades, gridDays, nil)
+		results, err := svc.RunPhases(binding, phases, gridCandles, gridDaily, nil, cfg, metric, minTrades, gridDays, nil)
 		if err != nil {
 			return fmt.Errorf("%s: calibrate: %w", ticker, err)
 		}
@@ -446,7 +457,7 @@ func runBasket(ctx context.Context, client grpcclient.GrpcClient, tickers []stri
 		}
 
 		best := results[0].Params
-		res := domain.Run(binding.Build(best), bestCandles, bestDaily, cfg)
+		res := domain.Run(binding.Build(best), bestCandles, bestDaily, nil, cfg)
 		m := domain.Compute(res, res.BarsInMarket, len(res.Equity), testDays)
 
 		entry.Trades = m.TotalTrades

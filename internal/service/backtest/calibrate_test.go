@@ -55,7 +55,7 @@ func TestRunGridCartesianProduct(t *testing.T) {
 		"SLMult":    {1.0, 1.5, 2.0},
 	}
 	cfg := backtest.Config{InitialCash: 100000, Fraction: 1.0, Commission: 0.0005, Lot: 1}
-	results, err := RunGrid(b, grid, tinyCandles(400), nil, cfg, "profit_factor", 0, 16)
+	results, err := RunGrid(b, grid, tinyCandles(400), nil, nil, cfg, "profit_factor", 0, 16)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestRankResultsSortino(t *testing.T) {
 func TestRunGridUnknownMetricErrors(t *testing.T) {
 	b, _ := Lookup("RUAL")
 	cfg := backtest.Config{InitialCash: 100000, Fraction: 1.0, Lot: 1}
-	if _, err := RunGrid(b, Grid{}, tinyCandles(400), nil, cfg, "sharpe", 0, 16); err == nil {
+	if _, err := RunGrid(b, Grid{}, tinyCandles(400), nil, nil, cfg, "sharpe", 0, 16); err == nil {
 		t.Fatal("expected error for unknown metric")
 	}
 }
@@ -113,7 +113,7 @@ func TestRunGridUnknownMetricErrors(t *testing.T) {
 func TestRunGridUnknownFieldErrors(t *testing.T) {
 	b, _ := Lookup("RUAL")
 	cfg := backtest.Config{InitialCash: 100000, Fraction: 1.0, Lot: 1}
-	if _, err := RunGrid(b, Grid{"Bogus": {1, 2}}, tinyCandles(400), nil, cfg, "profit_factor", 0, 16); err == nil {
+	if _, err := RunGrid(b, Grid{"Bogus": {1, 2}}, tinyCandles(400), nil, nil, cfg, "profit_factor", 0, 16); err == nil {
 		t.Fatal("expected error for unknown grid field")
 	}
 }
@@ -159,7 +159,7 @@ func TestRunPhasesNarrowsAndCarriesSeeds(t *testing.T) {
 		{Name: "gates", Grid: Grid{"SLMult": {1.0, 1.5, 2.0}}},
 	}
 	var prog []PhaseProgress
-	results, err := RunPhases(b, phases, tinyCandles(400), nil, cfg, "profit_factor", 0, 16,
+	results, err := RunPhases(b, phases, tinyCandles(400), nil, nil, cfg, "profit_factor", 0, 16,
 		func(p PhaseProgress) { prog = append(prog, p) })
 	if err != nil {
 		t.Fatal(err)
@@ -195,7 +195,7 @@ func TestRunPhasesKeepTopDefaultsAndClamps(t *testing.T) {
 		{Grid: Grid{"SLMult": {1.0, 1.5}}},
 	}
 	var prog []PhaseProgress
-	results, err := RunPhases(b, phases, tinyCandles(400), nil, cfg, "profit_factor", 0, 16,
+	results, err := RunPhases(b, phases, tinyCandles(400), nil, nil, cfg, "profit_factor", 0, 16,
 		func(p PhaseProgress) { prog = append(prog, p) })
 	if err != nil {
 		t.Fatal(err)
@@ -218,11 +218,11 @@ func TestRunPhasesSinglePhaseMatchesRunGrid(t *testing.T) {
 	b, _ := Lookup("RUAL")
 	cfg := backtest.Config{InitialCash: 100000, Fraction: 1.0, Commission: 0.0005, Lot: 1}
 	grid := Grid{"EMAPeriod": {44, 55}, "SLMult": {1.0, 1.5}}
-	want, err := RunGrid(b, grid, tinyCandles(400), nil, cfg, "profit_factor", 0, 16)
+	want, err := RunGrid(b, grid, tinyCandles(400), nil, nil, cfg, "profit_factor", 0, 16)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := RunPhases(b, []Phase{{Grid: grid}}, tinyCandles(400), nil, cfg, "profit_factor", 0, 16, nil)
+	got, err := RunPhases(b, []Phase{{Grid: grid}}, tinyCandles(400), nil, nil, cfg, "profit_factor", 0, 16, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -237,7 +237,7 @@ func TestRunPhasesSinglePhaseMatchesRunGrid(t *testing.T) {
 func TestRunPhasesEmptyErrors(t *testing.T) {
 	b, _ := Lookup("RUAL")
 	cfg := backtest.Config{InitialCash: 100000, Fraction: 1.0, Lot: 1}
-	if _, err := RunPhases(b, nil, tinyCandles(400), nil, cfg, "profit_factor", 0, 16, nil); err == nil {
+	if _, err := RunPhases(b, nil, tinyCandles(400), nil, nil, cfg, "profit_factor", 0, 16, nil); err == nil {
 		t.Fatal("expected error for empty phases")
 	}
 }
@@ -289,11 +289,11 @@ func TestRunGridDeterministicOrder(t *testing.T) {
 	candles := tinyCandles(600)
 
 	// Run twice; the ranked output must be byte-stable across runs.
-	first, err := RunGrid(b, grid, candles, nil, cfg, "profit_factor", 0, 16)
+	first, err := RunGrid(b, grid, candles, nil, nil, cfg, "profit_factor", 0, 16)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := RunGrid(b, grid, candles, nil, cfg, "profit_factor", 0, 16)
+	second, err := RunGrid(b, grid, candles, nil, nil, cfg, "profit_factor", 0, 16)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -327,7 +327,7 @@ func BenchmarkRunGrid(b *testing.B) {
 	candles := tinyCandles(2000)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := RunGrid(bind, grid, candles, nil, cfg, "profit_factor", 0, 16); err != nil {
+		if _, err := RunGrid(bind, grid, candles, nil, nil, cfg, "profit_factor", 0, 16); err != nil {
 			b.Fatal(err)
 		}
 	}
