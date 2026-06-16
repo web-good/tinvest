@@ -2,6 +2,8 @@ package backtest
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	"tinvest/internal/domain/backtest"
@@ -237,4 +239,70 @@ func RunWalkForward(b Binding, phases []Phase, candles, dailyCandles, htfCandles
 	summary.PooledOOS = PooledMetrics(pool)
 	summary.CompoundedReturnPct = compoundReturns(foldPcts)
 	return summary, nil
+}
+
+// RenderWalkForwardMarkdown renders the pooled-OOS aggregate, the per-fold train-vs-OOS
+// table, and the parameter-stability breakdown. Mirrors RenderBasketMarkdown's style.
+func RenderWalkForwardMarkdown(ticker, metric string, s WalkForwardSummary, trainMonths, testMonths int) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "# Walk-forward %s\n\n", ticker)
+	fmt.Fprintf(&b, "- Train-окно: %d мес; OOS-фолд: %d мес; шаг: %d мес (встык)\n", trainMonths, testMonths, testMonths)
+	fmt.Fprintf(&b, "- Фолдов: %d; калибровка ранжировалась по: %s\n\n", len(s.Folds), metric)
+
+	m := s.PooledOOS
+	b.WriteString("## Пул сделок (агрегат OOS)\n\n")
+	b.WriteString("| Метрика | Значение |\n|---|---|\n")
+	fmt.Fprintf(&b, "| Всего сделок | %d |\n", m.TotalTrades)
+	fmt.Fprintf(&b, "| Выигрышных / проигрышных | %d / %d |\n", m.Wins, m.Losses)
+	fmt.Fprintf(&b, "| Win rate | %.2f%% |\n", m.WinRate*100)
+	fmt.Fprintf(&b, "| Profit factor | %.3f |\n", m.ProfitFactor)
+	fmt.Fprintf(&b, "| Gross profit / loss | %.2f / %.2f |\n", m.GrossProfit, m.GrossLoss)
+	fmt.Fprintf(&b, "| Expectancy | %.2f |\n", m.Expectancy)
+	fmt.Fprintf(&b, "| Sortino | %.3f |\n", m.Sortino)
+	fmt.Fprintf(&b, "| Лучшая / худшая сделка | %.2f / %.2f |\n", m.BestTrade, m.WorstTrade)
+	fmt.Fprintf(&b, "| Compounded return | %.2f%% |\n\n", s.CompoundedReturnPct*100)
+
+	b.WriteString("## Результаты по фолдам\n\n")
+	b.WriteString("| # | Train-окно | Test-окно | In-sample PF | OOS PF | OOS сделок | OOS NetPnL% | OOS MaxDD% |\n")
+	b.WriteString("|---|---|---|---|---|---|---|---|\n")
+	df := func(t time.Time) string { return t.Format("2006-01-02") }
+	for _, f := range s.Folds {
+		train := fmt.Sprintf("%s—%s", df(f.TrainFrom), df(f.TrainTo))
+		test := fmt.Sprintf("%s—%s", df(f.TestFrom), df(f.TestTo))
+		if f.WinnerRows == nil {
+			fmt.Fprintf(&b, "| %d | %s | %s | — | — | — | — | — | %s |\n", f.Index, train, test, f.Note)
+			continue
+		}
+		fmt.Fprintf(&b, "| %d | %s | %s | %.3f | %.3f | %d | %.2f%% | %.2f%% |\n",
+			f.Index, train, test, f.InSamplePF, f.OOS.ProfitFactor, f.OOSTrades, f.OOSNetPnLPct*100, f.OOSMaxDDPct*100)
+	}
+
+	b.WriteString("\n## Стабильность параметров\n\n")
+	stable, varied := paramStability(s.Folds)
+	if len(stable) > 0 {
+		names := make([]string, 0, len(stable))
+		for n := range stable {
+			names = append(names, n)
+		}
+		sort.Strings(names)
+		b.WriteString("**Стабильные** (одинаковы во всех фолдах): ")
+		parts := make([]string, 0, len(names))
+		for _, n := range names {
+			parts = append(parts, fmt.Sprintf("%s=%s", n, stable[n]))
+		}
+		b.WriteString(strings.Join(parts, ", "))
+		b.WriteString("\n\n")
+	}
+	if len(varied) > 0 {
+		names := make([]string, 0, len(varied))
+		for n := range varied {
+			names = append(names, n)
+		}
+		sort.Strings(names)
+		b.WriteString("**Гуляли** (значение по фолдам):\n\n")
+		for _, n := range names {
+			fmt.Fprintf(&b, "- %s: %s\n", n, strings.Join(varied[n], ", "))
+		}
+	}
+	return b.String()
 }

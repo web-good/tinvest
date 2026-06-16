@@ -1,6 +1,7 @@
 package backtest
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -232,5 +233,46 @@ func TestRunWalkForwardNoFold(t *testing.T) {
 		"profit_factor", 0, from, to, 3, 3)
 	if err == nil {
 		t.Fatal("want error when no fold fits")
+	}
+}
+
+func TestRenderWalkForwardMarkdown(t *testing.T) {
+	s := WalkForwardSummary{
+		Folds: []WalkForwardFold{
+			{
+				Index:     1,
+				TrainFrom: date(2025, time.January, 1), TrainTo: date(2025, time.April, 1),
+				TestFrom: date(2025, time.April, 1), TestTo: date(2025, time.July, 1),
+				InSamplePF: 2.10, OOS: backtest.Metrics{ProfitFactor: 1.30, TotalTrades: 12},
+				OOSNetPnLPct: 0.031, OOSMaxDDPct: 0.04, OOSTrades: 12,
+				WinnerRows: []backtest.ParamLine{{Name: "RSIPeriod", Value: "6"}, {Name: "StopATRMult", Value: "0.8"}},
+			},
+			{
+				Index:     2,
+				TrainFrom: date(2025, time.April, 1), TrainTo: date(2025, time.July, 1),
+				TestFrom: date(2025, time.July, 1), TestTo: date(2025, time.October, 1),
+				InSamplePF: 1.90, OOS: backtest.Metrics{ProfitFactor: 0.80, TotalTrades: 9},
+				OOSNetPnLPct: -0.012, OOSMaxDDPct: 0.06, OOSTrades: 9,
+				WinnerRows: []backtest.ParamLine{{Name: "RSIPeriod", Value: "6"}, {Name: "StopATRMult", Value: "1.2"}},
+			},
+		},
+		PooledOOS:           backtest.Metrics{ProfitFactor: 1.05, TotalTrades: 21, WinRate: 0.48},
+		CompoundedReturnPct: 0.0186,
+	}
+	md := RenderWalkForwardMarkdown("NVTK", "profit_factor", s, 3, 3)
+
+	for _, want := range []string{
+		"# Walk-forward NVTK",
+		"## Пул сделок (агрегат OOS)",
+		"Profit factor",
+		"Compounded return",
+		"## Результаты по фолдам",
+		"## Стабильность параметров",
+		"RSIPeriod",   // stable param mentioned
+		"StopATRMult", // varied param mentioned
+	} {
+		if !strings.Contains(md, want) {
+			t.Errorf("report missing %q", want)
+		}
 	}
 }
