@@ -148,6 +148,39 @@ func TestVisibleDailyCloses(t *testing.T) {
 	}
 }
 
+func TestVisibleCompletedHTF(t *testing.T) {
+	// Четыре 4H-бара, открытия в UTC: 00:00, 04:00, 08:00, 12:00.
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	htf := []Candle{
+		{Time: base, High: 11, Low: 9, Close: 10},
+		{Time: base.Add(4 * time.Hour), High: 21, Low: 19, Close: 20},
+		{Time: base.Add(8 * time.Hour), High: 31, Low: 29, Close: 30},
+		{Time: base.Add(12 * time.Hour), High: 41, Low: 39, Close: 40},
+	}
+
+	// На 09:00 закрылись бары 00:00 (→04:00) и 04:00 (→08:00); бар 08:00
+	// закроется только в 12:00, текущий формирующийся невидим.
+	cur := base.Add(9 * time.Hour)
+	closes, highs, lows := visibleCompletedHTF(htf, cur, 4*time.Hour)
+	if len(closes) != 2 || closes[0] != 10 || closes[1] != 20 {
+		t.Fatalf("closes на 09:00 = %v, want [10 20]", closes)
+	}
+	if len(highs) != 2 || len(lows) != 2 || highs[1] != 21 || lows[1] != 19 {
+		t.Fatalf("highs/lows на 09:00 = %v/%v, want выровнены с closes", highs, lows)
+	}
+
+	// Ровно на границе закрытия (08:00) видим оба бара: бар 00:00 закрылся в 04:00,
+	// бар 04:00 закрывается ровно в 08:00 включительно (правило c.Time.Add(interval) <= cur).
+	if c, _, _ := visibleCompletedHTF(htf, base.Add(8*time.Hour), 4*time.Hour); len(c) != 2 {
+		t.Fatalf("на 08:00 видимы %v, want 2 (бары 00:00 и 04:00 закрыты)", c)
+	}
+
+	// До первого закрытия — пусто.
+	if c, _, _ := visibleCompletedHTF(htf, base.Add(time.Hour), 4*time.Hour); len(c) != 0 {
+		t.Fatalf("на 01:00 видимы %v, want пусто", c)
+	}
+}
+
 func TestEngineSuppliesDailyCloses(t *testing.T) {
 	candles := []Candle{
 		{Time: time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC), Open: 10, High: 10, Low: 10, Close: 10, Volume: 1},

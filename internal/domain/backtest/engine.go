@@ -53,6 +53,22 @@ func visibleDailyHighsLows(daily []Candle, t time.Time, loc *time.Location) (hig
 	return highs, lows
 }
 
+// visibleCompletedHTF returns closes/highs/lows of higher-timeframe candles that have
+// FULLY closed by cur. A bar opening at c.Time spanning `interval` is closed once
+// c.Time.Add(interval) <= cur; the current, still-forming HTF bar is never visible
+// (no-lookahead). The three series are index-aligned, oldest-first, so the last element
+// is the most recent HTF bar closed at/before cur.
+func visibleCompletedHTF(htf []Candle, cur time.Time, interval time.Duration) (closes, highs, lows []float64) {
+	for _, c := range htf {
+		if !c.Time.Add(interval).After(cur) { // c.Time+interval <= cur
+			closes = append(closes, c.Close)
+			highs = append(highs, c.High)
+			lows = append(lows, c.Low)
+		}
+	}
+	return closes, highs, lows
+}
+
 // todayExtent returns the high and low across all bars sharing candles[i]'s MSK
 // calendar day, scanning back from i only (no lookahead). Returns (0,0) when i is
 // out of range.
