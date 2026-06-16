@@ -315,6 +315,10 @@ func (s *Strategy) decide(in decideInput) model.Signal {
 	// 0. Optional higher-timeframe (4H) trend filter. When enabled, block the buy unless
 	// the 4H trend is confirmed up. Missing/un-warmed 4H data (htfOK=false) also blocks:
 	// a protective filter must not trade when it cannot confirm the higher trend.
+	// NOTE: the `HTFTrendEMA > 0` guard is load-bearing, not redundant: when the filter is
+	// disabled buildInput leaves htfOK=false, so htfUptrend is false and dropping the guard
+	// would block every entry. htfOK thus means "disabled" or "not warmed" — never assume it
+	// means "skip the gate" (do not add a permissive htfOK=false fallback here).
 	if s.p.HTFTrendEMA > 0 && !htfUptrend(in) {
 		return sig
 	}
