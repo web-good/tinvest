@@ -247,6 +247,17 @@ func runCalibration(b svc.Binding, gridPath string, candles []domain.Candle, dai
 		gridDays = periodDays - testDays
 	}
 
+	// Guard the in-sample (grid) window: shorter than the strategy lookback means the
+	// engine returns early for every combo, silently yielding a 0-trade calibration that
+	// looks like a result but ranks nothing. Fail loudly instead. The dominant lookback
+	// term (e.g. SlowEMA) is not swept here, so the default params are representative.
+	if lb := b.Build(b.DefaultParams()).Lookback(); len(gridCandles) < lb {
+		return fmt.Errorf("in-sample window has %d candles, fewer than the strategy lookback %d: "+
+			"every combo would trade 0 times — the calibration window is too short "+
+			"(reduce -test-months or fetch more history; train window starts at the oldest available candle)",
+			len(gridCandles), lb)
+	}
+
 	results, err := svc.RunPhases(b, phases, gridCandles, gridDaily, cfg, metric, minTrades, gridDays,
 		func(p svc.PhaseProgress) {
 			fmt.Printf("phase %s: %d combos -> kept %d (best %s=%.4g)\n", p.Name, p.Combos, p.Kept, metric, p.BestMetric)
