@@ -46,6 +46,7 @@ type Params struct {
 	UseATRStop      int     // 0 = RSIOS exit (RSI breaks oversold zone down); 1 = ATRSL exit (price below entry by the daily ATR)
 	ATRPeriod       int     // daily ATR length; consulted only when UseATRStop=1
 	StopATRMult     float64 // ATRSL distance: stop = PurchasePrice - StopATRMult*EntryATR (default 1.0)
+	CatStopATRMult  float64 // catastrophic stop distance in EntryATR multiples; >0 = always-on backstop + risk-sizing anchor; 0 = off
 	UseVolume       int     // 0 = no volume filter; 1 = block entries below the average bar volume
 	VolAvgPeriod    int     // preceding-bar window for the average-volume baseline; consulted only when UseVolume=1
 	VolMult         float64 // entry requires entryVolume >= avg*VolMult (default 1.0)
@@ -79,7 +80,7 @@ func (s *Strategy) Lookback() int {
 		s.p.RSIPeriod + 1,
 		s.p.StochKPeriod + s.p.StochDSmooth + 1,
 	}
-	if (s.p.UseATRStop == 1 || s.p.UseBreakeven == 1) && s.p.ATRPeriod > 0 {
+	if (s.p.UseATRStop == 1 || s.p.UseBreakeven == 1 || s.p.CatStopATRMult > 0) && s.p.ATRPeriod > 0 {
 		cands = append(cands, s.p.ATRPeriod+1)
 	}
 	if s.p.UseVolume == 1 && s.p.VolAvgPeriod > 0 {
@@ -154,7 +155,7 @@ func (s *Strategy) buildInput(md strategy.MarketData) decideInput {
 	}
 
 	var atr float64
-	if (s.p.UseATRStop == 1 || s.p.UseBreakeven == 1) && s.p.ATRPeriod > 0 {
+	if (s.p.UseATRStop == 1 || s.p.UseBreakeven == 1 || s.p.CatStopATRMult > 0) && s.p.ATRPeriod > 0 {
 		atr = indicators.ATR(md.Highs, md.Lows, md.Closes, s.p.ATRPeriod)
 	}
 
@@ -346,6 +347,9 @@ func (s *Strategy) decide(in decideInput) model.Signal {
 	sig.RSI = in.rsiNow
 	sig.EntryReason = s.entryReason(in)
 	sig.ATR = in.atr
+	if s.p.CatStopATRMult > 0 && in.atr > 0 {
+		sig.StopLoss = in.price - s.p.CatStopATRMult*in.atr
+	}
 	return sig
 }
 

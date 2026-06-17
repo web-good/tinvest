@@ -975,3 +975,20 @@ func TestExitPrecedenceRSI50OverBreakeven(t *testing.T) {
 		t.Fatalf("RSI50 must win over BE, got %q", sig.Reason)
 	}
 }
+
+func TestBuyEmitsCatStop(t *testing.T) {
+	p := defaultParams()
+	p.CatStopATRMult = 2.0
+	p.ATRPeriod = 14
+	s := NewWithParams("TEST", p)
+	in := passingInput() // price = 100, all entry gates pass
+	in.atr = 3.0
+	sig := s.decide(in)
+	if sig.Kind != model.SignalBuy {
+		t.Fatalf("expected Buy, got %v", sig.Kind)
+	}
+	want := in.price - 2.0*3.0 // 100 - 6 = 94
+	if sig.StopLoss != want {
+		t.Fatalf("StopLoss = %.4f, want %.4f", sig.StopLoss, want)
+	}
+}
