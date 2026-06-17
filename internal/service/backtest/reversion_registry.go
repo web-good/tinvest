@@ -54,6 +54,7 @@ func genericReversionDefaults() core.Params {
 		RSIPeriod: 14, RSIOversold: 20,
 		StochKPeriod: 14, StochDSmooth: 3, StochOversold: 20,
 		UseOverbought: 1, RSIOverbought: 70, StochOverbought: 80,
+		UseRSI50: 1,
 		UseBreakeven: 0, BreakevenArmATR: 1.0,
 	}
 }

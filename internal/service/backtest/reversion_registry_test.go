@@ -55,3 +55,10 @@ func TestReversionDefaultsValid(t *testing.T) {
 		t.Fatalf("invalid generic defaults: %+v", p)
 	}
 }
+
+func TestGenericReversionDefaultsKeepRSI50(t *testing.T) {
+	p := genericReversionDefaults()
+	if p.UseRSI50 != 1 {
+		t.Fatalf("generic defaults UseRSI50 = %d, want 1 (preserve always-on RSI50)", p.UseRSI50)
+	}
+}
