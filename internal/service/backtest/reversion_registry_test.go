@@ -62,3 +62,14 @@ func TestGenericReversionDefaultsKeepRSI50(t *testing.T) {
 		t.Fatalf("generic defaults UseRSI50 = %d, want 1 (preserve always-on RSI50)", p.UseRSI50)
 	}
 }
+
+func TestReversionPerTickerUseRSI50(t *testing.T) {
+	// Guard against regression: every registered per-ticker reversion DefaultParams
+	// must have UseRSI50=1 (always-on momentum-fade exit).
+	for ticker, binding := range reversionRegistry {
+		params := binding.DefaultParams().(core.Params)
+		if params.UseRSI50 != 1 {
+			t.Errorf("ticker %s: UseRSI50 = %d, want 1 (always-on RSI50 exit)", ticker, params.UseRSI50)
+		}
+	}
+}

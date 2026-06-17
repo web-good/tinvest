@@ -48,7 +48,7 @@ func main() {
 		explain      = flag.String("explain", "", "diagnose one bar: MSK time 'YYYY-MM-DD HH:MM'; prints why the strategy did/didn't enter")
 		basket       = flag.String("basket", "", "basket mode: comma-separated tickers; calibrates each on the early window and pools OOS trades (ignores -ticker)")
 		gridDir      = flag.String("grid-dir", "data/params", "basket mode: directory holding <lower-ticker>/momentum_grid.json")
-		riskPct      = flag.Float64("risk-pct", 0, "risk-based sizing: risk this %% of equity per trade off the entry stop (0 = fixed -fraction sizing)")
+		riskPct      = flag.Float64("risk-pct", 0, "risk-based sizing: risk this %% of equity per trade off the entry stop (requires CatStopATRMult>0; 0 = fixed -fraction sizing)")
 		screen       = flag.String("screen", "", "screen mode: comma-separated tickers; ranks them by variance ratio (ignores -ticker/-strategy)")
 	)
 	flag.Parse()

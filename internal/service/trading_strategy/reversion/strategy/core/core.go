@@ -123,7 +123,7 @@ type decideInput struct {
 	stochNow    float64
 	stochPrev   float64
 	stochOK     bool
-	atr         float64 // ATR over the window (0 unless (UseATRStop=1 || UseBreakeven=1) and ATRPeriod>0); stamped onto sig.ATR at entry to freeze EntryATR
+	atr         float64 // ATR over the window (0 unless (UseATRStop=1 || UseBreakeven=1 || CatStopATRMult>0 || UseTrail=1) and ATRPeriod>0); stamped onto sig.ATR at entry to freeze EntryATR
 	entryVol    float64 // entry (latest) bar's volume; 0 unless UseVolume=1 and a baseline was computed
 	avgVol      float64 // average volume of the preceding VolAvgPeriod bars (weekends excluded); 0 unless gate active
 	volOK       bool    // true when the volume baseline could be computed; false -> gate is skipped
