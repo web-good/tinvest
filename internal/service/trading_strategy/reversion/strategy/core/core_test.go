@@ -65,6 +65,7 @@ func defaultParams() Params {
 		UseTrend: 1, FastEMA: 50, SlowEMA: 200,
 		RSIPeriod: 14, RSIOversold: 20,
 		StochKPeriod: 14, StochDSmooth: 3, StochOversold: 20,
+		UseRSI50: 1,
 	}
 }
 
@@ -1059,5 +1060,36 @@ func TestManageCatStopExit(t *testing.T) {
 	}
 	if sig.StopLoss != 94.0 {
 		t.Fatalf("StopLoss = %.4f, want 94.0", sig.StopLoss)
+	}
+}
+
+func TestManageTrailExit(t *testing.T) {
+	p := defaultParams()
+	p.UseTrail = 1
+	p.TrailATRMult = 1.5
+	s := NewWithParams("TEST", p)
+	in := openInput() // CatStopATRMult is 0 here, so CatSL does not fire
+	in.pos.PurchasePrice = 100
+	in.pos.EntryATR = 4.0
+	in.pos.MaxFavorablePrice = 120  // ran up to 120
+	in.price = 120 - 1.5*4.0 - 0.01 // 113.99 < trail 114 -> exit
+	sig := s.decide(in)
+	if sig.Kind != model.SignalSell || sig.Reason != "TRAIL" {
+		t.Fatalf("got Kind=%v Reason=%q, want Sell/TRAIL", sig.Kind, sig.Reason)
+	}
+	if sig.StopLoss != 114.0 {
+		t.Fatalf("StopLoss = %.4f, want 114.0", sig.StopLoss)
+	}
+}
+
+func TestRSI50ExitToggledOff(t *testing.T) {
+	p := defaultParams()
+	p.UseRSI50 = 0 // disabled
+	s := NewWithParams("TEST", p)
+	in := openInput()
+	in.rsiPrev, in.rsiNow = 55, 45 // a 50 cross-down that WOULD fire if enabled
+	sig := s.decide(in)
+	if sig.Kind == model.SignalSell && sig.Reason == "RSI50" {
+		t.Fatalf("RSI50 exit fired while UseRSI50==0")
 	}
 }

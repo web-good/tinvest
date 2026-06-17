@@ -59,6 +59,9 @@ type Params struct {
 	UseRegime       int     // 1 = require a low-ADX (range) regime before buying; 0 = off
 	ADXPeriod       int     // ADX (Wilder) length; consulted only when UseRegime==1
 	ADXMax          float64 // enter only when ADX < ADXMax (range regime); consulted only when UseRegime==1
+	UseTrail        int     // 1 = ATR trailing stop on the running max favourable price; 0 = off
+	TrailATRMult    float64 // trail distance in EntryATR multiples below MaxFavorablePrice; consulted only when UseTrail==1
+	UseRSI50        int     // 1 = exit when RSI crosses 50 downward (default); 0 = disable the RSI50 momentum-fade exit
 }
 
 // Strategy trades a single instrument with the dual-confirmation rules. Ticker-agnostic
@@ -83,7 +86,7 @@ func (s *Strategy) Lookback() int {
 		s.p.RSIPeriod + 1,
 		s.p.StochKPeriod + s.p.StochDSmooth + 1,
 	}
-	if (s.p.UseATRStop == 1 || s.p.UseBreakeven == 1 || s.p.CatStopATRMult > 0) && s.p.ATRPeriod > 0 {
+	if (s.p.UseATRStop == 1 || s.p.UseBreakeven == 1 || s.p.CatStopATRMult > 0 || s.p.UseTrail == 1) && s.p.ATRPeriod > 0 {
 		cands = append(cands, s.p.ATRPeriod+1)
 	}
 	if s.p.UseVolume == 1 && s.p.VolAvgPeriod > 0 {
@@ -163,7 +166,7 @@ func (s *Strategy) buildInput(md strategy.MarketData) decideInput {
 	}
 
 	var atr float64
-	if (s.p.UseATRStop == 1 || s.p.UseBreakeven == 1 || s.p.CatStopATRMult > 0) && s.p.ATRPeriod > 0 {
+	if (s.p.UseATRStop == 1 || s.p.UseBreakeven == 1 || s.p.CatStopATRMult > 0 || s.p.UseTrail == 1) && s.p.ATRPeriod > 0 {
 		atr = indicators.ATR(md.Highs, md.Lows, md.Closes, s.p.ATRPeriod)
 	}
 
@@ -433,7 +436,14 @@ func (s *Strategy) manage(in decideInput, sig model.Signal) model.Signal {
 		sig.StopLoss = stop
 		sig.ExitReason = fmt.Sprintf("SL: цена %.4f ≤ катастрофический стоп %.4f (вход %.4f − %.2g×ATR %.4f)",
 			in.price, stop, in.pos.PurchasePrice, s.p.CatStopATRMult, in.pos.EntryATR)
-	case in.rsiOK && crossDown(in.rsiPrev, in.rsiNow, rsiExitLevel):
+	case s.p.UseTrail == 1 && in.pos.EntryATR > 0 && s.p.TrailATRMult > 0 &&
+		in.price <= in.pos.MaxFavorablePrice-s.p.TrailATRMult*in.pos.EntryATR:
+		trail := in.pos.MaxFavorablePrice - s.p.TrailATRMult*in.pos.EntryATR
+		sig.Kind, sig.Reason = model.SignalSell, "TRAIL"
+		sig.StopLoss = trail
+		sig.ExitReason = fmt.Sprintf("TRAIL: цена %.4f ≤ трейлинг %.4f (макс %.4f − %.2g×ATR %.4f)",
+			in.price, trail, in.pos.MaxFavorablePrice, s.p.TrailATRMult, in.pos.EntryATR)
+	case s.p.UseRSI50 == 1 && in.rsiOK && crossDown(in.rsiPrev, in.rsiNow, rsiExitLevel):
 		sig.Kind, sig.Reason = model.SignalSell, "RSI50"
 		sig.ExitReason = fmt.Sprintf("RSI50: RSI %.2f→%.2f пересёк 50 сверху вниз", in.rsiPrev, in.rsiNow)
 	case s.p.UseBreakeven == 1 && in.pos.EntryATR > 0 && s.p.BreakevenArmATR > 0 &&
