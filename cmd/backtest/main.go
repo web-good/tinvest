@@ -48,6 +48,7 @@ func main() {
 		explain      = flag.String("explain", "", "diagnose one bar: MSK time 'YYYY-MM-DD HH:MM'; prints why the strategy did/didn't enter")
 		basket       = flag.String("basket", "", "basket mode: comma-separated tickers; calibrates each on the early window and pools OOS trades (ignores -ticker)")
 		gridDir      = flag.String("grid-dir", "data/params", "basket mode: directory holding <lower-ticker>/momentum_grid.json")
+		riskPct      = flag.Float64("risk-pct", 0, "risk-based sizing: risk this %% of equity per trade off the entry stop (0 = fixed -fraction sizing)")
 	)
 	flag.Parse()
 	logger.Init() // candle fetcher logs chunk errors via the package logger
@@ -59,7 +60,7 @@ func main() {
 
 	if err := run(*ticker, *strategyName, interval, *months, *cash, *fraction, *commission,
 		*paramsPath, *calibrate, *metric, *minTrades, *testMonths, *trainMonths, *outDir, *refresh, *explain,
-		*basket, *gridDir); err != nil {
+		*basket, *gridDir, *riskPct); err != nil {
 		log.Fatalf("backtest: %v", err)
 	}
 }
@@ -86,7 +87,7 @@ func parseInterval(s string) (enum.Interval, error) {
 
 func run(ticker, strategyName string, interval enum.Interval, months int, cash, fraction, commission float64,
 	paramsPath, calibratePath, metric string, minTrades, testMonths, trainMonths int, outDir string, refresh bool, explain string,
-	basketCSV, gridDir string,
+	basketCSV, gridDir string, riskPct float64,
 ) error {
 	if paramsPath != "" && calibratePath != "" {
 		return fmt.Errorf("-params and -calibrate are mutually exclusive")
@@ -113,7 +114,7 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 			return fmt.Errorf("-basket currently supports -strategy momentum only")
 		}
 		return runBasket(ctx, client, splitTickers(basketCSV), interval, months,
-			cash, fraction, commission, metric, minTrades, testMonths, gridDir, outDir, refresh)
+			cash, fraction, commission, metric, minTrades, testMonths, gridDir, outDir, refresh, riskPct)
 	}
 
 	if ticker == "" {
@@ -163,7 +164,7 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 		}
 	}
 
-	cfg := domain.Config{InitialCash: cash, Fraction: fraction, Commission: commission, Lot: share.Lot}
+	cfg := domain.Config{InitialCash: cash, Fraction: fraction, Commission: commission, Lot: share.Lot, RiskFractionPct: riskPct}
 	periodDays := to.Sub(from).Hours() / 24
 
 	if explain != "" {
@@ -401,7 +402,7 @@ func splitTickers(csv string) []string {
 // sample. Each ticker keeps its own calibrated params; the pool is validation only.
 func runBasket(ctx context.Context, client grpcclient.GrpcClient, tickers []string, interval enum.Interval,
 	months int, cash, fraction, commission float64, metric string, minTrades, testMonths int,
-	gridDir, outDir string, refresh bool,
+	gridDir, outDir string, refresh bool, riskPct float64,
 ) error {
 	if testMonths <= 0 {
 		return fmt.Errorf("-basket requires -test-months > 0 (walk-forward OOS window)")
@@ -468,7 +469,7 @@ func runBasket(ctx context.Context, client grpcclient.GrpcClient, tickers []stri
 		}
 
 		binding := svc.MomentumLookupOrGeneric(ticker)
-		cfg := domain.Config{InitialCash: cash, Fraction: fraction, Commission: commission, Lot: share.Lot}
+		cfg := domain.Config{InitialCash: cash, Fraction: fraction, Commission: commission, Lot: share.Lot, RiskFractionPct: riskPct}
 		gridCandles, bestCandles := svc.SplitByTime(candles, boundary)
 		gridDaily, bestDaily := svc.SplitByTime(dailyCandles, boundary)
 
