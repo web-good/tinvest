@@ -49,6 +49,7 @@ func main() {
 		basket       = flag.String("basket", "", "basket mode: comma-separated tickers; calibrates each on the early window and pools OOS trades (ignores -ticker)")
 		gridDir      = flag.String("grid-dir", "data/params", "basket mode: directory holding <lower-ticker>/momentum_grid.json")
 		riskPct      = flag.Float64("risk-pct", 0, "risk-based sizing: risk this %% of equity per trade off the entry stop (0 = fixed -fraction sizing)")
+		screen       = flag.String("screen", "", "screen mode: comma-separated tickers; ranks them by variance ratio (ignores -ticker/-strategy)")
 	)
 	flag.Parse()
 	logger.Init() // candle fetcher logs chunk errors via the package logger
@@ -60,7 +61,7 @@ func main() {
 
 	if err := run(*ticker, *strategyName, interval, *months, *cash, *fraction, *commission,
 		*paramsPath, *calibrate, *metric, *minTrades, *testMonths, *trainMonths, *outDir, *refresh, *explain,
-		*basket, *gridDir, *riskPct); err != nil {
+		*basket, *gridDir, *riskPct, *screen); err != nil {
 		log.Fatalf("backtest: %v", err)
 	}
 }
@@ -87,7 +88,7 @@ func parseInterval(s string) (enum.Interval, error) {
 
 func run(ticker, strategyName string, interval enum.Interval, months int, cash, fraction, commission float64,
 	paramsPath, calibratePath, metric string, minTrades, testMonths, trainMonths int, outDir string, refresh bool, explain string,
-	basketCSV, gridDir string, riskPct float64,
+	basketCSV, gridDir string, riskPct float64, screenCSV string,
 ) error {
 	if paramsPath != "" && calibratePath != "" {
 		return fmt.Errorf("-params and -calibrate are mutually exclusive")
@@ -97,6 +98,9 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 	}
 	if trainMonths > 0 && calibratePath == "" {
 		return fmt.Errorf("-train-months requires -calibrate (walk-forward re-calibrates each fold from a grid)")
+	}
+	if screenCSV != "" && (calibratePath != "" || basketCSV != "" || explain != "") {
+		return fmt.Errorf("-screen is standalone (not combined with -calibrate/-basket/-explain)")
 	}
 
 	token, err := loadToken()
@@ -108,6 +112,10 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 		return fmt.Errorf("grpc client: %w", err)
 	}
 	ctx := context.Background()
+
+	if screenCSV != "" {
+		return runScreen(ctx, client, splitTickers(screenCSV), interval, months, outDir, refresh)
+	}
 
 	if basketCSV != "" {
 		if strategyName != "momentum" {
@@ -382,6 +390,67 @@ func writeFile(path, content string) error {
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		return fmt.Errorf("write %s: %w", path, err)
 	}
+	return nil
+}
+
+func runScreen(ctx context.Context, client grpcclient.GrpcClient, tickers []string,
+	interval enum.Interval, months int, outDir string, refresh bool,
+) error {
+	if len(tickers) == 0 {
+		return fmt.Errorf("-screen: no tickers parsed")
+	}
+	shares, err := client.InstrumentsServiceClient().Shares(ctx)
+	if err != nil {
+		return fmt.Errorf("load shares: %w", err)
+	}
+	byTicker := make(map[string]shareInfo, len(shares))
+	for _, s := range shares {
+		byTicker[s.Ticker] = shareInfo{ID: s.ID, Lot: s.Lot}
+	}
+	provider := svc.NewCandleProvider(client.MarketDataServiceClient(), cacheDir)
+	to := time.Now()
+	from := to.AddDate(0, -months, 0)
+
+	var rows []svc.ScreenRow
+	for _, ticker := range tickers {
+		share, ok := byTicker[ticker]
+		if !ok {
+			rows = append(rows, svc.ScreenRow{Ticker: ticker, Note: "инструмент не найден"})
+			continue
+		}
+		candles, err := provider.Load(ctx, ticker, share.ID, interval, from, to, refresh)
+		if err != nil {
+			return fmt.Errorf("%s: load candles: %w", ticker, err)
+		}
+		closes := make([]float64, len(candles))
+		for i, c := range candles {
+			closes[i] = c.Close
+		}
+		rets := domain.SimpleReturns(closes)
+		if len(rets) < 9 {
+			rows = append(rows, svc.ScreenRow{Ticker: ticker, Note: "мало свечей"})
+			continue
+		}
+		vr2 := domain.VarianceRatio(rets, 2)
+		rows = append(rows, svc.ScreenRow{
+			Ticker: ticker, VR2: vr2,
+			VR4:       domain.VarianceRatio(rets, 4),
+			VR8:       domain.VarianceRatio(rets, 8),
+			Autocorr1: domain.Autocorr1(rets),
+			Verdict:   domain.MeanReversionVerdict(vr2),
+		})
+		fmt.Printf("screen %s: VR(2)=%.3f autocorr=%.3f\n", ticker, vr2, domain.Autocorr1(rets))
+	}
+
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		return fmt.Errorf("mkdir out dir: %w", err)
+	}
+	stamp := time.Now().Format("20060102_150405")
+	path := filepath.Join(outDir, fmt.Sprintf("screen_%s_%s.md", interval.String(), stamp))
+	if err := writeFile(path, svc.RenderScreenMarkdown(rows)); err != nil {
+		return err
+	}
+	fmt.Printf("screen report: %s (tickers=%d)\n", path, len(rows))
 	return nil
 }
 
