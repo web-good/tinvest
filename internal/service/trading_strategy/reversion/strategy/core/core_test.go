@@ -992,3 +992,19 @@ func TestBuyEmitsCatStop(t *testing.T) {
 		t.Fatalf("StopLoss = %.4f, want %.4f", sig.StopLoss, want)
 	}
 }
+
+func TestBuyNoCatStopWhenATRZero(t *testing.T) {
+	p := defaultParams()
+	p.CatStopATRMult = 2.0
+	p.ATRPeriod = 14
+	s := NewWithParams("TEST", p)
+	in := passingInput()
+	in.atr = 0 // ATR unavailable
+	sig := s.decide(in)
+	if sig.Kind != model.SignalBuy {
+		t.Fatalf("expected Buy, got %v", sig.Kind)
+	}
+	if sig.StopLoss != 0 {
+		t.Fatalf("StopLoss should be 0 when atr=0, got %.4f", sig.StopLoss)
+	}
+}
