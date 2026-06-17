@@ -38,8 +38,20 @@ func (p *portfolio) open(price float64, t time.Time, level, target, atr, stop fl
 	if lotCost <= 0 {
 		return
 	}
-	budget := p.cfg.Fraction * p.cash
-	lots := int64(math.Floor(budget / lotCost))
+	var lots int64
+	if p.cfg.RiskFractionPct > 0 && stop > 0 && price > stop {
+		// Risk-based sizing: position size so a stop-out loses RiskFractionPct% of equity.
+		riskCapital := p.cfg.RiskFractionPct / 100 * p.equity(price)
+		perShareRisk := price - stop
+		lots = int64(math.Floor(riskCapital / perShareRisk / float64(p.cfg.Lot)))
+		// Never deploy more than the cash on hand allows.
+		if affordable := int64(math.Floor(p.cash / lotCost)); lots > affordable {
+			lots = affordable
+		}
+	} else {
+		budget := p.cfg.Fraction * p.cash
+		lots = int64(math.Floor(budget / lotCost))
+	}
 	if lots <= 0 {
 		return
 	}

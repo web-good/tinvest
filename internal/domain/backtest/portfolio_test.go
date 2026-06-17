@@ -141,3 +141,35 @@ func TestPortfolioCloseResetsEntryState(t *testing.T) {
 		t.Fatalf("entryStop=%v maxFavorable=%v, want 0/0 after close", p.entryStop, p.maxFavorable)
 	}
 }
+
+func TestOpenRiskBasedSizing(t *testing.T) {
+	// equity 100000, risk 1% = 1000; stop 2.0 below entry 100 -> per-share risk 2;
+	// target shares = 1000/2 = 500; lot 1 -> 500 shares.
+	cfg := Config{InitialCash: 100000, Fraction: 1.0, Commission: 0, Lot: 1, RiskFractionPct: 1.0}
+	p := newPortfolio(cfg)
+	p.open(100, time.Time{}, 0, 0, 2.0, 98.0, "")
+	if p.qty != 500 {
+		t.Fatalf("risk-sized qty = %d, want 500", p.qty)
+	}
+}
+
+func TestOpenRiskBasedCappedByCash(t *testing.T) {
+	// per-share risk 0.1 -> target shares 10000 -> cost 1,000,000 > cash 100000.
+	// Capped to affordable floor(100000/100) = 1000 shares.
+	cfg := Config{InitialCash: 100000, Fraction: 1.0, Commission: 0, Lot: 1, RiskFractionPct: 1.0}
+	p := newPortfolio(cfg)
+	p.open(100, time.Time{}, 0, 0, 0.1, 99.9, "")
+	if p.qty != 1000 {
+		t.Fatalf("cash-capped qty = %d, want 1000", p.qty)
+	}
+}
+
+func TestOpenLegacyFractionUnchanged(t *testing.T) {
+	// RiskFractionPct 0 -> legacy Fraction path: floor(100000/100) = 1000.
+	cfg := Config{InitialCash: 100000, Fraction: 1.0, Commission: 0, Lot: 1, RiskFractionPct: 0}
+	p := newPortfolio(cfg)
+	p.open(100, time.Time{}, 0, 0, 0, 0, "")
+	if p.qty != 1000 {
+		t.Fatalf("legacy qty = %d, want 1000", p.qty)
+	}
+}
