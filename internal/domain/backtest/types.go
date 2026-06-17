@@ -20,7 +20,7 @@ type Config struct {
 	Fraction        float64 // fraction of current cash deployed per Buy (1.0 = all-in); used when RiskFractionPct == 0
 	Commission      float64 // commission as a fraction of turnover (e.g. 0.0005)
 	Lot             int32   // share lot size (orders are whole lots)
-	RiskFractionPct float64 // >0 = risk this % of equity per trade, sized off the entry stop distance; 0 = legacy Fraction sizing
+	RiskFractionPct float64 // >0 = risk this % of equity per trade, sized off the entry stop distance; 0 = legacy Fraction sizing; commission is excluded from the modeled stop-out loss
 }
 
 // Trade is one completed round-trip (entry -> exit).

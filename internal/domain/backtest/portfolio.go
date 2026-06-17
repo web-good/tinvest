@@ -28,8 +28,12 @@ func newPortfolio(cfg Config) *portfolio {
 	return &portfolio{cfg: cfg, cash: cfg.InitialCash}
 }
 
-// open deploys cfg.Fraction of cash into whole lots at price. No-op if already
-// in a position or if there is not enough cash for a single lot.
+// open enters a whole-lot position at price, sized by risk when cfg.RiskFractionPct>0
+// (so a clean stop-out loses RiskFractionPct% of equity) or by cfg.Fraction of cash
+// otherwise (legacy default). No-op if already in a position or if there is not enough
+// cash for a single lot. Risk calculation excludes commission for simplicity: per-share
+// risk is the raw price-minus-stop distance; entry/exit commission is not added to the
+// modeled stop-out loss.
 func (p *portfolio) open(price float64, t time.Time, level, target, atr, stop float64, entryReason string) {
 	if p.qty != 0 {
 		return
