@@ -56,6 +56,9 @@ type Params struct {
 	HTFTrendEMA     int     // EMA period on the 4H timeframe for the higher-timeframe trend filter; 0 = off
 	UseBreakeven    int     // 1 = after price runs BreakevenArmATR×EntryATR in favor, exit at the first close back at/below entry; 0 = off
 	BreakevenArmATR float64 // breakeven arm threshold in EntryATR multiples (e.g. 1.0); consulted only when UseBreakeven=1
+	UseRegime       int     // 1 = require a low-ADX (range) regime before buying; 0 = off
+	ADXPeriod       int     // ADX (Wilder) length; consulted only when UseRegime==1
+	ADXMax          float64 // enter only when ADX < ADXMax (range regime); consulted only when UseRegime==1
 }
 
 // Strategy trades a single instrument with the dual-confirmation rules. Ticker-agnostic
@@ -85,6 +88,9 @@ func (s *Strategy) Lookback() int {
 	}
 	if s.p.UseVolume == 1 && s.p.VolAvgPeriod > 0 {
 		cands = append(cands, s.p.VolAvgPeriod+1)
+	}
+	if s.p.UseRegime == 1 && s.p.ADXPeriod > 0 {
+		cands = append(cands, 2*s.p.ADXPeriod+1)
 	}
 	for _, c := range cands {
 		if c > m {
@@ -121,6 +127,8 @@ type decideInput struct {
 	htfClose    float64 // last completed 4H close (0 unless HTFTrendEMA>0 and enough data)
 	htfEMA      float64 // EMA(HTFCloses, HTFTrendEMA), latest value; 0 unless gate active
 	htfOK       bool    // true when the 4H EMA is warmed; false -> higher-timeframe trend not confirmed
+	adx         float64 // Wilder ADX (0 unless UseRegime==1 and warmed)
+	adxOK       bool    // true when ADX is warmed (len >= 2*ADXPeriod+1); false -> regime not confirmed
 	pos         *strategy.Position
 }
 
@@ -185,6 +193,13 @@ func (s *Strategy) buildInput(md strategy.MarketData) decideInput {
 		}
 	}
 
+	var adx float64
+	adxOK := false
+	if s.p.UseRegime == 1 && s.p.ADXPeriod > 0 && len(md.Closes) >= 2*s.p.ADXPeriod+1 {
+		adx, _, _ = indicators.ADX(md.Highs, md.Lows, md.Closes, s.p.ADXPeriod)
+		adxOK = true
+	}
+
 	return decideInput{
 		price:       md.Price,
 		emaFast:     emaFast,
@@ -205,6 +220,8 @@ func (s *Strategy) buildInput(md strategy.MarketData) decideInput {
 		htfClose:    htfClose,
 		htfEMA:      htfEMA,
 		htfOK:       htfOK,
+		adx:         adx,
+		adxOK:       adxOK,
 		pos:         md.Position,
 	}
 }
@@ -332,6 +349,12 @@ func (s *Strategy) decide(in decideInput) model.Signal {
 
 	// 1. Optional trend filter.
 	if s.p.UseTrend == 1 && !uptrend(in) {
+		return sig
+	}
+	// 1b. Optional range-regime filter: trade reversion only when ADX is low (no strong
+	// trend). Un-warmed ADX (adxOK=false) blocks — a protective gate must not trade when
+	// it cannot confirm the regime.
+	if s.p.UseRegime == 1 && !(in.adxOK && in.adx < s.p.ADXMax) {
 		return sig
 	}
 	// 2. Dual oversold confirmation.
@@ -472,6 +495,14 @@ func (s *Strategy) explainFrom(in decideInput) string {
 				s.p.FastEMA, s.p.SlowEMA, s.p.SlowEMA, s.p.FastEMA, in.emaFast, s.p.SlowEMA, in.emaSlow, in.price)
 		}
 		pass("Тренд↑: EMA%d %.4f > EMA%d %.4f, close %.4f > EMA%d", s.p.FastEMA, in.emaFast, s.p.SlowEMA, in.emaSlow, in.price, s.p.SlowEMA)
+	}
+
+	// 1b. Optional range-regime (ADX) filter.
+	if s.p.UseRegime == 1 {
+		if !(in.adxOK && in.adx < s.p.ADXMax) {
+			return block("Режим: нужен ADX<%.0f при прогретом ADX (adxOK=%v, ADX=%.2f)", s.p.ADXMax, in.adxOK, in.adx)
+		}
+		pass("Режим: ADX %.2f < %.0f (боковик)", in.adx, s.p.ADXMax)
 	}
 
 	// 2. Dual oversold confirmation.

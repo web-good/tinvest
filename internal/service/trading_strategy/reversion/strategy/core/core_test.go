@@ -1009,6 +1009,42 @@ func TestBuyNoCatStopWhenATRZero(t *testing.T) {
 	}
 }
 
+func TestRegimeGateBlocksTrend(t *testing.T) {
+	p := defaultParams()
+	p.UseRegime = 1
+	p.ADXPeriod = 14
+	p.ADXMax = 25
+	s := NewWithParams("TEST", p)
+
+	in := passingInput()
+	in.adxOK = true
+	in.adx = 30 // trending -> blocked
+	if sig := s.decide(in); sig.Kind == model.SignalBuy {
+		t.Fatalf("ADX 30 >= 25 should block the buy")
+	}
+
+	in = passingInput()
+	in.adxOK = true
+	in.adx = 15 // ranging -> allowed
+	if sig := s.decide(in); sig.Kind != model.SignalBuy {
+		t.Fatalf("ADX 15 < 25 should allow the buy")
+	}
+}
+
+func TestRegimeGateBlocksWhenUnwarmed(t *testing.T) {
+	p := defaultParams()
+	p.UseRegime = 1
+	p.ADXPeriod = 14
+	p.ADXMax = 25
+	s := NewWithParams("TEST", p)
+	in := passingInput()
+	in.adxOK = false // not warmed -> protective block
+	in.adx = 0
+	if sig := s.decide(in); sig.Kind == model.SignalBuy {
+		t.Fatalf("un-warmed ADX must block the buy")
+	}
+}
+
 func TestManageCatStopExit(t *testing.T) {
 	p := defaultParams()
 	p.CatStopATRMult = 2.0
