@@ -1008,3 +1008,20 @@ func TestBuyNoCatStopWhenATRZero(t *testing.T) {
 		t.Fatalf("StopLoss should be 0 when atr=0, got %.4f", sig.StopLoss)
 	}
 }
+
+func TestManageCatStopExit(t *testing.T) {
+	p := defaultParams()
+	p.CatStopATRMult = 2.0
+	s := NewWithParams("TEST", p)
+	in := openInput() // in.pos != nil, neutral signals -> no other exit fires
+	in.pos.PurchasePrice = 100
+	in.pos.EntryATR = 3.0
+	in.price = 100 - 2.0*3.0 - 0.01 // 93.99 < stop 94
+	sig := s.decide(in)
+	if sig.Kind != model.SignalSell || sig.Reason != "SL" {
+		t.Fatalf("got Kind=%v Reason=%q, want Sell/SL", sig.Kind, sig.Reason)
+	}
+	if sig.StopLoss != 94.0 {
+		t.Fatalf("StopLoss = %.4f, want 94.0", sig.StopLoss)
+	}
+}

@@ -403,6 +403,13 @@ func (s *Strategy) manage(in decideInput, sig model.Signal) model.Signal {
 		sig.Kind, sig.Reason = model.SignalSell, "OB"
 		sig.ExitReason = fmt.Sprintf("OB: RSI %.2f ≥ %.0f и Stoch %.2f ≥ %.0f — обе зоны перекупленности",
 			in.rsiNow, s.p.RSIOverbought, in.stochNow, s.p.StochOverbought)
+	case s.p.CatStopATRMult > 0 && in.pos.EntryATR > 0 &&
+		in.price <= in.pos.PurchasePrice-s.p.CatStopATRMult*in.pos.EntryATR:
+		stop := in.pos.PurchasePrice - s.p.CatStopATRMult*in.pos.EntryATR
+		sig.Kind, sig.Reason = model.SignalSell, "SL"
+		sig.StopLoss = stop
+		sig.ExitReason = fmt.Sprintf("SL: цена %.4f ≤ катастрофический стоп %.4f (вход %.4f − %.2g×ATR %.4f)",
+			in.price, stop, in.pos.PurchasePrice, s.p.CatStopATRMult, in.pos.EntryATR)
 	case in.rsiOK && crossDown(in.rsiPrev, in.rsiNow, rsiExitLevel):
 		sig.Kind, sig.Reason = model.SignalSell, "RSI50"
 		sig.ExitReason = fmt.Sprintf("RSI50: RSI %.2f→%.2f пересёк 50 сверху вниз", in.rsiPrev, in.rsiNow)
