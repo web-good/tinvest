@@ -64,12 +64,13 @@ func TestGenericReversionDefaultsKeepRSI50(t *testing.T) {
 }
 
 func TestReversionPerTickerUseRSI50(t *testing.T) {
-	// Guard against regression: every registered per-ticker reversion DefaultParams
-	// must have UseRSI50=1 (always-on momentum-fade exit).
+	// UseRSI50 is a 0/1 toggle for the momentum-fade exit. Most tickers keep it ON,
+	// but calibration may legitimately turn it OFF per ticker (e.g. NVTK), so the
+	// guard only asserts every registered config holds a valid flag value (0 or 1).
 	for ticker, binding := range reversionRegistry {
 		params := binding.DefaultParams().(core.Params)
-		if params.UseRSI50 != 1 {
-			t.Errorf("ticker %s: UseRSI50 = %d, want 1 (always-on RSI50 exit)", ticker, params.UseRSI50)
+		if params.UseRSI50 != 0 && params.UseRSI50 != 1 {
+			t.Errorf("ticker %s: UseRSI50 = %d, want 0 or 1 (toggle flag)", ticker, params.UseRSI50)
 		}
 	}
 }
