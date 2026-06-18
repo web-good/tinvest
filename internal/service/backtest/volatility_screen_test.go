@@ -65,6 +65,9 @@ func TestRenderVolatilityMarkdown_SortsDescAndTrend(t *testing.T) {
 	if !strings.Contains(out, "↑") || !strings.Contains(out, "↓") {
 		t.Errorf("expected both trend arrows in output")
 	}
+	if strings.Contains(out, "%%") {
+		t.Errorf("rendered output must not contain literal '%%%%'; got: %q", out)
+	}
 }
 
 func TestRenderVolatilityMarkdown_TopN(t *testing.T) {

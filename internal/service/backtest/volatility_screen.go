@@ -86,7 +86,7 @@ func RenderVolatilityMarkdown(rows []VolRow, meta VolMeta, topN int) string {
 		meta.Months, meta.ATRPeriod, meta.MinTurnover)
 	fmt.Fprintf(&b, "Просканировано %d тикеров (RUB, торгуемые); прошло фильтр: %d.\n\n",
 		meta.Scanned, meta.Passed)
-	b.WriteString("Метрика — ATR%% = ATR / цена. Ранжир по средней ATR%% за окно (убыв.).\n\n")
+	b.WriteString("Метрика — ATR% = ATR / цена. Ранжир по средней ATR% за окно (убыв.).\n\n")
 	b.WriteString("| # | Тикер | Ср. ATR% | Тек. ATR% | Тренд | Ликвидность, млн ₽/день | Баров |\n")
 	b.WriteString("|---|---|---|---|---|---|---|\n")
 	for i, r := range sorted {
