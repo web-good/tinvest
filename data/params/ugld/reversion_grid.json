@@ -1,0 +1,30 @@
+{
+  "_comment": "Trimmed reversion grid focused on the new risk/regime/exit mechanics (2026-06-17). Entry + oscillator params are inherited from each ticker's calibrated DefaultParams (NOT swept) so walk-forward measures what the new layer adds on top of the baseline. Run with -risk-pct 1 so the catastrophic stop also anchors position size. ADXPeriod/ATRPeriod are pinned to 14 because the regime/ATR features need a non-zero period. Intended for rolling walk-forward (-train-months/-test-months), judged on per-fold consistency + parameter stability, not a single calibration.",
+  "phases": [
+    {
+      "name": "regime",
+      "keepTop": 6,
+      "grid": {
+        "UseRegime": [0, 1],
+        "ADXPeriod": [14],
+        "ADXMax": [20, 25, 30]
+      }
+    },
+    {
+      "name": "catstop",
+      "keepTop": 6,
+      "grid": {
+        "ATRPeriod": [14],
+        "CatStopATRMult": [2.0, 3.0, 4.0]
+      }
+    },
+    {
+      "name": "exit",
+      "grid": {
+        "UseTrail": [0, 1],
+        "TrailATRMult": [1.5, 3.0],
+        "UseRSI50": [0, 1]
+      }
+    }
+  ]
+}

@@ -12,6 +12,7 @@ import (
 	reversionplzl "tinvest/internal/service/trading_strategy/reversion/strategy/plzl"
 	reversionrusal "tinvest/internal/service/trading_strategy/reversion/strategy/rusal"
 	reversionsber "tinvest/internal/service/trading_strategy/reversion/strategy/sber"
+	reversionugld "tinvest/internal/service/trading_strategy/reversion/strategy/ugld"
 	reversionydex "tinvest/internal/service/trading_strategy/reversion/strategy/ydex"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 )
@@ -43,6 +44,7 @@ var reversionRegistry = map[string]Binding{
 	reversiongazp.Ticker:  reversionBindingFor(reversiongazp.Ticker, reversiongazp.DefaultParams),
 	reversionnvtk.Ticker:  reversionBindingFor(reversionnvtk.Ticker, reversionnvtk.DefaultParams),
 	reversionmdmg.Ticker:  reversionBindingFor(reversionmdmg.Ticker, reversionmdmg.DefaultParams),
+	reversionugld.Ticker:  reversionBindingFor(reversionugld.Ticker, reversionugld.DefaultParams),
 }
 
 // genericReversionDefaults are neutral baseline params for tickers without a dedicated
@@ -54,7 +56,7 @@ func genericReversionDefaults() core.Params {
 		RSIPeriod: 14, RSIOversold: 20,
 		StochKPeriod: 14, StochDSmooth: 3, StochOversold: 20,
 		UseOverbought: 1, RSIOverbought: 70, StochOverbought: 80,
-		UseRSI50: 1,
+		UseRSI50:     1,
 		UseBreakeven: 0, BreakevenArmATR: 1.0,
 	}
 }
