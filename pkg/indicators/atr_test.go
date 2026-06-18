@@ -124,3 +124,53 @@ func TestATR(t *testing.T) {
 		})
 	}
 }
+
+func TestATRSeries_LengthAndWarmup(t *testing.T) {
+	highs := []float64{10, 11, 12, 13, 14, 15}
+	lows := []float64{9, 9.5, 10, 11, 12, 13}
+	closes := []float64{9.5, 10.5, 11.5, 12.5, 13.5, 14.5}
+	period := 3
+
+	s := ATRSeries(highs, lows, closes, period)
+
+	if len(s) != len(closes) {
+		t.Fatalf("len = %d, want %d", len(s), len(closes))
+	}
+	for i := 0; i < period; i++ {
+		if s[i] != 0 {
+			t.Errorf("s[%d] = %v, want 0 (warmup)", i, s[i])
+		}
+	}
+	if s[period] == 0 {
+		t.Errorf("s[%d] (seed) = 0, want non-zero", period)
+	}
+}
+
+func TestATRSeries_LastEqualsATR(t *testing.T) {
+	highs := []float64{10, 11, 12, 13, 14, 15}
+	lows := []float64{9, 9.5, 10, 11, 12, 13}
+	closes := []float64{9.5, 10.5, 11.5, 12.5, 13.5, 14.5}
+	period := 3
+
+	s := ATRSeries(highs, lows, closes, period)
+	last := s[len(s)-1]
+	single := ATR(highs, lows, closes, period)
+
+	if math.Abs(last-single) > 1e-9 {
+		t.Errorf("series last = %v, ATR = %v; want equal", last, single)
+	}
+}
+
+func TestATRSeries_InvalidReturnsZeros(t *testing.T) {
+	closes := []float64{1, 2, 3}
+	// n < period+1
+	s := ATRSeries([]float64{1, 2, 3}, []float64{1, 2, 3}, closes, 5)
+	if len(s) != 3 {
+		t.Fatalf("len = %d, want 3", len(s))
+	}
+	for i, v := range s {
+		if v != 0 {
+			t.Errorf("s[%d] = %v, want 0", i, v)
+		}
+	}
+}

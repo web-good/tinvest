@@ -2,29 +2,17 @@ package indicators
 
 import "math"
 
-// ATR returns Wilder's Average True Range over the input bar series.
-//
-// Inputs must be aligned (highs[i], lows[i], closes[i] all describe the same
-// bar). Returns 0 when period <= 0, when the three slices are not the same
-// length, or when len(closes) < period+1 — the insufficient-history rule is
-// silent (no error), mirroring VolumeConfirmed.
-//
-// Algorithm:
-//   - True Range at bar i (i >= 1):
-//       TR_i = max(High_i - Low_i, |High_i - Close_{i-1}|, |Low_i - Close_{i-1}|)
-//   - Seed ATR_{period} = mean(TR_1 .. TR_{period}).
-//   - For i > period: ATR_i = (ATR_{i-1} * (period - 1) + TR_i) / period.
-//   - Returns ATR at the last index.
-func ATR(highs, lows, closes []float64, period int) float64 {
-	if period <= 0 {
-		return 0
-	}
+// ATRSeries returns Wilder's Average True Range at every bar of the input
+// series. The result has length len(closes): entries before the seed bar
+// (index < period) are 0, the entry at index == period is the seed
+// mean(TR_1..TR_period), and later entries are Wilder-smoothed. Returns an
+// all-zero slice for invalid input (period <= 0, mismatched lengths, or
+// len(closes) < period+1) — the insufficient-history rule is silent.
+func ATRSeries(highs, lows, closes []float64, period int) []float64 {
 	n := len(closes)
-	if len(highs) != n || len(lows) != n {
-		return 0
-	}
-	if n < period+1 {
-		return 0
+	out := make([]float64, n)
+	if period <= 0 || len(highs) != n || len(lows) != n || n < period+1 {
+		return out
 	}
 
 	trueRange := func(i int) float64 {
@@ -40,10 +28,28 @@ func ATR(highs, lows, closes []float64, period int) float64 {
 		sum += trueRange(i)
 	}
 	atr := sum / float64(period)
+	out[period] = atr
 
 	// Wilder smoothing for every subsequent bar.
 	for i := period + 1; i < n; i++ {
 		atr = (atr*float64(period-1) + trueRange(i)) / float64(period)
+		out[i] = atr
 	}
-	return atr
+	return out
+}
+
+// ATR returns Wilder's Average True Range at the last bar of the input series.
+// It is the final element of ATRSeries; returns 0 for empty/invalid input.
+//
+// Algorithm:
+//   - True Range at bar i (i >= 1):
+//       TR_i = max(High_i - Low_i, |High_i - Close_{i-1}|, |Low_i - Close_{i-1}|)
+//   - Seed ATR_{period} = mean(TR_1 .. TR_{period}).
+//   - For i > period: ATR_i = (ATR_{i-1} * (period - 1) + TR_i) / period.
+func ATR(highs, lows, closes []float64, period int) float64 {
+	s := ATRSeries(highs, lows, closes, period)
+	if len(s) == 0 {
+		return 0
+	}
+	return s[len(s)-1]
 }
