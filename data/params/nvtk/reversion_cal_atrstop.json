@@ -1,0 +1,13 @@
+{
+  "_comment": "MIDDLE-EXIT = ATR STOP calibration. Forces UseATRStop=1, swapping the RSIOS failed-bounce middle exit for a hard ATR stop at PurchasePrice - StopATRMult×EntryATR. NOTE: NVTK's calibrated default is UseATRStop=0 because a 2026-06-16 loss analysis found the ATR stop net-negative (knocked out by noise on trades that later recovered). Run this only to re-test that conclusion if the screen surprises you. go run ./cmd/backtest -ticker NVTK -strategy reversion -interval Day1 -calibrate data/params/nvtk/reversion_cal_atrstop.json -out ./reports/NVTK_atrstop -months 50 -test-months 12 -metric profit_factor -min-trades 20",
+  "phases": [
+    {
+      "name": "atrstop",
+      "grid": {
+        "UseATRStop": [1],
+        "ATRPeriod": [14],
+        "StopATRMult": [0.8, 1.0, 1.2, 1.5, 2.0]
+      }
+    }
+  ]
+}

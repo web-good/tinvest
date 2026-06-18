@@ -1,0 +1,37 @@
+{
+  "_comment": "Degenerate single-combo grid pinned to the exact params from report NVTK_reversion_Hour1_20260618_130846.md. Used to run a rolling walk-forward of the ALREADY-CHOSEN params (no parameter search): each train fold can only pick this one combo, so the pooled OOS / per-fold output measures whether the fixed params survive out of sample. Run to MATCH the report: fraction 1, commission 0.0005, NO -risk-pct (CatStopATRMult=0 means fixed sizing).",
+  "phases": [
+    {
+      "name": "fixed",
+      "grid": {
+        "UseTrend": [1],
+        "FastEMA": [10],
+        "SlowEMA": [150],
+        "RSIPeriod": [7],
+        "RSIOversold": [30],
+        "StochKPeriod": [14],
+        "StochDSmooth": [1],
+        "StochOversold": [20],
+        "UseATRStop": [0],
+        "ATRPeriod": [14],
+        "StopATRMult": [1],
+        "CatStopATRMult": [0],
+        "UseVolume": [1],
+        "VolAvgPeriod": [10],
+        "VolMult": [1.5],
+        "UseOverbought": [1],
+        "RSIOverbought": [70],
+        "StochOverbought": [80],
+        "HTFTrendEMA": [150],
+        "UseBreakeven": [1],
+        "BreakevenArmATR": [0.5],
+        "UseRegime": [0],
+        "ADXPeriod": [0],
+        "ADXMax": [0],
+        "UseTrail": [1],
+        "TrailATRMult": [1.5],
+        "UseRSI50": [0]
+      }
+    }
+  ]
+}

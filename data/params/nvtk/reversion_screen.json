@@ -1,0 +1,26 @@
+{
+  "_comment": "ABLATION SCREEN (2026-06-17). Single phase, full cartesian over every filter/exit TOGGLE while the entry oscillator core (RSIPeriod/RSIOversold/Stoch*) stays pinned at NVTK's calibrated DefaultParams. Goal: see which filters actually earn their keep before spending grids tuning them. Each toggle's companion params are pinned to a WORKING value (not the default) so an enabled filter is never silently inert — e.g. UseRegime needs ADXPeriod>0, UseTrail needs TrailATRMult>0. Read the result by scanning the top-ranked rows: a toggle that is consistently ON in the winners helps; one that is ON/OFF at random (or consistently OFF) is dead weight to drop. 2^10 = 1024 combos. Run: go run ./cmd/backtest -ticker NVTK -strategy reversion -interval Day1 -calibrate data/params/nvtk/reversion_screen.json -out ./reports/NVTK_screen -months 50 -test-months 12 -metric profit_factor -min-trades 20 -risk-pct 1",
+  "phases": [
+    {
+      "name": "ablation",
+      "grid": {
+        "HTFTrendEMA": [0, 100],
+        "UseRegime": [0, 1],
+        "ADXPeriod": [14],
+        "ADXMax": [25],
+        "UseVolume": [0, 1],
+        "VolAvgPeriod": [20],
+        "VolMult": [1.2],
+        "UseOverbought": [0, 1],
+        "UseRSI50": [0, 1],
+        "UseBreakeven": [0, 1],
+        "BreakevenArmATR": [1.0],
+        "UseTrail": [0, 1],
+        "TrailATRMult": [2.0],
+        "UseATRStop": [0, 1],
+        "StopATRMult": [1.0],
+        "CatStopATRMult": [0, 3.0]
+      }
+    }
+  ]
+}
