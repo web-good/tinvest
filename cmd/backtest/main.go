@@ -485,7 +485,7 @@ func runVolRank(ctx context.Context, client grpcclient.GrpcClient, months, atrPe
 	var universe []shareInfoT
 	for _, s := range shares {
 		if strings.EqualFold(s.Currency, "rub") && s.Trading {
-			universe = append(universe, shareInfoT{Ticker: s.Ticker, ID: s.ID, Lot: s.Lot})
+			universe = append(universe, shareInfoT{Ticker: s.Ticker, Name: s.Name, ID: s.ID, Lot: s.Lot})
 		}
 	}
 	if len(universe) == 0 {
@@ -521,7 +521,7 @@ func runVolRank(ctx context.Context, client grpcclient.GrpcClient, months, atrPe
 			}
 			mu.Lock()
 			rows = append(rows, svc.VolRow{
-				Ticker: u.Ticker, MeanATRpct: mean, LastATRpct: last, TurnoverM: turn, Bars: bars,
+				Ticker: u.Ticker, Name: u.Name, MeanATRpct: mean, LastATRpct: last, TurnoverM: turn, Bars: bars,
 			})
 			mu.Unlock()
 		}(u)
@@ -547,6 +547,7 @@ func runVolRank(ctx context.Context, client grpcclient.GrpcClient, months, atrPe
 // shareInfoT carries the per-ticker data the volrank worker pool needs.
 type shareInfoT struct {
 	Ticker string
+	Name   string
 	ID     string
 	Lot    int32
 }

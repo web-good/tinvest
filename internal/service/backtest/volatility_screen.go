@@ -12,6 +12,7 @@ import (
 // VolRow is one ticker's daily-ATR volatility result.
 type VolRow struct {
 	Ticker     string
+	Name       string  // company / instrument name
 	MeanATRpct float64 // mean ATR% over the window (headline ranking metric)
 	LastATRpct float64 // latest ATR% (regime: heating up vs cooling)
 	TurnoverM  float64 // mean daily turnover in millions of RUB
@@ -87,15 +88,15 @@ func RenderVolatilityMarkdown(rows []VolRow, meta VolMeta, topN int) string {
 	fmt.Fprintf(&b, "Просканировано %d тикеров (RUB, торгуемые); прошло фильтр: %d.\n\n",
 		meta.Scanned, meta.Passed)
 	b.WriteString("Метрика — ATR% = ATR / цена. Ранжир по средней ATR% за окно (убыв.).\n\n")
-	b.WriteString("| # | Тикер | Ср. ATR% | Тек. ATR% | Тренд | Ликвидность, млн ₽/день | Баров |\n")
-	b.WriteString("|---|---|---|---|---|---|---|\n")
+	b.WriteString("| # | Тикер | Название | Ср. ATR% | Тек. ATR% | Тренд | Ликвидность, млн ₽/день | Баров |\n")
+	b.WriteString("|---|---|---|---|---|---|---|---|\n")
 	for i, r := range sorted {
 		trend := "↓"
 		if r.LastATRpct > r.MeanATRpct {
 			trend = "↑"
 		}
-		fmt.Fprintf(&b, "| %d | %s | %.2f | %.2f | %s | %.1f | %d |\n",
-			i+1, r.Ticker, r.MeanATRpct, r.LastATRpct, trend, r.TurnoverM, r.Bars)
+		fmt.Fprintf(&b, "| %d | %s | %s | %.2f | %.2f | %s | %.1f | %d |\n",
+			i+1, r.Ticker, r.Name, r.MeanATRpct, r.LastATRpct, trend, r.TurnoverM, r.Bars)
 	}
 	return b.String()
 }

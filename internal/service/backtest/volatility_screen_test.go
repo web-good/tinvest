@@ -47,8 +47,8 @@ func TestVolMetrics_InsufficientHistory(t *testing.T) {
 
 func TestRenderVolatilityMarkdown_SortsDescAndTrend(t *testing.T) {
 	rows := []VolRow{
-		{Ticker: "AAA", MeanATRpct: 1.0, LastATRpct: 1.5, TurnoverM: 200, Bars: 120}, // trend up
-		{Ticker: "BBB", MeanATRpct: 3.0, LastATRpct: 2.0, TurnoverM: 50, Bars: 120},  // trend down
+		{Ticker: "AAA", Name: "Alpha Co", MeanATRpct: 1.0, LastATRpct: 1.5, TurnoverM: 200, Bars: 120}, // trend up
+		{Ticker: "BBB", Name: "Beta Co", MeanATRpct: 3.0, LastATRpct: 2.0, TurnoverM: 50, Bars: 120},   // trend down
 	}
 	meta := VolMeta{Months: 6, ATRPeriod: 14, MinTurnover: 50, Scanned: 100, Passed: 2}
 
@@ -67,6 +67,12 @@ func TestRenderVolatilityMarkdown_SortsDescAndTrend(t *testing.T) {
 	}
 	if strings.Contains(out, "%%") {
 		t.Errorf("rendered output must not contain literal '%%%%'; got: %q", out)
+	}
+	if !strings.Contains(out, "Alpha Co") || !strings.Contains(out, "Beta Co") {
+		t.Errorf("expected company names in output; got: %q", out)
+	}
+	if !strings.Contains(out, "Название") {
+		t.Errorf("expected Название column header; got: %q", out)
 	}
 }
 
