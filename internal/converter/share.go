@@ -38,5 +38,6 @@ func ConvertShareFromPb(share *investapi.Share) *model.Share {
 		Currency: share.Currency,
 		Name:     share.Name,
 		ID:       share.Uid,
+		Trading:  share.ApiTradeAvailableFlag,
 	}
 }

@@ -12,6 +12,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -21,11 +23,13 @@ import (
 	svc "tinvest/internal/service/backtest"
 	grpcclient "tinvest/pkg/client/grpc"
 	"tinvest/pkg/logger"
+	"tinvest/pkg/semaphore"
 )
 
 const (
 	apiAddress = "invest-public-api.tinkoff.ru:443"
 	cacheDir   = "data/candles"
+	volWorkers = 6 // concurrent candle fetches for -volrank
 )
 
 func main() {
@@ -50,6 +54,10 @@ func main() {
 		gridDir      = flag.String("grid-dir", "data/params", "basket mode: directory holding <lower-ticker>/momentum_grid.json")
 		riskPct      = flag.Float64("risk-pct", 0, "risk-based sizing: risk this %% of equity per trade off the entry stop (requires CatStopATRMult>0; 0 = fixed -fraction sizing)")
 		screen       = flag.String("screen", "", "screen mode: comma-separated tickers; ranks them by variance ratio (ignores -ticker/-strategy)")
+		volRank     = flag.Bool("volrank", false, "volatility mode: rank the liquid RUB universe by daily ATR%% (ignores -ticker/-strategy/-interval)")
+		minTurnover = flag.Float64("min-turnover", 50, "volrank: minimum mean daily turnover in millions of RUB")
+		atrPeriod   = flag.Int("atr-period", 14, "volrank: ATR period on the daily timeframe")
+		topN        = flag.Int("top", 50, "volrank: rows in the report (0 = all)")
 	)
 	flag.Parse()
 	logger.Init() // candle fetcher logs chunk errors via the package logger
@@ -61,7 +69,8 @@ func main() {
 
 	if err := run(*ticker, *strategyName, interval, *months, *cash, *fraction, *commission,
 		*paramsPath, *calibrate, *metric, *minTrades, *testMonths, *trainMonths, *outDir, *refresh, *explain,
-		*basket, *gridDir, *riskPct, *screen); err != nil {
+		*basket, *gridDir, *riskPct, *screen,
+		*volRank, *minTurnover, *atrPeriod, *topN); err != nil {
 		log.Fatalf("backtest: %v", err)
 	}
 }
@@ -89,6 +98,7 @@ func parseInterval(s string) (enum.Interval, error) {
 func run(ticker, strategyName string, interval enum.Interval, months int, cash, fraction, commission float64,
 	paramsPath, calibratePath, metric string, minTrades, testMonths, trainMonths int, outDir string, refresh bool, explain string,
 	basketCSV, gridDir string, riskPct float64, screenCSV string,
+	volRank bool, minTurnoverM float64, atrPeriod, topN int,
 ) error {
 	if paramsPath != "" && calibratePath != "" {
 		return fmt.Errorf("-params and -calibrate are mutually exclusive")
@@ -101,6 +111,9 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 	}
 	if screenCSV != "" && (calibratePath != "" || basketCSV != "" || explain != "") {
 		return fmt.Errorf("-screen is standalone (not combined with -calibrate/-basket/-explain)")
+	}
+	if volRank && (screenCSV != "" || basketCSV != "" || calibratePath != "" || explain != "") {
+		return fmt.Errorf("-volrank is standalone (not combined with -screen/-basket/-calibrate/-explain)")
 	}
 
 	token, err := loadToken()
@@ -115,6 +128,10 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 
 	if screenCSV != "" {
 		return runScreen(ctx, client, splitTickers(screenCSV), interval, months, outDir, refresh)
+	}
+
+	if volRank {
+		return runVolRank(ctx, client, months, atrPeriod, topN, minTurnoverM, outDir, refresh)
 	}
 
 	if basketCSV != "" {
@@ -452,6 +469,86 @@ func runScreen(ctx context.Context, client grpcclient.GrpcClient, tickers []stri
 	}
 	fmt.Printf("screen report: %s (tickers=%d)\n", path, len(rows))
 	return nil
+}
+
+// runVolRank ranks the liquid RUB share universe by normalized daily ATR (ATR%)
+// over the last `months`, writing a markdown report. It fetches daily candles
+// concurrently (volWorkers) — different tickers hit different cache files, so
+// the only shared state guarded is the result slice.
+func runVolRank(ctx context.Context, client grpcclient.GrpcClient, months, atrPeriod, topN int,
+	minTurnoverM float64, outDir string, refresh bool,
+) error {
+	shares, err := client.InstrumentsServiceClient().Shares(ctx)
+	if err != nil {
+		return fmt.Errorf("load shares: %w", err)
+	}
+	var universe []shareInfoT
+	for _, s := range shares {
+		if strings.EqualFold(s.Currency, "rub") && s.Trading {
+			universe = append(universe, shareInfoT{Ticker: s.Ticker, ID: s.ID, Lot: s.Lot})
+		}
+	}
+	if len(universe) == 0 {
+		return fmt.Errorf("-volrank: no tradable RUB shares found")
+	}
+
+	provider := svc.NewCandleProvider(client.MarketDataServiceClient(), cacheDir)
+	to := time.Now()
+	from := to.AddDate(0, -months, 0)
+
+	sem := semaphore.New(volWorkers)
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var rows []svc.VolRow
+	var done int32
+
+	for _, u := range universe {
+		wg.Add(1)
+		sem.Acquire()
+		go func(u shareInfoT) {
+			defer wg.Done()
+			defer sem.Release()
+			candles, err := provider.Load(ctx, u.Ticker, u.ID, enum.Day1, from, to, refresh)
+			if err != nil {
+				fmt.Printf("volrank %s: skip (load: %v)\n", u.Ticker, err)
+				return
+			}
+			mean, last, turn, bars := svc.VolMetrics(candles, u.Lot, atrPeriod)
+			n := atomic.AddInt32(&done, 1)
+			fmt.Printf("volrank [%d/%d] %s: ATR%%=%.2f turnover=%.0fM\n", n, len(universe), u.Ticker, mean, turn)
+			if bars < atrPeriod+1 || turn < minTurnoverM || mean <= 0 {
+				return
+			}
+			mu.Lock()
+			rows = append(rows, svc.VolRow{
+				Ticker: u.Ticker, MeanATRpct: mean, LastATRpct: last, TurnoverM: turn, Bars: bars,
+			})
+			mu.Unlock()
+		}(u)
+	}
+	wg.Wait()
+
+	meta := svc.VolMeta{
+		Months: months, ATRPeriod: atrPeriod, MinTurnover: minTurnoverM,
+		Scanned: len(universe), Passed: len(rows),
+	}
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		return fmt.Errorf("mkdir out dir: %w", err)
+	}
+	stamp := time.Now().Format("20060102_150405")
+	path := filepath.Join(outDir, fmt.Sprintf("volatility_Day1_%s.md", stamp))
+	if err := writeFile(path, svc.RenderVolatilityMarkdown(rows, meta, topN)); err != nil {
+		return err
+	}
+	fmt.Printf("volrank report: %s (scanned=%d passed=%d)\n", path, len(universe), len(rows))
+	return nil
+}
+
+// shareInfoT carries the per-ticker data the volrank worker pool needs.
+type shareInfoT struct {
+	Ticker string
+	ID     string
+	Lot    int32
 }
 
 // splitTickers parses a comma-separated ticker list, trimming blanks.
