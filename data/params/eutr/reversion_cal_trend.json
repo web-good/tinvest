@@ -1,0 +1,13 @@
+{
+  "_comment": "TREND filter calibration (EMA regime gate on the entry side). Forces UseTrend=1 and sweeps the fast/slow EMA pair; SlowEMA also acts as the price floor and the EMAX bearish-cross exit slow line. Run only if the screen kept UseTrend ON. go run ./cmd/backtest -ticker EUTR -strategy reversion -interval Hour1 -calibrate data/params/eutr/reversion_cal_trend.json -out ./reports/EUTR_trend -months 31 -train-months 12 -test-months 6 -metric profit_factor -min-trades 20",
+  "phases": [
+    {
+      "name": "trend",
+      "grid": {
+        "UseTrend": [
+          1
+        ]
+      }
+    }
+  ]
+}

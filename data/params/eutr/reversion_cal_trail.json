@@ -1,0 +1,23 @@
+{
+  "_comment": "ATR TRAILING-STOP exit calibration. Forces UseTrail=1; exits when price falls TrailATRMult\u00d7EntryATR below the running MaxFavorablePrice. Needs ATRPeriod>0. Run only if the screen kept UseTrail ON. go run ./cmd/backtest -ticker EUTR -strategy reversion -interval Hour1 -calibrate data/params/eutr/reversion_cal_trail.json -out ./reports/EUTR_trail -months 31 -train-months 12 -test-months 6 -metric profit_factor -min-trades 20",
+  "phases": [
+    {
+      "name": "trail",
+      "grid": {
+        "UseTrail": [
+          1
+        ],
+        "ATRPeriod": [
+          14
+        ],
+        "TrailATRMult": [
+          1.5,
+          2.0,
+          2.5,
+          3.0,
+          4.0
+        ]
+      }
+    }
+  ]
+}

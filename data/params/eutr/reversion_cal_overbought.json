@@ -1,0 +1,24 @@
+{
+  "_comment": "OVERBOUGHT take-profit exit calibration. Forces UseOverbought=1; exits when RSI and Stoch %D are simultaneously in their overbought zones. Run only if the screen kept UseOverbought ON. go run ./cmd/backtest -ticker EUTR -strategy reversion -interval Hour1 -calibrate data/params/eutr/reversion_cal_overbought.json -out ./reports/EUTR_ob -months 31 -train-months 12 -test-months 6 -metric profit_factor -min-trades 20",
+  "phases": [
+    {
+      "name": "overbought",
+      "grid": {
+        "UseOverbought": [
+          1
+        ],
+        "RSIOverbought": [
+          65,
+          70,
+          75,
+          80
+        ],
+        "StochOverbought": [
+          75,
+          80,
+          85
+        ]
+      }
+    }
+  ]
+}
