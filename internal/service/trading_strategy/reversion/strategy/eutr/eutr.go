@@ -41,11 +41,12 @@ func DefaultParams() core.Params {
 		StochKPeriod: 14, StochDSmooth: 1, StochOversold: 20,
 		// RSI50 momentum-fade выход — ВКЛ (всегда-включённый, гридами не перебирается).
 		UseRSI50: 1,
-		// Опциональные гейты входа — ВЫКЛ.
+		// Гейты входа: 4H-HTF тренд (EMA150) — ВКЛ; режим (ADX) и объём — ВЫКЛ
+		// (cal_regime и cal_volume ухудшили PF во всех фолдах).
 		HTFTrendEMA: 150,
 		UseRegime:   0, ADXPeriod: 14, ADXMax: 30,
 		UseVolume: 0, VolAvgPeriod: 30, VolMult: 1.8,
-		// Опциональные выходы/стопы — ВЫКЛ.
+		// Выходы: OB-тейк, безубыток и ATR-трейл — ВКЛ; ATR-стоп и катстоп — ВЫКЛ.
 		UseOverbought: 1, RSIOverbought: 65, StochOverbought: 75,
 		UseBreakeven: 1, BreakevenArmATR: 0.5,
 		UseTrail: 1, TrailATRMult: 1.5,
