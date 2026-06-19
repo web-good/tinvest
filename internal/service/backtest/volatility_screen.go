@@ -31,11 +31,13 @@ type VolMeta struct {
 // VolMetrics computes the daily-ATR volatility metrics for one ticker from its
 // daily candle slice. meanATRpct/lastATRpct are 0 when there is not enough
 // history for a valid ATR series (len < atrPeriod+1). turnoverM is the mean of
-// volume*lot*close across all candles, in millions of RUB.
-func VolMetrics(candles []backtest.Candle, lot int32, atrPeriod int) (meanATRpct, lastATRpct, turnoverM float64, bars int) {
+// volume*lot*close across all candles, in millions of RUB. vr2 is the variance
+// ratio at lag 2 (mean-reversion metric); autocorr1 is lag-1 autocorrelation of
+// simple returns (negative for mean-reverting, positive for trending).
+func VolMetrics(candles []backtest.Candle, lot int32, atrPeriod int) (meanATRpct, lastATRpct, turnoverM, vr2, autocorr1 float64, bars int) {
 	bars = len(candles)
 	if bars == 0 {
-		return 0, 0, 0, 0
+		return 0, 0, 0, 0, 0, 0
 	}
 
 	highs := make([]float64, bars)
@@ -50,6 +52,10 @@ func VolMetrics(candles []backtest.Candle, lot int32, atrPeriod int) (meanATRpct
 	}
 	turnoverM = turnoverSum / float64(bars) / 1e6
 
+	returns := backtest.SimpleReturns(closes)
+	vr2 = backtest.VarianceRatio(returns, 2)
+	autocorr1 = backtest.Autocorr1(returns)
+
 	series := indicators.ATRSeries(highs, lows, closes, atrPeriod)
 	pctSum := 0.0
 	count := 0
@@ -62,10 +68,10 @@ func VolMetrics(candles []backtest.Candle, lot int32, atrPeriod int) (meanATRpct
 		}
 	}
 	if count == 0 {
-		return 0, 0, turnoverM, bars
+		return 0, 0, turnoverM, vr2, autocorr1, bars
 	}
 	meanATRpct = pctSum / float64(count)
-	return meanATRpct, lastATRpct, turnoverM, bars
+	return meanATRpct, lastATRpct, turnoverM, vr2, autocorr1, bars
 }
 
 // RenderVolatilityMarkdown renders the volatility screen as a Markdown table

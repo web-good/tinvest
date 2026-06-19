@@ -513,7 +513,7 @@ func runVolRank(ctx context.Context, client grpcclient.GrpcClient, months, atrPe
 				fmt.Printf("volrank %s: skip (load: %v)\n", u.Ticker, err)
 				return
 			}
-			mean, last, turn, bars := svc.VolMetrics(candles, u.Lot, atrPeriod)
+			mean, last, turn, _, _, bars := svc.VolMetrics(candles, u.Lot, atrPeriod)
 			n := atomic.AddInt32(&done, 1)
 			fmt.Printf("volrank [%d/%d] %s: ATR%%=%.2f turnover=%.0fM\n", n, len(universe), u.Ticker, mean, turn)
 			if bars < atrPeriod+1 || turn < minTurnoverM || mean <= 0 {
