@@ -19,19 +19,19 @@ const Ticker = "EUTR"
 func DefaultParams() core.Params {
 	return core.Params{
 		// Ядро входа + всегда-включённый выход EMAX.
-		UseTrend: 0, FastEMA: 10, SlowEMA: 200,
-		RSIPeriod: 14, RSIOversold: 25,
-		StochKPeriod: 14, StochDSmooth: 3, StochOversold: 15,
+		UseTrend: 1, FastEMA: 5, SlowEMA: 200,
+		RSIPeriod: 14, RSIOversold: 35,
+		StochKPeriod: 14, StochDSmooth: 1, StochOversold: 20,
 		// RSI50 momentum-fade выход — ВКЛ (всегда-включённый, гридами не перебирается).
 		UseRSI50: 1,
 		// Опциональные гейты входа — ВЫКЛ.
-		HTFTrendEMA: 0,
+		HTFTrendEMA: 150,
 		UseRegime:   0, ADXPeriod: 14, ADXMax: 30,
 		UseVolume: 0, VolAvgPeriod: 30, VolMult: 1.8,
 		// Опциональные выходы/стопы — ВЫКЛ.
-		UseOverbought: 0, RSIOverbought: 70, StochOverbought: 80,
-		UseBreakeven: 0, BreakevenArmATR: 0.5,
-		UseTrail: 0, TrailATRMult: 1.5,
+		UseOverbought: 1, RSIOverbought: 65, StochOverbought: 75,
+		UseBreakeven: 1, BreakevenArmATR: 0.5,
+		UseTrail: 1, TrailATRMult: 1.5,
 		UseATRStop: 0, ATRPeriod: 14, StopATRMult: 1.0,
 		CatStopATRMult: 0,
 	}
