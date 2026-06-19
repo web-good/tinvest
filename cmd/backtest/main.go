@@ -58,6 +58,10 @@ func main() {
 		minTurnover  = flag.Float64("min-turnover", 50, "volrank: minimum mean daily turnover in millions of RUB")
 		atrPeriod    = flag.Int("atr-period", 14, "volrank: ATR period on the daily timeframe")
 		topN         = flag.Int("top", 50, "volrank: rows in the report (0 = all)")
+		maxVR        = flag.Float64("max-vr", 1.05, "volrank: drop tickers whose VR(2) exceeds this (trend exclusion)")
+		wVol         = flag.Float64("w-vol", 0.4, "volrank: composite weight on ATR%% percentile")
+		wRev         = flag.Float64("w-rev", 0.4, "volrank: composite weight on mean-reversion percentile")
+		wLiq         = flag.Float64("w-liq", 0.2, "volrank: composite weight on turnover percentile")
 	)
 	flag.Parse()
 	logger.Init() // candle fetcher logs chunk errors via the package logger
@@ -70,7 +74,7 @@ func main() {
 	if err := run(*ticker, *strategyName, interval, *months, *cash, *fraction, *commission,
 		*paramsPath, *calibrate, *metric, *minTrades, *testMonths, *trainMonths, *outDir, *refresh, *explain,
 		*basket, *gridDir, *riskPct, *screen,
-		*volRank, *minTurnover, *atrPeriod, *topN); err != nil {
+		*volRank, *minTurnover, *atrPeriod, *topN, *maxVR, *wVol, *wRev, *wLiq); err != nil {
 		log.Fatalf("backtest: %v", err)
 	}
 }
@@ -98,7 +102,7 @@ func parseInterval(s string) (enum.Interval, error) {
 func run(ticker, strategyName string, interval enum.Interval, months int, cash, fraction, commission float64,
 	paramsPath, calibratePath, metric string, minTrades, testMonths, trainMonths int, outDir string, refresh bool, explain string,
 	basketCSV, gridDir string, riskPct float64, screenCSV string,
-	volRank bool, minTurnoverM float64, atrPeriod, topN int,
+	volRank bool, minTurnoverM float64, atrPeriod, topN int, maxVR, wVol, wRev, wLiq float64,
 ) error {
 	if paramsPath != "" && calibratePath != "" {
 		return fmt.Errorf("-params and -calibrate are mutually exclusive")
@@ -131,7 +135,7 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 	}
 
 	if volRank {
-		return runVolRank(ctx, client, months, atrPeriod, topN, minTurnoverM, outDir, refresh)
+		return runVolRank(ctx, client, months, atrPeriod, topN, minTurnoverM, maxVR, wVol, wRev, wLiq, outDir, refresh)
 	}
 
 	if basketCSV != "" {
@@ -476,7 +480,7 @@ func runScreen(ctx context.Context, client grpcclient.GrpcClient, tickers []stri
 // concurrently (volWorkers) — different tickers hit different cache files, so
 // the only shared state guarded is the result slice.
 func runVolRank(ctx context.Context, client grpcclient.GrpcClient, months, atrPeriod, topN int,
-	minTurnoverM float64, outDir string, refresh bool,
+	minTurnoverM, maxVR, wVol, wRev, wLiq float64, outDir string, refresh bool,
 ) error {
 	shares, err := client.InstrumentsServiceClient().Shares(ctx)
 	if err != nil {
@@ -501,6 +505,7 @@ func runVolRank(ctx context.Context, client grpcclient.GrpcClient, months, atrPe
 	var mu sync.Mutex
 	var rows []svc.VolRow
 	var done int32
+	var droppedTrending int32
 
 	for _, u := range universe {
 		wg.Add(1)
@@ -513,24 +518,32 @@ func runVolRank(ctx context.Context, client grpcclient.GrpcClient, months, atrPe
 				fmt.Printf("volrank %s: skip (load: %v)\n", u.Ticker, err)
 				return
 			}
-			mean, last, turn, _, _, bars := svc.VolMetrics(candles, u.Lot, atrPeriod)
+			mean, last, turn, vr2, ac1, bars := svc.VolMetrics(candles, u.Lot, atrPeriod)
 			n := atomic.AddInt32(&done, 1)
-			fmt.Printf("volrank [%d/%d] %s: ATR%%=%.2f turnover=%.0fM\n", n, len(universe), u.Ticker, mean, turn)
+			fmt.Printf("volrank [%d/%d] %s: ATR%%=%.2f turnover=%.0fM VR2=%.2f\n", n, len(universe), u.Ticker, mean, turn, vr2)
 			if bars < atrPeriod+1 || turn < minTurnoverM || mean <= 0 {
+				return
+			}
+			if vr2 <= 0 || vr2 > maxVR { // undefined or trending → exclude
+				atomic.AddInt32(&droppedTrending, 1)
 				return
 			}
 			mu.Lock()
 			rows = append(rows, svc.VolRow{
-				Ticker: u.Ticker, Name: u.Name, MeanATRpct: mean, LastATRpct: last, TurnoverM: turn, Bars: bars,
+				Ticker: u.Ticker, Name: u.Name, MeanATRpct: mean, LastATRpct: last,
+				TurnoverM: turn, VR2: vr2, Autocorr1: ac1, Bars: bars,
 			})
 			mu.Unlock()
 		}(u)
 	}
 	wg.Wait()
 
+	svc.ScoreVolRows(rows, wVol, wRev, wLiq)
+
 	meta := svc.VolMeta{
-		Months: months, ATRPeriod: atrPeriod, MinTurnover: minTurnoverM,
-		Scanned: len(universe), Passed: len(rows),
+		Months: months, ATRPeriod: atrPeriod, MinTurnover: minTurnoverM, MaxVR: maxVR,
+		WVol: wVol, WRev: wRev, WLiq: wLiq,
+		Scanned: len(universe), Passed: len(rows), DroppedTrending: int(droppedTrending),
 	}
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return fmt.Errorf("mkdir out dir: %w", err)
