@@ -24,11 +24,16 @@ type VolRow struct {
 
 // VolMeta carries the run parameters shown in the report header.
 type VolMeta struct {
-	Months      int
-	ATRPeriod   int
-	MinTurnover float64
-	Scanned     int // universe size after the currency/trading filter
-	Passed      int // rows that cleared the liquidity/history filter
+	Months          int
+	ATRPeriod       int
+	MinTurnover     float64
+	MaxVR           float64 // trend-exclusion threshold on VR(2)
+	WVol            float64 // composite weights
+	WRev            float64
+	WLiq            float64
+	Scanned         int // universe size after the currency/trading filter
+	Passed          int // rows that cleared liquidity/history/trend filters (scored)
+	DroppedTrending int // rows excluded because VR2 > MaxVR or VR2 <= 0
 }
 
 // VolMetrics computes the daily-ATR volatility metrics for one ticker from its
@@ -122,34 +127,36 @@ func ScoreVolRows(rows []VolRow, wVol, wRev, wLiq float64) {
 }
 
 // RenderVolatilityMarkdown renders the volatility screen as a Markdown table
-// ranked by MeanATRpct descending (most volatile first). When topN > 0 the
+// ranked by Score descending (best reversion-fitness first). When topN > 0 the
 // table is truncated to the top N rows.
 func RenderVolatilityMarkdown(rows []VolRow, meta VolMeta, topN int) string {
 	sorted := make([]VolRow, len(rows))
 	copy(sorted, rows)
 	sort.SliceStable(sorted, func(i, j int) bool {
-		return sorted[i].MeanATRpct > sorted[j].MeanATRpct
+		return sorted[i].Score > sorted[j].Score
 	})
 	if topN > 0 && len(sorted) > topN {
 		sorted = sorted[:topN]
 	}
 
 	var b strings.Builder
-	b.WriteString("# Волатильность акций по дневному ATR\n\n")
-	fmt.Fprintf(&b, "Окно: %d мес; ATR(%d) на дневном ТФ; порог ликвидности: %.0f млн ₽/день.\n",
-		meta.Months, meta.ATRPeriod, meta.MinTurnover)
-	fmt.Fprintf(&b, "Просканировано %d тикеров (RUB, торгуемые); прошло фильтр: %d.\n\n",
-		meta.Scanned, meta.Passed)
-	b.WriteString("Метрика — ATR% = ATR / цена. Ранжир по средней ATR% за окно (убыв.).\n\n")
-	b.WriteString("| # | Тикер | Название | Ср. ATR% | Тек. ATR% | Тренд | Ликвидность, млн ₽/день | Баров |\n")
-	b.WriteString("|---|---|---|---|---|---|---|---|\n")
+	b.WriteString("# Скринер пригодности под reversion (дневной ТФ)\n\n")
+	fmt.Fprintf(&b, "Окно: %d мес; ATR(%d); порог ликвидности: %.0f млн ₽/день; трендовый отсев: VR(2) > %.2f.\n",
+		meta.Months, meta.ATRPeriod, meta.MinTurnover, meta.MaxVR)
+	fmt.Fprintf(&b, "Просканировано %d тикеров (RUB, торгуемые); прошло фильтр: %d; отсеяно как трендовые: %d.\n\n",
+		meta.Scanned, meta.Passed, meta.DroppedTrending)
+	fmt.Fprintf(&b, "Score = %.2g·перцентиль(ATR%%) + %.2g·перцентиль(возврат, −VR2) + %.2g·перцентиль(оборот). Ранжир по Score (убыв.).\n\n",
+		meta.WVol, meta.WRev, meta.WLiq)
+	b.WriteString("| # | Тикер | Название | Score | Ср. ATR% | Тек. ATR% | Тренд | VR(2) | Autocorr | Вердикт | Оборот, млн ₽/день | Баров |\n")
+	b.WriteString("|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	for i, r := range sorted {
 		trend := "↓"
 		if r.LastATRpct > r.MeanATRpct {
 			trend = "↑"
 		}
-		fmt.Fprintf(&b, "| %d | %s | %s | %.2f | %.2f | %s | %.1f | %d |\n",
-			i+1, r.Ticker, r.Name, r.MeanATRpct, r.LastATRpct, trend, r.TurnoverM, r.Bars)
+		fmt.Fprintf(&b, "| %d | %s | %s | %.3f | %.2f | %.2f | %s | %.3f | %+.3f | %s | %.1f | %d |\n",
+			i+1, r.Ticker, r.Name, r.Score, r.MeanATRpct, r.LastATRpct, trend,
+			r.VR2, r.Autocorr1, backtest.MeanReversionVerdict(r.VR2), r.TurnoverM, r.Bars)
 	}
 	return b.String()
 }

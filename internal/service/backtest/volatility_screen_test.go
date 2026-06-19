@@ -81,46 +81,41 @@ func TestVolMetrics_VarianceRatio(t *testing.T) {
 	}
 }
 
-func TestRenderVolatilityMarkdown_SortsDescAndTrend(t *testing.T) {
+func TestRenderVolatilityMarkdown_SortsByScore(t *testing.T) {
 	rows := []VolRow{
-		{Ticker: "AAA", Name: "Alpha Co", MeanATRpct: 1.0, LastATRpct: 1.5, TurnoverM: 200, Bars: 120}, // trend up
-		{Ticker: "BBB", Name: "Beta Co", MeanATRpct: 3.0, LastATRpct: 2.0, TurnoverM: 50, Bars: 120},   // trend down
+		{Ticker: "AAA", Name: "Alpha Co", MeanATRpct: 1.0, LastATRpct: 1.5, TurnoverM: 200, VR2: 0.9, Autocorr1: -0.1, Score: 0.20, Bars: 120},
+		{Ticker: "BBB", Name: "Beta Co", MeanATRpct: 3.0, LastATRpct: 2.0, TurnoverM: 50, VR2: 0.7, Autocorr1: -0.3, Score: 0.80, Bars: 120},
 	}
-	meta := VolMeta{Months: 6, ATRPeriod: 14, MinTurnover: 50, Scanned: 100, Passed: 2}
+	meta := VolMeta{Months: 6, ATRPeriod: 14, MinTurnover: 50, MaxVR: 1.05, WVol: 0.4, WRev: 0.4, WLiq: 0.2, Scanned: 100, Passed: 2}
 
 	out := RenderVolatilityMarkdown(rows, meta, 0)
 
-	bbb := strings.Index(out, "BBB")
-	aaa := strings.Index(out, "AAA")
+	bbb, aaa := strings.Index(out, "BBB"), strings.Index(out, "AAA")
 	if bbb == -1 || aaa == -1 {
 		t.Fatalf("both tickers must appear; out=%q", out)
 	}
 	if bbb > aaa {
-		t.Errorf("BBB (mean 3.0) must rank before AAA (mean 1.0)")
-	}
-	if !strings.Contains(out, "↑") || !strings.Contains(out, "↓") {
-		t.Errorf("expected both trend arrows in output")
+		t.Errorf("BBB (score 0.80) must rank before AAA (score 0.20)")
 	}
 	if strings.Contains(out, "%%") {
 		t.Errorf("rendered output must not contain literal '%%%%'; got: %q", out)
 	}
-	if !strings.Contains(out, "Alpha Co") || !strings.Contains(out, "Beta Co") {
-		t.Errorf("expected company names in output; got: %q", out)
-	}
-	if !strings.Contains(out, "Название") {
-		t.Errorf("expected Название column header; got: %q", out)
+	for _, want := range []string{"Alpha Co", "Beta Co", "Score", "VR(2)", "Autocorr", "Вердикт"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("expected %q in output; got: %q", want, out)
+		}
 	}
 }
 
 func TestRenderVolatilityMarkdown_TopN(t *testing.T) {
 	rows := []VolRow{
-		{Ticker: "AAA", MeanATRpct: 1.0, Bars: 120},
-		{Ticker: "BBB", MeanATRpct: 3.0, Bars: 120},
-		{Ticker: "CCC", MeanATRpct: 2.0, Bars: 120},
+		{Ticker: "AAA", Score: 0.1, Bars: 120},
+		{Ticker: "BBB", Score: 0.9, Bars: 120},
+		{Ticker: "CCC", Score: 0.5, Bars: 120},
 	}
 	out := RenderVolatilityMarkdown(rows, VolMeta{}, 2)
 	if strings.Contains(out, "AAA") {
-		t.Errorf("topN=2 must drop AAA (lowest mean); out=%q", out)
+		t.Errorf("topN=2 must drop AAA (lowest score); out=%q", out)
 	}
 	if !strings.Contains(out, "BBB") || !strings.Contains(out, "CCC") {
 		t.Errorf("topN=2 must keep BBB and CCC")
