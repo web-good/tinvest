@@ -126,3 +126,56 @@ func TestRenderVolatilityMarkdown_TopN(t *testing.T) {
 		t.Errorf("topN=2 must keep BBB and CCC")
 	}
 }
+
+func TestScoreVolRows_RewardsAllThree(t *testing.T) {
+	rows := []VolRow{
+		// strong: high ATR%, low VR2 (mean-reverting), high turnover
+		{Ticker: "GOOD", MeanATRpct: 4.0, VR2: 0.7, TurnoverM: 500},
+		// weak: low ATR%, high-ish VR2, low turnover
+		{Ticker: "WEAK", MeanATRpct: 1.0, VR2: 1.0, TurnoverM: 50},
+		// middle
+		{Ticker: "MID", MeanATRpct: 2.5, VR2: 0.9, TurnoverM: 200},
+	}
+	ScoreVolRows(rows, 0.4, 0.4, 0.2)
+
+	byTicker := map[string]float64{}
+	for _, r := range rows {
+		byTicker[r.Ticker] = r.Score
+	}
+	if !(byTicker["GOOD"] > byTicker["MID"] && byTicker["MID"] > byTicker["WEAK"]) {
+		t.Errorf("score order wrong: GOOD=%.3f MID=%.3f WEAK=%.3f",
+			byTicker["GOOD"], byTicker["MID"], byTicker["WEAK"])
+	}
+	// best on all dims ⇒ max blended score 1.0
+	if byTicker["GOOD"] < 0.999 {
+		t.Errorf("GOOD score = %.3f, want ~1.0 (top on every dimension)", byTicker["GOOD"])
+	}
+}
+
+func TestScoreVolRows_WeightShiftsOrder(t *testing.T) {
+	// A is more volatile; B mean-reverts harder. Weighting reversion flips the winner.
+	mk := func() []VolRow {
+		return []VolRow{
+			{Ticker: "A", MeanATRpct: 5.0, VR2: 0.95, TurnoverM: 100},
+			{Ticker: "B", MeanATRpct: 2.0, VR2: 0.60, TurnoverM: 100},
+		}
+	}
+	volHeavy := mk()
+	ScoreVolRows(volHeavy, 0.9, 0.1, 0.0)
+	if volHeavy[0].Score <= volHeavy[1].Score {
+		t.Errorf("vol-heavy weights: A must outscore B")
+	}
+	revHeavy := mk()
+	ScoreVolRows(revHeavy, 0.1, 0.9, 0.0)
+	if revHeavy[1].Score <= revHeavy[0].Score {
+		t.Errorf("rev-heavy weights: B must outscore A")
+	}
+}
+
+func TestScoreVolRows_SingleRow(t *testing.T) {
+	rows := []VolRow{{Ticker: "ONLY", MeanATRpct: 2.0, VR2: 0.8, TurnoverM: 100}}
+	ScoreVolRows(rows, 0.4, 0.4, 0.2) // must not panic; single candidate scores top
+	if rows[0].Score == 0 {
+		t.Errorf("single row score = 0, want > 0")
+	}
+}

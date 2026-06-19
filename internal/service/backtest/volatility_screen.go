@@ -16,6 +16,9 @@ type VolRow struct {
 	MeanATRpct float64 // mean ATR% over the window (headline ranking metric)
 	LastATRpct float64 // latest ATR% (regime: heating up vs cooling)
 	TurnoverM  float64 // mean daily turnover in millions of RUB
+	VR2        float64 // Lo-MacKinlay variance ratio at q=2 (<1 mean-reverting)
+	Autocorr1  float64 // lag-1 autocorrelation (negative = mean-reverting)
+	Score      float64 // composite reversion-fitness score (filled by ScoreVolRows)
 	Bars       int
 }
 
@@ -72,6 +75,50 @@ func VolMetrics(candles []backtest.Candle, lot int32, atrPeriod int) (meanATRpct
 	}
 	meanATRpct = pctSum / float64(count)
 	return meanATRpct, lastATRpct, turnoverM, vr2, autocorr1, bars
+}
+
+// percentileRanks maps each value to its fractional rank in [0,1]: the smallest
+// value gets 0, the largest 1, ties share a rank. A single value scores 1 (it is
+// the sole — hence top — candidate).
+func percentileRanks(vals []float64) []float64 {
+	n := len(vals)
+	out := make([]float64, n)
+	if n == 1 {
+		out[0] = 1
+		return out
+	}
+	for i, v := range vals {
+		less := 0
+		for _, w := range vals {
+			if w < v {
+				less++
+			}
+		}
+		out[i] = float64(less) / float64(n-1)
+	}
+	return out
+}
+
+// ScoreVolRows fills each row's Score with a weighted blend of percentile ranks
+// across volatility (ATR%), mean reversion (-VR2, so lower VR2 ranks higher) and
+// liquidity (turnover). Percentiles are relative to the rows passed in.
+func ScoreVolRows(rows []VolRow, wVol, wRev, wLiq float64) {
+	n := len(rows)
+	if n == 0 {
+		return
+	}
+	atr := make([]float64, n)
+	rev := make([]float64, n)
+	liq := make([]float64, n)
+	for i, r := range rows {
+		atr[i] = r.MeanATRpct
+		rev[i] = -r.VR2
+		liq[i] = r.TurnoverM
+	}
+	pa, pr, pl := percentileRanks(atr), percentileRanks(rev), percentileRanks(liq)
+	for i := range rows {
+		rows[i].Score = wVol*pa[i] + wRev*pr[i] + wLiq*pl[i]
+	}
 }
 
 // RenderVolatilityMarkdown renders the volatility screen as a Markdown table
