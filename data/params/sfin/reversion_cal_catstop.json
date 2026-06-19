@@ -1,0 +1,12 @@
+{
+  "_comment": "CATASTROPHIC-STOP calibration. CatStopATRMult>0 turns on the always-on backstop (PurchasePrice - CatStopATRMult×EntryATR) AND anchors risk-based position sizing, so run with -risk-pct 1 to size positions off the stop. Includes 0 so the grid can also confirm whether running without a catastrophic stop wins. go run ./cmd/backtest -ticker SFIN -strategy reversion -interval Day1 -calibrate data/params/sfin/reversion_cal_catstop.json -out ./reports/SFIN_catstop -months 50 -test-months 12 -metric profit_factor -min-trades 20 -risk-pct 1",
+  "phases": [
+    {
+      "name": "catstop",
+      "grid": {
+        "ATRPeriod": [14],
+        "CatStopATRMult": [0, 2.0, 2.5, 3.0, 3.5, 4.0]
+      }
+    }
+  ]
+}

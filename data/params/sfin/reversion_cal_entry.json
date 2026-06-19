@@ -1,0 +1,29 @@
+{
+  "_comment": "ENTRY-CORE calibration (the dual-oscillator buy signal). Two staged phases: tune RSI first, then the Stochastic over the RSI survivors. Everything else inherits SFIN DefaultParams. This is the heart of the strategy — run it even if the screen says all filters are dead. Run: go run ./cmd/backtest -ticker SFIN -strategy reversion -interval Day1 -calibrate data/params/sfin/reversion_cal_entry.json -out ./reports/SFIN_entry -months 50 -test-months 12 -metric profit_factor -min-trades 20",
+  "phases": [
+    {
+      "name": "rsi",
+      "keepTop": 4,
+      "grid": {
+        "RSIPeriod": [6, 9, 14],
+        "RSIOversold": [20, 25, 30, 35]
+      }
+    },
+    {
+      "name": "stoch",
+      "keepTop": 4,
+      "grid": {
+        "StochKPeriod": [9, 14],
+        "StochDSmooth": [1, 3],
+        "StochOversold": [15, 20, 25]
+      }
+    },
+    {
+      "name": "ema",
+      "grid": {
+        "FastEMA": [5, 10, 20, 50],
+        "SlowEMA": [100, 150, 200]
+      }
+    }
+  ]
+}

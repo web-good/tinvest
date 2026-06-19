@@ -1,0 +1,13 @@
+{
+  "_comment": "OVERBOUGHT take-profit exit calibration. Forces UseOverbought=1; exits when RSI and Stoch %D are simultaneously in their overbought zones. Run only if the screen kept UseOverbought ON. go run ./cmd/backtest -ticker NVTK -strategy reversion -interval Day1 -calibrate data/params/nvtk/reversion_cal_overbought.json -out ./reports/NVTK_ob -months 50 -test-months 12 -metric profit_factor -min-trades 20",
+  "phases": [
+    {
+      "name": "overbought",
+      "grid": {
+        "UseOverbought": [1],
+        "RSIOverbought": [65, 70, 75, 80],
+        "StochOverbought": [75, 80, 85]
+      }
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "_comment": "Degenerate single-combo grid pinned to the EXACT params from ugld.DefaultParams() (internal/service/trading_strategy/reversion/strategy/ugld/ugld.go). Used to run a rolling walk-forward of the ALREADY-CHOSEN params (no parameter search): each train fold can only pick this one combo, so the pooled OOS / per-fold output measures whether the fixed params survive out of sample. Run to MATCH the strategy: fraction 1, commission 0.0005, NO -risk-pct (CatStopATRMult=0 means fixed sizing).",
+  "phases": [
+    {
+      "name": "fixed",
+      "grid": {
+        "UseTrend": [0],
+        "FastEMA": [10],
+        "SlowEMA": [150],
+        "RSIPeriod": [7],
+        "RSIOversold": [20],
+        "StochKPeriod": [14],
+        "StochDSmooth": [3],
+        "StochOversold": [20],
+        "UseRSI50": [0],
+        "HTFTrendEMA": [0],
+        "UseRegime": [1],
+        "ADXPeriod": [14],
+        "ADXMax": [30],
+        "UseVolume": [1],
+        "VolAvgPeriod": [30],
+        "VolMult": [1.8],
+        "UseOverbought": [1],
+        "RSIOverbought": [70],
+        "StochOverbought": [80],
+        "UseBreakeven": [1],
+        "BreakevenArmATR": [0.5],
+        "UseTrail": [1],
+        "TrailATRMult": [1.5],
+        "UseATRStop": [0],
+        "ATRPeriod": [14],
+        "StopATRMult": [1],
+        "CatStopATRMult": [0]
+      }
+    }
+  ]
+}

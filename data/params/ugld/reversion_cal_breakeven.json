@@ -1,0 +1,13 @@
+{
+  "_comment": "BREAKEVEN exit calibration. Forces UseBreakeven=1; after price runs BreakevenArmATR×EntryATR in favor, exits at the first close back at/below entry. Needs ATRPeriod>0. Run only if the screen kept UseBreakeven ON. go run ./cmd/backtest -ticker NVTK -strategy reversion -interval Day1 -calibrate data/params/nvtk/reversion_cal_breakeven.json -out ./reports/NVTK_be -months 50 -test-months 12 -metric profit_factor -min-trades 20",
+  "phases": [
+    {
+      "name": "breakeven",
+      "grid": {
+        "UseBreakeven": [1],
+        "ATRPeriod": [14],
+        "BreakevenArmATR": [0.5, 1.0, 1.5, 2.0, 2.5]
+      }
+    }
+  ]
+}

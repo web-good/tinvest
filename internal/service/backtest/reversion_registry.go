@@ -12,6 +12,7 @@ import (
 	reversionplzl "tinvest/internal/service/trading_strategy/reversion/strategy/plzl"
 	reversionrusal "tinvest/internal/service/trading_strategy/reversion/strategy/rusal"
 	reversionsber "tinvest/internal/service/trading_strategy/reversion/strategy/sber"
+	reversionsfin "tinvest/internal/service/trading_strategy/reversion/strategy/sfin"
 	reversionugld "tinvest/internal/service/trading_strategy/reversion/strategy/ugld"
 	reversionydex "tinvest/internal/service/trading_strategy/reversion/strategy/ydex"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
@@ -45,6 +46,7 @@ var reversionRegistry = map[string]Binding{
 	reversionnvtk.Ticker:  reversionBindingFor(reversionnvtk.Ticker, reversionnvtk.DefaultParams),
 	reversionmdmg.Ticker:  reversionBindingFor(reversionmdmg.Ticker, reversionmdmg.DefaultParams),
 	reversionugld.Ticker:  reversionBindingFor(reversionugld.Ticker, reversionugld.DefaultParams),
+	reversionsfin.Ticker:  reversionBindingFor(reversionsfin.Ticker, reversionsfin.DefaultParams),
 }
 
 // genericReversionDefaults are neutral baseline params for tickers without a dedicated

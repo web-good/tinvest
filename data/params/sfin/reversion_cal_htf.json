@@ -1,0 +1,11 @@
+{
+  "_comment": "HIGHER-TIMEFRAME (4H) trend filter calibration. HTFTrendEMA is the EMA period on the 4H series; 0 = filter off. Includes 0 so this grid can also confirm whether dropping the HTF gate beats every period. Run only if the screen kept HTFTrendEMA ON (>0). go run ./cmd/backtest -ticker SFIN -strategy reversion -interval Day1 -calibrate data/params/sfin/reversion_cal_htf.json -out ./reports/SFIN_htf -months 50 -test-months 12 -metric profit_factor -min-trades 20",
+  "phases": [
+    {
+      "name": "htf",
+      "grid": {
+        "HTFTrendEMA": [0, 50, 100, 150, 200]
+      }
+    }
+  ]
+}

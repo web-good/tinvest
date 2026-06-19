@@ -1,0 +1,13 @@
+{
+  "_comment": "ATR TRAILING-STOP exit calibration. Forces UseTrail=1; exits when price falls TrailATRMult×EntryATR below the running MaxFavorablePrice. Needs ATRPeriod>0. Run only if the screen kept UseTrail ON. go run ./cmd/backtest -ticker SFIN -strategy reversion -interval Day1 -calibrate data/params/sfin/reversion_cal_trail.json -out ./reports/SFIN_trail -months 50 -test-months 12 -metric profit_factor -min-trades 20",
+  "phases": [
+    {
+      "name": "trail",
+      "grid": {
+        "UseTrail": [1],
+        "ATRPeriod": [14],
+        "TrailATRMult": [1.5, 2.0, 2.5, 3.0, 4.0]
+      }
+    }
+  ]
+}

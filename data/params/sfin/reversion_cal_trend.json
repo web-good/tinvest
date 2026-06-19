@@ -1,0 +1,11 @@
+{
+  "_comment": "TREND filter calibration (EMA regime gate on the entry side). Forces UseTrend=1 and sweeps the fast/slow EMA pair; SlowEMA also acts as the price floor and the EMAX bearish-cross exit slow line. Run only if the screen kept UseTrend ON. go run ./cmd/backtest -ticker SFIN -strategy reversion -interval Day1 -calibrate data/params/sfin/reversion_cal_trend.json -out ./reports/SFIN_trend -months 50 -test-months 12 -metric profit_factor -min-trades 20",
+  "phases": [
+    {
+      "name": "trend",
+      "grid": {
+        "UseTrend": [1]
+      }
+    }
+  ]
+}
