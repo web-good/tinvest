@@ -1,0 +1,37 @@
+{
+  "_comment": "Degenerate single-combo grid pinned to the EXACT params currently in nvtk.go (2026-06-22 verification). Walk-forward of already-chosen params, no search. Fixed sizing (CatStopATRMult=0, no -risk-pct).",
+  "phases": [
+    {
+      "name": "fixed",
+      "grid": {
+        "UseTrend": [1],
+        "FastEMA": [10],
+        "SlowEMA": [150],
+        "RSIPeriod": [7],
+        "RSIOversold": [30],
+        "RSIOverbought": [70],
+        "StochKPeriod": [14],
+        "StochDSmooth": [1],
+        "StochOversold": [20],
+        "StochOverbought": [80],
+        "ATRPeriod": [14],
+        "UseRSI50": [0],
+        "HTFTrendEMA": [150],
+        "UseRegime": [0],
+        "ADXPeriod": [0],
+        "ADXMax": [0],
+        "UseVolume": [1],
+        "VolAvgPeriod": [10],
+        "VolMult": [1.5],
+        "UseOverbought": [1],
+        "UseBreakeven": [1],
+        "BreakevenArmATR": [0.5],
+        "UseTrail": [1],
+        "TrailATRMult": [1.5],
+        "UseATRStop": [0],
+        "StopATRMult": [1.0],
+        "CatStopATRMult": [0]
+      }
+    }
+  ]
+}

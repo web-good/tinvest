@@ -1,0 +1,37 @@
+{
+  "_comment": "Degenerate single-combo grid pinned to the exact params currently in eutr.go (2026-06-22 manual tuning: UseTrend1/EMA5-100, RSI6/OS30, StochK9/D1/OS20, OB on RSI65/Stoch85, Trail 1.5xATR, ATRStop 1.2xATR; regime/volume/breakeven/catstop/HTF OFF, RSI50 off). Used to walk-forward the ALREADY-CHOSEN params (no search): each train fold can only pick this combo, so pooled OOS / per-fold output measures whether the fixed config survives OOS. Fixed sizing (CatStopATRMult=0, no -risk-pct).",
+  "phases": [
+    {
+      "name": "fixed",
+      "grid": {
+        "UseTrend": [1],
+        "FastEMA": [5],
+        "SlowEMA": [100],
+        "RSIPeriod": [6],
+        "RSIOversold": [30],
+        "StochKPeriod": [9],
+        "StochDSmooth": [1],
+        "StochOversold": [20],
+        "UseRSI50": [0],
+        "HTFTrendEMA": [0],
+        "UseRegime": [0],
+        "ADXPeriod": [14],
+        "ADXMax": [30],
+        "UseVolume": [0],
+        "VolAvgPeriod": [30],
+        "VolMult": [1.8],
+        "UseOverbought": [1],
+        "RSIOverbought": [65],
+        "StochOverbought": [85],
+        "UseBreakeven": [0],
+        "BreakevenArmATR": [0.5],
+        "UseTrail": [1],
+        "TrailATRMult": [1.5],
+        "UseATRStop": [1],
+        "ATRPeriod": [14],
+        "StopATRMult": [1.2],
+        "CatStopATRMult": [0]
+      }
+    }
+  ]
+}
