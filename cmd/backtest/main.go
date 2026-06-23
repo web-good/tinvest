@@ -27,9 +27,10 @@ import (
 )
 
 const (
-	apiAddress = "invest-public-api.tinkoff.ru:443"
-	cacheDir   = "data/candles"
-	volWorkers = 6 // concurrent candle fetches for -volrank
+	apiAddress    = "invest-public-api.tinkoff.ru:443"
+	cacheDir      = "data/candles"
+	volWorkers    = 6   // concurrent candle fetches for -volrank
+	screenTrendEMA = 200 // volrank: trend EMA period (uptrend context for pullback events)
 )
 
 func main() {
@@ -58,10 +59,13 @@ func main() {
 		minTurnover  = flag.Float64("min-turnover", 50, "volrank: minimum mean daily turnover in millions of RUB")
 		atrPeriod    = flag.Int("atr-period", 14, "volrank: ATR period on the daily timeframe")
 		topN         = flag.Int("top", 50, "volrank: rows in the report (0 = all)")
-		maxVR        = flag.Float64("max-vr", 1.05, "volrank: drop tickers whose VR(2) exceeds this (trend exclusion)")
-		wVol         = flag.Float64("w-vol", 0.4, "volrank: composite weight on ATR%% percentile")
-		wRev         = flag.Float64("w-rev", 0.4, "volrank: composite weight on mean-reversion percentile")
+		wRecov       = flag.Float64("w-recov", 0.5, "volrank: composite weight on recovery-rate percentile")
+		wFreq        = flag.Float64("w-freq", 0.3, "volrank: composite weight on event-frequency percentile")
 		wLiq         = flag.Float64("w-liq", 0.2, "volrank: composite weight on turnover percentile")
+		rsiPeriodS   = flag.Int("rsi-period", 14, "volrank: RSI period for the pullback trigger")
+		rsiOversold  = flag.Float64("rsi-oversold", 30, "volrank: RSI oversold threshold (cross-down trigger)")
+		recoverBars  = flag.Int("recover-bars", 24, "volrank: bars allowed for a dip's RSI to recover")
+		recoverRSI   = flag.Float64("recover-rsi", 50, "volrank: RSI level marking a recovered dip")
 	)
 	flag.Parse()
 	logger.Init() // candle fetcher logs chunk errors via the package logger
@@ -74,7 +78,7 @@ func main() {
 	if err := run(*ticker, *strategyName, interval, *months, *cash, *fraction, *commission,
 		*paramsPath, *calibrate, *metric, *minTrades, *testMonths, *trainMonths, *outDir, *refresh, *explain,
 		*basket, *gridDir, *riskPct, *screen,
-		*volRank, *minTurnover, *atrPeriod, *topN, *maxVR, *wVol, *wRev, *wLiq); err != nil {
+		*volRank, *minTurnover, *atrPeriod, *topN, *wRecov, *wFreq, *wLiq, *rsiPeriodS, *rsiOversold, *recoverBars, *recoverRSI); err != nil {
 		log.Fatalf("backtest: %v", err)
 	}
 }
@@ -102,7 +106,7 @@ func parseInterval(s string) (enum.Interval, error) {
 func run(ticker, strategyName string, interval enum.Interval, months int, cash, fraction, commission float64,
 	paramsPath, calibratePath, metric string, minTrades, testMonths, trainMonths int, outDir string, refresh bool, explain string,
 	basketCSV, gridDir string, riskPct float64, screenCSV string,
-	volRank bool, minTurnoverM float64, atrPeriod, topN int, maxVR, wVol, wRev, wLiq float64,
+	volRank bool, minTurnoverM float64, atrPeriod, topN int, wRecov, wFreq, wLiq float64, rsiPeriodS int, rsiOversold float64, recoverBars int, recoverRSI float64,
 ) error {
 	if paramsPath != "" && calibratePath != "" {
 		return fmt.Errorf("-params and -calibrate are mutually exclusive")
@@ -135,7 +139,15 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 	}
 
 	if volRank {
-		return runVolRank(ctx, client, months, atrPeriod, topN, minTurnoverM, maxVR, wVol, wRev, wLiq, outDir, refresh)
+		sp := svc.VolParams{
+			ATRPeriod:   atrPeriod,
+			EMAPeriod:   screenTrendEMA,
+			RSIPeriod:   rsiPeriodS,
+			RSIOversold: rsiOversold,
+			RecoverRSI:  recoverRSI,
+			RecoverBars: recoverBars,
+		}
+		return runVolRank(ctx, client, months, topN, minTurnoverM, wRecov, wFreq, wLiq, sp, outDir, refresh)
 	}
 
 	if basketCSV != "" {
@@ -475,12 +487,12 @@ func runScreen(ctx context.Context, client grpcclient.GrpcClient, tickers []stri
 	return nil
 }
 
-// runVolRank ranks the liquid RUB share universe by normalized daily ATR (ATR%)
-// over the last `months`, writing a markdown report. It fetches daily candles
-// concurrently (volWorkers) — different tickers hit different cache files, so
-// the only shared state guarded is the result slice.
-func runVolRank(ctx context.Context, client grpcclient.GrpcClient, months, atrPeriod, topN int,
-	minTurnoverM, maxVR, wVol, wRev, wLiq float64, outDir string, refresh bool,
+// runVolRank ranks the liquid RUB share universe by Hour1 pullback-in-trend
+// fitness over the last `months`, writing a markdown report. It fetches Hour1
+// candles concurrently (volWorkers) — different tickers hit different cache
+// files, so the only shared state guarded is the result slice.
+func runVolRank(ctx context.Context, client grpcclient.GrpcClient, months, topN int,
+	minTurnoverM, wRecov, wFreq, wLiq float64, sp svc.VolParams, outDir string, refresh bool,
 ) error {
 	shares, err := client.InstrumentsServiceClient().Shares(ctx)
 	if err != nil {
@@ -499,13 +511,13 @@ func runVolRank(ctx context.Context, client grpcclient.GrpcClient, months, atrPe
 	provider := svc.NewCandleProvider(client.MarketDataServiceClient(), cacheDir)
 	to := time.Now()
 	from := to.AddDate(0, -months, 0)
+	minBars := sp.EMAPeriod + sp.RecoverBars
 
 	sem := semaphore.New(volWorkers)
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	var rows []svc.VolRow
 	var done int32
-	var droppedTrending int32
 
 	for _, u := range universe {
 		wg.Add(1)
@@ -513,43 +525,43 @@ func runVolRank(ctx context.Context, client grpcclient.GrpcClient, months, atrPe
 		go func(u shareInfoT) {
 			defer wg.Done()
 			defer sem.Release()
-			candles, err := provider.Load(ctx, u.Ticker, u.ID, enum.Day1, from, to, refresh)
+			candles, err := provider.Load(ctx, u.Ticker, u.ID, enum.Hour1, from, to, refresh)
 			if err != nil {
 				fmt.Printf("volrank %s: skip (load: %v)\n", u.Ticker, err)
 				return
 			}
-			mean, last, turn, vr2, ac1, bars := svc.VolMetrics(candles, u.Lot, atrPeriod)
+			st := svc.VolMetrics(candles, u.Lot, sp)
 			n := atomic.AddInt32(&done, 1)
-			fmt.Printf("volrank [%d/%d] %s: ATR%%=%.2f turnover=%.0fM VR2=%.2f\n", n, len(universe), u.Ticker, mean, turn, vr2)
-			if bars < atrPeriod+1 || turn < minTurnoverM || mean <= 0 {
-				return
-			}
-			if vr2 <= 0 || vr2 > maxVR { // undefined or trending → exclude
-				atomic.AddInt32(&droppedTrending, 1)
+			fmt.Printf("volrank [%d/%d] %s: recov=%.0f%% freq=%.2f turnover=%.0fM bars=%d\n",
+				n, len(universe), u.Ticker, st.RecoveryRate*100, st.EventFreq, st.TurnoverM, st.Bars)
+			if st.Bars < minBars || st.TurnoverM < minTurnoverM {
 				return
 			}
 			mu.Lock()
 			rows = append(rows, svc.VolRow{
-				Ticker: u.Ticker, Name: u.Name, MeanATRpct: mean, LastATRpct: last,
-				TurnoverM: turn, VR2: vr2, Autocorr1: ac1, Bars: bars,
+				Ticker: u.Ticker, Name: u.Name,
+				RecoveryRate: st.RecoveryRate, EventFreq: st.EventFreq, Events: st.Events,
+				MeanATRpct: st.MeanATRpct, LastATRpct: st.LastATRpct, TurnoverM: st.TurnoverM,
+				VR2: st.VR2, Autocorr1: st.Autocorr1, Bars: st.Bars,
 			})
 			mu.Unlock()
 		}(u)
 	}
 	wg.Wait()
 
-	svc.ScoreVolRows(rows, wVol, wRev, wLiq)
+	svc.ScoreVolRows(rows, wRecov, wFreq, wLiq)
 
 	meta := svc.VolMeta{
-		Months: months, ATRPeriod: atrPeriod, MinTurnover: minTurnoverM, MaxVR: maxVR,
-		WVol: wVol, WRev: wRev, WLiq: wLiq,
-		Scanned: len(universe), Passed: len(rows), DroppedTrending: int(droppedTrending),
+		Months: months, ATRPeriod: sp.ATRPeriod, MinTurnover: minTurnoverM,
+		RSIPeriod: sp.RSIPeriod, RSIOversold: sp.RSIOversold, RecoverBars: sp.RecoverBars, RecoverRSI: sp.RecoverRSI,
+		WRecov: wRecov, WFreq: wFreq, WLiq: wLiq,
+		Scanned: len(universe), Passed: len(rows),
 	}
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return fmt.Errorf("mkdir out dir: %w", err)
 	}
 	stamp := time.Now().Format("20060102_150405")
-	path := filepath.Join(outDir, fmt.Sprintf("volatility_Day1_%s.md", stamp))
+	path := filepath.Join(outDir, fmt.Sprintf("volatility_Hour1_%s.md", stamp))
 	if err := writeFile(path, svc.RenderVolatilityMarkdown(rows, meta, topN)); err != nil {
 		return err
 	}
