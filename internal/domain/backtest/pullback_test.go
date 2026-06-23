@@ -110,7 +110,7 @@ func TestPullbackStats_WarmupSentinelSkipped(t *testing.T) {
 		ema[i] = 50
 		rsi[i] = 60
 	}
-	rsi[9] = 0  // warm-up sentinel
+	rsi[9] = 0   // warm-up sentinel
 	rsi[10] = 20 // would look like a cross-down from 0, but prev is invalid
 	rsi[12] = 55
 	_, _, events := PullbackStats(closes, ema, rsi, 30, 50, 24)

@@ -27,9 +27,9 @@ import (
 )
 
 const (
-	apiAddress    = "invest-public-api.tinkoff.ru:443"
-	cacheDir      = "data/candles"
-	volWorkers    = 6   // concurrent candle fetches for -volrank
+	apiAddress     = "invest-public-api.tinkoff.ru:443"
+	cacheDir       = "data/candles"
+	volWorkers     = 6   // concurrent candle fetches for -volrank
 	screenTrendEMA = 200 // volrank: trend EMA period (uptrend context for pullback events)
 )
 
