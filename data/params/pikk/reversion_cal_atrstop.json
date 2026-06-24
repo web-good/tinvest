@@ -1,0 +1,23 @@
+{
+  "_comment": "MIDDLE-EXIT = ATR STOP calibration. Forces UseATRStop=1, swapping the RSIOS failed-bounce middle exit for a hard ATR stop at PurchasePrice - StopATRMult\u00d7EntryATR. PIKK is UNCALIBRATED (baseline UseATRStop=0); run this to decide whether a fixed ATR stop beats the soft RSIOS exit. go run ./cmd/backtest -ticker PIKK -strategy reversion -interval Hour1 -calibrate data/params/pikk/reversion_cal_atrstop.json -out ./reports/PIKK_atrstop -months 12 -train-months 6 -test-months 3 -metric profit_factor -min-trades 20",
+  "phases": [
+    {
+      "name": "atrstop",
+      "grid": {
+        "UseATRStop": [
+          1
+        ],
+        "ATRPeriod": [
+          14
+        ],
+        "StopATRMult": [
+          0.8,
+          1.0,
+          1.2,
+          1.5,
+          2.0
+        ]
+      }
+    }
+  ]
+}

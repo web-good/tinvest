@@ -1,0 +1,21 @@
+{
+  "_comment": "CATPIKKOPHIC-STOP calibration. CatStopATRMult>0 turns on the always-on backstop (PurchasePrice - CatStopATRMult\u00d7EntryATR) AND anchors risk-based position sizing, so run with -risk-pct 1 to size positions off the stop. Includes 0 so the grid can also confirm whether running without a catastrophic stop wins. go run ./cmd/backtest -ticker PIKK -strategy reversion -interval Hour1 -calibrate data/params/pikk/reversion_cal_catstop.json -out ./reports/PIKK_catstop -months 12 -train-months 6 -test-months 3 -metric profit_factor -min-trades 20 -risk-pct 1",
+  "phases": [
+    {
+      "name": "catstop",
+      "grid": {
+        "ATRPeriod": [
+          14
+        ],
+        "CatStopATRMult": [
+          0,
+          2.0,
+          2.5,
+          3.0,
+          3.5,
+          4.0
+        ]
+      }
+    }
+  ]
+}

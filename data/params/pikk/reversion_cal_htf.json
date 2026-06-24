@@ -1,0 +1,17 @@
+{
+  "_comment": "HIGHER-TIMEFRAME (4H) trend filter calibration. HTFTrendEMA is the EMA period on the 4H series; 0 = filter off. Includes 0 so this grid can also confirm whether dropping the HTF gate beats every period. Run only if the screen kept HTFTrendEMA ON (>0). go run ./cmd/backtest -ticker PIKK -strategy reversion -interval Hour1 -calibrate data/params/pikk/reversion_cal_htf.json -out ./reports/PIKK_htf -months 12 -train-months 6 -test-months 3 -metric profit_factor -min-trades 20",
+  "phases": [
+    {
+      "name": "htf",
+      "grid": {
+        "HTFTrendEMA": [
+          0,
+          50,
+          100,
+          150,
+          200
+        ]
+      }
+    }
+  ]
+}

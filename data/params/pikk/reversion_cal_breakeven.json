@@ -1,0 +1,23 @@
+{
+  "_comment": "BREAKEVEN exit calibration. Forces UseBreakeven=1; after price runs BreakevenArmATR\u00d7EntryATR in favor, exits at the first close back at/below entry. Needs ATRPeriod>0. Run only if the screen kept UseBreakeven ON. go run ./cmd/backtest -ticker PIKK -strategy reversion -interval Hour1 -calibrate data/params/pikk/reversion_cal_breakeven.json -out ./reports/PIKK_be -months 12 -train-months 6 -test-months 3 -metric profit_factor -min-trades 20",
+  "phases": [
+    {
+      "name": "breakeven",
+      "grid": {
+        "UseBreakeven": [
+          1
+        ],
+        "ATRPeriod": [
+          14
+        ],
+        "BreakevenArmATR": [
+          0.5,
+          1.0,
+          1.5,
+          2.0,
+          2.5
+        ]
+      }
+    }
+  ]
+}

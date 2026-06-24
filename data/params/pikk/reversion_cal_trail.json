@@ -1,0 +1,24 @@
+{
+  "_comment": "ATR TRAILING-STOP exit calibration. Forces UseTrail=1; exits when price falls TrailATRMult\u00d7EntryATR below the running MaxFavorablePrice. Needs ATRPeriod>0. Run only if the screen kept UseTrail ON. go run ./cmd/backtest -ticker PIKK -strategy reversion -interval Hour1 -calibrate data/params/pikk/reversion_cal_trail.json -out ./reports/PIKK_trail -months 12 -train-months 6 -test-months 3 -metric profit_factor -min-trades 20",
+  "phases": [
+    {
+      "name": "trail",
+      "grid": {
+        "UseTrail": [
+          1
+        ],
+        "ATRPeriod": [
+          14
+        ],
+        "TrailATRMult": [
+          1.5,
+          1.8,
+          2.0,
+          2.5,
+          3.0,
+          4.0
+        ]
+      }
+    }
+  ]
+}

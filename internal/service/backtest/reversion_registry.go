@@ -5,11 +5,13 @@ import (
 	"fmt"
 
 	reversionafks "tinvest/internal/service/trading_strategy/reversion/strategy/afks"
+	reversionastr "tinvest/internal/service/trading_strategy/reversion/strategy/astr"
 	"tinvest/internal/service/trading_strategy/reversion/strategy/core"
 	reversioneutr "tinvest/internal/service/trading_strategy/reversion/strategy/eutr"
 	reversiongazp "tinvest/internal/service/trading_strategy/reversion/strategy/gazp"
 	reversionmdmg "tinvest/internal/service/trading_strategy/reversion/strategy/mdmg"
 	reversionnvtk "tinvest/internal/service/trading_strategy/reversion/strategy/nvtk"
+	reversionpikk "tinvest/internal/service/trading_strategy/reversion/strategy/pikk"
 	reversionplzl "tinvest/internal/service/trading_strategy/reversion/strategy/plzl"
 	reversionrusal "tinvest/internal/service/trading_strategy/reversion/strategy/rusal"
 	reversionsber "tinvest/internal/service/trading_strategy/reversion/strategy/sber"
@@ -40,12 +42,14 @@ func reversionBindingFor(ticker string, defaults func() core.Params) Binding {
 var reversionRegistry = map[string]Binding{
 	reversionrusal.Ticker: reversionBindingFor(reversionrusal.Ticker, reversionrusal.DefaultParams),
 	reversionafks.Ticker:  reversionBindingFor(reversionafks.Ticker, reversionafks.DefaultParams),
+	reversionastr.Ticker:  reversionBindingFor(reversionastr.Ticker, reversionastr.DefaultParams),
 	reversioneutr.Ticker:  reversionBindingFor(reversioneutr.Ticker, reversioneutr.DefaultParams),
 	reversionydex.Ticker:  reversionBindingFor(reversionydex.Ticker, reversionydex.DefaultParams),
 	reversionplzl.Ticker:  reversionBindingFor(reversionplzl.Ticker, reversionplzl.DefaultParams),
 	reversionsber.Ticker:  reversionBindingFor(reversionsber.Ticker, reversionsber.DefaultParams),
 	reversiongazp.Ticker:  reversionBindingFor(reversiongazp.Ticker, reversiongazp.DefaultParams),
 	reversionnvtk.Ticker:  reversionBindingFor(reversionnvtk.Ticker, reversionnvtk.DefaultParams),
+	reversionpikk.Ticker:  reversionBindingFor(reversionpikk.Ticker, reversionpikk.DefaultParams),
 	reversionmdmg.Ticker:  reversionBindingFor(reversionmdmg.Ticker, reversionmdmg.DefaultParams),
 	reversionugld.Ticker:  reversionBindingFor(reversionugld.Ticker, reversionugld.DefaultParams),
 	reversionsfin.Ticker:  reversionBindingFor(reversionsfin.Ticker, reversionsfin.DefaultParams),

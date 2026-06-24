@@ -1,0 +1,24 @@
+{
+  "_comment": "RANGE-REGIME (ADX) filter calibration. Forces UseRegime=1; enter only when ADX < ADXMax (low-trend / range regime, where mean-reversion works best). ADXPeriod must be >0 or the gate blocks everything. Run only if the screen kept UseRegime ON. go run ./cmd/backtest -ticker PIKK -strategy reversion -interval Hour1 -calibrate data/params/pikk/reversion_cal_regime.json -out ./reports/PIKK_regime -months 12 -train-months 6 -test-months 3 -metric profit_factor -min-trades 20",
+  "phases": [
+    {
+      "name": "regime",
+      "grid": {
+        "UseRegime": [
+          1
+        ],
+        "ADXPeriod": [
+          10,
+          14,
+          20
+        ],
+        "ADXMax": [
+          20,
+          25,
+          30,
+          35
+        ]
+      }
+    }
+  ]
+}

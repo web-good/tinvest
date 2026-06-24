@@ -1,0 +1,37 @@
+{
+  "_comment": "TIMEFRAME SWEEP for PIKK. Every parameter is PINNED to a single value (the hand-picked stack: regime+trail+volume ON; trend/HTF/overbought/breakeven/ATR-stop OFF; catstop 2.0), so calibration evaluates exactly ONE config. Purpose: run the SAME fixed config across different timeframes to compare. The timeframe is the -interval flag, not a grid key, so re-run this one file per interval. Values mirror pikk.DefaultParams() as of 2026-06-24. Runs (adjust windows per timeframe; lookback is 205 bars):\n  Hour1:    go run ./cmd/backtest -ticker PIKK -strategy reversion -interval Hour1    -calibrate data/params/pikk/reversion_tf_sweep.json -out ./reports/PIKK/tf/Hour1    -months 48 -train-months 12 -test-months 6 -metric profit_factor -min-trades 10\n  Hour4:    go run ./cmd/backtest -ticker PIKK -strategy reversion -interval Hour4    -calibrate data/params/pikk/reversion_tf_sweep.json -out ./reports/PIKK/tf/Hour4    -months 48 -train-months 12 -test-months 6 -metric profit_factor -min-trades 10\n  Day1:     go run ./cmd/backtest -ticker PIKK -strategy reversion -interval Day1     -calibrate data/params/pikk/reversion_tf_sweep.json -out ./reports/PIKK/tf/Day1     -months 96 -train-months 24 -test-months 12 -metric profit_factor -min-trades 5\n  Minutes30:go run ./cmd/backtest -ticker PIKK -strategy reversion -interval Minutes30 -calibrate data/params/pikk/reversion_tf_sweep.json -out ./reports/PIKK/tf/Minutes30 -months 12 -train-months 3 -test-months 1 -metric profit_factor -min-trades 10\nNOTE: sub-hour and hour history depth is API-limited; if a fold errors with 'train window has 0 candles', narrow -months/-train-months for that interval. Day1 needs a wide window because 205-bar lookback ~= 10 trading months.",
+  "phases": [
+    {
+      "name": "fixed",
+      "grid": {
+        "UseTrend": [0],
+        "FastEMA": [10],
+        "SlowEMA": [150],
+        "RSIPeriod": [12],
+        "RSIOversold": [25],
+        "StochKPeriod": [14],
+        "StochDSmooth": [3],
+        "StochOversold": [20],
+        "UseRSI50": [0],
+        "HTFTrendEMA": [0],
+        "UseRegime": [1],
+        "ADXPeriod": [20],
+        "ADXMax": [35],
+        "UseVolume": [1],
+        "VolAvgPeriod": [10],
+        "VolMult": [1.5],
+        "UseOverbought": [0],
+        "RSIOverbought": [70],
+        "StochOverbought": [80],
+        "UseBreakeven": [0],
+        "BreakevenArmATR": [0.5],
+        "UseTrail": [1],
+        "TrailATRMult": [2.0],
+        "UseATRStop": [0],
+        "ATRPeriod": [14],
+        "StopATRMult": [1.0],
+        "CatStopATRMult": [2.0]
+      }
+    }
+  ]
+}
