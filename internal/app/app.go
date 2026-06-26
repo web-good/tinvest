@@ -12,6 +12,8 @@ import (
 	goldenx "tinvest/internal/service/trading_strategy/golden_x/dto"
 	gxmodel "tinvest/internal/service/trading_strategy/golden_x/model"
 	"tinvest/internal/service/trading_strategy/golden_x/scheduler"
+	reversiondto "tinvest/internal/service/trading_strategy/reversion/live/dto"
+	reversionscheduler "tinvest/internal/service/trading_strategy/reversion/live/scheduler"
 	scalpingdto "tinvest/internal/service/trading_strategy/scalping/dto"
 	scalpingscheduler "tinvest/internal/service/trading_strategy/scalping/scheduler"
 	"tinvest/internal/service_provider"
@@ -227,7 +229,7 @@ func (a *App) runDev(ctx context.Context) {
 
 func (a *App) runProd(ctx context.Context) {
 	wg := sync.WaitGroup{}
-	wg.Add(6)
+	wg.Add(8)
 	/*go func() {
 		defer wg.Done()
 		sh := mr.NewSchedulerService(a.sp.GetMacdRsiTradingService())
@@ -333,6 +335,26 @@ func (a *App) runProd(ctx context.Context) {
 		)
 		if err != nil {
 			logger.ErrorContext(ctx, "Error in worker Scalping sell-watch", err.Error())
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		err := reversionscheduler.NewSchedulerService(a.sp.GetReversionLiveService()).Run(
+			ctx,
+			reversiondto.Run{Scheduler: "0 8-23 * * 1-5", Mode: reversiondto.ModeBuy},
+		)
+		if err != nil {
+			logger.ErrorContext(ctx, "Error in worker Reversion buy", err.Error())
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		err := reversionscheduler.NewSchedulerService(a.sp.GetReversionLiveService()).Run(
+			ctx,
+			reversiondto.Run{Scheduler: "0 7-23,0 * * *", Mode: reversiondto.ModeManage},
+		)
+		if err != nil {
+			logger.ErrorContext(ctx, "Error in worker Reversion manage", err.Error())
 		}
 	}()
 	wg.Wait()

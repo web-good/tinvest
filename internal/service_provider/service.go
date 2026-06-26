@@ -13,6 +13,7 @@ import (
 	"tinvest/internal/service/trading_strategy/ema200"
 	"tinvest/internal/service/trading_strategy/golden_x"
 	"tinvest/internal/service/trading_strategy/macd_rsi"
+	"tinvest/internal/service/trading_strategy/reversion/live"
 	"tinvest/internal/service/trading_strategy/scalping"
 	"tinvest/internal/service/trading_strategy/scalping_rsi"
 	"tinvest/internal/service/trading_strategy/super_trend"
@@ -23,6 +24,7 @@ type service struct {
 	macdRsiTradingService     macd_rsi.MacdRsi
 	scalpingRsiTradingService scalping_rsi.ScalpingRsi
 	scalpingTradingService    scalping.Scalping
+	reversionLiveService      live.Service
 	superTrendTradingService  super_trend.SuperTrend
 	goldenXTradingService     golden_x.GoldenX
 	bondsTradingService       bonds.Bonds
@@ -222,4 +224,21 @@ func (*ServiceProvider) GetScalpingTradingService() scalping.Scalping {
 	}
 
 	return serviceProvider.service.scalpingTradingService
+}
+
+func (*ServiceProvider) GetReversionLiveService() live.Service {
+	if serviceProvider.service.reversionLiveService == nil {
+		grpcClient, _ := serviceProvider.GetGrpcClient()
+		tgClient, _ := serviceProvider.GetTelegramBotClient()
+		serviceProvider.service.reversionLiveService = live.NewService(
+			grpcClient.InstrumentsServiceClient(),
+			grpcClient.MarketDataServiceClient(),
+			grpcClient.OperationsServiceClient(),
+			grpcClient.OrdersServiceClient(),
+			tgClient,
+			serviceProvider.appConfig.Reversion,
+		)
+	}
+
+	return serviceProvider.service.reversionLiveService
 }
