@@ -442,3 +442,35 @@ func TestEngineFreezesEntryStopAndTracksFavorable(t *testing.T) {
 		t.Fatalf("exit reason = %q, want SL", res.Trades[0].Reason)
 	}
 }
+
+func TestAssembleMarketData_MatchesPerBarFields(t *testing.T) {
+	base := time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC) // Monday 10:00
+	window := []Candle{
+		{Time: base, Open: 10, High: 11, Low: 9, Close: 10, Volume: 100},
+		{Time: base.Add(time.Hour), Open: 10, High: 12, Low: 10, Close: 11, Volume: 200},
+	}
+	daily := []Candle{
+		{Time: time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC), Close: 8, High: 9, Low: 7},  // completed
+		{Time: time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC), Close: 10, High: 11, Low: 9}, // current day -> excluded
+	}
+	htf := []Candle{
+		{Time: base.Add(-4 * time.Hour), Close: 9, High: 9.5, Low: 8.5}, // closed by base+1h
+		{Time: base.Add(4 * time.Hour), Close: 12, High: 13, Low: 11},   // not closed
+	}
+	cur := window[len(window)-1].Time
+
+	md := AssembleMarketData(window, daily, htf, cur)
+
+	if md.Price != 11 {
+		t.Fatalf("Price = %v, want 11", md.Price)
+	}
+	if len(md.Closes) != 2 || md.Closes[1] != 11 {
+		t.Fatalf("Closes = %v, want last 11", md.Closes)
+	}
+	if len(md.DailyCloses) != 1 || md.DailyCloses[0] != 8 {
+		t.Fatalf("DailyCloses = %v, want [8]", md.DailyCloses)
+	}
+	if len(md.HTFCloses) != 1 || md.HTFCloses[0] != 9 {
+		t.Fatalf("HTFCloses = %v, want [9]", md.HTFCloses)
+	}
+}

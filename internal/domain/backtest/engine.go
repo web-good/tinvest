@@ -111,11 +111,8 @@ func Run(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Candl
 	lastClose := candles[len(candles)-1].Close
 	for i := l - 1; i < len(candles); i++ {
 		p.bar = i
-		md := buildMarketData(candles[i-l+1 : i+1])
-		md.DailyCloses = visibleDailyCloses(dailyCandles, candles[i].Time, mskLoc)
-		md.DailyHighs, md.DailyLows = visibleDailyHighsLows(dailyCandles, candles[i].Time, mskLoc)
+		md := AssembleMarketData(candles[i-l+1:i+1], dailyCandles, htfCandles, candles[i].Time)
 		md.TodayHigh, md.TodayLow = todayExtent(candles, i, mskLoc)
-		md.HTFCloses, md.HTFHighs, md.HTFLows = visibleCompletedHTF(htfCandles, candles[i].Time, htfInterval)
 		if p.qty != 0 {
 			p.mark(candles[i].Close)
 		}
@@ -175,11 +172,8 @@ func Trace(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Can
 	p := newPortfolio(cfg)
 	for i := l - 1; i < len(candles); i++ {
 		p.bar = i
-		md := buildMarketData(candles[i-l+1 : i+1])
-		md.DailyCloses = visibleDailyCloses(dailyCandles, candles[i].Time, mskLoc)
-		md.DailyHighs, md.DailyLows = visibleDailyHighsLows(dailyCandles, candles[i].Time, mskLoc)
+		md := AssembleMarketData(candles[i-l+1:i+1], dailyCandles, htfCandles, candles[i].Time)
 		md.TodayHigh, md.TodayLow = todayExtent(candles, i, mskLoc)
-		md.HTFCloses, md.HTFHighs, md.HTFLows = visibleCompletedHTF(htfCandles, candles[i].Time, htfInterval)
 		if p.qty != 0 {
 			p.mark(candles[i].Close)
 		}
@@ -253,5 +247,18 @@ func buildMarketData(window []Candle) strategy.MarketData {
 	if n := len(window); n > 0 {
 		md.Price = window[n-1].Close
 	}
+	return md
+}
+
+// AssembleMarketData builds the per-bar snapshot from an oldest-first hourly window
+// plus completed-daily and 4H series, identically to Run's per-bar assembly — minus
+// TodayHigh/TodayLow, which the caller sets separately and the reversion core ignores.
+// cur is the open-time of the current (latest) bar; it anchors the no-lookahead
+// completeness test for daily and 4H series.
+func AssembleMarketData(window, daily, htf []Candle, cur time.Time) strategy.MarketData {
+	md := buildMarketData(window)
+	md.DailyCloses = visibleDailyCloses(daily, cur, mskLoc)
+	md.DailyHighs, md.DailyLows = visibleDailyHighsLows(daily, cur, mskLoc)
+	md.HTFCloses, md.HTFHighs, md.HTFLows = visibleCompletedHTF(htf, cur, htfInterval)
 	return md
 }
