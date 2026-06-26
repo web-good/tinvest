@@ -57,7 +57,7 @@ func main() {
 		screen       = flag.String("screen", "", "screen mode: comma-separated tickers; ranks them by variance ratio (ignores -ticker/-strategy)")
 		volRank      = flag.Bool("volrank", false, "screener mode: rank the liquid RUB universe by Hour1 pullback-in-trend fitness (ignores -ticker/-strategy/-interval)")
 		minTurnover  = flag.Float64("min-turnover", 50, "volrank: minimum mean daily turnover in millions of RUB")
-		atrPeriod    = flag.Int("atr-period", 14, "volrank: ATR period on the daily timeframe")
+		atrPeriod    = flag.Int("atr-period", 14, "volrank: ATR period for the Hour1 reference column (not in Score)")
 		topN         = flag.Int("top", 50, "volrank: rows in the report (0 = all)")
 		wRecov       = flag.Float64("w-recov", 0.5, "volrank: composite weight on recovery-rate percentile")
 		wFreq        = flag.Float64("w-freq", 0.3, "volrank: composite weight on event-frequency percentile")
