@@ -1,23 +1,26 @@
-# Reversion Live Runner — Operator Guide
+# Reversion Live Runner — руководство оператора
 
-**Status:** Live trading enabled (branch `feat/reversion-rsi-dip`)  
-**Design spec:** `docs/superpowers/specs/2026-06-25-reversion-live-runner-design.md`
+**Статус:** боевая торговля включена (ветка `feat/reversion-rsi-dip`)
+**Дизайн-спека:** `docs/superpowers/specs/2026-06-25-reversion-live-runner-design.md`
 
-## Configuration
+> Документация по коду (какой кусок за что отвечает) — в [`live-code-map.md`](./live-code-map.md).
 
-All configuration is via environment variables. Defaults are provided; override by setting env vars before running the app.
+## Конфигурация
 
-### Environment Variables
+Вся конфигурация задаётся через переменные окружения. Для каждой есть значение по
+умолчанию; чтобы переопределить — задайте env-переменную перед запуском приложения.
 
-| Variable | Default | Description |
+### Переменные окружения
+
+| Переменная | По умолчанию | Описание |
 |----------|---------|-------------|
-| `REVERSION_ACCOUNT_ID` | *required* | Dedicated brokerage account ID for the reversion strategy. Must be a valid Tinkoff Invest account. |
-| `REVERSION_TICKERS` | `UGLD,EUTR,NVTK` | Comma-separated list of tickers in the live universe. See [Ticker Universe](#ticker-universe) for registered tickers and constraints. |
-| `REVERSION_BUY_PCT` | `10` | Position sizing as a percentage of total account value (cash + open positions). E.g., `10` means each buy targets 10% of current account equity. |
-| `REVERSION_TRADE_ENABLED` | `false` | **Critical:** If `false`, no orders are placed; only logs and notifications fire (paper mode). Set to `true` only in production after full testing. |
-| `REVERSION_NOTIFY_ENABLED` | `true` | If `true`, entries, exits, skips, and errors are posted to Telegram. Set to `false` for silent operation. |
+| `REVERSION_ACCOUNT_ID` | *обязательная* | ID отдельного брокерского счёта для стратегии reversion. Должен быть валидным счётом Tinkoff Invest. |
+| `REVERSION_TICKERS` | `UGLD,EUTR,NVTK` | Список тикеров боевого набора через запятую. См. [Набор тикеров](#набор-тикеров) — зарегистрированные тикеры и ограничения. |
+| `REVERSION_BUY_PCT` | `10` | Размер позиции в процентах от полной стоимости счёта (кэш + открытые позиции). Например, `10` означает, что каждая покупка нацелена на 10% текущей стоимости счёта. |
+| `REVERSION_TRADE_ENABLED` | `false` | **Критично:** если `false`, ордера не выставляются — только логи и уведомления (бумажный режим). Ставьте `true` только в проде после полного тестирования. |
+| `REVERSION_NOTIFY_ENABLED` | `true` | Если `true`, входы, выходы, пропуски и ошибки публикуются в Telegram. Поставьте `false` для «тихой» работы. |
 
-**Example `env/local.env`:**
+**Пример `env/local.env`:**
 
 ```bash
 REVERSION_ACCOUNT_ID=your_account_id_here
@@ -27,264 +30,301 @@ REVERSION_TRADE_ENABLED=false
 REVERSION_NOTIFY_ENABLED=true
 ```
 
-## Flag Matrix
+## Матрица флагов
 
-The `TRADE_ENABLED` and `NOTIFY_ENABLED` flags are independent. Choose your mode:
+Флаги `TRADE_ENABLED` и `NOTIFY_ENABLED` независимы. Выберите свой режим:
 
-| `TRADE_ENABLED` | `NOTIFY_ENABLED` | Behaviour |
+| `TRADE_ENABLED` | `NOTIFY_ENABLED` | Поведение |
 |---|---|---|
-| `false` | `true` | **Paper mode:** signals posted to Telegram only; no broker orders placed. Use for development and testing. |
-| `true` | `true` | **Live trading + notifications:** orders placed, full Telegram reporting. Production mode. |
-| `true` | `false` | **Live trading, silent:** orders placed, no Telegram output. Use if notifications are handled elsewhere. |
-| `false` | `false` | **Dry run:** no orders, no notifications; only log output. For debugging and metrics collection. |
+| `false` | `true` | **Бумажный режим:** сигналы публикуются только в Telegram; ордера у брокера не выставляются. Для разработки и тестирования. |
+| `true` | `true` | **Боевая торговля + уведомления:** ордера выставляются, полная отчётность в Telegram. Продакшн-режим. |
+| `true` | `false` | **Боевая торговля, тихо:** ордера выставляются, вывода в Telegram нет. Если уведомления обрабатываются где-то ещё. |
+| `false` | `false` | **Холостой прогон (dry run):** ни ордеров, ни уведомлений; только вывод в лог. Для отладки и сбора метрик. |
 
-### Recommended Flow
+### Рекомендуемый порядок
 
-1. **Development:** `TRADE_ENABLED=false`, `NOTIFY_ENABLED=true` (paper mode on Telegram).
-2. **Testing:** `TRADE_ENABLED=false`, `NOTIFY_ENABLED=false` (dry run to logs only).
-3. **Live:** `TRADE_ENABLED=true`, `NOTIFY_ENABLED=true` (full operation with alerts).
+1. **Разработка:** `TRADE_ENABLED=false`, `NOTIFY_ENABLED=true` (бумажный режим в Telegram).
+2. **Тестирование:** `TRADE_ENABLED=false`, `NOTIFY_ENABLED=false` (холостой прогон только в логи).
+3. **Бой:** `TRADE_ENABLED=true`, `NOTIFY_ENABLED=true` (полная работа с алертами).
 
-## Execution Schedule
+## Расписание запуска
 
-The reversion runner executes two independent cron jobs:
+Runner reversion выполняет две независимые cron-задачи:
 
-### Buy-Pass Schedule
+### Расписание buy-pass
 
-**Cron:** `0 8-23 * * 1-5`  
-**Times:** 08:00, 09:00, …, 23:00 Moscow Time, Monday–Friday  
-**Action:** Per ticker with no open position, evaluate entry signals and place buy orders if triggered.
+**Cron:** `0 8-23 * * 1-5`
+**Время:** 08:00, 09:00, …, 23:00 по Москве, понедельник–пятница
+**Действие:** по каждому тикеру без открытой позиции вычислить сигналы входа и выставить ордера на покупку, если сигнал сработал.
 
-### Manage-Pass Schedule
+### Расписание manage-pass
 
-**Cron:** `0 7-23,0 * * *`  
-**Times:** 07:00, 08:00, …, 23:00, 00:00 Moscow Time, every day (no gap 01:00–06:00)  
-**Action:** Per ticker with an open position, evaluate exit signals and place sell orders if triggered.
+**Cron:** `0 7-23,0 * * *`
+**Время:** 07:00, 08:00, …, 23:00, 00:00 по Москве, ежедневно (без пропуска 01:00–06:00)
+**Действие:** по каждому тикеру с открытой позицией вычислить сигналы выхода и выставить ордера на продажу, если сигнал сработал.
 
-Both passes run in production mode (`APP_ENV=prod`). In development mode (`APP_ENV=dev`), the workers run concurrently as goroutines with no schedule delay.
+Оба прохода работают в продакшн-режиме (`APP_ENV=prod`). В режиме разработки
+(`APP_ENV=dev`) воркеры запускаются параллельно как горутины без задержки расписания.
 
-## State Management
+## Управление состоянием
 
-### State File
+### Файл состояния
 
-The runner persists per-ticker entry state in a local JSON file:
+Runner сохраняет per-ticker entry-state в локальном JSON-файле:
 
-**Path:** `data/state/reversion_<REVERSION_ACCOUNT_ID>.json`
+**Путь:** `data/state/reversion_<REVERSION_ACCOUNT_ID>.json`
 
-**Format:** Object with ticker keys, each holding:
+**Формат:** объект с ключами-тикерами, в каждом:
 
 ```json
 {
   "UGLD": {
-    "Ticker": "UGLD",
-    "EntryTime": "2026-06-26T09:00:00Z",
-    "EntryPrice": 2845.5,
-    "EntryATR": 12.3,
-    "MaxFav": 2857.8,
-    "Quantity": 10
+    "ticker": "UGLD",
+    "entryTime": "2026-06-26T09:00:00Z",
+    "entryPrice": 2845.5,
+    "entryATR": 12.3,
+    "maxFav": 2857.8,
+    "quantity": 10
   },
   "EUTR": {
-    "Ticker": "EUTR",
-    "EntryTime": "2026-06-26T10:00:00Z",
-    "EntryPrice": 1234.25,
-    "EntryATR": 8.5,
-    "MaxFav": 1234.25,
-    "Quantity": 50
+    "ticker": "EUTR",
+    "entryTime": "2026-06-26T10:00:00Z",
+    "entryPrice": 1234.25,
+    "entryATR": 8.5,
+    "maxFav": 1234.25,
+    "quantity": 50
   }
 }
 ```
 
-**Fields:**
+**Поля:**
 
-- `Ticker` — instrument code (e.g., `UGLD`).
-- `EntryTime` — UTC timestamp of the buy order (when the position was opened).
-- `EntryPrice` — average fill price of the buy order.
-- `EntryATR` — ATR value at the time of entry; used by the exit logic to compute stop-loss and take-profit.
-- `MaxFav` — maximum favorable price reached since entry; updated on each manage-pass tick for monitoring.
-- `Quantity` — number of shares in the position (in lots for brokers with lot restrictions; see [Position Sizing](#position-sizing)).
+- `ticker` — код инструмента (например, `UGLD`).
+- `entryTime` — UTC-метка времени ордера на покупку (когда позиция была открыта).
+- `entryPrice` — средняя цена исполнения ордера на покупку.
+- `entryATR` — значение ATR на момент входа; используется логикой выхода для расчёта стопов, трейлинга и breakeven. **Брокер его не отдаёт — поэтому храним сами.**
+- `maxFav` — максимальная благоприятная цена, достигнутая с момента входа; монотонно поднимается на каждом тике manage-pass (нужна для trailing-stop и breakeven).
+- `quantity` — количество **штук** в позиции (не лотов).
 
-### Atomic Writes
+### Атомарная запись
 
-State files are written atomically (temp file + rename) to prevent corruption if the process crashes mid-write.
+Файлы состояния пишутся атомарно (временный файл + `rename`), чтобы избежать порчи,
+если процесс упадёт в середине записи.
 
-### Reconstruct Fallback
+### Восстановление (reconstruct)
 
-If the portfolio holds a position in the broker account but the state file is missing (e.g., after a state file loss or recovery), the runner:
+Если в брокерском счёте позиция есть, а файл состояния отсутствует (например, после
+потери файла или восстановления окружения), runner:
 
-1. Queries the broker API for past trades (`GetOperationsByCursor`).
-2. Locates the most recent BUY order for that ticker in the current account.
-3. Reconstructs `EntryTime`, `EntryPrice`, and `Quantity` from the trade.
-4. Recomputes `EntryATR` by fetching historical candles and re-running the indicator.
-5. Sets `MaxFav` to the current market price.
-6. Persists the reconstructed state to disk.
-7. Sends a Telegram alert: `"Reconstructed state for UGLD: entry time=..., price=..., ATR=..."`
+1. Запрашивает у брокера сделки по инструменту (`GetInstrumentTrades`, за последние 120 дней).
+2. Находит **последнюю** BUY-сделку по этому тикеру → `entryTime`.
+3. Берёт `entryPrice` из средней цены покупки брокера, а `quantity` — из текущей позиции портфеля.
+4. Пересчитывает `entryATR`, загружая исторические часовые свечи вокруг входа и прогоняя индикатор ATR на окне, заканчивающемся на баре входа.
+5. Вычисляет `maxFav` как максимум close с момента входа.
+6. Сохраняет восстановленное состояние на диск.
+7. Шлёт алерт в Telegram: `"⚠️ Reversion UGLD — стейт восстановлен из API: вход 2845.5000, ATR 12.3000"`.
 
-This ensures the runner continues to function without manual intervention, and the operator is notified of the recovery.
+Это позволяет runner'у продолжить работу без ручного вмешательства, а оператор
+получает уведомление о восстановлении. Восстановленные значения (особенно ATR)
+приблизительны, поэтому алерт обязателен.
 
-## Position Sizing
+## Размер позиции
 
-Each buy order targets `REVERSION_BUY_PCT`% of the **total account value** (cash + marked-to-market open positions).
+Каждый ордер на покупку нацелен на `REVERSION_BUY_PCT`% от **полной стоимости счёта**
+(кэш + открытые позиции по рыночной оценке).
 
-**Calculation:**
+**Расчёт:**
 
-1. Fetch total account value (cash + position valuation) from broker.
-2. Compute target amount: `accountValue × BUY_PCT / 100`.
-3. Fetch current share price and lot size (1 for most Tinkoff Invest stocks).
-4. Compute quantity in lots: `floor(targetAmount / (price × lotSize))`.
-5. If `quantity == 0` or available cash is insufficient → skip order + alert.
+1. Получить полную стоимость счёта (кэш + оценка позиций) от брокера.
+2. Вычислить целевую сумму: `accountValue × BUY_PCT / 100`.
+3. Получить текущую цену акции и размер лота (1 для большинства акций Tinkoff Invest).
+4. Вычислить количество в лотах: `floor(targetAmount / (price × lotSize))`.
+5. Дополнительно ограничить доступным кэшом: `min(lots, floor(cash / lotCost))`.
+6. Если `quantity == 0` или кэша не хватает на лот → пропуск ордера + алерт.
 
-**Example:**
+**Пример:**
 
-- Account value: 1,000,000 rubles.
-- `REVERSION_BUY_PCT=10` → target: 100,000 rubles.
-- UGLD price: 2,800 rubles, lot size: 1.
-- Quantity: `floor(100,000 / 2,800) = 35 lots`.
-- Available cash: 150,000 rubles → sufficient, order placed.
+- Стоимость счёта: 1 000 000 рублей.
+- `REVERSION_BUY_PCT=10` → цель: 100 000 рублей.
+- Цена UGLD: 2 800 рублей, размер лота: 1.
+- Количество: `floor(100 000 / 2 800) = 35 лотов`.
+- Доступный кэш: 150 000 рублей → достаточно, ордер выставляется.
 
-If available cash < target amount → order skipped, Telegram alert sent.
+Если доступного кэша меньше целевой суммы → ордер пропускается, шлётся алерт в Telegram.
 
-## Position Limits
+> **Отличие от бэктеста:** в бэктесте дефолт `Fraction=1.0` = **100% кэша** на одну
+> позицию (так считались PF по отдельному тикеру). В live дефолт `BUY_PCT=10` —
+> **10% от счёта**, и тикеры делят общий капитал.
 
-- **One position per ticker:** Multiple entries in the same ticker are not allowed. If a position exists, no new buy is placed until it is sold.
-- **Tickers not in the universe:** Positions held for tickers not in `REVERSION_TICKERS` are left untouched (out of scope for the reversion runner).
+## Ограничения по позициям
 
-## Order Placement
+- **Одна позиция на тикер:** несколько входов в один тикер не допускаются. Пока позиция есть, новая покупка не выставляется, пока она не будет продана.
+- **Тикеры вне набора:** позиции по тикерам, которых нет в `REVERSION_TICKERS`, не трогаются (вне зоны ответственности runner'а reversion).
 
-### Order Type
+## Выставление ордеров
 
-Market orders only (`ORDER_TYPE_MARKET`). Orders fill at the best available market price at the time of execution.
+### Тип ордера
 
-### Idempotency
+Только рыночные ордера (`ORDER_TYPE_MARKET`). Исполняются по лучшей доступной
+рыночной цене на момент выполнения.
 
-Each order is assigned a unique UUID (`order_id`) for idempotency. If the same order is retried (e.g., due to a network timeout), the broker will recognize the duplicate `order_id` and not double-execute.
+### Идемпотентность
 
-### Rejection Handling
+Каждому ордеру присваивается уникальный UUID (`order_id`) для идемпотентности. Если
+тот же ордер будет повторён (например, из-за сетевого таймаута), брокер распознает
+дубликат `order_id` и не исполнит его дважды.
 
-If the broker rejects an order (e.g., market closed, insufficient margin, invalid instrument):
+### Обработка отказов
 
-1. No state is recorded (no buy entry, no sell confirmation).
-2. An error is logged.
-3. If `NOTIFY_ENABLED=true`, a Telegram alert is sent.
-4. The runner retries on the next scheduled tick.
+Если брокер отклоняет ордер (рынок закрыт, недостаточно средств, неверный инструмент):
 
-### Fill Tracking
+1. Состояние не записывается (ни вход, ни подтверждение продажи).
+2. Ошибка логируется.
+3. При `NOTIFY_ENABLED=true` шлётся алерт в Telegram.
+4. Runner повторяет попытку на следующем тике расписания.
 
-The runner records the actual fill price and quantity reported by the broker. If the quantity differs from the order request (partial fill in exceptional cases), the state stores the actual filled quantity.
+### Учёт исполнения
 
-## Known Divergence from Backtest
+Runner записывает фактическую цену и количество исполнения, которые сообщил брокер.
+Если количество отличается от запрошенного (исключительный случай частичного
+исполнения), в состоянии сохраняется фактически исполненное количество.
 
-The live runner produces different fills than the backtest due to inherent real-time constraints:
+## Известные расхождения с бэктестом
 
-### Entry Fill Timing
+Live-runner даёт другие исполнения, чем бэктест, из-за неизбежных ограничений
+реального времени:
 
-- **Backtest:** Fills an entry at the **close of the bar when the signal fires** (same-bar close).
-- **Live:** Wakes at the **start of the next hour** and places a market order, which fills near the **open of the next bar** (~1-bar offset + slippage).
+### Время исполнения входа
 
-On liquid names (UGLD, EUTR), the gap is typically small. On less liquid tickers, live fills may deviate more noticeably from backtest PnL.
+- **Бэктест:** исполняет вход по **close того бара, на котором сработал сигнал** (close той же свечи).
+- **Live:** просыпается в **начале следующего часа** и выставляет рыночный ордер, который исполняется около **open следующего бара** (смещение ~1 бар + проскальзывание).
 
-### Exit Fill Logic
+На ликвидных бумагах (UGLD, EUTR) разрыв обычно мал. На менее ликвидных тикерах
+live-исполнения могут заметнее отклоняться от PnL бэктеста.
 
-- **Backtest:** Models stop-loss and take-profit gap fills as `min(StopLoss, nextOpen)` / `max(TakeProfit, nextOpen)` — it knows the next bar's open and gap-fills realistically.
-- **Live:** All exits are plain market orders at signal time. The next bar's open is unknowable, so gap-fill math is not replicable.
+### Логика исполнения выхода
 
-**Impact:** Live results will not match backtest P&L exactly, especially on volatile/gapped names. Backtest results are a reference, not a guarantee.
+- **Бэктест:** моделирует гэп-исполнение стопов и тейков как `min(StopLoss, nextOpen)` / `max(TakeProfit, nextOpen)` — он знает open следующего бара и реалистично исполняет на гэпе.
+- **Live:** все выходы — обычные рыночные ордера в момент сигнала. Open следующего бара неизвестен, поэтому гэп-математику воспроизвести нельзя.
 
-## Ticker Universe
+**Влияние:** live-результаты не совпадут с P&L бэктеста точно, особенно на
+волатильных/гэповых бумагах. Бэктест — ориентир, а не гарантия.
 
-### Production Tickers (Tested and Approved)
+## Набор тикеров
 
-| Ticker | Walk-Forward PF | Status |
+### Продакшн-тикеры (протестированы и одобрены)
+
+| Тикер | Walk-Forward PF | Статус |
 |--------|-----------------|--------|
-| `UGLD` | 3.39 | ✓ Production |
-| `EUTR` | 2.529 | ✓ Production (manually tuned) |
-| `NVTK` | 4.37 | ✓ Production |
+| `UGLD` | 3.39 | ✓ Продакшн |
+| `EUTR` | 2.529 | ✓ Продакшн (настроен вручную) |
+| `NVTK` | 4.37 | ✓ Продакшн |
 
-These three are included in the default `REVERSION_TICKERS` and are ready for live trading.
+Эти три включены в `REVERSION_TICKERS` по умолчанию и готовы к боевой торговле.
 
-### Registered Tickers (Not in Default Universe)
+### Зарегистрированные тикеры (не в наборе по умолчанию)
 
-| Ticker | Walk-Forward PF | Status | Notes |
+| Тикер | Walk-Forward PF | Статус | Примечания |
 |--------|-----------------|--------|-------|
-| `ASTR` | N/A (baseline) | Tuning | Added for calibration; do not use in production without explicit testing. |
-| `SFIN` | Failed | ⛔ DO NOT TRADE | Walk-forward result was negative. Remove from `REVERSION_TICKERS` if present. |
+| `ASTR` | N/A (baseline) | Калибровка | Добавлен для калибровки; не используйте в проде без явного тестирования. |
+| `SFIN` | Провал | ⛔ НЕ ТОРГОВАТЬ | Walk-forward дал отрицательный результат. Уберите из `REVERSION_TICKERS`, если присутствует. |
 
-If you add tickers beyond the default three, ensure you have run walk-forward backtests and are confident in the calibrated parameters.
+Если добавляете тикеры сверх трёх дефолтных — убедитесь, что прогнали walk-forward
+бэктесты и уверены в калиброванных параметрах.
 
-### Adding a Ticker
+### Добавление тикера
 
-1. Run a walk-forward backtest with the candidate ticker.
-2. Inspect the out-of-sample Profit Factor (PF). Accept only if PF > 1.0 and showing consistent profitability across test windows.
-3. Add the ticker to `REVERSION_TICKERS` in your `.env` file.
-4. Deploy and monitor live P&L vs. backtest predictions.
+1. Прогоните walk-forward бэктест по кандидату.
+2. Проверьте out-of-sample Profit Factor (PF). Принимайте только если PF > 1.0 и видна стабильная прибыльность по всем тестовым окнам.
+3. Добавьте тикер в `REVERSION_TICKERS` в вашем `.env`.
+4. Задеплойте и сравнивайте live P&L с прогнозами бэктеста.
 
-## Monitoring and Alerts
+## Мониторинг и алерты
 
-### Telegram Notifications
+### Уведомления в Telegram
 
-When `NOTIFY_ENABLED=true`, the runner sends messages for:
+При `NOTIFY_ENABLED=true` runner шлёт сообщения о:
 
-- **Entry:** `"Entry UGLD at 2845.50, qty=35, ATR=12.3"`
-- **Exit:** `"Exit UGLD at 2857.80, qty=35, PnL=+420.5R"`
-- **Skip (insufficient cash):** `"Skip EUTR entry: budget=100k, cash=50k (insufficient)"`
-- **Skip (signal but no position):** `"No sell signal for NVTK (no open position)"`
-- **Reconstruct alert:** `"Reconstructed state for UGLD: entry=2026-06-26T09:00:00Z, price=2845.50, ATR=12.3"`
-- **Error:** `"Order rejected for UGLD: market closed"`
+- **Вход:** `🟢 Вход UGLD\n  Цена: 2845.5000 | Лотов: 35 | Штук: 35`
+- **Выход:** `🔴 Выход UGLD [OB]\n  Цена: 2857.8000 | Штук: 35` (в скобках — код причины: `OB`/`TRAIL`/`BE`/`ATRSL`/`RSIOS`/`EMAX`)
+- **Пропуск (нехватка кэша/бюджета):** `⏭️ Пропуск EUTR\n  бюджета 100000.00 не хватает на 1 лот (...)`
+- **Алерт восстановления:** `⚠️ Reversion UGLD\n  стейт восстановлен из API: вход 2845.5000, ATR 12.3000`
+- **Ошибка:** `⚠️ Reversion UGLD\n  ордер на покупку отклонён: market closed`
 
-### Logs
+Сообщения отправляются только при `NOTIFY_ENABLED=true`; в бумажных сделках
+добавляется пометка «*(БУМАЖНАЯ сделка, ордер не выставлен)*».
 
-Detailed logs are output to stdout/stderr. In production, capture these to a file or log aggregator.
+### Логи
 
-**Log levels:**
+Подробные логи выводятся в stdout/stderr. В проде направляйте их в файл или
+агрегатор логов.
 
-- `INFO` — normal operations (entries, exits, skips).
-- `ERROR` — order rejections, state file I/O errors, API failures.
-- `DEBUG` — candle fetches, indicator calculations, decision logic (dev mode only).
+**Уровни логов:**
 
-## Recovery and Edge Cases
+- `INFO` — штатные операции (входы, выходы, пропуски).
+- `ERROR` — отказы ордеров, ошибки I/O файла состояния, сбои API.
+- `DEBUG` — загрузка свечей, расчёт индикаторов, логика решений (только dev-режим).
 
-### Market Closed
+## Восстановление и краевые случаи
 
-If no fresh completed candle is available (weekend, off-session), the manage-pass runs but takes no action (only mark-to-market is recorded). The runner does not fail; it waits for the next scheduled tick.
+### Рынок закрыт
 
-### Position in Portfolio, State Missing
+Если свежей закрытой свечи нет (выходные, вне сессии), manage-pass выполняется, но
+не предпринимает действий (фиксируется только переоценка по рынку). Runner не падает;
+он ждёт следующего тика расписания.
 
-The reconstruct fallback (see [State Management](#state-management)) handles this. An alert is sent via Telegram.
+### Позиция в портфеле, состояние отсутствует
 
-### Broker Quantity Mismatch
+Обрабатывается фолбэком reconstruct (см. [Управление состоянием](#управление-состоянием)).
+Алерт уходит в Telegram.
 
-If the broker reports a fill quantity different from the requested quantity, the state records the actual quantity. This may indicate a partial fill (rare) or rounding by the broker. Verify in the broker app.
+### Расхождение количества с брокером
 
-### Manual Position Changes
+Если брокер сообщает количество исполнения, отличное от запрошенного, в состоянии
+записывается фактическое количество. Это может означать частичное исполнение (редко)
+или округление брокером. Проверьте в приложении брокера.
 
-If you manually buy or sell a ticker in the account outside the runner, the runner may not detect the change immediately. The next manage-pass will check the broker portfolio. If a manual buy creates a position and the state is missing, reconstruct fires. If a manual close removes a position, the next buy-pass will attempt a new entry (if the signal fires).
+### Ручные изменения позиции
 
-**Best practice:** Avoid manual trades in the reversion account during live operation.
+Если вы вручную купите или продадите тикер на счёте вне runner'а, он может не
+заметить изменение сразу. Следующий manage-pass проверит портфель брокера. Если
+ручная покупка создала позицию, а состояние отсутствует — сработает reconstruct.
+Если ручное закрытие убрало позицию, следующий buy-pass попробует новый вход (если
+сработает сигнал).
 
-## Troubleshooting
+**Лучшая практика:** избегайте ручных сделок на счёте reversion во время боевой работы.
 
-### No Entries Are Triggering
+## Диагностика проблем
 
-1. Verify `REVERSION_TRADE_ENABLED=true` (not paper mode).
-2. Check Telegram notifications; if disabled, enable `NOTIFY_ENABLED=true` to see skip reasons.
-3. Run a backtest on the same timeframe/data to confirm the signal is expected.
-4. Check logs for candle fetch errors or indicator calculation issues.
+### Входы не срабатывают
 
-### Entries Trigger But No Orders Placed
+1. Проверьте `REVERSION_TRADE_ENABLED=true` (не бумажный режим).
+2. Проверьте уведомления Telegram; если выключены, включите `NOTIFY_ENABLED=true`, чтобы видеть причины пропусков.
+3. Прогоните бэктест на том же таймфрейме/данных, чтобы убедиться, что сигнал ожидается.
+4. Проверьте логи на ошибки загрузки свечей или расчёта индикаторов.
 
-1. If `TRADE_ENABLED=false`, orders are intentionally skipped (paper mode).
-2. Check available cash. If the sizing calculation results in 0 lots, a Telegram alert is sent.
-3. Check logs for broker API errors (e.g., "Order rejected: market closed").
-4. Verify the broker account ID in `REVERSION_ACCOUNT_ID` is correct and has trading permissions.
+### Входы срабатывают, но ордера не выставляются
 
-### State File Corruption
+1. Если `TRADE_ENABLED=false`, ордера пропускаются намеренно (бумажный режим).
+2. Проверьте доступный кэш. Если расчёт размера даёт 0 лотов, шлётся алерт в Telegram.
+3. Проверьте логи на ошибки API брокера (например, «ордер отклонён: market closed»).
+4. Убедитесь, что ID счёта в `REVERSION_ACCOUNT_ID` верен и имеет права на торговлю.
 
-Delete the state file (`data/state/reversion_<account>.json`). On the next manage-pass, the reconstruct fallback will rebuild it from the broker API.
+### Порча файла состояния
 
-### Stale Data / No Candles
+Удалите файл состояния (`data/state/reversion_<account>.json`). На следующем
+manage-pass фолбэк reconstruct восстановит его из API брокера.
 
-If candle fetches fail (API error, network timeout), logs will show the error. The runner retries on the next scheduled tick. There is no persistent candle cache; each tick fetches fresh data.
+### Устаревшие данные / нет свечей
 
-## See Also
+Если загрузка свечей падает (ошибка API, сетевой таймаут), логи покажут ошибку.
+Runner повторяет на следующем тике. Постоянного кэша свечей нет; каждый тик грузит
+свежие данные.
 
-- **Design Spec:** `docs/superpowers/specs/2026-06-25-reversion-live-runner-design.md`
-- **Strategy Guide:** `docs/reversion/strategy.md`
-- **Screener Notes:** `docs/reversion/screener.md`
+## См. также
+
+- **Карта кода:** `docs/reversion/live-code-map.md`
+- **Дизайн-спека:** `docs/superpowers/specs/2026-06-25-reversion-live-runner-design.md`
+- **Гайд по стратегии:** `docs/reversion/strategy.md`
+- **Заметки по скринеру:** `docs/reversion/screener.md`
+```
