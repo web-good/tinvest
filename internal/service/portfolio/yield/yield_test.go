@@ -33,6 +33,14 @@ func (f *fakeOperationsClient) GetPortfolioTotal(_ context.Context, _ string) (f
 	return f.portfolioTotal, nil
 }
 
+func (f *fakeOperationsClient) GetAvailableCash(_ context.Context, _ string) (float64, error) {
+	return 0, nil
+}
+
+func (f *fakeOperationsClient) GetInstrumentTrades(_ context.Context, _, _ string, _, _ time.Time) ([]grpcmodel.Trade, error) {
+	return nil, nil
+}
+
 // fakeUsersClient satisfies grpc.UsersServiceClient.
 type fakeUsersClient struct {
 	accounts []grpcmodel.Account
