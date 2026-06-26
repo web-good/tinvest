@@ -9,4 +9,5 @@ type Config struct {
 	TelegramClient *TelegramClient
 	PortfolioYield *PortfolioYieldConfig
 	Scalping       *ScalpingConfig
+	Reversion      *ReversionConfig
 }
