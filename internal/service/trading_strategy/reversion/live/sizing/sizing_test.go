@@ -4,11 +4,11 @@ import "testing"
 
 func TestLots(t *testing.T) {
 	tests := []struct {
-		name                                   string
-		buyPct, accountValue, cash, price      float64
-		lot                                    int32
-		wantLots                               int64
-		wantOK                                 bool
+		name                              string
+		buyPct, accountValue, cash, price float64
+		lot                               int32
+		wantLots                          int64
+		wantOK                            bool
 	}{
 		// 10% of 100000 = 10000 budget; price 100, lot 1 -> 100 shares = 100 lots; cash ample.
 		{"basic", 10, 100000, 100000, 100, 1, 100, true},

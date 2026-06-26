@@ -17,7 +17,9 @@ func (f *fakeTrades) GetInstrumentTrades(_ context.Context, _, _ string, _, _ ti
 	return f.trades, nil
 }
 
-type fakeCandles struct{ candles []*imodel.CandleItemTechAnalyse }
+type fakeCandles struct {
+	candles []*imodel.CandleItemTechAnalyse
+}
 
 func (f *fakeCandles) GetCandles(_ context.Context, _ *string, _ int32, _, _ *timestamppb.Timestamp, _ *int32, _ bool) ([]*imodel.CandleItemTechAnalyse, error) {
 	return f.candles, nil
@@ -31,7 +33,7 @@ func TestEntry_RebuildsFromMostRecentBuy(t *testing.T) {
 
 	tc := &fakeTrades{trades: []grpcmodel.Trade{
 		{Date: entryTime.Add(-48 * time.Hour), Price: 90, Quantity: 10, IsBuy: true}, // older buy
-		{Date: entryTime, Price: 100, Quantity: 10, IsBuy: true},                      // most recent buy
+		{Date: entryTime, Price: 100, Quantity: 10, IsBuy: true},                     // most recent buy
 	}}
 
 	var candles []*imodel.CandleItemTechAnalyse

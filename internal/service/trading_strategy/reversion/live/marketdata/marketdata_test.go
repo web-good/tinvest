@@ -137,7 +137,11 @@ func TestAssemble_ParityWithBacktest_HTF(t *testing.T) {
 
 	// Build 4H API series: bar0, bar1, bar2 (all marked complete by the exchange).
 	// bar2 is the discriminating bar: T+4h == now > lastCompletedTime.
-	type htfSpec struct{ ts time.Time; o, h, l, c float64; v int64 }
+	type htfSpec struct {
+		ts         time.Time
+		o, h, l, c float64
+		v          int64
+	}
 	htfSpecs := []htfSpec{
 		{base.Add(0 * time.Hour), 50.0, 52.0, 49.0, 51.0, 1000}, // bar0: T+4h=base+4h  ≤ base+9h
 		{base.Add(4 * time.Hour), 51.0, 53.0, 50.0, 52.0, 1100}, // bar1: T+4h=base+8h  ≤ base+9h
