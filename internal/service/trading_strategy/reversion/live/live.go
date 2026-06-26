@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"tinvest/internal/config"
@@ -33,6 +34,11 @@ type Service interface {
 }
 
 type service struct {
+	// mu serializes the buy-pass and manage-pass: both are scheduled at minute 0 of
+	// overlapping hours and share the same *service instance (via GetReversionLiveService
+	// memoization in service_provider). Without the lock, concurrent passes can interleave
+	// their Load→mutate→Save cycles and silently drop each other's state writes.
+	mu          sync.Mutex
 	instruments instrumentsClient
 	market      marketdata.CandleClient
 	ops         operationsClient
@@ -64,7 +70,13 @@ func NewService(
 }
 
 // Run dispatches to the buy or manage pass.
+// The mutex is held for the entire pass so that two cron workers sharing this
+// service instance (buy-pass and manage-pass) cannot interleave their
+// Load→mutate→Save cycles and overwrite each other's state.
 func (s *service) Run(ctx context.Context, in dto.Run) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	switch in.Mode {
 	case dto.ModeBuy:
 		return s.buyPass(ctx)

@@ -93,6 +93,11 @@ func (s *service) managePass(ctx context.Context) error {
 			continue
 		}
 
+		if sh.Lot <= 0 {
+			s.notify(notifier.Alert(ticker, "sh.Lot == 0 — невозможно вычислить лоты для продажи, пропуск"))
+			logger.ErrorContext(ctx, fmt.Sprintf("reversion: %s sh.Lot=%d, skipping sell to avoid divide-by-zero", ticker, sh.Lot))
+			continue
+		}
 		lots := pos.Quantity / int64(sh.Lot)
 		res, err := s.exec.Sell(ctx, sh.ID, lots)
 		if err != nil {
