@@ -17,6 +17,8 @@ type OperationsServiceClient interface {
 	GetOperation(ctx context.Context, accountID string, figi string) ([]*model.Operation, error)
 	GetCashOperations(ctx context.Context, accountID string, from, to time.Time) ([]model.CashOperation, error)
 	GetPortfolioTotal(ctx context.Context, accountID string) (float64, error)
+	GetAvailableCash(ctx context.Context, accountID string) (float64, error)
+	GetInstrumentTrades(ctx context.Context, accountID, instrumentID string, from, to time.Time) ([]model.Trade, error)
 }
 
 type operationsServiceClient struct {
@@ -139,6 +141,95 @@ func (o *operationsServiceClient) GetCashOperations(ctx context.Context, account
 	}
 
 	return result, nil
+}
+
+// tradesFromCursorItems flattens cursor operation items into per-instrument Trades.
+// Only BUY and SELL operations for the given instrumentID are included.
+func tradesFromCursorItems(items []*investapi.OperationItem, instrumentID string) []model.Trade {
+	var out []model.Trade
+	for _, it := range items {
+		if it.GetInstrumentUid() != instrumentID {
+			continue
+		}
+		isBuy := it.GetType() == investapi.OperationType_OPERATION_TYPE_BUY
+		isSell := it.GetType() == investapi.OperationType_OPERATION_TYPE_SELL
+		if !isBuy && !isSell {
+			continue
+		}
+		for _, tr := range it.GetTradesInfo().GetTrades() {
+			price := 0.0
+			if p := tr.GetPrice(); p != nil {
+				price = float64(p.GetUnits()) + float64(p.GetNano())/1e9
+			}
+			out = append(out, model.Trade{
+				Date:     tr.GetDate().AsTime(),
+				Price:    price,
+				Quantity: tr.GetQuantity(),
+				IsBuy:    isBuy,
+			})
+		}
+	}
+	return out
+}
+
+// GetAvailableCash returns the RUB cash balance (TotalAmountCurrencies) for the account.
+func (o *operationsServiceClient) GetAvailableCash(ctx context.Context, accountID string) (float64, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	cur := investapi.PortfolioRequest_RUB
+	resp, err := o.operationApi.GetPortfolio(ctx, &investapi.PortfolioRequest{
+		AccountId: accountID,
+		Currency:  &cur,
+	}, NewRPCCredential(o.auth))
+	if err != nil {
+		return 0, err
+	}
+
+	c := resp.GetTotalAmountCurrencies()
+	if c == nil {
+		return 0, nil
+	}
+	return float64(c.GetUnits()) + float64(c.GetNano())/1e9, nil
+}
+
+// GetInstrumentTrades returns per-trade fills for one instrument over [from, to],
+// paginating GetOperationsByCursor until all pages are consumed.
+func (o *operationsServiceClient) GetInstrumentTrades(ctx context.Context, accountID, instrumentID string, from, to time.Time) ([]model.Trade, error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	state := investapi.OperationState_OPERATION_STATE_EXECUTED
+	limit := int32(1000)
+	var out []model.Trade
+	var cursor string
+
+	for {
+		req := &investapi.GetOperationsByCursorRequest{
+			AccountId: accountID,
+			From:      timestamppb.New(from),
+			To:        timestamppb.New(to),
+			State:     &state,
+			Limit:     &limit,
+		}
+		if cursor != "" {
+			req.Cursor = &cursor
+		}
+
+		resp, err := o.operationApi.GetOperationsByCursor(ctx, req, NewRPCCredential(o.auth))
+		if err != nil {
+			return nil, err
+		}
+
+		out = append(out, tradesFromCursorItems(resp.GetItems(), instrumentID)...)
+
+		if !resp.GetHasNext() || resp.GetNextCursor() == "" {
+			break
+		}
+		cursor = resp.GetNextCursor()
+	}
+
+	return out, nil
 }
 
 // GetPortfolioTotal returns the total RUB portfolio value from the Tinkoff API.

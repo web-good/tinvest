@@ -29,3 +29,11 @@ type CashOperation struct {
 	Payment float64 // RUB amount from MoneyValue (units + nano/1e9)
 	Yield   float64 // realized P&L of the operation (units + nano/1e9); meaningful for trades (SELL)
 }
+
+// Trade is one executed fill of an instrument (from GetOperationsByCursor trades).
+type Trade struct {
+	Date     time.Time
+	Price    float64
+	Quantity int64
+	IsBuy    bool
+}
