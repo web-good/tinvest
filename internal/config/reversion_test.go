@@ -14,3 +14,10 @@ func TestNewReversionConfig_Defaults(t *testing.T) {
 		t.Fatalf("TradeEnabled default = true, want false (safe default)")
 	}
 }
+
+func TestNewReversionConfig_TokenHasNoDefault(t *testing.T) {
+	c := NewReversionConfig()
+	if c.Token != "" {
+		t.Fatalf("default Token = %q, want empty (must come from REVERSION_TOKEN env)", c.Token)
+	}
+}

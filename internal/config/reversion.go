@@ -4,6 +4,7 @@ package config
 // independent: both off = dry-run to log only.
 type ReversionConfig struct {
 	AccountID     string   `config:"REVERSION_ACCOUNT_ID,required,backend=env"`
+	Token         string   `config:"REVERSION_TOKEN,required,backend=env"`
 	Tickers       []string `config:"REVERSION_TICKERS,backend=env"`
 	BuyPct        float64  `config:"REVERSION_BUY_PCT,backend=env"`
 	TradeEnabled  bool     `config:"REVERSION_TRADE_ENABLED,backend=env"`
