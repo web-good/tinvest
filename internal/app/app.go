@@ -341,7 +341,7 @@ func (a *App) runProd(ctx context.Context) {
 		defer wg.Done()
 		err := reversionscheduler.NewSchedulerService(a.sp.GetReversionLiveService()).Run(
 			ctx,
-			reversiondto.Run{Scheduler: "0 8-23 * * 1-5", Mode: reversiondto.ModeBuy},
+			reversiondto.Run{Scheduler: "0 7-23 * * 1-5", Mode: reversiondto.ModeBuy},
 		)
 		if err != nil {
 			logger.ErrorContext(ctx, "Error in worker Reversion buy", err.Error())

@@ -20,6 +20,12 @@ WORKDIR /application
 COPY --from=builder /application/build ./build
 COPY --from=builder /application/env ./env
 
+# Reversion live runner persists per-ticker entry state here
+# (data/state/reversion_<account>.json). Mount a persistent volume so the
+# state survives container restarts/redeploys; otherwise it is lost and the
+# runner falls back to approximate reconstruct-from-API on the next tick.
+VOLUME ["/application/data/state"]
+
 EXPOSE 50051
 
 CMD ["/application/build"]

@@ -15,7 +15,16 @@ import (
 func (a *App) initConfig(ctx context.Context) error {
 	logger.InfoContext(ctx, "Start initializing configuration")
 
-	err := load("./env/local.env")
+	// APP_ENV is injected as a real environment variable in prod (see Dockerfile),
+	// so it is already set before any file is loaded and selects the env file. In
+	// dev it is unset here and defined inside local.env. godotenv.Load never
+	// overrides an existing variable, so the prod value always wins.
+	envFile := "./env/local.env"
+	if os.Getenv("APP_ENV") == "prod" {
+		envFile = "./env/prod.env"
+	}
+
+	err := load(envFile)
 
 	if err != nil {
 		return fmt.Errorf("failed to load env_file: %w", err)
