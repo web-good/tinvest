@@ -75,7 +75,7 @@ func NewClientGrpc(address string, token string) (GrpcClient, error) {
 	}
 
 	return &Client{
-		ordersServiceClient:      NewOrdersServiceClient(conn),
+		ordersServiceClient:      NewOrdersServiceClient(conn, token),
 		instrumentsServiceClient: NewInstrumentsServiceClient(conn, token),
 		marketDataServiceClient:  NewMarketDataService(conn, token),
 		usersServiceClient:       New(conn, token),
