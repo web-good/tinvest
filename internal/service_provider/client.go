@@ -7,8 +7,9 @@ import (
 )
 
 type client struct {
-	grpcClient  internalgrpc.GrpcClient
-	telegramBot telegram.Client
+	grpcClient          internalgrpc.GrpcClient
+	reversionGrpcClient internalgrpc.GrpcClient
+	telegramBot         telegram.Client
 }
 
 func (s *ServiceProvider) GetGrpcClient() (internalgrpc.GrpcClient, error) {
@@ -25,6 +26,25 @@ func (s *ServiceProvider) GetGrpcClient() (internalgrpc.GrpcClient, error) {
 	}
 
 	return serviceProvider.client.grpcClient, nil
+}
+
+// GetReversionGrpcClient returns a gRPC client authenticated with the reversion
+// strategy's dedicated token (REVERSION_TOKEN), separate from the shared T_BANK
+// client. It dials the same AddressProd; the second connection is negligible for
+// an hourly cron strategy and keeps the reversion account fully isolated.
+func (s *ServiceProvider) GetReversionGrpcClient() (internalgrpc.GrpcClient, error) {
+	if serviceProvider.client.reversionGrpcClient == nil {
+		var err error
+		serviceProvider.client.reversionGrpcClient, err = internalgrpc.NewClientGrpc(
+			s.appConfig.GrpcClient.AddressProd,
+			s.appConfig.Reversion.Token,
+		)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return serviceProvider.client.reversionGrpcClient, nil
 }
 
 func (s *ServiceProvider) GetTelegramBotClient() (telegram.Client, error) {

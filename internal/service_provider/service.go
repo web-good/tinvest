@@ -228,7 +228,7 @@ func (*ServiceProvider) GetScalpingTradingService() scalping.Scalping {
 
 func (*ServiceProvider) GetReversionLiveService() live.Service {
 	if serviceProvider.service.reversionLiveService == nil {
-		grpcClient, _ := serviceProvider.GetGrpcClient()
+		grpcClient, _ := serviceProvider.GetReversionGrpcClient()
 		tgClient, _ := serviceProvider.GetTelegramBotClient()
 		serviceProvider.service.reversionLiveService = live.NewService(
 			grpcClient.InstrumentsServiceClient(),
