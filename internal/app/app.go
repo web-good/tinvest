@@ -15,7 +15,6 @@ import (
 	reversiondto "tinvest/internal/service/trading_strategy/reversion/live/dto"
 	reversionscheduler "tinvest/internal/service/trading_strategy/reversion/live/scheduler"
 	scalpingdto "tinvest/internal/service/trading_strategy/scalping/dto"
-	scalpingscheduler "tinvest/internal/service/trading_strategy/scalping/scheduler"
 	"tinvest/internal/service_provider"
 	"tinvest/pkg/closer"
 	"tinvest/pkg/logger"
@@ -324,19 +323,7 @@ func (a *App) runProd(ctx context.Context) {
 			logger.ErrorContext(ctx, "Error in worker Scalping", err.Error())
 		}
 	}()*/
-	go func() {
-		defer wg.Done()
-		err := scalpingscheduler.NewSchedulerService(a.sp.GetScalpingTradingService()).Trade(
-			ctx,
-			scalpingdto.Trade{
-				Scheduler: "*/5 8-23 * * 1-5",
-				SellOnly:  true,
-			},
-		)
-		if err != nil {
-			logger.ErrorContext(ctx, "Error in worker Scalping sell-watch", err.Error())
-		}
-	}()
+
 	go func() {
 		defer wg.Done()
 		err := reversionscheduler.NewSchedulerService(a.sp.GetReversionLiveService()).Run(
