@@ -5,25 +5,13 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/protobuf/types/known/timestamppb"
+	"github.com/stretchr/testify/mock"
 
 	imodel "tinvest/internal/model"
+	marketdatamocks "tinvest/internal/service/trading_strategy/reversion/live/marketdata/mocks"
+	"tinvest/internal/service/trading_strategy/reversion/live/reconstruct/mocks"
 	grpcmodel "tinvest/pkg/client/grpc/model"
 )
-
-type fakeTrades struct{ trades []grpcmodel.Trade }
-
-func (f *fakeTrades) GetInstrumentTrades(_ context.Context, _, _ string, _, _ time.Time) ([]grpcmodel.Trade, error) {
-	return f.trades, nil
-}
-
-type fakeCandles struct {
-	candles []*imodel.CandleItemTechAnalyse
-}
-
-func (f *fakeCandles) GetCandles(_ context.Context, _ *string, _ int32, _, _ *timestamppb.Timestamp, _ *int32, _ bool) ([]*imodel.CandleItemTechAnalyse, error) {
-	return f.candles, nil
-}
 
 func q(f float64) imodel.Quotation { return imodel.Quotation{Units: int64(f)} }
 
@@ -31,10 +19,14 @@ func TestEntry_RebuildsFromMostRecentBuy(t *testing.T) {
 	entryTime := time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC)
 	now := entryTime.Add(20 * time.Hour)
 
-	tc := &fakeTrades{trades: []grpcmodel.Trade{
-		{Date: entryTime.Add(-48 * time.Hour), Price: 90, Quantity: 10, IsBuy: true}, // older buy
-		{Date: entryTime, Price: 100, Quantity: 10, IsBuy: true},                     // most recent buy
-	}}
+	tc := mocks.NewMockTradesClient(t)
+	tc.EXPECT().
+		GetInstrumentTrades(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return([]grpcmodel.Trade{
+			{Date: entryTime.Add(-48 * time.Hour), Price: 90, Quantity: 10, IsBuy: true}, // older buy
+			{Date: entryTime, Price: 100, Quantity: 10, IsBuy: true},                     // most recent buy
+		}, nil).
+		Once()
 
 	var candles []*imodel.CandleItemTechAnalyse
 	for i := 0; i < 40; i++ {
@@ -44,7 +36,11 @@ func TestEntry_RebuildsFromMostRecentBuy(t *testing.T) {
 			Time: ts, Open: q(c), High: q(c + 1), Low: q(c - 1), Close: q(c), Volume: 1000, IsComplete: true,
 		})
 	}
-	cc := &fakeCandles{candles: candles}
+	cc := marketdatamocks.NewMockCandleClient(t)
+	cc.EXPECT().
+		GetCandles(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(candles, nil).
+		Once()
 
 	got, err := Entry(context.Background(), tc, cc, "acc", "uid", "UGLD", 100, 14, 50, now)
 	if err != nil {
