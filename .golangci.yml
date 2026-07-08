@@ -21,6 +21,7 @@ linters:
       - internal/pb
       - internal/converter
       - pkg/client/grpc/converter
+      - "(^|/)mocks($|/)"
     rules:
       # tests intentionally ignore some error returns
       - path: _test\.go
@@ -36,3 +37,4 @@ formatters:
       - internal/pb
       - internal/converter
       - pkg/client/grpc/converter
+      - "(^|/)mocks($|/)"

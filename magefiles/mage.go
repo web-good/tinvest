@@ -45,3 +45,27 @@ func Lint() error {
 func Test() error {
 	return sh.RunV("go", "test", "-race", "./...")
 }
+
+// Mocks regenerates all mockery mocks from .mockery.yaml.
+func Mocks() error {
+	return sh.RunV(filepath.Join(binDir(), "mockery"))
+}
+
+// MocksCheck regenerates mocks and fails if the working tree changed (CI drift guard).
+func MocksCheck() error {
+	if err := Mocks(); err != nil {
+		return err
+	}
+	return sh.RunV("git", "diff", "--exit-code", "--", "**/mocks/")
+}
+
+// CI runs the full check suite: lint, test, and mock-drift.
+func CI() error {
+	if err := Lint(); err != nil {
+		return err
+	}
+	if err := Test(); err != nil {
+		return err
+	}
+	return MocksCheck()
+}

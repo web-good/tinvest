@@ -1,0 +1,37 @@
+with-expecter: true
+dir: "{{.InterfaceDir}}/mocks"
+mockname: "Mock{{.InterfaceName}}"
+outpkg: "mocks"
+filename: "mock_{{.InterfaceName}}.go"
+packages:
+  tinvest/pkg/client/grpc:
+    interfaces:
+      OperationsServiceClient:
+      UsersServiceClient:
+  tinvest/pkg/client/telegram:
+    interfaces:
+      Client:
+  tinvest/internal/service/trading_strategy/reversion/live:
+    config:
+      all: false
+    interfaces:
+      Service:
+      instrumentsClient:
+      operationsClient:
+  tinvest/internal/service/trading_strategy/reversion/live/executor:
+    interfaces:
+      OrdersClient:
+  tinvest/internal/service/trading_strategy/reversion/live/marketdata:
+    interfaces:
+      CandleClient:
+  tinvest/internal/service/trading_strategy/reversion/live/reconstruct:
+    interfaces:
+      TradesClient:
+  tinvest/internal/service/trading_strategy/scalping/strategy:
+    interfaces:
+      Strategy:
+  tinvest/internal/service/backtest:
+    config:
+      all: false
+    interfaces:
+      candleFetcher:
