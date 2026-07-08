@@ -6,51 +6,22 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/protobuf/types/known/timestamppb"
+	"github.com/stretchr/testify/mock"
 
 	"tinvest/internal/config"
 	imodel "tinvest/internal/model"
 	"tinvest/internal/service/trading_strategy/reversion/live/dto"
+	mdmocks "tinvest/internal/service/trading_strategy/reversion/live/marketdata/mocks"
+	livemocks "tinvest/internal/service/trading_strategy/reversion/live/mocks"
 	"tinvest/internal/service/trading_strategy/reversion/live/statestore"
 	grpcmodel "tinvest/pkg/client/grpc/model"
+	tgmocks "tinvest/pkg/client/telegram/mocks"
 )
 
-// --- fakes ---
-
-type fakeInstruments struct{ shares []*imodel.Share }
-
-func (f *fakeInstruments) Shares(context.Context) ([]*imodel.Share, error) { return f.shares, nil }
-
-type fakeMarket struct {
-	hourly []*imodel.CandleItemTechAnalyse
-}
-
-func (f *fakeMarket) GetCandles(_ context.Context, _ *string, interval int32, _, _ *timestamppb.Timestamp, _ *int32, _ bool) ([]*imodel.CandleItemTechAnalyse, error) {
-	if interval == 4 {
-		return f.hourly, nil
-	}
-	return nil, nil
-}
-
-type fakeOps struct {
-	positions []*grpcmodel.Position
-	total     float64
-	cash      float64
-}
-
-func (f *fakeOps) GetPortfolio(context.Context, string) ([]*grpcmodel.Position, error) {
-	return f.positions, nil
-}
-func (f *fakeOps) GetPortfolioTotal(context.Context, string) (float64, error) { return f.total, nil }
-func (f *fakeOps) GetAvailableCash(context.Context, string) (float64, error)  { return f.cash, nil }
-func (f *fakeOps) GetInstrumentTrades(context.Context, string, string, time.Time, time.Time) ([]grpcmodel.Trade, error) {
-	return nil, nil
-}
-
-type fakeTg struct{ sent []string }
-
-func (f *fakeTg) SendMessage(m string) error            { f.sent = append(f.sent, m); return nil }
-func (f *fakeTg) SendMessageToChat(int64, string) error { return nil }
+// isHourly1 matches the interval arg for hourly (Hour1 -> 4) candle fetches, mirroring
+// the old fake's `interval == 4` branch. Neither test's single ticker (UGLD) triggers a
+// 4H fetch (MaxHTFTrendEMA(["UGLD"]) == 0), so this is the only interval ever requested.
+func isHourly1(interval int32) bool { return interval == 4 }
 
 func q(f float64) imodel.Quotation { return imodel.Quotation{Units: int64(f)} }
 
@@ -79,12 +50,33 @@ func cfg(dir string) *config.ReversionConfig {
 func TestBuyPass_NoSignal_NoOrderNoState(t *testing.T) {
 	dir := t.TempDir()
 	c := cfg(dir)
+
+	instruments := livemocks.NewMockinstrumentsClient(t)
+	instruments.EXPECT().Shares(mock.Anything).
+		Return([]*imodel.Share{{ID: "uid-ugld", Ticker: "UGLD", Name: "ЮГК", Lot: 1, Trading: true}}, nil)
+
+	market := mdmocks.NewMockCandleClient(t)
+	market.EXPECT().
+		GetCandles(mock.Anything, mock.Anything, mock.MatchedBy(isHourly1), mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(flatHourly(400), nil)
+
+	ops := livemocks.NewMockoperationsClient(t)
+	ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(nil, nil)
+	// GetPortfolioTotal/GetAvailableCash are only reached after a buy signal; the flat
+	// series never produces one, so no expectation is set for them (an unexpected call
+	// would fail the mock).
+
+	tg := tgmocks.NewMockClient(t)
+	// notify() is only reached on an unregistered ticker, a sizing rejection, or a buy
+	// result — none of which occur on the no-signal path, so SendMessage is never called
+	// and no expectation is needed.
+
 	svc := NewService(
-		&fakeInstruments{shares: []*imodel.Share{{ID: "uid-ugld", Ticker: "UGLD", Name: "ЮГК", Lot: 1, Trading: true}}},
-		&fakeMarket{hourly: flatHourly(400)},
-		&fakeOps{total: 100000, cash: 100000},
+		instruments,
+		market,
+		ops,
 		nil, // ordersClient unused in dry-run no-signal path
-		&fakeTg{},
+		tg,
 		c,
 	)
 	svc.statePath = filepath.Join(dir, "state.json")
@@ -121,13 +113,34 @@ func TestManagePass_UpdatesMaxFavAndPersists(t *testing.T) {
 		})
 	}
 
+	instruments := livemocks.NewMockinstrumentsClient(t)
+	instruments.EXPECT().Shares(mock.Anything).
+		Return([]*imodel.Share{{ID: "uid-ugld", Ticker: "UGLD", Name: "ЮГК", Lot: 1, Trading: true}}, nil)
+
+	market := mdmocks.NewMockCandleClient(t)
+	market.EXPECT().
+		GetCandles(mock.Anything, mock.Anything, mock.MatchedBy(isHourly1), mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(hourly, nil)
+
+	ops := livemocks.NewMockoperationsClient(t)
+	ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).
+		Return([]*grpcmodel.Position{{ShareID: "uid-ugld", InstrumentType: "share", Quantity: 10,
+			PurchasePrice: gq(100)}}, nil)
+
+	tg := tgmocks.NewMockClient(t)
+	// The pre-seeded state already has an entry for UGLD, so no reconstruct-alert
+	// notify fires; whether the raised maxFav also crosses the strategy's sell
+	// threshold on this data (triggering an Exit notify) is conditional on the
+	// strategy's Decide() output, which this test doesn't assert on either way
+	// (the original fake recorded but never checked `sent`) — Maybe() preserves that.
+	tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
+
 	svc := NewService(
-		&fakeInstruments{shares: []*imodel.Share{{ID: "uid-ugld", Ticker: "UGLD", Name: "ЮГК", Lot: 1, Trading: true}}},
-		&fakeMarket{hourly: hourly},
-		&fakeOps{positions: []*grpcmodel.Position{{ShareID: "uid-ugld", InstrumentType: "share", Quantity: 10,
-			PurchasePrice: gq(100)}}},
+		instruments,
+		market,
+		ops,
 		nil,
-		&fakeTg{},
+		tg,
 		cfg(dir),
 	)
 	svc.statePath = statePath
