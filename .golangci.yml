@@ -1,0 +1,38 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    - bodyclose
+    - misspell
+    - revive
+    - unconvert
+  settings:
+    revive:
+      rules:
+        - name: var-naming
+        - name: unreachable-code
+        - name: error-return
+        - name: context-as-argument
+  exclusions:
+    paths:
+      - internal/pb
+      - internal/converter
+      - pkg/client/grpc/converter
+    rules:
+      # tests intentionally ignore some error returns
+      - path: _test\.go
+        linters:
+          - errcheck
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    paths:
+      - internal/pb
+      - internal/converter
+      - pkg/client/grpc/converter
