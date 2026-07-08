@@ -2,11 +2,12 @@ package bonds
 
 import (
 	"context"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"tinvest/internal/domain"
 	"tinvest/internal/enum"
 	"tinvest/pkg/client/grpc"
 	"tinvest/pkg/client/telegram"
+
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type Bonds interface {

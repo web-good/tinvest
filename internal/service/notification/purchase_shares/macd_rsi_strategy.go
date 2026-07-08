@@ -3,8 +3,9 @@ package purchase_shares
 import (
 	"context"
 	"fmt"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"time"
+
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func (b *Service) MacdRsiStrategy(ctx context.Context) error {

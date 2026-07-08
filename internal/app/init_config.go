@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/heetch/confita"
-	"github.com/heetch/confita/backend/env"
-	"github.com/joho/godotenv"
 	"os"
 	"tinvest/internal/config"
 	"tinvest/pkg/logger"
+
+	"github.com/heetch/confita"
+	"github.com/heetch/confita/backend/env"
+	"github.com/joho/godotenv"
 )
 
 func (a *App) initConfig(ctx context.Context) error {

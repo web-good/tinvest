@@ -450,7 +450,7 @@ func TestAssembleMarketData_MatchesPerBarFields(t *testing.T) {
 		{Time: base.Add(time.Hour), Open: 10, High: 12, Low: 10, Close: 11, Volume: 200},
 	}
 	daily := []Candle{
-		{Time: time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC), Close: 8, High: 9, Low: 7},  // completed
+		{Time: time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC), Close: 8, High: 9, Low: 7},   // completed
 		{Time: time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC), Close: 10, High: 11, Low: 9}, // current day -> excluded
 	}
 	htf := []Candle{

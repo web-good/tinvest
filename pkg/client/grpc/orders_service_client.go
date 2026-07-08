@@ -2,9 +2,10 @@ package grpc
 
 import (
 	"context"
-	"google.golang.org/grpc"
 	"time"
 	investapi "tinvest/internal/pb/v1"
+
+	"google.golang.org/grpc"
 )
 
 type OrdersServiceClient interface {

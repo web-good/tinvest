@@ -3,13 +3,14 @@ package atr
 import (
 	"context"
 	"fmt"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"math"
 	"time"
 	"tinvest/internal/domain/atr"
 	"tinvest/internal/enum"
 	"tinvest/internal/model"
 	"tinvest/internal/utils"
+
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func (s *service) TechAnalyse(context context.Context, instrumentUid *string, interval enum.Interval, dateNow time.Time) (atr.ItemTechAnalyse, error) {

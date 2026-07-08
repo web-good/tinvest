@@ -2,13 +2,14 @@ package rsi
 
 import (
 	"context"
-	"github.com/pkg/errors"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"math"
 	"time"
 	"tinvest/internal/domain"
 	"tinvest/internal/enum"
 	"tinvest/internal/utils"
+
+	"github.com/pkg/errors"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func (s service) CalculateRSI(context context.Context, instrumentUid string, interval enum.Interval, dateFrom *timestamppb.Timestamp, dateTo *timestamppb.Timestamp, period int32) ([]*domain.RSIItemTechAnalyse, error) {

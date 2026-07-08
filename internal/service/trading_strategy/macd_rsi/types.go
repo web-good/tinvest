@@ -2,7 +2,6 @@ package macd_rsi
 
 import (
 	"context"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"time"
 	"tinvest/internal/domain"
 	"tinvest/internal/domain/atr"
@@ -11,6 +10,8 @@ import (
 	"tinvest/internal/service/trading_strategy/macd_rsi/dto"
 	"tinvest/pkg/client/grpc"
 	"tinvest/pkg/client/telegram"
+
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type rsiInstrument interface {

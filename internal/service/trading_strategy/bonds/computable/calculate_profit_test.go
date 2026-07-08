@@ -91,13 +91,13 @@ func TestCalculateProfit(t *testing.T) {
 			}
 
 			// Для ОФЗ: 1 купон в текущем году (30 руб), инвестиции = 985 + 15.5 = 1000.5
-				// Купонная доходность: (30 * 100) / 1000.5 = 3.0%
-				if tt.name == "ОФЗ с дисконтом" {
-					expectedCouponYield := 3.0
-					if report.CouponPercentByYear < expectedCouponYield-0.1 || report.CouponPercentByYear > expectedCouponYield+0.1 {
-						t.Errorf("Ожидаемая купонная доходность %.2f, получили %.2f", expectedCouponYield, report.CouponPercentByYear)
-					}
+			// Купонная доходность: (30 * 100) / 1000.5 = 3.0%
+			if tt.name == "ОФЗ с дисконтом" {
+				expectedCouponYield := 3.0
+				if report.CouponPercentByYear < expectedCouponYield-0.1 || report.CouponPercentByYear > expectedCouponYield+0.1 {
+					t.Errorf("Ожидаемая купонная доходность %.2f, получили %.2f", expectedCouponYield, report.CouponPercentByYear)
 				}
+			}
 		})
 	}
 }

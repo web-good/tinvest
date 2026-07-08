@@ -2,12 +2,13 @@ package macd
 
 import (
 	"context"
-	"github.com/pkg/errors"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"time"
 	"tinvest/internal/domain"
 	"tinvest/internal/enum"
 	"tinvest/internal/utils"
+
+	"github.com/pkg/errors"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func (s service) CalculateMACD(context context.Context, instrumentUid string, interval enum.Interval, dateFrom *timestamppb.Timestamp, dateTo *timestamppb.Timestamp, fast int32, slow int32, signal int32) ([]*domain.MACDItemTechAnalyse, error) {

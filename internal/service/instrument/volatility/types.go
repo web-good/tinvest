@@ -2,11 +2,12 @@ package volatility
 
 import (
 	"context"
-	"github.com/golang/protobuf/ptypes/timestamp"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"tinvest/internal/domain"
 	"tinvest/internal/enum"
 	"tinvest/internal/model"
+
+	"github.com/golang/protobuf/ptypes/timestamp"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type Instrument interface {

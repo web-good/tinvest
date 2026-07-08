@@ -3,13 +3,14 @@ package grpc
 import (
 	"context"
 	"fmt"
-	"github.com/golang/protobuf/ptypes/timestamp"
-	"google.golang.org/grpc"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"time"
 	"tinvest/internal/converter"
 	"tinvest/internal/model"
 	investapi "tinvest/internal/pb/v1"
+
+	"github.com/golang/protobuf/ptypes/timestamp"
+	"google.golang.org/grpc"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type MarketDataServiceClient interface {

@@ -17,7 +17,7 @@ func DefaultParams() core.Params {
 		UseATRStop: 0, ATRPeriod: 14, StopATRMult: 1.0,
 		UseVolume: 1, VolAvgPeriod: 20, VolMult: 1.0,
 		UseOverbought: 1, RSIOverbought: 70, StochOverbought: 80,
-		UseRSI50: 1,
+		UseRSI50:     1,
 		UseBreakeven: 0, BreakevenArmATR: 1.0,
 	}
 }

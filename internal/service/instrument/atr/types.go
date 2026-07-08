@@ -2,11 +2,12 @@ package atr
 
 import (
 	"context"
-	"github.com/golang/protobuf/ptypes/timestamp"
 	"time"
 	"tinvest/internal/domain/atr"
 	"tinvest/internal/enum"
 	"tinvest/internal/model"
+
+	"github.com/golang/protobuf/ptypes/timestamp"
 )
 
 type Instrument interface {

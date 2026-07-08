@@ -3,11 +3,12 @@ package grpc
 import (
 	"context"
 	"fmt"
-	"google.golang.org/grpc"
 	"time"
 	investapi "tinvest/internal/pb/v1"
 	"tinvest/pkg/client/grpc/converter"
 	"tinvest/pkg/client/grpc/model"
+
+	"google.golang.org/grpc"
 )
 
 type UsersServiceClient interface {

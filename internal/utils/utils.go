@@ -2,7 +2,6 @@ package utils
 
 import (
 	"fmt"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"math"
 	"strconv"
 	"strings"
@@ -10,6 +9,8 @@ import (
 	"tinvest/internal/enum"
 	"tinvest/internal/model"
 	pkgmodel "tinvest/pkg/client/grpc/model"
+
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func CombinePrice(intPart int64, frac int32) float64 {

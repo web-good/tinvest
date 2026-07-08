@@ -960,7 +960,7 @@ func TestExitPrecedenceBreakevenOverMiddle(t *testing.T) {
 	s := NewWithParams("T", p)
 	in := openInput()
 	in.pos = &strategy.Position{PurchasePrice: 100, EntryATR: 5, MaxFavorablePrice: 106} // armed
-	in.price = 94 // <= 95 ATR threshold AND <= 100 entry
+	in.price = 94                                                                        // <= 95 ATR threshold AND <= 100 entry
 	if sig := s.decide(in); sig.Reason != "BE" {
 		t.Fatalf("BE must win over ATRSL, got %q", sig.Reason)
 	}
@@ -970,8 +970,8 @@ func TestExitPrecedenceRSI50OverBreakeven(t *testing.T) {
 	s := NewWithParams("T", breakevenParams())
 	in := openInput()
 	in.pos = &strategy.Position{PurchasePrice: 100, EntryATR: 5, MaxFavorablePrice: 106} // armed
-	in.price = 99                  // BE would fire
-	in.rsiPrev, in.rsiNow = 55, 45 // RSI50 also fires
+	in.price = 99                                                                        // BE would fire
+	in.rsiPrev, in.rsiNow = 55, 45                                                       // RSI50 also fires
 	if sig := s.decide(in); sig.Reason != "RSI50" {
 		t.Fatalf("RSI50 must win over BE, got %q", sig.Reason)
 	}

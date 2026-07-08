@@ -7,13 +7,13 @@ import (
 
 func TestATR(t *testing.T) {
 	tests := []struct {
-		name    string
-		highs   []float64
-		lows    []float64
-		closes  []float64
-		period  int
-		want    float64
-		tol     float64
+		name   string
+		highs  []float64
+		lows   []float64
+		closes []float64
+		period int
+		want   float64
+		tol    float64
 	}{
 		{
 			name:   "constant TR=2: ATR equals 2 regardless of close drift",
@@ -43,7 +43,7 @@ func TestATR(t *testing.T) {
 			tol:    1e-9,
 		},
 		{
-			name:   "Wilder smoothing nudges ATR toward larger TR",
+			name: "Wilder smoothing nudges ATR toward larger TR",
 			// Period 3 so the example is small enough to hand-check.
 			// TRs (i=1..6): 2, 2, 2, 6, 2, 2.
 			//   Seed ATR_3 = mean(2,2,2) = 2.
@@ -103,7 +103,7 @@ func TestATR(t *testing.T) {
 			tol:    0,
 		},
 		{
-			name:   "gap up beats high-low: TR uses |high - prevClose|",
+			name: "gap up beats high-low: TR uses |high - prevClose|",
 			// Bar 0: high=10, low=8, close=9.
 			// Bar 1: high=12, low=11, close=11.5. TR = max(12-11, |12-9|, |11-9|) = 3.
 			// Period 1 means seed ATR_1 = TR_1 = 3.

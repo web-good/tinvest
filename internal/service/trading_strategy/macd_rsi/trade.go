@@ -3,7 +3,6 @@ package macd_rsi
 import (
 	"context"
 	"fmt"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"sync"
 	"time"
 	"tinvest/internal/domain"
@@ -14,6 +13,8 @@ import (
 	"tinvest/internal/utils"
 	"tinvest/pkg/logger"
 	"tinvest/pkg/semaphore"
+
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 //Trade Условия покупки по MACD

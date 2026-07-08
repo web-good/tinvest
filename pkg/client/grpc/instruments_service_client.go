@@ -3,8 +3,6 @@ package grpc
 import (
 	"context"
 	"fmt"
-	"google.golang.org/grpc"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"time"
 	"tinvest/internal/converter"
 	"tinvest/internal/domain/share"
@@ -12,6 +10,9 @@ import (
 	investapi "tinvest/internal/pb/v1"
 	converter2 "tinvest/pkg/client/grpc/converter"
 	pkgmodel "tinvest/pkg/client/grpc/model"
+
+	"google.golang.org/grpc"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type InstrumentsServiceClient interface {

@@ -2,10 +2,11 @@ package ema
 
 import (
 	"context"
-	"github.com/golang/protobuf/ptypes/timestamp"
 	"time"
 	domainema "tinvest/internal/domain/ema"
 	"tinvest/internal/model"
+
+	"github.com/golang/protobuf/ptypes/timestamp"
 )
 
 type Instrument interface {

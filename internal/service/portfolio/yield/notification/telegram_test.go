@@ -10,13 +10,13 @@ import (
 
 func makeYield(xirr float64, xirrAvailable bool, note string) domain.PortfolioYield {
 	return domain.PortfolioYield{
-		PeriodStart:    time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
-		PeriodEnd:      time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC),
-		StartValue:     500000.0,
-		EndValue:       620000.0,
-		Deposits:       50000.0,
-		Withdrawals:    10000.0,
-		NetDeposits:    40000.0,
+		PeriodStart:        time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		PeriodEnd:          time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC),
+		StartValue:         500000.0,
+		EndValue:           620000.0,
+		Deposits:           50000.0,
+		Withdrawals:        10000.0,
+		NetDeposits:        40000.0,
 		AnnualizedXIRR:     xirr,
 		PeriodReturn:       0.16,
 		XIRRAvailable:      xirrAvailable,

@@ -3,7 +3,6 @@ package computable
 import (
 	"context"
 	"errors"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"log/slog"
 	"time"
 	"tinvest/internal/domain"
@@ -13,6 +12,8 @@ import (
 	"tinvest/internal/utils"
 	pkgmodel "tinvest/pkg/client/grpc/model"
 	"tinvest/pkg/logger"
+
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func (s *service) CalculateProfit(ctx context.Context, bond *pkgmodel.Bond) (domain.BondReport, error) {

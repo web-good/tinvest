@@ -2,7 +2,6 @@ package scalping_rsi
 
 import (
 	"context"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"time"
 	"tinvest/internal/domain"
 	domainema "tinvest/internal/domain/ema"
@@ -10,6 +9,8 @@ import (
 	"tinvest/internal/service/trading_strategy/scalping_rsi/dto"
 	"tinvest/pkg/client/grpc"
 	"tinvest/pkg/client/telegram"
+
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type ScalpingRsi interface {

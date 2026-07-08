@@ -3,7 +3,6 @@ package super_trend
 import (
 	"context"
 	"fmt"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"time"
 	notification2 "tinvest/internal/domain/notification"
 	"tinvest/internal/enum"
@@ -11,6 +10,8 @@ import (
 	"tinvest/internal/service/trading_strategy/super_trend/notification"
 	"tinvest/internal/service/trading_strategy/super_trend/specification"
 	"tinvest/pkg/logger"
+
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 var (
