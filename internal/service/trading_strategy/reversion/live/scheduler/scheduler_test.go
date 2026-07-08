@@ -6,14 +6,14 @@ import (
 	"time"
 
 	"tinvest/internal/service/trading_strategy/reversion/live/dto"
+	"tinvest/internal/service/trading_strategy/reversion/live/mocks"
+
+	"github.com/stretchr/testify/mock"
 )
 
-type fakeSvc struct{ calls int }
-
-func (f *fakeSvc) Run(context.Context, dto.Run) error { f.calls++; return nil }
-
 func TestSchedulerService_ReturnsOnContextCancel(t *testing.T) {
-	inner := &fakeSvc{}
+	inner := mocks.NewMockService(t)
+	inner.EXPECT().Run(mock.Anything, mock.Anything).Return(nil).Maybe()
 	sch := NewSchedulerService(inner)
 
 	ctx, cancel := context.WithCancel(context.Background())
