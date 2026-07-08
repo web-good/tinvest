@@ -53,7 +53,7 @@ func (s *SuperTrendIntersection) IsSatisfiedBy(fastEma []domainema.ItemTechAnaly
 			}
 		}
 		*/
-		if itemFlagTrade == true {
+		if itemFlagTrade {
 			return true
 		}
 

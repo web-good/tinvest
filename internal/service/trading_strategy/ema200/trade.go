@@ -25,7 +25,7 @@ func (s *service) Trade(ctx context.Context, dto input.Trade) error {
 
 		rsiS := specification.RsiSpecification{}
 
-		if rsiS.IsSatisfiedBy(rsiModel) != true {
+		if !rsiS.IsSatisfiedBy(rsiModel) {
 			continue
 		}
 
@@ -37,7 +37,7 @@ func (s *service) Trade(ctx context.Context, dto input.Trade) error {
 
 		macDSpecification := specification.MacDSpecification{}
 
-		if macDSpecification.IsSatisfiedBy(macDModel) != true {
+		if !macDSpecification.IsSatisfiedBy(macDModel) {
 			continue
 		}
 

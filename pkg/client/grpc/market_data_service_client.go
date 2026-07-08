@@ -145,7 +145,7 @@ func (m *marketDataService) GetCandles(ctx context.Context, instrumentUid *strin
 
 	h := investapi.GetCandlesRequest_CANDLE_SOURCE_UNSPECIFIED
 
-	if withHoliday == true {
+	if withHoliday {
 		h = investapi.GetCandlesRequest_CANDLE_SOURCE_UNSPECIFIED
 	}
 

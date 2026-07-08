@@ -20,15 +20,15 @@ func Finder(doneCh chan struct{}, bonds []*pkgmodel.Bond, isOfz bool, dateFrom, 
 				continue
 			}
 
-			if bond.FloatingCouponFlag == true || bond.AmortizationFlag == true || bond.Nkd == 0 {
+			if bond.FloatingCouponFlag || bond.AmortizationFlag || bond.Nkd == 0 {
 				continue
 			}
 
-			if isOfz == true && (reOfz.MatchString(bond.Name) == false && reRegion.MatchString(bond.Name) == false) {
+			if isOfz && (!reOfz.MatchString(bond.Name) && !reRegion.MatchString(bond.Name)) {
 				continue
 			}
 
-			if isOfz == false && (reOfz.MatchString(bond.Name) == true || reRegion.MatchString(bond.Name) == true) {
+			if !isOfz && (reOfz.MatchString(bond.Name) || reRegion.MatchString(bond.Name)) {
 				continue
 			}
 

@@ -33,9 +33,5 @@ func (s *GreenMacD) IsSatisfiedBy(itemTechAnalyse []*model.MacDItemTechAnalyse) 
 		j++
 	}
 
-	if countGreenIndicators == countGreenCandles {
-		return true
-	}
-
-	return false
+	return countGreenIndicators == countGreenCandles
 }

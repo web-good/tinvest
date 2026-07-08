@@ -15,11 +15,11 @@ func (s *Macd) IsSatisfiedBy(itemTechAnalyse []*domain.MACDItemTechAnalyse) bool
 			continue
 		}
 
-		if item.IsCross == false || item.Diff > 0 {
+		if !item.IsCross || item.Diff > 0 {
 			continue
 		}
 
-		if item.UnderZero == true {
+		if item.UnderZero {
 			//&& prevItem.Diff > 0
 			return false
 		}

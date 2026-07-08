@@ -48,11 +48,11 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) error {
 			continue
 		}
 
-		if emaSp.IsSatisfiedBy(ema[len(ema)-1], *price[1]) == false {
+		if !emaSp.IsSatisfiedBy(ema[len(ema)-1], *price[1]) {
 			continue
 		}
 
-		if rsiSp.IsSatisfiedBy(*rsi[1]) == false {
+		if !rsiSp.IsSatisfiedBy(*rsi[1]) {
 			continue
 		}
 
