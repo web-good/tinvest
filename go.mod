@@ -6,8 +6,10 @@ require (
 	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1
 	github.com/golang/protobuf v1.5.4
 	github.com/google/go-cmp v0.7.0
+	github.com/google/uuid v1.6.0
 	github.com/heetch/confita v0.10.0
 	github.com/joho/godotenv v1.5.1
+	github.com/magefile/mage v1.17.2
 	github.com/pkg/errors v0.8.1
 	github.com/robfig/cron/v3 v3.0.1
 	golang.org/x/sync v0.20.0
@@ -17,7 +19,6 @@ require (
 )
 
 require (
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
 	go.opentelemetry.io/otel v1.42.0 // indirect
 	go.opentelemetry.io/otel/sdk/metric v1.40.0 // indirect
