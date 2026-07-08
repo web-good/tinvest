@@ -5,10 +5,6 @@ import (
 	"tinvest/pkg/logger"
 )
 
-const (
-	address = "invest-public-api.tinkoff.ru:443"
-)
-
 func (a *App) initGrpcClient(ctx context.Context) error {
 	logger.InfoContext(ctx, "Initialize gRPC client")
 	_, err := a.sp.GetGrpcClient()

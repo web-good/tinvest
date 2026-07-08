@@ -5,7 +5,6 @@ import (
 )
 
 type MacDSpecification struct {
-	differenceValue float64
 }
 
 func (s *MacDSpecification) IsSatisfiedBy(itemTechAnalyse []*model.MacDItemTechAnalyse) bool {
