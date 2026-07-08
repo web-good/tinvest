@@ -56,7 +56,7 @@ func MocksCheck() error {
 	if err := Mocks(); err != nil {
 		return err
 	}
-	return sh.RunV("git", "diff", "--exit-code", "--", "**/mocks/")
+	return sh.RunV("git", "diff", "--exit-code", "--", "**/mocks/**")
 }
 
 // CI runs the full check suite: lint, test, and mock-drift.
