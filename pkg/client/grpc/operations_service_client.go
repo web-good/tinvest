@@ -34,7 +34,7 @@ func NewOperationsServiceClient(conn grpc.ClientConnInterface, token string) Ope
 }
 
 func (o *operationsServiceClient) GetPortfolio(ctx context.Context, accountID string) ([]*model.Position, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	cur := investapi.PortfolioRequest_RUB
 	resp, err := o.operationApi.GetPortfolio(ctx, &investapi.PortfolioRequest{
@@ -50,7 +50,7 @@ func (o *operationsServiceClient) GetPortfolio(ctx context.Context, accountID st
 }
 
 func (o *operationsServiceClient) GetOperation(ctx context.Context, accountID string, figi string) ([]*model.Operation, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	resp, err := o.operationApi.GetOperations(ctx, &investapi.OperationsRequest{

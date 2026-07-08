@@ -28,7 +28,7 @@ func New(conn grpc.ClientConnInterface, token string) UsersServiceClient {
 }
 
 func (u *usersServiceClient) GetAccounts(ctx context.Context) ([]model.Account, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	status := investapi.AccountStatus_ACCOUNT_STATUS_OPEN

@@ -25,7 +25,7 @@ func NewOrdersServiceClient(conn grpc.ClientConnInterface, token string) OrdersS
 }
 
 func (c *ordersServiceClient) PostOrder(ctx context.Context, in *investapi.PostOrderRequest, opts ...grpc.CallOption) (*investapi.PostOrderResponse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	opts = append(opts, NewRPCCredential(c.auth))

@@ -36,7 +36,7 @@ func NewInstrumentsServiceClient(conn grpc.ClientConnInterface, token string) In
 }
 
 func (c *instrumentsServiceClient) Bonds(ctx context.Context) ([]*pkgmodel.Bond, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	resp, err := c.instrumentsApi.Bonds(ctx, &investapi.InstrumentsRequest{
 		InstrumentStatus:   investapi.InstrumentStatus_INSTRUMENT_STATUS_BASE.Enum(),
@@ -70,7 +70,7 @@ func (c *instrumentsServiceClient) GetBondCoupons(instrumentId string, from time
 }
 
 func (c *instrumentsServiceClient) Shares(ctx context.Context) ([]*model.Share, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	resp, err := c.instrumentsApi.Shares(ctx, &investapi.InstrumentsRequest{
 		InstrumentStatus:   investapi.InstrumentStatus_INSTRUMENT_STATUS_BASE.Enum(),
@@ -85,7 +85,7 @@ func (c *instrumentsServiceClient) Shares(ctx context.Context) ([]*model.Share, 
 }
 
 func (c *instrumentsServiceClient) ShareByID(ctx context.Context, id string) (*share.Share, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	resp, err := c.instrumentsApi.ShareBy(ctx, &investapi.InstrumentRequest{
 		IdType: investapi.InstrumentIdType_INSTRUMENT_ID_TYPE_UID,
@@ -100,7 +100,7 @@ func (c *instrumentsServiceClient) ShareByID(ctx context.Context, id string) (*s
 }
 
 func (c *instrumentsServiceClient) BondByID(ctx context.Context, id string) (*pkgmodel.Bond, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	resp, err := c.instrumentsApi.BondBy(ctx, &investapi.InstrumentRequest{
 		IdType: investapi.InstrumentIdType_INSTRUMENT_ID_TYPE_UID,

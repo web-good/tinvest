@@ -28,7 +28,7 @@ type marketDataService struct {
 }
 
 func (m *marketDataService) GetTechAnalyseBB(ctx context.Context, instrumentUid string, interval int, from *timestamppb.Timestamp, to *timestamppb.Timestamp) ([]*model.BbItemTechAnalyse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	resp, err := m.marketDataApi.GetTechAnalysis(ctx, &investapi.GetTechAnalysisRequest{
 		Length:        20,
@@ -51,7 +51,7 @@ func (m *marketDataService) GetTechAnalyseBB(ctx context.Context, instrumentUid 
 }
 
 func (m *marketDataService) GetTechAnalyseEma(ctx context.Context, instrumentUid string, interval int, from *timestamppb.Timestamp, to *timestamppb.Timestamp, length int32) ([]*model.EmaItemTechAnalyse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	resp, err := m.marketDataApi.GetTechAnalysis(ctx, &investapi.GetTechAnalysisRequest{
@@ -72,7 +72,7 @@ func (m *marketDataService) GetTechAnalyseEma(ctx context.Context, instrumentUid
 }
 
 func (m *marketDataService) GetTechAnalyseRsi(ctx context.Context, instrumentUid string, interval int, from *timestamppb.Timestamp, to *timestamppb.Timestamp, length int32) ([]*model.RsiItemTechAnalyse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	resp, err := m.marketDataApi.GetTechAnalysis(ctx, &investapi.GetTechAnalysisRequest{
 		Length:        length,
@@ -92,7 +92,7 @@ func (m *marketDataService) GetTechAnalyseRsi(ctx context.Context, instrumentUid
 }
 
 func (m *marketDataService) GetTechAnalyseMacD(ctx context.Context, instrumentUid string, interval int, from *timestamppb.Timestamp, to *timestamppb.Timestamp, fastLength int32) ([]*model.MacDItemTechAnalyse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	resp, err := m.marketDataApi.GetTechAnalysis(ctx, &investapi.GetTechAnalysisRequest{
 		IndicatorType: investapi.GetTechAnalysisRequest_INDICATOR_TYPE_MACD,
@@ -116,7 +116,7 @@ func (m *marketDataService) GetTechAnalyseMacD(ctx context.Context, instrumentUi
 }
 
 func (m *marketDataService) GetTechAnalyseMacDCustom(ctx context.Context, instrumentUid string, interval int, from *timestamppb.Timestamp, to *timestamppb.Timestamp, fastLength int32, slowLength int32, smoothing int32) ([]*model.MacDItemTechAnalyse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	resp, err := m.marketDataApi.GetTechAnalysis(ctx, &investapi.GetTechAnalysisRequest{
 		IndicatorType: investapi.GetTechAnalysisRequest_INDICATOR_TYPE_MACD,
@@ -140,7 +140,7 @@ func (m *marketDataService) GetTechAnalyseMacDCustom(ctx context.Context, instru
 }
 
 func (m *marketDataService) GetCandles(ctx context.Context, instrumentUid *string, interval int32, from *timestamp.Timestamp, to *timestamp.Timestamp, limit *int32, withHoliday bool) ([]*model.CandleItemTechAnalyse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	h := investapi.GetCandlesRequest_CANDLE_SOURCE_UNSPECIFIED
