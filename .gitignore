@@ -1,5 +1,5 @@
 *token.env
-./bin
+/bin/
 .idea
 .continue
 qdrant_data
