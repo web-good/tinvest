@@ -49,7 +49,7 @@ func (s *service) CalculateVolatility(context context.Context, instrumentUid str
 	// Расчет стандартного отклонения
 	variance := 0.0
 	for _, price := range prices {
-		variance += math.Pow(price-average, 2)
+		variance += (price - average) * (price - average)
 	}
 	v1, v2 := utils.SplitPrice(math.Sqrt(variance / float64(len(prices)-1)))
 	return &domain.VolatilityItemTechAnalyse{Value: domain.Quotation{

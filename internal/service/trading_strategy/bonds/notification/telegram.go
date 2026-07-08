@@ -16,16 +16,14 @@ func Send(bonds []domain.BondReport, dateFrom time.Time, dateTo time.Time) strin
 	var notifyMessageBuilder strings.Builder
 
 	// Заголовок сообщения
-	notifyMessageBuilder.WriteString(fmt.Sprintf(
-		"<b>📊 Облигации </b>\n\n"+
-			"🗓️ <i>Период: %s - %s</i>\n\n",
+	fmt.Fprintf(&notifyMessageBuilder, "<b>📊 Облигации </b>\n\n"+
+		"🗓️ <i>Период: %s - %s</i>\n\n",
 		dateFrom.Format("02.01.2006"),
-		dateTo.Format("02.01.2006"),
-	))
+		dateTo.Format("02.01.2006"))
 
 	// Тип облигаций
 	bondType := strings.ToUpper(string(bonds[0].Type))
-	notifyMessageBuilder.WriteString(fmt.Sprintf("🏛️ <b>%s</b>\n\n", bondType))
+	fmt.Fprintf(&notifyMessageBuilder, "🏛️ <b>%s</b>\n\n", bondType)
 
 	// Список облигаций
 	for i, bond := range bonds {
@@ -36,11 +34,9 @@ func Send(bonds []domain.BondReport, dateFrom time.Time, dateTo time.Time) strin
 		}
 
 		// Название облигации
-		notifyMessageBuilder.WriteString(fmt.Sprintf(
-			"<b>%d. %s</b>\n\n",
+		fmt.Fprintf(&notifyMessageBuilder, "<b>%d. %s</b>\n\n",
 			i+1,
-			htmlEscape(bond.Name),
-		))
+			htmlEscape(bond.Name))
 
 		// Ключевые метрики в компактном виде
 		notifyMessageBuilder.WriteString(

@@ -31,8 +31,7 @@ func (u *usersServiceClient) GetAccounts(ctx context.Context) ([]model.Account, 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	var status investapi.AccountStatus
-	status = investapi.AccountStatus_ACCOUNT_STATUS_OPEN
+	status := investapi.AccountStatus_ACCOUNT_STATUS_OPEN
 
 	resp, err := u.usersApi.GetAccounts(ctx, &investapi.GetAccountsRequest{
 		Status: &status,

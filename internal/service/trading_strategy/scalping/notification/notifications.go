@@ -34,10 +34,8 @@ func render(header string, signals []model.Signal) string {
 	if len(buys) > 0 {
 		b.WriteString("<u><b>Сигналы на покупку:</b></u>\n")
 		for _, s := range buys {
-			b.WriteString(fmt.Sprintf(
-				"🟢 <b>%s</b> (%s)\n  Цена: %.2f | TP: %.2f | SL: %.2f | RSI: %.0f\n",
-				s.InstrumentName, s.Ticker, s.Price, s.TakeProfit, s.StopLoss, s.RSI,
-			))
+			fmt.Fprintf(&b, "🟢 <b>%s</b> (%s)\n  Цена: %.2f | TP: %.2f | SL: %.2f | RSI: %.0f\n",
+				s.InstrumentName, s.Ticker, s.Price, s.TakeProfit, s.StopLoss, s.RSI)
 		}
 		b.WriteString("\n")
 	}
@@ -45,10 +43,8 @@ func render(header string, signals []model.Signal) string {
 	if len(sells) > 0 {
 		b.WriteString("<u><b>Сигналы на продажу:</b></u>\n")
 		for _, s := range sells {
-			b.WriteString(fmt.Sprintf(
-				"🔴 <b>%s</b> (%s) [%s]\n  Цена: %.2f | TP: %.2f | SL: %.2f\n",
-				s.InstrumentName, s.Ticker, s.Reason, s.Price, s.TakeProfit, s.StopLoss,
-			))
+			fmt.Fprintf(&b, "🔴 <b>%s</b> (%s) [%s]\n  Цена: %.2f | TP: %.2f | SL: %.2f\n",
+				s.InstrumentName, s.Ticker, s.Reason, s.Price, s.TakeProfit, s.StopLoss)
 		}
 	}
 
