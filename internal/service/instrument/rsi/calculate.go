@@ -12,10 +12,10 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func (s service) CalculateRSI(context context.Context, instrumentUid string, interval enum.Interval, dateFrom *timestamppb.Timestamp, dateTo *timestamppb.Timestamp, period int32) ([]*domain.RSIItemTechAnalyse, error) {
+func (s service) CalculateRSI(context context.Context, instrumentUID string, interval enum.Interval, dateFrom *timestamppb.Timestamp, dateTo *timestamppb.Timestamp, period int32) ([]*domain.RSIItemTechAnalyse, error) {
 	//fmt.Println(dateFrom.AsTime(), dateTo.AsTime())
 	limit := period*3 - 1
-	candles, _ := s.marketDataServiceClient.GetCandles(context, &instrumentUid, interval.ToNumberInvestApi(), dateFrom, dateTo, &limit, true)
+	candles, _ := s.marketDataServiceClient.GetCandles(context, &instrumentUID, interval.ToNumberInvestAPI(), dateFrom, dateTo, &limit, true)
 
 	if len(candles) < int(period+2)-1 {
 		return nil, errors.New("prices len must be more or equal 2 periods +1 mor date from")

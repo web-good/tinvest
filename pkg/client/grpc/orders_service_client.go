@@ -13,13 +13,13 @@ type OrdersServiceClient interface {
 }
 
 type ordersServiceClient struct {
-	orderApi investapi.OrdersServiceClient
+	orderAPI investapi.OrdersServiceClient
 	auth     *Auth
 }
 
 func NewOrdersServiceClient(conn grpc.ClientConnInterface, token string) OrdersServiceClient {
 	return &ordersServiceClient{
-		orderApi: investapi.NewOrdersServiceClient(conn),
+		orderAPI: investapi.NewOrdersServiceClient(conn),
 		auth:     NewAuth(token),
 	}
 }
@@ -29,5 +29,5 @@ func (c *ordersServiceClient) PostOrder(ctx context.Context, in *investapi.PostO
 	defer cancel()
 
 	opts = append(opts, NewRPCCredential(c.auth))
-	return c.orderApi.PostOrder(ctx, in, opts...)
+	return c.orderAPI.PostOrder(ctx, in, opts...)
 }

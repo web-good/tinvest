@@ -2,7 +2,7 @@ package config
 
 type Profile struct {
 	TBank  string
-	ChatId int64
+	ChatID int64
 }
 
 type Profiles []Profile

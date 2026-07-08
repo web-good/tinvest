@@ -12,10 +12,10 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func (s *service) CalculateVolatility(context context.Context, instrumentUid string, interval enum.Interval, dateFrom *timestamppb.Timestamp, dateTo *timestamppb.Timestamp, length int32) (*domain.VolatilityItemTechAnalyse, error) {
+func (s *service) CalculateVolatility(context context.Context, instrumentUID string, interval enum.Interval, dateFrom *timestamppb.Timestamp, dateTo *timestamppb.Timestamp, length int32) (*domain.VolatilityItemTechAnalyse, error) {
 	limit := length * 3
 	loc, _ := time.LoadLocation("Europe/Moscow")
-	candles, _ := s.marketDataServiceClient.GetCandles(context, &instrumentUid, interval.ToNumberInvestApi(), utils.TimeStampPbGenerator(dateFrom.AsTime().In(loc), int64(-limit), interval), dateTo, &limit, true)
+	candles, _ := s.marketDataServiceClient.GetCandles(context, &instrumentUID, interval.ToNumberInvestAPI(), utils.TimeStampPbGenerator(dateFrom.AsTime().In(loc), int64(-limit), interval), dateTo, &limit, true)
 	prices := make([]float64, 0, len(candles))
 
 	for i := 0; i < len(candles); i++ {

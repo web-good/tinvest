@@ -11,11 +11,11 @@ import (
 )
 
 type Instrument interface {
-	CalculateVolatility(context context.Context, instrumentUid string, interval enum.Interval, dateFrom *timestamppb.Timestamp, dateTo *timestamppb.Timestamp, length int32) (*domain.VolatilityItemTechAnalyse, error)
+	CalculateVolatility(context context.Context, instrumentUID string, interval enum.Interval, dateFrom *timestamppb.Timestamp, dateTo *timestamppb.Timestamp, length int32) (*domain.VolatilityItemTechAnalyse, error)
 }
 
 type marketDataClient interface {
-	GetCandles(context context.Context, instrumentUid *string, interval int32, from *timestamp.Timestamp, to *timestamp.Timestamp, limit *int32, withHoliday bool) ([]*model.CandleItemTechAnalyse, error)
+	GetCandles(context context.Context, instrumentUID *string, interval int32, from *timestamp.Timestamp, to *timestamp.Timestamp, limit *int32, withHoliday bool) ([]*model.CandleItemTechAnalyse, error)
 }
 
 type service struct {

@@ -13,14 +13,14 @@ type Client interface {
 }
 
 type telegramBotClientClient struct {
-	clientApi *tgbotapi.BotAPI
-	chatIds   []int64
+	clientAPI *tgbotapi.BotAPI
+	chatIDs   []int64
 }
 
 func (b *telegramBotClientClient) SendMessage(msg string) error {
 	var errMsg string
 
-	for _, chatID := range b.chatIds {
+	for _, chatID := range b.chatIDs {
 		if err := b.SendMessageToChat(chatID, msg); err != nil {
 			errMsg += fmt.Sprintf("Failed to send to chat %d: %v\n", chatID, err)
 		}
@@ -34,11 +34,11 @@ func (b *telegramBotClientClient) SendMessage(msg string) error {
 func (b *telegramBotClientClient) SendMessageToChat(chatID int64, msg string) error {
 	ms := tgbotapi.NewMessage(chatID, msg)
 	ms.ParseMode = "HTML"
-	_, err := b.clientApi.Send(ms)
+	_, err := b.clientAPI.Send(ms)
 	return err
 }
 
-func InitTelegramBot(token string, chatId []int64) (Client, error) {
+func InitTelegramBot(token string, chatID []int64) (Client, error) {
 	bot, err := tgbotapi.NewBotAPI(token)
 
 	if err != nil {
@@ -47,10 +47,10 @@ func InitTelegramBot(token string, chatId []int64) (Client, error) {
 
 	bot.Debug = true
 
-	return &telegramBotClientClient{clientApi: bot, chatIds: chatId}, nil
+	return &telegramBotClientClient{clientAPI: bot, chatIDs: chatID}, nil
 }
 
-func InitTelegramBotProxy(token string, chatId []int64, proxyURL string) (Client, error) {
+func InitTelegramBotProxy(token string, chatID []int64, proxyURL string) (Client, error) {
 	bot, err := tgbotapi.NewBotAPIWithClient(token, "https://v0-telegram-proxy-api.vercel.app/bot%s/%s", &http.Client{})
 
 	if err != nil {
@@ -59,5 +59,5 @@ func InitTelegramBotProxy(token string, chatId []int64, proxyURL string) (Client
 
 	bot.Debug = true
 
-	return &telegramBotClientClient{clientApi: bot, chatIds: chatId}, nil
+	return &telegramBotClientClient{clientAPI: bot, chatIDs: chatID}, nil
 }

@@ -18,11 +18,11 @@ type ScalpingRsi interface {
 }
 
 type emaInstrument interface {
-	TechAnalyse(context context.Context, instrumentUid *string, interval int32, from time.Time, to time.Time, period int) ([]domainema.ItemTechAnalyse, error)
+	TechAnalyse(context context.Context, instrumentUID *string, interval int32, from time.Time, to time.Time, period int) ([]domainema.ItemTechAnalyse, error)
 }
 
 type rsiInstrument interface {
-	CalculateRSI(context context.Context, instrumentUid string, interval enum.Interval, dateFrom *timestamppb.Timestamp, DateTo *timestamppb.Timestamp, period int32) ([]*domain.RSIItemTechAnalyse, error)
+	CalculateRSI(context context.Context, instrumentUID string, interval enum.Interval, dateFrom *timestamppb.Timestamp, DateTo *timestamppb.Timestamp, period int32) ([]*domain.RSIItemTechAnalyse, error)
 }
 
 type service struct {

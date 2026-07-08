@@ -20,7 +20,7 @@ import (
 
 // CandleClient is the slice of the market-data client the assembler needs.
 type CandleClient interface {
-	GetCandles(ctx context.Context, instrumentUid *string, interval int32,
+	GetCandles(ctx context.Context, instrumentUID *string, interval int32,
 		from, to *timestamppb.Timestamp, limit *int32, withHoliday bool) ([]*imodel.CandleItemTechAnalyse, error)
 }
 
@@ -66,7 +66,7 @@ func fetchCompleted(ctx context.Context, c CandleClient, instrumentID string,
 	calendarDays *= warmupBufferFactor
 	from := now.AddDate(0, 0, -calendarDays)
 	limit := int32(bars * warmupBufferFactor * 2)
-	raw, err := c.GetCandles(ctx, &instrumentID, interval.ToNumberInvestApi(),
+	raw, err := c.GetCandles(ctx, &instrumentID, interval.ToNumberInvestAPI(),
 		timestamppb.New(from), timestamppb.New(now), &limit, true)
 	if err != nil {
 		return nil, err

@@ -67,7 +67,7 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) error {
 		limit := int32(lookback)
 
 		time.Sleep(300 * time.Millisecond)
-		candles, candErr := s.marketDataClient.GetCandles(ctx, &id, interval.ToNumberInvestApi(),
+		candles, candErr := s.marketDataClient.GetCandles(ctx, &id, interval.ToNumberInvestAPI(),
 			utils.TimeStampPbGenerator(dateNow, -int64(lookback), interval), timestamppb.New(dateNow), &limit, true)
 		if candErr != nil || len(candles) == 0 {
 			logger.ErrorContext(ctx, fmt.Sprintf("scalping: candles %s skipped", st.Ticker()))
@@ -79,7 +79,7 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) error {
 		const dailyLookback = 250 // ~trading days of lead-in to warm the daily EMA(200)
 		dailyLimit := int32(dailyLookback)
 		time.Sleep(300 * time.Millisecond)
-		dailyCandles, dailyErr := s.marketDataClient.GetCandles(ctx, &id, enum.Day1.ToNumberInvestApi(),
+		dailyCandles, dailyErr := s.marketDataClient.GetCandles(ctx, &id, enum.Day1.ToNumberInvestAPI(),
 			utils.TimeStampPbGenerator(dateNow, -int64(dailyLookback), enum.Day1), timestamppb.New(dateNow), &dailyLimit, true)
 		if dailyErr != nil {
 			logger.ErrorContext(ctx, fmt.Sprintf("scalping: daily candles %s skipped", st.Ticker()))

@@ -22,13 +22,13 @@ type OperationsServiceClient interface {
 }
 
 type operationsServiceClient struct {
-	operationApi investapi.OperationsServiceClient
+	operationAPI investapi.OperationsServiceClient
 	auth         *Auth
 }
 
 func NewOperationsServiceClient(conn grpc.ClientConnInterface, token string) OperationsServiceClient {
 	return &operationsServiceClient{
-		operationApi: investapi.NewOperationsServiceClient(conn),
+		operationAPI: investapi.NewOperationsServiceClient(conn),
 		auth:         NewAuth(token),
 	}
 }
@@ -37,7 +37,7 @@ func (o *operationsServiceClient) GetPortfolio(ctx context.Context, accountID st
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	cur := investapi.PortfolioRequest_RUB
-	resp, err := o.operationApi.GetPortfolio(ctx, &investapi.PortfolioRequest{
+	resp, err := o.operationAPI.GetPortfolio(ctx, &investapi.PortfolioRequest{
 		AccountId: accountID,
 		Currency:  &cur,
 	}, NewRPCCredential(o.auth))
@@ -53,7 +53,7 @@ func (o *operationsServiceClient) GetOperation(ctx context.Context, accountID st
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	resp, err := o.operationApi.GetOperations(ctx, &investapi.OperationsRequest{
+	resp, err := o.operationAPI.GetOperations(ctx, &investapi.OperationsRequest{
 		AccountId: accountID,
 		Figi:      &figi,
 	}, NewRPCCredential(o.auth))
@@ -122,7 +122,7 @@ func (o *operationsServiceClient) GetCashOperations(ctx context.Context, account
 			req.Cursor = &cursor
 		}
 
-		resp, err := o.operationApi.GetOperationsByCursor(ctx, req, NewRPCCredential(o.auth))
+		resp, err := o.operationAPI.GetOperationsByCursor(ctx, req, NewRPCCredential(o.auth))
 		if err != nil {
 			return nil, err
 		}
@@ -177,7 +177,7 @@ func (o *operationsServiceClient) GetAvailableCash(ctx context.Context, accountI
 	defer cancel()
 
 	cur := investapi.PortfolioRequest_RUB
-	resp, err := o.operationApi.GetPortfolio(ctx, &investapi.PortfolioRequest{
+	resp, err := o.operationAPI.GetPortfolio(ctx, &investapi.PortfolioRequest{
 		AccountId: accountID,
 		Currency:  &cur,
 	}, NewRPCCredential(o.auth))
@@ -215,7 +215,7 @@ func (o *operationsServiceClient) GetInstrumentTrades(ctx context.Context, accou
 			req.Cursor = &cursor
 		}
 
-		resp, err := o.operationApi.GetOperationsByCursor(ctx, req, NewRPCCredential(o.auth))
+		resp, err := o.operationAPI.GetOperationsByCursor(ctx, req, NewRPCCredential(o.auth))
 		if err != nil {
 			return nil, err
 		}
@@ -237,7 +237,7 @@ func (o *operationsServiceClient) GetPortfolioTotal(ctx context.Context, account
 	defer cancel()
 
 	cur := investapi.PortfolioRequest_RUB
-	resp, err := o.operationApi.GetPortfolio(ctx, &investapi.PortfolioRequest{
+	resp, err := o.operationAPI.GetPortfolio(ctx, &investapi.PortfolioRequest{
 		AccountId: accountID,
 		Currency:  &cur,
 	}, NewRPCCredential(o.auth))

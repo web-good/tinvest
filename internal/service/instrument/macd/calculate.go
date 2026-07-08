@@ -11,11 +11,11 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func (s service) CalculateMACD(context context.Context, instrumentUid string, interval enum.Interval, dateFrom *timestamppb.Timestamp, dateTo *timestamppb.Timestamp, fast int32, slow int32, signal int32) ([]*domain.MACDItemTechAnalyse, error) {
+func (s service) CalculateMACD(context context.Context, instrumentUID string, interval enum.Interval, dateFrom *timestamppb.Timestamp, dateTo *timestamppb.Timestamp, fast int32, slow int32, signal int32) ([]*domain.MACDItemTechAnalyse, error) {
 	limit := slow * 2
 	loc, _ := time.LoadLocation("Europe/Moscow")
 
-	candles, _ := s.marketDataServiceClient.GetCandles(context, &instrumentUid, interval.ToNumberInvestApi(), utils.TimeStampPbGenerator(dateFrom.AsTime().In(loc), int64(-limit*2), interval), dateTo, &limit, true)
+	candles, _ := s.marketDataServiceClient.GetCandles(context, &instrumentUID, interval.ToNumberInvestAPI(), utils.TimeStampPbGenerator(dateFrom.AsTime().In(loc), int64(-limit*2), interval), dateTo, &limit, true)
 
 	if len(candles) < int(limit) {
 		return nil, errors.New("prices len must be more or equal 2 periods")

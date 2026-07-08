@@ -11,12 +11,12 @@ import (
 )
 
 type Instrument interface {
-	TechAnalyse(context context.Context, instrumentUid *string, interval enum.Interval, dateNow time.Time) (atr.ItemTechAnalyse, error)
-	AverageVolume(ctx context.Context, instrumentUid string, interval enum.Interval, dateNow time.Time) (float64, error)
+	TechAnalyse(context context.Context, instrumentUID *string, interval enum.Interval, dateNow time.Time) (atr.ItemTechAnalyse, error)
+	AverageVolume(ctx context.Context, instrumentUID string, interval enum.Interval, dateNow time.Time) (float64, error)
 }
 
 type MarketDataClient interface {
-	GetCandles(context context.Context, instrumentUid *string, interval int32, from *timestamp.Timestamp, to *timestamp.Timestamp, limit *int32, withHoliday bool) ([]*model.CandleItemTechAnalyse, error)
+	GetCandles(context context.Context, instrumentUID *string, interval int32, from *timestamp.Timestamp, to *timestamp.Timestamp, limit *int32, withHoliday bool) ([]*model.CandleItemTechAnalyse, error)
 }
 
 type service struct {

@@ -22,7 +22,7 @@ type instrumentsClient interface {
 }
 
 type marketDataClient interface {
-	GetCandles(ctx context.Context, instrumentUid *string, interval int32, from *timestamp.Timestamp, to *timestamp.Timestamp, limit *int32, withHoliday bool) ([]*imodel.CandleItemTechAnalyse, error)
+	GetCandles(ctx context.Context, instrumentUID *string, interval int32, from *timestamp.Timestamp, to *timestamp.Timestamp, limit *int32, withHoliday bool) ([]*imodel.CandleItemTechAnalyse, error)
 }
 
 type operationsClient interface {

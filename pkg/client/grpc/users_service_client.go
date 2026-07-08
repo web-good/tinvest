@@ -16,13 +16,13 @@ type UsersServiceClient interface {
 }
 
 type usersServiceClient struct {
-	usersApi investapi.UsersServiceClient
+	usersAPI investapi.UsersServiceClient
 	auth     *Auth
 }
 
 func New(conn grpc.ClientConnInterface, token string) UsersServiceClient {
 	return &usersServiceClient{
-		usersApi: investapi.NewUsersServiceClient(conn),
+		usersAPI: investapi.NewUsersServiceClient(conn),
 		auth:     NewAuth(token),
 	}
 }
@@ -33,7 +33,7 @@ func (u *usersServiceClient) GetAccounts(ctx context.Context) ([]model.Account, 
 
 	status := investapi.AccountStatus_ACCOUNT_STATUS_OPEN
 
-	resp, err := u.usersApi.GetAccounts(ctx, &investapi.GetAccountsRequest{
+	resp, err := u.usersAPI.GetAccounts(ctx, &investapi.GetAccountsRequest{
 		Status: &status,
 	}, NewRPCCredential(u.auth))
 

@@ -19,7 +19,7 @@ type fakeCandleClient struct {
 
 func (f *fakeCandleClient) GetCandles(_ context.Context, _ *string, interval int32,
 	_, _ *timestamppb.Timestamp, _ *int32, _ bool) ([]*imodel.CandleItemTechAnalyse, error) {
-	// Hour1 == 4 per enum.ToNumberInvestApi mapping; anything else is the 4H request.
+	// Hour1 == 4 per enum.ToNumberInvestAPI mapping; anything else is the 4H request.
 	if interval == 4 {
 		return f.hourly, nil
 	}
@@ -34,7 +34,7 @@ type fakeHTFCandleClient struct {
 
 func (f *fakeHTFCandleClient) GetCandles(_ context.Context, _ *string, interval int32,
 	_, _ *timestamppb.Timestamp, _ *int32, _ bool) ([]*imodel.CandleItemTechAnalyse, error) {
-	// Hour1 == 4; Hour4 == 11 per enum.ToNumberInvestApi mapping.
+	// Hour1 == 4; Hour4 == 11 per enum.ToNumberInvestAPI mapping.
 	if interval == 4 {
 		return f.hourly, nil
 	}
