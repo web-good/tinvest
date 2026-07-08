@@ -5,27 +5,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/ptypes/timestamp"
+	"github.com/stretchr/testify/mock"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"tinvest/internal/domain/backtest"
 	"tinvest/internal/enum"
 	"tinvest/internal/model"
+	"tinvest/internal/service/backtest/mocks"
 )
 
 func qt(v float64) model.Quotation { return model.Quotation{Units: int64(v), Nano: 0} }
-
-// fakeFetcher returns canned candles and records call count.
-type fakeFetcher struct {
-	candles []*model.CandleItemTechAnalyse
-	calls   int
-}
-
-func (f *fakeFetcher) GetCandles(_ context.Context, _ *string, _ int32,
-	_ *timestamp.Timestamp, _ *timestamp.Timestamp, _ *int32, _ bool,
-) ([]*model.CandleItemTechAnalyse, error) {
-	f.calls++
-	return f.candles, nil
-}
 
 func bar(tm time.Time, c float64, complete bool) *model.CandleItemTechAnalyse {
 	return &model.CandleItemTechAnalyse{
@@ -75,12 +64,20 @@ func TestSliceWindow(t *testing.T) {
 
 func TestLoadNoFileFetchesAndCaches(t *testing.T) {
 	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	f := &fakeFetcher{candles: []*model.CandleItemTechAnalyse{
+	candles := []*model.CandleItemTechAnalyse{
 		bar(base, 10, true),
 		bar(base.Add(time.Hour), 11, true),
 		bar(base.Add(2*time.Hour), 12, true),
-	}}
-	p := NewCandleProvider(f, t.TempDir())
+	}
+	var calls int
+	m := mocks.NewMockcandleFetcher(t)
+	m.EXPECT().GetCandles(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		RunAndReturn(func(context.Context, *string, int32, *timestamppb.Timestamp, *timestamppb.Timestamp, *int32, bool) ([]*model.CandleItemTechAnalyse, error) {
+			calls++
+			return candles, nil
+		})
+
+	p := NewCandleProvider(m, t.TempDir())
 	got, err := p.Load(context.Background(), "RUAL", "id-1", enum.Hour1, base, base.Add(2*time.Hour), false)
 	if err != nil {
 		t.Fatal(err)
@@ -88,16 +85,16 @@ func TestLoadNoFileFetchesAndCaches(t *testing.T) {
 	if len(got) != 3 {
 		t.Fatalf("loaded %d candles, want 3", len(got))
 	}
-	if f.calls == 0 {
+	if calls == 0 {
 		t.Fatal("expected at least one fetch on cold cache")
 	}
 	// Second load (no refresh): cache file exists; last cached == to, so no new
 	// tail fetch is required.
-	callsAfterFirst := f.calls
+	callsAfterFirst := calls
 	if _, err := p.Load(context.Background(), "RUAL", "id-1", enum.Hour1, base, base.Add(2*time.Hour), false); err != nil {
 		t.Fatal(err)
 	}
-	if f.calls != callsAfterFirst {
-		t.Fatalf("warm cache refetched: calls %d -> %d", callsAfterFirst, f.calls)
+	if calls != callsAfterFirst {
+		t.Fatalf("warm cache refetched: calls %d -> %d", callsAfterFirst, calls)
 	}
 }
