@@ -6,39 +6,44 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/protobuf/types/known/timestamppb"
+	"github.com/stretchr/testify/mock"
 
 	"tinvest/internal/domain/backtest"
 	imodel "tinvest/internal/model"
+	"tinvest/internal/service/trading_strategy/reversion/live/marketdata/mocks"
 )
 
-// fakeCandleClient returns a fixed hourly series and an empty 4H series.
-type fakeCandleClient struct {
-	hourly []*imodel.CandleItemTechAnalyse
+// newFakeCandleClient returns a mock that answers the hourly request (interval==4 per
+// enum.ToNumberInvestAPI mapping) with `hourly` and any other request with nil, nil —
+// equivalent to the old fakeCandleClient (used when no 4H fetch is expected).
+func newFakeCandleClient(t *testing.T, hourly []*imodel.CandleItemTechAnalyse) *mocks.MockCandleClient {
+	t.Helper()
+	m := mocks.NewMockCandleClient(t)
+	// The hourly fetch (interval==4) always runs in Assemble, so require it (no .Maybe()).
+	m.EXPECT().GetCandles(mock.Anything, mock.Anything, mock.MatchedBy(func(interval int32) bool {
+		return interval == 4
+	}), mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(hourly, nil)
+	// The 4H fetch (interval!=4) never runs when htfEMAPeriod==0; allow zero calls.
+	m.EXPECT().GetCandles(mock.Anything, mock.Anything, mock.MatchedBy(func(interval int32) bool {
+		return interval != 4
+	}), mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil, nil).Maybe()
+	return m
 }
 
-func (f *fakeCandleClient) GetCandles(_ context.Context, _ *string, interval int32,
-	_, _ *timestamppb.Timestamp, _ *int32, _ bool) ([]*imodel.CandleItemTechAnalyse, error) {
-	// Hour1 == 4 per enum.ToNumberInvestAPI mapping; anything else is the 4H request.
-	if interval == 4 {
-		return f.hourly, nil
-	}
-	return nil, nil
-}
-
-// fakeHTFCandleClient returns a fixed hourly series and a fixed 4H series.
-type fakeHTFCandleClient struct {
-	hourly []*imodel.CandleItemTechAnalyse
-	htf    []*imodel.CandleItemTechAnalyse
-}
-
-func (f *fakeHTFCandleClient) GetCandles(_ context.Context, _ *string, interval int32,
-	_, _ *timestamppb.Timestamp, _ *int32, _ bool) ([]*imodel.CandleItemTechAnalyse, error) {
-	// Hour1 == 4; Hour4 == 11 per enum.ToNumberInvestAPI mapping.
-	if interval == 4 {
-		return f.hourly, nil
-	}
-	return f.htf, nil
+// newFakeHTFCandleClient returns a mock that answers the hourly request (interval==4)
+// with `hourly` and the 4H request (interval==11) with `htf` — equivalent to the old
+// fakeHTFCandleClient.
+func newFakeHTFCandleClient(t *testing.T, hourly, htf []*imodel.CandleItemTechAnalyse) *mocks.MockCandleClient {
+	t.Helper()
+	m := mocks.NewMockCandleClient(t)
+	// With htfEMAPeriod>0 both fetches run unconditionally, so require both (no .Maybe()).
+	m.EXPECT().GetCandles(mock.Anything, mock.Anything, mock.MatchedBy(func(interval int32) bool {
+		return interval == 4
+	}), mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(hourly, nil)
+	m.EXPECT().GetCandles(mock.Anything, mock.Anything, mock.MatchedBy(func(interval int32) bool {
+		return interval != 4
+	}), mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(htf, nil)
+	return m
 }
 
 func apiCandle(ts time.Time, o, h, l, c float64, v int64, complete bool) *imodel.CandleItemTechAnalyse {
@@ -67,7 +72,7 @@ func TestAssemble_ParityWithBacktest(t *testing.T) {
 	api = append(api, apiCandle(ts, 999, 999, 999, 999, 9, false))
 
 	const lookback = 50
-	c := &fakeCandleClient{hourly: api}
+	c := newFakeCandleClient(t, api)
 	live, err := Assemble(context.Background(), c, "uid", lookback, 0, ts.Add(time.Hour))
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
@@ -83,9 +88,9 @@ func TestAssemble_ParityWithBacktest(t *testing.T) {
 }
 
 func TestAssemble_ErrorsOnInsufficientCandles(t *testing.T) {
-	c := &fakeCandleClient{hourly: []*imodel.CandleItemTechAnalyse{
+	c := newFakeCandleClient(t, []*imodel.CandleItemTechAnalyse{
 		apiCandle(time.Now(), 1, 1, 1, 1, 1, true),
-	}}
+	})
 	if _, err := Assemble(context.Background(), c, "uid", 50, 0, time.Now()); err == nil {
 		t.Fatal("expected error when completed candles < lookback")
 	}
@@ -162,7 +167,7 @@ func TestAssemble_ParityWithBacktest_HTF(t *testing.T) {
 	}
 
 	const htfEMAPeriod = 3
-	client := &fakeHTFCandleClient{hourly: apiHourly, htf: apiHTF}
+	client := newFakeHTFCandleClient(t, apiHourly, apiHTF)
 	live, err := Assemble(context.Background(), client, "uid", lookback, htfEMAPeriod, now)
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
