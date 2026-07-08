@@ -24,8 +24,8 @@ jobs:
           cache: true
       - name: Install tools
         run: go run github.com/magefile/mage tools
-      - name: Lint + Test
-        run: go run github.com/magefile/mage lint test
+      - name: Lint + Test + Mock drift
+        run: go run github.com/magefile/mage ci
 
   image-build-and-push:
     runs-on: ubuntu-latest
