@@ -13,6 +13,7 @@ import (
 	"tinvest/internal/service/trading_strategy/reversion/live/executor"
 	"tinvest/internal/service/trading_strategy/reversion/live/marketdata"
 	"tinvest/internal/service/trading_strategy/reversion/live/statestore"
+	"tinvest/internal/service/trading_strategy/reversion/live/stoporders"
 	grpcmodel "tinvest/pkg/client/grpc/model"
 	"tinvest/pkg/client/telegram"
 )
@@ -43,18 +44,20 @@ type service struct {
 	market      marketdata.CandleClient
 	ops         operationsClient
 	exec        *executor.Executor
+	stops       *stoporders.Executor
 	tg          telegram.Client
 	cfg         *config.ReversionConfig
 	statePath   string
 }
 
-// NewService wires the live reversion service. The orders client may be nil only when
-// TradeEnabled is false and no order will ever be placed (tests/dry-run).
+// NewService wires the live reversion service. The orders and stops clients may be nil
+// only when TradeEnabled is false and no order will ever be placed (tests/dry-run).
 func NewService(
 	instruments instrumentsClient,
 	market marketdata.CandleClient,
 	ops operationsClient,
 	orders executor.OrdersClient,
+	stops stoporders.Client,
 	tg telegram.Client,
 	cfg *config.ReversionConfig,
 ) *service {
@@ -63,6 +66,7 @@ func NewService(
 		market:      market,
 		ops:         ops,
 		exec:        executor.New(orders, cfg.AccountID, cfg.TradeEnabled),
+		stops:       stoporders.New(stops, cfg.AccountID, cfg.TradeEnabled),
 		tg:          tg,
 		cfg:         cfg,
 		statePath:   filepath.Join("data", "state", "reversion_"+cfg.AccountID+".json"),

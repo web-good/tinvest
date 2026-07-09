@@ -20,6 +20,12 @@ var paramsByTicker = map[string]core.Params{
 	sfin.Ticker: sfin.DefaultParams(),
 }
 
+// ParamsFor returns the calibrated params for a known ticker, ok=false otherwise.
+func ParamsFor(ticker string) (core.Params, bool) {
+	p, ok := paramsByTicker[ticker]
+	return p, ok
+}
+
 // StrategyFor returns the calibrated strategy for a known ticker, ok=false otherwise.
 func StrategyFor(ticker string) (*core.Strategy, bool) {
 	p, ok := paramsByTicker[ticker]

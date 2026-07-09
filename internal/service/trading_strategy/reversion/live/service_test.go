@@ -10,10 +10,12 @@ import (
 
 	"tinvest/internal/config"
 	imodel "tinvest/internal/model"
+	investapi "tinvest/internal/pb/v1"
 	"tinvest/internal/service/trading_strategy/reversion/live/dto"
 	mdmocks "tinvest/internal/service/trading_strategy/reversion/live/marketdata/mocks"
 	livemocks "tinvest/internal/service/trading_strategy/reversion/live/mocks"
 	"tinvest/internal/service/trading_strategy/reversion/live/statestore"
+	stopmocks "tinvest/internal/service/trading_strategy/reversion/live/stoporders/mocks"
 	grpcmodel "tinvest/pkg/client/grpc/model"
 	tgmocks "tinvest/pkg/client/telegram/mocks"
 )
@@ -76,6 +78,7 @@ func TestBuyPass_NoSignal_NoOrderNoState(t *testing.T) {
 		market,
 		ops,
 		nil, // ordersClient unused in dry-run no-signal path
+		nil, // stopsClient unused in dry-run no-signal path
 		tg,
 		c,
 	)
@@ -140,6 +143,7 @@ func TestManagePass_UpdatesMaxFavAndPersists(t *testing.T) {
 		market,
 		ops,
 		nil,
+		nil,
 		tg,
 		cfg(dir),
 	)
@@ -151,5 +155,38 @@ func TestManagePass_UpdatesMaxFavAndPersists(t *testing.T) {
 	st, _ := statestore.New(statePath).Load()
 	if st["UGLD"].MaxFav != 110 {
 		t.Fatalf("MaxFav = %v, want 110 (raised from latest close)", st["UGLD"].MaxFav)
+	}
+}
+
+func TestPlaceInitialStopPersistsIDAndLevel(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	stops := stopmocks.NewMockClient(t)
+	stops.EXPECT().PostStopOrder(mock.Anything, mock.Anything).
+		Return(&investapi.PostStopOrderResponse{StopOrderId: "so-9"}, nil)
+
+	c := cfg(dir)
+	c.TradeEnabled = true
+	tg := tgmocks.NewMockClient(t)
+	// cfg(dir) sets NotifyEnabled: true, so the StopSet notification fires.
+	tg.EXPECT().SendMessage(mock.Anything).Return(nil)
+	svc := NewService(livemocks.NewMockinstrumentsClient(t), mdmocks.NewMockCandleClient(t),
+		livemocks.NewMockoperationsClient(t), nil, stops, tg, c)
+	svc.statePath = statePath
+
+	store := statestore.New(statePath)
+	entry := statestore.Entry{Ticker: "UGLD", EntryPrice: 100, EntryATR: 2, MaxFav: 100, Quantity: 10}
+	state := map[string]statestore.Entry{"UGLD": entry}
+	sh := &imodel.Share{ID: "uid-ugld", Ticker: "UGLD", Lot: 1, MinPriceIncrement: 0.01}
+
+	got := svc.placeInitialStop(context.Background(), "UGLD", sh, entry, state, store)
+	// UGLD DefaultParams: UseTrail=1/TrailATRMult=1.5, CatStop=0, UseATRStop=0
+	// -> want = 100 - 1.5*2 = 97, reason TRAIL
+	if got.StopOrderID != "so-9" || got.StopPrice != 97 || got.StopReason != "TRAIL" {
+		t.Fatalf("entry after stop: %+v", got)
+	}
+	persisted, _ := store.Load()
+	if persisted["UGLD"].StopOrderID != "so-9" {
+		t.Fatalf("state not persisted: %+v", persisted["UGLD"])
 	}
 }

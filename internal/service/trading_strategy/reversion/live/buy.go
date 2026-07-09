@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	imodel "tinvest/internal/model"
 	"tinvest/internal/service/trading_strategy/reversion/live/marketdata"
 	"tinvest/internal/service/trading_strategy/reversion/live/notifier"
 	"tinvest/internal/service/trading_strategy/reversion/live/sizing"
 	"tinvest/internal/service/trading_strategy/reversion/live/statestore"
+	"tinvest/internal/service/trading_strategy/reversion/strategy/core"
 	"tinvest/internal/service/trading_strategy/scalping/model"
 	"tinvest/pkg/logger"
 )
@@ -104,6 +106,39 @@ func (s *service) buyPass(ctx context.Context) error {
 			return fmt.Errorf("reversion: save state after buy %s: %w", ticker, err)
 		}
 		s.notify(notifier.Entry(ticker, fillPrice, filledLots, qty, !res.Placed))
+
+		state[ticker] = s.placeInitialStop(ctx, ticker, sh, state[ticker], state, store)
 	}
 	return nil
+}
+
+// placeInitialStop puts the protective exchange stop right after a fill so the
+// position is never unprotected for the first hour. On failure the entry keeps an
+// empty StopOrderID and managePass retries next tick.
+func (s *service) placeInitialStop(ctx context.Context, ticker string, sh *imodel.Share,
+	entry statestore.Entry, state map[string]statestore.Entry, store statestore.Store) statestore.Entry {
+
+	p, ok := ParamsFor(ticker)
+	if !ok {
+		return entry
+	}
+	level, reason := core.DesiredStop(p, entry.EntryPrice, entry.EntryATR, entry.MaxFav)
+	if reason == "" {
+		return entry
+	}
+	lots := entry.Quantity / int64(sh.Lot)
+	res, err := s.stops.Place(ctx, sh.ID, lots, level, sh.MinPriceIncrement)
+	if err != nil {
+		s.notify(notifier.Alert(ticker, "стоп-заявка не выставлена: "+err.Error()))
+		logger.ErrorContext(ctx, fmt.Sprintf("reversion: %s place stop: %v", ticker, err))
+		return entry
+	}
+	if res.Placed {
+		entry.StopOrderID = res.OrderID
+	}
+	entry.StopPrice, entry.StopReason = level, reason
+	state[ticker] = entry
+	_ = store.Save(state)
+	s.notify(notifier.StopSet(ticker, level, reason, !res.Placed))
+	return entry
 }

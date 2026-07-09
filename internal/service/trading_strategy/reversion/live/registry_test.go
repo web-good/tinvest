@@ -15,6 +15,15 @@ func TestStrategyFor(t *testing.T) {
 	}
 }
 
+func TestParamsForKnownAndUnknown(t *testing.T) {
+	if _, ok := ParamsFor("UGLD"); !ok {
+		t.Fatal("UGLD must be registered")
+	}
+	if _, ok := ParamsFor("NOPE"); ok {
+		t.Fatal("unknown ticker must return ok=false")
+	}
+}
+
 func TestMaxHTFTrendEMA(t *testing.T) {
 	// NVTK has HTFTrendEMA=150; UGLD/EUTR have 0.
 	if got := MaxHTFTrendEMA([]string{"UGLD", "EUTR"}); got != 0 {

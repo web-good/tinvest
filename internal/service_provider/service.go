@@ -233,6 +233,7 @@ func (*ServiceProvider) GetReversionLiveService() live.Service {
 			grpcClient.MarketDataServiceClient(),
 			grpcClient.OperationsServiceClient(),
 			grpcClient.OrdersServiceClient(),
+			grpcClient.StopOrdersServiceClient(),
 			tgClient,
 			serviceProvider.appConfig.Reversion,
 		)
