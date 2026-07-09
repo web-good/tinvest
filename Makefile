@@ -14,6 +14,7 @@ get-deps:
 
 generate:
 	make generate-note-api
+	make generate-stoporders-api
 
 generate-orders-api:
 	mkdir -p internal/pb/v1
@@ -23,6 +24,15 @@ generate-orders-api:
 	--go-grpc_out=internal/pb/v1 --go-grpc_opt=paths=source_relative \
 	--plugin=protoc-gen-go-grpc=bin/protoc-gen-go-grpc \
 	api/v1/orders.proto
+
+generate-stoporders-api:
+	mkdir -p internal/pb/v1
+	protoc --proto_path api/v1 \
+	--go_out=./internal/pb/v1 --experimental_allow_proto3_optional --go_opt=paths=source_relative \
+	--plugin=protoc-gen-go=bin/protoc-gen-go \
+	--go-grpc_out=internal/pb/v1 --go-grpc_opt=paths=source_relative \
+	--plugin=protoc-gen-go-grpc=bin/protoc-gen-go-grpc \
+	api/v1/stoporders.proto
 
 generate-common-api:
 	mkdir -p internal/pb/v1

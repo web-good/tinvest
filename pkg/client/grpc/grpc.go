@@ -19,6 +19,7 @@ type GrpcClient interface {
 	OperationsServiceClient() OperationsServiceClient
 	Connection() grpc.ClientConnInterface
 	UserServiceClient() UsersServiceClient
+	StopOrdersServiceClient() StopOrdersServiceClient
 }
 
 type Client struct {
@@ -27,6 +28,7 @@ type Client struct {
 	marketDataServiceClient  MarketDataServiceClient
 	usersServiceClient       UsersServiceClient
 	operationsServiceClient  OperationsServiceClient
+	stopOrdersServiceClient  StopOrdersServiceClient
 	conn                     grpc.ClientConnInterface
 }
 
@@ -48,6 +50,10 @@ func (c Client) UserServiceClient() UsersServiceClient {
 
 func (c Client) OperationsServiceClient() OperationsServiceClient {
 	return c.operationsServiceClient
+}
+
+func (c Client) StopOrdersServiceClient() StopOrdersServiceClient {
+	return c.stopOrdersServiceClient
 }
 
 func (c Client) Connection() grpc.ClientConnInterface {
@@ -81,6 +87,7 @@ func NewClientGrpc(address string, token string) (GrpcClient, error) {
 		marketDataServiceClient:  NewMarketDataService(conn, token),
 		usersServiceClient:       New(conn, token),
 		operationsServiceClient:  NewOperationsServiceClient(conn, token),
+		stopOrdersServiceClient:  NewStopOrdersServiceClient(conn, token),
 		conn:                     conn,
 	}, nil
 }
