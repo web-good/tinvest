@@ -9,19 +9,20 @@ import (
 
 // portfolio is the long-only mock account the engine trades against.
 type portfolio struct {
-	cfg          Config
-	cash         float64
-	qty          int64
-	entryPrice   float64
-	entryTime    time.Time
-	entryBar     int
-	entryLevel   float64 // support level captured at entry
-	entryTarget  float64 // resistance/target captured at entry
-	entryATR     float64 // ATR captured at entry
-	entryStop    float64 // hard stop frozen at entry
-	entryReason  string  // human-readable entry rationale captured at entry
-	maxFavorable float64 // highest close seen since entry (monotonic)
-	bar          int     // current bar index, set by the engine each iteration
+	cfg              Config
+	cash             float64
+	qty              int64
+	entryPrice       float64
+	entryTime        time.Time
+	entryBar         int
+	entryLevel       float64 // support level captured at entry
+	entryTarget      float64 // resistance/target captured at entry
+	entryATR         float64 // ATR captured at entry
+	entryStop        float64 // hard stop frozen at entry
+	entryReason      string  // human-readable entry rationale captured at entry
+	maxFavorable     float64 // highest close seen since entry (monotonic)
+	prevMaxFavorable float64 // maxFavorable as of the previous bar
+	bar              int     // current bar index, set by the engine each iteration
 }
 
 func newPortfolio(cfg Config) *portfolio {
@@ -73,14 +74,19 @@ func (p *portfolio) open(price float64, t time.Time, level, target, atr, stop fl
 	p.entryStop = stop
 	p.entryReason = entryReason
 	p.maxFavorable = price
+	p.prevMaxFavorable = price
 }
 
 // mark raises the running favourable-price maximum toward price. No-op when flat
 // or when price is not a new high, which keeps maxFavorable monotonic.
+// prevMaxFavorable is snapshotted to the pre-mark maxFavorable first, so it always
+// lags one bar behind: it reflects what an exchange stop order placed after the
+// previous close would know, before this bar's close can move the level.
 func (p *portfolio) mark(price float64) {
 	if p.qty == 0 {
 		return
 	}
+	p.prevMaxFavorable = p.maxFavorable
 	if price > p.maxFavorable {
 		p.maxFavorable = price
 	}
@@ -121,6 +127,7 @@ func (p *portfolio) close(price float64, t time.Time, reason, exitReason string)
 	p.entryStop = 0
 	p.entryReason = ""
 	p.maxFavorable = 0
+	p.prevMaxFavorable = 0
 	return tr
 }
 
@@ -130,11 +137,12 @@ func (p *portfolio) strategyPosition() *strategy.Position {
 		return nil
 	}
 	return &strategy.Position{
-		PurchasePrice:     p.entryPrice,
-		Quantity:          p.qty,
-		StopLoss:          p.entryStop,
-		EntryATR:          p.entryATR,
-		MaxFavorablePrice: p.maxFavorable,
+		PurchasePrice:         p.entryPrice,
+		Quantity:              p.qty,
+		StopLoss:              p.entryStop,
+		EntryATR:              p.entryATR,
+		MaxFavorablePrice:     p.maxFavorable,
+		PrevMaxFavorablePrice: p.prevMaxFavorable,
 	}
 }
 

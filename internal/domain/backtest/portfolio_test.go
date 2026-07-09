@@ -164,6 +164,25 @@ func TestOpenRiskBasedCappedByCash(t *testing.T) {
 	}
 }
 
+func TestPrevMaxFavorableLagsMark(t *testing.T) {
+	p := newPortfolio(Config{InitialCash: 1000, Fraction: 1, Commission: 0, Lot: 1})
+	p.open(100, time.Now(), 0, 0, 0, 0, "")
+	pos := p.strategyPosition()
+	if pos.PrevMaxFavorablePrice != 100 || pos.MaxFavorablePrice != 100 {
+		t.Fatalf("after open: prev=%v max=%v, want 100/100", pos.PrevMaxFavorablePrice, pos.MaxFavorablePrice)
+	}
+	p.mark(105)
+	pos = p.strategyPosition()
+	if pos.PrevMaxFavorablePrice != 100 || pos.MaxFavorablePrice != 105 {
+		t.Fatalf("after mark(105): prev=%v max=%v, want 100/105", pos.PrevMaxFavorablePrice, pos.MaxFavorablePrice)
+	}
+	p.mark(103) // не новый максимум: prev догоняет 105, max стоит
+	pos = p.strategyPosition()
+	if pos.PrevMaxFavorablePrice != 105 || pos.MaxFavorablePrice != 105 {
+		t.Fatalf("after mark(103): prev=%v max=%v, want 105/105", pos.PrevMaxFavorablePrice, pos.MaxFavorablePrice)
+	}
+}
+
 func TestOpenLegacyFractionUnchanged(t *testing.T) {
 	// RiskFractionPct 0 -> legacy Fraction path: floor(100000/100) = 1000.
 	cfg := Config{InitialCash: 100000, Fraction: 1.0, Commission: 0, Lot: 1, RiskFractionPct: 0}

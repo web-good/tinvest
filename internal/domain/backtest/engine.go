@@ -133,8 +133,10 @@ func Run(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Candl
 				// TP exits fill at the target, adjusted for a gap-up open: max(target,
 				// open) is the limit fill and rewards a gap through the target.
 				switch sig.Reason {
-				case "SL", "TRAIL":
-					exitPrice = min(sig.StopLoss, c.Open)
+				case "SL", "TRAIL", "ATRSL":
+					if sig.StopLoss > 0 {
+						exitPrice = min(sig.StopLoss, c.Open)
+					}
 				case "TP":
 					if sig.TakeProfit > 0 {
 						exitPrice = max(sig.TakeProfit, c.Open)
@@ -213,8 +215,10 @@ func Trace(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Can
 			if p.qty != 0 {
 				exitPrice := c.Close
 				switch sig.Reason {
-				case "SL", "TRAIL":
-					exitPrice = min(sig.StopLoss, c.Open)
+				case "SL", "TRAIL", "ATRSL":
+					if sig.StopLoss > 0 {
+						exitPrice = min(sig.StopLoss, c.Open)
+					}
 				case "TP":
 					if sig.TakeProfit > 0 {
 						exitPrice = max(sig.TakeProfit, c.Open)

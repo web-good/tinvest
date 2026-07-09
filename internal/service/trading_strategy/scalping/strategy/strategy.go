@@ -19,6 +19,11 @@ type Position struct {
 	// MaxFavorablePrice is the highest close seen since entry (monotonic
 	// non-decreasing); it makes the trail's arming latch monotonic.
 	MaxFavorablePrice float64
+	// PrevMaxFavorablePrice is MaxFavorablePrice as of the PREVIOUS bar (before the
+	// current bar's close was marked). The reversion intrabar stop computes its trail
+	// level from it: the exchange stop order working during bar i was placed after bar
+	// i-1 closed, so its level knows nothing about bar i. Seeded to the entry price.
+	PrevMaxFavorablePrice float64
 }
 
 // MarketData is the raw, per-instrument snapshot the runner hands to a strategy.
