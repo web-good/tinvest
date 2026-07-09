@@ -103,7 +103,7 @@ func (s *service) fetchWeeklyCandles(ctx context.Context, shareID string, interv
 	return s.marketDataServiceGrpcClient.GetCandles(
 		ctx,
 		&shareID,
-		interval.ToNumberInvestApi(),
+		interval.ToNumberInvestAPI(),
 		utils.TimeStampPbGenerator(dateNow, -int64(candleLookbackWeeks), interval),
 		timestamppb.New(dateNow),
 		&limit,

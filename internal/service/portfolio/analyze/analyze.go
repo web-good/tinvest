@@ -69,12 +69,12 @@ func (s service) BondsPortfolio(ctx context.Context, chatID int64) error {
 	}
 
 	// Build message
-	msg := fmt.Sprintf("📊 *Бонд-портфель анализ*\n\n")
+	msg := "📊 *Бонд-портфель анализ*\n\n"
 	msg += fmt.Sprintf("💰 *Общая стоимость:* %.2f RUB\n", totalBondSum)
 	msg += fmt.Sprintf("📅 *0-2 года:* %.2f RUB (%.2f%%)\n", level1Sum, level1Sum/totalBondSum*100)
 	msg += fmt.Sprintf("📅 *2-6 лет:* %.2f RUB (%.2f%%)\n", level2Sum, level2Sum/totalBondSum*100)
 	msg += fmt.Sprintf("📅 *6+ лет:* %.2f RUB (%.2f%%)\n\n", level3Sum, level3Sum/totalBondSum*100)
-	msg += fmt.Sprintf("🏢 *По эмитентам:*\n")
+	msg += "🏢 *По эмитентам:*\n"
 	for issuer, sum := range issuerSums {
 		msg += fmt.Sprintf("  • %s: %.2f RUB (%.2f%%)\n", issuer, sum, sum/totalBondSum*100)
 	}

@@ -5,9 +5,5 @@ type BuyMore struct {
 }
 
 func (s *BuyMore) IsSatisfiedBy(purchasePrice float64, price float64) bool {
-	if purchasePrice-purchasePrice*s.Diff > price {
-		return true
-	}
-
-	return false
+	return purchasePrice-purchasePrice*s.Diff > price
 }

@@ -2,13 +2,14 @@ package super_trend
 
 import (
 	"context"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"time"
 	notification2 "tinvest/internal/domain/notification"
 	"tinvest/internal/enum"
 	"tinvest/internal/service/trading_strategy/super_trend/notification"
 	"tinvest/internal/service/trading_strategy/super_trend/specification"
 	"tinvest/pkg/logger"
+
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 const TakeProfitAccount string = "2252263587"
@@ -37,10 +38,15 @@ func (s *service) TakeProfit(ctx context.Context) error {
 
 		for _, position := range portfolio {
 			atr, err := s.atr.TechAnalyse(ctx, &position.ShareID, enum.Hour1, time.Now())
-			rsiModel, err := s.marketDataServiceGrpcClient.GetTechAnalyseRsi(ctx, position.ShareID, 4, timestamppb.New(time.Now().AddDate(0, 0, -1)), timestamppb.New(time.Now()), 4)
-
 			if err != nil {
 				logger.ErrorContext(ctx, "atr get error", err)
+
+				continue
+			}
+
+			rsiModel, err := s.marketDataServiceGrpcClient.GetTechAnalyseRsi(ctx, position.ShareID, 4, timestamppb.New(time.Now().AddDate(0, 0, -1)), timestamppb.New(time.Now()), 4)
+			if err != nil {
+				logger.ErrorContext(ctx, "rsi get error", err)
 
 				continue
 			}

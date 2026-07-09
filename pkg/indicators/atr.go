@@ -43,7 +43,7 @@ func ATRSeries(highs, lows, closes []float64, period int) []float64 {
 //
 // Algorithm:
 //   - True Range at bar i (i >= 1):
-//       TR_i = max(High_i - Low_i, |High_i - Close_{i-1}|, |Low_i - Close_{i-1}|)
+//     TR_i = max(High_i - Low_i, |High_i - Close_{i-1}|, |Low_i - Close_{i-1}|)
 //   - Seed ATR_{period} = mean(TR_1 .. TR_{period}).
 //   - For i > period: ATR_i = (ATR_{i-1} * (period - 1) + TR_i) / period.
 func ATR(highs, lows, closes []float64, period int) float64 {

@@ -12,7 +12,6 @@ import (
 	"tinvest/internal/service/trading_strategy/bonds"
 	"tinvest/internal/service/trading_strategy/ema200"
 	"tinvest/internal/service/trading_strategy/golden_x"
-	"tinvest/internal/service/trading_strategy/macd_rsi"
 	"tinvest/internal/service/trading_strategy/reversion/live"
 	"tinvest/internal/service/trading_strategy/scalping"
 	"tinvest/internal/service/trading_strategy/scalping_rsi"
@@ -21,7 +20,6 @@ import (
 
 type service struct {
 	purchaseSharesService     purchase_shares.PurchaseShares
-	macdRsiTradingService     macd_rsi.MacdRsi
 	scalpingRsiTradingService scalping_rsi.ScalpingRsi
 	scalpingTradingService    scalping.Scalping
 	reversionLiveService      live.Service

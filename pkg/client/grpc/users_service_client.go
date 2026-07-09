@@ -3,11 +3,12 @@ package grpc
 import (
 	"context"
 	"fmt"
-	"google.golang.org/grpc"
 	"time"
 	investapi "tinvest/internal/pb/v1"
 	"tinvest/pkg/client/grpc/converter"
 	"tinvest/pkg/client/grpc/model"
+
+	"google.golang.org/grpc"
 )
 
 type UsersServiceClient interface {
@@ -15,25 +16,24 @@ type UsersServiceClient interface {
 }
 
 type usersServiceClient struct {
-	usersApi investapi.UsersServiceClient
+	usersAPI investapi.UsersServiceClient
 	auth     *Auth
 }
 
 func New(conn grpc.ClientConnInterface, token string) UsersServiceClient {
 	return &usersServiceClient{
-		usersApi: investapi.NewUsersServiceClient(conn),
+		usersAPI: investapi.NewUsersServiceClient(conn),
 		auth:     NewAuth(token),
 	}
 }
 
 func (u *usersServiceClient) GetAccounts(ctx context.Context) ([]model.Account, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	var status investapi.AccountStatus
-	status = investapi.AccountStatus_ACCOUNT_STATUS_OPEN
+	status := investapi.AccountStatus_ACCOUNT_STATUS_OPEN
 
-	resp, err := u.usersApi.GetAccounts(ctx, &investapi.GetAccountsRequest{
+	resp, err := u.usersAPI.GetAccounts(ctx, &investapi.GetAccountsRequest{
 		Status: &status,
 	}, NewRPCCredential(u.auth))
 

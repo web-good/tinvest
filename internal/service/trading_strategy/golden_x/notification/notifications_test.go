@@ -39,7 +39,7 @@ func TestTrade_RendersLegendBlock(t *testing.T) {
 	if medalIdx < 0 || legendIdx < 0 || buyHeaderIdx < 0 {
 		t.Fatalf("missing landmarks: medal=%d legend=%d header=%d in:\n%s", medalIdx, legendIdx, buyHeaderIdx, got)
 	}
-	if !(medalIdx < legendIdx && legendIdx < buyHeaderIdx) {
+	if medalIdx >= legendIdx || legendIdx >= buyHeaderIdx {
 		t.Errorf("expected order medal < legend < header, got medal=%d legend=%d header=%d", medalIdx, legendIdx, buyHeaderIdx)
 	}
 }
@@ -423,7 +423,7 @@ func TestTrade_SortsByScoreDesc(t *testing.T) {
 	if highIdx < 0 || midIdx < 0 || lowIdx < 0 {
 		t.Fatalf("missing share names in output:\n%s", got)
 	}
-	if !(highIdx < midIdx && midIdx < lowIdx) {
+	if highIdx >= midIdx || midIdx >= lowIdx {
 		t.Errorf("expected HighScore(%d) < MidScore(%d) < LowScore(%d) in output:\n%s", highIdx, midIdx, lowIdx, got)
 	}
 }

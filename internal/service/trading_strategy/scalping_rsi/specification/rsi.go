@@ -10,9 +10,5 @@ type Rsi struct {
 }
 
 func (r *Rsi) IsSatisfiedBy(rsi domain.RSIItemTechAnalyse) bool {
-	if utils.CombinePrice(rsi.SignalLine.Units, rsi.SignalLine.Nano) < float64(r.Value) {
-		return true
-	}
-
-	return false
+	return utils.CombinePrice(rsi.SignalLine.Units, rsi.SignalLine.Nano) < float64(r.Value)
 }

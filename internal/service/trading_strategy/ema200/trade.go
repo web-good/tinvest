@@ -3,11 +3,12 @@ package ema200
 import (
 	"context"
 	"fmt"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"time"
 	"tinvest/internal/service/trading_strategy/ema200/dto/input"
 	"tinvest/internal/service/trading_strategy/ema200/specification"
 	"tinvest/pkg/logger"
+
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func (s *service) Trade(ctx context.Context, dto input.Trade) error {
@@ -24,7 +25,7 @@ func (s *service) Trade(ctx context.Context, dto input.Trade) error {
 
 		rsiS := specification.RsiSpecification{}
 
-		if rsiS.IsSatisfiedBy(rsiModel) != true {
+		if !rsiS.IsSatisfiedBy(rsiModel) {
 			continue
 		}
 
@@ -36,7 +37,7 @@ func (s *service) Trade(ctx context.Context, dto input.Trade) error {
 
 		macDSpecification := specification.MacDSpecification{}
 
-		if macDSpecification.IsSatisfiedBy(macDModel) != true {
+		if !macDSpecification.IsSatisfiedBy(macDModel) {
 			continue
 		}
 

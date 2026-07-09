@@ -7,9 +7,5 @@ import (
 type Volume struct{}
 
 func (s *Volume) IsSatisfiedBy(itemTechAnalyse *model.CandleItemTechAnalyse, volume float64) bool {
-	if float64(itemTechAnalyse.Volume) > volume {
-		return true
-	}
-
-	return false
+	return float64(itemTechAnalyse.Volume) > volume
 }

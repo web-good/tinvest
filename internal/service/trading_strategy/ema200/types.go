@@ -16,11 +16,11 @@ type Ema200 interface {
 }
 
 type emaInstrument interface {
-	TechAnalyse(context context.Context, instrumentUid *string, interval int32, from time.Time, to time.Time, period int) ([]domainema.ItemTechAnalyse, error)
+	TechAnalyse(context context.Context, instrumentUID *string, interval int32, from time.Time, to time.Time, period int) ([]domainema.ItemTechAnalyse, error)
 }
 
 type atrInstrument interface {
-	TechAnalyse(context context.Context, instrumentUid *string, interval enum.Interval, dateNow time.Time) (atr.ItemTechAnalyse, error)
+	TechAnalyse(context context.Context, instrumentUID *string, interval enum.Interval, dateNow time.Time) (atr.ItemTechAnalyse, error)
 }
 
 type service struct {

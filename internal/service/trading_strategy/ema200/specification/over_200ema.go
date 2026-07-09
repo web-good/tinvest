@@ -37,7 +37,7 @@ func (s *Over200ema) IsSatisfiedBy(fastEma []domainema.ItemTechAnalyse, tradeEma
 			itemFlagTrade = true
 		}
 
-		if itemFlagTrade == true {
+		if itemFlagTrade {
 			return true
 		}
 

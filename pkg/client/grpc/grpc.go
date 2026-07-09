@@ -3,12 +3,13 @@ package grpc
 import (
 	"context"
 	"crypto/tls"
+	"strings"
+	"time"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
-	"strings"
-	"time"
 )
 
 type GrpcClient interface {

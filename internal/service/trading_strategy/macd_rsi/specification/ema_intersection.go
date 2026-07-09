@@ -38,7 +38,7 @@ func (s *EmaIntersection) IsSatisfiedBy(fastEma []domainema.ItemTechAnalyse, tra
 			itemFlagTrade = true
 		}
 
-		if itemFlagTrade == true {
+		if itemFlagTrade {
 			return true
 		}
 

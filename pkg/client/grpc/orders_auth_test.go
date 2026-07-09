@@ -31,7 +31,7 @@ func TestNewOrdersServiceClient_StoresToken(t *testing.T) {
 
 func TestOrdersServiceClient_PostOrderAttachesAuth(t *testing.T) {
 	fake := &fakeOrdersAPI{}
-	c := &ordersServiceClient{orderApi: fake, auth: NewAuth("tok-123")}
+	c := &ordersServiceClient{orderAPI: fake, auth: NewAuth("tok-123")}
 
 	if _, err := c.PostOrder(context.Background(), &investapi.PostOrderRequest{}); err != nil {
 		t.Fatalf("PostOrder returned error: %v", err)

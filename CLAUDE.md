@@ -7,7 +7,8 @@ Go-based trading/investment application built around the Tinkoff Invest gRPC API
 - Go 1.25
 - gRPC (Tinkoff Invest API) for market data and orders
 - Telegram Bot API for notifications
-- Code generation: `protoc-gen-go`, `protoc-gen-go-grpc`, `goverter` (see `Makefile`)
+- Code generation: `protoc-gen-go`, `protoc-gen-go-grpc`, `goverter` (see `Makefile`); `mockery` (v2) for test mocks (see `.mockery.yaml`)
+- Build/quality tooling: `mage` (`magefiles/`) drives lint/test/mocks; `golangci-lint` v2 (`.golangci.yml`). See `docs/tooling/mage.md`.
 
 ## Layout
 - `cmd/main.go` — entry point; initializes and runs `internal/app`.
@@ -29,7 +30,8 @@ Go-based trading/investment application built around the Tinkoff Invest gRPC API
 - `internal/enum`, `internal/model`, `internal/utils` — shared types/helpers.
 - `pkg` — reusable packages: `client` (grpc, telegram), `closer`, `collection`, `heartbeat`, `indicators`, `logger`, `scheduler`, `semaphore`.
 - `api/v1` — `.proto` definitions for Tinkoff Invest API.
-- `docs/golden_x/` — strategy documentation (strategy, settings, backtest).
+- `magefiles/` — mage build package: `Tools`, `Lint`, `Test`, `Mocks`, `MocksCheck`, `CI` targets.
+- `docs/golden_x/` — strategy documentation (strategy, settings, backtest); `docs/tooling/mage.md` — build/lint/mocks tooling.
 
 ## How to Run
 1. Copy `env/local.env.example` to `env/local.env` and fill in required values (tokens, etc.).
@@ -39,6 +41,7 @@ Go-based trading/investment application built around the Tinkoff Invest gRPC API
 - `APP_ENV` selects mode: `dev` runs strategy workers as goroutines (`internal/app/app.go:runDev`); `prod` schedules workers via the `pkg/scheduler` cron-like scheduler.
 - Telegram bot integration is used for sending strategy/portfolio notifications.
 - Code generation entry points live in `Makefile` (e.g. `make generate`, plus per-service `generate-*-api` targets); deps installed into `./bin` via `make install-deps`.
+- Quality checks run through `mage` (from repo root): `./bin/mage tools` installs pinned `golangci-lint`/`mockery` into `./bin`; `./bin/mage ci` runs lint + `go test -race ./...` + mock-drift check — the same gate CI enforces before build/deploy. Regenerate mocks with `./bin/mage mocks` after changing a mocked interface. Note: `go build ./...` fails on the `magefiles` package (no `main`); use `go build ./internal/... ./pkg/... ./cmd/...`. Details: `docs/tooling/mage.md`.
 - Golden X strategy settings are centralized in `golden_x/model.Settings` with `DefaultSettings()` constructor. Algorithm knobs are exported fields; fetch-policy constants (`candleLookbackWeeks`, `divergenceFractalK`) remain in-package.
 
 ## Configuration

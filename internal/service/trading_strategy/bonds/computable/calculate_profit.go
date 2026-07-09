@@ -3,7 +3,6 @@ package computable
 import (
 	"context"
 	"errors"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"log/slog"
 	"time"
 	"tinvest/internal/domain"
@@ -13,6 +12,8 @@ import (
 	"tinvest/internal/utils"
 	pkgmodel "tinvest/pkg/client/grpc/model"
 	"tinvest/pkg/logger"
+
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func (s *service) CalculateProfit(ctx context.Context, bond *pkgmodel.Bond) (domain.BondReport, error) {
@@ -20,7 +21,7 @@ func (s *service) CalculateProfit(ctx context.Context, bond *pkgmodel.Bond) (dom
 
 	candles, errCandle := s.marketDataServiceGrpcClient.GetCandles(
 		ctx,
-		&bond.Id,
+		&bond.ID,
 		int32(enum.Day1),
 		utils.TimeStampPbGenerator(time.Now(), -20, enum.Day1),
 		timestamppb.New(time.Now()),
@@ -40,7 +41,7 @@ func (s *service) CalculateProfit(ctx context.Context, bond *pkgmodel.Bond) (dom
 
 	yearStart := time.Date(time.Now().Year(), 1, 1, 0, 0, 0, 0, time.UTC)
 	coupons, _ := s.instrumentServiceGrpcClient.GetBondCoupons(
-		bond.Id,
+		bond.ID,
 		yearStart,
 		bond.MaturityDate,
 	)

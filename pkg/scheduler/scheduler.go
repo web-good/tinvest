@@ -1,8 +1,9 @@
 package scheduler
 
 import (
-	r "github.com/robfig/cron/v3"
 	"tinvest/pkg/closer"
+
+	r "github.com/robfig/cron/v3"
 )
 
 type job func()

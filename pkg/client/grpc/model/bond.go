@@ -3,7 +3,7 @@ package model
 import "time"
 
 type Bond struct {
-	Id                    string
+	ID                    string
 	AciValue              float64
 	CouponQuantityPerYear int32
 	Name                  string

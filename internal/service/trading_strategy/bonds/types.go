@@ -2,11 +2,12 @@ package bonds
 
 import (
 	"context"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"tinvest/internal/domain"
 	"tinvest/internal/enum"
 	"tinvest/pkg/client/grpc"
 	"tinvest/pkg/client/telegram"
+
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type Bonds interface {
@@ -14,7 +15,7 @@ type Bonds interface {
 }
 
 type rsiInstrument interface {
-	CalculateRSI(context context.Context, instrumentUid string, interval enum.Interval, dateFrom *timestamppb.Timestamp, DateTo *timestamppb.Timestamp, period int32) ([]*domain.RSIItemTechAnalyse, error)
+	CalculateRSI(context context.Context, instrumentUID string, interval enum.Interval, dateFrom *timestamppb.Timestamp, DateTo *timestamppb.Timestamp, period int32) ([]*domain.RSIItemTechAnalyse, error)
 }
 
 type service struct {

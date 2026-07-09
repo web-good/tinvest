@@ -3,7 +3,6 @@ package scalping_rsi
 import (
 	"context"
 	"fmt"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"time"
 	"tinvest/internal/domain"
 	"tinvest/internal/service/trading_strategy/scalping_rsi/dto"
@@ -11,6 +10,8 @@ import (
 	"tinvest/internal/service/trading_strategy/scalping_rsi/specification"
 	"tinvest/internal/utils"
 	"tinvest/pkg/logger"
+
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func (s *service) Trade(ctx context.Context, in dto.Trade) error {
@@ -47,11 +48,11 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) error {
 			continue
 		}
 
-		if emaSp.IsSatisfiedBy(ema[len(ema)-1], *price[1]) == false {
+		if !emaSp.IsSatisfiedBy(ema[len(ema)-1], *price[1]) {
 			continue
 		}
 
-		if rsiSp.IsSatisfiedBy(*rsi[1]) == false {
+		if !rsiSp.IsSatisfiedBy(*rsi[1]) {
 			continue
 		}
 

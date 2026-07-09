@@ -6,11 +6,13 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/ptypes/timestamp"
+	"github.com/stretchr/testify/mock"
 
 	imodel "tinvest/internal/model"
 	"tinvest/internal/service/trading_strategy/scalping/dto"
 	"tinvest/internal/service/trading_strategy/scalping/model"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
+	"tinvest/internal/service/trading_strategy/scalping/strategy/mocks"
 	grpcmodel "tinvest/pkg/client/grpc/model"
 	"tinvest/pkg/logger"
 )
@@ -21,16 +23,6 @@ func TestMain(m *testing.M) {
 }
 
 // --- fakes ---
-
-type fakeStrategy struct {
-	ticker   string
-	lookback int
-	sig      model.Signal
-}
-
-func (f fakeStrategy) Ticker() string                          { return f.ticker }
-func (f fakeStrategy) Lookback() int                           { return f.lookback }
-func (f fakeStrategy) Decide(strategy.MarketData) model.Signal { return f.sig }
 
 type stubInstruments struct{ shares []*imodel.Share }
 
@@ -132,13 +124,21 @@ func TestTrade_SellOnly(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			market := &stubMarket{candles: oneCandle()}
 			tg := &stubTg{}
+
+			strategyMock := mocks.NewMockStrategy(t)
+			strategyMock.EXPECT().Ticker().Return("TEST")
+			if tt.wantFetched {
+				strategyMock.EXPECT().Lookback().Return(1)
+				strategyMock.EXPECT().Decide(mock.Anything).Return(tt.sig)
+			}
+
 			svc := NewService(
 				stubInstruments{shares: []*imodel.Share{tradableShare()}},
 				market,
 				stubOps{positions: tt.positions},
 				tg,
 				"acc-1",
-				WithStrategies([]strategy.Strategy{fakeStrategy{ticker: "TEST", lookback: 1, sig: tt.sig}}),
+				WithStrategies([]strategy.Strategy{strategyMock}),
 			)
 
 			if err := svc.Trade(context.Background(), dto.Trade{SellOnly: tt.sellOnly}); err != nil {

@@ -2,19 +2,20 @@ package volatility
 
 import (
 	"context"
-	"github.com/pkg/errors"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"math"
 	"time"
 	"tinvest/internal/domain"
 	"tinvest/internal/enum"
 	"tinvest/internal/utils"
+
+	"github.com/pkg/errors"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func (s *service) CalculateVolatility(context context.Context, instrumentUid string, interval enum.Interval, dateFrom *timestamppb.Timestamp, dateTo *timestamppb.Timestamp, length int32) (*domain.VolatilityItemTechAnalyse, error) {
+func (s *service) CalculateVolatility(context context.Context, instrumentUID string, interval enum.Interval, dateFrom *timestamppb.Timestamp, dateTo *timestamppb.Timestamp, length int32) (*domain.VolatilityItemTechAnalyse, error) {
 	limit := length * 3
 	loc, _ := time.LoadLocation("Europe/Moscow")
-	candles, _ := s.marketDataServiceClient.GetCandles(context, &instrumentUid, interval.ToNumberInvestApi(), utils.TimeStampPbGenerator(dateFrom.AsTime().In(loc), int64(-limit), interval), dateTo, &limit, true)
+	candles, _ := s.marketDataServiceClient.GetCandles(context, &instrumentUID, interval.ToNumberInvestAPI(), utils.TimeStampPbGenerator(dateFrom.AsTime().In(loc), int64(-limit), interval), dateTo, &limit, true)
 	prices := make([]float64, 0, len(candles))
 
 	for i := 0; i < len(candles); i++ {
@@ -48,7 +49,7 @@ func (s *service) CalculateVolatility(context context.Context, instrumentUid str
 	// Расчет стандартного отклонения
 	variance := 0.0
 	for _, price := range prices {
-		variance += math.Pow(price-average, 2)
+		variance += (price - average) * (price - average)
 	}
 	v1, v2 := utils.SplitPrice(math.Sqrt(variance / float64(len(prices)-1)))
 	return &domain.VolatilityItemTechAnalyse{Value: domain.Quotation{

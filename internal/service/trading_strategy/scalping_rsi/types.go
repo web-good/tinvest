@@ -2,7 +2,6 @@ package scalping_rsi
 
 import (
 	"context"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"time"
 	"tinvest/internal/domain"
 	domainema "tinvest/internal/domain/ema"
@@ -10,6 +9,8 @@ import (
 	"tinvest/internal/service/trading_strategy/scalping_rsi/dto"
 	"tinvest/pkg/client/grpc"
 	"tinvest/pkg/client/telegram"
+
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type ScalpingRsi interface {
@@ -17,11 +18,11 @@ type ScalpingRsi interface {
 }
 
 type emaInstrument interface {
-	TechAnalyse(context context.Context, instrumentUid *string, interval int32, from time.Time, to time.Time, period int) ([]domainema.ItemTechAnalyse, error)
+	TechAnalyse(context context.Context, instrumentUID *string, interval int32, from time.Time, to time.Time, period int) ([]domainema.ItemTechAnalyse, error)
 }
 
 type rsiInstrument interface {
-	CalculateRSI(context context.Context, instrumentUid string, interval enum.Interval, dateFrom *timestamppb.Timestamp, DateTo *timestamppb.Timestamp, period int32) ([]*domain.RSIItemTechAnalyse, error)
+	CalculateRSI(context context.Context, instrumentUID string, interval enum.Interval, dateFrom *timestamppb.Timestamp, DateTo *timestamppb.Timestamp, period int32) ([]*domain.RSIItemTechAnalyse, error)
 }
 
 type service struct {

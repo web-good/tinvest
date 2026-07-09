@@ -41,7 +41,7 @@ func chunkDaysFor(i enum.Interval) int {
 // candleFetcher is the slice of the gRPC market-data client the provider needs.
 // The real grpc.MarketDataServiceClient satisfies it.
 type candleFetcher interface {
-	GetCandles(ctx context.Context, instrumentUid *string, interval int32,
+	GetCandles(ctx context.Context, instrumentUID *string, interval int32,
 		from *timestamp.Timestamp, to *timestamp.Timestamp, limit *int32, withHoliday bool,
 	) ([]*model.CandleItemTechAnalyse, error)
 }
@@ -110,7 +110,7 @@ func (p *CandleProvider) fetchRange(ctx context.Context, instrumentID string,
 ) ([]backtest.Candle, error) {
 	var all []backtest.Candle
 	id := instrumentID
-	num := interval.ToNumberInvestApi()
+	num := interval.ToNumberInvestAPI()
 	chunk := time.Duration(chunkDaysFor(interval)) * 24 * time.Hour
 	for winFrom := from; winFrom.Before(to); {
 		winTo := winFrom.Add(chunk)

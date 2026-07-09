@@ -3,7 +3,6 @@ package super_trend
 import (
 	"context"
 	"fmt"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"time"
 	notification2 "tinvest/internal/domain/notification"
 	"tinvest/internal/enum"
@@ -11,6 +10,8 @@ import (
 	"tinvest/internal/service/trading_strategy/super_trend/notification"
 	"tinvest/internal/service/trading_strategy/super_trend/specification"
 	"tinvest/pkg/logger"
+
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 var (
@@ -25,7 +26,7 @@ func (s *service) Trade(ctx context.Context) error {
 		greenMacDSp := specification.GreenMacD{}
 		dMacDModel, _ := s.marketDataServiceGrpcClient.GetTechAnalyseMacD(ctx, share.ID, 5, timestamppb.New(time.Now().AddDate(0, 0, -20)), timestamppb.New(time.Now()), 12)
 
-		if greenMacDSp.IsSatisfiedBy(dMacDModel) == false {
+		if !greenMacDSp.IsSatisfiedBy(dMacDModel) {
 			continue
 		}
 
@@ -48,7 +49,7 @@ func (s *service) Trade(ctx context.Context) error {
 
 		sp := specification.SuperTrendIntersection{}
 
-		if sp.IsSatisfiedBy(ema5, ema20) != true {
+		if !sp.IsSatisfiedBy(ema5, ema20) {
 			continue
 		}
 
@@ -67,7 +68,7 @@ func (s *service) Trade(ctx context.Context) error {
 
 		sp1h := specification.SuperTrendIntersection{}
 
-		if sp1h.IsSatisfiedBy(ema1h10, ema1h40) != true {
+		if !sp1h.IsSatisfiedBy(ema1h10, ema1h40) {
 			continue
 		}
 
@@ -80,7 +81,7 @@ func (s *service) Trade(ctx context.Context) error {
 
 		rsiS := specification.RsiSpecification{}
 
-		if rsiS.IsSatisfiedBy(rsiModel) != true {
+		if !rsiS.IsSatisfiedBy(rsiModel) {
 			continue
 		}
 

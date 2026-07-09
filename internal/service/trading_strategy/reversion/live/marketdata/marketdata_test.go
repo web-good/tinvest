@@ -6,39 +6,45 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/mock"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"tinvest/internal/domain/backtest"
 	imodel "tinvest/internal/model"
+	"tinvest/internal/service/trading_strategy/reversion/live/marketdata/mocks"
 )
 
-// fakeCandleClient returns a fixed hourly series and an empty 4H series.
-type fakeCandleClient struct {
-	hourly []*imodel.CandleItemTechAnalyse
+// newFakeCandleClient returns a mock that answers the hourly request (interval==4 per
+// enum.ToNumberInvestAPI mapping) with `hourly` and any other request with nil, nil —
+// equivalent to the old fakeCandleClient (used when no 4H fetch is expected).
+func newFakeCandleClient(t *testing.T, hourly []*imodel.CandleItemTechAnalyse) *mocks.MockCandleClient {
+	t.Helper()
+	m := mocks.NewMockCandleClient(t)
+	// The hourly fetch (interval==4) always runs in Assemble, so require it (no .Maybe()).
+	m.EXPECT().GetCandles(mock.Anything, mock.Anything, mock.MatchedBy(func(interval int32) bool {
+		return interval == 4
+	}), mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(hourly, nil)
+	// The 4H fetch (interval!=4) never runs when htfEMAPeriod==0; allow zero calls.
+	m.EXPECT().GetCandles(mock.Anything, mock.Anything, mock.MatchedBy(func(interval int32) bool {
+		return interval != 4
+	}), mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil, nil).Maybe()
+	return m
 }
 
-func (f *fakeCandleClient) GetCandles(_ context.Context, _ *string, interval int32,
-	_, _ *timestamppb.Timestamp, _ *int32, _ bool) ([]*imodel.CandleItemTechAnalyse, error) {
-	// Hour1 == 4 per enum.ToNumberInvestApi mapping; anything else is the 4H request.
-	if interval == 4 {
-		return f.hourly, nil
-	}
-	return nil, nil
-}
-
-// fakeHTFCandleClient returns a fixed hourly series and a fixed 4H series.
-type fakeHTFCandleClient struct {
-	hourly []*imodel.CandleItemTechAnalyse
-	htf    []*imodel.CandleItemTechAnalyse
-}
-
-func (f *fakeHTFCandleClient) GetCandles(_ context.Context, _ *string, interval int32,
-	_, _ *timestamppb.Timestamp, _ *int32, _ bool) ([]*imodel.CandleItemTechAnalyse, error) {
-	// Hour1 == 4; Hour4 == 11 per enum.ToNumberInvestApi mapping.
-	if interval == 4 {
-		return f.hourly, nil
-	}
-	return f.htf, nil
+// newFakeHTFCandleClient returns a mock that answers the hourly request (interval==4)
+// with `hourly` and the 4H request (interval==11) with `htf` — equivalent to the old
+// fakeHTFCandleClient.
+func newFakeHTFCandleClient(t *testing.T, hourly, htf []*imodel.CandleItemTechAnalyse) *mocks.MockCandleClient {
+	t.Helper()
+	m := mocks.NewMockCandleClient(t)
+	// With htfEMAPeriod>0 both fetches run unconditionally, so require both (no .Maybe()).
+	m.EXPECT().GetCandles(mock.Anything, mock.Anything, mock.MatchedBy(func(interval int32) bool {
+		return interval == 4
+	}), mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(hourly, nil)
+	m.EXPECT().GetCandles(mock.Anything, mock.Anything, mock.MatchedBy(func(interval int32) bool {
+		return interval != 4
+	}), mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(htf, nil)
+	return m
 }
 
 func apiCandle(ts time.Time, o, h, l, c float64, v int64, complete bool) *imodel.CandleItemTechAnalyse {
@@ -67,7 +73,7 @@ func TestAssemble_ParityWithBacktest(t *testing.T) {
 	api = append(api, apiCandle(ts, 999, 999, 999, 999, 9, false))
 
 	const lookback = 50
-	c := &fakeCandleClient{hourly: api}
+	c := newFakeCandleClient(t, api)
 	live, err := Assemble(context.Background(), c, "uid", lookback, 0, ts.Add(time.Hour))
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
@@ -82,10 +88,98 @@ func TestAssemble_ParityWithBacktest(t *testing.T) {
 	}
 }
 
+// TestAssemble_4HRequestWithinAPILimits is a regression guard for the InvalidArgument
+// 30014 seen live on NVTK. NVTK's HTFTrendEMA=150 → the 4H fetch requested bars=170,
+// which fetchCompleted turned into a ~258-day window and limit 1020. Tinkoff caps 4H
+// GetCandles at a 3-month window and limit 700, so the API rejected the request and the
+// worker never got its 4H data. Assert the 4H request stays within both caps.
+func TestAssemble_4HRequestWithinAPILimits(t *testing.T) {
+	const (
+		htfEMAPeriod = 150 // NVTK HTFTrendEMA
+		lookback     = 50
+	)
+	now := time.Date(2026, 7, 8, 12, 0, 0, 0, time.UTC)
+
+	var hourly []*imodel.CandleItemTechAnalyse
+	for i := 0; i < lookback; i++ {
+		ts := now.Add(-time.Duration(lookback-i) * time.Hour)
+		hourly = append(hourly, apiCandle(ts, 100, 101, 99, 100, 1000, true))
+	}
+	var htf []*imodel.CandleItemTechAnalyse
+	for i := 0; i < htfEMAPeriod+20; i++ {
+		ts := now.Add(-time.Duration((htfEMAPeriod+20-i)*4) * time.Hour)
+		htf = append(htf, apiCandle(ts, 50, 51, 49, 50, 1000, true))
+	}
+
+	var got4HFrom time.Time
+	var got4HLimit int32
+	m := mocks.NewMockCandleClient(t)
+	m.EXPECT().GetCandles(mock.Anything, mock.Anything, mock.MatchedBy(func(interval int32) bool {
+		return interval == 4
+	}), mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(hourly, nil)
+	m.EXPECT().GetCandles(mock.Anything, mock.Anything, mock.MatchedBy(func(interval int32) bool {
+		return interval == 11
+	}), mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Run(func(_ context.Context, _ *string, _ int32, from, _ *timestamppb.Timestamp, limit *int32, _ bool) {
+			got4HFrom = from.AsTime()
+			got4HLimit = *limit
+		}).Return(htf, nil)
+
+	if _, err := Assemble(context.Background(), m, "uid", lookback, htfEMAPeriod, now); err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+
+	if earliest := now.AddDate(0, -3, 0); got4HFrom.Before(earliest) {
+		t.Errorf("4H `from` %s exceeds the 3-month API window (earliest allowed %s)", got4HFrom, earliest)
+	}
+	if got4HLimit > 700 {
+		t.Errorf("4H limit %d exceeds the API cap of 700", got4HLimit)
+	}
+}
+
+// TestAssemble_4HWarmupExtendsPastPeriod pins the live/backtest EMA parity fix: the 4H
+// fetch must warm the HTF EMA with htfWarmupBars (280) bars, not just period+20. With
+// only period+20 bars the SMA seed dominates EMA150 and the HTF gate decision diverged
+// from the backtest on ~4% of NVTK bars. Supply more completed 4H candles than needed
+// and assert the snapshot keeps exactly htfWarmupBars of them.
+func TestAssemble_4HWarmupExtendsPastPeriod(t *testing.T) {
+	const (
+		htfEMAPeriod = 150 // NVTK HTFTrendEMA
+		lookback     = 10
+		htfSupplied  = 400 // more than the 280 warm-up target → trimmed to exactly 280
+	)
+	now := time.Date(2026, 7, 8, 12, 0, 0, 0, time.UTC)
+
+	var hourly []*imodel.CandleItemTechAnalyse
+	for i := 0; i < lookback; i++ {
+		ts := now.Add(-time.Duration(lookback-i) * time.Hour)
+		hourly = append(hourly, apiCandle(ts, 100, 101, 99, 100, 1000, true))
+	}
+	cur := now.Add(-time.Hour) // window[last].Time — the `cur` anchor Assemble uses
+
+	// All 4H bars end at or before `cur` (last bar's open = cur-4h), so none are dropped
+	// by the no-lookahead completeness filter — only fetchCompleted's trim applies.
+	var htf []*imodel.CandleItemTechAnalyse
+	for i := 0; i < htfSupplied; i++ {
+		ts := cur.Add(-time.Duration(htfSupplied-i) * 4 * time.Hour)
+		htf = append(htf, apiCandle(ts, 50, 51, 49, 50, 1000, true))
+	}
+
+	client := newFakeHTFCandleClient(t, hourly, htf)
+	live, err := Assemble(context.Background(), client, "uid", lookback, htfEMAPeriod, now)
+	if err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+
+	if got := len(live.HTFCloses); got != htfWarmupBars {
+		t.Errorf("HTFCloses length = %d, want htfWarmupBars = %d", got, htfWarmupBars)
+	}
+}
+
 func TestAssemble_ErrorsOnInsufficientCandles(t *testing.T) {
-	c := &fakeCandleClient{hourly: []*imodel.CandleItemTechAnalyse{
+	c := newFakeCandleClient(t, []*imodel.CandleItemTechAnalyse{
 		apiCandle(time.Now(), 1, 1, 1, 1, 1, true),
-	}}
+	})
 	if _, err := Assemble(context.Background(), c, "uid", 50, 0, time.Now()); err == nil {
 		t.Fatal("expected error when completed candles < lookback")
 	}
@@ -108,8 +202,8 @@ func TestAssemble_ParityWithBacktest_HTF(t *testing.T) {
 	//   window[last].Time  = base+9h  (the correct `cur` anchor)
 	//   now                = base+12h (3h after last completed hourly bar)
 	//
-	// 4H bars (all complete, 8 bars total; htfEMAPeriod=3 → fetchCompleted requests
-	// 3+20=23 bars, but we only supply 8 so nothing is trimmed):
+	// 4H bars (all complete, 3 bars total; htfEMAPeriod=3 → fetchCompleted requests
+	// max(3+20, htfWarmupBars)=280 bars, but we only supply 3 so nothing is trimmed):
 	//   bar0: T=base+0h   → T+4h=base+4h  ≤ base+9h → included at correct anchor ✓
 	//   bar1: T=base+4h   → T+4h=base+8h  ≤ base+9h → included at correct anchor ✓
 	//   bar2: T=base+8h   → T+4h=base+12h > base+9h → NOT completed at correct anchor
@@ -162,7 +256,7 @@ func TestAssemble_ParityWithBacktest_HTF(t *testing.T) {
 	}
 
 	const htfEMAPeriod = 3
-	client := &fakeHTFCandleClient{hourly: apiHourly, htf: apiHTF}
+	client := newFakeHTFCandleClient(t, apiHourly, apiHTF)
 	live, err := Assemble(context.Background(), client, "uid", lookback, htfEMAPeriod, now)
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)

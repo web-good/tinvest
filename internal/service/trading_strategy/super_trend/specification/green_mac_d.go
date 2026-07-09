@@ -7,7 +7,6 @@ import (
 const countGreenCandles int = 1
 
 type GreenMacD struct {
-	countGreenCandles int
 }
 
 func (s *GreenMacD) IsSatisfiedBy(itemTechAnalyse []*model.MacDItemTechAnalyse) bool {
@@ -33,9 +32,5 @@ func (s *GreenMacD) IsSatisfiedBy(itemTechAnalyse []*model.MacDItemTechAnalyse) 
 		j++
 	}
 
-	if countGreenIndicators == countGreenCandles {
-		return true
-	}
-
-	return false
+	return countGreenIndicators == countGreenCandles
 }

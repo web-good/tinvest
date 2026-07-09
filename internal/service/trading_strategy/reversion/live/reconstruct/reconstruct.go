@@ -47,7 +47,7 @@ func Entry(ctx context.Context, tc TradesClient, cc marketdata.CandleClient,
 	// Hourly candles from before entry (for ATR warm-up) through now (for maxFav).
 	from := entryTime.AddDate(0, 0, -(lookbackBars/4 + 10))
 	limit := int32(lookbackBars * 6)
-	raw, err := cc.GetCandles(ctx, &instrumentID, enum.Hour1.ToNumberInvestApi(),
+	raw, err := cc.GetCandles(ctx, &instrumentID, enum.Hour1.ToNumberInvestAPI(),
 		timestamppb.New(from), timestamppb.New(now), &limit, true)
 	if err != nil {
 		return statestore.Entry{}, fmt.Errorf("reconstruct: candles: %w", err)

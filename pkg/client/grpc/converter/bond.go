@@ -36,7 +36,7 @@ func ConvertCouponsFromPb(in []*investapi.Coupon) []*model.BondCoupon {
 
 func ConvertBondModelFromBondPb(bond *investapi.Bond) *model.Bond {
 	return &model.Bond{
-		Id:                    bond.Uid,
+		ID:                    bond.Uid,
 		Name:                  bond.Name,
 		CouponQuantityPerYear: bond.CouponQuantityPerYear,
 		AciValue:              utils.CombinePrice(bond.AciValue.Units, bond.AciValue.Nano),

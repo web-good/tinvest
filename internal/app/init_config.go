@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/heetch/confita"
-	"github.com/heetch/confita/backend/env"
-	"github.com/joho/godotenv"
 	"os"
 	"tinvest/internal/config"
 	"tinvest/pkg/logger"
+
+	"github.com/heetch/confita"
+	"github.com/heetch/confita/backend/env"
+	"github.com/joho/godotenv"
 )
 
 func (a *App) initConfig(ctx context.Context) error {
@@ -54,8 +55,8 @@ func (a *App) initConfig(ctx context.Context) error {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	prJson := os.Getenv("PROFILES")
-	errP := json.Unmarshal([]byte(prJson), &cfg.TelegramClient.Profiles)
+	prJSON := os.Getenv("PROFILES")
+	errP := json.Unmarshal([]byte(prJSON), &cfg.TelegramClient.Profiles)
 	if errP != nil {
 		return fmt.Errorf("failed to parse env personse: %w", errP)
 	}

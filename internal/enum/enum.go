@@ -52,7 +52,7 @@ func (i Interval) ToTimeDuration() time.Duration {
 	return interval
 }
 
-func (i Interval) ToNumberInvestApi() int32 {
+func (i Interval) ToNumberInvestAPI() int32 {
 	if i == Minutes15 {
 		return 3
 	}

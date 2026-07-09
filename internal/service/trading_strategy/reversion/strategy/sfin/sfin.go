@@ -17,6 +17,7 @@ const Ticker = "SFIN"
 //     entry bets on does not arrive (worst trade -21.6k, fold-4 OOS drawdown 42.7%).
 //   - No single filter rescues it (best is the catastrophic stop at OOS PF 0.957, i.e.
 //     ~breakeven before costs); the catstop+overbought+trail combo only reaches PF 0.942.
+//
 // SFIN is kept REGISTERED with this stripped baseline so the result is reproducible, but
 // it must stay out of any live universe until a profitable config is found (e.g. on a
 // slower timeframe). Walk-forward reports under reports/SFIN/.
