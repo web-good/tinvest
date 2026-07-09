@@ -1,21 +1,28 @@
 // Package core implements a long-only mean-reversion strategy on the daily timeframe,
 // driven by the agreement of two oscillators: RSI and the Stochastic %D line. It buys
 // when one oscillator is already inside its oversold zone and the other crosses into it.
-// It exits an open long on one of five signals: an overbought take-profit when both RSI
-// and Stochastic %D are simultaneously in their overbought zones (OB, gated by UseOverbought);
-// RSI crossing the 50 line downward (primary momentum fade);
+// It exits an open long on one of six signals, in precedence order
+// STOP(SL|TRAIL|ATRSL) → OB → RSI50 → BE → RSIOS → EMAX:
+// a combined protective stop (STOP) computed by DesiredStop from up to three components —
+// a catastrophic stop (SL, gated by CatStopATRMult>0), an ATR stop (ATRSL, gated by
+// UseATRStop=1) and an ATR trailing stop off the running max favorable price (TRAIL, gated
+// by UseTrail=1) — whichever level binds; modeled as an exchange stop order, it triggers
+// intrabar the instant the bar's LOW touches/pierces the level, pre-empting every
+// close-based exit including OB;
+// an overbought take-profit when both RSI and Stochastic %D are simultaneously in their
+// overbought zones (OB, gated by UseOverbought);
+// RSI crossing the 50 line downward (primary momentum fade, RSI50);
 // a breakeven floor that, once price has run BreakevenArmATR×EntryATR in favor (armed via the
 // monotonic Position.MaxFavorablePrice), exits at the first close back at/below entry (BE, gated
 // by UseBreakeven);
-// a middle exit selected by the
-// UseATRStop flag — either RSI breaking back down through the oversold zone (RSIOS, failed
-// bounce) or price falling below the ATR stop PurchasePrice − StopATRMult×EntryATR with
-// EntryATR frozen at entry (ATRSL); and a bearish EMA cross (FastEMA below SlowEMA) as a
-// regime-break backstop. There is no protective stop unless UseATRStop=1. An optional trend filter restricts buys to
-// a confirmed uptrend. An optional volume filter (UseVolume) additionally blocks a buy when the
-// entry bar's volume is below the average of the preceding VolAvgPeriod bars (weekend Sat/Sun
-// bars excluded), scaled by VolMult. The decision logic is pure and
-// ticker-agnostic; per-share packages supply ticker + Params. Run with `-interval Day1`.
+// RSI breaking back down through the oversold zone (RSIOS, failed bounce; consulted only
+// when UseATRStop=0, since the ATR stop already covers this exit via STOP);
+// and a bearish EMA cross (FastEMA below SlowEMA) as a regime-break backstop (EMAX).
+// There is no protective stop unless CatStopATRMult>0, UseATRStop=1 or UseTrail=1. An optional
+// trend filter restricts buys to a confirmed uptrend. An optional volume filter (UseVolume)
+// additionally blocks a buy when the entry bar's volume is below the average of the preceding
+// VolAvgPeriod bars (weekend Sat/Sun bars excluded), scaled by VolMult. The decision logic is
+// pure and ticker-agnostic; per-share packages supply ticker + Params. Run with `-interval Day1`.
 package core
 
 import (
@@ -112,6 +119,7 @@ func (s *Strategy) Lookback() int {
 // fresh cross — mirroring the rsiOK/stochOK discipline.
 type decideInput struct {
 	price       float64
+	low         float64 // текущий бар: intraday low (0 на прогреве/пустой серии)
 	emaFast     float64
 	emaFastPrev float64
 	emaSlow     float64
@@ -203,8 +211,14 @@ func (s *Strategy) buildInput(md strategy.MarketData) decideInput {
 		adxOK = true
 	}
 
+	var low float64
+	if n := len(md.Lows); n > 0 {
+		low = md.Lows[n-1]
+	}
+
 	return decideInput{
 		price:       md.Price,
+		low:         low,
 		emaFast:     emaFast,
 		emaFastPrev: emaFastPrev,
 		emaSlow:     emaSlow,
@@ -398,51 +412,82 @@ func (s *Strategy) entryReason(in decideInput) string {
 	)
 }
 
-// manage handles an open long. There is no protective price stop other than the optional
-// ATR stop below. It exits on one of five signals, evaluated in precedence order
-// OB → RSI50 → BE → middle(RSIOS xor ATRSL) → EMAX (all fills at close):
+// DesiredStop returns the single protective stop level for a reversion position
+// and the reason of the binding component ("SL" | "ATRSL" | "TRAIL"), or (0, "")
+// when no price stop is enabled/armed. maxFav is the monotonic max of closes the
+// stop may trail from (backtest passes PrevMaxFavorablePrice; live passes the
+// persisted MaxFav). entryATR<=0 disables every price stop outright (the
+// live-trading guard: EntryATR is not yet persisted there). Among the components
+// that are active, the numerically GREATEST level (the one closest to price, and
+// therefore the first one price would touch as it falls) binds.
+func DesiredStop(p Params, entryPrice, entryATR, maxFav float64) (float64, string) {
+	if entryATR <= 0 {
+		return 0, ""
+	}
+	level, reason := 0.0, ""
+	if p.CatStopATRMult > 0 {
+		level, reason = entryPrice-p.CatStopATRMult*entryATR, "SL"
+	}
+	if p.UseATRStop == 1 && p.StopATRMult > 0 {
+		if l := entryPrice - p.StopATRMult*entryATR; l > level {
+			level, reason = l, "ATRSL"
+		}
+	}
+	if p.UseTrail == 1 && p.TrailATRMult > 0 && maxFav > 0 {
+		if l := maxFav - p.TrailATRMult*entryATR; l > level {
+			level, reason = l, "TRAIL"
+		}
+	}
+	if level <= 0 {
+		return 0, ""
+	}
+	return level, reason
+}
+
+// manage handles an open long. It exits on one of six signals, evaluated in
+// precedence order STOP(SL|TRAIL|ATRSL) → OB → RSI50 → BE → RSIOS → EMAX:
+//   - STOP: the combined protective stop from DesiredStop (catastrophic SL, ATR
+//     stop ATRSL, and/or ATR trail TRAIL — whichever level binds). Modeled as an
+//     exchange stop order: it triggers intrabar on the bar's LOW touching/piercing
+//     the level (in.low > 0 && in.low <= level), not on the close, because a real
+//     stop order fills as soon as price trades through it during the bar. The
+//     trail component reads Position.PrevMaxFavorablePrice (the running max as of
+//     the PREVIOUS bar) rather than the current bar's MaxFavorablePrice: the
+//     exchange order working during bar i was placed after bar i-1 closed, so its
+//     level cannot know about a new high made intrabar on bar i itself. Highest
+//     precedence — a touched stop pre-empts every close-based exit, including OB.
 //   - OB: RSI and Stochastic %D simultaneously in their overbought zones — take-profit
-//     (gated by UseOverbought=1). Highest precedence.
+//     (gated by UseOverbought=1).
 //   - RSI50: RSI crosses the 50 midline downward — primary momentum fade.
 //   - BE: after price ran BreakevenArmATR×EntryATR in favor (armed via the monotonic
 //     Position.MaxFavorablePrice), price has fallen back to/below PurchasePrice — pure
 //     breakeven floor (gated by UseBreakeven=1, EntryATR>0, BreakevenArmATR>0). Fills at
 //     close, so the exit is at the first close back at/below entry (may be a small loss).
-//   - middle branch, selected by UseATRStop:
-//     UseATRStop==0 -> RSIOS: RSI breaks back down through the oversold zone from above
-//     (failed-bounce breakdown); fires when RSI was at/above RSIOversold last bar and
-//     is now below it.
-//     UseATRStop==1 -> ATRSL: price has fallen to/below PurchasePrice - StopATRMult*EntryATR,
-//     where EntryATR is the daily ATR frozen at entry. Guarded by EntryATR>0 and
-//     StopATRMult>0 so it stays inert in live trading (EntryATR not persisted) and on
-//     a misconfigured zero multiplier.
+//   - RSIOS: RSI breaks back down through the oversold zone from above (failed-bounce
+//     breakdown); fires when RSI was at/above RSIOversold last bar and is now below it.
+//     Only consulted when UseATRStop==0 (the ATR price stop, when enabled, already
+//     covers this exit via STOP above).
 //   - EMAX: FastEMA drops below SlowEMA (bearish EMA cross) — regime-break backstop.
 //
-// When multiple signals fire on the same bar the first in the list wins; the fill price
-// (close) is identical either way.
+// STOP fills at the engine-computed min(level, bar open); OB/RSI50/BE/RSIOS/EMAX all
+// fill at close. When multiple close-based signals fire on the same bar the first in
+// the list wins.
 func (s *Strategy) manage(in decideInput, sig model.Signal) model.Signal {
 	sig.RSI = in.rsiNow
 
+	stopLevel, stopReason := DesiredStop(s.p, in.pos.PurchasePrice, in.pos.EntryATR, in.pos.PrevMaxFavorablePrice)
+
 	switch {
+	case stopReason != "" && in.low > 0 && in.low <= stopLevel:
+		sig.Kind, sig.Reason = model.SignalSell, stopReason
+		sig.StopLoss = stopLevel
+		sig.ExitReason = fmt.Sprintf("%s: low %.4f ≤ стоп %.4f (вход %.4f, ATR %.4f, prevMaxFav %.4f)",
+			stopReason, in.low, stopLevel, in.pos.PurchasePrice, in.pos.EntryATR, in.pos.PrevMaxFavorablePrice)
 	case s.p.UseOverbought == 1 && in.rsiOK && in.stochOK &&
 		in.rsiNow >= s.p.RSIOverbought && in.stochNow >= s.p.StochOverbought:
 		sig.Kind, sig.Reason = model.SignalSell, "OB"
 		sig.ExitReason = fmt.Sprintf("OB: RSI %.2f ≥ %.0f и Stoch %.2f ≥ %.0f — обе зоны перекупленности",
 			in.rsiNow, s.p.RSIOverbought, in.stochNow, s.p.StochOverbought)
-	case s.p.CatStopATRMult > 0 && in.pos.EntryATR > 0 &&
-		in.price <= in.pos.PurchasePrice-s.p.CatStopATRMult*in.pos.EntryATR:
-		stop := in.pos.PurchasePrice - s.p.CatStopATRMult*in.pos.EntryATR
-		sig.Kind, sig.Reason = model.SignalSell, "SL"
-		sig.StopLoss = stop
-		sig.ExitReason = fmt.Sprintf("SL: цена %.4f ≤ катастрофический стоп %.4f (вход %.4f − %.2g×ATR %.4f)",
-			in.price, stop, in.pos.PurchasePrice, s.p.CatStopATRMult, in.pos.EntryATR)
-	case s.p.UseTrail == 1 && in.pos.EntryATR > 0 && s.p.TrailATRMult > 0 &&
-		in.price <= in.pos.MaxFavorablePrice-s.p.TrailATRMult*in.pos.EntryATR:
-		trail := in.pos.MaxFavorablePrice - s.p.TrailATRMult*in.pos.EntryATR
-		sig.Kind, sig.Reason = model.SignalSell, "TRAIL"
-		sig.StopLoss = trail
-		sig.ExitReason = fmt.Sprintf("TRAIL: цена %.4f ≤ трейлинг %.4f (макс %.4f − %.2g×ATR %.4f)",
-			in.price, trail, in.pos.MaxFavorablePrice, s.p.TrailATRMult, in.pos.EntryATR)
 	case s.p.UseRSI50 == 1 && in.rsiOK && crossDown(in.rsiPrev, in.rsiNow, rsiExitLevel):
 		sig.Kind, sig.Reason = model.SignalSell, "RSI50"
 		sig.ExitReason = fmt.Sprintf("RSI50: RSI %.2f→%.2f пересёк 50 сверху вниз", in.rsiPrev, in.rsiNow)
@@ -456,12 +501,6 @@ func (s *Strategy) manage(in decideInput, sig model.Signal) model.Signal {
 		sig.Kind, sig.Reason = model.SignalSell, "RSIOS"
 		sig.ExitReason = fmt.Sprintf("RSIOS: RSI %.2f→%.2f пробил зону перепроданности %.0f сверху вниз",
 			in.rsiPrev, in.rsiNow, s.p.RSIOversold)
-	case s.p.UseATRStop == 1 && in.pos.EntryATR > 0 && s.p.StopATRMult > 0 &&
-		in.price <= in.pos.PurchasePrice-s.p.StopATRMult*in.pos.EntryATR:
-		stop := in.pos.PurchasePrice - s.p.StopATRMult*in.pos.EntryATR
-		sig.Kind, sig.Reason = model.SignalSell, "ATRSL"
-		sig.ExitReason = fmt.Sprintf("ATRSL: цена %.4f ≤ вход %.4f − %.2g×ATR %.4f (порог %.4f)",
-			in.price, in.pos.PurchasePrice, s.p.StopATRMult, in.pos.EntryATR, stop)
 	case in.emaOK && crossDown(in.emaFastPrev-in.emaSlowPrev, in.emaFast-in.emaSlow, 0):
 		sig.Kind, sig.Reason = model.SignalSell, "EMAX"
 		sig.ExitReason = fmt.Sprintf("EMAX: FastEMA%d %.4f ушла под SlowEMA%d %.4f (медвежий кросс)",

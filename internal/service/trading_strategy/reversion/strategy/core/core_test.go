@@ -81,7 +81,8 @@ func passingInput() decideInput {
 }
 
 // openInput is an open position holding, with neutral signals (no exit): RSI above 50
-// and rising, fast EMA above slow on both bars.
+// and rising, fast EMA above slow on both bars. low defaults to price so a test that
+// forgets to override it can't accidentally pierce some stop level below price.
 func openInput() decideInput {
 	in := passingInput()
 	in.pos = &strategy.Position{PurchasePrice: 100}
@@ -90,6 +91,7 @@ func openInput() decideInput {
 	in.emaFast, in.emaFastPrev = 95, 95
 	in.emaSlow, in.emaSlowPrev = 90, 90
 	in.emaOK = true
+	in.low = in.price
 	return in
 }
 
@@ -400,10 +402,10 @@ func TestExitATRStopFires(t *testing.T) {
 	s := NewWithParams("T", atrStopParams())
 	in := openInput() // neutral RSI/EMA: no RSI50, no EMAX
 	in.pos = &strategy.Position{PurchasePrice: 100, EntryATR: 5}
-	in.price = 94 // <= 100 - 1.0*5 = 95
+	in.price, in.low = 94, 94 // low <= 100 - 1.0*5 = 95: intrabar touch
 	sig := s.decide(in)
 	if sig.Kind != model.SignalSell || sig.Reason != "ATRSL" {
-		t.Fatalf("price below entry-ATR: want ATRSL sell, got kind=%v reason=%q", sig.Kind, sig.Reason)
+		t.Fatalf("low below entry-ATR: want ATRSL sell, got kind=%v reason=%q", sig.Kind, sig.Reason)
 	}
 }
 
@@ -411,19 +413,19 @@ func TestNoATRStopAboveThreshold(t *testing.T) {
 	s := NewWithParams("T", atrStopParams())
 	in := openInput()
 	in.pos = &strategy.Position{PurchasePrice: 100, EntryATR: 5}
-	in.price = 96 // > 95 threshold
+	in.price, in.low = 96, 96 // low > 95 threshold: no touch
 	if sig := s.decide(in); sig.Kind == model.SignalSell {
-		t.Fatalf("price above threshold: should hold, got sell %q", sig.Reason)
+		t.Fatalf("low above threshold: should hold, got sell %q", sig.Reason)
 	}
 }
 
 func TestATRStopSkippedWhenEntryATRZero(t *testing.T) {
 	// Live-trading guard: EntryATR is not persisted (0), so the stop must never fire,
-	// even though price (1) is far below PurchasePrice (100).
+	// even though low (1) is far below PurchasePrice (100).
 	s := NewWithParams("T", atrStopParams())
 	in := openInput()
 	in.pos = &strategy.Position{PurchasePrice: 100, EntryATR: 0}
-	in.price = 1
+	in.price, in.low = 1, 1
 	if sig := s.decide(in); sig.Kind == model.SignalSell && sig.Reason == "ATRSL" {
 		t.Fatalf("EntryATR=0 must skip ATRSL (live-trading guard)")
 	}
@@ -443,14 +445,21 @@ func TestRSIOSInertWhenATRStopOn(t *testing.T) {
 	}
 }
 
-func TestExitPrecedenceRSI50OverATR(t *testing.T) {
+// TestExitPrecedenceSTOPOverRSI50 supersedes the pre-intrabar TestExitPrecedenceRSI50OverATR:
+// under the OLD close-based precedence (OB → SL → TRAIL → RSI50 → BE → middle(RSIOS xor
+// ATRSL) → EMAX) the plain ATR stop sat in the low-precedence "middle" bucket, below RSI50,
+// so RSI50 used to win this matchup. The new precedence folds ATRSL into the single STOP
+// bucket that now outranks EVERYTHING, including RSI50 — so the winner flips to ATRSL. This
+// is the documented, intentional consequence of the new order (see the package doc-comment
+// and manage()'s doc-comment), not an accidental behavior change.
+func TestExitPrecedenceSTOPOverRSI50(t *testing.T) {
 	s := NewWithParams("T", atrStopParams())
 	in := openInput()
 	in.pos = &strategy.Position{PurchasePrice: 100, EntryATR: 5}
-	in.price = 94                  // ATRSL would fire
-	in.rsiPrev, in.rsiNow = 55, 45 // RSI50 also fires
-	if sig := s.decide(in); sig.Reason != "RSI50" {
-		t.Fatalf("RSI50 must win over ATRSL, got %q", sig.Reason)
+	in.price, in.low = 94, 94      // ATRSL touches (low <= 95)
+	in.rsiPrev, in.rsiNow = 55, 45 // RSI50 would also fire on close
+	if sig := s.decide(in); sig.Reason != "ATRSL" {
+		t.Fatalf("STOP must win over RSI50 under the new precedence, got %q", sig.Reason)
 	}
 }
 
@@ -458,7 +467,7 @@ func TestExitPrecedenceATROverEMA(t *testing.T) {
 	s := NewWithParams("T", atrStopParams())
 	in := openInput()
 	in.pos = &strategy.Position{PurchasePrice: 100, EntryATR: 5}
-	in.price = 94                  // ATRSL fires
+	in.price, in.low = 94, 94      // ATRSL fires (low touches)
 	in.rsiPrev, in.rsiNow = 60, 58 // no RSI50
 	in.emaFastPrev, in.emaSlowPrev = 95, 90
 	in.emaFast, in.emaSlow = 88, 90 // EMAX also fires
@@ -475,7 +484,7 @@ func TestATRStopSkippedWhenMultZero(t *testing.T) {
 	s := NewWithParams("T", p)
 	in := openInput()
 	in.pos = &strategy.Position{PurchasePrice: 100, EntryATR: 5}
-	in.price = 99 // below PurchasePrice but ATRSL must not fire
+	in.price, in.low = 99, 99 // below PurchasePrice but ATRSL must not fire
 	if sig := s.decide(in); sig.Kind == model.SignalSell && sig.Reason == "ATRSL" {
 		t.Fatalf("StopATRMult=0 must skip ATRSL (zero-multiplier guard)")
 	}
@@ -950,9 +959,14 @@ func TestBreakevenInertWhenArmZero(t *testing.T) {
 	}
 }
 
-func TestExitPrecedenceBreakevenOverMiddle(t *testing.T) {
-	// Armed, ATR stop also on. Price is below the ATR threshold (ATRSL would fire) AND
-	// below entry (BE fires). BE has higher precedence -> reason BE.
+// TestExitPrecedenceSTOPOverBreakeven supersedes the pre-intrabar
+// TestExitPrecedenceBreakevenOverMiddle: under the OLD close-based precedence the plain ATR
+// stop sat in the low-precedence "middle" bucket, below BE, so BE used to win. The new
+// precedence folds ATRSL into the single STOP bucket that now outranks everything, including
+// BE — so the winner flips to ATRSL. Documented, intentional consequence of the new order.
+func TestExitPrecedenceSTOPOverBreakeven(t *testing.T) {
+	// Armed, ATR stop also on. Low touches the ATR threshold (ATRSL fires) AND close is
+	// below entry (BE would also fire). STOP now has the highest precedence -> reason ATRSL.
 	p := breakevenParams()
 	p.UseATRStop = 1
 	p.ATRPeriod = 14
@@ -960,9 +974,9 @@ func TestExitPrecedenceBreakevenOverMiddle(t *testing.T) {
 	s := NewWithParams("T", p)
 	in := openInput()
 	in.pos = &strategy.Position{PurchasePrice: 100, EntryATR: 5, MaxFavorablePrice: 106} // armed
-	in.price = 94                                                                        // <= 95 ATR threshold AND <= 100 entry
-	if sig := s.decide(in); sig.Reason != "BE" {
-		t.Fatalf("BE must win over ATRSL, got %q", sig.Reason)
+	in.price, in.low = 94, 94                                                            // <= 95 ATR threshold AND <= 100 entry
+	if sig := s.decide(in); sig.Reason != "ATRSL" {
+		t.Fatalf("STOP must win over BE under the new precedence, got %q", sig.Reason)
 	}
 }
 
@@ -1053,7 +1067,7 @@ func TestManageCatStopExit(t *testing.T) {
 	in := openInput() // in.pos != nil, neutral signals -> no other exit fires
 	in.pos.PurchasePrice = 100
 	in.pos.EntryATR = 3.0
-	in.price = 100 - 2.0*3.0 - 0.01 // 93.99 < stop 94
+	in.price, in.low = 100-2.0*3.0-0.01, 100-2.0*3.0-0.01 // 93.99 < stop 94: low touches
 	sig := s.decide(in)
 	if sig.Kind != model.SignalSell || sig.Reason != "SL" {
 		t.Fatalf("got Kind=%v Reason=%q, want Sell/SL", sig.Kind, sig.Reason)
@@ -1071,8 +1085,9 @@ func TestManageTrailExit(t *testing.T) {
 	in := openInput() // CatStopATRMult is 0 here, so CatSL does not fire
 	in.pos.PurchasePrice = 100
 	in.pos.EntryATR = 4.0
-	in.pos.MaxFavorablePrice = 120  // ran up to 120
-	in.price = 120 - 1.5*4.0 - 0.01 // 113.99 < trail 114 -> exit
+	in.pos.MaxFavorablePrice = 120                        // ran up to 120
+	in.pos.PrevMaxFavorablePrice = 120                    // already there as of the previous bar too
+	in.price, in.low = 120-1.5*4.0-0.01, 120-1.5*4.0-0.01 // 113.99 < trail 114: low touches
 	sig := s.decide(in)
 	if sig.Kind != model.SignalSell || sig.Reason != "TRAIL" {
 		t.Fatalf("got Kind=%v Reason=%q, want Sell/TRAIL", sig.Kind, sig.Reason)
@@ -1091,5 +1106,87 @@ func TestRSI50ExitToggledOff(t *testing.T) {
 	sig := s.decide(in)
 	if sig.Kind == model.SignalSell && sig.Reason == "RSI50" {
 		t.Fatalf("RSI50 exit fired while UseRSI50==0")
+	}
+}
+
+// Интрабарный прокол: low ниже уровня, close выше — раньше держали, теперь продаём.
+func TestIntrabarStopFiresOnLowTouch(t *testing.T) {
+	p := defaultParams()
+	p.UseTrail, p.TrailATRMult, p.ATRPeriod = 1, 1.5, 14
+	s := NewWithParams("T", p)
+	in := openInput()
+	in.pos = &strategy.Position{PurchasePrice: 100, EntryATR: 2,
+		MaxFavorablePrice: 110, PrevMaxFavorablePrice: 110} // trail = 110-3 = 107
+	in.price, in.low = 108, 106.5 // close выше уровня, low проколол
+	sig := s.decide(in)
+	if sig.Kind != model.SignalSell || sig.Reason != "TRAIL" {
+		t.Fatalf("want TRAIL sell on low touch, got kind=%v reason=%q", sig.Kind, sig.Reason)
+	}
+	if sig.StopLoss != 107 {
+		t.Fatalf("StopLoss = %v, want 107 (trail level)", sig.StopLoss)
+	}
+}
+
+// Трейлинг считается от PrevMaxFav: спайк-бар с новым максимумом закрытия не должен
+// выбивать по завышенному уровню, которого на «бирже» ещё не было.
+func TestIntrabarTrailUsesPrevMaxFav(t *testing.T) {
+	p := defaultParams()
+	p.UseTrail, p.TrailATRMult, p.ATRPeriod = 1, 1.5, 14
+	s := NewWithParams("T", p)
+	in := openInput()
+	in.pos = &strategy.Position{PurchasePrice: 100, EntryATR: 2,
+		MaxFavorablePrice: 120, PrevMaxFavorablePrice: 110} // рабочий уровень 107, не 117
+	in.price, in.low = 119, 116 // low 116 > 107 -> держим (по MaxFav 120 выбило бы)
+	if sig := s.decide(in); sig.Kind == model.SignalSell {
+		t.Fatalf("prev-max trail must hold, got sell %q", sig.Reason)
+	}
+}
+
+// Из двух активных стопов побеждает больший уровень и его причина.
+func TestDesiredStopPicksBindingComponent(t *testing.T) {
+	p := defaultParams()
+	p.UseATRStop, p.StopATRMult, p.ATRPeriod = 1, 1.2, 14 // 100-2.4 = 97.6
+	p.UseTrail, p.TrailATRMult = 1, 1.5                   // 110-3 = 107
+	level, reason := DesiredStop(p, 100, 2, 110)
+	if level != 107 || reason != "TRAIL" {
+		t.Fatalf("DesiredStop = %v/%q, want 107/TRAIL", level, reason)
+	}
+	level, reason = DesiredStop(p, 100, 2, 0) // maxFav неизвестен -> трейл не участвует
+	if level != 97.6 || reason != "ATRSL" {
+		t.Fatalf("DesiredStop = %v/%q, want 97.6/ATRSL", level, reason)
+	}
+	if level, reason = DesiredStop(p, 100, 0, 110); reason != "" || level != 0 {
+		t.Fatalf("EntryATR=0 must disable price stops, got %v/%q", level, reason)
+	}
+}
+
+// Стоп теперь старше OB: прокол и перекупленность в одном баре -> STOP.
+func TestStopBeatsOverboughtSameBar(t *testing.T) {
+	p := defaultParams()
+	p.UseOverbought, p.RSIOverbought, p.StochOverbought = 1, 70, 80
+	p.CatStopATRMult, p.ATRPeriod = 2, 14 // SL = 100-4 = 96
+	s := NewWithParams("T", p)
+	in := openInput()
+	in.pos = &strategy.Position{PurchasePrice: 100, EntryATR: 2,
+		MaxFavorablePrice: 100, PrevMaxFavorablePrice: 100}
+	in.rsiPrev, in.rsiNow = 72, 75
+	in.stochPrev, in.stochNow = 82, 85
+	in.price, in.low = 101, 95.5
+	if sig := s.decide(in); sig.Reason != "SL" {
+		t.Fatalf("stop must outrank OB, got %q", sig.Reason)
+	}
+}
+
+// Прогрев: low-сентинел 0 не триггерит стоп.
+func TestIntrabarStopSkippedWithoutLow(t *testing.T) {
+	p := defaultParams()
+	p.CatStopATRMult, p.ATRPeriod = 2, 14
+	s := NewWithParams("T", p)
+	in := openInput()
+	in.pos = &strategy.Position{PurchasePrice: 100, EntryATR: 2,
+		MaxFavorablePrice: 100, PrevMaxFavorablePrice: 100}
+	in.price, in.low = 101, 0
+	if sig := s.decide(in); sig.Kind == model.SignalSell {
+		t.Fatalf("low=0 sentinel must not fire the stop, got %q", sig.Reason)
 	}
 }
