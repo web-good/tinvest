@@ -22,10 +22,16 @@ jobs:
         with:
           go-version: '1.25'
           cache: true
+      - name: Download modules
+        run: go mod download || go mod download
       - name: Install tools
         run: go run github.com/magefile/mage tools
-      - name: Lint + Test + Mock drift
-        run: go run github.com/magefile/mage ci
+      - name: Lint
+        run: go run github.com/magefile/mage lint
+      - name: Mock drift
+        run: go run github.com/magefile/mage mocksCheck
+      - name: Test
+        run: go run github.com/magefile/mage test
 
   image-build-and-push:
     runs-on: ubuntu-latest

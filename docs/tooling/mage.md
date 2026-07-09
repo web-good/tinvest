@@ -30,7 +30,7 @@ mock-ов. Это Go-код, исполняемый через [magefile/mage](h
 | `mage test` | `go test -race ./...` — весь набор тестов с race-детектором. |
 | `mage mocks` | Перегенерирует все mock-и по `.mockery.yaml`. |
 | `mage mocksCheck` | Генерит mock-и и падает, если рабочее дерево изменилось (страж дрейфа). |
-| `mage ci` | Полный набор: `lint` → `test` → `mocksCheck`. То, что гоняет CI. |
+| `mage ci` | Полный набор: `lint` → `mocksCheck` → `test` — локальный аналог CI-гейта (сам CI гоняет те же таргеты отдельными шагами). Дрифт моков проверяется до медленных тестов: устаревшие моки валят прогон быстро. |
 
 Список всегда можно получить локально: `./bin/mage -l`.
 
@@ -149,12 +149,20 @@ diff непустой, команда падает, CI краснеет.
 ```yaml
 - uses: actions/setup-go@v5
   with: { go-version: '1.25', cache: true }
+- run: go mod download || go mod download   # сеть → отдельный шаг, с одним ретраем
 - run: go run github.com/magefile/mage tools
-- run: go run github.com/magefile/mage ci
+- run: go run github.com/magefile/mage lint
+- run: go run github.com/magefile/mage mocksCheck
+- run: go run github.com/magefile/mage test
 ```
 
+Проверки вызываются по отдельности (а не агрегатором `ci`), чтобы в интерфейсе GitHub было сразу
+видно, какой этап упал, и чтобы сетевые сбои прокси ловились на шаге `Download modules`, а не
+маскировались под ошибки typecheck в линте. Набор и порядок — ровно те же, что в `mage ci`;
+локально по-прежнему удобнее один `./bin/mage ci`.
+
 `image-build-and-push` завязан на `needs: checks` и условие push-в-`main`, `deploy-image` наследует
-гейт транзитивно. То есть сборка и деплой не стартуют, пока `mage ci` не зелёный.
+гейт транзитивно. То есть сборка и деплой не стартуют, пока job `checks` не зелёный.
 
 ---
 

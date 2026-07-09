@@ -59,13 +59,15 @@ func MocksCheck() error {
 	return sh.RunV("git", "diff", "--exit-code", "--", "**/mocks/**")
 }
 
-// CI runs the full check suite: lint, test, and mock-drift.
+// CI runs the full check suite: lint, mock-drift, then tests. Mock-drift goes
+// before the (much slower) tests so stale mocks fail fast, and the tests then
+// run against freshly regenerated mocks.
 func CI() error {
 	if err := Lint(); err != nil {
 		return err
 	}
-	if err := Test(); err != nil {
+	if err := MocksCheck(); err != nil {
 		return err
 	}
-	return MocksCheck()
+	return Test()
 }
