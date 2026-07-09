@@ -331,6 +331,29 @@ func TestEngineFillsATRSLAtStopLevel(t *testing.T) {
 	}
 }
 
+func TestEngineStopReasonWithZeroStopFallsBackToClose(t *testing.T) {
+	// Вход по 100, затем sell ATRSL со StopLoss 0 (не задан) на баре с open 97 и
+	// close 90: гвард должен оставить исполнение по close 90, а не min(0, 97) = 0.
+	candles := flatCandles([]float64{10, 100, 90})
+	candles[2].Open = 97
+	s := scriptedStrategy{lookback: 1, decide: func(md strategy.MarketData) model.Signal {
+		if md.Position == nil && md.Price == 100 {
+			return model.Signal{Kind: model.SignalBuy}
+		}
+		if md.Position != nil && md.Price == 90 {
+			return model.Signal{Kind: model.SignalSell, Reason: "ATRSL", StopLoss: 0}
+		}
+		return model.Signal{}
+	}}
+	res := Run(s, candles, nil, nil, Config{InitialCash: 1000, Fraction: 1, Commission: 0, Lot: 1})
+	if len(res.Trades) != 1 {
+		t.Fatalf("trades = %d, want 1", len(res.Trades))
+	}
+	if got := res.Trades[0].ExitPrice; got != 90 {
+		t.Fatalf("zero-stop ATRSL exit price = %v, want 90 (close fill, not min(0, open))", got)
+	}
+}
+
 func TestEngineStampsEntryContextOnTrade(t *testing.T) {
 	candles := flatCandles([]float64{10, 100, 110})
 	s := scriptedStrategy{lookback: 1, decide: func(md strategy.MarketData) model.Signal {
