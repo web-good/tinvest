@@ -28,3 +28,15 @@ func TestExitAndSkipAndAlert(t *testing.T) {
 		t.Fatal("Alert must be visibly flagged")
 	}
 }
+
+func TestStopSet(t *testing.T) {
+	msg := StopSet("UGLD", 107.5, "TRAIL", true)
+	for _, want := range []string{"UGLD", "107.5", "TRAIL", "БУМАЖНАЯ"} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("StopSet msg %q missing %q", msg, want)
+		}
+	}
+	if strings.Contains(StopSet("UGLD", 107.5, "TRAIL", false), "БУМАЖНАЯ") {
+		t.Fatal("non-paper StopSet must not be flagged as БУМАЖНАЯ")
+	}
+}

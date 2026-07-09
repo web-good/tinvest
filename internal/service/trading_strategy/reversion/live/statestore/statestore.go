@@ -20,6 +20,10 @@ type Entry struct {
 	EntryATR   float64   `json:"entryATR"`
 	MaxFav     float64   `json:"maxFav"`
 	Quantity   int64     `json:"quantity"`
+
+	StopOrderID string  `json:"stopOrderId,omitempty"` // активная биржевая стоп-заявка ("" = нет)
+	StopPrice   float64 `json:"stopPrice,omitempty"`   // уровень выставленной заявки
+	StopReason  string  `json:"stopReason,omitempty"`  // компонент уровня: SL | ATRSL | TRAIL
 }
 
 // Store loads and saves the full per-ticker entry-state map.

@@ -32,3 +32,8 @@ func Skip(ticker, reason string) string {
 func Alert(ticker, message string) string {
 	return fmt.Sprintf("⚠️ <b>Reversion %s</b>\n  %s", ticker, message)
 }
+
+// StopSet reports a protective stop order (re)placed at price for reason.
+func StopSet(ticker string, price float64, reason string, paper bool) string {
+	return fmt.Sprintf("🛡 %s: стоп-заявка %s на %.4f%s", ticker, reason, price, paperTag(paper))
+}

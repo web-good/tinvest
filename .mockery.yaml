@@ -27,6 +27,9 @@ packages:
   tinvest/internal/service/trading_strategy/reversion/live/reconstruct:
     interfaces:
       TradesClient:
+  tinvest/internal/service/trading_strategy/reversion/live/stoporders:
+    interfaces:
+      Client:
   tinvest/internal/service/trading_strategy/scalping/strategy:
     interfaces:
       Strategy:
