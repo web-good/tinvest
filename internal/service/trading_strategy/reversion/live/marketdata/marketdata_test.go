@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/mock"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"tinvest/internal/domain/backtest"
 	imodel "tinvest/internal/model"
@@ -87,6 +88,94 @@ func TestAssemble_ParityWithBacktest(t *testing.T) {
 	}
 }
 
+// TestAssemble_4HRequestWithinAPILimits is a regression guard for the InvalidArgument
+// 30014 seen live on NVTK. NVTK's HTFTrendEMA=150 → the 4H fetch requested bars=170,
+// which fetchCompleted turned into a ~258-day window and limit 1020. Tinkoff caps 4H
+// GetCandles at a 3-month window and limit 700, so the API rejected the request and the
+// worker never got its 4H data. Assert the 4H request stays within both caps.
+func TestAssemble_4HRequestWithinAPILimits(t *testing.T) {
+	const (
+		htfEMAPeriod = 150 // NVTK HTFTrendEMA
+		lookback     = 50
+	)
+	now := time.Date(2026, 7, 8, 12, 0, 0, 0, time.UTC)
+
+	var hourly []*imodel.CandleItemTechAnalyse
+	for i := 0; i < lookback; i++ {
+		ts := now.Add(-time.Duration(lookback-i) * time.Hour)
+		hourly = append(hourly, apiCandle(ts, 100, 101, 99, 100, 1000, true))
+	}
+	var htf []*imodel.CandleItemTechAnalyse
+	for i := 0; i < htfEMAPeriod+20; i++ {
+		ts := now.Add(-time.Duration((htfEMAPeriod+20-i)*4) * time.Hour)
+		htf = append(htf, apiCandle(ts, 50, 51, 49, 50, 1000, true))
+	}
+
+	var got4HFrom time.Time
+	var got4HLimit int32
+	m := mocks.NewMockCandleClient(t)
+	m.EXPECT().GetCandles(mock.Anything, mock.Anything, mock.MatchedBy(func(interval int32) bool {
+		return interval == 4
+	}), mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(hourly, nil)
+	m.EXPECT().GetCandles(mock.Anything, mock.Anything, mock.MatchedBy(func(interval int32) bool {
+		return interval == 11
+	}), mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Run(func(_ context.Context, _ *string, _ int32, from, _ *timestamppb.Timestamp, limit *int32, _ bool) {
+			got4HFrom = from.AsTime()
+			got4HLimit = *limit
+		}).Return(htf, nil)
+
+	if _, err := Assemble(context.Background(), m, "uid", lookback, htfEMAPeriod, now); err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+
+	if earliest := now.AddDate(0, -3, 0); got4HFrom.Before(earliest) {
+		t.Errorf("4H `from` %s exceeds the 3-month API window (earliest allowed %s)", got4HFrom, earliest)
+	}
+	if got4HLimit > 700 {
+		t.Errorf("4H limit %d exceeds the API cap of 700", got4HLimit)
+	}
+}
+
+// TestAssemble_4HWarmupExtendsPastPeriod pins the live/backtest EMA parity fix: the 4H
+// fetch must warm the HTF EMA with htfWarmupBars (280) bars, not just period+20. With
+// only period+20 bars the SMA seed dominates EMA150 and the HTF gate decision diverged
+// from the backtest on ~4% of NVTK bars. Supply more completed 4H candles than needed
+// and assert the snapshot keeps exactly htfWarmupBars of them.
+func TestAssemble_4HWarmupExtendsPastPeriod(t *testing.T) {
+	const (
+		htfEMAPeriod = 150 // NVTK HTFTrendEMA
+		lookback     = 10
+		htfSupplied  = 400 // more than the 280 warm-up target → trimmed to exactly 280
+	)
+	now := time.Date(2026, 7, 8, 12, 0, 0, 0, time.UTC)
+
+	var hourly []*imodel.CandleItemTechAnalyse
+	for i := 0; i < lookback; i++ {
+		ts := now.Add(-time.Duration(lookback-i) * time.Hour)
+		hourly = append(hourly, apiCandle(ts, 100, 101, 99, 100, 1000, true))
+	}
+	cur := now.Add(-time.Hour) // window[last].Time — the `cur` anchor Assemble uses
+
+	// All 4H bars end at or before `cur` (last bar's open = cur-4h), so none are dropped
+	// by the no-lookahead completeness filter — only fetchCompleted's trim applies.
+	var htf []*imodel.CandleItemTechAnalyse
+	for i := 0; i < htfSupplied; i++ {
+		ts := cur.Add(-time.Duration(htfSupplied-i) * 4 * time.Hour)
+		htf = append(htf, apiCandle(ts, 50, 51, 49, 50, 1000, true))
+	}
+
+	client := newFakeHTFCandleClient(t, hourly, htf)
+	live, err := Assemble(context.Background(), client, "uid", lookback, htfEMAPeriod, now)
+	if err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+
+	if got := len(live.HTFCloses); got != htfWarmupBars {
+		t.Errorf("HTFCloses length = %d, want htfWarmupBars = %d", got, htfWarmupBars)
+	}
+}
+
 func TestAssemble_ErrorsOnInsufficientCandles(t *testing.T) {
 	c := newFakeCandleClient(t, []*imodel.CandleItemTechAnalyse{
 		apiCandle(time.Now(), 1, 1, 1, 1, 1, true),
@@ -113,8 +202,8 @@ func TestAssemble_ParityWithBacktest_HTF(t *testing.T) {
 	//   window[last].Time  = base+9h  (the correct `cur` anchor)
 	//   now                = base+12h (3h after last completed hourly bar)
 	//
-	// 4H bars (all complete, 8 bars total; htfEMAPeriod=3 → fetchCompleted requests
-	// 3+20=23 bars, but we only supply 8 so nothing is trimmed):
+	// 4H bars (all complete, 3 bars total; htfEMAPeriod=3 → fetchCompleted requests
+	// max(3+20, htfWarmupBars)=280 bars, but we only supply 3 so nothing is trimmed):
 	//   bar0: T=base+0h   → T+4h=base+4h  ≤ base+9h → included at correct anchor ✓
 	//   bar1: T=base+4h   → T+4h=base+8h  ≤ base+9h → included at correct anchor ✓
 	//   bar2: T=base+8h   → T+4h=base+12h > base+9h → NOT completed at correct anchor
