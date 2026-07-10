@@ -86,18 +86,16 @@ func (s *service) managePass(ctx context.Context) error {
 			s.notify(notifier.Alert(ticker, fmt.Sprintf("стейт восстановлен из API: вход %.4f, ATR %.4f", entry.EntryPrice, entry.EntryATR)))
 		}
 
-		// Частичное исполнение: биржа продала часть позиции.
+		// Частичное исполнение: биржа продала часть позиции. Bookkeeping-only — StopOrderID
+		// НЕ трогаем и не отменяем здесь: снапшот stopByID/stopByInstrument взят один раз
+		// на пасс, повторный Cancel той же заявки ниже привёл бы к двойному cancel в одном
+		// тике (ложный alert). Реконсиляция размера заявки на изменившееся entry.Quantity
+		// выполняется общим путём ниже, в уровень-switch (size-mismatch case).
 		if pos.Quantity < entry.Quantity && entry.StopOrderID != "" {
 			entry.Quantity = pos.Quantity
 			state[ticker] = entry
 			_ = store.Save(state)
 			s.notify(notifier.Alert(ticker, fmt.Sprintf("стоп исполнился частично, осталось %d", pos.Quantity)))
-			// перевыставление на остаток произойдёт ниже общим путём (cancel+place)
-			if err := s.stops.Cancel(ctx, entry.StopOrderID); err == nil {
-				entry.StopOrderID = ""
-				state[ticker] = entry
-				_ = store.Save(state)
-			}
 		}
 
 		md, err := marketdata.Assemble(ctx, s.market, sh.ID, st.Lookback(), MaxHTFTrendEMA([]string{ticker}), now)
@@ -180,12 +178,24 @@ func (s *service) managePass(ctx context.Context) error {
 
 		// Желаемый уровень от ОБНОВЛЁННОГО MaxFav.
 		level, reason := core.DesiredStop(mustParams(ticker), entry.EntryPrice, entry.EntryATR, entry.MaxFav)
+
+		// Реконсиляция размера: живая заявка на бирже держит не тот объём, что реально в
+		// позиции (например, после частичного исполнения выше). Оверсайз опаснее
+		// не подтянутого трейла, поэтому проверяется до сравнения уровня и форсирует
+		// cancel+repost даже если level == StopPrice.
+		sizeMismatch := false
+		if sh.Lot > 0 && entry.StopOrderID != "" {
+			if live, alive := stopByID[entry.StopOrderID]; alive && live.Lots != entry.Quantity/int64(sh.Lot) {
+				sizeMismatch = true
+			}
+		}
+
 		switch {
 		case reason == "":
 			// ценовые стопы выключены параметрами — нечего вести
 		case entry.StopOrderID == "":
 			entry = s.replaceStop(ctx, ticker, sh, entry, level, reason)
-		case level > entry.StopPrice:
+		case sizeMismatch, level > entry.StopPrice:
 			if err := s.stops.Cancel(ctx, entry.StopOrderID); err != nil {
 				s.notify(notifier.Alert(ticker, "не удалось снять стоп для переноса: "+err.Error()))
 				break // старая заявка продолжает защищать

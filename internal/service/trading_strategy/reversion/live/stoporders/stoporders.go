@@ -27,6 +27,7 @@ type ActiveStop struct {
 	InstrumentUID string
 	StopOrderID   string
 	StopPrice     float64
+	Lots          int64
 }
 
 // Result reports the effect of a Place attempt. When Placed is false (dry-run) the
@@ -120,6 +121,7 @@ func (e *Executor) List(ctx context.Context) ([]ActiveStop, error) {
 			InstrumentUID: so.GetInstrumentUid(),
 			StopOrderID:   so.GetStopOrderId(),
 			StopPrice:     utils.CombinePrice(so.GetStopPrice().GetUnits(), so.GetStopPrice().GetNano()),
+			Lots:          so.GetLotsRequested(),
 		})
 	}
 	return out, nil

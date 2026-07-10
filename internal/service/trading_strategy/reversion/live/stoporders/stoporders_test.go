@@ -62,8 +62,9 @@ func TestListReturnsOnlyActiveSellStops(t *testing.T) {
 		return in.GetAccountId() == "acc" && in.GetStatus() == investapi.StopOrderStatusOption_STOP_ORDER_STATUS_ACTIVE
 	})).Return(&investapi.GetStopOrdersResponse{StopOrders: []*investapi.StopOrder{
 		{StopOrderId: "so-1", InstrumentUid: "uid-1",
-			Direction: investapi.StopOrderDirection_STOP_ORDER_DIRECTION_SELL,
-			StopPrice: &investapi.MoneyValue{Units: 107}},
+			Direction:     investapi.StopOrderDirection_STOP_ORDER_DIRECTION_SELL,
+			StopPrice:     &investapi.MoneyValue{Units: 107},
+			LotsRequested: 6},
 		{StopOrderId: "so-2", InstrumentUid: "uid-2",
 			Direction: investapi.StopOrderDirection_STOP_ORDER_DIRECTION_BUY,
 			StopPrice: &investapi.MoneyValue{Units: 50}},
@@ -71,7 +72,7 @@ func TestListReturnsOnlyActiveSellStops(t *testing.T) {
 
 	e := New(c, "acc", true)
 	list, err := e.List(context.Background())
-	if err != nil || len(list) != 1 || list[0].StopOrderID != "so-1" || list[0].StopPrice != 107 {
+	if err != nil || len(list) != 1 || list[0].StopOrderID != "so-1" || list[0].StopPrice != 107 || list[0].Lots != 6 {
 		t.Fatalf("list=%v err=%v", list, err)
 	}
 }
