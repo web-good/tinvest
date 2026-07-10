@@ -1063,6 +1063,7 @@ func TestRegimeGateBlocksWhenUnwarmed(t *testing.T) {
 func TestManageCatStopExit(t *testing.T) {
 	p := defaultParams()
 	p.CatStopATRMult = 2.0
+	p.UseIntrabarStop = 1
 	s := NewWithParams("TEST", p)
 	in := openInput() // in.pos != nil, neutral signals -> no other exit fires
 	in.pos.PurchasePrice = 100
@@ -1081,6 +1082,7 @@ func TestManageTrailExit(t *testing.T) {
 	p := defaultParams()
 	p.UseTrail = 1
 	p.TrailATRMult = 1.5
+	p.UseIntrabarStop = 1
 	s := NewWithParams("TEST", p)
 	in := openInput() // CatStopATRMult is 0 here, so CatSL does not fire
 	in.pos.PurchasePrice = 100
@@ -1113,6 +1115,7 @@ func TestRSI50ExitToggledOff(t *testing.T) {
 func TestIntrabarStopFiresOnLowTouch(t *testing.T) {
 	p := defaultParams()
 	p.UseTrail, p.TrailATRMult, p.ATRPeriod = 1, 1.5, 14
+	p.UseIntrabarStop = 1
 	s := NewWithParams("T", p)
 	in := openInput()
 	in.pos = &strategy.Position{PurchasePrice: 100, EntryATR: 2,
@@ -1132,6 +1135,7 @@ func TestIntrabarStopFiresOnLowTouch(t *testing.T) {
 func TestIntrabarTrailUsesPrevMaxFav(t *testing.T) {
 	p := defaultParams()
 	p.UseTrail, p.TrailATRMult, p.ATRPeriod = 1, 1.5, 14
+	p.UseIntrabarStop = 1
 	s := NewWithParams("T", p)
 	in := openInput()
 	in.pos = &strategy.Position{PurchasePrice: 100, EntryATR: 2,
@@ -1165,6 +1169,7 @@ func TestStopBeatsOverboughtSameBar(t *testing.T) {
 	p := defaultParams()
 	p.UseOverbought, p.RSIOverbought, p.StochOverbought = 1, 70, 80
 	p.CatStopATRMult, p.ATRPeriod = 2, 14 // SL = 100-4 = 96
+	p.UseIntrabarStop = 1
 	s := NewWithParams("T", p)
 	in := openInput()
 	in.pos = &strategy.Position{PurchasePrice: 100, EntryATR: 2,
@@ -1181,6 +1186,7 @@ func TestStopBeatsOverboughtSameBar(t *testing.T) {
 func TestIntrabarStopSkippedWithoutLow(t *testing.T) {
 	p := defaultParams()
 	p.CatStopATRMult, p.ATRPeriod = 2, 14
+	p.UseIntrabarStop = 1
 	s := NewWithParams("T", p)
 	in := openInput()
 	in.pos = &strategy.Position{PurchasePrice: 100, EntryATR: 2,
@@ -1188,5 +1194,50 @@ func TestIntrabarStopSkippedWithoutLow(t *testing.T) {
 	in.price, in.low = 101, 0
 	if sig := s.decide(in); sig.Kind == model.SignalSell {
 		t.Fatalf("low=0 sentinel must not fire the stop, got %q", sig.Reason)
+	}
+}
+
+// Close-модель (дефолт): прокол low ниже уровня при close выше НЕ триггерит стоп.
+func TestCloseStopIgnoresLowPoke(t *testing.T) {
+	s := NewWithParams("T", atrStopParams()) // UseIntrabarStop=0 по умолчанию
+	in := openInput()
+	in.pos = &strategy.Position{PurchasePrice: 100, EntryATR: 5}
+	in.price, in.low = 96, 94 // low проколол порог 95, close вернулся выше
+	if sig := s.decide(in); sig.Kind == model.SignalSell {
+		t.Fatalf("close-модель: прокол low не должен продавать, got %q", sig.Reason)
+	}
+}
+
+// Close-модель: триггер по close, sig.StopLoss НЕ ставится (движок филлит по close).
+func TestCloseStopFiresOnCloseWithoutStopLoss(t *testing.T) {
+	s := NewWithParams("T", atrStopParams())
+	in := openInput()
+	in.pos = &strategy.Position{PurchasePrice: 100, EntryATR: 5}
+	in.price, in.low = 94, 93 // close 94 <= порога 95
+	sig := s.decide(in)
+	if sig.Kind != model.SignalSell || sig.Reason != "ATRSL" {
+		t.Fatalf("want ATRSL sell on close, got kind=%v reason=%q", sig.Kind, sig.Reason)
+	}
+	if sig.StopLoss != 0 {
+		t.Fatalf("close-модель: StopLoss должен остаться 0 (филл по close), got %v", sig.StopLoss)
+	}
+}
+
+// Close-модель: трейл считается от ТЕКУЩЕГО MaxFavorablePrice (решение на закрытии,
+// весь бар известен), а не от PrevMaxFav, как в интрабарной модели.
+func TestCloseTrailUsesCurrentMaxFav(t *testing.T) {
+	p := defaultParams()
+	p.UseTrail, p.TrailATRMult, p.ATRPeriod = 1, 1.5, 14
+	s := NewWithParams("T", p)
+	in := openInput()
+	in.pos = &strategy.Position{PurchasePrice: 100, EntryATR: 2,
+		MaxFavorablePrice: 120, PrevMaxFavorablePrice: 110} // close-уровень 117, интрабарный был бы 107
+	in.price, in.low = 116.5, 116.5 // 116.5 <= 117 -> TRAIL; от prevMax (107) держали бы
+	sig := s.decide(in)
+	if sig.Kind != model.SignalSell || sig.Reason != "TRAIL" {
+		t.Fatalf("want TRAIL from current MaxFav, got kind=%v reason=%q", sig.Kind, sig.Reason)
+	}
+	if sig.StopLoss != 0 {
+		t.Fatalf("close-модель: StopLoss должен остаться 0, got %v", sig.StopLoss)
 	}
 }

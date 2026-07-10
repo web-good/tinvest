@@ -6,8 +6,10 @@
 // a combined protective stop (STOP) computed by DesiredStop from up to three components —
 // a catastrophic stop (SL, gated by CatStopATRMult>0), an ATR stop (ATRSL, gated by
 // UseATRStop=1) and an ATR trailing stop off the running max favorable price (TRAIL, gated
-// by UseTrail=1) — whichever level binds; modeled as an exchange stop order, it triggers
-// intrabar the instant the bar's LOW touches/pierces the level, pre-empting every
+// by UseTrail=1) — whichever level binds; the execution model is selected per ticker by
+// UseIntrabarStop: 0 (default) checks the stop against the bar CLOSE and fills at close;
+// 1 models an exchange stop order that triggers intrabar the instant the bar's LOW
+// touches/pierces the level and fills at min(level, open). Either way STOP pre-empts every
 // close-based exit including OB;
 // an overbought take-profit when both RSI and Stochastic %D are simultaneously in their
 // overbought zones (OB, gated by UseOverbought);
@@ -69,6 +71,7 @@ type Params struct {
 	UseTrail        int     // 1 = ATR trailing stop on the running max favourable price; 0 = off
 	TrailATRMult    float64 // trail distance in EntryATR multiples below MaxFavorablePrice; consulted only when UseTrail==1
 	UseRSI50        int     // 1 = exit when RSI crosses 50 downward (default); 0 = disable the RSI50 momentum-fade exit
+	UseIntrabarStop int     // 0 = close-модель (дефолт): стоп проверяется по close часовой свечи, филл по close, в live биржевая стоп-заявка НЕ выставляется; 1 = интрабар: триггер low ≤ уровень, филл min(уровень, open), в live — реальная биржевая стоп-заявка
 }
 
 // Strategy trades a single instrument with the dual-confirmation rules. Ticker-agnostic
@@ -415,8 +418,8 @@ func (s *Strategy) entryReason(in decideInput) string {
 // DesiredStop returns the single protective stop level for a reversion position
 // and the reason of the binding component ("SL" | "ATRSL" | "TRAIL"), or (0, "")
 // when no price stop is enabled/armed. maxFav is the monotonic max of closes the
-// stop may trail from (backtest passes PrevMaxFavorablePrice; live passes the
-// persisted MaxFav). entryATR<=0 disables every price stop outright (the
+// stop may trail from (the intrabar model passes PrevMaxFavorablePrice, the close
+// model passes MaxFavorablePrice). entryATR<=0 disables every price stop outright (the
 // live-trading guard: EntryATR is not yet persisted there). Among the components
 // that are active, the numerically GREATEST level (the one closest to price, and
 // therefore the first one price would touch as it falls) binds.
@@ -446,16 +449,24 @@ func DesiredStop(p Params, entryPrice, entryATR, maxFav float64) (float64, strin
 
 // manage handles an open long. It exits on one of six signals, evaluated in
 // precedence order STOP(SL|TRAIL|ATRSL) → OB → RSI50 → BE → RSIOS → EMAX:
-//   - STOP: the combined protective stop from DesiredStop (catastrophic SL, ATR
-//     stop ATRSL, and/or ATR trail TRAIL — whichever level binds). Modeled as an
-//     exchange stop order: it triggers intrabar on the bar's LOW touching/piercing
-//     the level (in.low > 0 && in.low <= level), not on the close, because a real
-//     stop order fills as soon as price trades through it during the bar. The
-//     trail component reads Position.PrevMaxFavorablePrice (the running max as of
-//     the PREVIOUS bar) rather than the current bar's MaxFavorablePrice: the
-//     exchange order working during bar i was placed after bar i-1 closed, so its
-//     level cannot know about a new high made intrabar on bar i itself. Highest
-//     precedence — a touched stop pre-empts every close-based exit, including OB.
+//   - STOP: the combined protective stop level from DesiredStop (catastrophic SL, ATR
+//     stop ATRSL, and/or ATR trail TRAIL — whichever level binds), evaluated under one
+//     of two execution models selected per ticker by UseIntrabarStop:
+//     intrabar (UseIntrabarStop=1) models an exchange stop order: it triggers on the
+//     bar's LOW touching/piercing the level (in.low > 0 && in.low <= level), not on the
+//     close, because a real stop order fills as soon as price trades through it during
+//     the bar; the trail component reads Position.PrevMaxFavorablePrice (the running max
+//     as of the PREVIOUS bar) rather than the current bar's MaxFavorablePrice, because the
+//     exchange order working during bar i was placed after bar i-1 closed and so its level
+//     cannot know about a new high made intrabar on bar i itself; sig.StopLoss is set to
+//     the level so the engine fills at min(level, open).
+//     close (UseIntrabarStop=0, default) triggers on the bar's CLOSE (in.price <= level),
+//     the decision a real close-only strategy would make once the whole bar is known; the
+//     trail component reads the current Position.MaxFavorablePrice (no lag, since the
+//     decision is made after the bar closed); sig.StopLoss stays 0 so the engine fills at
+//     close.
+//     The precedence order is identical in both models — highest precedence, a touched
+//     stop pre-empts every close-based exit, including OB.
 //   - OB: RSI and Stochastic %D simultaneously in their overbought zones — take-profit
 //     (gated by UseOverbought=1).
 //   - RSI50: RSI crosses the 50 midline downward — primary momentum fade.
@@ -469,20 +480,41 @@ func DesiredStop(p Params, entryPrice, entryATR, maxFav float64) (float64, strin
 //     covers this exit via STOP above).
 //   - EMAX: FastEMA drops below SlowEMA (bearish EMA cross) — regime-break backstop.
 //
-// STOP fills at the engine-computed min(level, bar open); OB/RSI50/BE/RSIOS/EMAX all
-// fill at close. When multiple close-based signals fire on the same bar the first in
-// the list wins.
+// STOP fills at the engine-computed min(level, bar open) under the intrabar model, at
+// close under the close model; OB/RSI50/BE/RSIOS/EMAX always fill at close. When multiple
+// close-based signals fire on the same bar the first in the list wins.
 func (s *Strategy) manage(in decideInput, sig model.Signal) model.Signal {
 	sig.RSI = in.rsiNow
 
-	stopLevel, stopReason := DesiredStop(s.p, in.pos.PurchasePrice, in.pos.EntryATR, in.pos.PrevMaxFavorablePrice)
+	// Источник maxFav для трейла зависит от модели исполнения: интрабарная заявка
+	// стояла на бирже с закрытия ПРОШЛОГО бара (PrevMaxFav); close-модель решает на
+	// закрытии текущего бара, когда весь бар известен (MaxFav) — как июньская модель.
+	maxFav := in.pos.MaxFavorablePrice
+	if s.p.UseIntrabarStop == 1 {
+		maxFav = in.pos.PrevMaxFavorablePrice
+	}
+	stopLevel, stopReason := DesiredStop(s.p, in.pos.PurchasePrice, in.pos.EntryATR, maxFav)
+
+	stopHit := false
+	if stopReason != "" {
+		if s.p.UseIntrabarStop == 1 {
+			stopHit = in.low > 0 && in.low <= stopLevel // биржевая заявка: касание low
+		} else {
+			stopHit = in.price <= stopLevel // close-модель: только закрытие бара
+		}
+	}
 
 	switch {
-	case stopReason != "" && in.low > 0 && in.low <= stopLevel:
+	case stopHit:
 		sig.Kind, sig.Reason = model.SignalSell, stopReason
-		sig.StopLoss = stopLevel
-		sig.ExitReason = fmt.Sprintf("%s: low %.4f ≤ стоп %.4f (вход %.4f, ATR %.4f, prevMaxFav %.4f)",
-			stopReason, in.low, stopLevel, in.pos.PurchasePrice, in.pos.EntryATR, in.pos.PrevMaxFavorablePrice)
+		if s.p.UseIntrabarStop == 1 {
+			sig.StopLoss = stopLevel // движок филлит min(уровень, open); в close-модели StopLoss=0 -> филл по close
+			sig.ExitReason = fmt.Sprintf("%s: low %.4f ≤ стоп %.4f (вход %.4f, ATR %.4f, prevMaxFav %.4f)",
+				stopReason, in.low, stopLevel, in.pos.PurchasePrice, in.pos.EntryATR, in.pos.PrevMaxFavorablePrice)
+		} else {
+			sig.ExitReason = fmt.Sprintf("%s: close %.4f ≤ стоп %.4f (вход %.4f, ATR %.4f, maxFav %.4f)",
+				stopReason, in.price, stopLevel, in.pos.PurchasePrice, in.pos.EntryATR, in.pos.MaxFavorablePrice)
+		}
 	case s.p.UseOverbought == 1 && in.rsiOK && in.stochOK &&
 		in.rsiNow >= s.p.RSIOverbought && in.stochNow >= s.p.StochOverbought:
 		sig.Kind, sig.Reason = model.SignalSell, "OB"
