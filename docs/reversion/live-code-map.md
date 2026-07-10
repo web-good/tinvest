@@ -36,7 +36,7 @@ EUTR) заявки нет вовсе — выход по STOP идёт обыч�
 и остальные close-based выходы. Подробности — в §11.
 
 ```
-cron "0 8-23 * * 1-5"  ─┐
+cron "0 7-23 * * 1-5"  ─┐
   (ModeBuy)             ├─► scheduler.Run ─► service.Run ─┬─► buyPass     ─► core.Decide ─► executor.Buy  ─► placeInitialStop: UseIntrabarStop=1? stoporders.Place : no-op ─► statestore.Save
 cron "0 7-23,0 * * *"  ─┘                  (под мьютексом) └─► managePass  ─► stoporders.List ─► core.Decide ─┬─► SignalSell: stoporders.Cancel (если есть) ─► executor.Sell ─► statestore.Save
                                                                                                                 ├─► UseIntrabarStop≠1: снять оставшуюся заявку (если есть) ─► statestore.Save
@@ -68,7 +68,7 @@ cron "0 7-23,0 * * *"  ─┘                  (под мьютексом) └�
 Внешние зависимости:
 
 - `internal/config/reversion.go` — `ReversionConfig` (env-конфиг, дефолты).
-- `internal/app/app.go:340-359` — где воркеры стартуют.
+- `internal/app/app.go:327-346` — где воркеры стартуют.
 - `reversion/strategy/core` — торговая логика (`Decide`, `Lookback`, `Params`,
   `DesiredStop`).
 - `internal/domain/backtest` — `AssembleMarketData` переиспользуется в live.
@@ -80,11 +80,11 @@ cron "0 7-23,0 * * *"  ─┘                  (под мьютексом) └�
 
 ## 3. Точка входа: запуск воркеров
 
-`internal/app/app.go:340-359` стартует **две** горутины, по одной на режим:
+`internal/app/app.go:327-346` стартует **две** горутины, по одной на режим:
 
 ```go
-// buy: рабочие дни, часы 08:00–23:00, минута 0
-reversiondto.Run{Scheduler: "0 8-23 * * 1-5", Mode: reversiondto.ModeBuy}
+// buy: рабочие дни, часы 07:00–23:00, минута 0
+reversiondto.Run{Scheduler: "0 7-23 * * 1-5", Mode: reversiondto.ModeBuy}
 
 // manage: ежедневно, часы 07:00–00:00, минута 0
 reversiondto.Run{Scheduler: "0 7-23,0 * * *", Mode: reversiondto.ModeManage}
@@ -303,10 +303,10 @@ func (s *service) Run(ctx context.Context, in dto.Run) error {
      alert, **старая заявка не трогается**, ретрай на следующем часовом тике.
    - **267-270** сохраняем итоговый `state[ticker]`.
 
-`atrPeriodFor` (215-220) — отдаёт `ATRPeriod` тикера для пересчёта ATR в
-reconstruct (дефолт 14). `mustParams` (223-226) — тонкая обёртка над `ParamsFor` для
+`atrPeriodFor` (276-281) — отдаёт `ATRPeriod` тикера для пересчёта ATR в
+reconstruct (дефолт 14). `mustParams` (284-287) — тонкая обёртка над `ParamsFor` для
 кейса, где тикер уже прошёл `StrategyFor` выше по стеку, так что `ok` гарантированно
-`true`. `replaceStop` (230-254) — хелпер `manage.go`, вызывает `s.stops.Place`,
+`true`. `replaceStop` (291-315) — хелпер `manage.go`, вызывает `s.stops.Place`,
 штампует `entry.StopOrderID` **только если реально размещено** (`res.Placed`), но
 `entry.StopPrice`/`entry.StopReason` — **всегда** (в том числе в dry-run, чтобы
 бумажный state отражал уровень, который был бы на бирже), и шлёт `notifier.StopSet`,
@@ -345,19 +345,20 @@ reconstruct (дефолт 14). `mustParams` (223-226) — тонкая обёр�
 ## 8. Сборка рыночных данных: `marketdata/marketdata.go`
 
 Цель — построить такой же `MarketData`, как в бэктесте, чтобы `core.Decide` вёл себя
-идентично. Для этого live **переиспользует** `backtest.AssembleMarketData` (строка 104).
+идентично. Для этого live **переиспользует** `backtest.AssembleMarketData` (строка 141).
 
-- `Assemble` (84-105):
+- `Assemble` (119-142):
   1. `fetchCompleted(... Hour1, lookbackBars ...)` — тянет **закрытые** часовые свечи
      в количестве `Strategy.Lookback()`. Если их меньше lookback — ошибка
-     (90-92), проход для тикера пропускается.
-  2. если `htfEMAPeriod > 0` — дополнительно тянет 4H-свечи (`htfEMAPeriod + 20`
-     для прогрева EMA).
+     (125-127), проход для тикера пропускается.
+  2. если `htfEMAPeriod > 0` — дополнительно тянет 4H-свечи
+     (`max(htfEMAPeriod + 20, htfWarmupBars)` для прогрева EMA — см. док-коммент
+     `htfWarmupBars` о сходимости live-EMA с full-history EMA бэктеста).
   3. `cur := window[len-1].Time` — «сейчас» = время последней закрытой свечи.
-- `fetchCompleted` (60-79): рассчитывает календарное окно с запасом
+- `fetchCompleted` (85-114): рассчитывает календарное окно с запасом
   (`warmupBufferFactor = 3`), запрашивает свечи и оставляет **последние `bars`**.
   Запас нужен, чтобы пережить выходные/праздники MOEX.
-- `ToCandles` (39-55): конвертирует API-свечи в доменные; при `completedOnly=true`
+- `ToCandles` (64-80): конвертирует API-свечи в доменные; при `completedOnly=true`
   **отбрасывает ещё формирующийся бар** (`IsComplete=false`).
 
 Константы прогрева (31-35): `barsPerCalendarDayHourly=6`, `barsPerCalendarDayHTF=2`,
@@ -468,13 +469,16 @@ lots      = min(lots, affordable)
   выставленной или, в dry-run, *номинально* выставленной заявки — обновляется независимо от
   того, реально ли заявка на бирже), `StopReason` (`SL`/`ATRSL`/`TRAIL` — какая компонента
   STOP сейчас связывает уровень). Все три поля — часть контракта только тикеров с
-  `UseIntrabarStop=1`: `placeInitialStop` (`buy.go`) и весь синхронизационный блок
-  `managePass` (`manage.go:188-266`) их не трогают для close-тикеров, так что у UGLD/EUTR
-  они остаются `""`/`0`/`""` всю жизнь позиции.
+  `UseIntrabarStop=1`: `placeInitialStop` (`buy.go`) их не заполняет для close-тикеров, а
+  блок ведения заявки в `managePass` (`manage.go:210-266`) для них не выполняется вовсе.
+  Единственная запись в эти поля у close-тикера — разовая переходная чистка (гейт модели,
+  `manage.go:188-208`, §6): если после переключения тикера с интрабара осталась заявка,
+  она снимается, а поля **обнуляются** в `""`/`0`/`""`. В устоявшемся состоянии у
+  UGLD/EUTR они так и остаются `""`/`0`/`""` всю жизнь позиции.
 - `FileStore` хранит **всю карту** `ticker → Entry` одним JSON-файлом
   (`data/state/reversion_<accountID>.json`).
-- `Load` (40-56): отсутствующий файл = **пустая карта, не ошибка**.
-- `Save` (59-82): **атомарная** запись — пишем во временный файл в той же
+- `Load` (44-60): отсутствующий файл = **пустая карта, не ошибка**.
+- `Save` (63-86): **атомарная** запись — пишем во временный файл в той же
   директории и `rename`. Гарантирует, что файл никогда не остаётся «полуписаным».
 
 ### `reconstruct/reconstruct.go`
@@ -483,14 +487,14 @@ lots      = min(lots, affordable)
 - `EntryPrice` ← средняя цена покупки от брокера;
 - `EntryTime` ← **последняя BUY-сделка** за 120 дней (`GetInstrumentTrades`, 33-45);
 - грузит часовые свечи от `entryTime - (lookback/4+10)` до now (47-55);
-- `EntryATR` ← `atrAtEntry` (95-119): ATR на часовом окне, заканчивающемся на баре
+- `EntryATR` ← `atrAtEntry` (97-119): ATR на часовом окне, заканчивающемся на баре
   входа — повторяет то, как `core` штампует ATR при входе;
 - `MaxFav` ← максимум close с момента входа (59-63).
 
 Восстановленная запись выходит с **пустыми стоп-полями** (`reconstruct.Entry` их не
 знает — на бирже могла остаться чужая/устаревшая заявка на этот инструмент, её подчистит
 шаг синхронизации в `managePass`, §6). Восстановленные значения приблизительны (особенно
-ATR), поэтому manage-pass шлёт alert о реконструкции (`manage.go:86`).
+ATR), поэтому manage-pass шлёт alert о реконструкции (`manage.go:110`).
 
 ---
 
@@ -521,7 +525,7 @@ ATR), поэтому manage-pass шлёт alert о реконструкции (`
 
 | Вопрос | Файл |
 |---|---|
-| Когда запускаются воркеры? | `internal/app/app.go:340-359` |
+| Когда запускаются воркеры? | `internal/app/app.go:327-346` |
 | Как cron вызывает сервис? | `live/scheduler/scheduler.go` |
 | Логика «купить»? | `live/buy.go` |
 | Логика «вести/продать»? | `live/manage.go` |
