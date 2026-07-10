@@ -30,7 +30,7 @@ type Trade struct {
 	ExitTime        time.Time
 	ExitPrice       float64
 	Quantity        int64   // shares (lots * Lot)
-	Reason          string  // exit reason: "SL" / "TRAIL" / "TP"
+	Reason          string  // exit reason code: "SL" / "TRAIL" / "ATRSL" / "OB" / "RSI50" / "BE" / "RSIOS" / "EMAX" (see reversion/strategy/core; other strategies may use a subset)
 	PnL             float64 // net of commission, in currency
 	PnLPct          float64 // PnL relative to entry cost
 	BarsHeld        int

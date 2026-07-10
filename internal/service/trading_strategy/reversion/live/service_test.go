@@ -276,6 +276,12 @@ func activeList(id string, price float64, lots int64) *investapi.GetStopOrdersRe
 	}}}
 }
 
+// emptyStopList строит ответ List без активных заявок — используется, когда сценарий
+// теста требует, чтобы стоп реально отсутствовал на бирже (сработал / не выставлен).
+func emptyStopList() *investapi.GetStopOrdersResponse {
+	return &investapi.GetStopOrdersResponse{}
+}
+
 // 1. Трейлинг подтянулся: cancel старой + post новой, стейт несёт новый ID/уровень.
 // UGLD params: UseTrail=1, TrailATRMult=1.5 -> close 110 => MaxFav 110, want 110-3=107 > 97.
 func TestManagePass_RepostsStopWhenTrailRises(t *testing.T) {
@@ -311,8 +317,9 @@ func TestManagePass_KeepsStopWhenLevelUnchanged(t *testing.T) {
 	}
 }
 
-// 3. Позиция исчезла + StopOrderID в стейте -> Exit с причиной из стейта, стейт очищен,
-// Cancel не вызывается (заявка уже исполнена биржей).
+// 3. Позиция исчезла + StopOrderID в стейте, List подтверждает, что заявки на бирже
+// больше нет (пуст) -> сработал именно наш стоп: Exit с причиной из стейта, стейт
+// очищен, Cancel не вызывается (заявка уже исполнена биржей).
 func TestManagePass_DetectsFiredStop(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
@@ -335,7 +342,9 @@ func TestManagePass_DetectsFiredStop(t *testing.T) {
 	ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(nil, nil)
 
 	stops := stopmocks.NewMockClient(t)
-	stops.EXPECT().GetStopOrders(mock.Anything, mock.Anything).Return(activeList("so-1", 97, 10), nil).Maybe()
+	// so-1 больше не в списке активных заявок биржи -> это и есть срабатывание стопа
+	// (не путать с орфан-кейсом ниже, где List всё ещё возвращает её живой).
+	stops.EXPECT().GetStopOrders(mock.Anything, mock.Anything).Return(emptyStopList(), nil)
 
 	tg := tgmocks.NewMockClient(t)
 	tg.EXPECT().SendMessage(mock.MatchedBy(func(s string) bool {
@@ -358,24 +367,145 @@ func TestManagePass_DetectsFiredStop(t *testing.T) {
 	}
 }
 
+// 3b. Позиция исчезла, но List показывает, что наша заявка ЖИВА на бирже — значит,
+// позицию продали вне раннера (вручную), а не сработавшим стопом. Runner обязан снять
+// осиротевшую заявку (иначе она продаст будущий вход по тикеру), НЕ слать Exit-уведомление
+// о срабатывании стопа, и очистить стейт только после успешного Cancel.
+func TestManagePass_OrphanedStopWhenSoldExternally(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	seed := seedEntry("so-1", 97)
+	if err := statestore.New(statePath).Save(map[string]statestore.Entry{"UGLD": seed}); err != nil {
+		t.Fatal(err)
+	}
+
+	instruments := livemocks.NewMockinstrumentsClient(t)
+	instruments.EXPECT().Shares(mock.Anything).
+		Return([]*imodel.Share{{ID: "uid-ugld", Ticker: "UGLD", Name: "ЮГК", Lot: 1,
+			Trading: true, MinPriceIncrement: 0.01}}, nil)
+
+	market := mdmocks.NewMockCandleClient(t)
+	market.EXPECT().
+		GetCandles(mock.Anything, mock.Anything, mock.MatchedBy(isHourly1), mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(hourlySeries(400), nil).Maybe()
+
+	ops := livemocks.NewMockoperationsClient(t)
+	ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(nil, nil) // position gone
+
+	stops := stopmocks.NewMockClient(t)
+	stops.EXPECT().GetStopOrders(mock.Anything, mock.Anything).Return(activeList("so-1", 97, 10), nil) // so-1 STILL alive
+	stops.EXPECT().CancelStopOrder(mock.Anything, mock.MatchedBy(func(in *investapi.CancelStopOrderRequest) bool {
+		return in.GetStopOrderId() == "so-1"
+	})).Return(&investapi.CancelStopOrderResponse{}, nil).Once()
+
+	tg := tgmocks.NewMockClient(t)
+	// Единственное ожидаемое сообщение — алерт об осиротевшей заявке; без catch-all
+	// Maybe(), поэтому лишний Exit-вызов (с другим текстом) провалил бы тест как
+	// неожиданный вызов мока.
+	tg.EXPECT().SendMessage(mock.MatchedBy(func(s string) bool {
+		return strings.Contains(s, "вне раннера") && strings.Contains(s, "UGLD")
+	})).Return(nil).Once()
+
+	orders := execmocks.NewMockOrdersClient(t)
+
+	c := cfg(dir)
+	c.TradeEnabled = true
+	svc := NewService(instruments, market, ops, orders, stops, tg, c)
+	svc.statePath = statePath
+
+	if err := svc.Run(context.Background(), dto.Run{Mode: dto.ModeManage}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	st, _ := statestore.New(statePath).Load()
+	if len(st) != 0 {
+		t.Fatalf("state must be cleared after orphaned-stop cancel, got %+v", st)
+	}
+}
+
 // 4. SELL ядра при живой заявке и падающем Cancel -> рыночная продажа НЕ отправляется,
-// позиция остаётся в стейте, уходит Alert.
+// позиция остаётся в стейте, уходит Alert. Собран вручную (не через newManageEnv), потому
+// что нужен СТРОГИЙ, а не Maybe(), tg-мок: если ядро перестанет давать SELL на этой серии,
+// generic-catch-all Maybe() пропустил бы тест вакуумно (0 вызовов SendMessage), а строгий
+// EXPECT() на конкретный текст алерта явно провалит его.
 func TestManagePass_CancelFailBlocksMarketSell(t *testing.T) {
-	// Серия с обвалом хвоста заставляет ядро дать SELL (у UGLD включён trail: close 90
-	// при MaxFav 100 пробивает close-бэкстоп... надёжнее выключить неоднозначность:
-	// хвост 110, затем 90 — low-стоп ядра сработает по close-падению).
-	env := newManageEnv(t, seedEntry("so-1", 97), hourlySeries(400, 110, 90))
-	env.stops.EXPECT().GetStopOrders(mock.Anything, mock.Anything).Return(activeList("so-1", 97, 10), nil).Maybe()
-	env.stops.EXPECT().CancelStopOrder(mock.Anything, mock.Anything).
-		Return(nil, fmt.Errorf("boom")).Maybe()
-	// env.orders без EXPECT: вызов PostOrder провалит тест = продажи не было.
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	seed := seedEntry("so-1", 97)
+	if err := statestore.New(statePath).Save(map[string]statestore.Entry{"UGLD": seed}); err != nil {
+		t.Fatal(err)
+	}
+
+	instruments := livemocks.NewMockinstrumentsClient(t)
+	instruments.EXPECT().Shares(mock.Anything).
+		Return([]*imodel.Share{{ID: "uid-ugld", Ticker: "UGLD", Name: "ЮГК", Lot: 1,
+			Trading: true, MinPriceIncrement: 0.01}}, nil)
+
+	market := mdmocks.NewMockCandleClient(t)
+	market.EXPECT().
+		GetCandles(mock.Anything, mock.Anything, mock.MatchedBy(isHourly1), mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		// Серия с обвалом хвоста заставляет ядро дать SELL (у UGLD включён trail: close 90
+		// при MaxFav 100 пробивает close-бэкстоп — хвост 110, затем 90).
+		Return(hourlySeries(400, 110, 90), nil)
+
+	ops := livemocks.NewMockoperationsClient(t)
+	ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).
+		Return([]*grpcmodel.Position{{ShareID: "uid-ugld", InstrumentType: "share",
+			Quantity: seed.Quantity, PurchasePrice: gq(seed.EntryPrice)}}, nil)
+
+	stops := stopmocks.NewMockClient(t)
+	stops.EXPECT().GetStopOrders(mock.Anything, mock.Anything).Return(activeList("so-1", 97, 10), nil)
+	stops.EXPECT().CancelStopOrder(mock.Anything, mock.Anything).
+		Return(nil, fmt.Errorf("boom")).Once()
+
+	tg := tgmocks.NewMockClient(t)
+	// Строгое (не Maybe()) ожидание — тест не должен проходить вакуумно.
+	tg.EXPECT().SendMessage(mock.MatchedBy(func(s string) bool {
+		return strings.Contains(s, "не удалось снять стоп-заявку перед продажей")
+	})).Return(nil).Once()
+
+	orders := execmocks.NewMockOrdersClient(t)
+	// orders без EXPECT: вызов PostOrder провалит тест = продажи не было.
+
+	c := cfg(dir)
+	c.TradeEnabled = true
+	svc := NewService(instruments, market, ops, orders, stops, tg, c)
+	svc.statePath = statePath
+
+	if err := svc.Run(context.Background(), dto.Run{Mode: dto.ModeManage}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	st, _ := statestore.New(statePath).Load()
+	if _, ok := st["UGLD"]; !ok {
+		t.Fatal("position must stay in state when cancel fails")
+	}
+}
+
+// 4b. Critical 1: entry.StopOrderID == "" (например, после reconstruct), на бирже висит
+// stray-заявка по инструменту, её Cancel падает -> НЕ ставим новую заявку в этом тике
+// (иначе на бирже оказались бы два живых SELL-стопа — второй продал бы уже не имеющиеся
+// бумаги при касании уровня). Alert уходит, позиция остаётся в стейте без stopOrderId,
+// ретрай — на следующем часовом тике.
+func TestManagePass_StrayCancelFailBlocksNewStopPlacement(t *testing.T) {
+	seed := statestore.Entry{Ticker: "UGLD", EntryPrice: 100, EntryATR: 2, MaxFav: 100,
+		Quantity: 10, EntryTime: time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC)} // StopOrderID == ""
+	env := newManageEnv(t, seed, hourlySeries(400)) // flat 100: no core SELL signal
+	env.stops.EXPECT().GetStopOrders(mock.Anything, mock.Anything).
+		Return(activeList("so-stray", 90, 10), nil) // stray заявка на uid-ugld
+	env.stops.EXPECT().CancelStopOrder(mock.Anything, mock.MatchedBy(func(in *investapi.CancelStopOrderRequest) bool {
+		return in.GetStopOrderId() == "so-stray"
+	})).Return(nil, fmt.Errorf("boom"))
+	// env.stops без EXPECT на PostStopOrder: вызов провалит тест = вторая заявка НЕ поставлена.
 
 	if err := env.svc.Run(context.Background(), dto.Run{Mode: dto.ModeManage}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	st, _ := statestore.New(env.statePath).Load()
-	if _, ok := st["UGLD"]; !ok {
-		t.Fatal("position must stay in state when cancel fails")
+	got, ok := st["UGLD"]
+	if !ok {
+		t.Fatal("position must stay in state when stray cancel fails")
+	}
+	if got.StopOrderID != "" {
+		t.Fatalf("no new stop should have been placed while stray is unresolved, got %+v", got)
 	}
 }
 

@@ -57,13 +57,37 @@ func (s *service) managePass(ctx context.Context) error {
 		pos, isHeld := held[sh.ID]
 		if !isHeld {
 			entry, hadState := state[ticker]
-			if hadState && entry.StopOrderID != "" {
-				// Наш биржевой стоп исполнился.
-				s.notify(notifier.Exit(ticker, entry.StopReason, entry.StopPrice, entry.Quantity, false))
-			}
-			if hadState {
+			switch {
+			case !hadState:
+				// Ничего не знаем про тикер — не наша забота.
+			case listErr != nil:
+				// Не можем свериться с биржей, есть ли ещё живая заявка — значит не можем
+				// отличить сработавший стоп от ручной продажи с осиротевшей заявкой.
+				// Консервативно: alert, стейт не трогаем, повтор на следующем часовом тике.
+				s.notify(notifier.Alert(ticker, "позиция исчезла, но GetStopOrders недоступен — не могу подтвердить срабатывание стопа, стейт сохранён"))
+			case entry.StopOrderID == "":
+				// Нет заявки, за которой нужно присматривать, — просто чистим стейт.
 				delete(state, ticker)
 				_ = store.Save(state)
+			default:
+				if _, alive := stopByID[entry.StopOrderID]; alive {
+					// Заявка ещё жива на бирже — значит, позицию продали НЕ через наш
+					// стоп (например, вручную в приложении брокера). Снимаем осиротевшую
+					// заявку, иначе она позже продаст новую позицию по этому тикеру.
+					if err := s.stops.Cancel(ctx, entry.StopOrderID); err != nil {
+						s.notify(notifier.Alert(ticker, "позиция продана вне раннера, не удалось снять осиротевший стоп: "+err.Error()))
+						// Стейт не чистим — ретрай на следующем часовом тике.
+					} else {
+						s.notify(notifier.Alert(ticker, "позиция продана вне раннера, снял осиротевший стоп"))
+						delete(state, ticker)
+						_ = store.Save(state)
+					}
+				} else {
+					// Заявки нет в живых — сработал именно наш биржевой стоп.
+					s.notify(notifier.Exit(ticker, entry.StopReason, entry.StopPrice, entry.Quantity, false))
+					delete(state, ticker)
+					_ = store.Save(state)
+				}
 			}
 			continue
 		}
@@ -162,6 +186,7 @@ func (s *service) managePass(ctx context.Context) error {
 		}
 
 		// Синхронизация стоп-заявки (только при работающем List).
+		strayCancelFailed := false
 		if listErr == nil {
 			if entry.StopOrderID != "" {
 				if _, alive := stopByID[entry.StopOrderID]; !alive {
@@ -172,6 +197,11 @@ func (s *service) managePass(ctx context.Context) error {
 				// Чужая/устаревшая заявка (например, после reconstruct) — снять.
 				if err := s.stops.Cancel(ctx, stray.StopOrderID); err != nil {
 					s.notify(notifier.Alert(ticker, "не удалось снять неизвестную стоп-заявку: "+err.Error()))
+					// Не ставим новую заявку в этом тике: stray-заявка всё ещё жива на
+					// бирже и продолжает защищать позицию (см. guard ниже). Без этого
+					// флага на бирже оказались бы ДВЕ живые SELL-заявки на один
+					// инструмент — вторая продала бы уже не имеющиеся бумаги.
+					strayCancelFailed = true
 				}
 			}
 		}
@@ -185,6 +215,9 @@ func (s *service) managePass(ctx context.Context) error {
 		// cancel+repost даже если level == StopPrice.
 		sizeMismatch := false
 		if sh.Lot > 0 && entry.StopOrderID != "" {
+			// alive-check load-bearing: при listErr != nil stopByID пуст, а `alive` тут
+			// всегда false — sizeMismatch остаётся false, а не форсит слепой cancel+repost
+			// на каждом отказе List (мы не знаем реальный размер заявки на бирже).
 			if live, alive := stopByID[entry.StopOrderID]; alive && live.Lots != entry.Quantity/int64(sh.Lot) {
 				sizeMismatch = true
 			}
@@ -194,6 +227,12 @@ func (s *service) managePass(ctx context.Context) error {
 		case reason == "":
 			// ценовые стопы выключены параметрами — нечего вести
 		case entry.StopOrderID == "":
+			if strayCancelFailed {
+				// Stray-заявка не снялась и всё ещё жива на бирже — она продолжает
+				// защищать позицию. НЕ ставим вторую: alert уже ушёл выше, ретрай
+				// снятия на следующем часовом тике.
+				break
+			}
 			entry = s.replaceStop(ctx, ticker, sh, entry, level, reason)
 		case sizeMismatch, level > entry.StopPrice:
 			if err := s.stops.Cancel(ctx, entry.StopOrderID); err != nil {
