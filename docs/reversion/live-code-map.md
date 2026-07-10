@@ -124,7 +124,7 @@ reversiondto.Run{Scheduler: "0 7-23,0 * * *", Mode: reversiondto.ModeManage}
 | `statePath` | `string` | путь к файлу состояния: `data/state/reversion_<accountID>.json` |
 
 `NewService` (`live.go:55-74`) с веткой стоп-заявок получила новый параметр `stops
-stoporders.Client` (седьмой позиционный аргумент, между `orders executor.OrdersClient` и `tg
+stoporders.Client` (пятый позиционный аргумент, между `orders executor.OrdersClient` и `tg
 telegram.Client`):
 
 ```go
@@ -474,7 +474,7 @@ ATR), поэтому manage-pass шлёт alert о реконструкции (`
 - `StopSet` (37) — 🛡 стоп-заявка (пере)выставлена на уровень с кодом причины
   (`SL`/`ATRSL`/`TRAIL`); шлётся из `replaceStop`/`placeInitialStop` только когда
   уровень или причина реально изменились (не на каждом тике).
-- `paperTag` (6) добавляет пометку «БУМАЖНАЯ сделка», когда ордер (рыночный или
+- `paperTag` (7) добавляет пометку «БУМАЖНАЯ сделка», когда ордер (рыночный или
   стоп-заявка) не выставлялся — общая для всех пяти функций.
 
 ---
