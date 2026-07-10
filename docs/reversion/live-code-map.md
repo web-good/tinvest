@@ -5,8 +5,10 @@
 в соседнем [`live-runner.md`](./live-runner.md). Логика самих сигналов входа/выхода —
 в [`strategy.md`](./strategy.md).
 
-Ветка: `feat/reversion-rsi-dip`.
-Дизайн-спека: `docs/superpowers/specs/2026-06-25-reversion-live-runner-design.md`.
+Ветка: `feat/reversion-rsi-dip` (базовый live-раннер); биржевые стоп-заявки и интрабарная
+модель стопа добавлены веткой `feat/reversion-stop-orders`.
+Дизайн-спеки: `docs/superpowers/specs/2026-06-25-reversion-live-runner-design.md` (раннер) +
+`docs/superpowers/specs/2026-07-09-reversion-stop-orders-design.md` (стоп-заявки).
 
 ---
 
@@ -24,11 +26,16 @@
 (`reversion/strategy/core`). Live-пакет НЕ содержит торговой логики — он только
 *добывает данные → зовёт `core.Decide()` → исполняет результат → сохраняет состояние*.
 
+Третий, более тонкий контур поверх этих двух проходов — **биржевая стоп-заявка**
+(`live/stoporders`): buy-pass выставляет её сразу после фактического входа, а manage-pass
+на каждом тике синхронизирует её (List/Cancel/Place) с желаемым уровнем STOP от
+`core.DesiredStop`. Подробности — в §11.
+
 ```
 cron "0 8-23 * * 1-5"  ─┐
-  (ModeBuy)             ├─► scheduler.Run ─► service.Run ─┬─► buyPass     ─► core.Decide ─► executor.Buy  ─► statestore.Save
-cron "0 7-23,0 * * *"  ─┘                  (под мьютексом) └─► managePass  ─► core.Decide ─► executor.Sell ─► statestore.Save
-  (ModeManage)
+  (ModeBuy)             ├─► scheduler.Run ─► service.Run ─┬─► buyPass     ─► core.Decide ─► executor.Buy  ─► stoporders.Place (initial) ─► statestore.Save
+cron "0 7-23,0 * * *"  ─┘                  (под мьютексом) └─► managePass  ─► stoporders.List ─► core.Decide ─┬─► SignalSell: stoporders.Cancel ─► executor.Sell ─► statestore.Save
+                                                                                                                └─► иначе: sync стоп-заявки (Cancel+Place при росте уровня/несовпадении лотов) ─► statestore.Save
 ```
 
 ---
@@ -48,16 +55,21 @@ cron "0 7-23,0 * * *"  ─┘                  (под мьютексом) └�
 | `marketdata/marketdata.go` | Сборка `MarketData` из свечей Тинькофф (как в бэктесте) | `Assemble`, `fetchCompleted`, `ToCandles` |
 | `sizing/sizing.go` | Расчёт количества лотов из % счёта | `Lots` |
 | `executor/executor.go` | Размещение рыночных ордеров (или dry-run) | `Executor`, `Buy`, `Sell`, `place` |
-| `statestore/statestore.go` | Персистентность entry-state в JSON (атомарно) | `FileStore`, `Entry`, `Load`, `Save` |
+| `stoporders/stoporders.go` | Постановка/снятие/список биржевой стоп-market SELL-заявки (или dry-run) | `Executor`, `Place`, `Cancel`, `List`, `ActiveStop`, `Result` |
+| `statestore/statestore.go` | Персистентность entry-state в JSON (атомарно), включая стоп-поля | `FileStore`, `Entry`, `Load`, `Save` |
 | `reconstruct/reconstruct.go` | Восстановление state из API, если файл потерян | `Entry`, `atrAtEntry` |
-| `notifier/notifier.go` | Рендер Telegram-сообщений (чистые функции) | `Entry`, `Exit`, `Skip`, `Alert` |
+| `notifier/notifier.go` | Рендер Telegram-сообщений (чистые функции) | `Entry`, `Exit`, `Skip`, `Alert`, `StopSet` |
 
 Внешние зависимости:
 
 - `internal/config/reversion.go` — `ReversionConfig` (env-конфиг, дефолты).
 - `internal/app/app.go:340-359` — где воркеры стартуют.
-- `reversion/strategy/core` — торговая логика (`Decide`, `Lookback`, `Params`).
+- `reversion/strategy/core` — торговая логика (`Decide`, `Lookback`, `Params`,
+  `DesiredStop`).
 - `internal/domain/backtest` — `AssembleMarketData` переиспользуется в live.
+- gRPC `StopOrdersService` (`internal/pb/v1`) — постановка/отмена/список биржевых
+  стоп-заявок; клиент — `grpcClient.StopOrdersServiceClient()`, передаётся в
+  `live.NewService` как параметр `stops`.
 
 ---
 
@@ -97,7 +109,7 @@ reversiondto.Run{Scheduler: "0 7-23,0 * * *", Mode: reversiondto.ModeManage}
 
 ## 4. Ядро: `service` и сериализация проходов
 
-`live.go:36-49` — структура `service` с зависимостями:
+`live.go:37-51` — структура `service` с зависимостями:
 
 | Поле | Тип | Зачем |
 |---|---|---|
@@ -105,12 +117,35 @@ reversiondto.Run{Scheduler: "0 7-23,0 * * *", Mode: reversiondto.ModeManage}
 | `instruments` | `instrumentsClient` | список торгуемых акций (`Shares`) |
 | `market` | `marketdata.CandleClient` | свечи (`GetCandles`) |
 | `ops` | `operationsClient` | портфель, кэш, сделки (gRPC) |
-| `exec` | `*executor.Executor` | размещение ордеров |
+| `exec` | `*executor.Executor` | размещение рыночных ордеров |
+| `stops` | `*stoporders.Executor` | постановка/снятие/список биржевой стоп-заявки (§11) |
 | `tg` | `telegram.Client` | уведомления |
 | `cfg` | `*config.ReversionConfig` | конфиг (account, тикеры, %, флаги) |
 | `statePath` | `string` | путь к файлу состояния: `data/state/reversion_<accountID>.json` |
 
-`Run` (`live.go:76-88`) — **единственная точка входа** прохода:
+`NewService` (`live.go:55-74`) с веткой стоп-заявок получила новый параметр `stops
+stoporders.Client` (седьмой позиционный аргумент, между `orders executor.OrdersClient` и `tg
+telegram.Client`):
+
+```go
+func NewService(
+    instruments instrumentsClient,
+    market marketdata.CandleClient,
+    ops operationsClient,
+    orders executor.OrdersClient,
+    stops stoporders.Client,
+    tg telegram.Client,
+    cfg *config.ReversionConfig,
+) *service
+```
+
+Внутри конструктора `stops` оборачивается тем же флагом `cfg.TradeEnabled`, что и обычный
+`exec`: `stoporders.New(stops, cfg.AccountID, cfg.TradeEnabled)` — отдельного тумблера
+dry-run для стоп-заявок нет. Вызывающая сторона (`service_provider.GetReversionLiveService`,
+`internal/service_provider/service.go:227-243`) передаёт
+`grpcClient.StopOrdersServiceClient()`.
+
+`Run` (`live.go:80-92`) — **единственная точка входа** прохода:
 
 ```go
 func (s *service) Run(ctx context.Context, in dto.Run) error {
@@ -130,78 +165,124 @@ func (s *service) Run(ctx context.Context, in dto.Run) error {
 `fix(reversion/live): serialize buy/manage passes`.
 
 Общие хелперы в `live.go`:
-- `notify` (90) — шлёт в Telegram **только** если `NotifyEnabled`;
-- `sharesByTicker` (98) — индекс `ticker → *Share` по всем торгуемым инструментам;
-- `heldByShareID` (111) — позиции счёта с `Quantity > 0`, индекс по `ShareID`
+- `notify` (95) — шлёт в Telegram **только** если `NotifyEnabled`;
+- `sharesByTicker` (102) — индекс `ticker → *Share` по всем торгуемым инструментам;
+- `heldByShareID` (115) — позиции счёта с `Quantity > 0`, индекс по `ShareID`
   (так buy понимает, что уже в позиции, а manage — что вести);
-- `nowMSK` (125) — текущее время в Europe/Moscow;
-- `stateStore` (134) — `FileStore` по `statePath`.
+- `nowMSK` (129) — текущее время в Europe/Moscow;
+- `stateStore` (138) — `FileStore` по `statePath`.
 
 ---
 
 ## 5. Buy-pass: как открывается позиция
 
-`buy.go:15-109`, функция `buyPass`. Поток по шагам:
+`buy.go:17-113`, функция `buyPass`. Поток по шагам:
 
-1. **Подготовка** (16-28): грузим торгуемые акции (`sharesByTicker`), текущие
+1. **Подготовка** (18-30): грузим торгуемые акции (`sharesByTicker`), текущие
    позиции (`heldByShareID`), файл состояния (`store.Load`).
 2. **Цикл по тикерам из конфига** (`cfg.Tickers`), для каждого:
-   - **31-36** `StrategyFor(ticker)` — берём калиброванную стратегию из реестра.
+   - **34-38** `StrategyFor(ticker)` — берём калиброванную стратегию из реестра.
      Нет в реестре → alert + пропуск.
-   - **37-41** проверяем, что инструмент существует и `sh.Trading == true`.
-   - **42-48** **фильтр «уже в позиции»**: если тикер есть в портфеле (`held`) или
+   - **39-43** проверяем, что инструмент существует и `sh.Trading == true`.
+   - **44-50** **фильтр «уже в позиции»**: если тикер есть в портфеле (`held`) или
      в нашем state — пропускаем, им займётся manage-pass.
-   - **50-55** `marketdata.Assemble(...)` — собираем `MarketData` (закрытые часовые
+   - **52-57** `marketdata.Assemble(...)` — собираем `MarketData` (закрытые часовые
      свечи + при необходимости 4H; см. §8). `md.Position = nil` — мы вне позиции.
-   - **57-60** `st.Decide(md)` — **главный вызов**. Если это не `SignalBuy` — дальше.
-   - **62-69** при сигнале берём из брокера полную стоимость счёта
+   - **59-62** `st.Decide(md)` — **главный вызов**. Если это не `SignalBuy` — дальше.
+   - **64-71** при сигнале берём из брокера полную стоимость счёта
      (`GetPortfolioTotal`) и свободный кэш (`GetAvailableCash`).
-   - **70-74** `sizing.Lots(...)` — считаем лоты (см. §9). Не хватает на лот →
+   - **72-76** `sizing.Lots(...)` — считаем лоты (см. §9). Не хватает на лот →
      `notifier.Skip` + пропуск.
-   - **76-81** `exec.Buy(...)` — рыночный ордер (или dry-run). Ошибка → alert,
+   - **78-83** `exec.Buy(...)` — рыночный ордер (или dry-run). Ошибка → alert,
      **state не меняем** (повтор на следующем тике).
-   - **83-93** определяем фактическую цену/количество: если ордер реально
+   - **85-95** определяем фактическую цену/количество: если ордер реально
      размещён и брокер вернул `FillPrice`/`FilledLots` — берём их, иначе fallback
      на цену сигнала и запрошенные лоты.
-   - **95-105** записываем `statestore.Entry` (тикер, время, цена входа, **`EntryATR`
-     из сигнала**, `MaxFav = fillPrice`, количество) и атомарно сохраняем.
-   - **106** уведомление `notifier.Entry`.
+   - **97-107** записываем `statestore.Entry` (тикер, время, цена входа, **`EntryATR`
+     из сигнала**, `MaxFav = fillPrice`, количество, стоп-поля ещё пустые) и
+     атомарно сохраняем.
+   - **108** уведомление `notifier.Entry`.
+   - **110** `s.placeInitialStop(...)` — сразу выставляет защитную биржевую
+     стоп-заявку на весь купленный объём (см. §11) и перезаписывает `state[ticker]`
+     с заполненными `StopOrderID`/`StopPrice`/`StopReason`.
 
-Ключевой момент — `EntryATR: sig.ATR` (строка 99). Стратегия «замораживает» ATR на
-момент входа, и все защитные выходы (trailing/breakeven/stop) считаются от этого
+Ключевой момент — `EntryATR: sig.ATR` (строка 101). Стратегия «замораживает» ATR на
+момент входа, и все защитные выходы (trailing/breakeven/STOP) считаются от этого
 замороженного значения. Поэтому его обязательно надо сохранить — брокер его не отдаёт.
 
 ---
 
 ## 6. Manage-pass: как ведётся и закрывается позиция
 
-`manage.go:16-120`, функция `managePass`. Поток:
+`manage.go:20-212`, функция `managePass`. Поток:
 
-1. **Подготовка** (17-29): акции, позиции, state — как в buy.
-2. **Цикл по тикерам**, для каждого:
-   - **33-40** стратегия из реестра + проверка торгуемости.
-   - **41-49** `held[sh.ID]` — **если позиции в портфеле НЕТ**, а в state она ещё
-     висит (продали где-то ещё) — чистим устаревшую запись и пропускаем.
-   - **51-67** **восстановление state** (`reconstruct.Entry`): позиция в портфеле
+1. **Подготовка** (21-33): акции, позиции, state — как в buy.
+2. **Один снимок активных стоп-заявок** (35-44): `s.stops.List(ctx)` — единственный
+   вызов `GetStopOrders` на весь проход (не на тикер), проиндексированный и по
+   `StopOrderID` (`stopByID`), и по инструменту (`stopByInstrument`). `List`-ошибка
+   не прерывает проход — просто отключает синхронизацию стоп-заявок в этом тике
+   (`listErr`) и шлёт alert.
+3. **Цикл по тикерам**, для каждого:
+   - **48-55** стратегия из реестра + проверка торгуемости.
+   - **57-69** `held[sh.ID]` — **если позиции в портфеле НЕТ**: если в state тикер
+     ещё числится с непустым `StopOrderID`, это трактуется как **сработавшая
+     стоп-заявка** — `notifier.Exit` с уже сохранёнными `StopReason`/`StopPrice`
+     (детект срабатывания, live-runner.md → «Стоп-заявки»); иначе — обычная ручная
+     продажа. В обоих случаях запись чистится из state.
+   - **71-87** **восстановление state** (`reconstruct.Entry`): позиция в портфеле
      есть, а локального state нет (потеряли файл / перезапуск без него). Тогда
-     восстанавливаем `EntryTime/EntryATR/MaxFav` из API (см. §11) и шлём alert.
-   - **69-73** `marketdata.Assemble(...)` — свежий снимок рынка.
-   - **75-82** **обновление `MaxFav`**: если текущая цена (последний закрытый
+     восстанавливаем `EntryTime/EntryATR/MaxFav` из API (см. §12) и шлём alert.
+   - **89-99** **частичное исполнение стопа** (`pos.Quantity < entry.Quantity &&
+     entry.StopOrderID != ""`): bookkeeping-only — `entry.Quantity` подрезается до
+     фактического остатка, alert шлётся, но `StopOrderID` **не отменяется здесь**
+     (снимок из шага 2 уже сделан один раз на пасс; повторная отмена той же заявки
+     дала бы ложный alert). Реконсиляция размера живой заявки происходит ниже, в
+     общем level-switch (см. следующий пункт).
+   - **101-105** `marketdata.Assemble(...)` — свежий снимок рынка.
+   - **107** `prevMaxFav := entry.MaxFav` — уровень, от которого была посчитана
+     заявка, стоящая сейчас на бирже (нужен ниже как `PrevMaxFavorablePrice`).
+   - **108-115** **обновление `MaxFav`**: если текущая цена (последний закрытый
      close) выше сохранённого максимума — поднимаем и сохраняем. Монотонный рост,
-     нужен для trailing-stop и breakeven.
-   - **84-89** собираем `md.Position` из state: цена входа, количество,
-     **замороженный `EntryATR`**, `MaxFavorablePrice`.
-   - **91-94** `st.Decide(md)` — если не `SignalSell`, дальше.
-   - **96-100** guard от деления на ноль: `sh.Lot <= 0` → alert + пропуск
-     (это причина части коммита `guard sell divide-by-zero`).
-   - **101-107** `lots = pos.Quantity / sh.Lot`; `exec.Sell(...)`. Ошибка → alert,
-     state не трогаем.
-   - **109-117** определяем цену выхода (фактический `FillPrice` либо `sig.Price`),
-     **удаляем тикер из state**, сохраняем, шлём `notifier.Exit` с кодом причины
-     (`OB`/`TRAIL`/`BE`/`ATRSL`/`RSIOS`/`EMAX` — см. `strategy.md`).
+     нужен для TRAIL и breakeven.
+   - **117-123** собираем `md.Position` из state: цена входа, количество,
+     **замороженный `EntryATR`**, `MaxFavorablePrice` (обновлённый) и
+     `PrevMaxFavorablePrice` (до обновления этого тика) — оба поля идут в
+     `core.DesiredStop`/`manage()`, см. `strategy.md` → «Модель исполнения стопов».
+   - **125** `sig := st.Decide(md)`.
+   - **126-162** **если `SignalSell`** (`OB`/`RSI50`/`BE`/`RSIOS`/`EMAX`/`STOP`
+     через close-путь): сначала `s.stops.Cancel(entry.StopOrderID)`, если заявка
+     есть — провал `Cancel` алертит и **пропускает продажу в этом тике**
+     (`continue`, без снятия заявки продавать нельзя). Затем guard `sh.Lot <= 0`
+     (причина коммита `guard sell divide-by-zero`), `exec.Sell(...)`. Ошибка
+     продажи → alert, state не трогаем (retry на следующем тике). Успех → удаляем
+     запись из state, `notifier.Exit`.
+   - **164-177** (только когда `List` в шаге 2 не упал) **синхронизация**: если
+     `StopOrderID` есть, но его нет среди живых заявок биржи — считаем, что
+     потерялась (сбрасываем `StopOrderID`, alert); если своей заявки нет, а на
+     бирже висит чужая/устаревшая на этот инструмент (например, после
+     `reconstruct`) — отменяем её.
+   - **179-180** `level, reason := core.DesiredStop(...)` от **обновлённого**
+     `MaxFav`.
+   - **182-191** `sizeMismatch` — живая заявка держит не те лоты, что реально в
+     позиции (`live.Lots != entry.Quantity/sh.Lot`), например после частичного
+     исполнения из шага «частичное исполнение».
+   - **193-205** финальный `switch`: `reason==""` → ценовые стопы выключены,
+     ничего не делаем; `StopOrderID==""` → `s.replaceStop` выставляет первую
+     заявку; `sizeMismatch || level > entry.StopPrice` → `Cancel` старой +
+     `s.replaceStop` новой (оверсайз или подъём трейла). Провал `Cancel` здесь —
+     alert, **старая заявка не трогается**, ретрай на следующем часовом тике.
+   - **206-209** сохраняем итоговый `state[ticker]`.
 
-`atrPeriodFor` (123-128) — отдаёт `ATRPeriod` тикера для пересчёта ATR в
-reconstruct (дефолт 14).
+`atrPeriodFor` (215-220) — отдаёт `ATRPeriod` тикера для пересчёта ATR в
+reconstruct (дефолт 14). `mustParams` (223-226) — тонкая обёртка над `ParamsFor` для
+кейса, где тикер уже прошёл `StrategyFor` выше по стеку, так что `ok` гарантированно
+`true`. `replaceStop` (230-254) — хелпер `manage.go`, вызывает `s.stops.Place`,
+штампует `entry.StopOrderID` **только если реально размещено** (`res.Placed`), но
+`entry.StopPrice`/`entry.StopReason` — **всегда** (в том числе в dry-run, чтобы
+бумажный state отражал уровень, который был бы на бирже), и шлёт `notifier.StopSet`,
+только если уровень/причина реально изменились. `buy.go`'s `placeInitialStop` (§5, шаг
+110) делает то же самое для самой первой заявки, но отдельным телом функции — а не
+вызовом `replaceStop` (код почти идентичен, но не переиспользован буквально).
 
 ---
 
@@ -214,14 +295,20 @@ reconstruct (дефолт 14).
   - ⚠️ `SFIN` — **DO NOT TRADE** (калибровка провалена). Числится для полноты, но
     его не должно быть в `REVERSION_TICKERS`.
   - `ASTR` — baseline (без калибровки).
-- `StrategyFor(ticker)` (24-30) — возвращает `*core.Strategy`
+- `ParamsFor(ticker)` (24-27) — возвращает голый `core.Params` (без обёртки в
+  `*core.Strategy`), `ok=false` для неизвестного тикера. Используется там, где нужны
+  именно параметры, а не готовая стратегия: `manage.go` (`mustParams`, вызов
+  `core.DesiredStop` в level-sync) и `buy.go` (`placeInitialStop`, тот же
+  `core.DesiredStop` для самой первой заявки).
+- `StrategyFor(ticker)` (30-36) — возвращает `*core.Strategy`
   (`core.NewWithParams(ticker, p)`) или `ok=false`.
-- `MaxHTFTrendEMA(tickers)` (34-42) — максимальный период 4H-EMA среди тикеров;
+- `MaxHTFTrendEMA(tickers)` (40-48) — максимальный период 4H-EMA среди тикеров;
   нужен, чтобы заранее знать, грузить ли 4H-свечи в `marketdata.Assemble`.
 
 Параметры каждого тикера живут в `reversion/strategy/<ticker>/<ticker>.go`
 (`DefaultParams()`). Именно тут отличаются `RSIOversold`, `UseTrend`, `UseVolume`,
-`HTFTrendEMA`, выходы и т.д. Live и бэктест берут их из **одного и того же** места.
+`HTFTrendEMA`, выходы (`UseTrail`/`CatStopATRMult`/`UseATRStop` — компоненты STOP) и
+т.д. Live и бэктест берут их из **одного и того же** места.
 
 ---
 
@@ -298,14 +385,54 @@ lots      = min(lots, affordable)
 
 ---
 
-## 11. Состояние позиции: `statestore` и `reconstruct`
+## 11. Стоп-заявки: `stoporders/stoporders.go`
 
-Брокер **не отдаёт** `EntryATR` и `MaxFavorablePrice` — а без них не посчитать
-trailing/breakeven/stop. Поэтому их храним сами.
+Ставит, снимает и листает **единственную** биржевую stop-market SELL-заявку на позицию —
+живую реализацию компоненты STOP из `core.DesiredStop` (`strategy.md`). Симметричен
+`executor/executor.go`, но говорит с отдельным gRPC-сервисом (`StopOrdersService`), а не
+`OrdersService`.
+
+- `Client` (19-23) — срез клиента, нужный экзекьютору: `PostStopOrder`, `GetStopOrders`,
+  `CancelStopOrder`.
+- `ActiveStop` (26-31) — одна активная заявка из ответа `List`: `InstrumentUID`,
+  `StopOrderID`, `StopPrice`, `Lots`.
+- `Result` (35-38) — `Placed`, `OrderID`; при `Placed=false` (dry-run) вызывающая сторона
+  продолжает полагаться на собственный state, а не на биржевую заявку.
+- `Executor` / `New` (42-51) — обёртка над `Client` + `accountID` + `tradeEnabled` (тот же
+  флаг `cfg.TradeEnabled`, что и у обычного `executor`).
+- `roundDownToIncrement` (55-60) — округляет цену **вниз** к `MinPriceIncrement`
+  инструмента: для sell-стопа округление вниз консервативно (заявка не окажется выше
+  желаемого уровня стратегии).
+- `Place` (64-86): при `!tradeEnabled` — сразу `Result{Placed:false}, nil` без обращения к
+  API. Иначе строит `PostStopOrderRequest`: `Direction=SELL`,
+  `ExpirationType=GOOD_TILL_CANCEL` (GTC — висит, пока не отменят или не исполнят),
+  `StopOrderType=STOP_LOSS`, `ExchangeOrderType=MARKET` (после срабатывания заявка
+  становится рыночной), `OrderId=uuid.NewString()` — свежий UUID на каждый вызов, для
+  идемпотентности так же, как у рыночных ордеров в `executor`.
+- `Cancel` (89-100) — при `!tradeEnabled` no-op (`nil`); иначе `CancelStopOrder`.
+- `List` (104-128) — при `!tradeEnabled` возвращает `(nil, nil)`, поэтому в dry-run
+  синхронизация с биржей в `manage.go` просто ничего не делает (сверять нечего). Иначе
+  запрашивает `GetStopOrders(Status=ACTIVE)` и оставляет только SELL-заявки
+  (`GetDirection() == SELL`), конвертируя `Quotation` в `float64` через `utils.CombinePrice`.
+
+Вызывающая сторона (`manage.go`, `buy.go`) не работает с `Client`/gRPC напрямую — только
+через `*stoporders.Executor` (поле `s.stops` в `service`, §4).
+
+---
+
+## 12. Состояние позиции: `statestore` и `reconstruct`
+
+Брокер **не отдаёт** `EntryATR`, `MaxFavorablePrice` и наши стоп-поля — а без них не
+посчитать trailing/breakeven/STOP или синхронизировать биржевую заявку. Поэтому их храним
+сами.
 
 ### `statestore/statestore.go`
-- `Entry` (16-23): `Ticker`, `EntryTime`, `EntryPrice`, `EntryATR`, `MaxFav`,
-  `Quantity`.
+- `Entry` (16-27): `Ticker`, `EntryTime`, `EntryPrice`, `EntryATR`, `MaxFav`, `Quantity` —
+  как раньше, плюс три новых поля стоп-заявки: `StopOrderID` (ID активной заявки на бирже,
+  `""` = сейчас нет заявки — dry-run или временный провал `Place`), `StopPrice` (уровень
+  выставленной или, в dry-run, *номинально* выставленной заявки — обновляется независимо от
+  того, реально ли заявка на бирже), `StopReason` (`SL`/`ATRSL`/`TRAIL` — какая компонента
+  STOP сейчас связывает уровень).
 - `FileStore` хранит **всю карту** `ticker → Entry` одним JSON-файлом
   (`data/state/reversion_<accountID>.json`).
 - `Load` (40-56): отсутствующий файл = **пустая карта, не ошибка**.
@@ -322,12 +449,14 @@ trailing/breakeven/stop. Поэтому их храним сами.
   входа — повторяет то, как `core` штампует ATR при входе;
 - `MaxFav` ← максимум close с момента входа (59-63).
 
-Восстановленные значения приблизительны (особенно ATR), поэтому manage-pass шлёт
-alert о реконструкции (`manage.go:66`).
+Восстановленная запись выходит с **пустыми стоп-полями** (`reconstruct.Entry` их не
+знает — на бирже могла остаться чужая/устаревшая заявка на этот инструмент, её подчистит
+шаг синхронизации в `managePass`, §6). Восстановленные значения приблизительны (особенно
+ATR), поэтому manage-pass шлёт alert о реконструкции (`manage.go:86`).
 
 ---
 
-## 12. Конфиг и уведомления
+## 13. Конфиг и уведомления
 
 ### `internal/config/reversion.go`
 `ReversionConfig` (5-11) + `NewReversionConfig` (16-21) с безопасными дефолтами:
@@ -340,12 +469,17 @@ alert о реконструкции (`manage.go:66`).
 Чистые функции рендера Telegram (вызывающая сторона шлёт только при `NotifyEnabled`):
 - `Entry` (15) — 🟢 вход; `Exit` (21) — 🔴 выход с кодом причины;
 - `Skip` (27) — ⏭️ пропуск входа (нехватка бюджета/кэша);
-- `Alert` (32) — ⚠️ операционный алерт (реконструкция, отклонённый ордер).
-- `paperTag` (7) добавляет пометку «БУМАЖНАЯ сделка», когда ордер не выставлялся.
+- `Alert` (32) — ⚠️ операционный алерт (реконструкция, отклонённый ордер, провал
+  Place/Cancel/List стоп-заявки);
+- `StopSet` (37) — 🛡 стоп-заявка (пере)выставлена на уровень с кодом причины
+  (`SL`/`ATRSL`/`TRAIL`); шлётся из `replaceStop`/`placeInitialStop` только когда
+  уровень или причина реально изменились (не на каждом тике).
+- `paperTag` (6) добавляет пометку «БУМАЖНАЯ сделка», когда ордер (рыночный или
+  стоп-заявка) не выставлялся — общая для всех пяти функций.
 
 ---
 
-## 13. Где что искать (шпаргалка)
+## 14. Где что искать (шпаргалка)
 
 | Вопрос | Файл |
 |---|---|
@@ -354,10 +488,13 @@ alert о реконструкции (`manage.go:66`).
 | Логика «купить»? | `live/buy.go` |
 | Логика «вести/продать»? | `live/manage.go` |
 | Сами правила входа/выхода? | `reversion/strategy/core/core.go` (+ `strategy.md`) |
+| Комбинированный уровень стопа (SL/ATRSL/TRAIL)? | `core.DesiredStop` (`core.go`) |
 | Параметры конкретного тикера? | `reversion/strategy/<ticker>/<ticker>.go` |
+| Параметры по тикеру без стратегии? | `registry.ParamsFor` (`live/registry.go`) |
 | Откуда берутся свечи? | `live/marketdata/marketdata.go` |
 | Сколько лотов покупать? | `live/sizing/sizing.go` |
-| Как выставляется ордер? | `live/executor/executor.go` |
-| Где хранится EntryATR/MaxFav? | `live/statestore/statestore.go` |
+| Как выставляется рыночный ордер? | `live/executor/executor.go` |
+| Как выставляется/снимается/листается стоп-заявка? | `live/stoporders/stoporders.go` |
+| Где хранится EntryATR/MaxFav/стоп-поля? | `live/statestore/statestore.go` |
 | Что если файл состояния потерян? | `live/reconstruct/reconstruct.go` |
 | Какие env-переменные? | `internal/config/reversion.go` + `live-runner.md` |
