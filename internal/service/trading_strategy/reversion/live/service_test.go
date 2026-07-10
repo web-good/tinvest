@@ -171,7 +171,66 @@ func TestManagePass_UpdatesMaxFavAndPersists(t *testing.T) {
 	}
 }
 
+// withIntrabarUGLD временно переводит UGLD в реестре на интрабарную модель — тесты
+// биржевой стоп-механики написаны против UGLD-окружения (newManageEnv), а боевой UGLD
+// работает по close-модели (без биржевых стопов).
+func withIntrabarUGLD(t *testing.T) {
+	t.Helper()
+	old := paramsByTicker["UGLD"]
+	p := old
+	p.UseIntrabarStop = 1
+	paramsByTicker["UGLD"] = p
+	t.Cleanup(func() { paramsByTicker["UGLD"] = old })
+}
+
+// Close-модель (дефолт UGLD): placeInitialStop не выставляет биржевую заявку.
+// stops-мок без ожиданий — любой вызов Place уронит тест (mockery strict).
+func TestPlaceInitialStopSkippedOnCloseModel(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	stops := stopmocks.NewMockClient(t)
+	c := cfg(dir)
+	c.TradeEnabled = true
+	svc := NewService(livemocks.NewMockinstrumentsClient(t), mdmocks.NewMockCandleClient(t),
+		livemocks.NewMockoperationsClient(t), nil, stops, tgmocks.NewMockClient(t), c)
+	svc.statePath = statePath
+
+	store := statestore.New(statePath)
+	entry := statestore.Entry{Ticker: "UGLD", EntryPrice: 100, EntryATR: 2, MaxFav: 100, Quantity: 10}
+	state := map[string]statestore.Entry{"UGLD": entry}
+	sh := &imodel.Share{ID: "uid-ugld", Ticker: "UGLD", Lot: 1, MinPriceIncrement: 0.01}
+
+	got := svc.placeInitialStop(context.Background(), "UGLD", sh, entry, state, store)
+	if got.StopOrderID != "" || got.StopPrice != 0 || got.StopReason != "" {
+		t.Fatalf("close-модель: стоп-заявка не должна выставляться, got %+v", got)
+	}
+}
+
+// Close-модель: заявка, оставшаяся после переключения с интрабара, снимается,
+// стоп-поля стейта чистятся, позиция остаётся (SELL ядро не сигналит).
+func TestManagePass_CancelsLeftoverStopOnCloseModel(t *testing.T) {
+	env := newManageEnv(t, seedEntry("so-old", 97), hourlySeries(400, 101))
+	env.stops.EXPECT().GetStopOrders(mock.Anything, mock.Anything).
+		Return(activeList("so-old", 97, 10), nil)
+	env.stops.EXPECT().CancelStopOrder(mock.Anything, mock.MatchedBy(func(in *investapi.CancelStopOrderRequest) bool {
+		return in.GetStopOrderId() == "so-old"
+	})).Return(&investapi.CancelStopOrderResponse{}, nil)
+
+	if err := env.svc.Run(context.Background(), dto.Run{Mode: dto.ModeManage}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	st, _ := statestore.New(env.statePath).Load()
+	e := st["UGLD"]
+	if e.StopOrderID != "" || e.StopPrice != 0 || e.StopReason != "" {
+		t.Fatalf("стоп-поля должны очиститься: %+v", e)
+	}
+	if e.Ticker == "" {
+		t.Fatalf("позиция не должна пропасть из стейта")
+	}
+}
+
 func TestPlaceInitialStopPersistsIDAndLevel(t *testing.T) {
+	withIntrabarUGLD(t)
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	stops := stopmocks.NewMockClient(t)
@@ -285,6 +344,7 @@ func emptyStopList() *investapi.GetStopOrdersResponse {
 // 1. Трейлинг подтянулся: cancel старой + post новой, стейт несёт новый ID/уровень.
 // UGLD params: UseTrail=1, TrailATRMult=1.5 -> close 110 => MaxFav 110, want 110-3=107 > 97.
 func TestManagePass_RepostsStopWhenTrailRises(t *testing.T) {
+	withIntrabarUGLD(t)
 	env := newManageEnv(t, seedEntry("so-old", 97), hourlySeries(400, 110))
 	env.stops.EXPECT().GetStopOrders(mock.Anything, mock.Anything).Return(activeList("so-old", 97, 10), nil)
 	env.stops.EXPECT().CancelStopOrder(mock.Anything, mock.MatchedBy(func(in *investapi.CancelStopOrderRequest) bool {
@@ -305,6 +365,7 @@ func TestManagePass_RepostsStopWhenTrailRises(t *testing.T) {
 
 // 2. Уровень не вырос: только List; отсутствие EXPECT на Cancel/Post ловит лишние вызовы.
 func TestManagePass_KeepsStopWhenLevelUnchanged(t *testing.T) {
+	withIntrabarUGLD(t)
 	env := newManageEnv(t, seedEntry("so-1", 97), hourlySeries(400)) // flat 100: want 97 == 97
 	env.stops.EXPECT().GetStopOrders(mock.Anything, mock.Anything).Return(activeList("so-1", 97, 10), nil)
 
@@ -486,6 +547,7 @@ func TestManagePass_CancelFailBlocksMarketSell(t *testing.T) {
 // бумаги при касании уровня). Alert уходит, позиция остаётся в стейте без stopOrderId,
 // ретрай — на следующем часовом тике.
 func TestManagePass_StrayCancelFailBlocksNewStopPlacement(t *testing.T) {
+	withIntrabarUGLD(t)
 	seed := statestore.Entry{Ticker: "UGLD", EntryPrice: 100, EntryATR: 2, MaxFav: 100,
 		Quantity: 10, EntryTime: time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC)} // StopOrderID == ""
 	env := newManageEnv(t, seed, hourlySeries(400)) // flat 100: no core SELL signal
@@ -516,6 +578,7 @@ func TestManagePass_StrayCancelFailBlocksNewStopPlacement(t *testing.T) {
 // без повторного cancel той же заявки (Finding 2) и без проглоченной ошибки Cancel
 // (Finding 1 — тут Cancel вообще один и идёт по существующему alert+break пути).
 func TestManagePass_ReconcilesStopSizeAfterPartialFill(t *testing.T) {
+	withIntrabarUGLD(t)
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	seed := seedEntry("so-old", 97) // Quantity: 10

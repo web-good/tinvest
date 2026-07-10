@@ -185,6 +185,28 @@ func (s *service) managePass(ctx context.Context) error {
 			continue
 		}
 
+		p := mustParams(ticker)
+		if p.UseIntrabarStop != 1 {
+			// Close-модель: биржевой стоп не ведём. Снять заявку, оставшуюся после
+			// переключения модели; мёртвую (не в живых по List) — просто вычистить из
+			// стейта. При недоступном List ничего не трогаем — ретрай на следующем тике.
+			if entry.StopOrderID != "" && listErr == nil {
+				if _, alive := stopByID[entry.StopOrderID]; alive {
+					if err := s.stops.Cancel(ctx, entry.StopOrderID); err != nil {
+						s.notify(notifier.Alert(ticker, "close-модель: не удалось снять оставшуюся стоп-заявку: "+err.Error()))
+						continue // заявка жива — стейт не трогаем, ретрай на следующем тике
+					}
+					s.notify(notifier.Alert(ticker, "close-модель: снял оставшуюся биржевую стоп-заявку"))
+				}
+				entry.StopOrderID, entry.StopPrice, entry.StopReason = "", 0, ""
+				state[ticker] = entry
+				if err := store.Save(state); err != nil {
+					return fmt.Errorf("reversion: save stop state %s: %w", ticker, err)
+				}
+			}
+			continue
+		}
+
 		// Синхронизация стоп-заявки (только при работающем List).
 		strayCancelFailed := false
 		if listErr == nil {
@@ -207,7 +229,7 @@ func (s *service) managePass(ctx context.Context) error {
 		}
 
 		// Желаемый уровень от ОБНОВЛЁННОГО MaxFav.
-		level, reason := core.DesiredStop(mustParams(ticker), entry.EntryPrice, entry.EntryATR, entry.MaxFav)
+		level, reason := core.DesiredStop(p, entry.EntryPrice, entry.EntryATR, entry.MaxFav)
 
 		// Реконсиляция размера: живая заявка на бирже держит не тот объём, что реально в
 		// позиции (например, после частичного исполнения выше). Оверсайз опаснее

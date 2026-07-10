@@ -119,8 +119,8 @@ func (s *service) placeInitialStop(ctx context.Context, ticker string, sh *imode
 	entry statestore.Entry, state map[string]statestore.Entry, store statestore.Store) statestore.Entry {
 
 	p, ok := ParamsFor(ticker)
-	if !ok {
-		return entry
+	if !ok || p.UseIntrabarStop != 1 {
+		return entry // close-модель: биржевой стоп не выставляется, выходы — по сигналам ядра на закрытии часа
 	}
 	level, reason := core.DesiredStop(p, entry.EntryPrice, entry.EntryATR, entry.MaxFav)
 	if reason == "" {
