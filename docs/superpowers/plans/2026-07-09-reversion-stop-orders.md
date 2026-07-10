@@ -44,13 +44,13 @@
   // + метод GrpcClient.StopOrdersServiceClient() StopOrdersServiceClient
   ```
 
-- [ ] **Step 1: Создать ветку**
+- [x] **Step 1: Создать ветку**
 
 ```bash
 git checkout -b feat/reversion-stop-orders main
 ```
 
-- [ ] **Step 2: Makefile-таргет по шаблону generate-orders-api**
+- [x] **Step 2: Makefile-таргет по шаблону generate-orders-api**
 
 ```makefile
 generate-stoporders-api:
@@ -65,7 +65,7 @@ generate-stoporders-api:
 
 Также добавить `make generate-stoporders-api` в агрегирующий таргет `generate` (рядом с остальными `generate-*-api`, см. начало Makefile).
 
-- [ ] **Step 3: Сгенерировать и проверить**
+- [x] **Step 3: Сгенерировать и проверить**
 
 Перед генерацией убедиться, что в `api/v1/stoporders.proto` есть `option go_package` в том же стиле, что в `orders.proto` (`grep go_package api/v1/orders.proto api/v1/stoporders.proto`); если в stoporders.proto его нет — добавить идентичный orders.proto.
 
@@ -76,7 +76,7 @@ go build ./internal/pb/...
 
 Expected: появились `internal/pb/v1/stoporders.pb.go` и `stoporders_grpc.pb.go` (пакет `investapi`), сборка зелёная. Если `bin/protoc-gen-go` отсутствует — `make install-deps`.
 
-- [ ] **Step 4: Failing test — обёртка хранит токен и подмешивает auth**
+- [x] **Step 4: Failing test — обёртка хранит токен и подмешивает auth**
 
 Скопировать паттерн из `pkg/client/grpc/orders_auth_test.go` (fake, который проверяет `opts`):
 
@@ -123,12 +123,12 @@ func TestStopOrdersServiceClient_PostAttachesAuth(t *testing.T) {
 
 Примечание: поле `auth.Token` — сверить фактическое имя поля в `pkg/client/grpc/auth.go` и с тестом `orders_auth_test.go`; повторить их структуру дословно.
 
-- [ ] **Step 5: Запустить — убедиться, что падает**
+- [x] **Step 5: Запустить — убедиться, что падает**
 
 Run: `go test ./pkg/client/grpc/ -run StopOrders -v`
 Expected: FAIL (undefined: `NewStopOrdersServiceClient`).
 
-- [ ] **Step 6: Реализация обёртки**
+- [x] **Step 6: Реализация обёртки**
 
 `pkg/client/grpc/stop_orders_service_client.go` — зеркало `orders_service_client.go` (таймаут 10s, `NewRPCCredential`):
 
@@ -183,12 +183,12 @@ func (c *stopOrdersServiceClient) CancelStopOrder(ctx context.Context, in *inves
 
 В `pkg/client/grpc/grpc.go`: добавить `StopOrdersServiceClient() StopOrdersServiceClient` в интерфейс `GrpcClient`, поле `stopOrdersServiceClient StopOrdersServiceClient` в `Client`, геттер и строку `stopOrdersServiceClient: NewStopOrdersServiceClient(conn, token),` в `NewClientGrpc`.
 
-- [ ] **Step 7: Тесты зелёные**
+- [x] **Step 7: Тесты зелёные**
 
 Run: `go test ./pkg/client/grpc/ -v`
 Expected: PASS (включая старые).
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add Makefile internal/pb/v1/stoporders*.go pkg/client/grpc/
@@ -208,7 +208,7 @@ git commit -m "feat(grpc): generate StopOrdersService stubs and add authed clien
 **Interfaces:**
 - Produces: `strategy.Position.PrevMaxFavorablePrice float64` — монотонный максимум закрытий **до** текущего бара (на баре входа = цене входа). Движок исполняет `sig.Reason` из набора `"SL", "TRAIL", "ATRSL"` по `min(sig.StopLoss, c.Open)`.
 
-- [ ] **Step 1: Failing tests**
+- [x] **Step 1: Failing tests**
 
 В `portfolio_test.go` (по стилю соседних тестов):
 
@@ -262,12 +262,12 @@ func TestEngineFillsATRSLAtStopLevel(t *testing.T) {
 
 Примечание: поле цены выхода в `Trade` сверить с фактическим именем в `internal/domain/backtest` (`grep "ExitPrice\|SellPrice" internal/domain/backtest/*.go`) и использовать реальное. `flatCandles`/`scriptedStrategy` уже есть в `engine_test.go` — если сигнатуры отличаются, адаптировать вызов, не меняя суть проверки.
 
-- [ ] **Step 2: Убедиться, что падают**
+- [x] **Step 2: Убедиться, что падают**
 
 Run: `go test ./internal/domain/backtest/ -run 'PrevMaxFavorable|ATRSLAtStop' -v`
 Expected: FAIL (`PrevMaxFavorablePrice` undefined; exit price 90 ≠ 95).
 
-- [ ] **Step 3: Реализация**
+- [x] **Step 3: Реализация**
 
 `strategy.go` — в `Position` после `MaxFavorablePrice`:
 
@@ -296,12 +296,12 @@ Expected: FAIL (`PrevMaxFavorablePrice` undefined; exit price 90 ≠ 95).
 
 Гвард: если `sig.StopLoss == 0` при этих причинах, `min(0, open)=0` испортит сделку — добавить условие `if sig.StopLoss > 0` перед подстановкой (сохранив текущее поведение для нулевого стопа: исполнение по close).
 
-- [ ] **Step 4: Тесты зелёные**
+- [x] **Step 4: Тесты зелёные**
 
 Run: `go test ./internal/domain/backtest/ ./internal/service/trading_strategy/... -count=1`
 Expected: PASS (в т.ч. существующие тесты движка/levels — их поведение не должно измениться).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/service/trading_strategy/scalping/strategy/strategy.go internal/domain/backtest/
@@ -329,7 +329,7 @@ git commit -m "feat(backtest): PrevMaxFavorablePrice on Position and stop-level 
   ```
   Новое поведение `manage`: приоритет `STOP(SL|TRAIL|ATRSL) → OB → RSI50 → BE → RSIOS → EMAX`; STOP триггерится по `low ≤ level`, кладёт `sig.StopLoss = level`, `sig.Reason = reason`.
 
-- [ ] **Step 1: Failing tests**
+- [x] **Step 1: Failing tests**
 
 Добавить в `core_test.go` (стиль `openInput()` + `s.decide(in)`; `openInput` дополнится полем `low` — см. Step 3):
 
@@ -417,12 +417,12 @@ func TestIntrabarStopSkippedWithoutLow(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Убедиться, что падают**
+- [x] **Step 2: Убедиться, что падают**
 
 Run: `go test ./internal/service/trading_strategy/reversion/strategy/core/ -run 'Intrabar|DesiredStop|BeatsOverbought' -v`
 Expected: FAIL (нет поля `low`, нет `DesiredStop`, `PrevMaxFavorablePrice` не используется).
 
-- [ ] **Step 3: Реализация**
+- [x] **Step 3: Реализация**
 
 1. `decideInput`: добавить поле `low float64 // текущий бар: intraday low (0 на прогреве/пустой серии)`.
 2. `buildInput`: заполнить `low` из `md.Lows[len(md.Lows)-1]` (0, если срез пуст); прокинуть в возвращаемый литерал.
@@ -477,12 +477,12 @@ func DesiredStop(p Params, entryPrice, entryATR, maxFav float64) (float64, strin
 5. Обновить doc-comment пакета (строки ~1-10) и `manage` (~401-422): новый приоритет `STOP(SL|TRAIL|ATRSL) → OB → RSI50 → BE → RSIOS → EMAX`, интрабарный триггер по low, исполнение движком по `min(level, open)`, BE/RSIOS/OB/RSI50/EMAX — по close.
 6. Починить существующие тесты: в `openInput()` добавить `low: <=цене price>` по умолчанию (чтобы нейтральные сценарии не проколоть); тесты, которые триггерили ATRSL/SL/TRAIL через `in.price` (`TestExitATRStopFires`, `TestNoATRStopAboveThreshold`, `TestATRStopSkippedWhenEntryATRZero`, `TestATRStopSkippedWhenMultZero`, catstop/trail/precedence-тесты), перевести на `in.low` и заполнить `PrevMaxFavorablePrice` там, где участвует трейлинг. Смысл каждой проверки сохранить (падение → низкий low; удержание → low выше уровня).
 
-- [ ] **Step 4: Тесты зелёные**
+- [x] **Step 4: Тесты зелёные**
 
 Run: `go test ./internal/service/trading_strategy/reversion/... -count=1`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/service/trading_strategy/reversion/strategy/core/
@@ -520,7 +520,7 @@ git commit -m "feat(reversion): combined intrabar stop (low-triggered) with Desi
   `statestore.Entry` += `StopOrderID string`, `StopPrice float64`, `StopReason string` (json: `stopOrderId`/`stopPrice`/`stopReason`, omitempty).
   `notifier.StopSet(ticker string, price float64, reason string, paper bool) string`.
 
-- [ ] **Step 1: Failing tests**
+- [x] **Step 1: Failing tests**
 
 `stoporders_test.go` (мок появится в Step 3 — писать тест сразу под `mocks.NewMockClient(t)`):
 
@@ -607,7 +607,7 @@ func TestListReturnsOnlyActiveSellStops(t *testing.T) {
 
 В `notifier_test.go` дополнить существующий стиль проверкой `StopSet("UGLD", 107.5, "TRAIL", true)`: строка содержит тикер, "107.5", "TRAIL" и пометку dry-run (какую именно — скопировать из `paperTag`).
 
-- [ ] **Step 2: Реализация + мок**
+- [x] **Step 2: Реализация + мок**
 
 `stoporders.go`:
 
@@ -755,12 +755,12 @@ func StopSet(ticker string, price float64, reason string, paper bool) string {
 
 Сгенерировать: `./bin/mage mocks`.
 
-- [ ] **Step 3: Тесты зелёные**
+- [x] **Step 3: Тесты зелёные**
 
 Run: `go test ./internal/service/trading_strategy/reversion/live/... -count=1`
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add internal/service/trading_strategy/reversion/live/ .mockery.yaml
@@ -789,7 +789,7 @@ git commit -m "feat(reversion/live): stoporders executor, stop fields in state, 
   func ParamsFor(ticker string) (core.Params, bool) // registry.go
   ```
 
-- [ ] **Step 1: Failing test**
+- [x] **Step 1: Failing test**
 
 В `service_test.go` — тест «покупка ставит стоп». Данные: серия, дающая buy-сигнал, уже есть? Нет — существующие тесты только no-signal. Проще протестировать через seed: вызвать неэкспортируемый хелпер напрямую. Поэтому выделить постановку стопа в метод и тестировать его юнитом:
 
@@ -846,12 +846,12 @@ func TestParamsForKnownAndUnknown(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Убедиться, что падают**
+- [x] **Step 2: Убедиться, что падают**
 
 Run: `go test ./internal/service/trading_strategy/reversion/live/ -run 'PlaceInitialStop|ParamsFor' -v`
 Expected: FAIL (нет `stops` в NewService, нет `placeInitialStop`, нет `ParamsFor`).
 
-- [ ] **Step 3: Реализация**
+- [x] **Step 3: Реализация**
 
 `registry.go`:
 
@@ -912,12 +912,12 @@ func (s *service) placeInitialStop(ctx context.Context, ticker string, sh *imode
 
 Все существующие вызовы `NewService(...)` в тестах: добавить пятым аргументом `nil` (dry-run) или мок.
 
-- [ ] **Step 4: Тесты зелёные + сборка**
+- [x] **Step 4: Тесты зелёные + сборка**
 
 Run: `go build ./internal/... ./pkg/... ./cmd/... && go test ./internal/service/trading_strategy/reversion/live/... ./internal/service_provider/... -count=1`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/service/trading_strategy/reversion/live/ internal/service_provider/
@@ -936,7 +936,7 @@ git commit -m "feat(reversion/live): place protective stop order right after ent
 - Consumes: `stoporders.Executor.{Place,Cancel,List}`, `core.DesiredStop`, `ParamsFor`, `statestore.Entry.{StopOrderID,StopPrice,StopReason}`, `strategy.Position.PrevMaxFavorablePrice`.
 - Produces: поведение managePass по секции 3 спеки (шесть случаев). Новых экспортируемых имён нет.
 
-- [ ] **Step 1: Failing tests**
+- [x] **Step 1: Failing tests**
 
 Тесты уровня managePass через `svc.Run(ModeManage)` с моками (стиль `TestManagePass_UpdatesMaxFavAndPersists`; `TradeEnabled=true`, `stops` = мок). Общий сборщик окружения + четыре сценария:
 
@@ -1085,12 +1085,12 @@ func TestManagePass_CancelFailBlocksMarketSell(t *testing.T) {
 
 Примечания: `execmocks` = `tinvest/internal/service/trading_strategy/reversion/live/executor/mocks`; `stopmocks` = `.../stoporders/mocks`; `investapi "tinvest/internal/pb/v1"`. Тест 3 собрать вручную по телу `newManageEnv` (другие ожидания ops/tg — см. комментарий). В тесте 4 сигнал ядра проверить локально (`go test -run CancelFail -v`); если серия `…110, 90` не даёт SELL — усилить обвал (несколько падающих закрытий 110→105→95→90), суть теста от формы сигнала не зависит.
 
-- [ ] **Step 2: Убедиться, что падают**
+- [x] **Step 2: Убедиться, что падают**
 
 Run: `go test ./internal/service/trading_strategy/reversion/live/ -run ManagePass -v`
 Expected: новые FAIL (логики нет), старые PASS.
 
-- [ ] **Step 3: Реализация**
+- [x] **Step 3: Реализация**
 
 Перестроить цикл managePass (`manage.go`), сохранив существующие шаги и добавив стоп-логику. Полный новый скелет тела цикла:
 
@@ -1245,12 +1245,12 @@ func (s *service) replaceStop(ctx context.Context, ticker string, sh *imodel.Sha
 - **Требование спеки про reconstruct** («найденную по инструменту заявку отменить, поставить свежую») реализуется здесь же, а не в пакете reconstruct: после реконструкции стейта `entry.StopOrderID == ""`, sync-ветка снимает stray-заявку инструмента через `stopByInstrument`, а общий путь ниже ставит свежую от восстановленных EntryATR/MaxFav. Пакет `reconstruct` не меняется.
 - В dry-run `List` возвращает `(nil, nil)` → sync-ветки инертны, `replaceStop` обновляет только StopPrice/StopReason и шлёт StopSet при изменении уровня — уведомление не чаще реального переноса.
 
-- [ ] **Step 4: Тесты зелёные**
+- [x] **Step 4: Тесты зелёные**
 
 Run: `go test ./internal/service/trading_strategy/reversion/live/... -count=1`
 Expected: PASS (новые 4 + все старые).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/service/trading_strategy/reversion/live/
@@ -1268,17 +1268,17 @@ git commit -m "feat(reversion/live): hourly stop-order sync — repost on trail 
 
 **Interfaces:** нет кода; фиксирует поведение Task 3–6.
 
-- [ ] **Step 1: strategy.md**
+- [x] **Step 1: strategy.md**
 
 - В шапке и разделе «Выход»: новый приоритет `STOP(SL|TRAIL|ATRSL) → OB → RSI50 → BE → RSIOS → EMAX`; SL/TRAIL/ATRSL — одна объединённая проверка `low ≤ max(уровни)` (интрабар), исполнение по `min(уровень, open)`, причина = компонент-максимум; трейлинг-уровень считается от максимума закрытий **по предыдущий бар** (PrevMaxFav); BE/OB/RSI50/RSIOS/EMAX — по close, как раньше.
 - Новый подраздел «Модель исполнения стопов»: в live этим стопам соответствует одна биржевая stop-market заявка (GTC), которую раннер перевыставляет на часовом тике при подъёме трейлинга; поэтому интрабарная модель бэктеста = модель реального исполнения.
 
-- [ ] **Step 2: live-runner.md и live-code-map.md**
+- [x] **Step 2: live-runner.md и live-code-map.md**
 
 - live-runner.md: раздел «Стоп-заявки» — постановка сразу после покупки, часовой sync (List/Cancel/Place), детект срабатывания (позиция исчезла + StopOrderID), правило «cancel перед любой рыночной продажей, cancel-fail блокирует продажу», частичное исполнение, поведение dry-run, бэкстоп через close-проверку ядра.
 - live-code-map.md: пакет `live/stoporders`, новые поля `statestore.Entry` (StopOrderID/StopPrice/StopReason), `notifier.StopSet`, `core.DesiredStop`, `registry.ParamsFor`, обновлённая сигнатура `NewService`.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add docs/reversion/
@@ -1295,12 +1295,12 @@ git commit -m "docs(reversion): intrabar stop execution model and live stop-orde
 
 **Interfaces:** Consumes: всё предыдущее. Тикеры из live-реестра НЕ убираются независимо от цифр (решение пользователя в спеке).
 
-- [ ] **Step 1: Полный гейт**
+- [x] **Step 1: Полный гейт**
 
 Run: `./bin/mage ci`
 Expected: lint OK, `go test -race ./...` PASS, mock-drift OK. Починить, если нет.
 
-- [ ] **Step 2: Перепрогон fixed walk-forward (те же окна, что в отчётах 2026-06-18/22)**
+- [x] **Step 2: Перепрогон fixed walk-forward (те же окна, что в отчётах 2026-06-18/22)**
 
 ```bash
 mkdir -p reports/UGLD/intrabar reports/EUTR/intrabar reports/NVTK/intrabar
@@ -1317,7 +1317,7 @@ go run ./cmd/backtest -ticker NVTK -strategy reversion -interval Hour1 \
 
 Ожидаемый выход: `*_walkforward.md` в каждой папке. Если раннер отвергнет единственную комбинацию из-за `-min-trades` — снизить до 0. Свечные кэши в `data/candles/` уже есть; окна сместятся на ~3 недели относительно июньских отчётов (данные до текущей даты) — это допустимо, фиксировать фактические окна в сравнении.
 
-- [ ] **Step 3: Одиночные прогоны (полная история, для журнала сделок)**
+- [x] **Step 3: Одиночные прогоны (полная история, для журнала сделок)**
 
 ```bash
 go run ./cmd/backtest -ticker UGLD -strategy reversion -interval Hour1 -months 30 -out ./reports/UGLD/intrabar
@@ -1325,18 +1325,18 @@ go run ./cmd/backtest -ticker EUTR -strategy reversion -interval Hour1 -months 3
 go run ./cmd/backtest -ticker NVTK -strategy reversion -interval Hour1 -months 36 -out ./reports/NVTK/intrabar
 ```
 
-- [ ] **Step 4: Сравнительный документ**
+- [x] **Step 4: Сравнительный документ**
 
 `docs/reversion/intrabar-rerun-2026-07.md`: таблица «close-модель (июнь) vs интрабар (сейчас)» по пулу OOS каждого тикера — PF, сделки, win rate, NetPnL%, MaxDD%, per-fold PF. Baseline из старых отчётов: UGLD PF 3.385 / 25tr / win 32.0% (reports/UGLD/fixed/...141934), EUTR PF 2.529 / 47tr / win 55.3% (reports/EUTR/...234155), NVTK PF 5.762 / 33tr / win 54.5% (reports/NVTK/result/...133935). Вывод — только констатация (тикеры остаются в live по решению пользователя); если какой-то тикер уходит в PF<1 — отдельно пометить это в документе как кандидата на перекалибровку (вне скоупа).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add docs/reversion/intrabar-rerun-2026-07.md reports/UGLD/intrabar reports/EUTR/intrabar reports/NVTK/intrabar
 git commit -m "docs(reversion): intrabar walk-forward rerun — close-model vs intrabar comparison"
 ```
 
-- [ ] **Step 6: Финальная проверка ветки**
+- [x] **Step 6: Финальная проверка ветки**
 
 Run: `./bin/mage ci && git log --oneline main..HEAD`
 Expected: CI зелёный; 8 коммитов по задачам. Ветку НЕ мержить — предложить пользователю ревью (skill superpowers:finishing-a-development-branch).
