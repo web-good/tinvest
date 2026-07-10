@@ -38,5 +38,10 @@ func DefaultParams() core.Params {
 		UseTrail: 1, TrailATRMult: 1.5,
 		UseATRStop: 0, StopATRMult: 1.0,
 		CatStopATRMult: 0,
+		// Модель исполнения стопа: интрабар (биржевая стоп-заявка в live). Интрабарный
+		// перепрогон 2026-07-10 показал минимальную деградацию (пул OOS PF 5.762 -> 4.842),
+		// защита биржевым стопом почти бесплатна. UGLD/EUTR остаются на close-модели
+		// своей июньской калибровки (дефолт UseIntrabarStop=0).
+		UseIntrabarStop: 1,
 	}
 }
