@@ -29,7 +29,7 @@
 - Consumes: существующие `Params`, `DesiredStop(p, entryPrice, entryATR, maxFav) (float64, string)` — сигнатура НЕ меняется.
 - Produces: поле `Params.UseIntrabarStop int` (0 = close-модель, 1 = интрабар) — Task 2 (live) и Task 3 (nvtk.go) читают его; семантика `manage()`: при 0 триггер `in.price <= level`, maxFav = `Position.MaxFavorablePrice`, `sig.StopLoss` не ставится; при 1 — прежнее поведение ветки.
 
-- [ ] **Step 1: Написать падающие тесты close-модели**
+- [x] **Step 1: Написать падающие тесты close-модели**
 
 В конец `core_test.go` добавить (helpers `defaultParams`, `openInput`, `atrStopParams` уже существуют в файле):
 
@@ -80,12 +80,12 @@ func TestCloseTrailUsesCurrentMaxFav(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Убедиться, что тесты падают**
+- [x] **Step 2: Убедиться, что тесты падают**
 
 Run: `go test ./internal/service/trading_strategy/reversion/strategy/core/ -run 'TestCloseStop|TestCloseTrail' -v`
 Expected: FAIL — `UseIntrabarStop` ещё нет, интрабарная семантика безусловна: `TestCloseStopIgnoresLowPoke` продаёт по проколу low, остальные два видят непустой `StopLoss`.
 
-- [ ] **Step 3: Добавить поле в Params**
+- [x] **Step 3: Добавить поле в Params**
 
 В `core.go` после поля `UseRSI50` в struct `Params`:
 
@@ -93,7 +93,7 @@ Expected: FAIL — `UseIntrabarStop` ещё нет, интрабарная се�
 	UseIntrabarStop int     // 0 = close-модель (дефолт): стоп проверяется по close часовой свечи, филл по close, в live биржевая стоп-заявка НЕ выставляется; 1 = интрабар: триггер low ≤ уровень, филл min(уровень, open), в live — реальная биржевая стоп-заявка
 ```
 
-- [ ] **Step 4: Переписать STOP-ветку manage()**
+- [x] **Step 4: Переписать STOP-ветку manage()**
 
 В `core.go` заменить начало `manage()` (строки с вызовом `DesiredStop` и первым `case`):
 
@@ -134,13 +134,13 @@ func (s *Strategy) manage(in decideInput, sig model.Signal) model.Signal {
 
 Остальные `case` (OB/RSI50/BE/RSIOS/EMAX) — без изменений.
 
-- [ ] **Step 5: Обновить doc-комментарии**
+- [x] **Step 5: Обновить doc-комментарии**
 
 1. Package-comment (`core.go`, шапка): фразу про STOP «modeled as an exchange stop order, it triggers intrabar the instant the bar's LOW touches/pierces the level, pre-empting every close-based exit including OB» заменить на описание двух моделей: «execution model is selected per ticker by UseIntrabarStop: 0 (default) checks the stop against the bar CLOSE and fills at close; 1 models an exchange stop order that triggers intrabar the instant the bar's LOW touches/pierces the level and fills at min(level, open). Either way STOP pre-empts every close-based exit including OB».
 2. Doc-комментарий `manage()`: абзац про STOP переписать — уровень общий (`DesiredStop`), далее две модели: интрабар (триггер low, prevMaxFav, филл min(level, open)) и close (триггер close, текущий MaxFav, филл по close; sig.StopLoss не ставится). Упомянуть, что порядок приоритетов одинаков в обеих моделях.
 3. Комментарий поля `atr` в `decideInput` и `DesiredStop` — упоминание «backtest passes PrevMaxFavorablePrice» уточнить: «intrabar model passes PrevMaxFavorablePrice, close model passes MaxFavorablePrice».
 
-- [ ] **Step 6: Проставить UseIntrabarStop=1 в тестах интрабарной семантики**
+- [x] **Step 6: Проставить UseIntrabarStop=1 в тестах интрабарной семантики**
 
 Эти тесты написаны про интрабар (прокол low при close выше, prevMaxFav, sentinel low=0, assert `sig.StopLoss`) и после смены дефолта обязаны явно включать флаг — добавить строку `p.UseIntrabarStop = 1` после создания params в каждом:
 
@@ -161,12 +161,12 @@ func (s *Strategy) manage(in decideInput, sig model.Signal) model.Signal {
 
 Остальные стоп-тесты (`TestExitATRStopFires`, `TestNoATRStopAboveThreshold`, `TestExitPrecedenceSTOPOverRSI50`, `TestExitPrecedenceATROverEMA`, `TestExitPrecedenceSTOPOverBreakeven`, `TestATRStopSkipped*`, `TestRSIOSInertWhenATRStopOn`) ставят price и low по одну сторону уровня и не ассертят StopLoss — они обязаны проходить в ОБЕИХ моделях, флаг в них НЕ добавлять (это бесплатная проверка эквивалентности моделей на «обычных» барах).
 
-- [ ] **Step 7: Прогнать тесты пакета**
+- [x] **Step 7: Прогнать тесты пакета**
 
 Run: `go test ./internal/service/trading_strategy/reversion/strategy/core/ -v 2>&1 | tail -20`
 Expected: PASS все, включая три новых close-теста.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add internal/service/trading_strategy/reversion/strategy/core/
@@ -188,7 +188,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Consumes: `core.Params.UseIntrabarStop` из Task 1; существующие `ParamsFor(ticker)`, `mustParams(ticker)`, `s.stops.Cancel/Place/List`, `statestore.Entry{StopOrderID, StopPrice, StopReason}`.
 - Produces: поведение live: close-тикер никогда не ставит и не ведёт биржевой стоп; оставшаяся заявка снимается в managePass. Никаких новых экспортируемых имён.
 
-- [ ] **Step 1: Тест-хелпер переключения UGLD на интрабар + падающие тесты**
+- [x] **Step 1: Тест-хелпер переключения UGLD на интрабар + падающие тесты**
 
 Тесты стоп-механики написаны против UGLD-окружения (`newManageEnv`, `cfg` с `Tickers: ["UGLD"]`), а UGLD теперь close-модель. В `service_test.go` добавить хелпер:
 
@@ -258,7 +258,7 @@ func TestManagePass_CancelsLeftoverStopOnCloseModel(t *testing.T) {
 
 (Импорты `context`, `filepath`, `mock`, `investapi`, `imodel`, `dto`, `statestore` и моки уже есть в файле.)
 
-- [ ] **Step 2: Пометить существующие тесты стоп-механики как интрабарные**
+- [x] **Step 2: Пометить существующие тесты стоп-механики как интрабарные**
 
 Добавить `withIntrabarUGLD(t)` первой строкой в:
 - `TestPlaceInitialStopPersistsIDAndLevel`
@@ -269,12 +269,12 @@ func TestManagePass_CancelsLeftoverStopOnCloseModel(t *testing.T) {
 
 НЕ трогать: `TestManagePass_DetectsFiredStop`, `TestManagePass_OrphanedStopWhenSoldExternally` (ветка «позиция исчезла» не консультирует params), `TestManagePass_CancelFailBlocksMarketSell` (cancel-перед-продажей стоит ДО гейта модели и обязан работать для close-тикера с оставшейся заявкой), `TestManagePass_UpdatesMaxFavAndPersists`, `TestBuyPass_NoSignal_NoOrderNoState`.
 
-- [ ] **Step 3: Убедиться, что новые тесты падают**
+- [x] **Step 3: Убедиться, что новые тесты падают**
 
 Run: `go test ./internal/service/trading_strategy/reversion/live/ -run 'CloseModel' -v`
 Expected: FAIL — `TestPlaceInitialStopSkippedOnCloseModel` падает на неожиданном `PostStopOrder` (mockery strict), `TestManagePass_CancelsLeftoverStopOnCloseModel` — стоп-поля не чистятся (сейчас sync ведёт заявку).
 
-- [ ] **Step 4: buy.go — не ставить стоп для close-тикера**
+- [x] **Step 4: buy.go — не ставить стоп для close-тикера**
 
 В `placeInitialStop` заменить гейт:
 
@@ -285,7 +285,7 @@ Expected: FAIL — `TestPlaceInitialStopSkippedOnCloseModel` падает на �
 	}
 ```
 
-- [ ] **Step 5: manage.go — гейт синхронизации + переходное снятие**
+- [x] **Step 5: manage.go — гейт синхронизации + переходное снятие**
 
 В `managePass` перед блоком «Синхронизация стоп-заявки» (сразу после `continue` SELL-ветки) вставить:
 
@@ -315,12 +315,12 @@ Expected: FAIL — `TestPlaceInitialStopSkippedOnCloseModel` падает на �
 
 Существующий вызов `core.DesiredStop(mustParams(ticker), ...)` ниже заменить на `core.DesiredStop(p, ...)` (params уже подняты). Остальной sync-блок без изменений.
 
-- [ ] **Step 6: Прогнать live-тесты**
+- [x] **Step 6: Прогнать live-тесты**
 
 Run: `go test ./internal/service/trading_strategy/reversion/live/ 2>&1 | tail -5`
 Expected: PASS (включая оба новых и все существующие с `withIntrabarUGLD`).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add internal/service/trading_strategy/reversion/live/
@@ -341,7 +341,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Consumes: `Params.UseIntrabarStop` из Task 1.
 - Produces: `nvtk.DefaultParams().UseIntrabarStop == 1` — Task 4 полагается на это: WF-прогон NVTK автоматически идёт в интрабарной модели (grid-калибровка стартует с `b.DefaultParams()` тикера, fixed-грид `reversion_fixed_current.json` поле не перечисляет → наследуется).
 
-- [ ] **Step 1: nvtk.go**
+- [x] **Step 1: nvtk.go**
 
 В struct-литерал `DefaultParams()` добавить строку (рядом с выходами):
 
@@ -355,15 +355,15 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 
 Проверить: `go test ./internal/service/trading_strategy/reversion/... 2>&1 | tail -3` → PASS.
 
-- [ ] **Step 2: docs/reversion/strategy.md**
+- [x] **Step 2: docs/reversion/strategy.md**
 
 Раздел про STOP/интрабарную модель переписать под опцию: уровень (`DesiredStop`) общий; `UseIntrabarStop=1` — интрабар (low-триггер, prevMaxFav, филл `min(уровень, open)`, в live биржевая заявка); `UseIntrabarStop=0` (дефолт) — close-модель (close-триггер, текущий MaxFav, филл по close, в live заявка не выставляется). Отметить два сознательных отличия close-модели от июньской (единый приоритет STOP-первым; честный close-филл вместо `min(уровень, open)` у SL/TRAIL) со ссылкой на спеку `2026-07-10-reversion-stop-mode-option-design.md`.
 
-- [ ] **Step 3: docs/reversion/live-runner.md и live-code-map.md**
+- [x] **Step 3: docs/reversion/live-runner.md и live-code-map.md**
 
 В live-runner.md (раздел «Стоп-заявки») добавить: механика активна только для тикеров с `UseIntrabarStop=1` (сейчас NVTK); для close-тикеров (UGLD/EUTR) стоп-заявки не выставляются, выходы — рыночной продажей по сигналу ядра на закрытии часа; при переключении тикера на close-модель managePass снимает оставшуюся заявку и чистит стоп-поля стейта. В live-code-map.md поправить описания `placeInitialStop`/`managePass`, если они утверждают безусловную установку/ведение стопа.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add internal/service/trading_strategy/reversion/strategy/nvtk/ docs/reversion/
@@ -384,12 +384,12 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Consumes: раскладку из Task 3 (NVTK интрабар, UGLD/EUTR close по дефолту); свечные кэши `data/candles/*` (валидны с перепрогона 2026-07-10; при ошибке парсинга JSON — перекачать `-refresh`, токен из `env/token.env`).
 - Produces: сводный отчёт для финального ответа пользователю.
 
-- [ ] **Step 1: Полный гейт качества**
+- [x] **Step 1: Полный гейт качества**
 
 Run: `./bin/mage ci`
 Expected: lint OK, `go test -race ./...` PASS, mock-drift OK. Починить, если нет.
 
-- [ ] **Step 2: Walk-forward в итоговой конфигурации (те же окна, что в intrabar-rerun)**
+- [x] **Step 2: Walk-forward в итоговой конфигурации (те же окна, что в intrabar-rerun)**
 
 ```bash
 mkdir -p reports/UGLD/stopmode reports/EUTR/stopmode reports/NVTK/stopmode
@@ -406,7 +406,7 @@ go run ./cmd/backtest -ticker NVTK -strategy reversion -interval Hour1 \
 
 Expected: `*_walkforward.md` в каждой папке. Модель берётся из `DefaultParams()` тикера автоматически (fixed-гриды не перечисляют `UseIntrabarStop`): UGLD/EUTR — close, NVTK — интрабар.
 
-- [ ] **Step 3: Одиночные полноисторийные прогоны (журнал сделок)**
+- [x] **Step 3: Одиночные полноисторийные прогоны (журнал сделок)**
 
 ```bash
 go run ./cmd/backtest -ticker UGLD -strategy reversion -interval Hour1 -months 30 -out ./reports/UGLD/stopmode
@@ -414,7 +414,7 @@ go run ./cmd/backtest -ticker EUTR -strategy reversion -interval Hour1 -months 3
 go run ./cmd/backtest -ticker NVTK -strategy reversion -interval Hour1 -months 36 -out ./reports/NVTK/stopmode
 ```
 
-- [ ] **Step 4: Сводный отчёт `docs/reversion/stop-mode-final-2026-07.md`**
+- [x] **Step 4: Сводный отчёт `docs/reversion/stop-mode-final-2026-07.md`**
 
 Структура (по образцу `docs/reversion/intrabar-rerun-2026-07.md`):
 - Шапка: статус, ссылка на спеку, раскладка моделей по тикерам.
@@ -424,7 +424,7 @@ go run ./cmd/backtest -ticker NVTK -strategy reversion -interval Hour1 -months 3
 - **Контроль корректности (из спеки, §6):** UGLD/EUTR (close) должны вернуться ≈ к июньским цифрам — не бит-в-бит (окна те же, что в июльском перепрогоне, но vs июнь сдвинуты ~3 недели; филл SL/TRAIL теперь честный по close, а не `min(уровень, open)`, поэтому лёгкое ухудшение против июня ожидаемо); NVTK — совпасть с интрабарным перепрогоном 2026-07-10 практически точно (его параметры и модель не менялись; расхождение возможно только от новых свечей в кэше). Существенные расхождения с ожиданием — разобрать в отчёте, не замалчивать.
 - Вывод: итоговая раскладка live-реестра, EUTR остаётся кандидатом на перекалибровку под интрабар (вне скоупа).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add docs/reversion/stop-mode-final-2026-07.md reports/UGLD/stopmode reports/EUTR/stopmode reports/NVTK/stopmode
@@ -433,6 +433,6 @@ git commit -m "docs(reversion): final stop-mode walk-forward — close (UGLD/EUT
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ```
 
-- [ ] **Step 6: Презентация отчёта пользователю**
+- [x] **Step 6: Презентация отчёта пользователю**
 
 В финальном ответе пользователю ОБЯЗАТЕЛЬНО привести содержание сводного отчёта (таблицы и выводы), а не только путь к файлу — прямое требование пользователя. Ветку НЕ мержить: предложить ревью (`/code-review ultra` запускает только пользователь).
