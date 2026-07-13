@@ -141,7 +141,7 @@ func (a *App) runDev(ctx context.Context) {
 
 func (a *App) runProd(ctx context.Context) {
 	wg := sync.WaitGroup{}
-	wg.Add(6)
+	wg.Add(7)
 	go func() {
 		defer wg.Done()
 		err := bondsscheduler.NewScheduler(a.sp.GetBondsTradingService()).Trade(ctx)
