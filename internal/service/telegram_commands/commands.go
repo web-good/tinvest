@@ -2,6 +2,8 @@ package telegram_commands
 
 import (
 	"context"
+	"fmt"
+	"runtime/debug"
 	"strings"
 	"sync"
 
@@ -97,10 +99,19 @@ func (c *Commands) runExclusive(ctx context.Context, cmd string, tg telegram.Cli
 	_ = tg.SendMessage("⏳ Считаю " + cmd + "…")
 
 	go func() {
+		// Один defer на снятие флага и recover: флаг снимается и при панике,
+		// причём до отправки «❌» — к моменту ответа команда снова доступна.
+		// Recover обязателен: паника в analyze/yield/bonds иначе уронит весь
+		// процесс вместе с live-торговыми горутинами (прецедент guard'а —
+		// golden_x.Trade).
 		defer func() {
 			c.mu.Lock()
 			c.running[cmd] = false
 			c.mu.Unlock()
+			if r := recover(); r != nil {
+				logger.ErrorContext(ctx, "telegram command panicked", fmt.Sprintf("%s: %v\n%s", cmd, r, debug.Stack()))
+				_ = tg.SendMessage("❌ " + cmd + ": внутренняя ошибка, подробности в логах")
+			}
 		}()
 		if err := fn(ctx); err != nil {
 			logger.ErrorContext(ctx, "telegram command failed", err.Error())
