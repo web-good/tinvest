@@ -55,7 +55,7 @@ func (*ServiceProvider) GetBondsTradingService() bonds.Bonds {
 func (*ServiceProvider) GetGoldenXTradingService() golden_x.GoldenX {
 	if serviceProvider.service.goldenXTradingService == nil {
 		grpcClient, _ := serviceProvider.GetGrpcClient()
-		tgClient, _ := serviceProvider.GetTelegramBotClient()
+		tgClient, _ := serviceProvider.GetGoldenXSender()
 		serviceProvider.service.goldenXTradingService = golden_x.NewService(
 			grpcClient.MarketDataServiceClient(),
 			tgClient,
@@ -153,7 +153,7 @@ func (*ServiceProvider) GetPortfolioYield() yield.Yield {
 func (*ServiceProvider) GetReversionLiveService() live.Service {
 	if serviceProvider.service.reversionLiveService == nil {
 		grpcClient, _ := serviceProvider.GetReversionGrpcClient()
-		tgClient, _ := serviceProvider.GetTelegramBotClient()
+		tgClient, _ := serviceProvider.GetReversionSender()
 		serviceProvider.service.reversionLiveService = live.NewService(
 			grpcClient.InstrumentsServiceClient(),
 			grpcClient.MarketDataServiceClient(),

@@ -5,15 +5,13 @@ import (
 	"time"
 	"tinvest/internal/service/trading_strategy/golden_x"
 	"tinvest/internal/service/trading_strategy/golden_x/dto"
-	"tinvest/pkg/client/telegram"
 	"tinvest/pkg/logger"
 	"tinvest/pkg/scheduler"
 )
 
 type schedulerService struct {
-	sh       scheduler.Scheduler
-	service  golden_x.GoldenX
-	tgClient telegram.Client
+	sh      scheduler.Scheduler
+	service golden_x.GoldenX
 }
 
 func (s *schedulerService) Trade(ctx context.Context, in dto.Trade) error {
@@ -43,10 +41,9 @@ func (s *schedulerService) Trade(ctx context.Context, in dto.Trade) error {
 	}
 }
 
-func NewSchedulerService(service golden_x.GoldenX, tgClient telegram.Client) golden_x.GoldenX {
+func NewSchedulerService(service golden_x.GoldenX) golden_x.GoldenX {
 	return &schedulerService{
-		sh:       scheduler.NewScheduler(),
-		tgClient: tgClient,
-		service:  service,
+		sh:      scheduler.NewScheduler(),
+		service: service,
 	}
 }

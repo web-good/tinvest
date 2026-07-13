@@ -6,9 +6,6 @@ import (
 	"sync"
 	"tinvest/internal/config"
 	"tinvest/internal/enum"
-	analyzescheduler "tinvest/internal/service/portfolio/analyze/scheduler"
-	yieldscheduler "tinvest/internal/service/portfolio/yield/scheduler"
-	bondsscheduler "tinvest/internal/service/trading_strategy/bonds/scheduler"
 	goldenx "tinvest/internal/service/trading_strategy/golden_x/dto"
 	gxmodel "tinvest/internal/service/trading_strategy/golden_x/model"
 	"tinvest/internal/service/trading_strategy/golden_x/scheduler"
@@ -85,70 +82,15 @@ func (a *App) initializationLoop(ctx context.Context) (err error) {
 func (a *App) runDev(ctx context.Context) {
 	wg := sync.WaitGroup{}
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		err := a.sp.GetPortfolioYield().PortfolioYieldYTD(ctx, a.config.TelegramClient.ChatID[0])
-		if err != nil {
-			logger.ErrorContext(ctx, "Error in worker Portfolio Yield YTD", err.Error())
-		}
-	}()
-	/*
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
-			err := a.sp.GetGoldenXTradingService().Trade(
-				ctx,
-				goldenx.Trade{
-					Kind:           gxmodel.StrategyKindGrowth,
-					Interval:       enum.Week1,
-					Scheduler:      "* * * * *",
-					ShareList:      *a.collection.GrowthShare,
-					UseTrendFilter: true,
-				},
-			)
-
-			if err != nil {
-				logger.ErrorContext(ctx, "Error in worker golden X strategy")
-			}
-		}()
-	*/
 	wg.Wait()
 }
 
 func (a *App) runProd(ctx context.Context) {
 	wg := sync.WaitGroup{}
-	wg.Add(7)
+	wg.Add(4)
 	go func() {
 		defer wg.Done()
-		err := bondsscheduler.NewScheduler(a.sp.GetBondsTradingService()).Trade(ctx)
-		if err != nil {
-			logger.ErrorContext(ctx, "Error in worker golden X strategy ShareTip:2", err.Error())
-		}
-	}()
-	go func() {
-		defer wg.Done()
-		err := analyzescheduler.NewScheduler(a.sp.GetAnalyze()).BondsPortfolio(ctx, a.config.TelegramClient.ChatID[0])
-		if err != nil {
-			logger.ErrorContext(ctx, "Error in worker Bonds Portfolio Analyze", err.Error())
-		}
-	}()
-	go func() {
-		defer wg.Done()
-		err := yieldscheduler.NewScheduler(a.sp.GetPortfolioYield()).PortfolioYieldYTD(ctx, a.config.TelegramClient.ChatID[0])
-		if err != nil {
-			logger.ErrorContext(ctx, "Error in worker Portfolio Yield YTD", err.Error())
-		}
-	}()
-	go func() {
-		defer wg.Done()
-		tgBot, tgErr := a.sp.GetTelegramBotClient()
-		if tgErr != nil {
-			logger.ErrorContext(ctx, "telegram bot init failed for golden X dividend", tgErr.Error())
-			return
-		}
-		err := scheduler.NewSchedulerService(a.sp.GetGoldenXTradingService(), tgBot).Trade(
+		err := scheduler.NewSchedulerService(a.sp.GetGoldenXTradingService()).Trade(
 			ctx,
 			goldenx.Trade{
 				Kind:           gxmodel.StrategyKindDividend,
@@ -164,12 +106,7 @@ func (a *App) runProd(ctx context.Context) {
 	}()
 	go func() {
 		defer wg.Done()
-		tgBot, tgErr := a.sp.GetTelegramBotClient()
-		if tgErr != nil {
-			logger.ErrorContext(ctx, "telegram bot init failed for golden X growth", tgErr.Error())
-			return
-		}
-		err := scheduler.NewSchedulerService(a.sp.GetGoldenXTradingService(), tgBot).Trade(
+		err := scheduler.NewSchedulerService(a.sp.GetGoldenXTradingService()).Trade(
 			ctx,
 			goldenx.Trade{
 				Kind:           gxmodel.StrategyKindGrowth,

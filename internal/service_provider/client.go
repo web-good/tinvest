@@ -2,8 +2,10 @@ package service_provider
 
 import (
 	"fmt"
+	"log/slog"
 	internalgrpc "tinvest/pkg/client/grpc"
 	"tinvest/pkg/client/telegram"
+	"tinvest/pkg/logger"
 )
 
 type client struct {
@@ -55,7 +57,7 @@ func (s *ServiceProvider) GetTelegramBot() (*telegram.Bot, error) {
 	var err error
 	serviceProvider.client.telegramBot, err = telegram.InitTelegramBot(
 		s.appConfig.TelegramClient.Token,
-		s.appConfig.TelegramClient.ChatID[0],
+		s.appConfig.TelegramClient.GroupChatID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("could not init telegram bot: %w", err)
@@ -66,4 +68,26 @@ func (s *ServiceProvider) GetTelegramBot() (*telegram.Bot, error) {
 
 func (s *ServiceProvider) GetTelegramBotClient() (telegram.Client, error) {
 	return s.GetTelegramBot()
+}
+
+func (s *ServiceProvider) GetGoldenXSender() (telegram.Client, error) {
+	return s.topicSender(s.appConfig.TelegramClient.TopicGoldenX, "golden_x")
+}
+
+func (s *ServiceProvider) GetReversionSender() (telegram.Client, error) {
+	return s.topicSender(s.appConfig.TelegramClient.TopicReversion, "reversion")
+}
+
+// topicSender строит Client, привязанный к теме форума; при незаданном ID
+// темы сообщения уходят в General (threadID 0), о чём предупреждаем в логе.
+func (s *ServiceProvider) topicSender(threadID int, name string) (telegram.Client, error) {
+	base, err := s.GetTelegramBot()
+	if err != nil {
+		return nil, err
+	}
+	if threadID == 0 {
+		logger.Warn("telegram topic id is not set, sending to General", slog.String("topic", name))
+	}
+
+	return telegram.NewTopicSender(base, s.appConfig.TelegramClient.GroupChatID, threadID), nil
 }

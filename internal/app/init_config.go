@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"tinvest/internal/config"
@@ -52,12 +51,6 @@ func (a *App) initConfig(ctx context.Context) error {
 
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
-	}
-
-	prJSON := os.Getenv("PROFILES")
-	errP := json.Unmarshal([]byte(prJSON), &cfg.TelegramClient.Profiles)
-	if errP != nil {
-		return fmt.Errorf("failed to parse env personse: %w", errP)
 	}
 
 	a.config = cfg

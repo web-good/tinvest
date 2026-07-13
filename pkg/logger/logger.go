@@ -22,6 +22,10 @@ func Info(msg string, fields ...any) {
 	logger.Info(msg, fields...)
 }
 
+func Warn(msg string, fields ...any) {
+	logger.Warn(msg, fields...)
+}
+
 func InfoContext(ctx context.Context, msg string, fields ...any) {
 	logger.InfoContext(ctx, msg, fields...)
 }

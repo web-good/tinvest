@@ -1,14 +1,15 @@
 package config
 
 type TelegramClient struct {
-	Token    string `config:"TELEGRAM"`
-	ChatID   []int64
-	Profiles Profiles
+	Token          string `config:"TELEGRAM"`
+	GroupChatID    int64  `config:"TELEGRAM_GROUP_CHAT_ID"`
+	TopicGoldenX   int    `config:"TELEGRAM_TOPIC_GOLDEN_X"`
+	TopicReversion int    `config:"TELEGRAM_TOPIC_REVERSION"`
+	AllowedUserIDs []int64
 }
 
 func NewTelegramClientConfig() *TelegramClient {
 	return &TelegramClient{
-		ChatID:   []int64{397653673, 784012062},
-		Profiles: Profiles{},
+		AllowedUserIDs: []int64{397653673, 784012062},
 	}
 }
