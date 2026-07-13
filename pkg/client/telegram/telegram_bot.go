@@ -1,63 +1,73 @@
 package telegram
 
 import (
+	"context"
 	"fmt"
-	"net/http"
+	"strconv"
+	"time"
 
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	tgbot "github.com/go-telegram/bot"
+	"github.com/go-telegram/bot/models"
 )
 
+// Client отправляет сообщения в Telegram. Экземпляр может быть привязан к
+// destination (чат + тема форума): SendMessage шлёт именно туда.
 type Client interface {
 	SendMessage(msg string) error
 	SendMessageToChat(chatID int64, msg string) error
+	SendMessageToTopic(chatID int64, threadID int, msg string) error
 }
 
-type telegramBotClientClient struct {
-	clientAPI *tgbotapi.BotAPI
-	chatIDs   []int64
+const sendTimeout = 30 * time.Second
+
+// Bot — клиент поверх go-telegram/bot. Реализует Client с destination по
+// умолчанию (defaultChatID, General).
+type Bot struct {
+	api           *tgbot.Bot
+	defaultChatID int64
 }
 
-func (b *telegramBotClientClient) SendMessage(msg string) error {
-	var errMsg string
+// API отдаёт сырой bot для регистрации хендлеров команд и long-polling.
+func (b *Bot) API() *tgbot.Bot { return b.api }
 
-	for _, chatID := range b.chatIDs {
-		if err := b.SendMessageToChat(chatID, msg); err != nil {
-			errMsg += fmt.Sprintf("Failed to send to chat %d: %v\n", chatID, err)
-		}
+func (b *Bot) SendMessage(msg string) error {
+	return b.SendMessageToTopic(b.defaultChatID, 0, msg)
+}
+
+func (b *Bot) SendMessageToChat(chatID int64, msg string) error {
+	return b.SendMessageToTopic(chatID, 0, msg)
+}
+
+func (b *Bot) SendMessageToTopic(chatID int64, threadID int, msg string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), sendTimeout)
+	defer cancel()
+
+	_, err := b.api.SendMessage(ctx, &tgbot.SendMessageParams{
+		ChatID:          chatID,
+		MessageThreadID: threadID,
+		Text:            msg,
+		ParseMode:       models.ParseModeHTML,
+	})
+	if err == nil || threadID == 0 {
+		return err
 	}
-	if errMsg != "" {
-		return fmt.Errorf("%s", errMsg)
+	// Тема недоступна — фолбэк в General: сигнал не должен пропасть.
+	_, ferr := b.api.SendMessage(ctx, &tgbot.SendMessageParams{
+		ChatID:    chatID,
+		Text:      "⚠️ тема " + strconv.Itoa(threadID) + " недоступна\n" + msg,
+		ParseMode: models.ParseModeHTML,
+	})
+	if ferr != nil {
+		return fmt.Errorf("send to topic %d failed: %w (fallback to General failed: %v)", threadID, err, ferr)
 	}
 	return nil
 }
 
-func (b *telegramBotClientClient) SendMessageToChat(chatID int64, msg string) error {
-	ms := tgbotapi.NewMessage(chatID, msg)
-	ms.ParseMode = "HTML"
-	_, err := b.clientAPI.Send(ms)
-	return err
-}
-
-func InitTelegramBot(token string, chatID []int64) (Client, error) {
-	bot, err := tgbotapi.NewBotAPI(token)
-
+func InitTelegramBot(token string, defaultChatID int64) (*Bot, error) {
+	api, err := tgbot.New(token)
 	if err != nil {
 		return nil, err
 	}
 
-	bot.Debug = true
-
-	return &telegramBotClientClient{clientAPI: bot, chatIDs: chatID}, nil
-}
-
-func InitTelegramBotProxy(token string, chatID []int64, proxyURL string) (Client, error) {
-	bot, err := tgbotapi.NewBotAPIWithClient(token, "https://v0-telegram-proxy-api.vercel.app/bot%s/%s", &http.Client{})
-
-	if err != nil {
-		return nil, err
-	}
-
-	bot.Debug = true
-
-	return &telegramBotClientClient{clientAPI: bot, chatIDs: chatID}, nil
+	return &Bot{api: api, defaultChatID: defaultChatID}, nil
 }

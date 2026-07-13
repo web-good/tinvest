@@ -110,6 +110,54 @@ func (_c *MockClient_SendMessageToChat_Call) RunAndReturn(run func(int64, string
 	return _c
 }
 
+// SendMessageToTopic provides a mock function with given fields: chatID, threadID, msg
+func (_m *MockClient) SendMessageToTopic(chatID int64, threadID int, msg string) error {
+	ret := _m.Called(chatID, threadID, msg)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SendMessageToTopic")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(int64, int, string) error); ok {
+		r0 = rf(chatID, threadID, msg)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockClient_SendMessageToTopic_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SendMessageToTopic'
+type MockClient_SendMessageToTopic_Call struct {
+	*mock.Call
+}
+
+// SendMessageToTopic is a helper method to define mock.On call
+//   - chatID int64
+//   - threadID int
+//   - msg string
+func (_e *MockClient_Expecter) SendMessageToTopic(chatID interface{}, threadID interface{}, msg interface{}) *MockClient_SendMessageToTopic_Call {
+	return &MockClient_SendMessageToTopic_Call{Call: _e.mock.On("SendMessageToTopic", chatID, threadID, msg)}
+}
+
+func (_c *MockClient_SendMessageToTopic_Call) Run(run func(chatID int64, threadID int, msg string)) *MockClient_SendMessageToTopic_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(int64), args[1].(int), args[2].(string))
+	})
+	return _c
+}
+
+func (_c *MockClient_SendMessageToTopic_Call) Return(_a0 error) *MockClient_SendMessageToTopic_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockClient_SendMessageToTopic_Call) RunAndReturn(run func(int64, int, string) error) *MockClient_SendMessageToTopic_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // NewMockClient creates a new instance of MockClient. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewMockClient(t interface {
