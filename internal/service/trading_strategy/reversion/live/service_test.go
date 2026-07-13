@@ -28,7 +28,7 @@ import (
 
 // TestMain initializes the package logger so that error-path logger.ErrorContext
 // calls (e.g. TestManagePass_CancelFailBlocksMarketSell) don't panic on a nil
-// logger — mirrors internal/service/trading_strategy/scalping/trade_test.go.
+// logger.
 func TestMain(m *testing.M) {
 	logger.Init()
 	os.Exit(m.Run())
