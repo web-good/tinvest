@@ -9,9 +9,11 @@ import (
 	"tinvest/internal/service/notification/purchase_shares"
 	"tinvest/internal/service/portfolio/analyze"
 	"tinvest/internal/service/portfolio/yield"
+	"tinvest/internal/service/telegram_commands"
 	"tinvest/internal/service/trading_strategy/bonds"
 	"tinvest/internal/service/trading_strategy/golden_x"
 	"tinvest/internal/service/trading_strategy/reversion/live"
+	"tinvest/pkg/client/telegram"
 )
 
 type service struct {
@@ -26,6 +28,7 @@ type service struct {
 	volatilityInstrument  volatility.Instrument
 	analyze               analyze.Analyze
 	portfolioYield        yield.Yield
+	telegramCommands      *telegram_commands.Listener
 }
 
 func (*ServiceProvider) GetPurchaseSharesService() purchase_shares.PurchaseShares {
@@ -160,4 +163,27 @@ func (*ServiceProvider) GetReversionLiveService() live.Service {
 	}
 
 	return serviceProvider.service.reversionLiveService
+}
+
+func (s *ServiceProvider) GetTelegramCommands() (*telegram_commands.Listener, error) {
+	if serviceProvider.service.telegramCommands != nil {
+		return serviceProvider.service.telegramCommands, nil
+	}
+	bot, err := s.GetTelegramBot()
+	if err != nil {
+		return nil, err
+	}
+	factory := func(chatID int64, threadID int) telegram.Client {
+		return telegram.NewTopicSender(bot, chatID, threadID)
+	}
+	cmds := telegram_commands.New(
+		s.GetAnalyze(),
+		s.GetPortfolioYield(),
+		s.GetBondsTradingService(),
+		factory,
+		s.appConfig.TelegramClient.AllowedUserIDs,
+	)
+	serviceProvider.service.telegramCommands = telegram_commands.NewListener(bot, cmds)
+
+	return serviceProvider.service.telegramCommands, nil
 }

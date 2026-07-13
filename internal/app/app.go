@@ -81,13 +81,34 @@ func (a *App) initializationLoop(ctx context.Context) (err error) {
 
 func (a *App) runDev(ctx context.Context) {
 	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		listener, err := a.sp.GetTelegramCommands()
+		if err != nil {
+			logger.ErrorContext(ctx, "telegram commands init failed", err.Error())
+			return
+		}
+		logger.InfoContext(ctx, "telegram commands listener started")
+		listener.Run(ctx)
+	}()
 
 	wg.Wait()
 }
 
 func (a *App) runProd(ctx context.Context) {
 	wg := sync.WaitGroup{}
-	wg.Add(4)
+	wg.Add(5)
+	go func() {
+		defer wg.Done()
+		listener, err := a.sp.GetTelegramCommands()
+		if err != nil {
+			logger.ErrorContext(ctx, "telegram commands init failed", err.Error())
+			return
+		}
+		logger.InfoContext(ctx, "telegram commands listener started")
+		listener.Run(ctx)
+	}()
 	go func() {
 		defer wg.Done()
 		err := scheduler.NewSchedulerService(a.sp.GetGoldenXTradingService()).Trade(
