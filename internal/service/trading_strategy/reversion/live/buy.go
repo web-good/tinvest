@@ -113,8 +113,11 @@ func (s *service) buyPass(ctx context.Context) error {
 }
 
 // placeInitialStop puts the protective exchange stop right after a fill so the
-// position is never unprotected for the first hour. On failure the entry keeps an
-// empty StopOrderID and managePass retries next tick.
+// position is never unprotected for the first hour. Placement and entry stamping
+// are delegated to replaceStop (same guard/rounding/notification path as
+// managePass); for a fresh entry StopPrice is 0, so the StopSet notification
+// always fires. On failure the entry keeps an empty StopOrderID and managePass
+// retries next tick.
 func (s *service) placeInitialStop(ctx context.Context, ticker string, sh *imodel.Share,
 	entry statestore.Entry, state map[string]statestore.Entry, store statestore.Store) statestore.Entry {
 
@@ -126,19 +129,8 @@ func (s *service) placeInitialStop(ctx context.Context, ticker string, sh *imode
 	if reason == "" {
 		return entry
 	}
-	lots := entry.Quantity / int64(sh.Lot)
-	res, err := s.stops.Place(ctx, sh.ID, lots, level, sh.MinPriceIncrement)
-	if err != nil {
-		s.notify(notifier.Alert(ticker, "стоп-заявка не выставлена: "+err.Error()))
-		logger.ErrorContext(ctx, fmt.Sprintf("reversion: %s place stop: %v", ticker, err))
-		return entry
-	}
-	if res.Placed {
-		entry.StopOrderID = res.OrderID
-	}
-	entry.StopPrice, entry.StopReason = level, reason
+	entry = s.replaceStop(ctx, ticker, sh, entry, level, reason)
 	state[ticker] = entry
 	_ = store.Save(state)
-	s.notify(notifier.StopSet(ticker, level, reason, !res.Placed))
 	return entry
 }

@@ -20,6 +20,7 @@ import (
 	livemocks "tinvest/internal/service/trading_strategy/reversion/live/mocks"
 	"tinvest/internal/service/trading_strategy/reversion/live/statestore"
 	stopmocks "tinvest/internal/service/trading_strategy/reversion/live/stoporders/mocks"
+	"tinvest/internal/utils"
 	grpcmodel "tinvest/pkg/client/grpc/model"
 	tgmocks "tinvest/pkg/client/telegram/mocks"
 	"tinvest/pkg/logger"
@@ -39,6 +40,12 @@ func TestMain(m *testing.M) {
 func isHourly1(interval int32) bool { return interval == 4 }
 
 func q(f float64) imodel.Quotation { return imodel.Quotation{Units: int64(f)} }
+
+// qf строит Quotation с дробной частью (q() несёт только Units).
+func qf(f float64) imodel.Quotation {
+	u, n := utils.SplitPrice(f)
+	return imodel.Quotation{Units: u, Nano: n}
+}
 
 func gq(f float64) grpcmodel.Quotation { return grpcmodel.Quotation{Units: int64(f)} }
 
@@ -263,6 +270,48 @@ func TestPlaceInitialStopPersistsIDAndLevel(t *testing.T) {
 	}
 }
 
+// Начальный стоп штампуется в стейт ОКРУГЛЁННЫМ к шагу цены (зеркалит биржевую
+// заявку), а не сырым уровнем ядра — placeInitialStop делегирует replaceStop.
+func TestPlaceInitialStopStoresRoundedLevel(t *testing.T) {
+	withIntrabarUGLD(t)
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	stops := stopmocks.NewMockClient(t)
+	stops.EXPECT().PostStopOrder(mock.Anything, mock.MatchedBy(func(in *investapi.PostStopOrderRequest) bool {
+		return utils.CombinePrice(in.GetStopPrice().GetUnits(), in.GetStopPrice().GetNano()) == 96
+	})).Return(&investapi.PostStopOrderResponse{StopOrderId: "so-10"}, nil)
+
+	c := cfg(dir)
+	c.TradeEnabled = true
+	tg := tgmocks.NewMockClient(t)
+	// Ровно один StopSet-нотификейшн (свежий вход: StopPrice был 0 -> changed).
+	tg.EXPECT().SendMessage(mock.Anything).Return(nil).Once()
+	svc := NewService(livemocks.NewMockinstrumentsClient(t), mdmocks.NewMockCandleClient(t),
+		livemocks.NewMockoperationsClient(t), nil, stops, tg, c)
+	svc.statePath = statePath
+
+	store := statestore.New(statePath)
+	entry := statestore.Entry{Ticker: "UGLD", EntryPrice: 100, EntryATR: 2, MaxFav: 100, Quantity: 10}
+	state := map[string]statestore.Entry{"UGLD": entry}
+	sh := &imodel.Share{ID: "uid-ugld", Ticker: "UGLD", Lot: 1, MinPriceIncrement: 2.0}
+
+	got := svc.placeInitialStop(context.Background(), "UGLD", sh, entry, state, store)
+	// UGLD DefaultParams: желаемый уровень 100 - 1.5*2 = 97; floor(97/2)*2 = 96.
+	if got.StopOrderID != "so-10" {
+		t.Fatalf("StopOrderID = %q, want so-10", got.StopOrderID)
+	}
+	if got.StopPrice != 96 {
+		t.Fatalf("StopPrice = %v, want 96 (rounded to increment, not raw 97)", got.StopPrice)
+	}
+	if got.StopReason != "TRAIL" {
+		t.Fatalf("StopReason = %q, want TRAIL", got.StopReason)
+	}
+	persisted, _ := store.Load()
+	if persisted["UGLD"].StopOrderID != "so-10" || persisted["UGLD"].StopPrice != 96 || persisted["UGLD"].StopReason != "TRAIL" {
+		t.Fatalf("persisted state mismatch: %+v", persisted["UGLD"])
+	}
+}
+
 // manageEnv wires a UGLD manage-pass with an open position and a stops mock.
 // hourlyLastClose управляет последним закрытием (MaxFav/сигналы ядра).
 type manageEnv struct {
@@ -273,7 +322,9 @@ type manageEnv struct {
 	orders    *execmocks.MockOrdersClient
 }
 
-func newManageEnv(t *testing.T, seed statestore.Entry, hourly []*imodel.CandleItemTechAnalyse) *manageEnv {
+func newManageEnv(t *testing.T, seed statestore.Entry, hourly []*imodel.CandleItemTechAnalyse,
+	shareOpts ...func(*imodel.Share)) *manageEnv {
+
 	t.Helper()
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
@@ -281,10 +332,13 @@ func newManageEnv(t *testing.T, seed statestore.Entry, hourly []*imodel.CandleIt
 		t.Fatal(err)
 	}
 
+	sh := &imodel.Share{ID: "uid-ugld", Ticker: "UGLD", Name: "ЮГК", Lot: 1,
+		Trading: true, MinPriceIncrement: 0.01}
+	for _, opt := range shareOpts {
+		opt(sh)
+	}
 	instruments := livemocks.NewMockinstrumentsClient(t)
-	instruments.EXPECT().Shares(mock.Anything).
-		Return([]*imodel.Share{{ID: "uid-ugld", Ticker: "UGLD", Name: "ЮГК", Lot: 1,
-			Trading: true, MinPriceIncrement: 0.01}}, nil)
+	instruments.EXPECT().Shares(mock.Anything).Return([]*imodel.Share{sh}, nil)
 
 	market := mdmocks.NewMockCandleClient(t)
 	market.EXPECT().
@@ -313,7 +367,7 @@ func hourlySeries(n int, tail ...float64) []*imodel.CandleItemTechAnalyse {
 	out := flatHourly(n)
 	for i, c := range tail {
 		idx := n - len(tail) + i
-		out[idx].Open, out[idx].High, out[idx].Low, out[idx].Close = q(c), q(c), q(c), q(c)
+		out[idx].Open, out[idx].High, out[idx].Low, out[idx].Close = qf(c), qf(c), qf(c), qf(c)
 	}
 	return out
 }
@@ -339,6 +393,20 @@ func activeList(id string, price float64, lots int64) *investapi.GetStopOrdersRe
 // теста требует, чтобы стоп реально отсутствовал на бирже (сработал / не выставлен).
 func emptyStopList() *investapi.GetStopOrdersResponse {
 	return &investapi.GetStopOrdersResponse{}
+}
+
+// statusIs матчит запрос GetStopOrders по статусу — разводит ACTIVE-снапшот пасса
+// и EXECUTED-проверку исчезнувшей заявки в одном моке.
+func statusIs(st investapi.StopOrderStatusOption) func(*investapi.GetStopOrdersRequest) bool {
+	return func(in *investapi.GetStopOrdersRequest) bool { return in.GetStatus() == st }
+}
+
+// executedList строит ответ GetStopOrders(EXECUTED) с одной исполненной заявкой.
+func executedList(id string) *investapi.GetStopOrdersResponse {
+	return &investapi.GetStopOrdersResponse{StopOrders: []*investapi.StopOrder{{
+		StopOrderId: id, InstrumentUid: "uid-ugld",
+		Direction: investapi.StopOrderDirection_STOP_ORDER_DIRECTION_SELL,
+	}}}
 }
 
 // 1. Трейлинг подтянулся: cancel старой + post новой, стейт несёт новый ID/уровень.
@@ -403,9 +471,13 @@ func TestManagePass_DetectsFiredStop(t *testing.T) {
 	ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(nil, nil)
 
 	stops := stopmocks.NewMockClient(t)
-	// so-1 больше не в списке активных заявок биржи -> это и есть срабатывание стопа
-	// (не путать с орфан-кейсом ниже, где List всё ещё возвращает её живой).
-	stops.EXPECT().GetStopOrders(mock.Anything, mock.Anything).Return(emptyStopList(), nil)
+	// so-1 больше не в списке активных заявок биржи, И она подтверждена в EXECUTED ->
+	// это и есть срабатывание стопа (не путать с орфан-кейсом ниже, где List всё ещё
+	// возвращает её живой, и с внешней отменой, где EXECUTED пуст).
+	stops.EXPECT().GetStopOrders(mock.Anything, mock.MatchedBy(statusIs(investapi.StopOrderStatusOption_STOP_ORDER_STATUS_ACTIVE))).
+		Return(emptyStopList(), nil)
+	stops.EXPECT().GetStopOrders(mock.Anything, mock.MatchedBy(statusIs(investapi.StopOrderStatusOption_STOP_ORDER_STATUS_EXECUTED))).
+		Return(executedList("so-1"), nil)
 
 	tg := tgmocks.NewMockClient(t)
 	tg.EXPECT().SendMessage(mock.MatchedBy(func(s string) bool {
@@ -631,5 +703,229 @@ func TestManagePass_ReconcilesStopSizeAfterPartialFill(t *testing.T) {
 	got := st["UGLD"]
 	if got.Quantity != 6 || got.StopOrderID != "so-new" || got.StopPrice != 97 {
 		t.Fatalf("state after size reconciliation: %+v", got)
+	}
+}
+
+// 6. Finding 1: SELL ядра, Cancel стопа прошёл, а рыночная продажа отклонена ->
+// позиция не должна остаться «голой» до следующего часа: защитный стоп
+// перевыставляется на прежнем уровне, стейт несёт новый ID.
+func TestManagePass_SellRejectedRepostsStop(t *testing.T) {
+	withIntrabarUGLD(t)
+	// Хвост 110, 90: low 90 ≤ трейл 97 (prevMaxFav 100 − 1.5×ATR2) -> SELL ядра.
+	env := newManageEnv(t, seedEntry("so-1", 97), hourlySeries(400, 110, 90))
+	env.stops.EXPECT().GetStopOrders(mock.Anything, mock.MatchedBy(statusIs(investapi.StopOrderStatusOption_STOP_ORDER_STATUS_ACTIVE))).
+		Return(activeList("so-1", 97, 10), nil)
+	env.stops.EXPECT().CancelStopOrder(mock.Anything, mock.MatchedBy(func(in *investapi.CancelStopOrderRequest) bool {
+		return in.GetStopOrderId() == "so-1"
+	})).Return(&investapi.CancelStopOrderResponse{}, nil).Once()
+	env.orders.EXPECT().PostOrder(mock.Anything, mock.Anything).
+		Return(nil, fmt.Errorf("rejected")).Once()
+	// Fallback-репост на прежнем уровне 97 и прежнем объёме.
+	env.stops.EXPECT().PostStopOrder(mock.Anything, mock.MatchedBy(func(in *investapi.PostStopOrderRequest) bool {
+		return in.GetQuantity() == 10
+	})).Return(&investapi.PostStopOrderResponse{StopOrderId: "so-2"}, nil).Once()
+
+	if err := env.svc.Run(context.Background(), dto.Run{Mode: dto.ModeManage}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	st, _ := statestore.New(env.statePath).Load()
+	got := st["UGLD"]
+	if got.StopOrderID != "so-2" || got.StopPrice != 97 || got.StopReason != "TRAIL" {
+		t.Fatalf("stop must be reposted after rejected sell, got %+v", got)
+	}
+}
+
+// 6b. Finding 1: sh.Lot == 0 проверяется ДО снятия стопа — иначе заявка снимается,
+// продажа невозможна (деление на лот), и позиция остаётся без защиты навсегда
+// (replaceStop с тем же guard'ом её не вернёт). Отсутствие EXPECT на Cancel/Post
+// ловит любую попытку тронуть заявку.
+func TestManagePass_LotZeroKeepsStopUntouched(t *testing.T) {
+	withIntrabarUGLD(t)
+	env := newManageEnv(t, seedEntry("so-1", 97), hourlySeries(400, 110, 90),
+		func(sh *imodel.Share) { sh.Lot = 0 })
+	env.stops.EXPECT().GetStopOrders(mock.Anything, mock.MatchedBy(statusIs(investapi.StopOrderStatusOption_STOP_ORDER_STATUS_ACTIVE))).
+		Return(activeList("so-1", 97, 10), nil)
+
+	if err := env.svc.Run(context.Background(), dto.Run{Mode: dto.ModeManage}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	st, _ := statestore.New(env.statePath).Load()
+	if st["UGLD"].StopOrderID != "so-1" {
+		t.Fatalf("stop must stay on exchange when Lot=0 blocks the sell, got %+v", st["UGLD"])
+	}
+}
+
+// 7. Finding 2: усадка позиции реконсилируется и БЕЗ StopOrderID в стейте (заявки
+// нет — например, после reconstruct или неудачного репоста): entry.Quantity
+// подтягивается к портфелю до сайзинга новой заявки, иначе replaceStop поставит
+// переразмеренный SELL-стоп на 10 при позиции 6.
+func TestManagePass_ReconcilesQuantityWithoutStopID(t *testing.T) {
+	withIntrabarUGLD(t)
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	seed := statestore.Entry{Ticker: "UGLD", EntryPrice: 100, EntryATR: 2, MaxFav: 100,
+		Quantity: 10, EntryTime: time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC)} // StopOrderID == ""
+	if err := statestore.New(statePath).Save(map[string]statestore.Entry{"UGLD": seed}); err != nil {
+		t.Fatal(err)
+	}
+
+	instruments := livemocks.NewMockinstrumentsClient(t)
+	instruments.EXPECT().Shares(mock.Anything).
+		Return([]*imodel.Share{{ID: "uid-ugld", Ticker: "UGLD", Name: "ЮГК", Lot: 1,
+			Trading: true, MinPriceIncrement: 0.01}}, nil)
+
+	market := mdmocks.NewMockCandleClient(t)
+	market.EXPECT().
+		GetCandles(mock.Anything, mock.Anything, mock.MatchedBy(isHourly1), mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(hourlySeries(400), nil)
+
+	ops := livemocks.NewMockoperationsClient(t)
+	ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).
+		Return([]*grpcmodel.Position{{ShareID: "uid-ugld", InstrumentType: "share",
+			Quantity: 6, PurchasePrice: gq(seed.EntryPrice)}}, nil) // 6 < 10 в стейте
+
+	stops := stopmocks.NewMockClient(t)
+	stops.EXPECT().GetStopOrders(mock.Anything, mock.MatchedBy(statusIs(investapi.StopOrderStatusOption_STOP_ORDER_STATUS_ACTIVE))).
+		Return(emptyStopList(), nil)
+	stops.EXPECT().PostStopOrder(mock.Anything, mock.MatchedBy(func(in *investapi.PostStopOrderRequest) bool {
+		return in.GetQuantity() == 6 // сайзинг от реконсилированного количества
+	})).Return(&investapi.PostStopOrderResponse{StopOrderId: "so-new"}, nil)
+
+	tg := tgmocks.NewMockClient(t)
+	tg.EXPECT().SendMessage(mock.MatchedBy(func(s string) bool {
+		return strings.Contains(s, "частично")
+	})).Return(nil).Once()
+	tg.EXPECT().SendMessage(mock.MatchedBy(func(s string) bool {
+		return strings.Contains(s, "стоп-заявка TRAIL")
+	})).Return(nil).Once()
+
+	c := cfg(dir)
+	c.TradeEnabled = true
+	svc := NewService(instruments, market, ops, execmocks.NewMockOrdersClient(t), stops, tg, c)
+	svc.statePath = statePath
+
+	if err := svc.Run(context.Background(), dto.Run{Mode: dto.ModeManage}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	st, _ := statestore.New(statePath).Load()
+	got := st["UGLD"]
+	if got.Quantity != 6 || got.StopOrderID != "so-new" {
+		t.Fatalf("state after quantity reconciliation: %+v", got)
+	}
+}
+
+// 8. Finding 3: held-путь, заявка исчезла из ACTIVE и подтверждена в EXECUTED ->
+// стоп СРАБОТАЛ (портфель ещё показывает позицию из-за лага расчётов). Репост
+// свежего стопа на уже проданную позицию запрещён (фантомная продажа/шорт при
+// касании уровня); отсутствие EXPECT на PostStopOrder это и проверяет. Уходит
+// Exit, стейт чистится.
+func TestManagePass_VanishedStopFiredExitsWithoutRepost(t *testing.T) {
+	withIntrabarUGLD(t)
+	env := newManageEnv(t, seedEntry("so-1", 97), hourlySeries(400))
+	env.stops.EXPECT().GetStopOrders(mock.Anything, mock.MatchedBy(statusIs(investapi.StopOrderStatusOption_STOP_ORDER_STATUS_ACTIVE))).
+		Return(emptyStopList(), nil)
+	env.stops.EXPECT().GetStopOrders(mock.Anything, mock.MatchedBy(statusIs(investapi.StopOrderStatusOption_STOP_ORDER_STATUS_EXECUTED))).
+		Return(executedList("so-1"), nil)
+
+	if err := env.svc.Run(context.Background(), dto.Run{Mode: dto.ModeManage}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	st, _ := statestore.New(env.statePath).Load()
+	if len(st) != 0 {
+		t.Fatalf("state must be cleared after fired stop, got %+v", st)
+	}
+}
+
+// 8b. Finding 3: заявка исчезла из ACTIVE, но в EXECUTED её нет -> отменена вне
+// раннера при живой позиции: перевыставляем (прежнее поведение) — позиция не
+// должна остаться без защиты.
+func TestManagePass_VanishedStopCancelledExternallyReposts(t *testing.T) {
+	withIntrabarUGLD(t)
+	env := newManageEnv(t, seedEntry("so-1", 97), hourlySeries(400))
+	env.stops.EXPECT().GetStopOrders(mock.Anything, mock.MatchedBy(statusIs(investapi.StopOrderStatusOption_STOP_ORDER_STATUS_ACTIVE))).
+		Return(emptyStopList(), nil)
+	env.stops.EXPECT().GetStopOrders(mock.Anything, mock.MatchedBy(statusIs(investapi.StopOrderStatusOption_STOP_ORDER_STATUS_EXECUTED))).
+		Return(emptyStopList(), nil)
+	env.stops.EXPECT().PostStopOrder(mock.Anything, mock.Anything).
+		Return(&investapi.PostStopOrderResponse{StopOrderId: "so-2"}, nil).Once()
+
+	if err := env.svc.Run(context.Background(), dto.Run{Mode: dto.ModeManage}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	st, _ := statestore.New(env.statePath).Load()
+	if st["UGLD"].StopOrderID != "so-2" {
+		t.Fatalf("stop must be reposted after external cancel, got %+v", st["UGLD"])
+	}
+}
+
+// 9. Finding 5: позиция исчезла, заявки нет в ACTIVE и нет в EXECUTED -> её отменили
+// вне раннера (не срабатывание). Ложный Exit «[TRAIL]» не уходит — единственное
+// строгое ожидание это алерт; стейт чистится.
+func TestManagePass_NotHeldCancelledStopNoExitNotification(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	if err := statestore.New(statePath).Save(map[string]statestore.Entry{"UGLD": seedEntry("so-1", 97)}); err != nil {
+		t.Fatal(err)
+	}
+
+	instruments := livemocks.NewMockinstrumentsClient(t)
+	instruments.EXPECT().Shares(mock.Anything).
+		Return([]*imodel.Share{{ID: "uid-ugld", Ticker: "UGLD", Name: "ЮГК", Lot: 1,
+			Trading: true, MinPriceIncrement: 0.01}}, nil)
+
+	market := mdmocks.NewMockCandleClient(t)
+	market.EXPECT().
+		GetCandles(mock.Anything, mock.Anything, mock.MatchedBy(isHourly1), mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(hourlySeries(400), nil).Maybe()
+
+	ops := livemocks.NewMockoperationsClient(t)
+	ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(nil, nil) // позиции нет
+
+	stops := stopmocks.NewMockClient(t)
+	stops.EXPECT().GetStopOrders(mock.Anything, mock.MatchedBy(statusIs(investapi.StopOrderStatusOption_STOP_ORDER_STATUS_ACTIVE))).
+		Return(emptyStopList(), nil)
+	stops.EXPECT().GetStopOrders(mock.Anything, mock.MatchedBy(statusIs(investapi.StopOrderStatusOption_STOP_ORDER_STATUS_EXECUTED))).
+		Return(emptyStopList(), nil)
+
+	tg := tgmocks.NewMockClient(t)
+	// Строгое ожидание: алерт про закрытие вне раннера, НЕ Exit-нотификация.
+	tg.EXPECT().SendMessage(mock.MatchedBy(func(s string) bool {
+		return strings.Contains(s, "вне раннера") && !strings.Contains(s, "Выход")
+	})).Return(nil).Once()
+
+	c := cfg(dir)
+	c.TradeEnabled = true
+	svc := NewService(instruments, market, ops, execmocks.NewMockOrdersClient(t), stops, tg, c)
+	svc.statePath = statePath
+
+	if err := svc.Run(context.Background(), dto.Run{Mode: dto.ModeManage}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	st, _ := statestore.New(statePath).Load()
+	if len(st) != 0 {
+		t.Fatalf("state must be cleared, got %+v", st)
+	}
+}
+
+// 10. Finding 4 + 9: желаемый уровень сравнивается на гранулярности шага цены и
+// против снапшота биржи, а не сырого локального значения. Локально записан «сырой»
+// 96.8, биржа держит округлённые 97.0, новый желаемый 97.3 округляется в те же 97.0
+// -> без фикса каждый час шёл бы cancel+repost по той же биржевой цене (окно без
+// защиты); отсутствие EXPECT на Cancel/Post ловит этот чёрн.
+func TestManagePass_NoChurnWhenRoundedLevelUnchanged(t *testing.T) {
+	withIntrabarUGLD(t)
+	seed := seedEntry("so-1", 96.8)
+	// Хвост 100.3: maxFav 100.3 -> желаемый трейл 100.3-3 = 97.3 -> floor(97.3, 0.5) = 97.0.
+	env := newManageEnv(t, seed, hourlySeries(400, 100.3),
+		func(sh *imodel.Share) { sh.MinPriceIncrement = 0.5 })
+	env.stops.EXPECT().GetStopOrders(mock.Anything, mock.MatchedBy(statusIs(investapi.StopOrderStatusOption_STOP_ORDER_STATUS_ACTIVE))).
+		Return(activeList("so-1", 97, 10), nil)
+
+	if err := env.svc.Run(context.Background(), dto.Run{Mode: dto.ModeManage}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	st, _ := statestore.New(env.statePath).Load()
+	if st["UGLD"].StopOrderID != "so-1" {
+		t.Fatalf("stop must be kept when rounded level is unchanged, got %+v", st["UGLD"])
 	}
 }

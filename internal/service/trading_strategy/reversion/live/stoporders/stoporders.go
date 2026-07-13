@@ -9,17 +9,15 @@ import (
 	"math"
 
 	"github.com/google/uuid"
-	"google.golang.org/grpc"
 
 	investapi "tinvest/internal/pb/v1"
 	"tinvest/internal/utils"
 )
 
-// Client is the slice of the stop-orders client the executor needs.
+// Client is the stop-orders client surface the executor needs — today the whole
+// generated service (all three RPCs), so it embeds it instead of restating the methods.
 type Client interface {
-	PostStopOrder(ctx context.Context, in *investapi.PostStopOrderRequest, opts ...grpc.CallOption) (*investapi.PostStopOrderResponse, error)
-	GetStopOrders(ctx context.Context, in *investapi.GetStopOrdersRequest, opts ...grpc.CallOption) (*investapi.GetStopOrdersResponse, error)
-	CancelStopOrder(ctx context.Context, in *investapi.CancelStopOrderRequest, opts ...grpc.CallOption) (*investapi.CancelStopOrderResponse, error)
+	investapi.StopOrdersServiceClient
 }
 
 // ActiveStop describes one active SELL stop-order returned by List.
@@ -50,9 +48,11 @@ func New(c Client, accountID string, tradeEnabled bool) *Executor {
 	return &Executor{client: c, accountID: accountID, tradeEnabled: tradeEnabled}
 }
 
-// roundDownToIncrement snaps price DOWN to the instrument's min price increment —
+// RoundDownToIncrement snaps price DOWN to the instrument's min price increment —
 // conservative for a sell stop (never above the strategy level). incr<=0 keeps price.
-func roundDownToIncrement(price, incr float64) float64 {
+// Exported so the runner can compare desired levels at exchange granularity and skip
+// cancel+repost cycles that would land on the same rounded price.
+func RoundDownToIncrement(price, incr float64) float64 {
 	if incr <= 0 {
 		return price
 	}
@@ -65,7 +65,7 @@ func (e *Executor) Place(ctx context.Context, instrumentID string, lots int64, s
 	if !e.tradeEnabled {
 		return Result{Placed: false}, nil
 	}
-	rounded := roundDownToIncrement(stopPrice, minPriceIncrement)
+	rounded := RoundDownToIncrement(stopPrice, minPriceIncrement)
 	units, nano := utils.SplitPrice(rounded)
 	req := &investapi.PostStopOrderRequest{
 		InstrumentId:      instrumentID,
@@ -97,6 +97,28 @@ func (e *Executor) Cancel(ctx context.Context, stopOrderID string) error {
 		return fmt.Errorf("cancel stop order %s: %w", stopOrderID, err)
 	}
 	return nil
+}
+
+// Executed reports whether stopOrderID is among the account's EXECUTED stop orders —
+// the fired-check for a stop that vanished from the ACTIVE list (fired vs cancelled
+// externally). Dry-run always reports false.
+func (e *Executor) Executed(ctx context.Context, stopOrderID string) (bool, error) {
+	if !e.tradeEnabled {
+		return false, nil
+	}
+	resp, err := e.client.GetStopOrders(ctx, &investapi.GetStopOrdersRequest{
+		AccountId: e.accountID,
+		Status:    investapi.StopOrderStatusOption_STOP_ORDER_STATUS_EXECUTED,
+	})
+	if err != nil {
+		return false, fmt.Errorf("get executed stop orders: %w", err)
+	}
+	for _, so := range resp.GetStopOrders() {
+		if so.GetStopOrderId() == stopOrderID {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // List returns the account's active SELL stop-orders, or (nil, nil) when

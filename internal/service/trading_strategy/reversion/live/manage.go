@@ -83,8 +83,15 @@ func (s *service) managePass(ctx context.Context) error {
 						_ = store.Save(state)
 					}
 				} else {
-					// Заявки нет в живых — сработал именно наш биржевой стоп.
-					s.notify(notifier.Exit(ticker, entry.StopReason, entry.StopPrice, entry.Quantity, false))
+					// Заявки нет в живых: либо сработал наш биржевой стоп, либо её сняли
+					// вне раннера вместе с продажей позиции. Различаем по EXECUTED-списку;
+					// при его недоступности считаем срабатыванием (как раньше) — на PnL
+					// это не влияет, вопрос только в тексте уведомления.
+					if fired, ferr := s.stops.Executed(ctx, entry.StopOrderID); ferr == nil && !fired {
+						s.notify(notifier.Alert(ticker, "позиция закрыта и стоп-заявка снята вне раннера — чищу стейт"))
+					} else {
+						s.notify(notifier.Exit(ticker, entry.StopReason, entry.StopPrice, entry.Quantity, false))
+					}
 					delete(state, ticker)
 					_ = store.Save(state)
 				}
@@ -110,16 +117,18 @@ func (s *service) managePass(ctx context.Context) error {
 			s.notify(notifier.Alert(ticker, fmt.Sprintf("стейт восстановлен из API: вход %.4f, ATR %.4f", entry.EntryPrice, entry.EntryATR)))
 		}
 
-		// Частичное исполнение: биржа продала часть позиции. Bookkeeping-only — StopOrderID
-		// НЕ трогаем и не отменяем здесь: снапшот stopByID/stopByInstrument взят один раз
-		// на пасс, повторный Cancel той же заявки ниже привёл бы к двойному cancel в одном
-		// тике (ложный alert). Реконсиляция размера заявки на изменившееся entry.Quantity
-		// выполняется общим путём ниже, в уровень-switch (size-mismatch case).
-		if pos.Quantity < entry.Quantity && entry.StopOrderID != "" {
+		// Позиция усохла (частичный стоп или ручная продажа) — реконсилируем количество
+		// независимо от того, числится ли заявка в стейте: replaceStop сайзит от
+		// entry.Quantity, и протухшее значение дало бы переразмеренный SELL-стоп.
+		// Bookkeeping-only — StopOrderID НЕ трогаем и не отменяем здесь: снапшот
+		// stopByID/stopByInstrument взят один раз на пасс, повторный Cancel той же заявки
+		// ниже привёл бы к двойному cancel в одном тике (ложный alert). Реконсиляция
+		// размера живой заявки выполняется общим путём ниже (size-mismatch case).
+		if pos.Quantity < entry.Quantity {
 			entry.Quantity = pos.Quantity
 			state[ticker] = entry
 			_ = store.Save(state)
-			s.notify(notifier.Alert(ticker, fmt.Sprintf("стоп исполнился частично, осталось %d", pos.Quantity)))
+			s.notify(notifier.Alert(ticker, fmt.Sprintf("позиция уменьшилась частично (стоп или ручная продажа), осталось %d", pos.Quantity)))
 		}
 
 		md, err := marketdata.Assemble(ctx, s.market, sh.ID, st.Lookback(), MaxHTFTrendEMA([]string{ticker}), now)
@@ -148,8 +157,18 @@ func (s *service) managePass(ctx context.Context) error {
 
 		sig := st.Decide(md)
 		if sig.Kind == model.SignalSell {
+			// Guard ДО снятия стопа: без лота продать нельзя, а уже снятая заявка
+			// оставила бы позицию без биржевой защиты навсегда (replaceStop с тем же
+			// guard'ом её не вернёт).
+			if sh.Lot <= 0 {
+				s.notify(notifier.Alert(ticker, "sh.Lot == 0 — невозможно вычислить лоты для продажи, пропуск"))
+				logger.ErrorContext(ctx, fmt.Sprintf("reversion: %s sh.Lot=%d, skipping sell to avoid divide-by-zero", ticker, sh.Lot))
+				continue
+			}
+
 			// Любой SELL ядра: сначала снять биржевой стоп, потом рыночная продажа.
-			if entry.StopOrderID != "" {
+			hadStop := entry.StopOrderID != ""
+			if hadStop {
 				if err := s.stops.Cancel(ctx, entry.StopOrderID); err != nil {
 					s.notify(notifier.Alert(ticker, "не удалось снять стоп-заявку перед продажей: "+err.Error()))
 					logger.ErrorContext(ctx, fmt.Sprintf("reversion: %s cancel before sell: %v", ticker, err))
@@ -160,17 +179,23 @@ func (s *service) managePass(ctx context.Context) error {
 				_ = store.Save(state)
 			}
 
-			if sh.Lot <= 0 {
-				s.notify(notifier.Alert(ticker, "sh.Lot == 0 — невозможно вычислить лоты для продажи, пропуск"))
-				logger.ErrorContext(ctx, fmt.Sprintf("reversion: %s sh.Lot=%d, skipping sell to avoid divide-by-zero", ticker, sh.Lot))
-				continue
-			}
 			lots := pos.Quantity / int64(sh.Lot)
 			res, err := s.exec.Sell(ctx, sh.ID, lots)
 			if err != nil {
 				s.notify(notifier.Alert(ticker, "ордер на продажу отклонён: "+err.Error()))
 				logger.ErrorContext(ctx, fmt.Sprintf("reversion: %s sell rejected: %v", ticker, err))
-				continue // state unchanged; retried next tick
+				// Стоп уже снят, а продажа не прошла — позиция «голая» до следующего
+				// тика. Возвращаем биржевую защиту на прежнем уровне (дубль StopSet
+				// подавит changed-флаг replaceStop: уровень/причина не менялись).
+				if hadStop && entry.StopReason != "" {
+					entry = s.replaceStop(ctx, ticker, sh, entry, entry.StopPrice, entry.StopReason)
+					state[ticker] = entry
+					_ = store.Save(state)
+					if entry.StopOrderID != "" {
+						s.notify(notifier.Alert(ticker, "стоп-заявка перевыставлена после отклонённой продажи"))
+					}
+				}
+				continue // retried next tick
 			}
 
 			exitPrice := sig.Price
@@ -212,8 +237,25 @@ func (s *service) managePass(ctx context.Context) error {
 		if listErr == nil {
 			if entry.StopOrderID != "" {
 				if _, alive := stopByID[entry.StopOrderID]; !alive {
-					s.notify(notifier.Alert(ticker, "стоп-заявка исчезла с биржи — перевыставляю"))
-					entry.StopOrderID = ""
+					// Заявки нет в ACTIVE: сработала или снята вне раннера. Различить
+					// обязательно — репост свежего стопа на уже проданную стопом позицию
+					// (портфель может отставать от расчётов) обернулся бы фантомной
+					// продажей/шортом при касании уровня.
+					fired, ferr := s.stops.Executed(ctx, entry.StopOrderID)
+					switch {
+					case ferr != nil:
+						// Не репостим вслепую — ретрай на следующем часовом тике.
+						s.notify(notifier.Alert(ticker, "стоп-заявка исчезла из ACTIVE, но EXECUTED недоступен — репост отложен: "+ferr.Error()))
+						continue
+					case fired:
+						s.notify(notifier.Exit(ticker, entry.StopReason, entry.StopPrice, entry.Quantity, false))
+						delete(state, ticker)
+						_ = store.Save(state)
+						continue
+					default:
+						s.notify(notifier.Alert(ticker, "стоп-заявка снята вне раннера — перевыставляю"))
+						entry.StopOrderID = ""
+					}
 				}
 			} else if stray, ok := stopByInstrument[sh.ID]; ok {
 				// Чужая/устаревшая заявка (например, после reconstruct) — снять.
@@ -228,20 +270,27 @@ func (s *service) managePass(ctx context.Context) error {
 			}
 		}
 
-		// Желаемый уровень от ОБНОВЛЁННОГО MaxFav.
+		// Желаемый уровень от ОБНОВЛЁННОГО MaxFav — на гранулярности шага цены биржи:
+		// сырой уровень может расти на доли шага каждый час, а биржевая цена после
+		// округления не меняется; сравнение сырых значений гоняло бы cancel+repost
+		// по той же цене с окном без защиты на каждом тике.
 		level, reason := core.DesiredStop(p, entry.EntryPrice, entry.EntryATR, entry.MaxFav)
+		desired := stoporders.RoundDownToIncrement(level, sh.MinPriceIncrement)
 
-		// Реконсиляция размера: живая заявка на бирже держит не тот объём, что реально в
-		// позиции (например, после частичного исполнения выше). Оверсайз опаснее
-		// не подтянутого трейла, поэтому проверяется до сравнения уровня и форсирует
-		// cancel+repost даже если level == StopPrice.
+		// Текущий уровень и размер — от биржевого снапшота (источник истины);
+		// локальный entry.StopPrice — только fallback, когда заявки нет в снапшоте
+		// (в т.ч. при listErr != nil: stopByID пуст, alive всегда false — sizeMismatch
+		// не форсит слепой cancel+repost, мы не знаем реального размера заявки).
+		current := entry.StopPrice
 		sizeMismatch := false
-		if sh.Lot > 0 && entry.StopOrderID != "" {
-			// alive-check load-bearing: при listErr != nil stopByID пуст, а `alive` тут
-			// всегда false — sizeMismatch остаётся false, а не форсит слепой cancel+repost
-			// на каждом отказе List (мы не знаем реальный размер заявки на бирже).
-			if live, alive := stopByID[entry.StopOrderID]; alive && live.Lots != entry.Quantity/int64(sh.Lot) {
-				sizeMismatch = true
+		if entry.StopOrderID != "" {
+			if live, alive := stopByID[entry.StopOrderID]; alive {
+				current = live.StopPrice
+				// Оверсайз опаснее не подтянутого трейла, поэтому размер проверяется
+				// до сравнения уровня и форсирует cancel+repost даже при равном уровне.
+				if sh.Lot > 0 && live.Lots != entry.Quantity/int64(sh.Lot) {
+					sizeMismatch = true
+				}
 			}
 		}
 
@@ -256,7 +305,7 @@ func (s *service) managePass(ctx context.Context) error {
 				break
 			}
 			entry = s.replaceStop(ctx, ticker, sh, entry, level, reason)
-		case sizeMismatch, level > entry.StopPrice:
+		case sizeMismatch, desired > current:
 			if err := s.stops.Cancel(ctx, entry.StopOrderID); err != nil {
 				s.notify(notifier.Alert(ticker, "не удалось снять стоп для переноса: "+err.Error()))
 				break // старая заявка продолжает защищать
@@ -264,9 +313,11 @@ func (s *service) managePass(ctx context.Context) error {
 			entry.StopOrderID = ""
 			entry = s.replaceStop(ctx, ticker, sh, entry, level, reason)
 		}
-		state[ticker] = entry
-		if err := store.Save(state); err != nil {
-			return fmt.Errorf("reversion: save stop state %s: %w", ticker, err)
+		if prev := state[ticker]; prev != entry {
+			state[ticker] = entry
+			if err := store.Save(state); err != nil {
+				return fmt.Errorf("reversion: save stop state %s: %w", ticker, err)
+			}
 		}
 	}
 	return nil
@@ -287,7 +338,8 @@ func mustParams(ticker string) core.Params {
 }
 
 // replaceStop places a stop at level and stamps the entry (id only when actually
-// placed; price/reason always, so dry-run state mirrors what WOULD be on exchange).
+// placed; price/reason always). StopPrice is stamped ROUNDED to the instrument's
+// price increment, so the state mirrors the exchange-side order (dry-run included).
 func (s *service) replaceStop(ctx context.Context, ticker string, sh *imodel.Share,
 	entry statestore.Entry, level float64, reason string) statestore.Entry {
 
@@ -306,10 +358,11 @@ func (s *service) replaceStop(ctx context.Context, ticker string, sh *imodel.Sha
 	if res.Placed {
 		entry.StopOrderID = res.OrderID
 	}
-	changed := level != entry.StopPrice || reason != entry.StopReason
-	entry.StopPrice, entry.StopReason = level, reason
+	rounded := stoporders.RoundDownToIncrement(level, sh.MinPriceIncrement)
+	changed := rounded != entry.StopPrice || reason != entry.StopReason
+	entry.StopPrice, entry.StopReason = rounded, reason
 	if changed {
-		s.notify(notifier.StopSet(ticker, level, reason, !res.Placed))
+		s.notify(notifier.StopSet(ticker, rounded, reason, !res.Placed))
 	}
 	return entry
 }

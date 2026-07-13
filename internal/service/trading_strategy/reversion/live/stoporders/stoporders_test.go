@@ -54,6 +54,30 @@ func TestDryRunTouchesNoAPI(t *testing.T) {
 	if list, err := e.List(context.Background()); err != nil || list != nil {
 		t.Fatalf("dry-run List: %v %v", list, err)
 	}
+	if fired, err := e.Executed(context.Background(), "so-1"); err != nil || fired {
+		t.Fatalf("dry-run Executed: %v %v", fired, err)
+	}
+}
+
+// Executed отличает сработавшую заявку от отменённой: ID ищется в списке
+// EXECUTED-заявок счёта (fired-check для исчезнувшего из ACTIVE стопа).
+func TestExecutedLooksUpFiredStop(t *testing.T) {
+	c := mocks.NewMockClient(t)
+	c.EXPECT().GetStopOrders(mock.Anything, mock.MatchedBy(func(in *investapi.GetStopOrdersRequest) bool {
+		return in.GetAccountId() == "acc" && in.GetStatus() == investapi.StopOrderStatusOption_STOP_ORDER_STATUS_EXECUTED
+	})).Return(&investapi.GetStopOrdersResponse{StopOrders: []*investapi.StopOrder{
+		{StopOrderId: "so-1"},
+	}}, nil).Twice()
+
+	e := New(c, "acc", true)
+	fired, err := e.Executed(context.Background(), "so-1")
+	if err != nil || !fired {
+		t.Fatalf("fired=%v err=%v, want fired for listed id", fired, err)
+	}
+	fired, err = e.Executed(context.Background(), "so-2")
+	if err != nil || fired {
+		t.Fatalf("fired=%v err=%v, want not-fired for missing id", fired, err)
+	}
 }
 
 func TestListReturnsOnlyActiveSellStops(t *testing.T) {
