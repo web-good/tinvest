@@ -85,94 +85,7 @@ func (a *App) initializationLoop(ctx context.Context) (err error) {
 
 func (a *App) runDev(ctx context.Context) {
 	wg := sync.WaitGroup{}
-	/*wg.Add(1)
-	go func() {
-		defer wg.Done()
-		err := a.sp.GetSuperTrendTradingService().Trade(ctx)
 
-		if err != nil {
-			logger.ErrorContext(ctx, "Error in worker super trend", err.Error())
-		}
-	}()*/
-
-	/*	go func() {
-			defer wg.Done()
-			err := a.sp.GetSuperTrendTradingService().TakeProfit(ctx)
-
-			if err != nil {
-				logger.ErrorContext(ctx, "Error in worker super trend", err.Error())
-			}
-		}()
-
-		/*wg.Add(1)
-		go func() {
-			defer wg.Done()
-			err := a.sp.Get200EmaService().Trade(ctx, input.Trade{
-				Interval: input.Hour1,
-			})
-
-			if err != nil {
-				logger.ErrorContext(ctx, "Error in worker super trend", err.Error())
-			}
-		}()*/
-	/*wg.Add(1)
-	go func() {
-		defer wg.Done()
-		err := a.sp.GetMacdRsiTradingService().Trade(ctx, dto.Trade{AtrInterval: enum.Day1, Interval: enum.Hour1, Scheduler: "*35 * * * *"})
-
-		if err != nil {
-			logger.ErrorContext(ctx, "Error in worker macd rsi", err.Error())
-		}
-	}()*/
-	/*
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			sh := mr.NewSchedulerService(a.sp.GetMacdRsiTradingService())
-			err := sh.TakeProfit(ctx, dto.TakeProfit{Interval: enum.Hour1, ATRInterval: enum.Day1, Scheduler: ""})
-
-			if err != nil {
-				logger.ErrorContext(ctx, "Error in worker macd rsi 1H take profit", err.Error())
-			}
-		}()
-	*/
-
-	/*wg.Add(1)
-	go func() {
-		defer wg.Done()
-		err := a.sp.GetScalpingRsiTradingService().Trade(ctx, scalpinrsi.Trade{AtrInterval: enum.Day1, Interval: enum.Hour1, Scheduler: "*35 * * * *"})
-
-		if err != nil {
-			logger.ErrorContext(ctx, "Error in worker macd rsi", err.Error())
-		}
-	}()
-	*/
-	/*wg.Add(1)
-	go func() {
-		defer wg.Done()
-
-		err := a.sp.GetBondsTradingService().Trade(
-			ctx,
-		)
-
-		if err != nil {
-			logger.ErrorContext(ctx, "Error in worker golden X strategy", err.Error())
-		}
-	}()
-	/*wg.Add(1)
-	go func() {
-		defer wg.Done()
-
-		err := a.sp.GetAnalyze().BondsPortfolio(
-			ctx,
-			a.config.TelegramClient.ChatID[0],
-		)
-
-		if err != nil {
-			logger.ErrorContext(ctx, "Error in worker golden X strategy")
-		}
-	}()
-	*/
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -228,26 +141,7 @@ func (a *App) runDev(ctx context.Context) {
 
 func (a *App) runProd(ctx context.Context) {
 	wg := sync.WaitGroup{}
-	wg.Add(8)
-	/*go func() {
-		defer wg.Done()
-		sh := mr.NewSchedulerService(a.sp.GetMacdRsiTradingService())
-		err := sh.Trade(ctx, dto.Trade{AtrInterval: enum.Day1, Interval: enum.Hour1, Scheduler: "5 8-23 * * 1-5"})
-
-		if err != nil {
-			logger.ErrorContext(ctx, "Error in worker macd rsi 1H", err.Error())
-		}
-	}()*/
-
-	/*go func() {
-	defer wg.Done()
-	sh := mr.NewSchedulerService(a.sp.GetMacdRsiTradingService())
-	err := sh.TakeProfit(ctx, dto.TakeProfit{Interval: enum.Hour1, ATRInterval: enum.Day1, Scheduler: "*/ //2 8-23 * * *"})
-
-	/*if err != nil {
-			logger.ErrorContext(ctx, "Error in worker macd rsi 1H take profit", err.Error())
-		}
-	}()*/
+	wg.Add(6)
 	go func() {
 		defer wg.Done()
 		err := bondsscheduler.NewScheduler(a.sp.GetBondsTradingService()).Trade(ctx)
