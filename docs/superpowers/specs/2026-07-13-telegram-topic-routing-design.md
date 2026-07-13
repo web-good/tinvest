@@ -77,8 +77,8 @@ push-источников остаётся два.
 пакете: все потребители зависят от нашего интерфейса `telegram.Client`,
 их код не меняется. Старая зависимость удаляется из `go.mod`.
 
-`InitTelegramBotProxy` переносится на кастомный `http.Client` /
-`bot.WithServerURL` новой библиотеки с тем же прокси-URL.
+`InitTelegramBotProxy` удаляется, а не переносится: на момент миграции он нигде
+не вызывался (мёртвый код).
 
 ### Отправка (push): topic-sender per стратегия
 
@@ -123,17 +123,19 @@ call-sites стратегий (`s.tgClient.SendMessage(...)`) не трогаю�
 
 ```go
 type TelegramClient struct {
-    Token          string           `config:"TELEGRAM"`
-    GroupChatID    int64            `config:"TELEGRAM_GROUP_CHAT_ID"` // супергруппа-форум
-    Topics         map[string]int64 // ключ стратегии -> message_thread_id
-    AllowedUserIDs []int64          // whitelist для команд
+    Token          string `config:"TELEGRAM"`
+    GroupChatID    int64  `config:"TELEGRAM_GROUP_CHAT_ID"` // супергруппа-форум
+    TopicGoldenX   int    `config:"TELEGRAM_TOPIC_GOLDEN_X"`
+    TopicReversion int    `config:"TELEGRAM_TOPIC_REVERSION"`
+    AllowedUserIDs []int64 // whitelist для команд
 }
 ```
 
-- Ключи `Topics` — устойчивые идентификаторы: `golden_x`, `reversion`.
-- ID тем и группы заполняются в `env/local.env` (confita) либо дефолтами в
-  `NewTelegramClientConfig()` по образцу текущего `ChatID`.
-- Отсутствующий ключ темы → фолбэк в General + warning в лог (сообщение не
+- Плоские поля `TopicGoldenX`/`TopicReversion` вместо `map[string]int64` —
+  проще для `confita` (нет парсинга произвольных ключей из ENV).
+- ID тем и группы заполняются в `env/local.env` (confita); `AllowedUserIDs`
+  дефолтится в `NewTelegramClientConfig()`.
+- Незаданная (нулевая) тема → фолбэк в General + warning в лог (сообщение не
   должно пропасть).
 - Поле `ChatID []int64` и `Profiles` удаляются после миграции всех
   потребителей (рассылка веером больше не нужна: второй получатель — участник

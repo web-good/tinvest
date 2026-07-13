@@ -43,6 +43,7 @@ Go-based trading/investment application built around the Tinkoff Invest gRPC API
 - Code generation entry points live in `Makefile` (e.g. `make generate`, plus per-service `generate-*-api` targets); deps installed into `./bin` via `make install-deps`.
 - Quality checks run through `mage` (from repo root): `./bin/mage tools` installs pinned `golangci-lint`/`mockery` into `./bin`; `./bin/mage ci` runs lint + `go test -race ./...` + mock-drift check — the same gate CI enforces before build/deploy. Regenerate mocks with `./bin/mage mocks` after changing a mocked interface. Note: `go build ./...` fails on the `magefiles` package (no `main`); use `go build ./internal/... ./pkg/... ./cmd/...`. Details: `docs/tooling/mage.md`.
 - Golden X strategy settings are centralized in `golden_x/model.Settings` with `DefaultSettings()` constructor. Algorithm knobs are exported fields; fetch-policy constants (`candleLookbackWeeks`, `divergenceFractalK`) remain in-package.
+- Notifications go to forum topics of a Telegram supergroup (`TELEGRAM_GROUP_CHAT_ID`, `TELEGRAM_TOPIC_*`); portfolio reports are pulled on demand via bot commands (`/bonds_portfolio`, `/yield`, `/bonds_screener`) — see `docs/superpowers/specs/2026-07-13-telegram-topic-routing-design.md`.
 
 ## Configuration
 Loaded via `heetch/confita` from environment variables and/or files. See `internal/config/config.go` for the full schema.

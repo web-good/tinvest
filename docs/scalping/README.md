@@ -1,5 +1,11 @@
 # Scalping — по-акционные стратегии
 
+> **Live-слой удалён (2026-07, ветка `feat/telegram-topic-notifications`)**:
+> раннер, реестр стратегий и Telegram-уведомления из этого пакета выпилены.
+> Ядро `scalping/model/` и `scalping/strategy/**` живо и используется live
+> Reversion, Levels, Momentum и бэктест-движком. Остальные документы в этой
+> папке описывают историческое поведение удалённого live-раннера.
+
 Документация по реализации в `internal/service/trading_strategy/scalping/`.
 
 ## Что это
