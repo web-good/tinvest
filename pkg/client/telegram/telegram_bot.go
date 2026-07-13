@@ -52,7 +52,12 @@ func (b *Bot) SendMessageToTopic(chatID int64, threadID int, msg string) error {
 		return err
 	}
 	// Тема недоступна — фолбэк в General: сигнал не должен пропасть.
-	_, ferr := b.api.SendMessage(ctx, &tgbot.SendMessageParams{
+	// Свой таймаут: если первичная отправка «медленно упала» и съела бюджет
+	// первого контекста, фолбэк всё равно должен успеть уйти.
+	fctx, fcancel := context.WithTimeout(context.Background(), sendTimeout)
+	defer fcancel()
+
+	_, ferr := b.api.SendMessage(fctx, &tgbot.SendMessageParams{
 		ChatID:    chatID,
 		Text:      "⚠️ тема " + strconv.Itoa(threadID) + " недоступна\n" + msg,
 		ParseMode: models.ParseModeHTML,
