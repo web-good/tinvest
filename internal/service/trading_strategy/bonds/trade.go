@@ -6,9 +6,10 @@ import (
 	"time"
 	"tinvest/internal/service/trading_strategy/bonds/computable"
 	"tinvest/internal/service/trading_strategy/bonds/pipeline"
+	"tinvest/pkg/client/telegram"
 )
 
-func (s *service) Trade(ctx context.Context) error {
+func (s *service) Trade(ctx context.Context, tg telegram.Client) error {
 	var wg sync.WaitGroup
 	bonds, err := s.instrumentServiceGrpcClient.Bonds(ctx)
 	if err != nil {
@@ -26,7 +27,7 @@ func (s *service) Trade(ctx context.Context) error {
 				pipeline.Finder(doneCh, bonds, true, time.Now().AddDate(0, 0, 180), time.Now().AddDate(2, 0, 0)),
 				computable.NewService(s.instrumentServiceGrpcClient, s.marketDataServiceGrpcClient),
 			),
-			s.tgClient,
+			tg,
 			&wg,
 			time.Now().AddDate(0, 0, 180),
 			time.Now().AddDate(2, 0, 0),
@@ -43,7 +44,7 @@ func (s *service) Trade(ctx context.Context) error {
 				pipeline.Finder(doneCh, bonds, true, time.Now().AddDate(2, 0, 0), time.Now().AddDate(6, 0, 0)),
 				computable.NewService(s.instrumentServiceGrpcClient, s.marketDataServiceGrpcClient),
 			),
-			s.tgClient,
+			tg,
 			&wg,
 			time.Now().AddDate(2, 0, 0),
 			time.Now().AddDate(6, 0, 0),
@@ -60,7 +61,7 @@ func (s *service) Trade(ctx context.Context) error {
 				pipeline.Finder(doneCh, bonds, true, time.Now().AddDate(6, 0, 0), time.Now().AddDate(16, 0, 0)),
 				computable.NewService(s.instrumentServiceGrpcClient, s.marketDataServiceGrpcClient),
 			),
-			s.tgClient,
+			tg,
 			&wg,
 			time.Now().AddDate(6, 0, 0),
 			time.Now().AddDate(16, 0, 0),
@@ -77,7 +78,7 @@ func (s *service) Trade(ctx context.Context) error {
 				pipeline.Finder(doneCh, bonds, false, time.Now().AddDate(0, 0, 180), time.Now().AddDate(3, 0, 0)),
 				computable.NewService(s.instrumentServiceGrpcClient, s.marketDataServiceGrpcClient),
 			),
-			s.tgClient,
+			tg,
 			&wg,
 			time.Now().AddDate(0, 0, 180),
 			time.Now().AddDate(3, 0, 0),

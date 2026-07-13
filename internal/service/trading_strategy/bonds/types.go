@@ -11,7 +11,7 @@ import (
 )
 
 type Bonds interface {
-	Trade(ctx context.Context) error
+	Trade(ctx context.Context, tg telegram.Client) error
 }
 
 type rsiInstrument interface {
@@ -22,14 +22,12 @@ type service struct {
 	rsi                         rsiInstrument
 	instrumentServiceGrpcClient grpc.InstrumentsServiceClient
 	marketDataServiceGrpcClient grpc.MarketDataServiceClient
-	tgClient                    telegram.Client
 }
 
-func NewService(rsi rsiInstrument, instrumentsServiceClient grpc.InstrumentsServiceClient, marketDataServiceGrpcClient grpc.MarketDataServiceClient, tgClient telegram.Client) *service {
+func NewService(rsi rsiInstrument, instrumentsServiceClient grpc.InstrumentsServiceClient, marketDataServiceGrpcClient grpc.MarketDataServiceClient) *service {
 	return &service{
 		rsi:                         rsi,
 		instrumentServiceGrpcClient: instrumentsServiceClient,
 		marketDataServiceGrpcClient: marketDataServiceGrpcClient,
-		tgClient:                    tgClient,
 	}
 }

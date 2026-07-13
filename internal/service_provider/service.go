@@ -40,12 +40,10 @@ func (*ServiceProvider) GetPurchaseSharesService() purchase_shares.PurchaseShare
 func (*ServiceProvider) GetBondsTradingService() bonds.Bonds {
 	if serviceProvider.service.bondsTradingService == nil {
 		grpcClient, _ := serviceProvider.GetGrpcClient()
-		tgClient, _ := serviceProvider.GetTelegramBotClient()
 		serviceProvider.service.bondsTradingService = bonds.NewService(
 			serviceProvider.RSI(),
 			grpcClient.InstrumentsServiceClient(),
 			grpcClient.MarketDataServiceClient(),
-			tgClient,
 		)
 	}
 
@@ -123,11 +121,9 @@ func (*ServiceProvider) Volatility() volatility.Instrument {
 func (*ServiceProvider) GetAnalyze() analyze.Analyze {
 	if serviceProvider.service.analyze == nil {
 		grpcClient, _ := serviceProvider.GetGrpcClient()
-		tgClient, _ := serviceProvider.GetTelegramBotClient()
 		serviceProvider.service.analyze = analyze.NewService(
 			grpcClient.OperationsServiceClient(),
 			grpcClient.UserServiceClient(),
-			tgClient,
 			grpcClient.InstrumentsServiceClient(),
 		)
 	}
@@ -138,11 +134,9 @@ func (*ServiceProvider) GetAnalyze() analyze.Analyze {
 func (*ServiceProvider) GetPortfolioYield() yield.Yield {
 	if serviceProvider.service.portfolioYield == nil {
 		grpcClient, _ := serviceProvider.GetGrpcClient()
-		tgClient, _ := serviceProvider.GetTelegramBotClient()
 		serviceProvider.service.portfolioYield = yield.NewService(
 			grpcClient.OperationsServiceClient(),
 			grpcClient.UserServiceClient(),
-			tgClient,
 			serviceProvider.appConfig.PortfolioYield,
 		)
 	}

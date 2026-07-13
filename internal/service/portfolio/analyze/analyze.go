@@ -6,9 +6,10 @@ import (
 	"time"
 
 	"tinvest/internal/utils"
+	"tinvest/pkg/client/telegram"
 )
 
-func (s service) BondsPortfolio(ctx context.Context, chatID int64) error {
+func (s service) BondsPortfolio(ctx context.Context, tg telegram.Client) error {
 	accounts, err := s.usersServiceClient.GetAccounts(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get accounts: %w", err)
@@ -62,8 +63,8 @@ func (s service) BondsPortfolio(ctx context.Context, chatID int64) error {
 
 	if totalBondSum == 0 {
 		msg := "No bonds found in portfolio"
-		if s.tgClient != nil {
-			_ = s.tgClient.SendMessageToChat(chatID, msg)
+		if tg != nil {
+			_ = tg.SendMessage(msg)
 		}
 		return nil
 	}
@@ -80,8 +81,8 @@ func (s service) BondsPortfolio(ctx context.Context, chatID int64) error {
 	}
 
 	// Send via Telegram
-	if s.tgClient != nil {
-		if err := s.tgClient.SendMessageToChat(chatID, msg); err != nil {
+	if tg != nil {
+		if err := tg.SendMessage(msg); err != nil {
 			return fmt.Errorf("failed to send telegram message: %w", err)
 		}
 	}

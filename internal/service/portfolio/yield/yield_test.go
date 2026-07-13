@@ -49,8 +49,8 @@ func TestPortfolioYieldYTD_HappyPath(t *testing.T) {
 	var sentMsg string
 	tgClient := tgmocks.NewMockClient(t)
 	tgClient.EXPECT().
-		SendMessageToChat(mock.Anything, mock.Anything).
-		Run(func(_ int64, msg string) {
+		SendMessage(mock.Anything).
+		Run(func(msg string) {
 			sentMsg = msg
 		}).
 		Return(nil).
@@ -59,12 +59,11 @@ func TestPortfolioYieldYTD_HappyPath(t *testing.T) {
 	svc := &service{
 		operationsServiceClient: operationsClient,
 		usersServiceClient:      usersClient,
-		tgClient:                tgClient,
 		manualStartValue:        startValue,
 	}
 
 	ctx := context.Background()
-	if err := svc.PortfolioYieldYTD(ctx, 12345); err != nil {
+	if err := svc.PortfolioYieldYTD(ctx, tgClient); err != nil {
 		t.Fatalf("PortfolioYieldYTD returned error: %v", err)
 	}
 
@@ -101,8 +100,8 @@ func TestPortfolioYieldYTD_InsufficientData(t *testing.T) {
 	var sentMsg string
 	tgClient := tgmocks.NewMockClient(t)
 	tgClient.EXPECT().
-		SendMessageToChat(mock.Anything, mock.Anything).
-		Run(func(_ int64, msg string) {
+		SendMessage(mock.Anything).
+		Run(func(msg string) {
 			sentMsg = msg
 		}).
 		Return(nil).
@@ -111,12 +110,11 @@ func TestPortfolioYieldYTD_InsufficientData(t *testing.T) {
 	svc := &service{
 		operationsServiceClient: operationsClient,
 		usersServiceClient:      usersClient,
-		tgClient:                tgClient,
 		manualStartValue:        0,
 	}
 
 	ctx := context.Background()
-	if err := svc.PortfolioYieldYTD(ctx, 12345); err != nil {
+	if err := svc.PortfolioYieldYTD(ctx, tgClient); err != nil {
 		t.Fatalf("PortfolioYieldYTD returned error: %v", err)
 	}
 
@@ -147,18 +145,17 @@ func TestPortfolioYieldYTD_NoAccounts(t *testing.T) {
 	svc := &service{
 		operationsServiceClient: operationsClient,
 		usersServiceClient:      usersClient,
-		tgClient:                nil,
 		manualStartValue:        0,
 	}
 
 	ctx := context.Background()
-	if err := svc.PortfolioYieldYTD(ctx, 12345); err != nil {
+	if err := svc.PortfolioYieldYTD(ctx, nil); err != nil {
 		t.Fatalf("PortfolioYieldYTD returned error: %v", err)
 	}
 }
 
 // TestPortfolioYieldYTD_NilTgClient verifies the function doesn't panic
-// when tgClient is nil (no Telegram configured).
+// when tg is nil (no Telegram configured).
 func TestPortfolioYieldYTD_NilTgClient(t *testing.T) {
 	const endValue = 50_000.0
 
@@ -181,12 +178,11 @@ func TestPortfolioYieldYTD_NilTgClient(t *testing.T) {
 	svc := &service{
 		operationsServiceClient: operationsClient,
 		usersServiceClient:      usersClient,
-		tgClient:                nil, // no Telegram
 		manualStartValue:        40_000.0,
 	}
 
 	ctx := context.Background()
-	if err := svc.PortfolioYieldYTD(ctx, 0); err != nil {
+	if err := svc.PortfolioYieldYTD(ctx, nil); err != nil {
 		t.Fatalf("PortfolioYieldYTD returned error: %v", err)
 	}
 }
@@ -217,8 +213,8 @@ func TestPortfolioYieldYTD_XIRRAvailableTrue(t *testing.T) {
 	var sentMsg string
 	tgClient := tgmocks.NewMockClient(t)
 	tgClient.EXPECT().
-		SendMessageToChat(mock.Anything, mock.Anything).
-		Run(func(_ int64, msg string) {
+		SendMessage(mock.Anything).
+		Run(func(msg string) {
 			sentMsg = msg
 		}).
 		Return(nil).
@@ -227,12 +223,11 @@ func TestPortfolioYieldYTD_XIRRAvailableTrue(t *testing.T) {
 	svc := &service{
 		operationsServiceClient: operationsClient,
 		usersServiceClient:      usersClient,
-		tgClient:                tgClient,
 		manualStartValue:        startValue,
 	}
 
 	ctx := context.Background()
-	if err := svc.PortfolioYieldYTD(ctx, 99); err != nil {
+	if err := svc.PortfolioYieldYTD(ctx, tgClient); err != nil {
 		t.Fatalf("PortfolioYieldYTD returned error: %v", err)
 	}
 

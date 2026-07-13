@@ -7,21 +7,19 @@ import (
 )
 
 type Analyze interface {
-	BondsPortfolio(context context.Context, chatID int64) error
+	BondsPortfolio(ctx context.Context, tg telegram.Client) error
 }
 
 type service struct {
 	operationsServiceClient     grpc.OperationsServiceClient
 	usersServiceClient          grpc.UsersServiceClient
 	instrumentServiceGrpcClient grpc.InstrumentsServiceClient
-	tgClient                    telegram.Client
 }
 
-func NewService(operationsServiceClient grpc.OperationsServiceClient, usersServiceClient grpc.UsersServiceClient, tgClient telegram.Client, instrumentsServiceClient grpc.InstrumentsServiceClient) *service {
+func NewService(operationsServiceClient grpc.OperationsServiceClient, usersServiceClient grpc.UsersServiceClient, instrumentsServiceClient grpc.InstrumentsServiceClient) *service {
 	return &service{
 		operationsServiceClient:     operationsServiceClient,
 		instrumentServiceGrpcClient: instrumentsServiceClient,
 		usersServiceClient:          usersServiceClient,
-		tgClient:                    tgClient,
 	}
 }

@@ -8,12 +8,13 @@ import (
 	"tinvest/internal/domain"
 	"tinvest/internal/service/portfolio/yield/notification"
 	"tinvest/pkg/client/grpc/model"
+	"tinvest/pkg/client/telegram"
 	"tinvest/pkg/indicators"
 )
 
 // PortfolioYieldYTD computes the year-to-date portfolio yield and sends the
-// result to the given Telegram chat.
-func (s *service) PortfolioYieldYTD(ctx context.Context, chatID int64) error {
+// result via the given Telegram destination client.
+func (s *service) PortfolioYieldYTD(ctx context.Context, tg telegram.Client) error {
 	now := time.Now()
 	year := now.Year()
 	periodStart := time.Date(year, time.January, 1, 0, 0, 0, 0, now.Location())
@@ -105,8 +106,8 @@ func (s *service) PortfolioYieldYTD(ctx context.Context, chatID int64) error {
 	}
 
 	msg := notification.Send(y)
-	if s.tgClient != nil {
-		if err := s.tgClient.SendMessageToChat(chatID, msg); err != nil {
+	if tg != nil {
+		if err := tg.SendMessage(msg); err != nil {
 			return fmt.Errorf("failed to send telegram message: %w", err)
 		}
 	}
