@@ -8,6 +8,5 @@ type Config struct {
 	GrpcClient     *GrpcClient
 	TelegramClient *TelegramClient
 	PortfolioYield *PortfolioYieldConfig
-	Scalping       *ScalpingConfig
 	Reversion      *ReversionConfig
 }

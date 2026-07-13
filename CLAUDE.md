@@ -1,7 +1,7 @@
 # TInvest Project
 
 ## Overview
-Go-based trading/investment application built around the Tinkoff Invest gRPC API. It implements trading strategies (Golden X, Reversion, Bonds screening, plus backtest-only Levels/Momentum), analyzes the portfolio, and sends notifications via Telegram bots.
+Go-based trading/investment application built around the Tinkoff Invest gRPC API. It implements live trading strategies (Golden X, Reversion, Bonds screening) and backtest-only strategies (Levels, Momentum), plus a shared scalping core for backtesting. Analyzes the portfolio and sends notifications via Telegram bots.
 
 ## Tech Stack
 - Go 1.25
@@ -20,7 +20,7 @@ Go-based trading/investment application built around the Tinkoff Invest gRPC API
   - indicators: `atr/`, `ema/`, `rsi.go`, `macd.go`, `volatility.go`
   - `notification/`, `backtest/`
 - `internal/service` — business logic, grouped by concern:
-  - `trading_strategy/` — `golden_x`, `reversion`, `bonds`, `scalping`, `levels`, `momentum` (last two: backtest-only)
+  - `trading_strategy/` — `golden_x`, `reversion`, `bonds` (live strategies); `levels`, `momentum` (backtest-only); `scalping/model/` and `scalping/strategy/` (shared core for backtest-only indicators, used by reversion/levels/momentum)
   - `instrument/` — indicator calculators: `atr`, `ema`, `macd`, `rsi`, `volatility`
   - `notification/purchase_shares`
   - `portfolio/analyze`

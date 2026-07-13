@@ -12,22 +12,20 @@ import (
 	"tinvest/internal/service/trading_strategy/bonds"
 	"tinvest/internal/service/trading_strategy/golden_x"
 	"tinvest/internal/service/trading_strategy/reversion/live"
-	"tinvest/internal/service/trading_strategy/scalping"
 )
 
 type service struct {
-	purchaseSharesService  purchase_shares.PurchaseShares
-	scalpingTradingService scalping.Scalping
-	reversionLiveService   live.Service
-	goldenXTradingService  golden_x.GoldenX
-	bondsTradingService    bonds.Bonds
-	emaInstrument          ema.Instrument
-	atrInstrument          atr.Instrument
-	rsiInstrument          rsi.Instrument
-	MACDInstrument         macd.Instrument
-	volatilityInstrument   volatility.Instrument
-	analyze                analyze.Analyze
-	portfolioYield         yield.Yield
+	purchaseSharesService purchase_shares.PurchaseShares
+	reversionLiveService  live.Service
+	goldenXTradingService golden_x.GoldenX
+	bondsTradingService   bonds.Bonds
+	emaInstrument         ema.Instrument
+	atrInstrument         atr.Instrument
+	rsiInstrument         rsi.Instrument
+	MACDInstrument        macd.Instrument
+	volatilityInstrument  volatility.Instrument
+	analyze               analyze.Analyze
+	portfolioYield        yield.Yield
 }
 
 func (*ServiceProvider) GetPurchaseSharesService() purchase_shares.PurchaseShares {
@@ -150,22 +148,6 @@ func (*ServiceProvider) GetPortfolioYield() yield.Yield {
 	}
 
 	return serviceProvider.service.portfolioYield
-}
-
-func (*ServiceProvider) GetScalpingTradingService() scalping.Scalping {
-	if serviceProvider.service.scalpingTradingService == nil {
-		grpcClient, _ := serviceProvider.GetGrpcClient()
-		tgClient, _ := serviceProvider.GetTelegramBotClient()
-		serviceProvider.service.scalpingTradingService = scalping.NewService(
-			grpcClient.InstrumentsServiceClient(),
-			grpcClient.MarketDataServiceClient(),
-			grpcClient.OperationsServiceClient(),
-			tgClient,
-			serviceProvider.appConfig.Scalping.AccountID,
-		)
-	}
-
-	return serviceProvider.service.scalpingTradingService
 }
 
 func (*ServiceProvider) GetReversionLiveService() live.Service {
