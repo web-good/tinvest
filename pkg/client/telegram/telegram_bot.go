@@ -69,7 +69,11 @@ func (b *Bot) SendMessageToTopic(chatID int64, threadID int, msg string) error {
 }
 
 func InitTelegramBot(token string, defaultChatID int64) (*Bot, error) {
-	api, err := tgbot.New(token)
+	// No-op default handler: иначе библиотека дампит в лог каждый update,
+	// не пойманный зарегистрированными хендлерами.
+	api, err := tgbot.New(token, tgbot.WithDefaultHandler(
+		func(_ context.Context, _ *tgbot.Bot, _ *models.Update) {},
+	))
 	if err != nil {
 		return nil, err
 	}
