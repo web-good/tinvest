@@ -8,6 +8,9 @@ packages:
     interfaces:
       OperationsServiceClient:
       UsersServiceClient:
+  tinvest/pkg/client/rss:
+    interfaces:
+      Fetcher:
   tinvest/pkg/client/telegram:
     interfaces:
       Client:
