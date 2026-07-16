@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -173,6 +174,37 @@ func TestRun_SendError_DoesNotAdvanceWindow(t *testing.T) {
 	if !strings.Contains(sent, `>n a<`) {
 		t.Errorf("запись потеряна после ошибки отправки, got %q", sent)
 	}
+}
+
+// TestRun_ConcurrentRuns гоняет два Run параллельно на одном Service: cron не
+// гарантирует отсутствие перекрытия тиков, поэтому доступ к состоянию
+// (lastSeen, boundaryGUIDs) должен быть сериализован. Запускать с -race.
+func TestRun_ConcurrentRuns(t *testing.T) {
+	f := rssmocks.NewMockFetcher(t)
+	f.EXPECT().Fetch(context.Background()).Return([]rss.Item{
+		item("c1", baseTime.Add(-10*time.Minute)),
+		item("c2", baseTime.Add(-5*time.Minute)),
+	}, nil).Times(2)
+
+	tg := tgmocks.NewMockClient(t)
+	tg.EXPECT().SendMessage(mock.AnythingOfType("string")).Return(nil).Maybe()
+
+	svc := newTestService(f, tg)
+
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(2)
+	for range 2 {
+		go func() {
+			defer wg.Done()
+			<-start
+			if err := svc.Run(context.Background()); err != nil {
+				t.Errorf("Run: %v", err)
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
 }
 
 // mockAnyString принимает любое строковое сообщение и запоминает последнее

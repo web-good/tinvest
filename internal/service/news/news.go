@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
+	"sync"
 	"time"
 
 	"tinvest/pkg/client/rss"
@@ -26,6 +27,9 @@ type Service struct {
 	fetcher rss.Fetcher
 	tg      telegram.Client
 	now     func() time.Time // подменяется в тестах
+
+	// mu сериализует Run: cron не гарантирует отсутствие перекрытия тиков.
+	mu sync.Mutex
 
 	// lastSeen — максимальный PubDate уже отправленных записей;
 	// boundaryGUIDs — GUID отправленных записей с PubDate == lastSeen
@@ -49,6 +53,9 @@ func NewService(fetcher rss.Fetcher, tg telegram.Client) *Service {
 // сдвиг окна. При любой ошибке окно не сдвигается: следующий запуск повторит
 // невышедшие записи.
 func (s *Service) Run(ctx context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	items, err := s.fetcher.Fetch(ctx)
 	if err != nil {
 		return fmt.Errorf("news: fetch feed: %w", err)
