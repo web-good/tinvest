@@ -1,0 +1,83 @@
+package news
+
+import (
+	"fmt"
+	"strings"
+	"testing"
+
+	"tinvest/pkg/client/rss"
+)
+
+func TestFormatDigest_Empty(t *testing.T) {
+	if got := formatDigest(nil); got != nil {
+		t.Fatalf("formatDigest(nil) = %v, want nil", got)
+	}
+}
+
+func TestFormatDigest_SingleMessage(t *testing.T) {
+	items := []rss.Item{
+		{Title: "Новость раз", Link: "https://example.com/1"},
+		{Title: "Новость два", Link: "https://example.com/2"},
+	}
+	msgs := formatDigest(items)
+	if len(msgs) != 1 {
+		t.Fatalf("len(msgs) = %d, want 1", len(msgs))
+	}
+	want := "📰 Новости рынка\n" +
+		`• <a href="https://example.com/1">Новость раз</a>` + "\n" +
+		`• <a href="https://example.com/2">Новость два</a>`
+	if msgs[0] != want {
+		t.Errorf("msg = %q\nwant %q", msgs[0], want)
+	}
+}
+
+func TestFormatDigest_EscapesHTML(t *testing.T) {
+	items := []rss.Item{{Title: `Отчёт <AFKS> & "прогноз"`, Link: "https://example.com/1"}}
+	msg := formatDigest(items)[0]
+	if strings.Contains(msg, "<AFKS>") {
+		t.Errorf("заголовок не заэскейпен: %q", msg)
+	}
+	if !strings.Contains(msg, "&lt;AFKS&gt; &amp;") {
+		t.Errorf("нет ожидаемых HTML-энтити: %q", msg)
+	}
+}
+
+func TestFormatDigest_SplitsAtMessageLimit(t *testing.T) {
+	// 100 пунктов по ~100 символам — заведомо больше 4096, ждём несколько
+	// сообщений, каждое в лимите, пункты не порваны, все на месте.
+	var items []rss.Item
+	for i := range 100 {
+		items = append(items, rss.Item{
+			Title: fmt.Sprintf("Новость %03d %s", i, strings.Repeat("х", 60)),
+			Link:  fmt.Sprintf("https://example.com/%03d", i),
+		})
+	}
+	msgs := formatDigest(items)
+	if len(msgs) < 2 {
+		t.Fatalf("len(msgs) = %d, want >= 2", len(msgs))
+	}
+
+	total := 0
+	for i, m := range msgs {
+		if len(m) > messageLimit {
+			t.Errorf("msgs[%d]: len %d > лимита %d", i, len(m), messageLimit)
+		}
+		if i == 0 && !strings.HasPrefix(m, "📰 Новости рынка\n") {
+			t.Errorf("первое сообщение без заголовка: %q", m[:40])
+		}
+		if i > 0 && strings.Contains(m, "📰") {
+			t.Errorf("заголовок должен быть только в первом сообщении, msgs[%d]", i)
+		}
+		for _, line := range strings.Split(m, "\n") {
+			if strings.HasPrefix(line, "• ") {
+				if !strings.HasSuffix(line, "</a>") {
+					t.Errorf("порванный пункт: %q", line)
+				}
+				total++
+			}
+		}
+	}
+	if total != len(items) {
+		t.Errorf("пунктов во всех сообщениях %d, want %d", total, len(items))
+	}
+}
