@@ -6,6 +6,7 @@ import (
 	"sync"
 	"tinvest/internal/config"
 	"tinvest/internal/enum"
+	newsscheduler "tinvest/internal/service/news/scheduler"
 	goldenx "tinvest/internal/service/trading_strategy/golden_x/dto"
 	gxmodel "tinvest/internal/service/trading_strategy/golden_x/model"
 	"tinvest/internal/service/trading_strategy/golden_x/scheduler"
@@ -81,7 +82,7 @@ func (a *App) initializationLoop(ctx context.Context) (err error) {
 
 func (a *App) runDev(ctx context.Context) {
 	wg := sync.WaitGroup{}
-	wg.Add(1)
+	wg.Add(2)
 	go func() {
 		defer wg.Done()
 		listener, err := a.sp.GetTelegramCommands()
@@ -92,13 +93,25 @@ func (a *App) runDev(ctx context.Context) {
 		logger.InfoContext(ctx, "telegram commands listener started")
 		listener.Run(ctx)
 	}()
+	go func() {
+		defer wg.Done()
+		svc, err := a.sp.GetNewsService()
+		if err != nil {
+			logger.ErrorContext(ctx, "news service init failed", err.Error())
+			return
+		}
+		// Dev: один немедленный прогон для ручной проверки дайджеста.
+		if err := svc.Run(ctx); err != nil {
+			logger.ErrorContext(ctx, "news digest run failed", err.Error())
+		}
+	}()
 
 	wg.Wait()
 }
 
 func (a *App) runProd(ctx context.Context) {
 	wg := sync.WaitGroup{}
-	wg.Add(5)
+	wg.Add(6)
 	go func() {
 		defer wg.Done()
 		listener, err := a.sp.GetTelegramCommands()
@@ -108,6 +121,18 @@ func (a *App) runProd(ctx context.Context) {
 		}
 		logger.InfoContext(ctx, "telegram commands listener started")
 		listener.Run(ctx)
+	}()
+	go func() {
+		defer wg.Done()
+		svc, err := a.sp.GetNewsService()
+		if err != nil {
+			logger.ErrorContext(ctx, "news service init failed", err.Error())
+			return
+		}
+		// 5-я минута часа: дайджест собирает полный прошедший час.
+		if err := newsscheduler.NewSchedulerService(svc).Run(ctx, "5 * * * *"); err != nil {
+			logger.ErrorContext(ctx, "Error in worker News digest", err.Error())
+		}
 	}()
 	go func() {
 		defer wg.Done()

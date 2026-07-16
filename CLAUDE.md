@@ -24,11 +24,12 @@ Go-based trading/investment application built around the Tinkoff Invest gRPC API
   - `instrument/` — indicator calculators: `atr`, `ema`, `macd`, `rsi`, `volatility`
   - `notification/purchase_shares`
   - `portfolio/analyze`
+  - `news/` — ежечасный дайджест новостей рынка (RSS smart-lab) в тему Telegram; `news/scheduler/` — cron-обёртка
 - `internal/service/trading_strategy/golden_x/` — subpackages: `dto`, `factory`, `model`, `notification`, `percentile`, `scheduler`, `shares`.
 - `internal/converter` — DTO/model converters (goverter-generated).
 - `internal/pb` — generated protobuf/gRPC stubs (`api/v1/*.proto`).
 - `internal/enum`, `internal/model`, `internal/utils` — shared types/helpers.
-- `pkg` — reusable packages: `client` (grpc, telegram), `closer`, `collection`, `heartbeat`, `indicators`, `logger`, `scheduler`, `semaphore`.
+- `pkg` — reusable packages: `client` (grpc, telegram, rss), `closer`, `collection`, `heartbeat`, `indicators`, `logger`, `scheduler`, `semaphore`.
 - `api/v1` — `.proto` definitions for Tinkoff Invest API.
 - `magefiles/` — mage build package: `Tools`, `Lint`, `Test`, `Mocks`, `MocksCheck`, `CI` targets.
 - `docs/golden_x/` — strategy documentation (strategy, settings, backtest); `docs/tooling/mage.md` — build/lint/mocks tooling.
@@ -43,7 +44,7 @@ Go-based trading/investment application built around the Tinkoff Invest gRPC API
 - Code generation entry points live in `Makefile` (e.g. `make generate`, plus per-service `generate-*-api` targets); deps installed into `./bin` via `make install-deps`.
 - Quality checks run through `mage` (from repo root): `./bin/mage tools` installs pinned `golangci-lint`/`mockery` into `./bin`; `./bin/mage ci` runs lint + `go test -race ./...` + mock-drift check — the same gate CI enforces before build/deploy. Regenerate mocks with `./bin/mage mocks` after changing a mocked interface. Note: `go build ./...` fails on the `magefiles` package (no `main`); use `go build ./internal/... ./pkg/... ./cmd/...`. Details: `docs/tooling/mage.md`.
 - Golden X strategy settings are centralized in `golden_x/model.Settings` with `DefaultSettings()` constructor. Algorithm knobs are exported fields; fetch-policy constants (`candleLookbackWeeks`, `divergenceFractalK`) remain in-package.
-- Notifications go to forum topics of a Telegram supergroup (`TELEGRAM_GROUP_CHAT_ID`, `TELEGRAM_TOPIC_*`); portfolio reports are pulled on demand via bot commands (`/bonds_portfolio`, `/yield`, `/bonds_screener`) — see `docs/superpowers/specs/2026-07-13-telegram-topic-routing-design.md`.
+- Notifications go to forum topics of a Telegram supergroup (`TELEGRAM_GROUP_CHAT_ID`, `TELEGRAM_TOPIC_*`); portfolio reports are pulled on demand via bot commands (`/bonds_portfolio`, `/yield`, `/bonds_screener`); push-дайджест новостей рынка приходит в тему «Новости» раз в час (`TELEGRAM_TOPIC_NEWS`, источник `NEWS_FEED_URL`, дефолт — RSS smart-lab); см. `docs/superpowers/specs/2026-07-15-news-digest-design.md` — see `docs/superpowers/specs/2026-07-13-telegram-topic-routing-design.md`.
 
 ## Configuration
 Loaded via `heetch/confita` from environment variables and/or files. See `internal/config/config.go` for the full schema.
