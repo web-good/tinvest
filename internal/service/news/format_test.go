@@ -42,6 +42,56 @@ func TestFormatDigest_EscapesHTML(t *testing.T) {
 	}
 }
 
+func TestFormatDigest_TruncatesOversizedTitle(t *testing.T) {
+	// Один пункт, чей заголовок сам по себе больше 4096: заголовок должен быть
+	// обрезан (с «…»), якорь остаться целым, сообщение — одно и в лимите.
+	items := []rss.Item{{
+		Title: strings.Repeat("х", 5000),
+		Link:  "https://example.com/long",
+	}}
+	msgs := formatDigest(items)
+	if len(msgs) != 1 {
+		t.Fatalf("len(msgs) = %d, want 1", len(msgs))
+	}
+	msg := msgs[0]
+	if len(msg) > messageLimit {
+		t.Errorf("len(msg) = %d > лимита %d", len(msg), messageLimit)
+	}
+	if !strings.Contains(msg, "…") {
+		t.Errorf("нет признака обрезки «…»")
+	}
+	lines := strings.Split(msg, "\n")
+	item := lines[len(lines)-1]
+	if !strings.HasPrefix(item, "• ") || !strings.HasSuffix(item, "</a>") {
+		t.Errorf("порванный якорь: %.80q", item)
+	}
+}
+
+func TestFormatDigest_OversizedLinkFallsBackToPlainText(t *testing.T) {
+	// Ссылка длиннее 4096: якорь не влезает даже с пустым заголовком —
+	// ждём пункт без <a> (просто текст), одно сообщение в лимите.
+	items := []rss.Item{{
+		Title: "Короткая новость",
+		Link:  "https://example.com/" + strings.Repeat("a", 5000),
+	}}
+	msgs := formatDigest(items)
+	if len(msgs) != 1 {
+		t.Fatalf("len(msgs) = %d, want 1", len(msgs))
+	}
+	msg := msgs[0]
+	if len(msg) > messageLimit {
+		t.Errorf("len(msg) = %d > лимита %d", len(msg), messageLimit)
+	}
+	lines := strings.Split(msg, "\n")
+	item := lines[len(lines)-1]
+	if strings.Contains(item, "<a") {
+		t.Errorf("ожидали пункт без якоря: %.80q", item)
+	}
+	if !strings.Contains(item, "Короткая новость") {
+		t.Errorf("пропал заголовок: %.80q", item)
+	}
+}
+
 func TestFormatDigest_SplitsAtMessageLimit(t *testing.T) {
 	// 100 пунктов по ~100 символам — заведомо больше 4096, ждём несколько
 	// сообщений, каждое в лимите, пункты не порваны, все на месте.
