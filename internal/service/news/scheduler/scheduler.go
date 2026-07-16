@@ -3,6 +3,8 @@ package scheduler
 
 import (
 	"context"
+	"fmt"
+	"runtime/debug"
 	"time"
 
 	"tinvest/pkg/logger"
@@ -37,7 +39,7 @@ func (s *SchedulerService) Run(ctx context.Context, cronExpr string) error {
 		// telegram_commands.runExclusive).
 		defer func() {
 			if r := recover(); r != nil {
-				logger.ErrorContext(ctx, "паника в воркере News", r)
+				logger.ErrorContext(ctx, "паника в воркере News", fmt.Sprintf("%v\n%s", r, debug.Stack()))
 			}
 		}()
 		logger.InfoContext(ctx, "Воркер News начал работу")

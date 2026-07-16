@@ -32,7 +32,7 @@ func formatDigest(items []rss.Item) []string {
 			html.EscapeString(it.Link),
 			html.EscapeString(it.Title),
 		)
-		if len(line) > messageLimit {
+		if len(line) > lineLimit {
 			line = shortenLine(it, lineLimit)
 		}
 		if len(cur)+1+len(line) > messageLimit {

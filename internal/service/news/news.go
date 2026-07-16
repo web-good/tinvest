@@ -20,6 +20,11 @@ import (
 // новости за последний час, а не всю ленту.
 const startupLookback = time.Hour
 
+// futureSkewSlack — терпим небольшой перекос часов источника, но будущая
+// дата не должна глушить окно навсегда: advance() не даёт lastSeen уйти
+// дальше этого зазора относительно текущего времени.
+const futureSkewSlack = 15 * time.Minute
+
 // Service хранит состояние дедупликации в памяти процесса: после рестарта
 // возможен редкий повтор записей на границе окна — принято осознанно,
 // хранилище ради этого не заводим.
@@ -51,7 +56,10 @@ func NewService(fetcher rss.Fetcher, tg telegram.Client) *Service {
 
 // Run — одна итерация: fetch → отбор новых записей → отправка дайджеста →
 // сдвиг окна. При любой ошибке окно не сдвигается: следующий запуск повторит
-// невышедшие записи.
+// невышедшие записи. Это касается и ошибки на k-м сообщении
+// многосообщенческого дайджеста: уже доставленные сообщения будут повторены
+// в следующем запуске (следствие правила «окно не сдвигается при ошибке»;
+// дубли предпочтительнее потерь).
 func (s *Service) Run(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -73,7 +81,8 @@ func (s *Service) Run(ctx context.Context) error {
 	}
 
 	// RSS отдаёт новые сверху — в дайджесте порядок хронологический.
-	sort.Slice(fresh, func(i, j int) bool { return fresh[i].PubDate.Before(fresh[j].PubDate) })
+	// SliceStable: записи с равным PubDate сохраняют порядок ленты.
+	sort.SliceStable(fresh, func(i, j int) bool { return fresh[i].PubDate.Before(fresh[j].PubDate) })
 
 	for _, msg := range formatDigest(fresh) {
 		if err := s.tg.SendMessage(msg); err != nil {
@@ -87,9 +96,19 @@ func (s *Service) Run(ctx context.Context) error {
 	return nil
 }
 
+// selectNew отбирает записи новее lastSeen (плюс граница по boundaryGUIDs).
+// seen отсекает дубли GUID внутри одного ответа Fetch (лента отдавала один
+// и тот же элемент дважды на практике) — без него дайджест мог бы получить
+// одну запись несколько раз в одном сообщении.
 func (s *Service) selectNew(items []rss.Item) []rss.Item {
 	var fresh []rss.Item
+	seen := make(map[string]struct{}, len(items))
 	for _, it := range items {
+		if _, dup := seen[it.GUID]; dup {
+			continue
+		}
+		seen[it.GUID] = struct{}{}
+
 		switch {
 		case it.PubDate.After(s.lastSeen):
 			fresh = append(fresh, it)
@@ -103,14 +122,18 @@ func (s *Service) selectNew(items []rss.Item) []rss.Item {
 	return fresh
 }
 
-// advance сдвигает окно на максимальный PubDate отправленных записей и
-// перезаполняет множество GUID на новой границе.
+// advance сдвигает окно на максимальный PubDate отправленных записей (с
+// клампом от будущих дат, см. futureSkewSlack) и перезаполняет множество
+// GUID на новой границе.
 func (s *Service) advance(sent []rss.Item) {
 	maxPub := s.lastSeen
 	for _, it := range sent {
 		if it.PubDate.After(maxPub) {
 			maxPub = it.PubDate
 		}
+	}
+	if clamp := s.now().Add(futureSkewSlack); maxPub.After(clamp) {
+		maxPub = clamp
 	}
 	if maxPub.After(s.lastSeen) {
 		s.lastSeen = maxPub

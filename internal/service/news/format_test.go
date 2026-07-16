@@ -92,6 +92,36 @@ func TestFormatDigest_OversizedLinkFallsBackToPlainText(t *testing.T) {
 	}
 }
 
+func TestFormatDigest_LineJustOverLineLimitFitsFirstMessage(t *testing.T) {
+	// Пункт длиной в (lineLimit, messageLimit] сам по себе укладывается в
+	// messageLimit, но вместе с заголовком — нет. До фикса триггер обрезки
+	// смотрел на messageLimit, а не lineLimit, так что такой пункт не
+	// обрезался: заголовок уходил отдельным сообщением, а пункт — вторым.
+	// После фикса пункт обрезается, и всё влезает в одно сообщение.
+	link := "https://example.com/1"
+	prefixLen := len(fmt.Sprintf(`• <a href="%s">`, link))
+	suffixLen := len("</a>")
+	const targetLineLen = messageLimit - 10 // строго между lineLimit и messageLimit
+	titleLen := targetLineLen - prefixLen - suffixLen
+
+	items := []rss.Item{{Title: strings.Repeat("a", titleLen), Link: link}}
+	rawLine := fmt.Sprintf(`• <a href="%s">%s</a>`, link, strings.Repeat("a", titleLen))
+	if len(rawLine) <= lineLimit || len(rawLine) > messageLimit {
+		t.Fatalf("тестовая установка неверна: len(rawLine) = %d, want in (%d, %d]", len(rawLine), lineLimit, messageLimit)
+	}
+
+	msgs := formatDigest(items)
+	if len(msgs) != 1 {
+		t.Fatalf("len(msgs) = %d, want 1", len(msgs))
+	}
+	if !strings.HasPrefix(msgs[0], digestHeader+"\n") {
+		t.Errorf("первое сообщение должно содержать заголовок и пункт вместе: %.80q", msgs[0])
+	}
+	if len(msgs[0]) > messageLimit {
+		t.Errorf("len(msgs[0]) = %d > лимита %d", len(msgs[0]), messageLimit)
+	}
+}
+
 func TestFormatDigest_SplitsAtMessageLimit(t *testing.T) {
 	// 100 пунктов по ~100 символам — заведомо больше 4096, ждём несколько
 	// сообщений, каждое в лимите, пункты не порваны, все на месте.
