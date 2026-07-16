@@ -78,6 +78,10 @@ func (s *ServiceProvider) GetReversionSender() (telegram.Client, error) {
 	return s.topicSender(s.appConfig.TelegramClient.TopicReversion, "reversion")
 }
 
+func (s *ServiceProvider) GetNewsSender() (telegram.Client, error) {
+	return s.topicSender(s.appConfig.TelegramClient.TopicNews, "news")
+}
+
 // topicSender строит Client, привязанный к теме форума; при незаданном ID
 // темы сообщения уходят в General (threadID 0), о чём предупреждаем в логе.
 func (s *ServiceProvider) topicSender(threadID int, name string) (telegram.Client, error) {

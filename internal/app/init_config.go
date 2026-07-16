@@ -44,6 +44,7 @@ func (a *App) initConfig(ctx context.Context) error {
 		TelegramClient: config.NewTelegramClientConfig(),
 		PortfolioYield: config.NewPortfolioYieldConfig(),
 		Reversion:      config.NewReversionConfig(),
+		News:           config.NewNewsConfig(),
 	}
 	err = confita.NewLoader(
 		env.NewBackend(),

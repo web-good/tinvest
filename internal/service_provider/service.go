@@ -6,6 +6,7 @@ import (
 	"tinvest/internal/service/instrument/macd"
 	"tinvest/internal/service/instrument/rsi"
 	"tinvest/internal/service/instrument/volatility"
+	"tinvest/internal/service/news"
 	"tinvest/internal/service/notification/purchase_shares"
 	"tinvest/internal/service/portfolio/analyze"
 	"tinvest/internal/service/portfolio/yield"
@@ -13,6 +14,7 @@ import (
 	"tinvest/internal/service/trading_strategy/bonds"
 	"tinvest/internal/service/trading_strategy/golden_x"
 	"tinvest/internal/service/trading_strategy/reversion/live"
+	"tinvest/pkg/client/rss"
 	"tinvest/pkg/client/telegram"
 )
 
@@ -29,6 +31,7 @@ type service struct {
 	analyze               analyze.Analyze
 	portfolioYield        yield.Yield
 	telegramCommands      *telegram_commands.Listener
+	newsService           *news.Service
 }
 
 func (*ServiceProvider) GetPurchaseSharesService() purchase_shares.PurchaseShares {
@@ -186,4 +189,20 @@ func (s *ServiceProvider) GetTelegramCommands() (*telegram_commands.Listener, er
 	serviceProvider.service.telegramCommands = telegram_commands.NewListener(bot, cmds)
 
 	return serviceProvider.service.telegramCommands, nil
+}
+
+func (s *ServiceProvider) GetNewsService() (*news.Service, error) {
+	if serviceProvider.service.newsService != nil {
+		return serviceProvider.service.newsService, nil
+	}
+	sender, err := s.GetNewsSender()
+	if err != nil {
+		return nil, err
+	}
+	serviceProvider.service.newsService = news.NewService(
+		rss.NewClient(s.appConfig.News.FeedURL),
+		sender,
+	)
+
+	return serviceProvider.service.newsService, nil
 }

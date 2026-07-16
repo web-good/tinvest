@@ -5,6 +5,7 @@ type TelegramClient struct {
 	GroupChatID    int64  `config:"TELEGRAM_GROUP_CHAT_ID"`
 	TopicGoldenX   int    `config:"TELEGRAM_TOPIC_GOLDEN_X"`
 	TopicReversion int    `config:"TELEGRAM_TOPIC_REVERSION"`
+	TopicNews      int    `config:"TELEGRAM_TOPIC_NEWS"`
 	AllowedUserIDs []int64
 }
 
