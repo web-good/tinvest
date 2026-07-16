@@ -29,14 +29,16 @@ walk-forward, появившимся уже после реворка:
 
 ```
 go run ./cmd/backtest -ticker RUAL -strategy scalping -interval Hour1 \
-  -months 24 -calibrate data/params/rusal/scalping_grid.json \
+  -months 24 -calibrate data/params/scalping/rusal_grid.json \
   -train-months 12 -test-months 6 -min-trades 10 -metric profit_factor
 ```
 
-Аналогично AFKS + 3–5 тикеров корзины через `LookupOrGeneric`. Внимание:
-scalping-сеток в `data/params/` больше нет (каталог чистился) — перед
-прогоном восстановить сетку из git-истории или собрать минимальную по полям
-`adaptive.Params` (включая новые ручки реворка).
+Аналогично AFKS (`data/params/scalping/afks_grid.json`) + 3–5 тикеров
+корзины через `LookupOrGeneric`. Сетки восстановлены из git-истории
+(были удалены случайным коммитом 08d36e6) в `data/params/scalping/` и
+дополнены нулевыми значениями, чтобы калибратор мог выбрать «ручка
+выключена»: перебираются четыре ручки реворка
+TrailArmATR/ADXMargin/MinRR/MinATRFrac (192 комбинации).
 
 - **Критерий выживания** (из исходного плана реворка): pooled OOS
   expectancy > 0 и PF > 1.2.
