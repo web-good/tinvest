@@ -292,8 +292,101 @@ func (s *Strategy) entryCheck(md strategy.MarketData, sig model.Signal) (model.S
 	return sig, ""
 }
 
-// passFilters applies the optional SMC filters to a reclaim candidate.
-// Implemented in the filters task; the core entry is filter-free.
-func (s *Strategy) passFilters(_ strategy.MarketData, _ level) (string, bool) {
+// passFilters applies the optional SMC filters to a reclaim candidate. Each
+// filter is a pure predicate over the same window; the first failing one
+// names itself in the rejection reason.
+func (s *Strategy) passFilters(md strategy.MarketData, cand level) (string, bool) {
+	if s.p.UseFVG == 1 && !hasBullishFVG(md.Highs, md.Lows, cand.pierceIdx, cand.reclaimIdx) {
+		return "фильтр FVG: между проколом и reclaim нет бычьего разрыва", false
+	}
+	if s.p.UseDiscount == 1 && !inDiscount(md.Highs, md.Lows, windowStart(md.Times), md.Price) {
+		return "фильтр discount: вход выше середины диапазона окна", false
+	}
+	if s.p.UseOB == 1 {
+		zones := bullishOBZones(md.Highs, md.Lows, md.Closes, md.Times, s.p.SwingK)
+		if !inOBZone(zones, md.Price) {
+			return "фильтр OB: close входа вне непогашенных бычьих order block", false
+		}
+	}
 	return "", true
+}
+
+// hasBullishFVG reports a three-bar bullish imbalance (Low[i+1] > High[i-1])
+// whose middle bar lies in [pierce, reclaim-1] — the pattern completes no
+// later than the reclaim bar. A same-bar sweep has no room for displacement
+// and always fails this filter.
+func hasBullishFVG(highs, lows []float64, pierce, reclaim int) bool {
+	for i := max(pierce, 1); i <= reclaim-1 && i+1 < len(lows); i++ {
+		if lows[i+1] > highs[i-1] {
+			return true
+		}
+	}
+	return false
+}
+
+// inDiscount reports whether close sits below the midpoint of the
+// level-window price range — the "buy cheap" half.
+func inDiscount(highs, lows []float64, start int, close float64) bool {
+	hi, lo := highs[start], lows[start]
+	for i := start + 1; i < len(highs); i++ {
+		hi = max(hi, highs[i])
+		lo = min(lo, lows[i])
+	}
+	return close < (hi+lo)/2
+}
+
+// bullishOBZones returns unmitigated bullish order blocks in the level
+// window: for each confirmed fractal swing-high later broken by a close, the
+// last down-close bar (Close[o] < Close[o-1] — MarketData has no Open) before
+// the breaking bar forms the zone [low, high]; any later close below the zone
+// low mitigates (removes) it.
+func bullishOBZones(highs, lows, closes []float64, times []time.Time, k int) [][2]float64 {
+	n := len(closes)
+	start := windowStart(times)
+	var zones [][2]float64
+	for i := max(k, start); i+k < n; i++ {
+		swing := true
+		for d := 1; d <= k; d++ {
+			if highs[i] <= highs[i-d] || highs[i] <= highs[i+d] {
+				swing = false
+				break
+			}
+		}
+		if !swing {
+			continue
+		}
+		for b := i + k + 1; b < n; b++ {
+			if closes[b] <= highs[i] {
+				continue
+			}
+			for o := b - 1; o > 0; o-- {
+				if closes[o] >= closes[o-1] {
+					continue
+				}
+				mitigated := false
+				for m := o + 1; m < n; m++ {
+					if closes[m] < lows[o] {
+						mitigated = true
+						break
+					}
+				}
+				if !mitigated {
+					zones = append(zones, [2]float64{lows[o], highs[o]})
+				}
+				break
+			}
+			break
+		}
+	}
+	return zones
+}
+
+// inOBZone reports whether price falls inside any zone (inclusive).
+func inOBZone(zones [][2]float64, price float64) bool {
+	for _, z := range zones {
+		if price >= z[0] && price <= z[1] {
+			return true
+		}
+	}
+	return false
 }

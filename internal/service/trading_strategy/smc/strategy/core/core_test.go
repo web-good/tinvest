@@ -306,3 +306,70 @@ func TestManageTimeStop(t *testing.T) {
 		t.Fatalf("not expired: sig = %+v, want None", sig)
 	}
 }
+
+func TestFVGFilter(t *testing.T) {
+	// База: между проколом (high 99) и reclaim (low 97.7) разрыва нет — режем.
+	p := defParams()
+	p.UseFVG = 1
+	if sig := newStrat(p).Decide(mkMD(sweepScenario(), nil)); sig.Kind != model.SignalNone {
+		t.Fatalf("no FVG: sig = %+v, want None", sig)
+	}
+	// Вариант с разрывом: X(h97.6) → A(прокол) → R(low 97.7 > 97.6) — FVG есть.
+	bars := flatBars(msk(2026, 7, 6, 10), 16, 100)
+	bars = append(bars, bar{t: next(bars), h: 101, l: 97, c: 100, v: 100})
+	bars = append(bars, bar{t: next(bars), h: 100.6, l: 97.9, c: 100.3, v: 100})
+	bars = append(bars, bar{t: next(bars), h: 97.6, l: 97.1, c: 97.3, v: 100}) // X — confirm + сжатие
+	bars = append(bars, bar{t: next(bars), h: 97.4, l: 96.5, c: 96.9, v: 100}) // A — прокол
+	bars = append(bars, bar{t: next(bars), h: 99, l: 97.7, c: 98.5, v: 100})   // R — reclaim, FVG
+	if sig := newStrat(p).Decide(mkMD(bars, nil)); sig.Kind != model.SignalBuy {
+		t.Fatalf("with FVG: sig = %+v, want Buy", sig)
+	}
+}
+
+func TestDiscountFilter(t *testing.T) {
+	// База: окно [96.5..101], mid 98.75, вход 98.5 < mid — проходит.
+	p := defParams()
+	p.UseDiscount = 1
+	if sig := newStrat(p).Decide(mkMD(sweepScenario(), nil)); sig.Kind != model.SignalBuy {
+		t.Fatalf("discount entry: sig = %+v, want Buy", sig)
+	}
+	// Вход 99.2 > mid — режем.
+	bars := sweepScenario()
+	bars[len(bars)-1].c = 99.2
+	md := mkMD(bars, nil)
+	if sig := newStrat(p).Decide(md); sig.Kind != model.SignalNone {
+		t.Fatalf("premium entry: sig = %+v, want None", sig)
+	}
+}
+
+// obScenario — сетап с непогашенным бычьим OB [96, 100.8]: swing-high 103
+// пробит закрытием 103.5, последняя down-close свеча перед пробоем — зона.
+func obScenario() []bar {
+	bars := flatBars(msk(2026, 7, 6, 10), 16, 100)
+	bars = append(bars, bar{t: next(bars), h: 103, l: 99.5, c: 102, v: 100})     // H — swing high
+	bars = append(bars, bar{t: next(bars), h: 101, l: 99, c: 100.4, v: 100})     // S1
+	bars = append(bars, bar{t: next(bars), h: 101, l: 99, c: 100.2, v: 100})     // S2 — confirm H
+	bars = append(bars, bar{t: next(bars), h: 100.8, l: 96, c: 99.8, v: 100})    // O — down-close, зона [96,100.8]
+	bars = append(bars, bar{t: next(bars), h: 104, l: 99.9, c: 103.5, v: 100})   // B1 — пробой 103
+	bars = append(bars, bar{t: next(bars), h: 101, l: 99, c: 100.5, v: 100})     // F1
+	bars = append(bars, bar{t: next(bars), h: 101, l: 99, c: 100.2, v: 100})     // F2
+	bars = append(bars, bar{t: next(bars), h: 101, l: 97, c: 100, v: 100})       // D — swing low 97
+	bars = append(bars, bar{t: next(bars), h: 100.6, l: 97.9, c: 100.3, v: 100}) // D1
+	bars = append(bars, bar{t: next(bars), h: 100.5, l: 97.8, c: 100.1, v: 100}) // D2 — confirm D
+	bars = append(bars, bar{t: next(bars), h: 99, l: 96.5, c: 96.9, v: 100})     // A — прокол
+	bars = append(bars, bar{t: next(bars), h: 99.4, l: 97.7, c: 98.5, v: 100})   // R — reclaim ∈ зоны
+	return bars
+}
+
+func TestOBFilter(t *testing.T) {
+	p := defParams()
+	p.UseOB = 1
+	// База: ни один swing-high не пробит — зон нет, режем.
+	if sig := newStrat(p).Decide(mkMD(sweepScenario(), nil)); sig.Kind != model.SignalNone {
+		t.Fatalf("no OB: sig = %+v, want None", sig)
+	}
+	// Сетап с зоной: вход 98.5 ∈ [96, 100.8] — проходит.
+	if sig := newStrat(p).Decide(mkMD(obScenario(), nil)); sig.Kind != model.SignalBuy {
+		t.Fatalf("with OB: sig = %+v, want Buy", sig)
+	}
+}
