@@ -1,7 +1,8 @@
-// Command backtest replays a per-share trading strategy (scalping or levels) over
-// historical candles, simulates a mock portfolio, and writes Markdown + CSV reports.
-// It supports a single run (default params or -params) and grid calibration
-// (-calibrate). All gRPC/file I/O is here; the engine and metrics are pure.
+// Command backtest replays a per-share trading strategy (scalping, levels, momentum,
+// reversion or smc) over historical candles, simulates a mock portfolio, and writes
+// Markdown + CSV reports. It supports a single run (default params or -params) and
+// grid calibration (-calibrate). All gRPC/file I/O is here; the engine and metrics
+// are pure.
 package main
 
 import (
@@ -37,7 +38,7 @@ func main() {
 	var (
 		ticker       = flag.String("ticker", "", "ticker, e.g. RUAL (required)")
 		intervalS    = flag.String("interval", "Hour1", "candle timeframe: Minutes15|Minutes30|Hour1|Hour4|Day1|Week1")
-		strategyName = flag.String("strategy", "scalping", "strategy engine: scalping|levels|momentum|reversion")
+		strategyName = flag.String("strategy", "scalping", "strategy engine: scalping|levels|momentum|reversion|smc")
 		months       = flag.Int("months", 12, "lookback period in months")
 		cash         = flag.Float64("cash", 100000, "starting mock cash")
 		fraction     = flag.Float64("fraction", 1.0, "fraction of cash per Buy")
@@ -169,10 +170,12 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 		binding = svc.MomentumLookupOrGeneric(ticker)
 	case "reversion":
 		binding = svc.ReversionLookupOrGeneric(ticker)
+	case "smc":
+		binding = svc.SMCLookupOrGeneric(ticker)
 	case "scalping":
 		binding = svc.LookupOrGeneric(ticker)
 	default:
-		return fmt.Errorf("unknown strategy %q (want scalping|levels|momentum|reversion)", strategyName)
+		return fmt.Errorf("unknown strategy %q (want scalping|levels|momentum|reversion|smc)", strategyName)
 	}
 
 	share, err := resolveShare(ctx, client, ticker)
