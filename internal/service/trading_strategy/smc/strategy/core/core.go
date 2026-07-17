@@ -271,7 +271,7 @@ func (s *Strategy) entryCheck(md strategy.MarketData, sig model.Signal) (model.S
 	if !ok {
 		return sig, "текущий бар не reclaim-ит ни один уровень в окне ReclaimBars"
 	}
-	if why, ok := s.passFilters(md, cand); !ok { // no-op до Task 6
+	if why, ok := s.passFilters(md, cand); !ok {
 		return sig, why
 	}
 	atr := indicators.ATR(md.Highs, md.Lows, md.Closes, atrPeriod)
