@@ -143,6 +143,7 @@ func (p *portfolio) strategyPosition() *strategy.Position {
 		EntryATR:              p.entryATR,
 		MaxFavorablePrice:     p.maxFavorable,
 		PrevMaxFavorablePrice: p.prevMaxFavorable,
+		EntryTime:             p.entryTime,
 	}
 }
 

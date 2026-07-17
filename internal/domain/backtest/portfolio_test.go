@@ -192,3 +192,16 @@ func TestOpenLegacyFractionUnchanged(t *testing.T) {
 		t.Fatalf("legacy qty = %d, want 1000", p.qty)
 	}
 }
+
+func TestStrategyPositionCarriesEntryTime(t *testing.T) {
+	p := newPortfolio(Config{InitialCash: 1000, Fraction: 1, Commission: 0, Lot: 1})
+	entry := time.Date(2026, 7, 1, 10, 0, 0, 0, time.UTC)
+	p.open(100, entry, 0, 0, 0, 95, "")
+	pos := p.strategyPosition()
+	if pos == nil {
+		t.Fatal("strategyPosition() = nil, want position")
+	}
+	if !pos.EntryTime.Equal(entry) {
+		t.Fatalf("EntryTime = %v, want %v", pos.EntryTime, entry)
+	}
+}
