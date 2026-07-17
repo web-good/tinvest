@@ -14,6 +14,7 @@ import (
 
 	"tinvest/internal/service/trading_strategy/scalping/model"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
+	"tinvest/pkg/indicators"
 )
 
 // Fixed knobs — deliberately NOT part of Params: sweeping window/warm-up
@@ -204,7 +205,8 @@ func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 	if md.Position != nil {
 		return s.manage(md, sig)
 	}
-	return sig // entryCheck подключается в Task 5
+	sig, _ = s.entryCheck(md, sig)
+	return sig
 }
 
 // manage handles an open position: the intrabar hard stop first (it fires
@@ -245,4 +247,53 @@ func takeProfit(pos *strategy.Position, tpr float64) (float64, bool) {
 		return 0, false
 	}
 	return pos.PurchasePrice + tpr*(pos.PurchasePrice-pos.StopLoss), true
+}
+
+// entryCheck runs the full entry pipeline. On rejection the second result
+// holds a human-readable reason (consumed by Explain). On success
+// sig.Kind == model.SignalBuy with the frozen structural stop in sig.StopLoss.
+func (s *Strategy) entryCheck(md strategy.MarketData, sig model.Signal) (model.Signal, string) {
+	n := len(md.Closes)
+	t := md.Times[n-1].In(mskLoc)
+	if isWeekend(t) {
+		return sig, "выходной (Сб/Вс MSK) — входы запрещены"
+	}
+	if h := t.Hour(); h < sessionOpenHour {
+		return sig, fmt.Sprintf("час бара %d < %d MSK — утренняя сессия без входов", h, sessionOpenHour)
+	} else if h >= eveningStartHour {
+		return sig, fmt.Sprintf("час бара %d ≥ %d MSK — вечерняя сессия без входов", h, eveningStartHour)
+	}
+	if s.p.SwingK <= 0 {
+		return sig, "SwingK ≤ 0 — вход выключен"
+	}
+	levels := levelStates(md.Lows, md.Closes, md.Times, s.p.SwingK)
+	cand, ok := reclaimCandidate(levels, n-1, s.p.ReclaimBars)
+	if !ok {
+		return sig, "текущий бар не reclaim-ит ни один уровень в окне ReclaimBars"
+	}
+	if why, ok := s.passFilters(md, cand); !ok { // no-op до Task 6
+		return sig, why
+	}
+	atr := indicators.ATR(md.Highs, md.Lows, md.Closes, atrPeriod)
+	if atr <= 0 {
+		return sig, "ATR не прогрет — не с чего считать стоп"
+	}
+	stop := cand.sweepLow - s.p.Buffer*atr
+	sig.Kind = model.SignalBuy
+	sig.StopLoss = stop
+	sig.ATR = atr
+	sig.Level = cand.price
+	if s.p.TPR > 0 {
+		sig.TakeProfit = md.Price + s.p.TPR*(md.Price-stop)
+	}
+	sig.EntryReason = fmt.Sprintf(
+		"sweep-и-reclaim уровня %.4f: прокол до %.4f (%d бар(ов) от прокола), close %.4f выше уровня; стоп %.4f",
+		cand.price, cand.sweepLow, cand.reclaimIdx-cand.pierceIdx, md.Price, stop)
+	return sig, ""
+}
+
+// passFilters applies the optional SMC filters to a reclaim candidate.
+// Implemented in the filters task; the core entry is filter-free.
+func (s *Strategy) passFilters(_ strategy.MarketData, _ level) (string, bool) {
+	return "", true
 }

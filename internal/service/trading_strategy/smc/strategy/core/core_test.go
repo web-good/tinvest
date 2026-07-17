@@ -6,6 +6,7 @@ import (
 
 	"tinvest/internal/service/trading_strategy/scalping/model"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
+	"tinvest/pkg/indicators"
 )
 
 // bar — компактная спека свечи для тестов: время открытия MSK + H/L/C/V
@@ -63,6 +64,82 @@ func flatBars(start time.Time, n int, p float64) []bar {
 
 // next — время открытия бара, следующего за последним в срезе.
 func next(bars []bar) time.Time { return advance(bars[len(bars)-1].t) }
+
+// sweepScenario — канонический валидный сетап (k=2): ATR-прогрев (2 дня
+// флэта), подтверждённый swing-low 97, прокол до 96.5 и reclaim-close 98.5
+// последним баром (среда, основная сессия).
+func sweepScenario() []bar {
+	bars := flatBars(msk(2026, 7, 6, 10), 16, 100)
+	bars = append(bars, bar{t: next(bars), h: 101, l: 97, c: 100, v: 100}) // swing low 97
+	bars = append(bars, bar{t: next(bars), h: 100.6, l: 97.9, c: 100.3, v: 100})
+	bars = append(bars, bar{t: next(bars), h: 100.5, l: 97.8, c: 100.1, v: 100}) // confirm
+	bars = append(bars, bar{t: next(bars), h: 99, l: 96.5, c: 96.9, v: 100})     // pierce
+	bars = append(bars, bar{t: next(bars), h: 99.4, l: 97.7, c: 98.5, v: 100})   // reclaim
+	return bars
+}
+
+func defParams() Params {
+	return Params{SwingK: 2, ReclaimBars: 4, Buffer: 0.5, TPR: 2, MaxHoldDays: 3}
+}
+
+func TestEntryOnSweepReclaim(t *testing.T) {
+	md := mkMD(sweepScenario(), nil)
+	sig := newStrat(defParams()).Decide(md)
+	if sig.Kind != model.SignalBuy {
+		t.Fatalf("sig = %+v, want Buy", sig)
+	}
+	atr := indicators.ATR(md.Highs, md.Lows, md.Closes, 14)
+	wantStop := 96.5 - 0.5*atr
+	if sig.StopLoss != wantStop {
+		t.Fatalf("StopLoss = %v, want %v", sig.StopLoss, wantStop)
+	}
+	if sig.Level != 97 || sig.ATR != atr {
+		t.Fatalf("Level/ATR = %v/%v, want 97/%v", sig.Level, sig.ATR, atr)
+	}
+	wantTP := 98.5 + 2*(98.5-wantStop)
+	if sig.TakeProfit != wantTP {
+		t.Fatalf("TakeProfit = %v, want %v", sig.TakeProfit, wantTP)
+	}
+	if sig.EntryReason == "" {
+		t.Fatal("EntryReason must be set on Buy")
+	}
+}
+
+func TestNoEntryWhenReclaimTooLate(t *testing.T) {
+	p := defParams()
+	p.ReclaimBars = 0 // только однобарный sweep; в сценарии gap = 1
+	if sig := newStrat(p).Decide(mkMD(sweepScenario(), nil)); sig.Kind != model.SignalNone {
+		t.Fatalf("sig = %+v, want None", sig)
+	}
+}
+
+func TestNoEntryWhenReclaimOnEarlierBar(t *testing.T) {
+	bars := sweepScenario()
+	bars = append(bars, bar{t: next(bars), h: 101, l: 99, c: 100, v: 100})
+	if sig := newStrat(defParams()).Decide(mkMD(bars, nil)); sig.Kind != model.SignalNone {
+		t.Fatalf("sig = %+v, want None (reclaim был баром раньше)", sig)
+	}
+}
+
+func TestNoEntryOutsideMainSession(t *testing.T) {
+	// Reclaim-бар в вечернюю сессию (19:00 MSK того же дня).
+	bars := sweepScenario()
+	ev := bars[len(bars)-1].t.In(mskLoc)
+	bars[len(bars)-1].t = time.Date(ev.Year(), ev.Month(), ev.Day(), 19, 0, 0, 0, mskLoc)
+	if sig := newStrat(defParams()).Decide(mkMD(bars, nil)); sig.Kind != model.SignalNone {
+		t.Fatalf("evening bar: sig = %+v, want None", sig)
+	}
+	// Reclaim-бар в субботу.
+	bars = sweepScenario()
+	sat := startOfMSKDay(bars[len(bars)-1].t)
+	for sat.Weekday() != time.Saturday {
+		sat = sat.AddDate(0, 0, 1)
+	}
+	bars[len(bars)-1].t = sat.Add(12 * time.Hour)
+	if sig := newStrat(defParams()).Decide(mkMD(bars, nil)); sig.Kind != model.SignalNone {
+		t.Fatalf("saturday bar: sig = %+v, want None", sig)
+	}
+}
 
 func TestWindowStartKeepsLastNDays(t *testing.T) {
 	// 12 торговых дней по 8 баров: окно должно начинаться с первого бара
