@@ -10,6 +10,7 @@ package core
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"tinvest/internal/service/trading_strategy/scalping/model"
@@ -389,4 +390,51 @@ func inOBZone(zones [][2]float64, price float64) bool {
 		}
 	}
 	return false
+}
+
+// Explain renders a human-readable verdict for the LAST bar of md — why the
+// strategy did or did not act. Wired into `-explain` via domain.Trace, which
+// type-asserts exactly this signature.
+func (s *Strategy) Explain(md strategy.MarketData) string {
+	sig := model.Signal{Kind: model.SignalNone, Ticker: s.ticker, Price: md.Price}
+	n := len(md.Closes)
+	if n == 0 || len(md.Times) != n || len(md.Highs) != n || len(md.Lows) != n {
+		return "SMC: нет данных или Times не заполнен/не выровнен — стратегия без временных меток не работает"
+	}
+	stamp := md.Times[n-1].In(mskLoc).Format("2006-01-02 15:04")
+	if md.Position != nil {
+		out := s.manage(md, sig)
+		if out.Kind == model.SignalSell {
+			return fmt.Sprintf("SMC %s %s: ВЫХОД %s — %s", s.ticker, stamp, out.Reason, out.ExitReason)
+		}
+		tp, _ := takeProfit(md.Position, s.p.TPR)
+		return fmt.Sprintf("SMC %s %s: позиция удерживается (стоп %.4f, тейк %.4f, low бара %.4f)",
+			s.ticker, stamp, md.Position.StopLoss, tp, md.Lows[n-1])
+	}
+	out, why := s.entryCheck(md, sig)
+	if out.Kind == model.SignalBuy {
+		return fmt.Sprintf("SMC %s %s: ВХОД — %s", s.ticker, stamp, out.EntryReason)
+	}
+	levels := levelStates(md.Lows, md.Closes, md.Times, s.p.SwingK)
+	return fmt.Sprintf("SMC %s %s: входа нет — %s; уровней в окне: %d (%s)",
+		s.ticker, stamp, why, len(levels), levelSummary(levels))
+}
+
+// levelSummary renders a compact per-level status line for Explain.
+func levelSummary(levels []level) string {
+	if len(levels) == 0 {
+		return "нет"
+	}
+	parts := make([]string, 0, len(levels))
+	for _, lv := range levels {
+		st := "активен"
+		switch {
+		case lv.reclaimIdx >= 0:
+			st = fmt.Sprintf("reclaim на баре %d", lv.reclaimIdx)
+		case lv.pierceIdx >= 0:
+			st = fmt.Sprintf("в снятии с бара %d", lv.pierceIdx)
+		}
+		parts = append(parts, fmt.Sprintf("%.4f: %s", lv.price, st))
+	}
+	return strings.Join(parts, "; ")
 }

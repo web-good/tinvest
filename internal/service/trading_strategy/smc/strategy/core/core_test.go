@@ -1,6 +1,7 @@
 package core
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -371,5 +372,29 @@ func TestOBFilter(t *testing.T) {
 	// Сетап с зоной: вход 98.5 ∈ [96, 100.8] — проходит.
 	if sig := newStrat(p).Decide(mkMD(obScenario(), nil)); sig.Kind != model.SignalBuy {
 		t.Fatalf("with OB: sig = %+v, want Buy", sig)
+	}
+}
+
+func TestExplain(t *testing.T) {
+	s := newStrat(defParams())
+	// Вход.
+	if got := s.Explain(mkMD(sweepScenario(), nil)); !strings.Contains(got, "ВХОД") {
+		t.Fatalf("Explain(entry) = %q, want contains ВХОД", got)
+	}
+	// Отказ: показывает причину и сводку уровней.
+	bars := sweepScenario()
+	bars = append(bars, bar{t: next(bars), h: 101, l: 99, c: 100, v: 100})
+	got := s.Explain(mkMD(bars, nil))
+	if !strings.Contains(got, "входа нет") || !strings.Contains(got, "уровн") {
+		t.Fatalf("Explain(reject) = %q", got)
+	}
+	// Позиция: показывает стоп и тейк.
+	got = s.Explain(heldMD(101, 99, 100))
+	if !strings.Contains(got, "удерживается") {
+		t.Fatalf("Explain(hold) = %q", got)
+	}
+	// Выход.
+	if got := s.Explain(heldMD(101, 94, 95)); !strings.Contains(got, "ВЫХОД SL") {
+		t.Fatalf("Explain(exit) = %q", got)
 	}
 }
