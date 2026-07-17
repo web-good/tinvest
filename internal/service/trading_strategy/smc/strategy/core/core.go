@@ -9,7 +9,11 @@
 package core
 
 import (
+	"fmt"
 	"time"
+
+	"tinvest/internal/service/trading_strategy/scalping/model"
+	"tinvest/internal/service/trading_strategy/scalping/strategy"
 )
 
 // Fixed knobs — deliberately NOT part of Params: sweeping window/warm-up
@@ -186,4 +190,59 @@ func reclaimCandidate(levels []level, cur, maxBars int) (level, bool) {
 		}
 	}
 	return best, found
+}
+
+// Decide is pure: it computes everything from md and performs no I/O. Times
+// are mandatory; when Times is missing or misaligned the strategy is a
+// deliberate no-op (can't see the calendar — don't trade).
+func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
+	sig := model.Signal{Kind: model.SignalNone, Ticker: s.ticker, Price: md.Price}
+	n := len(md.Closes)
+	if n == 0 || len(md.Times) != n || len(md.Highs) != n || len(md.Lows) != n {
+		return sig
+	}
+	if md.Position != nil {
+		return s.manage(md, sig)
+	}
+	return sig // entryCheck подключается в Task 5
+}
+
+// manage handles an open position: the intrabar hard stop first (it fires
+// earlier in real time), then the take-profit, then the trading-day
+// time-stop (close-fill).
+func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal {
+	n := len(md.Closes)
+	pos := md.Position
+	if pos.StopLoss > 0 && md.Lows[n-1] <= pos.StopLoss {
+		sig.Kind = model.SignalSell
+		sig.Reason = "SL"
+		sig.StopLoss = pos.StopLoss
+		sig.ExitReason = fmt.Sprintf("интрабарный стоп %.4f (low бара %.4f)", pos.StopLoss, md.Lows[n-1])
+		return sig
+	}
+	if tp, ok := takeProfit(pos, s.p.TPR); ok && md.Highs[n-1] >= tp {
+		sig.Kind = model.SignalSell
+		sig.Reason = "TP"
+		sig.TakeProfit = tp
+		sig.ExitReason = fmt.Sprintf("тейк-профит %.4f (high бара %.4f)", tp, md.Highs[n-1])
+		return sig
+	}
+	if s.p.MaxHoldDays > 0 && !pos.EntryTime.IsZero() &&
+		tradingDaysSince(md.Times, pos.EntryTime) >= s.p.MaxHoldDays {
+		sig.Kind = model.SignalSell
+		sig.Reason = "TIME"
+		sig.ExitReason = fmt.Sprintf("тайм-стоп: позиция старше %d торговых дней", s.p.MaxHoldDays)
+		return sig
+	}
+	return sig
+}
+
+// takeProfit derives the frozen TP from the position itself (stateless): the
+// entry stop distance times TPR. ok=false when TPR is off or the stop is
+// missing/inverted — then no TP exit exists.
+func takeProfit(pos *strategy.Position, tpr float64) (float64, bool) {
+	if tpr <= 0 || pos.StopLoss <= 0 || pos.PurchasePrice <= pos.StopLoss {
+		return 0, false
+	}
+	return pos.PurchasePrice + tpr*(pos.PurchasePrice-pos.StopLoss), true
 }

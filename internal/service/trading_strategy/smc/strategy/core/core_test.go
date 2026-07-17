@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"tinvest/internal/service/trading_strategy/scalping/model"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 )
 
@@ -168,5 +169,63 @@ func TestReclaimCandidateWindowAndDepth(t *testing.T) {
 	// Текущий бар не совпадает с reclaim — не кандидат.
 	if _, ok := reclaimCandidate(lvls, 13, 4); ok {
 		t.Fatal("reclaim on an earlier bar must not be a candidate")
+	}
+}
+
+// heldMD — 2 торговых дня флэта + текущий бар с заданными H/L; позиция
+// открыта в первый день по 100 со стопом 95.
+func heldMD(h, l, c float64) strategy.MarketData {
+	bars := flatBars(msk(2026, 7, 6, 10), 16, 100)
+	bars = append(bars, bar{t: next(bars), h: h, l: l, c: c, v: 100})
+	return mkMD(bars, &strategy.Position{
+		PurchasePrice: 100, Quantity: 1, StopLoss: 95,
+		EntryTime: msk(2026, 7, 6, 11),
+	})
+}
+
+func newStrat(p Params) *Strategy { return NewWithParams("TEST", p) }
+
+func TestManageStopBeforeTP(t *testing.T) {
+	s := newStrat(Params{SwingK: 2, ReclaimBars: 4, TPR: 2, MaxHoldDays: 5})
+	// TP = 100 + 2*(100-95) = 110; бар задевает и стоп, и тейк — стоп первым.
+	sig := s.Decide(heldMD(111, 94, 100))
+	if sig.Kind != model.SignalSell || sig.Reason != "SL" {
+		t.Fatalf("sig = %+v, want Sell/SL", sig)
+	}
+	if sig.StopLoss != 95 {
+		t.Fatalf("StopLoss = %v, want 95", sig.StopLoss)
+	}
+}
+
+func TestManageTP(t *testing.T) {
+	s := newStrat(Params{SwingK: 2, ReclaimBars: 4, TPR: 2, MaxHoldDays: 5})
+	sig := s.Decide(heldMD(110.5, 99, 109))
+	if sig.Kind != model.SignalSell || sig.Reason != "TP" || sig.TakeProfit != 110 {
+		t.Fatalf("sig = %+v, want Sell/TP@110", sig)
+	}
+	// TPR <= 0 выключает тейк.
+	s = newStrat(Params{SwingK: 2, ReclaimBars: 4, TPR: 0, MaxHoldDays: 5})
+	if sig := s.Decide(heldMD(120, 99, 119)); sig.Kind != model.SignalNone {
+		t.Fatalf("TPR=0: sig = %+v, want None", sig)
+	}
+}
+
+func TestManageTimeStop(t *testing.T) {
+	s := newStrat(Params{SwingK: 2, ReclaimBars: 4, TPR: 2, MaxHoldDays: 2})
+	// heldMD: вход Пн, текущий бар Ср → 2 полных торговых дня после входа.
+	sig := s.Decide(heldMD(101, 99, 100))
+	if sig.Kind != model.SignalSell || sig.Reason != "TIME" {
+		t.Fatalf("sig = %+v, want Sell/TIME", sig)
+	}
+	// Без EntryTime тайм-стоп деградирует в no-op.
+	md := heldMD(101, 99, 100)
+	md.Position.EntryTime = time.Time{}
+	if sig := s.Decide(md); sig.Kind != model.SignalNone {
+		t.Fatalf("zero EntryTime: sig = %+v, want None", sig)
+	}
+	// MaxHoldDays=5 ещё не истёк.
+	s = newStrat(Params{SwingK: 2, ReclaimBars: 4, TPR: 2, MaxHoldDays: 5})
+	if sig := s.Decide(heldMD(101, 99, 100)); sig.Kind != model.SignalNone {
+		t.Fatalf("not expired: sig = %+v, want None", sig)
 	}
 }
