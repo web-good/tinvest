@@ -91,3 +91,82 @@ func TestTradingDaysSince(t *testing.T) {
 		t.Fatalf("tradingDaysSince(last day) = %d, want 0", got)
 	}
 }
+
+func TestSwingLowConfirmedOnlyAfterK(t *testing.T) {
+	base := flatBars(msk(2026, 7, 6, 10), 6, 100)
+	dip := bar{t: next(base), h: 101, l: 97, c: 100, v: 100}
+	bars := append(append([]bar{}, base...), dip)
+	// 1 бар после дна (k=2): уровень ещё не подтверждён.
+	bars = append(bars, bar{t: next(bars), h: 100.6, l: 97.9, c: 100.3, v: 100})
+	md := mkMD(bars, nil)
+	if lvls := levelStates(md.Lows, md.Closes, md.Times, 2); len(lvls) != 0 {
+		t.Fatalf("levels before confirmation = %d, want 0", len(lvls))
+	}
+	// 2 бара после дна: уровень 97 подтверждён.
+	bars = append(bars, bar{t: next(bars), h: 100.5, l: 97.8, c: 100.1, v: 100})
+	md = mkMD(bars, nil)
+	lvls := levelStates(md.Lows, md.Closes, md.Times, 2)
+	if len(lvls) != 1 || lvls[0].price != 97 {
+		t.Fatalf("levels = %+v, want one level at 97", lvls)
+	}
+	if lvls[0].pierceIdx != -1 || lvls[0].reclaimIdx != -1 {
+		t.Fatalf("fresh level must be untouched, got %+v", lvls[0])
+	}
+}
+
+func TestSweepReclaimLifecycle(t *testing.T) {
+	base := flatBars(msk(2026, 7, 6, 10), 6, 100)
+	bars := append(append([]bar{}, base...),
+		bar{t: next(base), h: 101, l: 97, c: 100, v: 100}, // swing low 97
+	)
+	bars = append(bars, bar{t: next(bars), h: 100.6, l: 97.9, c: 100.3, v: 100})
+	bars = append(bars, bar{t: next(bars), h: 100.5, l: 97.8, c: 100.1, v: 100}) // confirm
+	bars = append(bars, bar{t: next(bars), h: 99, l: 96.5, c: 96.9, v: 100})     // pierce, close under
+	md := mkMD(bars, nil)
+	lvls := levelStates(md.Lows, md.Closes, md.Times, 2)
+	if len(lvls) != 1 || lvls[0].pierceIdx != len(bars)-1 || lvls[0].reclaimIdx != -1 {
+		t.Fatalf("after pierce: %+v", lvls)
+	}
+	bars = append(bars, bar{t: next(bars), h: 99.4, l: 97.7, c: 98.5, v: 100}) // reclaim close
+	md = mkMD(bars, nil)
+	lvls = levelStates(md.Lows, md.Closes, md.Times, 2)
+	lv := lvls[0]
+	if lv.reclaimIdx != len(bars)-1 {
+		t.Fatalf("reclaimIdx = %d, want %d", lv.reclaimIdx, len(bars)-1)
+	}
+	if lv.sweepLow != 96.5 {
+		t.Fatalf("sweepLow = %v, want 96.5", lv.sweepLow)
+	}
+	// Однобарный sweep: прокол и reclaim одной свечой.
+	sb := append(append([]bar{}, base...),
+		bar{t: next(base), h: 101, l: 97, c: 100, v: 100},
+	)
+	sb = append(sb, bar{t: next(sb), h: 100.6, l: 97.9, c: 100.3, v: 100})
+	sb = append(sb, bar{t: next(sb), h: 100.5, l: 97.8, c: 100.1, v: 100})
+	sb = append(sb, bar{t: next(sb), h: 99, l: 96.5, c: 98.2, v: 100}) // wick under, close above
+	md = mkMD(sb, nil)
+	lv = levelStates(md.Lows, md.Closes, md.Times, 2)[0]
+	if lv.pierceIdx != lv.reclaimIdx || lv.reclaimIdx != len(sb)-1 {
+		t.Fatalf("same-bar sweep: %+v", lv)
+	}
+}
+
+func TestReclaimCandidateWindowAndDepth(t *testing.T) {
+	lvls := []level{
+		{price: 97, pierceIdx: 10, reclaimIdx: 12, sweepLow: 96.5},
+		{price: 96, pierceIdx: 11, reclaimIdx: 12, sweepLow: 95.8},
+	}
+	// Оба reclaim-ятся баром 12 — берём с более глубоким sweepLow.
+	cand, ok := reclaimCandidate(lvls, 12, 4)
+	if !ok || cand.sweepLow != 95.8 {
+		t.Fatalf("cand = %+v ok=%v, want deepest sweepLow 95.8", cand, ok)
+	}
+	// Просроченный reclaim (gap 2 > maxBars 1) не кандидат.
+	if _, ok := reclaimCandidate(lvls[:1], 12, 1); ok {
+		t.Fatal("stale reclaim (gap 2 > 1) must not be a candidate")
+	}
+	// Текущий бар не совпадает с reclaim — не кандидат.
+	if _, ok := reclaimCandidate(lvls, 13, 4); ok {
+		t.Fatal("reclaim on an earlier bar must not be a candidate")
+	}
+}

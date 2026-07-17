@@ -117,3 +117,73 @@ func tradingDaysSince(times []time.Time, entry time.Time) int {
 	}
 	return days
 }
+
+// level is one confirmed swing-low and its sweep lifecycle inside the window.
+type level struct {
+	price      float64 // the swing-low value — the liquidity line
+	barIdx     int     // bar of the swing-low extreme
+	confirmIdx int     // barIdx + SwingK: first bar the level is visible on (anti-lookahead)
+	pierceIdx  int     // first bar > confirmIdx with Low < price; -1 while untouched
+	reclaimIdx int     // first bar >= pierceIdx with Close > price; -1 while under water
+	sweepLow   float64 // lowest Low from pierce through reclaim (or through the window end)
+}
+
+// levelStates finds confirmed fractal swing-lows inside the level window and
+// classifies each one's sweep lifecycle. Bars within SwingK of the extreme
+// cannot pierce it by construction (their lows are strictly higher), so the
+// pierce scan starts after confirmation. A level is consumed by its FIRST
+// reclaim; later sweeps of the same line never signal again.
+func levelStates(lows, closes []float64, times []time.Time, k int) []level {
+	n := len(lows)
+	start := windowStart(times)
+	var out []level
+	for i := max(k, start); i+k < n; i++ {
+		swing := true
+		for d := 1; d <= k; d++ {
+			if lows[i] >= lows[i-d] || lows[i] >= lows[i+d] {
+				swing = false
+				break
+			}
+		}
+		if !swing {
+			continue
+		}
+		lv := level{price: lows[i], barIdx: i, confirmIdx: i + k, pierceIdx: -1, reclaimIdx: -1}
+		for j := lv.confirmIdx + 1; j < n; j++ {
+			if lows[j] < lv.price {
+				lv.pierceIdx = j
+				break
+			}
+		}
+		if lv.pierceIdx >= 0 {
+			lv.sweepLow = lows[lv.pierceIdx]
+			for j := lv.pierceIdx; j < n; j++ {
+				lv.sweepLow = min(lv.sweepLow, lows[j])
+				if closes[j] > lv.price {
+					lv.reclaimIdx = j
+					break
+				}
+			}
+		}
+		out = append(out, lv)
+	}
+	return out
+}
+
+// reclaimCandidate returns the level whose FIRST reclaim lands exactly on bar
+// cur within maxBars of its pierce. When several levels reclaim on the same
+// bar the deepest sweepLow wins — its stop covers the others.
+func reclaimCandidate(levels []level, cur, maxBars int) (level, bool) {
+	var best level
+	found := false
+	for _, lv := range levels {
+		if lv.pierceIdx < 0 || lv.reclaimIdx != cur || lv.reclaimIdx-lv.pierceIdx > maxBars {
+			continue
+		}
+		if !found || lv.sweepLow < best.sweepLow {
+			best = lv
+			found = true
+		}
+	}
+	return best, found
+}
