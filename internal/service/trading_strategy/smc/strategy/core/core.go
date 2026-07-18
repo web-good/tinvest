@@ -280,6 +280,11 @@ func (s *Strategy) entryCheck(md strategy.MarketData, sig model.Signal) (model.S
 		return sig, "ATR не прогрет — не с чего считать стоп"
 	}
 	stop := cand.sweepLow - s.p.Buffer*atr
+	if stop <= 0 {
+		// A non-positive stop would slip through manage's pos.StopLoss > 0
+		// guard and silently disable both SL and TP — reject up front.
+		return sig, fmt.Sprintf("структурный стоп %.4f ≤ 0 — защитный уровень невалиден", stop)
+	}
 	sig.Kind = model.SignalBuy
 	sig.StopLoss = stop
 	sig.ATR = atr

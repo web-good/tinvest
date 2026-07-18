@@ -230,6 +230,37 @@ func TestSweepReclaimLifecycle(t *testing.T) {
 	}
 }
 
+// TestNoEntryWhenStopNonPositive — огромный Buffer утаскивает structural stop
+// (sweepLow - Buffer*ATR) в ноль/минус: как и для низкоценового инструмента с
+// большим ATR, вход должен отклоняться, а не оставлять позицию без стопа.
+func TestNoEntryWhenStopNonPositive(t *testing.T) {
+	p := defParams()
+	p.Buffer = 50 // sweepLow 96.5, ATR ~2 → stop ~= 96.5 - 100 < 0
+	md := mkMD(sweepScenario(), nil)
+	if sig := newStrat(p).Decide(md); sig.Kind != model.SignalNone {
+		t.Fatalf("sig = %+v, want None (стоп <= 0)", sig)
+	}
+	_, why := newStrat(p).entryCheck(md, model.Signal{Kind: model.SignalNone, Ticker: "TEST", Price: md.Price})
+	if !strings.Contains(why, "стоп") {
+		t.Fatalf("why = %q, want mentions стоп", why)
+	}
+}
+
+// TestNoEntryWhenSwingKNonPositive — SwingK <= 0 выключает вход на самом
+// раннем шаге entryCheck, ещё до поиска уровней.
+func TestNoEntryWhenSwingKNonPositive(t *testing.T) {
+	p := defParams()
+	p.SwingK = 0
+	md := mkMD(sweepScenario(), nil)
+	if sig := newStrat(p).Decide(md); sig.Kind != model.SignalNone {
+		t.Fatalf("sig = %+v, want None (SwingK <= 0)", sig)
+	}
+	_, why := newStrat(p).entryCheck(md, model.Signal{Kind: model.SignalNone, Ticker: "TEST", Price: md.Price})
+	if !strings.Contains(why, "SwingK") {
+		t.Fatalf("why = %q, want mentions SwingK", why)
+	}
+}
+
 func TestReclaimCandidateWindowAndDepth(t *testing.T) {
 	lvls := []level{
 		{price: 97, pierceIdx: 10, reclaimIdx: 12, sweepLow: 96.5},
@@ -305,6 +336,27 @@ func TestManageTimeStop(t *testing.T) {
 	s = newStrat(Params{SwingK: 2, ReclaimBars: 4, TPR: 2, MaxHoldDays: 5})
 	if sig := s.Decide(heldMD(101, 99, 100)); sig.Kind != model.SignalNone {
 		t.Fatalf("not expired: sig = %+v, want None", sig)
+	}
+}
+
+// TestFVGFilterRejectsSameBarSweep — однобарный sweep (прокол и reclaim
+// одной свечой) не оставляет средней свечи для трёхбарного паттерна разрыва,
+// поэтому hasBullishFVG всегда false и вход с UseFVG=1 отклоняется.
+func TestFVGFilterRejectsSameBarSweep(t *testing.T) {
+	p := defParams()
+	p.UseFVG = 1
+	bars := flatBars(msk(2026, 7, 6, 10), 16, 100)
+	bars = append(bars, bar{t: next(bars), h: 101, l: 97, c: 100, v: 100})
+	bars = append(bars, bar{t: next(bars), h: 100.6, l: 97.9, c: 100.3, v: 100})
+	bars = append(bars, bar{t: next(bars), h: 100.5, l: 97.8, c: 100.1, v: 100}) // confirm
+	bars = append(bars, bar{t: next(bars), h: 99, l: 96.5, c: 98.2, v: 100})     // same-bar: wick под уровнем, close выше
+	md := mkMD(bars, nil)
+	if sig := newStrat(p).Decide(md); sig.Kind != model.SignalNone {
+		t.Fatalf("same-bar sweep + FVG filter: sig = %+v, want None", sig)
+	}
+	_, why := newStrat(p).entryCheck(md, model.Signal{Kind: model.SignalNone, Ticker: "TEST", Price: md.Price})
+	if !strings.Contains(why, "FVG") {
+		t.Fatalf("why = %q, want mentions FVG", why)
 	}
 }
 
