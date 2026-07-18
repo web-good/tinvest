@@ -20,7 +20,7 @@ Go-based trading/investment application built around the Tinkoff Invest gRPC API
   - indicators: `atr/`, `ema/`, `rsi.go`, `macd.go`, `volatility.go`
   - `notification/`, `backtest/`
 - `internal/service` — business logic, grouped by concern:
-  - `trading_strategy/` — `golden_x`, `reversion`, `bonds` (live strategies); `levels`, `momentum` (backtest-only); `scalping/model/` and `scalping/strategy/` (shared core used by reversion (live), levels, momentum, and the backtest engine; scalping live layer removed)
+  - `trading_strategy/` — `golden_x`, `reversion`, `bonds` (live strategies); `levels`, `momentum`, `smc` (backtest-only; `smc` — свинговый liquidity-sweep (Hour1), см. `docs/smc/strategy.md`); `scalping/model/` and `scalping/strategy/` (shared core used by reversion (live), levels, momentum, and the backtest engine; scalping live layer removed)
   - `instrument/` — indicator calculators: `atr`, `ema`, `macd`, `rsi`, `volatility`
   - `notification/purchase_shares`
   - `portfolio/analyze`
@@ -50,3 +50,5 @@ Go-based trading/investment application built around the Tinkoff Invest gRPC API
 Loaded via `heetch/confita` from environment variables and/or files. See `internal/config/config.go` for the full schema.
 
 go run ./cmd/backtest -ticker AFKS -strategy momentum -calibrate data/params/afks/momentum_grid.json -out ./reports/AFKS -months 24 -min-trades 20 -test-months 6 -metric profit_factor
+
+go run ./cmd/backtest -ticker SBER -strategy smc -interval Hour1 -months 24 -calibrate data/params/sber/smc_grid.json -train-months 12 -test-months 6 -min-trades 10 -metric profit_factor
