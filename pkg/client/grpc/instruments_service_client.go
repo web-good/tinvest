@@ -21,6 +21,7 @@ type InstrumentsServiceClient interface {
 	Bonds(ctx context.Context) ([]*pkgmodel.Bond, error)
 	BondByID(ctx context.Context, id string) (*pkgmodel.Bond, error)
 	GetBondCoupons(instrumentID string, from time.Time, to time.Time) ([]*pkgmodel.BondCoupon, error)
+	GetAssetFundamentals(ctx context.Context, assetUIDs []string) ([]*model.Fundamentals, error)
 }
 
 type instrumentsServiceClient struct {
@@ -112,4 +113,27 @@ func (c *instrumentsServiceClient) BondByID(ctx context.Context, id string) (*pk
 	}
 
 	return converter2.ConvertBondModelFromBondPb(resp.Instrument), nil
+}
+
+func (c *instrumentsServiceClient) GetAssetFundamentals(ctx context.Context, assetUIDs []string) ([]*model.Fundamentals, error) {
+	const batchSize = 100
+	res := make([]*model.Fundamentals, 0, len(assetUIDs))
+	for start := 0; start < len(assetUIDs); start += batchSize {
+		end := start + batchSize
+		if end > len(assetUIDs) {
+			end = len(assetUIDs)
+		}
+		reqCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		resp, err := c.instrumentsAPI.GetAssetFundamentals(
+			reqCtx,
+			&investapi.GetAssetFundamentalsRequest{Assets: assetUIDs[start:end]},
+			NewRPCCredential(c.auth),
+		)
+		cancel()
+		if err != nil {
+			return nil, fmt.Errorf("failed to request fundamentals: %w", err)
+		}
+		res = append(res, converter.ConvertFundamentalsFromPb(resp.Fundamentals)...)
+	}
+	return res, nil
 }
