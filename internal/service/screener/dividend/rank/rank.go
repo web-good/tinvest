@@ -10,7 +10,7 @@ import (
 // ScoredCompany — результат ранжирования одной компании. Отсеянные воротами
 // имеют GateReason != "" и Composite == 0.
 type ScoredCompany struct {
-	AssetUid  string
+	AssetUID  string
 	Composite float64
 
 	Sustainability float64
@@ -112,7 +112,7 @@ func Rank(universe []*model.Fundamentals, cfg Config) []ScoredCompany {
 	for _, f := range universe {
 		reason, trap := gate(f, cfg)
 		if reason != "" {
-			gated = append(gated, ScoredCompany{AssetUid: f.AssetUid, GateReason: reason, YieldTrap: trap})
+			gated = append(gated, ScoredCompany{AssetUID: f.AssetUID, GateReason: reason, YieldTrap: trap})
 			continue
 		}
 		survivors = append(survivors, f)
@@ -130,7 +130,7 @@ func Rank(universe []*model.Fundamentals, cfg Config) []ScoredCompany {
 
 	scored := make([]ScoredCompany, 0, len(survivors))
 	for _, f := range survivors {
-		sc := ScoredCompany{AssetUid: f.AssetUid}
+		sc := ScoredCompany{AssetUID: f.AssetUID}
 		sc.Sustainability = 0.7*payoutFit(f.DividendPayoutRatioFy, cfg) + 0.3*boolScore(f.FreeCashFlowTtm > 0)
 		sc.Safety = leverageScore(f.NetDebtToEbitda)
 		sc.DivGrowth = indicators.PercentileRank(divGrowth, f.FiveYearAnnualDividendGrowthRate)
@@ -151,7 +151,7 @@ func Rank(universe []*model.Fundamentals, cfg Config) []ScoredCompany {
 		if scored[i].Composite != scored[j].Composite {
 			return scored[i].Composite > scored[j].Composite
 		}
-		return scored[i].AssetUid < scored[j].AssetUid
+		return scored[i].AssetUID < scored[j].AssetUID
 	})
 
 	return append(scored, gated...)

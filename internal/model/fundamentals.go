@@ -3,7 +3,7 @@ package model
 // Fundamentals — подмножество фундаментальных показателей актива из
 // Tinkoff GetAssetFundamentals, что использует дивидендный скринер.
 type Fundamentals struct {
-	AssetUid string
+	AssetUID string
 
 	ForwardAnnualDividendYield       float64 // форвардная дивдоходность, %
 	DividendYieldDailyTtm            float64 // текущая дивдоходность TTM, %

@@ -12,7 +12,7 @@ func ConvertFundamentalsFromPb(in []*investapi.GetAssetFundamentalsResponse_Stat
 			continue
 		}
 		res = append(res, &model.Fundamentals{
-			AssetUid:                         f.AssetUid,
+			AssetUID:                         f.AssetUid,
 			ForwardAnnualDividendYield:       f.ForwardAnnualDividendYield,
 			DividendYieldDailyTtm:            f.DividendYieldDailyTtm,
 			DividendPayoutRatioFy:            f.DividendPayoutRatioFy,

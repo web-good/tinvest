@@ -39,7 +39,7 @@ func ConvertShareFromPb(share *investapi.Share) *model.Share {
 		Name:         share.Name,
 		ID:           share.Uid,
 		Trading:      share.ApiTradeAvailableFlag,
-		AssetUid:     share.AssetUid,
+		AssetUID:     share.AssetUid,
 		DivYieldFlag: share.DivYieldFlag,
 	}
 }

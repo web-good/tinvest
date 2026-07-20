@@ -42,7 +42,7 @@ func TestConvertFundamentalsFromPb(t *testing.T) {
 	}
 
 	want := &model.Fundamentals{
-		AssetUid:                         "asset-1",
+		AssetUID:                         "asset-1",
 		ForwardAnnualDividendYield:       1.1,
 		DividendYieldDailyTtm:            2.2,
 		DividendPayoutRatioFy:            3.3,
@@ -65,8 +65,8 @@ func TestConvertFundamentalsFromPb(t *testing.T) {
 		PriceToFreeCashFlowTtm:           20.20,
 	}
 
-	if got[0].AssetUid != want.AssetUid {
-		t.Errorf("AssetUid = %v, want %v", got[0].AssetUid, want.AssetUid)
+	if got[0].AssetUID != want.AssetUID {
+		t.Errorf("AssetUID = %v, want %v", got[0].AssetUID, want.AssetUID)
 	}
 	if got[0].ForwardAnnualDividendYield != want.ForwardAnnualDividendYield {
 		t.Errorf("ForwardAnnualDividendYield = %v, want %v", got[0].ForwardAnnualDividendYield, want.ForwardAnnualDividendYield)

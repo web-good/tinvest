@@ -17,8 +17,8 @@ func TestConvertShareFromPb_MapsAssetUidAndDivFlag(t *testing.T) {
 
 	got := ConvertShareFromPb(in)
 
-	if got.AssetUid != "asset-uid-1" {
-		t.Fatalf("AssetUid = %q, want %q", got.AssetUid, "asset-uid-1")
+	if got.AssetUID != "asset-uid-1" {
+		t.Fatalf("AssetUID = %q, want %q", got.AssetUID, "asset-uid-1")
 	}
 	if !got.DivYieldFlag {
 		t.Fatalf("DivYieldFlag = false, want true")

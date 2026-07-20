@@ -54,12 +54,12 @@ func (s *service) refresh(ctx context.Context) error {
 	uids := make([]string, 0, len(shares))
 	shareByAsset := make(map[string]*model.Share, len(shares))
 	for _, sh := range shares {
-		if !sh.DivYieldFlag || sh.AssetUid == "" {
+		if !sh.DivYieldFlag || sh.AssetUID == "" {
 			continue
 		}
 		dividendShares = append(dividendShares, sh)
-		uids = append(uids, sh.AssetUid)
-		shareByAsset[sh.AssetUid] = sh
+		uids = append(uids, sh.AssetUID)
+		shareByAsset[sh.AssetUID] = sh
 	}
 
 	funds, err := s.client.GetAssetFundamentals(ctx, uids)
@@ -86,7 +86,7 @@ func (s *service) refresh(ctx context.Context) error {
 	bonusByID := make(map[string]int, len(survivors))
 	total := len(survivors)
 	for i, sc := range survivors {
-		sh := shareByAsset[sc.AssetUid]
+		sh := shareByAsset[sc.AssetUID]
 		if sh == nil {
 			continue
 		}
