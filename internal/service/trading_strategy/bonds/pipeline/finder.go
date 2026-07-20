@@ -16,6 +16,10 @@ func Finder(doneCh chan struct{}, bonds []*pkgmodel.Bond, isOfz bool, dateFrom, 
 		for _, bond := range bonds {
 			time.Sleep(100 * time.Millisecond)
 
+			if !PassesReliability(bond) {
+				continue
+			}
+
 			if dateTo.Before(bond.MaturityDate) || dateFrom.After(bond.MaturityDate) {
 				continue
 			}

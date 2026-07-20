@@ -9,18 +9,9 @@ import (
 
 func ConvertBondsFromPb(in *investapi.BondsResponse) []*model.Bond {
 	res := make([]*model.Bond, 0, len(in.Instruments))
-
 	for _, bond := range in.Instruments {
-		if bond.RiskLevel != investapi.RiskLevel_RISK_LEVEL_LOW {
-			continue
-		}
-		if bond.FloatingCouponFlag == true {
-			continue
-		}
-
 		res = append(res, ConvertBondModelFromBondPb(bond))
 	}
-
 	return res
 }
 
