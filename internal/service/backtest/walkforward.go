@@ -241,8 +241,14 @@ func RunWalkForward(b Binding, phases []Phase, candles, dailyCandles, htfCandles
 	return summary, nil
 }
 
+// PooledMetrics computes aggregate metrics over a flat pool of trades, ignoring
+// equity-curve/bar context (used for pooled out-of-sample validation samples).
+func PooledMetrics(trades []backtest.Trade) backtest.Metrics {
+	return backtest.Compute(backtest.Result{Trades: trades}, 0, 0, 0)
+}
+
 // RenderWalkForwardMarkdown renders the pooled-OOS aggregate, the per-fold train-vs-OOS
-// table, and the parameter-stability breakdown. Mirrors RenderBasketMarkdown's style.
+// table, and the parameter-stability breakdown.
 func RenderWalkForwardMarkdown(ticker, metric string, s WalkForwardSummary, trainMonths, testMonths int) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Walk-forward %s\n\n", ticker)
