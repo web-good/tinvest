@@ -76,13 +76,14 @@ func (*ServiceProvider) GetBondsTradingService() bonds.Bonds {
 	return serviceProvider.service.bondsTradingService
 }
 
-func (*ServiceProvider) GetGoldenXTradingService() golden_x.GoldenX {
+func (s *ServiceProvider) GetGoldenXTradingService() golden_x.GoldenX {
 	if serviceProvider.service.goldenXTradingService == nil {
 		grpcClient, _ := serviceProvider.GetGrpcClient()
 		tgClient, _ := serviceProvider.GetGoldenXSender()
 		serviceProvider.service.goldenXTradingService = golden_x.NewService(
 			grpcClient.MarketDataServiceClient(),
 			tgClient,
+			golden_x.WithRankProvider(s.dividendSvc().provider),
 		)
 	}
 

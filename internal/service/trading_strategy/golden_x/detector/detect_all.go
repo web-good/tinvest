@@ -12,7 +12,7 @@ import (
 
 // DetectAll runs Detect on every successfully fetched share. Shares with
 // fetch errors or insufficient history are logged and skipped.
-func DetectAll(ctx context.Context, fetched []gxmodel.FetchResult, in dto.Trade, settings gxmodel.Settings) []gxmodel.DetectResult {
+func DetectAll(ctx context.Context, fetched []gxmodel.FetchResult, in dto.Trade, settings gxmodel.Settings, bonusFor func(instrumentID string) int) []gxmodel.DetectResult {
 	results := make([]gxmodel.DetectResult, 0, len(fetched))
 	for _, fr := range fetched {
 		if fr.Err != nil {
@@ -34,7 +34,7 @@ func DetectAll(ctx context.Context, fetched []gxmodel.FetchResult, in dto.Trade,
 			continue
 		}
 
-		results = append(results, gxmodel.DetectResult{Share: fr.Share, Signal: sig})
+		results = append(results, gxmodel.DetectResult{Share: fr.Share, Signal: sig, FundamentalBonus: bonusFor(fr.Share.ID)})
 	}
 	return results
 }

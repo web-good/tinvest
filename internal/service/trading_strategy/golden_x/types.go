@@ -3,6 +3,7 @@ package golden_x
 import (
 	"context"
 
+	"tinvest/internal/service/screener/dividend"
 	"tinvest/internal/service/trading_strategy/golden_x/dto"
 	"tinvest/internal/service/trading_strategy/golden_x/factory"
 	gxmodel "tinvest/internal/service/trading_strategy/golden_x/model"
@@ -22,10 +23,17 @@ func WithSettings(s gxmodel.Settings) Option {
 	}
 }
 
+func WithRankProvider(p dividend.RankProvider) Option {
+	return func(svc *service) {
+		svc.rankProvider = p
+	}
+}
+
 type service struct {
 	marketDataServiceGrpcClient grpc.MarketDataServiceClient
 	tgClient                    telegram.Client
 	settings                    gxmodel.Settings
+	rankProvider                dividend.RankProvider
 }
 
 func NewService(
@@ -41,5 +49,14 @@ func NewService(
 	for _, o := range opts {
 		o(svc)
 	}
+	if svc.rankProvider == nil {
+		svc.rankProvider = noopRankProvider{}
+	}
 	return svc
 }
+
+// noopRankProvider is the default RankProvider when none is wired — every
+// share gets a zero fundamental bonus, matching pre-integration behavior.
+type noopRankProvider struct{}
+
+func (noopRankProvider) RankBonus(string) int { return 0 }

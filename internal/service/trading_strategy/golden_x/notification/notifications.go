@@ -43,7 +43,7 @@ func Trade(r model.TradeResult) string {
 			if trendMark != "" {
 				trendMark = " " + trendMark
 			}
-			b.WriteString("• <b>Акция:</b> " + sr.InstrumentName + buyTierEmoji(sr.BuyTier) + trendMark + divergenceBadge(sr.DivergenceOK) + volumeBadge(sr.VolumeOK) + "\n")
+			b.WriteString("• <b>Акция:</b> " + sr.InstrumentName + buyTierEmoji(sr.BuyTier) + trendMark + divergenceBadge(sr.DivergenceOK) + volumeBadge(sr.VolumeOK) + fundamentalBadge(sr.FundamentalBonus) + "\n")
 			b.WriteString("  <b>RSI Value:</b>" + strconv.Itoa(int(sr.RSI)) + thresholdSuffix(sr.Thresholds) + "\n")
 			if sr.Score > 0 {
 				b.WriteString("  <b>Score:</b> " + strconv.Itoa(sr.Score) + "\n")
@@ -110,6 +110,7 @@ const legendBlock = "<b>Легенда:</b>\n" +
 	"🚫 тренд против\n" +
 	"📈 бычья дивергенция\n" +
 	"🔊 подтверждение объёмом\n" +
+	"🏆 фунд-рейтинг (+1..+3 к Score)\n" +
 	"⏸️ лимит сектора\n\n"
 
 // divergenceBadge returns " 📈" when the share's row should display the
@@ -128,6 +129,16 @@ func divergenceBadge(divergent bool) string {
 func volumeBadge(confirmed bool) string {
 	if confirmed {
 		return " 🔊"
+	}
+	return ""
+}
+
+// fundamentalBadge returns " 🏆" when the share's dividend-screener percentile
+// rank contributed a positive bonus to its Score, "" otherwise. The badge is
+// purely additive.
+func fundamentalBadge(bonus int) string {
+	if bonus > 0 {
+		return " 🏆"
 	}
 	return ""
 }

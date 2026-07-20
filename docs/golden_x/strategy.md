@@ -124,6 +124,23 @@ DistancePct  = (Close − Stop) / Close × 100
 
 `notification.Trade()` (`notification/notifications.go:12`) собирает HTML-сообщение со всеми покупками и продажами одной партией. Сообщение начинается с блока легенды (`legendBlock`), объясняющего все emoji. Доставка через Telegram Bot API на все `chatIds` из конфига (см. `internal/app/app.go`).
 
+## Score сигнала
+
+После `Detect()` акции классифицируются в `classifier.Classify()` (чистая функция, без I/O). Там же считается `Score` — композитная сила сигнала (`classifier/classifier.go:signalScore`):
+
+| Компонент | Вклад |
+|---|---|
+| `TierGreen` | +3 |
+| `TierYellow` | +1 |
+| `TrendWith` (тренд за нас) | +2 |
+| `DivergenceOK` (бычья дивергенция) | +2 |
+| `VolumeOK` (объём подтверждён) | +1 |
+| Фунд-рейтинг (перцентильный ранг дивидендного скринера) | +0..+3 |
+
+Итоговый диапазон `Score`: **1..11** (было 1..8 до добавления фунд-бонуса). Список покупок в уведомлении сортируется по убыванию `Score`.
+
+Фунд-бонус приходит как данные извне: `service.Trade` прокидывает `s.rankProvider.RankBonus(instrumentID)` в `detector.DetectAll()`, которая кладёт его в `DetectResult.FundamentalBonus` для каждой акции; `Classify()` лишь копирует это значение в `ShareResult.FundamentalBonus` и суммирует — сама остаётся чистой (никакого I/O, никакого времени). Источник ранга — `dividend.RankProvider` (скринер дивидендных бумаг, `internal/service/screener/dividend`), обновляется ~раз в 24 часа. Если провайдер не подключён (`golden_x.WithRankProvider` не передан), используется no-op-реализация — бонус всегда 0, поведение идентично коду до интеграции. В уведомлении бумаги с положительным бонусом дополнительно помечаются 🏆.
+
 ## Разница Dividend vs Growth
 
 | Аспект | 🥇 Dividend | 🥈 Growth |

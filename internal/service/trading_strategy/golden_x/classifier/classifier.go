@@ -36,6 +36,7 @@ func Classify(detected []gxmodel.DetectResult, in dto.Trade) gxmodel.TradeResult
 			sr.DivergenceOK = sig.DivergenceOK
 			sr.VolumeOK = sig.VolumeOK
 		}
+		sr.FundamentalBonus = dr.FundamentalBonus
 
 		sr.Score = signalScore(sr)
 
@@ -53,11 +54,12 @@ func Classify(detected []gxmodel.DetectResult, in dto.Trade) gxmodel.TradeResult
 // signalScore computes a composite buy-signal strength score for a ShareResult.
 // Higher scores indicate stronger confluence of buy conditions.
 //
-//   - TierGreen buy tier:  +3
-//   - TierYellow buy tier: +1
-//   - TrendWith:           +2
-//   - DivergenceOK:        +2
-//   - VolumeOK:            +1
+//   - TierGreen buy tier:   +3
+//   - TierYellow buy tier:  +1
+//   - TrendWith:            +2
+//   - DivergenceOK:         +2
+//   - VolumeOK:             +1
+//   - FundamentalBonus:     +0..3 (dividend screener percentile rank)
 func signalScore(sr gxmodel.ShareResult) int {
 	s := 0
 	switch sr.BuyTier {
@@ -75,5 +77,6 @@ func signalScore(sr gxmodel.ShareResult) int {
 	if sr.VolumeOK {
 		s += 1
 	}
+	s += sr.FundamentalBonus
 	return s
 }

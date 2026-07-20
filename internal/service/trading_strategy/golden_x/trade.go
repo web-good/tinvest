@@ -46,7 +46,7 @@ func (s *service) Trade(ctx context.Context, in dto.Trade) (err error) {
 	dateNow := time.Now().In(loc)
 
 	fetched := s.fetchAll(ctx, in, dateNow)
-	signals := detector.DetectAll(ctx, fetched, in, s.settings)
+	signals := detector.DetectAll(ctx, fetched, in, s.settings, s.rankProvider.RankBonus)
 	result := classifier.Classify(signals, in)
 	result = classifier.CapSectors(result)
 

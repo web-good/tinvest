@@ -31,6 +31,10 @@
 | `AdaptiveWindowMax` | int | **200** | Максимум недель RSI (включая текущую формирующуюся); история обрезается до последних N значений | `detector.go:26` |
 | `DivergenceLookbackWeeks` | int | **52** | Глубина поиска фрактального минимума для дивергенции | `detector.go:51` |
 
+## Фунд-бонус к Score (не часть `Settings`)
+
+`Score` каждой покупки может получать +0..+3 от перцентильного ранга дивидендного скринера (см. [strategy.md §Score сигнала](strategy.md#score-сигнала)). Это не поле `dto.Settings` — оно подключается снаружи через `golden_x.WithRankProvider(p dividend.RankProvider)` (см. `internal/service_provider/service.go:GetGoldenXTradingService`), а данные обновляются скринером `internal/service/screener/dividend` раз в ~24ч. Без вызова `WithRankProvider` бонус всегда 0 (no-op) — `Score` ведёт себя как раньше.
+
 ## Per-share параметр: `RSILength`
 
 Кроме общих `Settings`, каждая бумага имеет свой период RSI — `RSILength`. Он задан в списке тикеров `shares/shares.go` и подбирается эмпирически: для волатильных бумаг короче (резвее реагирует), для стабильных длиннее (меньше шума).

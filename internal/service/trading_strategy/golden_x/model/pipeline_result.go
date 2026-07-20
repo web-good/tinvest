@@ -12,6 +12,7 @@ type FetchResult struct {
 }
 
 type DetectResult struct {
-	Share  collection.Instrument
-	Signal Signal
+	Share            collection.Instrument
+	Signal           Signal
+	FundamentalBonus int
 }
