@@ -130,6 +130,8 @@ func (s *service) RankBonus(instrumentID string) int {
 	return s.bonusByID[instrumentID]
 }
 
+// Top returns the top-n ranked shares plus gate stats.
+// n<=0 falls back to defaultTopN. If fewer than n shares are ranked, all are returned.
 func (s *service) Top(ctx context.Context, n int) ([]RankedShare, Stats, error) {
 	if err := s.ensureFresh(ctx); err != nil {
 		return nil, Stats{}, err

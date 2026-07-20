@@ -72,3 +72,44 @@ func TestTop_ReportsGateStats(t *testing.T) {
 		t.Fatalf("top = %s, want i-strong", ranked[0].Share.ID)
 	}
 }
+
+func TestTop_NonPositiveNFallsBackToDefault(t *testing.T) {
+	svc := newMockedService(t)
+	ctx := context.Background()
+
+	// Get with default n
+	defaultResult, _, err := svc.Top(ctx, defaultTopN)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Test n=0 falls back to default
+	zeroResult, _, err := svc.Top(ctx, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(zeroResult) != len(defaultResult) {
+		t.Fatalf("Top(ctx, 0) returned %d items, want %d (same as default)", len(zeroResult), len(defaultResult))
+	}
+
+	// Test n=-1 falls back to default
+	negResult, _, err := svc.Top(ctx, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(negResult) != len(defaultResult) {
+		t.Fatalf("Top(ctx, -1) returned %d items, want %d (same as default)", len(negResult), len(defaultResult))
+	}
+
+	// Test n=1 caps to 1 and returns top-ranked
+	oneResult, _, err := svc.Top(ctx, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(oneResult) != 1 {
+		t.Fatalf("Top(ctx, 1) returned %d items, want 1", len(oneResult))
+	}
+	if oneResult[0].Share.ID != "i-strong" {
+		t.Fatalf("Top(ctx, 1) returned %s, want i-strong", oneResult[0].Share.ID)
+	}
+}
