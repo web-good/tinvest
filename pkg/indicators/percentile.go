@@ -2,7 +2,6 @@ package indicators
 
 import (
 	"math"
-	"sort"
 )
 
 // Percentile returns the R-7 (linear-interpolation) percentile of an
@@ -31,13 +30,11 @@ func PercentileRank(values []float64, x float64) float64 {
 	if len(values) == 0 {
 		return 0
 	}
-	sorted := append([]float64(nil), values...)
-	sort.Float64s(sorted)
 	count := 0
-	for _, v := range sorted {
+	for _, v := range values {
 		if v < x {
 			count++
 		}
 	}
-	return float64(count) / float64(len(sorted))
+	return float64(count) / float64(len(values))
 }

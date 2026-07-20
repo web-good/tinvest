@@ -22,7 +22,10 @@ func TestPercentile_R7(t *testing.T) {
 }
 
 func TestPercentileRank(t *testing.T) {
-	vals := []float64{10, 20, 30, 40}
+	// Use unsorted input to prove order-independence and catch accidental mutations.
+	vals := []float64{40, 10, 30, 20}
+	original := []float64{40, 10, 30, 20} // Capture original order for immutability check.
+
 	if got := PercentileRank(vals, 25); math.Abs(got-0.5) > 1e-9 {
 		t.Fatalf("rank(25) = %v, want 0.5", got)
 	}
@@ -31,5 +34,12 @@ func TestPercentileRank(t *testing.T) {
 	}
 	if got := PercentileRank(vals, 100); math.Abs(got-1.0) > 1e-9 {
 		t.Fatalf("rank(100) = %v, want 1", got)
+	}
+
+	// Verify input slice was not mutated.
+	for i := range vals {
+		if vals[i] != original[i] {
+			t.Fatalf("input slice was mutated: vals[%d] = %v, want %v", i, vals[i], original[i])
+		}
 	}
 }
