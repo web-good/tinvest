@@ -1,7 +1,8 @@
-// Command backtest replays a per-share trading strategy (scalping or levels) over
-// historical candles, simulates a mock portfolio, and writes Markdown + CSV reports.
-// It supports a single run (default params or -params) and grid calibration
-// (-calibrate). All gRPC/file I/O is here; the engine and metrics are pure.
+// Command backtest replays a per-share trading strategy (scalping or reversion)
+// over historical candles, simulates a mock portfolio, and writes
+// Markdown + CSV reports. It supports a single run (default params or -params) and
+// grid calibration (-calibrate). All gRPC/file I/O is here; the engine and metrics
+// are pure.
 package main
 
 import (
@@ -37,7 +38,7 @@ func main() {
 	var (
 		ticker       = flag.String("ticker", "", "ticker, e.g. RUAL (required)")
 		intervalS    = flag.String("interval", "Hour1", "candle timeframe: Minutes15|Minutes30|Hour1|Hour4|Day1|Week1")
-		strategyName = flag.String("strategy", "scalping", "strategy engine: scalping|levels|momentum|reversion")
+		strategyName = flag.String("strategy", "scalping", "strategy engine: scalping|reversion")
 		months       = flag.Int("months", 12, "lookback period in months")
 		cash         = flag.Float64("cash", 100000, "starting mock cash")
 		fraction     = flag.Float64("fraction", 1.0, "fraction of cash per Buy")
@@ -51,8 +52,6 @@ func main() {
 		outDir       = flag.String("out", "reports", "report output directory")
 		refresh      = flag.Bool("refresh", false, "force candle refetch (ignore cache)")
 		explain      = flag.String("explain", "", "diagnose one bar: MSK time 'YYYY-MM-DD HH:MM'; prints why the strategy did/didn't enter")
-		basket       = flag.String("basket", "", "basket mode: comma-separated tickers; calibrates each on the early window and pools OOS trades (ignores -ticker)")
-		gridDir      = flag.String("grid-dir", "data/params", "basket mode: directory holding <lower-ticker>/momentum_grid.json")
 		riskPct      = flag.Float64("risk-pct", 0, "risk-based sizing: risk this %% of equity per trade off the entry stop (requires CatStopATRMult>0; 0 = fixed -fraction sizing)")
 		screen       = flag.String("screen", "", "screen mode: comma-separated tickers; ranks them by variance ratio (ignores -ticker/-strategy)")
 		volRank      = flag.Bool("volrank", false, "screener mode: rank the liquid RUB universe by Hour1 pullback-in-trend fitness (ignores -ticker/-strategy/-interval)")
@@ -77,7 +76,7 @@ func main() {
 
 	if err := run(*ticker, *strategyName, interval, *months, *cash, *fraction, *commission,
 		*paramsPath, *calibrate, *metric, *minTrades, *testMonths, *trainMonths, *outDir, *refresh, *explain,
-		*basket, *gridDir, *riskPct, *screen,
+		*riskPct, *screen,
 		*volRank, *minTurnover, *atrPeriod, *topN, *wRecov, *wFreq, *wLiq, *rsiPeriodS, *rsiOversold, *recoverBars, *recoverRSI); err != nil {
 		log.Fatalf("backtest: %v", err)
 	}
@@ -105,23 +104,20 @@ func parseInterval(s string) (enum.Interval, error) {
 
 func run(ticker, strategyName string, interval enum.Interval, months int, cash, fraction, commission float64,
 	paramsPath, calibratePath, metric string, minTrades, testMonths, trainMonths int, outDir string, refresh bool, explain string,
-	basketCSV, gridDir string, riskPct float64, screenCSV string,
+	riskPct float64, screenCSV string,
 	volRank bool, minTurnoverM float64, atrPeriod, topN int, wRecov, wFreq, wLiq float64, rsiPeriodS int, rsiOversold float64, recoverBars int, recoverRSI float64,
 ) error {
 	if paramsPath != "" && calibratePath != "" {
 		return fmt.Errorf("-params and -calibrate are mutually exclusive")
 	}
-	if basketCSV != "" && calibratePath != "" {
-		return fmt.Errorf("-basket and -calibrate are mutually exclusive (-basket uses per-ticker grids from -grid-dir)")
-	}
 	if trainMonths > 0 && calibratePath == "" {
 		return fmt.Errorf("-train-months requires -calibrate (walk-forward re-calibrates each fold from a grid)")
 	}
-	if screenCSV != "" && (calibratePath != "" || basketCSV != "" || explain != "") {
-		return fmt.Errorf("-screen is standalone (not combined with -calibrate/-basket/-explain)")
+	if screenCSV != "" && (calibratePath != "" || explain != "") {
+		return fmt.Errorf("-screen is standalone (not combined with -calibrate/-explain)")
 	}
-	if volRank && (screenCSV != "" || basketCSV != "" || calibratePath != "" || explain != "") {
-		return fmt.Errorf("-volrank is standalone (not combined with -screen/-basket/-calibrate/-explain)")
+	if volRank && (screenCSV != "" || calibratePath != "" || explain != "") {
+		return fmt.Errorf("-volrank is standalone (not combined with -screen/-calibrate/-explain)")
 	}
 
 	token, err := loadToken()
@@ -150,29 +146,17 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 		return runVolRank(ctx, client, months, topN, minTurnoverM, wRecov, wFreq, wLiq, sp, outDir, refresh)
 	}
 
-	if basketCSV != "" {
-		if strategyName != "momentum" {
-			return fmt.Errorf("-basket currently supports -strategy momentum only")
-		}
-		return runBasket(ctx, client, splitTickers(basketCSV), interval, months,
-			cash, fraction, commission, metric, minTrades, testMonths, gridDir, outDir, refresh, riskPct)
-	}
-
 	if ticker == "" {
 		return fmt.Errorf("-ticker is required")
 	}
 	var binding svc.Binding
 	switch strategyName {
-	case "levels":
-		binding = svc.LevelsLookupOrGeneric(ticker)
-	case "momentum":
-		binding = svc.MomentumLookupOrGeneric(ticker)
 	case "reversion":
 		binding = svc.ReversionLookupOrGeneric(ticker)
 	case "scalping":
 		binding = svc.LookupOrGeneric(ticker)
 	default:
-		return fmt.Errorf("unknown strategy %q (want scalping|levels|momentum|reversion)", strategyName)
+		return fmt.Errorf("unknown strategy %q (want scalping|reversion)", strategyName)
 	}
 
 	share, err := resolveShare(ctx, client, ticker)
@@ -587,139 +571,4 @@ func splitTickers(csv string) []string {
 		}
 	}
 	return out
-}
-
-// runBasket calibrates each ticker on the early window, runs the winner on the shared
-// OOS tail, and pools the tail trades across tickers into one statistically meaningful
-// sample. Each ticker keeps its own calibrated params; the pool is validation only.
-func runBasket(ctx context.Context, client grpcclient.GrpcClient, tickers []string, interval enum.Interval,
-	months int, cash, fraction, commission float64, metric string, minTrades, testMonths int,
-	gridDir, outDir string, refresh bool, riskPct float64,
-) error {
-	if testMonths <= 0 {
-		return fmt.Errorf("-basket requires -test-months > 0 (walk-forward OOS window)")
-	}
-	if len(tickers) == 0 {
-		return fmt.Errorf("-basket: no tickers parsed")
-	}
-
-	provider := svc.NewCandleProvider(client.MarketDataServiceClient(), cacheDir)
-	to := time.Now()
-	from := to.AddDate(0, -months, 0)
-	boundary := to.AddDate(0, -testMonths, 0)
-	dailyFrom := from.AddDate(-1, 0, 0)
-	periodDays := to.Sub(from).Hours() / 24
-	testDays := to.Sub(boundary).Hours() / 24
-	gridDays := periodDays - testDays
-	if testDays >= periodDays {
-		return fmt.Errorf("-test-months window (%.0f days) must be smaller than the -months window (%.0f days)", testDays, periodDays)
-	}
-
-	shares, err := client.InstrumentsServiceClient().Shares(ctx)
-	if err != nil {
-		return fmt.Errorf("load shares: %w", err)
-	}
-	byTicker := make(map[string]shareInfo, len(shares))
-	for _, s := range shares {
-		byTicker[s.Ticker] = shareInfo{ID: s.ID, Lot: s.Lot}
-	}
-
-	var pooled []domain.Trade
-	var summary svc.BasketSummary
-
-	for _, ticker := range tickers {
-		entry := svc.BasketEntry{Ticker: ticker}
-
-		gridPath := filepath.Join(gridDir, strings.ToLower(ticker), "momentum_grid.json")
-		raw, err := os.ReadFile(gridPath)
-		if err != nil {
-			entry.Skipped, entry.Note = true, fmt.Sprintf("нет грида (%s)", gridPath)
-			summary.Entries = append(summary.Entries, entry)
-			continue
-		}
-		phases, err := svc.ParsePhases(raw)
-		if err != nil {
-			entry.Skipped, entry.Note = true, fmt.Sprintf("грид невалиден: %v", err)
-			summary.Entries = append(summary.Entries, entry)
-			continue
-		}
-
-		share, ok := byTicker[ticker]
-		if !ok {
-			entry.Skipped, entry.Note = true, "инструмент не найден в Shares()"
-			summary.Entries = append(summary.Entries, entry)
-			continue
-		}
-
-		candles, err := provider.Load(ctx, ticker, share.ID, interval, from, to, refresh)
-		if err != nil {
-			return fmt.Errorf("%s: load candles: %w", ticker, err)
-		}
-		dailyCandles, err := provider.Load(ctx, ticker, share.ID, enum.Day1, dailyFrom, to, refresh)
-		if err != nil {
-			return fmt.Errorf("%s: load daily: %w", ticker, err)
-		}
-
-		binding := svc.MomentumLookupOrGeneric(ticker)
-		cfg := domain.Config{InitialCash: cash, Fraction: fraction, Commission: commission, Lot: share.Lot, RiskFractionPct: riskPct}
-		gridCandles, bestCandles := svc.SplitByTime(candles, boundary)
-		gridDaily, bestDaily := svc.SplitByTime(dailyCandles, boundary)
-
-		results, err := svc.RunPhases(binding, phases, gridCandles, gridDaily, nil, cfg, metric, minTrades, gridDays, nil)
-		if err != nil {
-			return fmt.Errorf("%s: calibrate: %w", ticker, err)
-		}
-		if len(results) == 0 {
-			entry.Skipped, entry.Note = true, "калибровка не дала комбинаций"
-			summary.Entries = append(summary.Entries, entry)
-			continue
-		}
-
-		best := results[0].Params
-		res := domain.Run(binding.Build(best), bestCandles, bestDaily, nil, cfg)
-		m := domain.Compute(res, res.BarsInMarket, len(res.Equity), testDays)
-
-		entry.Trades = m.TotalTrades
-		entry.ProfitFactor = m.ProfitFactor
-		entry.NetPnL = m.NetPnL
-		entry.NetPnLPct = m.NetPnLPct
-		entry.MaxDrawdownPct = m.MaxDrawdownPct
-		entry.WinRate = m.WinRate
-		entry.Params = svc.ParamRows(best)
-		if m.TotalTrades == 0 {
-			entry.Note = "нет OOS-сделок"
-		}
-		summary.Entries = append(summary.Entries, entry)
-		pooled = append(pooled, res.Trades...)
-		fmt.Printf("basket %s: OOS trades=%d PF=%.3f net=%.2f\n", ticker, m.TotalTrades, m.ProfitFactor, m.NetPnL)
-	}
-
-	summary.Pooled = svc.PooledMetrics(pooled)
-
-	if len(pooled) == 0 {
-		skipped := 0
-		for _, e := range summary.Entries {
-			if e.Skipped {
-				skipped++
-			}
-		}
-		if skipped == len(summary.Entries) {
-			return fmt.Errorf("basket: every ticker was skipped (no grids / instruments not found); nothing to report")
-		}
-	}
-
-	basketDir := filepath.Join(outDir, "basket")
-	if err := os.MkdirAll(basketDir, 0o755); err != nil {
-		return fmt.Errorf("mkdir basket dir: %w", err)
-	}
-	stamp := time.Now().Format("20060102_150405")
-	base := filepath.Join(basketDir, fmt.Sprintf("basket_momentum_%s", stamp))
-	if err := writeFile(base+".md", svc.RenderBasketMarkdown(metric, summary, boundary, to)); err != nil {
-		return err
-	}
-	if err := writeFile(base+"_trades.csv", domain.RenderTradesCSV(pooled)); err != nil {
-		return err
-	}
-	fmt.Printf("basket report: %s.md (pooled trades=%d, PF=%.3f)\n", base, summary.Pooled.TotalTrades, summary.Pooled.ProfitFactor)
-	return nil
 }

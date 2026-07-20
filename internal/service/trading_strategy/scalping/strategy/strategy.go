@@ -24,6 +24,10 @@ type Position struct {
 	// level from it: the exchange stop order working during bar i was placed after bar
 	// i-1 closed, so its level knows nothing about bar i. Seeded to the entry price.
 	PrevMaxFavorablePrice float64
+	// EntryTime is the open-time of the entry bar. Zero means "not set" (live
+	// trading does not persist it); the backtest engine always populates it.
+	// Time-based exits must degrade to a no-op when zero.
+	EntryTime time.Time
 }
 
 // MarketData is the raw, per-instrument snapshot the runner hands to a strategy.

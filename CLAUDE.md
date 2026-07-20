@@ -1,7 +1,7 @@
 # TInvest Project
 
 ## Overview
-Go-based trading/investment application built around the Tinkoff Invest gRPC API. It implements live trading strategies (Golden X, Reversion, Bonds screening) and backtest-only strategies (Levels, Momentum), plus a shared scalping core (model/strategy packages) used by live Reversion, Levels, Momentum, and the backtest engine. Analyzes the portfolio and sends notifications via Telegram bots.
+Go-based trading/investment application built around the Tinkoff Invest gRPC API. It implements live trading strategies (Golden X, Reversion, Bonds screening), plus a shared scalping core (model/strategy packages) used by live Reversion and the backtest engine. Analyzes the portfolio and sends notifications via Telegram bots.
 
 ## Tech Stack
 - Go 1.25
@@ -20,7 +20,7 @@ Go-based trading/investment application built around the Tinkoff Invest gRPC API
   - indicators: `atr/`, `ema/`, `rsi.go`, `macd.go`, `volatility.go`
   - `notification/`, `backtest/`
 - `internal/service` — business logic, grouped by concern:
-  - `trading_strategy/` — `golden_x`, `reversion`, `bonds` (live strategies); `levels`, `momentum` (backtest-only); `scalping/model/` and `scalping/strategy/` (shared core used by reversion (live), levels, momentum, and the backtest engine; scalping live layer removed)
+  - `trading_strategy/` — `golden_x`, `reversion`, `bonds` (live strategies); `scalping/model/` and `scalping/strategy/` (shared core used by reversion (live) and the backtest engine; scalping live layer removed). Note: backtest-only strategies `levels`, `momentum`, `smc` were removed after walk-forward validation failed (2026-07-20).
   - `instrument/` — indicator calculators: `atr`, `ema`, `macd`, `rsi`, `volatility`
   - `notification/purchase_shares`
   - `portfolio/analyze`
@@ -49,4 +49,4 @@ Go-based trading/investment application built around the Tinkoff Invest gRPC API
 ## Configuration
 Loaded via `heetch/confita` from environment variables and/or files. See `internal/config/config.go` for the full schema.
 
-go run ./cmd/backtest -ticker AFKS -strategy momentum -calibrate data/params/afks/momentum_grid.json -out ./reports/AFKS -months 24 -min-trades 20 -test-months 6 -metric profit_factor
+go run ./cmd/backtest -ticker NVTK -strategy reversion -calibrate data/params/nvtk/reversion_grid.json -out ./reports/NVTK -months 24 -min-trades 20 -test-months 6 -metric profit_factor
