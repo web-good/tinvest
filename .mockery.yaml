@@ -41,3 +41,8 @@ packages:
       all: false
     interfaces:
       candleFetcher:
+  tinvest/internal/service/screener/dividend:
+    config:
+      all: false
+    interfaces:
+      instrumentsClient:

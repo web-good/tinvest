@@ -1,0 +1,74 @@
+package dividend
+
+import (
+	"context"
+	"testing"
+
+	"tinvest/internal/model"
+	"tinvest/internal/service/screener/dividend/mocks"
+
+	"github.com/stretchr/testify/mock"
+)
+
+func fundUniverse() ([]*model.Share, []*model.Fundamentals) {
+	shares := []*model.Share{
+		{ID: "i-strong", AssetUid: "a-strong", Name: "Strong", DivYieldFlag: true},
+		{ID: "i-mid", AssetUid: "a-mid", Name: "Mid", DivYieldFlag: true},
+		{ID: "i-weak", AssetUid: "a-weak", Name: "Weak", DivYieldFlag: true},
+		{ID: "i-gated", AssetUid: "a-gated", Name: "Gated", DivYieldFlag: true},
+	}
+	funds := []*model.Fundamentals{
+		{AssetUid: "a-strong", ForwardAnnualDividendYield: 10, DividendPayoutRatioFy: 45, NetDebtToEbitda: 0.3, EbitdaTtm: 100, Roic: 0.25, EvToEbitdaMrq: 3, FreeCashFlowTtm: 500, FiveYearAnnualDividendGrowthRate: 0.2},
+		{AssetUid: "a-mid", ForwardAnnualDividendYield: 8, DividendPayoutRatioFy: 55, NetDebtToEbitda: 1.5, EbitdaTtm: 100, Roic: 0.12, EvToEbitdaMrq: 6, FreeCashFlowTtm: 100, FiveYearAnnualDividendGrowthRate: 0.05},
+		{AssetUid: "a-weak", ForwardAnnualDividendYield: 7, DividendPayoutRatioFy: 95, NetDebtToEbitda: 3.5, EbitdaTtm: 100, Roic: 0.03, EvToEbitdaMrq: 12, FreeCashFlowTtm: 10, FiveYearAnnualDividendGrowthRate: -0.05},
+		{AssetUid: "a-gated", ForwardAnnualDividendYield: 30, DividendPayoutRatioFy: 130, NetDebtToEbitda: 5, EbitdaTtm: 100, FreeCashFlowTtm: -10},
+	}
+	return shares, funds
+}
+
+func newMockedService(t *testing.T) *service {
+	shares, funds := fundUniverse()
+	m := mocks.NewMockinstrumentsClient(t)
+	m.On("Shares", mock.Anything).Return(shares, nil)
+	m.On("GetAssetFundamentals", mock.Anything, mock.Anything).Return(funds, nil)
+	return NewService(m)
+}
+
+func TestRankBonus_TopGetsMorePoints(t *testing.T) {
+	svc := newMockedService(t)
+
+	strong := svc.RankBonus("i-strong")
+	weak := svc.RankBonus("i-weak")
+	gated := svc.RankBonus("i-gated")
+	unknown := svc.RankBonus("i-does-not-exist")
+
+	if strong < weak {
+		t.Fatalf("strong bonus %d should be >= weak %d", strong, weak)
+	}
+	if strong < 1 || strong > 3 {
+		t.Fatalf("strong bonus %d out of [1,3]", strong)
+	}
+	if gated != 0 {
+		t.Fatalf("gated bonus = %d, want 0", gated)
+	}
+	if unknown != 0 {
+		t.Fatalf("unknown bonus = %d, want 0", unknown)
+	}
+}
+
+func TestTop_ReportsGateStats(t *testing.T) {
+	svc := newMockedService(t)
+	ranked, stats, err := svc.Top(context.Background(), 15)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ranked) != 3 {
+		t.Fatalf("ranked = %d, want 3 (one gated)", len(ranked))
+	}
+	if stats.Gated != 1 || stats.Universe != 4 {
+		t.Fatalf("stats = %+v, want Gated 1 / Universe 4", stats)
+	}
+	if ranked[0].Share.ID != "i-strong" {
+		t.Fatalf("top = %s, want i-strong", ranked[0].Share.ID)
+	}
+}
