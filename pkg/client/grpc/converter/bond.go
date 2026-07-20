@@ -47,12 +47,12 @@ func ConvertBondModelFromBondPb(bond *investapi.Bond) *model.Bond {
 		RiskLevel:             bond.RiskLevel.String(),
 		AmortizationFlag:      bond.AmortizationFlag,
 		Nkd:                   utils.CombinePrice(bond.AciValue.Units, bond.AciValue.Nano),
-		LiquidityFlag:       bond.LiquidityFlag,
-		SubordinatedFlag:    bond.SubordinatedFlag,
-		ForQualInvestorFlag: bond.ForQualInvestorFlag,
-		PerpetualFlag:       bond.PerpetualFlag,
-		Sector:              bond.Sector,
-		IssueSize:           bond.IssueSize,
+		LiquidityFlag:         bond.LiquidityFlag,
+		SubordinatedFlag:      bond.SubordinatedFlag,
+		ForQualInvestorFlag:   bond.ForQualInvestorFlag,
+		PerpetualFlag:         bond.PerpetualFlag,
+		Sector:                bond.Sector,
+		IssueSize:             bond.IssueSize,
 	}
 }
 
