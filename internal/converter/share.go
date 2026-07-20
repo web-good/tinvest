@@ -31,13 +31,15 @@ func ConvertSharesFromPb(shares []*investapi.Share) []*model.Share {
 
 func ConvertShareFromPb(share *investapi.Share) *model.Share {
 	return &model.Share{
-		Figi:     share.Figi,
-		Ticker:   share.Ticker,
-		Isin:     share.Isin,
-		Lot:      share.Lot,
-		Currency: share.Currency,
-		Name:     share.Name,
-		ID:       share.Uid,
-		Trading:  share.ApiTradeAvailableFlag,
+		Figi:         share.Figi,
+		Ticker:       share.Ticker,
+		Isin:         share.Isin,
+		Lot:          share.Lot,
+		Currency:     share.Currency,
+		Name:         share.Name,
+		ID:           share.Uid,
+		Trading:      share.ApiTradeAvailableFlag,
+		AssetUid:     share.AssetUid,
+		DivYieldFlag: share.DivYieldFlag,
 	}
 }

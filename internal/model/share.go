@@ -19,4 +19,6 @@ type Share struct {
 	Nominal                 float64
 	MinPriceIncrement       float64
 	MinPriceIncrementAmount float64
+	AssetUid                string
+	DivYieldFlag            bool
 }
