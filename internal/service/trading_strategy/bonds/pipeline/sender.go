@@ -24,17 +24,21 @@ func Sender(ctx context.Context, bondCh <-chan domain.BondReport, tgClient teleg
 		return
 	}
 
-	sortByCouponYield := int(time.Until(dateTo).Hours()/8760) >= 6
-
-	sortedResult := collectionBond.GetTopByCriteria(func(i, j domain.BondReport) bool {
-		if sortByCouponYield {
-			return i.CouponPercentByYear > j.CouponPercentByYear
-		}
-		return i.PercentByYear > j.PercentByYear
-	}, 10)
+	sortedResult := topByYTM(collectionBond.GetAll(), 10)
 
 	err := tgClient.SendMessage(notification.Send(sortedResult, dateFrom, dateTo))
 	if err != nil {
 		logger.ErrorContext(ctx, "message is not sent", slog.String("error_msg", err.Error()))
 	}
+}
+
+// topByYTM возвращает топ-n отчётов по доходности к погашению (YTM) по убыванию.
+func topByYTM(reports []domain.BondReport, n int) []domain.BondReport {
+	c := collection.New[domain.BondReport]()
+	for _, r := range reports {
+		c.Add(r)
+	}
+	return c.GetTopByCriteria(func(i, j domain.BondReport) bool {
+		return i.PercentByYear > j.PercentByYear
+	}, n)
 }

@@ -25,5 +25,8 @@ func CreateBondReport(bond *pkgmodel.Bond, finalProfit, profitPerYear, percentBy
 		Nkd:                 utils.RoundFloat(bond.Nkd, 2),            // НКД с точностью до копеек
 		ExecutionDate:       bond.MaturityDate,
 		Type:                bondType,
+		Sector:              bond.Sector,
+		RiskLevel:           bond.RiskLevel,
+		Liquidity:           bond.LiquidityFlag,
 	}
 }

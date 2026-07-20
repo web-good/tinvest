@@ -25,6 +25,9 @@ func Send(bonds []domain.BondReport, dateFrom time.Time, dateTo time.Time) strin
 	bondType := strings.ToUpper(string(bonds[0].Type))
 	fmt.Fprintf(&notifyMessageBuilder, "🏛️ <b>%s</b>\n\n", bondType)
 
+	// Строка политики отбора облигаций
+	notifyMessageBuilder.WriteString("🛡️ <i>Отбор: только LOW risk, несубординированные, ликвидные</i>\n\n")
+
 	// Список облигаций
 	for i, bond := range bonds {
 		// Разделитель между облигациями
@@ -40,11 +43,11 @@ func Send(bonds []domain.BondReport, dateFrom time.Time, dateTo time.Time) strin
 
 		// Ключевые метрики в компактном виде
 		notifyMessageBuilder.WriteString(
-			"💰 <b>Чистая доходность/год:</b> " + formatPercent(bond.PercentByYear) + "\n" +
+			"💰 <b>Доходность к погашению (YTM):</b> " + formatPercent(bond.PercentByYear) + "\n" +
 				"🎯 <b>Купонная доходность в год:</b> " + formatPercent(bond.CouponPercentByYear) + "\n" +
 				"📈 <b>Прибыль/год:</b> " + formatMoney(bond.ManyByYear) + "₽\n" +
 				"💳 <b>НКД:</b> " + formatMoney(bond.Nkd) + "₽\n" +
-				"💵 <b>Доходность к погашению:</b> " + formatMoney(bond.FinalSum) + "₽\n" +
+				"🏢 <b>Сектор:</b> " + sectorOrDash(bond.Sector) + "\n" +
 				"⏰ <b>Погашение:</b> " + bond.ExecutionDate.Format("02.01.2006") + "\n")
 	}
 
@@ -55,6 +58,14 @@ func Send(bonds []domain.BondReport, dateFrom time.Time, dateTo time.Time) strin
 	)
 
 	return notifyMessageBuilder.String()
+}
+
+// sectorOrDash возвращает экранированный сектор, либо прочерк, если сектор не задан
+func sectorOrDash(s string) string {
+	if strings.TrimSpace(s) == "" {
+		return "—"
+	}
+	return htmlEscape(s)
 }
 
 // htmlEscape экранирует HTML-символы для безопасности
