@@ -18,7 +18,7 @@ func CalculateProfit(ctx context.Context, doneCh chan struct{}, bondsCh <-chan *
 			profit, err := computableSrc.CalculateProfit(ctx, bond)
 			if err != nil {
 				logger.ErrorContext(ctx, "error in CalculateProfit", slog.String("error_msg", err.Error()))
-				close(doneCh)
+				continue
 			}
 
 			select {
