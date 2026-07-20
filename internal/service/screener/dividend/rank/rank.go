@@ -1,0 +1,180 @@
+package rank
+
+import (
+	"sort"
+
+	"tinvest/internal/model"
+	"tinvest/pkg/indicators"
+)
+
+// ScoredCompany — результат ранжирования одной компании. Отсеянные воротами
+// имеют GateReason != "" и Composite == 0.
+type ScoredCompany struct {
+	AssetUid  string
+	Composite float64
+
+	Sustainability float64
+	Safety         float64
+	DivGrowth      float64
+	Quality        float64
+	Valuation      float64
+	YieldScore     float64
+
+	YieldTrap  bool
+	GateReason string
+}
+
+// Причины отсева (стабильные строки для вывода и тестов).
+const (
+	reasonNoDividend    = "нет дивиденда"
+	reasonMissingData   = "нет ключевых данных"
+	reasonHighLeverage  = "долг > порога"
+	reasonUnsustainable = "payout > порога"
+	reasonYieldTrap     = "yield trap"
+)
+
+func yieldOf(f *model.Fundamentals) float64 {
+	if f.ForwardAnnualDividendYield > 0 {
+		return f.ForwardAnnualDividendYield
+	}
+	return f.DividendYieldDailyTtm
+}
+
+// gate возвращает (reason, isTrap). Пустой reason => компания проходит.
+func gate(f *model.Fundamentals, cfg Config) (string, bool) {
+	y := yieldOf(f)
+	if y <= 0 {
+		return reasonNoDividend, false
+	}
+	if f.EbitdaTtm <= 0 || f.DividendPayoutRatioFy <= 0 {
+		return reasonMissingData, false
+	}
+	trap := y >= cfg.YieldTrapMinYield &&
+		(f.DividendPayoutRatioFy > 100 || f.NetDebtToEbitda > 3 || f.FreeCashFlowTtm < 0)
+	if trap {
+		return reasonYieldTrap, true
+	}
+	if f.NetDebtToEbitda > cfg.MaxNetDebtToEbitda {
+		return reasonHighLeverage, false
+	}
+	if f.DividendPayoutRatioFy > cfg.MaxPayoutPct {
+		return reasonUnsustainable, false
+	}
+	return "", false
+}
+
+// payoutFit: 1.0 в идеальной зоне, линейно к 0 у краёв (0 и MaxPayoutPct).
+func payoutFit(payout float64, cfg Config) float64 {
+	switch {
+	case payout >= cfg.PayoutIdealLow && payout <= cfg.PayoutIdealHigh:
+		return 1.0
+	case payout < cfg.PayoutIdealLow:
+		return clamp01(payout / cfg.PayoutIdealLow)
+	default: // > ideal high
+		span := cfg.MaxPayoutPct - cfg.PayoutIdealHigh
+		if span <= 0 {
+			return 0
+		}
+		return clamp01((cfg.MaxPayoutPct - payout) / span)
+	}
+}
+
+// leverageScore: чем меньше долг, тем лучше. Чистый кэш (<0) — максимум.
+func leverageScore(nd float64) float64 {
+	switch {
+	case nd < 0:
+		return 1.0
+	case nd <= 1:
+		return 0.9
+	case nd <= 2:
+		return 0.7
+	case nd <= 3:
+		return 0.4
+	default:
+		return 0.15
+	}
+}
+
+func clamp01(x float64) float64 {
+	if x < 0 {
+		return 0
+	}
+	if x > 1 {
+		return 1
+	}
+	return x
+}
+
+func Rank(universe []*model.Fundamentals, cfg Config) []ScoredCompany {
+	survivors := make([]*model.Fundamentals, 0, len(universe))
+	gated := make([]ScoredCompany, 0)
+
+	for _, f := range universe {
+		reason, trap := gate(f, cfg)
+		if reason != "" {
+			gated = append(gated, ScoredCompany{AssetUid: f.AssetUid, GateReason: reason, YieldTrap: trap})
+			continue
+		}
+		survivors = append(survivors, f)
+	}
+
+	// Перцентильные пулы по выжившим.
+	divGrowth := make([]float64, len(survivors))
+	roic := make([]float64, len(survivors))
+	evEbitda := make([]float64, len(survivors))
+	for i, f := range survivors {
+		divGrowth[i] = f.FiveYearAnnualDividendGrowthRate
+		roic[i] = qualityMetric(f)
+		evEbitda[i] = f.EvToEbitdaMrq
+	}
+
+	scored := make([]ScoredCompany, 0, len(survivors))
+	for _, f := range survivors {
+		sc := ScoredCompany{AssetUid: f.AssetUid}
+		sc.Sustainability = 0.7*payoutFit(f.DividendPayoutRatioFy, cfg) + 0.3*boolScore(f.FreeCashFlowTtm > 0)
+		sc.Safety = leverageScore(f.NetDebtToEbitda)
+		sc.DivGrowth = indicators.PercentileRank(divGrowth, f.FiveYearAnnualDividendGrowthRate)
+		sc.Quality = indicators.PercentileRank(roic, qualityMetric(f))
+		sc.Valuation = 1 - indicators.PercentileRank(evEbitda, f.EvToEbitdaMrq) // ниже EV/EBITDA — лучше
+		sc.YieldScore = clamp01(minf(yieldOf(f), cfg.YieldCapPct) / cfg.YieldCapPct)
+
+		sc.Composite = 100 * (cfg.WeightSustainability*sc.Sustainability +
+			cfg.WeightSafety*sc.Safety +
+			cfg.WeightDivGrowth*sc.DivGrowth +
+			cfg.WeightQuality*sc.Quality +
+			cfg.WeightValuation*sc.Valuation +
+			cfg.WeightYield*sc.YieldScore)
+		scored = append(scored, sc)
+	}
+
+	sort.SliceStable(scored, func(i, j int) bool {
+		if scored[i].Composite != scored[j].Composite {
+			return scored[i].Composite > scored[j].Composite
+		}
+		return scored[i].AssetUid < scored[j].AssetUid
+	})
+
+	return append(scored, gated...)
+}
+
+// qualityMetric: ROIC, с фолбэком на ROE, если ROIC не задан.
+func qualityMetric(f *model.Fundamentals) float64 {
+	if f.Roic != 0 {
+		return f.Roic
+	}
+	return f.Roe
+}
+
+func boolScore(b bool) float64 {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+func minf(a, b float64) float64 {
+	if a < b {
+		return a
+	}
+	return b
+}
