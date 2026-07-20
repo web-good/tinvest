@@ -71,9 +71,16 @@ func (f *fakeBonds) Trade(context.Context, telegram.Client) error {
 	return nil
 }
 
+type fakeScreener struct{ called bool }
+
+func (f *fakeScreener) Send(context.Context, telegram.Client) error {
+	f.called = true
+	return nil
+}
+
 func newTestCommands(y *fakeYield, sender *fakeSender) *Commands {
 	factory := func(chatID int64, threadID int) telegram.Client { return sender }
-	return New(&fakeAnalyze{}, y, &fakeBonds{}, factory, []int64{111})
+	return New(&fakeAnalyze{}, y, &fakeBonds{}, &fakeScreener{}, factory, []int64{111})
 }
 
 func TestHandleIgnoresUnknownUser(t *testing.T) {
@@ -158,7 +165,7 @@ func waitMsg(t *testing.T, ch chan string) string {
 func TestHandleRecoversFromPanic(t *testing.T) {
 	sender := &fakeSender{sent: make(chan string, 8)}
 	factory := func(int64, int) telegram.Client { return sender }
-	c := New(&fakeAnalyze{}, panickyYield{}, &fakeBonds{}, factory, []int64{111})
+	c := New(&fakeAnalyze{}, panickyYield{}, &fakeBonds{}, &fakeScreener{}, factory, []int64{111})
 
 	if !c.Handle(context.Background(), "/yield", 1, 2, 111) {
 		t.Fatal("команда авторизованного пользователя должна обрабатываться")

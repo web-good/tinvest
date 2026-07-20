@@ -7,6 +7,7 @@ import (
 
 	"tinvest/internal/model"
 	"tinvest/internal/service/screener/dividend/rank"
+	"tinvest/pkg/client/telegram"
 )
 
 type service struct {
@@ -148,4 +149,13 @@ func (s *service) Top(ctx context.Context, n int) ([]RankedShare, Stats, error) 
 	out := make([]RankedShare, len(top))
 	copy(out, top)
 	return out, s.stats, nil
+}
+
+// Send рендерит топ-N дивидендных акций и отправляет в Telegram.
+func (s *service) Send(ctx context.Context, tg telegram.Client) error {
+	ranked, stats, err := s.Top(ctx, defaultTopN)
+	if err != nil {
+		return err
+	}
+	return tg.SendMessage(Render(ranked, stats))
 }

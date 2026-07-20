@@ -9,6 +9,7 @@ import (
 
 	"tinvest/internal/service/portfolio/analyze"
 	"tinvest/internal/service/portfolio/yield"
+	"tinvest/internal/service/screener/dividend"
 	"tinvest/internal/service/trading_strategy/bonds"
 	"tinvest/pkg/client/telegram"
 	"tinvest/pkg/logger"
@@ -21,6 +22,7 @@ type Commands struct {
 	analyze        analyze.Analyze
 	yield          yield.Yield
 	bonds          bonds.Bonds
+	screener       dividend.Screener
 	newSender      SenderFactory
 	allowedUserIDs map[int64]struct{}
 
@@ -28,7 +30,7 @@ type Commands struct {
 	running map[string]bool
 }
 
-func New(a analyze.Analyze, y yield.Yield, b bonds.Bonds, f SenderFactory, allowed []int64) *Commands {
+func New(a analyze.Analyze, y yield.Yield, b bonds.Bonds, sc dividend.Screener, f SenderFactory, allowed []int64) *Commands {
 	ids := make(map[int64]struct{}, len(allowed))
 	for _, id := range allowed {
 		ids[id] = struct{}{}
@@ -38,6 +40,7 @@ func New(a analyze.Analyze, y yield.Yield, b bonds.Bonds, f SenderFactory, allow
 		analyze:        a,
 		yield:          y,
 		bonds:          b,
+		screener:       sc,
 		newSender:      f,
 		allowedUserIDs: ids,
 		running:        make(map[string]bool),
@@ -48,6 +51,7 @@ const helpText = `Доступные команды:
 /bonds_portfolio — распределение облигаций в портфеле
 /yield — доходность портфеля YTD (XIRR)
 /bonds_screener — скринер облигаций к покупке
+/dividend_screener — скринер дивидендных акций
 /help — этот список`
 
 // Handle обрабатывает одно входящее сообщение. Возвращает false, если оно
@@ -75,6 +79,10 @@ func (c *Commands) Handle(ctx context.Context, text string, chatID int64, thread
 	case "/bonds_screener":
 		c.runExclusive(ctx, cmd, tg, func(ctx context.Context) error {
 			return c.bonds.Trade(ctx, tg)
+		})
+	case "/dividend_screener":
+		c.runExclusive(ctx, cmd, tg, func(ctx context.Context) error {
+			return c.screener.Send(ctx, tg)
 		})
 	default:
 		return false

@@ -10,6 +10,7 @@ import (
 	"tinvest/internal/service/notification/purchase_shares"
 	"tinvest/internal/service/portfolio/analyze"
 	"tinvest/internal/service/portfolio/yield"
+	"tinvest/internal/service/screener/dividend"
 	"tinvest/internal/service/telegram_commands"
 	"tinvest/internal/service/trading_strategy/bonds"
 	"tinvest/internal/service/trading_strategy/golden_x"
@@ -32,6 +33,25 @@ type service struct {
 	portfolioYield        yield.Yield
 	telegramCommands      *telegram_commands.Listener
 	newsService           *news.Service
+	dividend              *dividendSingleton
+}
+
+type dividendSingleton struct {
+	screener dividend.Screener
+	provider dividend.RankProvider
+}
+
+func (s *ServiceProvider) dividendSvc() *dividendSingleton {
+	if serviceProvider.service.dividend == nil {
+		grpcClient, _ := serviceProvider.GetGrpcClient()
+		svc := dividend.NewService(grpcClient.InstrumentsServiceClient())
+		serviceProvider.service.dividend = &dividendSingleton{screener: svc, provider: svc}
+	}
+	return serviceProvider.service.dividend
+}
+
+func (s *ServiceProvider) GetDividendScreener() dividend.Screener {
+	return s.dividendSvc().screener
 }
 
 func (*ServiceProvider) GetPurchaseSharesService() purchase_shares.PurchaseShares {
@@ -183,6 +203,7 @@ func (s *ServiceProvider) GetTelegramCommands() (*telegram_commands.Listener, er
 		s.GetAnalyze(),
 		s.GetPortfolioYield(),
 		s.GetBondsTradingService(),
+		s.GetDividendScreener(),
 		factory,
 		s.appConfig.TelegramClient.AllowedUserIDs,
 	)
