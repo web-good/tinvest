@@ -73,6 +73,46 @@ func TestTop_ReportsGateStats(t *testing.T) {
 	}
 }
 
+func TestRankBonus_SharedAssetCoversAllInstruments(t *testing.T) {
+	shares := []*model.Share{
+		{ID: "i-ord", AssetUID: "a-shared", Name: "Shared Ordinary", DivYieldFlag: true},
+		{ID: "i-pref", AssetUID: "a-shared", Name: "Shared Preferred", DivYieldFlag: true},
+		{ID: "i-weak", AssetUID: "a-weak", Name: "Weak", DivYieldFlag: true},
+	}
+	funds := []*model.Fundamentals{
+		{AssetUID: "a-shared", ForwardAnnualDividendYield: 10, DividendPayoutRatioFy: 45, NetDebtToEbitda: 0.3, EbitdaTtm: 100, Roic: 0.25, EvToEbitdaMrq: 3, FreeCashFlowTtm: 500, FiveYearAnnualDividendGrowthRate: 0.2},
+		{AssetUID: "a-weak", ForwardAnnualDividendYield: 7, DividendPayoutRatioFy: 95, NetDebtToEbitda: 3.5, EbitdaTtm: 100, Roic: 0.03, EvToEbitdaMrq: 12, FreeCashFlowTtm: 10, FiveYearAnnualDividendGrowthRate: -0.05},
+	}
+
+	m := mocks.NewMockinstrumentsClient(t)
+	m.On("Shares", mock.Anything).Return(shares, nil)
+	m.On("GetAssetFundamentals", mock.Anything, mock.Anything).Return(funds, nil)
+	svc := NewService(m)
+
+	ord := svc.RankBonus("i-ord")
+	pref := svc.RankBonus("i-pref")
+	if ord != pref {
+		t.Fatalf("ord bonus %d != pref bonus %d, want equal (shared asset)", ord, pref)
+	}
+	if ord <= 0 {
+		t.Fatalf("shared asset bonus = %d, want > 0", ord)
+	}
+
+	ranked, _, err := svc.Top(context.Background(), 15)
+	if err != nil {
+		t.Fatal(err)
+	}
+	count := 0
+	for _, r := range ranked {
+		if r.Scored.AssetUID == "a-shared" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("shared asset appeared %d times in ranked list, want 1", count)
+	}
+}
+
 func TestTop_NonPositiveNFallsBackToDefault(t *testing.T) {
 	svc := newMockedService(t)
 	ctx := context.Background()

@@ -2,6 +2,7 @@ package dividend
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -47,31 +48,32 @@ func (s *service) ensureFresh(ctx context.Context) error {
 func (s *service) refresh(ctx context.Context) error {
 	shares, err := s.client.Shares(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("dividend screener: fetch shares: %w", err)
 	}
 
-	dividendShares := make([]*model.Share, 0, len(shares))
-	uids := make([]string, 0, len(shares))
-	shareByAsset := make(map[string]*model.Share, len(shares))
+	sharesByAsset := make(map[string][]*model.Share, len(shares))
 	for _, sh := range shares {
 		if !sh.DivYieldFlag || sh.AssetUID == "" {
 			continue
 		}
-		dividendShares = append(dividendShares, sh)
-		uids = append(uids, sh.AssetUID)
-		shareByAsset[sh.AssetUID] = sh
+		sharesByAsset[sh.AssetUID] = append(sharesByAsset[sh.AssetUID], sh)
+	}
+
+	uids := make([]string, 0, len(sharesByAsset))
+	for assetUID := range sharesByAsset {
+		uids = append(uids, assetUID)
 	}
 
 	funds, err := s.client.GetAssetFundamentals(ctx, uids)
 	if err != nil {
-		return err
+		return fmt.Errorf("dividend screener: fetch fundamentals: %w", err)
 	}
 
 	scored := rank.Rank(funds, s.cfg)
 
 	// Разделить на выживших (по порядку) и посчитать перцентильный ранг.
 	survivors := make([]rank.ScoredCompany, 0, len(scored))
-	stats := Stats{Universe: len(dividendShares), ByReason: map[string]int{}}
+	stats := Stats{Universe: len(uids), ByReason: map[string]int{}}
 	for _, sc := range scored {
 		if sc.GateReason != "" {
 			stats.Gated++
@@ -86,12 +88,15 @@ func (s *service) refresh(ctx context.Context) error {
 	bonusByID := make(map[string]int, len(survivors))
 	total := len(survivors)
 	for i, sc := range survivors {
-		sh := shareByAsset[sc.AssetUID]
-		if sh == nil {
+		instruments := sharesByAsset[sc.AssetUID]
+		if len(instruments) == 0 {
 			continue
 		}
-		ranked = append(ranked, RankedShare{Share: sh, Scored: sc})
-		bonusByID[sh.ID] = bonusFromRank(i, total)
+		ranked = append(ranked, RankedShare{Share: instruments[0], Scored: sc})
+		bonus := bonusFromRank(i, total)
+		for _, sh := range instruments {
+			bonusByID[sh.ID] = bonus
+		}
 	}
 
 	s.mu.Lock()
