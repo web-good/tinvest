@@ -18,4 +18,7 @@ type BondReport struct {
 	Nkd                 float64
 	ExecutionDate       time.Time
 	Type                TypeEnumBond
+	Sector              string
+	RiskLevel           string
+	Liquidity           bool
 }

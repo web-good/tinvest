@@ -11,10 +11,14 @@ import (
 	"tinvest/internal/service/trading_strategy/bonds/factory"
 	"tinvest/internal/utils"
 	pkgmodel "tinvest/pkg/client/grpc/model"
+	"tinvest/pkg/indicators"
 	"tinvest/pkg/logger"
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+// maxCandleAgeDays — страховка от неликвида: цена не должна быть слишком старой.
+const maxCandleAgeDays = 7
 
 func (s *service) CalculateProfit(ctx context.Context, bond *pkgmodel.Bond) (domain.BondReport, error) {
 	limit := int32(10)
@@ -46,26 +50,23 @@ func (s *service) CalculateProfit(ctx context.Context, bond *pkgmodel.Bond) (dom
 		bond.MaturityDate,
 	)
 
-	return calculateProfit(bond, coupons, candles[len(candles)-1]), nil
+	last := candles[len(candles)-1]
+	if time.Since(last.Time) > maxCandleAgeDays*24*time.Hour {
+		return domain.BondReport{}, errors.New("stale candle: price too old")
+	}
+
+	return calculateProfit(bond, coupons, last)
 }
 
-func calculateProfit(bond *pkgmodel.Bond, coupons []*pkgmodel.BondCoupon, candles *model.CandleItemTechAnalyse) domain.BondReport {
-	var (
-		totalFutureCoupons float64
-		currentYearCoupons float64
-	)
+func calculateProfit(bond *pkgmodel.Bond, coupons []*pkgmodel.BondCoupon, candles *model.CandleItemTechAnalyse) (domain.BondReport, error) {
+	const taxRate = 0.13
 
 	now := time.Now()
 
+	var currentYearCoupons float64
 	for _, coupon := range coupons {
-		couponAmount := utils.CombinePrice(coupon.PayOnBond.Units, coupon.PayOnBond.Nano)
-
 		if coupon.CouponDate.Year() == now.Year() {
-			currentYearCoupons += couponAmount
-		}
-
-		if coupon.CouponDate.After(now) {
-			totalFutureCoupons += couponAmount
+			currentYearCoupons += utils.CombinePrice(coupon.PayOnBond.Units, coupon.PayOnBond.Nano)
 		}
 	}
 
@@ -73,36 +74,60 @@ func calculateProfit(bond *pkgmodel.Bond, coupons []*pkgmodel.BondCoupon, candle
 	bondPrice := (closePrice * bond.Nominal) / 100
 	totalInvestment := bondPrice + bond.Nkd
 
+	// Текущая купонная доходность (второй показатель, оставляем как было).
 	var annualCouponIncome float64
 	if currentYearCoupons > 0 {
 		annualCouponIncome = currentYearCoupons
-	} else {
-		if len(coupons) > 0 {
-			annualCouponIncome = utils.CombinePrice(coupons[0].PayOnBond.Units, coupons[0].PayOnBond.Nano) * float64(bond.CouponQuantityPerYear)
+	} else if len(coupons) > 0 {
+		annualCouponIncome = utils.CombinePrice(coupons[0].PayOnBond.Units, coupons[0].PayOnBond.Nano) * float64(bond.CouponQuantityPerYear)
+	}
+	couponPercentByYear := 0.0
+	if totalInvestment > 0 {
+		couponPercentByYear = (annualCouponIncome * 100) / totalInvestment
+	}
+
+	// Денежные потоки для XIRR.
+	flows := []indicators.CashFlow{{Date: now, Amount: -totalInvestment}}
+
+	var firstCouponIdx = -1
+	for _, coupon := range coupons {
+		if !coupon.CouponDate.After(now) {
+			continue
+		}
+		amount := utils.CombinePrice(coupon.PayOnBond.Units, coupon.PayOnBond.Nano) * (1 - taxRate)
+		flows = append(flows, indicators.CashFlow{Date: coupon.CouponDate, Amount: amount})
+		if firstCouponIdx == -1 {
+			firstCouponIdx = len(flows) - 1
 		}
 	}
-	couponPercentByYear := (annualCouponIncome * 100) / totalInvestment
-
-	couponTax := (totalFutureCoupons - bond.Nkd) * 0.13
-	if couponTax < 0 {
-		couponTax = 0
+	// Налоговый щит НКД — к самому раннему будущему купону.
+	if firstCouponIdx != -1 {
+		flows[firstCouponIdx].Amount += bond.Nkd * taxRate
 	}
 
-	var nominalPriceTax float64
+	// Возврат номинала за вычетом налога на прирост (цена ниже номинала).
+	var priceTax float64
 	if diff := bond.Nominal - bondPrice; diff > 0 {
-		nominalPriceTax = diff * 0.13
+		priceTax = diff * taxRate
+	}
+	flows = append(flows, indicators.CashFlow{Date: bond.MaturityDate, Amount: bond.Nominal - priceTax})
+
+	ytm, err := indicators.XIRR(flows)
+	if err != nil {
+		return domain.BondReport{}, err
 	}
 
-	totalReturn := bond.Nominal + totalFutureCoupons
-	finalProfit := totalReturn - totalInvestment - couponTax - nominalPriceTax
-
+	// Совокупная прибыль и линейная годовая прибыль в деньгах (второстепенные показатели).
+	var totalCouponsNet float64
+	for _, f := range flows[1:] {
+		totalCouponsNet += f.Amount
+	}
+	finalProfit := totalCouponsNet - totalInvestment
 	daysToMaturity := int(bond.MaturityDate.Sub(now).Hours() / 24)
 	if daysToMaturity < 1 {
 		daysToMaturity = 1
 	}
-
 	profitPerYear := (finalProfit * 365) / float64(daysToMaturity)
-	percentByYear := (100 * profitPerYear) / totalInvestment
 
-	return factory.CreateBondReport(bond, finalProfit, profitPerYear, percentByYear, couponPercentByYear)
+	return factory.CreateBondReport(bond, finalProfit, profitPerYear, ytm*100, couponPercentByYear), nil
 }

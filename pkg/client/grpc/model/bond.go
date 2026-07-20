@@ -14,6 +14,12 @@ type Bond struct {
 	Nominal               float64
 	RiskLevel             string
 	Nkd                   float64
+	LiquidityFlag         bool
+	SubordinatedFlag      bool
+	ForQualInvestorFlag   bool
+	PerpetualFlag         bool
+	Sector                string
+	IssueSize             int64
 }
 
 type BondCoupon struct {

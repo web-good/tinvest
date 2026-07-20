@@ -16,74 +16,26 @@ func (s *service) Trade(ctx context.Context, tg telegram.Client) error {
 		return err
 	}
 
-	wg.Add(1)
-	go func() {
-		doneCh := make(chan struct{})
-		pipeline.Sender(
-			ctx,
-			pipeline.CalculateProfit(
+	now := time.Now()
+	for _, r := range DefaultLadder(now) {
+		wg.Add(1)
+		go func(r Rung) {
+			doneCh := make(chan struct{})
+			pipeline.Sender(
 				ctx,
-				doneCh,
-				pipeline.Finder(doneCh, bonds, true, time.Now().AddDate(0, 0, 180), time.Now().AddDate(2, 0, 0)),
-				computable.NewService(s.instrumentServiceGrpcClient, s.marketDataServiceGrpcClient),
-			),
-			tg,
-			&wg,
-			time.Now().AddDate(0, 0, 180),
-			time.Now().AddDate(2, 0, 0),
-		)
-	}()
-	wg.Add(1)
-	go func() {
-		doneCh := make(chan struct{})
-		pipeline.Sender(
-			ctx,
-			pipeline.CalculateProfit(
-				ctx,
-				doneCh,
-				pipeline.Finder(doneCh, bonds, true, time.Now().AddDate(2, 0, 0), time.Now().AddDate(6, 0, 0)),
-				computable.NewService(s.instrumentServiceGrpcClient, s.marketDataServiceGrpcClient),
-			),
-			tg,
-			&wg,
-			time.Now().AddDate(2, 0, 0),
-			time.Now().AddDate(6, 0, 0),
-		)
-	}()
-	wg.Add(1)
-	go func() {
-		doneCh := make(chan struct{})
-		pipeline.Sender(
-			ctx,
-			pipeline.CalculateProfit(
-				ctx,
-				doneCh,
-				pipeline.Finder(doneCh, bonds, true, time.Now().AddDate(6, 0, 0), time.Now().AddDate(16, 0, 0)),
-				computable.NewService(s.instrumentServiceGrpcClient, s.marketDataServiceGrpcClient),
-			),
-			tg,
-			&wg,
-			time.Now().AddDate(6, 0, 0),
-			time.Now().AddDate(16, 0, 0),
-		)
-	}()
-	wg.Add(1)
-	go func() {
-		doneCh := make(chan struct{})
-		pipeline.Sender(
-			ctx,
-			pipeline.CalculateProfit(
-				ctx,
-				doneCh,
-				pipeline.Finder(doneCh, bonds, false, time.Now().AddDate(0, 0, 180), time.Now().AddDate(3, 0, 0)),
-				computable.NewService(s.instrumentServiceGrpcClient, s.marketDataServiceGrpcClient),
-			),
-			tg,
-			&wg,
-			time.Now().AddDate(0, 0, 180),
-			time.Now().AddDate(3, 0, 0),
-		)
-	}()
+				pipeline.CalculateProfit(
+					ctx,
+					doneCh,
+					pipeline.Finder(doneCh, bonds, r.IsOfz, r.From, r.To),
+					computable.NewService(s.instrumentServiceGrpcClient, s.marketDataServiceGrpcClient),
+				),
+				tg,
+				&wg,
+				r.From,
+				r.To,
+			)
+		}(r)
+	}
 	wg.Wait()
 
 	return nil

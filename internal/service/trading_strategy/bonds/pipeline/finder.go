@@ -14,7 +14,9 @@ func Finder(doneCh chan struct{}, bonds []*pkgmodel.Bond, isOfz bool, dateFrom, 
 	go func() {
 		defer close(c)
 		for _, bond := range bonds {
-			time.Sleep(100 * time.Millisecond)
+			if !PassesReliability(bond) {
+				continue
+			}
 
 			if dateTo.Before(bond.MaturityDate) || dateFrom.After(bond.MaturityDate) {
 				continue
@@ -31,6 +33,8 @@ func Finder(doneCh chan struct{}, bonds []*pkgmodel.Bond, isOfz bool, dateFrom, 
 			if !isOfz && (reOfz.MatchString(bond.Name) || reRegion.MatchString(bond.Name)) {
 				continue
 			}
+
+			time.Sleep(100 * time.Millisecond)
 
 			select {
 			case <-doneCh:
