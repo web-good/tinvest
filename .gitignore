@@ -8,3 +8,5 @@ data/candles/
 reports/
 # stray compiled cmd/backtest binary
 /backtest
+# stray compiled cmd/divscreen binary
+/divscreen
