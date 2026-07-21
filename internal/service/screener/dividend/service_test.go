@@ -39,6 +39,24 @@ func newMockedService(t *testing.T) *service {
 	return NewService(m)
 }
 
+func TestBonusFromScore(t *testing.T) {
+	cfg := rank.Config{BonusScoreT1: 50, BonusScoreT2: 70, BonusScoreT3: 90}
+	cases := []struct {
+		composite float64
+		want      int
+	}{
+		{95, 3}, {90, 3}, // >= T3
+		{89, 2}, {70, 2}, // >= T2
+		{69, 1}, {50, 1}, // >= T1
+		{49, 0}, {0, 0}, // < T1
+	}
+	for _, c := range cases {
+		if got := bonusFromScore(c.composite, cfg); got != c.want {
+			t.Errorf("bonusFromScore(%v) = %d, want %d", c.composite, got, c.want)
+		}
+	}
+}
+
 func TestRankBonus_TopGetsMorePoints(t *testing.T) {
 	svc := newMockedService(t)
 
@@ -47,11 +65,10 @@ func TestRankBonus_TopGetsMorePoints(t *testing.T) {
 	gated := svc.RankBonus("i-gated")
 	unknown := svc.RankBonus("i-does-not-exist")
 
+	// bonusFromScore монотонна по композиту, а композит strong >= weak,
+	// поэтому бонус strong не меньше weak при любых порогах.
 	if strong < weak {
 		t.Fatalf("strong bonus %d should be >= weak %d", strong, weak)
-	}
-	if strong < 1 || strong > 3 {
-		t.Fatalf("strong bonus %d out of [1,3]", strong)
 	}
 	if gated != 0 {
 		t.Fatalf("gated bonus = %d, want 0", gated)

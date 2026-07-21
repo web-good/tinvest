@@ -17,6 +17,10 @@ type Config struct {
 	YieldCapPct        float64 // потолок для yield-подсчёта
 	MinMarketCap       float64 // ниже (в т.ч. 0 = нет данных) — отсев как неликвид
 
+	BonusScoreT1 float64 // композит >= T1 → бонус +1
+	BonusScoreT2 float64 // композит >= T2 → бонус +2
+	BonusScoreT3 float64 // композит >= T3 → бонус +3
+
 	PayoutIdealLow  float64 // нижняя граница идеальной зоны payout
 	PayoutIdealHigh float64 // верхняя граница идеальной зоны payout
 }
@@ -35,6 +39,10 @@ func DefaultConfig() Config {
 		YieldTrapMinYield:  20.0,
 		YieldCapPct:        14.0,
 		MinMarketCap:       50_000_000_000, // ₽50 млрд, сид — калибруется на живых данных
+
+		BonusScoreT1: 55, // сиды — подбираются по распределению композитов ликвидной вселенной
+		BonusScoreT2: 65,
+		BonusScoreT3: 75,
 
 		PayoutIdealLow:  30.0,
 		PayoutIdealHigh: 60.0,

@@ -86,14 +86,13 @@ func (s *service) refresh(ctx context.Context) error {
 
 	ranked := make([]RankedShare, 0, len(survivors))
 	bonusByID := make(map[string]int, len(survivors))
-	total := len(survivors)
-	for i, sc := range survivors {
+	for _, sc := range survivors {
 		instruments := sharesByAsset[sc.AssetUID]
 		if len(instruments) == 0 {
 			continue
 		}
 		ranked = append(ranked, RankedShare{Share: instruments[0], Scored: sc})
-		bonus := bonusFromRank(i, total)
+		bonus := bonusFromScore(sc.Composite, s.cfg)
 		for _, sh := range instruments {
 			bonusByID[sh.ID] = bonus
 		}
@@ -108,19 +107,16 @@ func (s *service) refresh(ctx context.Context) error {
 	return nil
 }
 
-// bonusFromRank: топ-дециль →3, топ-квартиль →2, топ-половина →1, иначе 0.
-// idx 0 — лучший из total.
-func bonusFromRank(idx, total int) int {
-	if total <= 0 {
-		return 0
-	}
-	q := float64(idx) / float64(total)
+// bonusFromScore отображает композит (0..100) в фундаментальный бонус Golden X.
+// Пороги — точки калибровки (см. live-шаг); полосы абсолютны, чтобы бонус не
+// зависел от состава вселенной.
+func bonusFromScore(composite float64, cfg rank.Config) int {
 	switch {
-	case q < 0.10:
+	case composite >= cfg.BonusScoreT3:
 		return 3
-	case q < 0.25:
+	case composite >= cfg.BonusScoreT2:
 		return 2
-	case q < 0.50:
+	case composite >= cfg.BonusScoreT1:
 		return 1
 	default:
 		return 0
