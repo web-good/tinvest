@@ -34,6 +34,8 @@ func ConvertFundamentalsFromPb(in []*investapi.GetAssetFundamentalsResponse_Stat
 			PriceToBookTtm:                   f.PriceToBookTtm,
 			PriceToFreeCashFlowTtm:           f.PriceToFreeCashFlowTtm,
 			MarketCapitalization:             f.MarketCapitalization,
+			FreeFloat:                        f.FreeFloat,
+			AverageDailyVolumeLast4Weeks:     f.AverageDailyVolumeLast_4Weeks,
 		})
 	}
 	return res

@@ -30,4 +30,7 @@ type Fundamentals struct {
 	PriceToFreeCashFlowTtm float64
 
 	MarketCapitalization float64 // рыночная капитализация, валюта инструмента
+
+	FreeFloat                    float64 // доля акций в свободном обращении (0..1)
+	AverageDailyVolumeLast4Weeks float64 // средний дневной объём торгов за месяц
 }

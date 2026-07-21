@@ -67,6 +67,12 @@ func gate(f *model.Fundamentals, cfg Config) (string, bool) {
 	return "", false
 }
 
+// GateDecision — экспортированная обёртка над gate для диагностики (cmd/divscreen):
+// возвращает (reason, isTrap) без ранжирования. Пустой reason => компания проходит.
+func GateDecision(f *model.Fundamentals, cfg Config) (string, bool) {
+	return gate(f, cfg)
+}
+
 // payoutFit: 1.0 в идеальной зоне, линейно к 0 у краёв (0 и MaxPayoutPct).
 func payoutFit(payout float64, cfg Config) float64 {
 	switch {
