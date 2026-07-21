@@ -52,7 +52,17 @@ func DefaultConfig() Config {
 		PayoutIdealLow:  30.0,
 		PayoutIdealHigh: 60.0,
 
-		BankPBIdealHigh: 1.0,  // ориентир; live-калибровка в Task 6
-		BankPBZero:      2.5,  // ориентир; live-калибровка в Task 6
+		// BankPBIdealHigh/BankPBZero — live-калибровка 2026-07-21 (cmd/divscreen
+		// -top 0 / -probe SBER,BSPB,SVCB,VTBR,MOEX). Наблюдаемый P/B среди
+		// финансового сектора (financial, n=9): SBERP 0.03, VTBR 0.13, BSPB 0.47,
+		// SVCB 0.50, SBER 0.64, DOMRF 0.72, T 0.92, RGSS 0.97, MOEX 1.15 (MOEX
+		// отсеян по yield trap, не по P/B). При исходных ориентирах 1.0/2.5 ВСЕ
+		// живые банки получали бы Valuation=1.0 (P/B<=1.0 для всех, кроме MOEX) —
+		// пилар не дифференцирует реальные имена. IdealHigh=0.5 (явно ниже
+		// балансовой стоимости — бесспорно дёшево) и Zero=1.5 (запас над макс.
+		// наблюдаемым P/B в выборке) дают реальный разброс: VTBR/SBERP/BSPB/SVCB
+		// у потолка 1.0, SBER≈0.86, DOMRF≈0.78, T≈0.58, RGSS≈0.53, MOEX≈0.35.
+		BankPBIdealHigh: 0.5,
+		BankPBZero:      1.5,
 	}
 }

@@ -54,6 +54,7 @@ func loadToken() (string, error) {
 type asset struct {
 	ticker string
 	name   string
+	sector string
 	fund   *model.Fundamentals
 }
 
@@ -87,7 +88,7 @@ func run(topN int, showGated bool, probeCSV string) error {
 			continue
 		}
 		if _, ok := byUID[sh.AssetUID]; !ok {
-			byUID[sh.AssetUID] = &asset{ticker: sh.Ticker, name: sh.Name}
+			byUID[sh.AssetUID] = &asset{ticker: sh.Ticker, name: sh.Name, sector: sh.Sector}
 			uidOrder = append(uidOrder, sh.AssetUID)
 		}
 	}
@@ -102,8 +103,13 @@ func run(topN int, showGated bool, probeCSV string) error {
 		}
 	}
 
+	sectorByAsset := make(map[string]rank.SectorKind, len(byUID))
+	for uid, a := range byUID {
+		sectorByAsset[uid] = rank.ClassifySector(a.sector)
+	}
+
 	cfg := rank.DefaultConfig()
-	scored := rank.Rank(funds, nil, cfg) // TODO(task 5/6): pass real sector map
+	scored := rank.Rank(funds, sectorByAsset, cfg)
 
 	printRanked(scored, byUID, cfg, topN)
 	if showGated {
@@ -128,17 +134,17 @@ func printRanked(scored []rank.ScoredCompany, byUID map[string]*asset, cfg rank.
 
 	fmt.Printf("\n=== Ранжировано: %d (показано %d) ===\n", countSurvivors(scored), len(survivors))
 	w := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
-	_, _ = fmt.Fprintln(w, "#\tTicker\tName\tComp\tBonus\tSust\tSafe\tGrow\tQual\tVal\tMktCap,₽млрд\tFloat%\tPayout%\tND/EBITDA\tYield%")
+	_, _ = fmt.Fprintln(w, "#\tTicker\tName\tSector\tComp\tBonus\tSust\tSafe\tGrow\tQual\tVal\tMktCap,₽млрд\tFloat%\tPayout%\tND/EBITDA\tP/B\tYield%")
 	for i, sc := range survivors {
 		a := byUID[sc.AssetUID]
 		if a == nil || a.fund == nil {
 			continue
 		}
 		f := a.fund
-		_, _ = fmt.Fprintf(w, "%d\t%s\t%s\t%.0f\t+%d\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.1f\t%.0f\t%.0f\t%.2f\t%.2f\n",
-			i+1, a.ticker, trunc(a.name, 22), sc.Composite, bonusFromScore(sc.Composite, cfg),
+		_, _ = fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%.0f\t+%d\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.1f\t%.0f\t%.0f\t%.2f\t%.2f\t%.2f\n",
+			i+1, a.ticker, trunc(a.name, 22), a.sector, sc.Composite, bonusFromScore(sc.Composite, cfg),
 			sc.Sustainability, sc.Safety, sc.DivGrowth, sc.Quality, sc.Valuation,
-			f.MarketCapitalization/1e9, f.FreeFloat*100, f.DividendPayoutRatioFy, f.NetDebtToEbitda, yieldOf(f))
+			f.MarketCapitalization/1e9, f.FreeFloat*100, f.DividendPayoutRatioFy, f.NetDebtToEbitda, f.PriceToBookTtm, yieldOf(f))
 	}
 	_ = w.Flush()
 }
@@ -192,9 +198,18 @@ func printProbe(csv string, tickerToUID map[string]string, byUID map[string]*ass
 		if reason != "" {
 			verdict = "ОТСЕЯН: " + reason
 		}
+		sectorKind := rank.ClassifySector(a.sector)
+		sectorLabel := "other"
+		if sectorKind == rank.SectorFinancial {
+			sectorLabel = "financial"
+		}
 		fmt.Printf("\n%s — %s [%s]\n", t, a.name, verdict)
 		if trap {
 			fmt.Printf("  ⚠️ yield trap\n")
+		}
+		fmt.Printf("  Sector:           %s (code=%q, class=%s)\n", a.sector, a.sector, sectorLabel)
+		if sectorKind == rank.SectorFinancial {
+			fmt.Printf("  ⚙️  секторные поправки применены: Safety=0.5 (фикс.), Valuation по P/B (без FCF/EBITDA)\n")
 		}
 		fmt.Printf("  MarketCap:        %.1f млрд ₽ (порог %.1f)\n", f.MarketCapitalization/1e9, cfg.MinMarketCap/1e9)
 		fmt.Printf("  FreeFloat:        %.1f%%\n", f.FreeFloat*100)
@@ -205,6 +220,7 @@ func printProbe(csv string, tickerToUID map[string]string, byUID map[string]*ass
 		fmt.Printf("  FCF ttm:          %.0f\n", f.FreeCashFlowTtm)
 		fmt.Printf("  ROIC / ROE:       %.2f / %.2f\n", f.Roic, f.Roe)
 		fmt.Printf("  EV/EBITDA:        %.2f\n", f.EvToEbitdaMrq)
+		fmt.Printf("  P/B ttm:          %.2f\n", f.PriceToBookTtm)
 		fmt.Printf("  DivGrowth 5y:     %.2f\n", f.FiveYearAnnualDividendGrowthRate)
 	}
 }
