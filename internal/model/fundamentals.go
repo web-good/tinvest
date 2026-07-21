@@ -28,4 +28,6 @@ type Fundamentals struct {
 	PeRatioTtm             float64
 	PriceToBookTtm         float64
 	PriceToFreeCashFlowTtm float64
+
+	MarketCapitalization float64 // рыночная капитализация, валюта инструмента
 }

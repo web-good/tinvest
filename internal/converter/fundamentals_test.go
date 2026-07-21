@@ -31,6 +31,7 @@ func TestConvertFundamentalsFromPb(t *testing.T) {
 			PeRatioTtm:                       18.18,
 			PriceToBookTtm:                   19.19,
 			PriceToFreeCashFlowTtm:           20.20,
+			MarketCapitalization:             21.21,
 		},
 		nil,
 	}
@@ -63,6 +64,7 @@ func TestConvertFundamentalsFromPb(t *testing.T) {
 		PeRatioTtm:                       18.18,
 		PriceToBookTtm:                   19.19,
 		PriceToFreeCashFlowTtm:           20.20,
+		MarketCapitalization:             21.21,
 	}
 
 	if got[0].AssetUID != want.AssetUID {
@@ -127,5 +129,8 @@ func TestConvertFundamentalsFromPb(t *testing.T) {
 	}
 	if got[0].PriceToFreeCashFlowTtm != want.PriceToFreeCashFlowTtm {
 		t.Errorf("PriceToFreeCashFlowTtm = %v, want %v", got[0].PriceToFreeCashFlowTtm, want.PriceToFreeCashFlowTtm)
+	}
+	if got[0].MarketCapitalization != want.MarketCapitalization {
+		t.Errorf("MarketCapitalization = %v, want %v", got[0].MarketCapitalization, want.MarketCapitalization)
 	}
 }

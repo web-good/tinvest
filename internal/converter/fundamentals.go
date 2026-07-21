@@ -33,6 +33,7 @@ func ConvertFundamentalsFromPb(in []*investapi.GetAssetFundamentalsResponse_Stat
 			PeRatioTtm:                       f.PeRatioTtm,
 			PriceToBookTtm:                   f.PriceToBookTtm,
 			PriceToFreeCashFlowTtm:           f.PriceToFreeCashFlowTtm,
+			MarketCapitalization:             f.MarketCapitalization,
 		})
 	}
 	return res
