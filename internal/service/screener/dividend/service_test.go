@@ -137,6 +137,45 @@ func TestRankBonus_SharedAssetCoversAllInstruments(t *testing.T) {
 	}
 }
 
+func TestRefresh_SectorAffectsComposite(t *testing.T) {
+	bankUID, oilUID := "bank-asset", "oil-asset"
+	shares := []*model.Share{
+		{ID: "SBER", Ticker: "SBER", Name: "Bank", AssetUID: bankUID, DivYieldFlag: true, Sector: "financial"},
+		{ID: "LKOH", Ticker: "LKOH", Name: "Oil", AssetUID: oilUID, DivYieldFlag: true, Sector: "energy"},
+	}
+	fund := func(uid string) *model.Fundamentals {
+		return &model.Fundamentals{
+			AssetUID:                   uid,
+			ForwardAnnualDividendYield: 10,
+			DividendPayoutRatioFy:      50,
+			NetDebtToEbitda:            -0.1, // небанк: leverageScore 1.0; банк игнор → 0.5
+			FreeCashFlowTtm:            100,
+			PriceToBookTtm:             1.0,
+			MarketCapitalization:       aboveCapFloor,
+			FreeFloat:                  aboveFloatFloor,
+		}
+	}
+	funds := []*model.Fundamentals{fund(bankUID), fund(oilUID)}
+
+	m := mocks.NewMockinstrumentsClient(t)
+	m.On("Shares", mock.Anything).Return(shares, nil)
+	m.On("GetAssetFundamentals", mock.Anything, mock.Anything).Return(funds, nil)
+
+	s := NewService(m)
+	top, _, err := s.Top(context.Background(), 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byTicker := map[string]float64{}
+	for _, rs := range top {
+		byTicker[rs.Share.Ticker] = rs.Scored.Composite
+	}
+	if byTicker["SBER"] == byTicker["LKOH"] {
+		t.Fatalf("bank and non-bank with equal fundamentals must differ: SBER=%v LKOH=%v",
+			byTicker["SBER"], byTicker["LKOH"])
+	}
+}
+
 func TestTop_NonPositiveNFallsBackToDefault(t *testing.T) {
 	svc := newMockedService(t)
 	ctx := context.Background()

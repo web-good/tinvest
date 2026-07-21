@@ -64,12 +64,19 @@ func (s *service) refresh(ctx context.Context) error {
 		uids = append(uids, assetUID)
 	}
 
+	sectorByAsset := make(map[string]rank.SectorKind, len(sharesByAsset))
+	for assetUID, instruments := range sharesByAsset {
+		if len(instruments) > 0 {
+			sectorByAsset[assetUID] = rank.ClassifySector(instruments[0].Sector)
+		}
+	}
+
 	funds, err := s.client.GetAssetFundamentals(ctx, uids)
 	if err != nil {
 		return fmt.Errorf("dividend screener: fetch fundamentals: %w", err)
 	}
 
-	scored := rank.Rank(funds, nil, s.cfg) // TODO(task 5/6): pass real sector map
+	scored := rank.Rank(funds, sectorByAsset, s.cfg)
 
 	// Разделить на выживших (по порядку) и посчитать перцентильный ранг.
 	survivors := make([]rank.ScoredCompany, 0, len(scored))
