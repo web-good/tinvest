@@ -24,6 +24,9 @@ type Config struct {
 
 	PayoutIdealLow  float64 // нижняя граница идеальной зоны payout
 	PayoutIdealHigh float64 // верхняя граница идеальной зоны payout
+
+	BankPBIdealHigh float64 // P/B, до которого оценка банка максимальна (1.0)
+	BankPBZero      float64 // P/B, при котором оценка банка падает до 0
 }
 
 func DefaultConfig() Config {
@@ -48,5 +51,8 @@ func DefaultConfig() Config {
 
 		PayoutIdealLow:  30.0,
 		PayoutIdealHigh: 60.0,
+
+		BankPBIdealHigh: 1.0,  // ориентир; live-калибровка в Task 6
+		BankPBZero:      2.5,  // ориентир; live-калибровка в Task 6
 	}
 }

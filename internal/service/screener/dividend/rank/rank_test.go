@@ -170,3 +170,25 @@ func TestRank_GateThinFloat(t *testing.T) {
 		t.Fatalf("edge must survive, gated: %q", got["edge"].GateReason)
 	}
 }
+
+func TestBankValuation(t *testing.T) {
+	cfg := DefaultConfig() // IdealHigh=1.0, Zero=2.5
+	cases := []struct {
+		name string
+		pb   float64
+		want float64
+	}{
+		{"no data → neutral", 0, 0.5},
+		{"negative → neutral", -1, 0.5},
+		{"cheap at ideal high → max", 1.0, 1.0},
+		{"below ideal high → max", 0.6, 1.0},
+		{"at zero point → 0", 2.5, 0.0},
+		{"above zero point → 0", 3.0, 0.0},
+		{"midpoint → 0.5", 1.75, 0.5}, // (2.5-1.75)/(2.5-1.0)=0.5
+	}
+	for _, c := range cases {
+		if got := bankValuation(c.pb, cfg); got != c.want {
+			t.Errorf("%s: bankValuation(%v) = %v, want %v", c.name, c.pb, got, c.want)
+		}
+	}
+}

@@ -120,6 +120,23 @@ func leverageScore(nd float64) float64 {
 	}
 }
 
+// bankValuation: оценка банка по P/B (у банков нет EBITDA, EV/EBITDA неприменим).
+// P/B <= BankPBIdealHigh → 1.0 (дёшево); линейно к 0 при P/B >= BankPBZero;
+// P/B <= 0 (нет данных, proto3 omitempty) → нейтральные 0.5.
+func bankValuation(pb float64, cfg Config) float64 {
+	if pb <= 0 {
+		return 0.5
+	}
+	if pb <= cfg.BankPBIdealHigh {
+		return 1.0
+	}
+	span := cfg.BankPBZero - cfg.BankPBIdealHigh
+	if span <= 0 {
+		return 0
+	}
+	return clamp01((cfg.BankPBZero - pb) / span)
+}
+
 func clamp01(x float64) float64 {
 	if x < 0 {
 		return 0
