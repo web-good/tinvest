@@ -15,6 +15,7 @@ type Config struct {
 	MaxPayoutPct       float64 // выше — gate unsustainablePayout
 	YieldTrapMinYield  float64 // ниже этого yield trap не рассматривается
 	YieldCapPct        float64 // потолок для yield-подсчёта
+	MinMarketCap       float64 // ниже (в т.ч. 0 = нет данных) — отсев как неликвид
 
 	PayoutIdealLow  float64 // нижняя граница идеальной зоны payout
 	PayoutIdealHigh float64 // верхняя граница идеальной зоны payout
@@ -33,6 +34,7 @@ func DefaultConfig() Config {
 		MaxPayoutPct:       140.0,
 		YieldTrapMinYield:  20.0,
 		YieldCapPct:        14.0,
+		MinMarketCap:       50_000_000_000, // ₽50 млрд, сид — калибруется на живых данных
 
 		PayoutIdealLow:  30.0,
 		PayoutIdealHigh: 60.0,

@@ -6,9 +6,14 @@ import (
 
 	"tinvest/internal/model"
 	"tinvest/internal/service/screener/dividend/mocks"
+	"tinvest/internal/service/screener/dividend/rank"
 
 	"github.com/stretchr/testify/mock"
 )
+
+// aboveCapFloor — капа выше сида MinMarketCap, чтобы фикстуры не резались
+// фильтром ликвидности (тестируем ранжирование/бонус, а не ликвидность).
+var aboveCapFloor = rank.DefaultConfig().MinMarketCap + 1
 
 func fundUniverse() ([]*model.Share, []*model.Fundamentals) {
 	shares := []*model.Share{
@@ -18,10 +23,10 @@ func fundUniverse() ([]*model.Share, []*model.Fundamentals) {
 		{ID: "i-gated", AssetUID: "a-gated", Name: "Gated", DivYieldFlag: true},
 	}
 	funds := []*model.Fundamentals{
-		{AssetUID: "a-strong", ForwardAnnualDividendYield: 10, DividendPayoutRatioFy: 45, NetDebtToEbitda: 0.3, EbitdaTtm: 100, Roic: 0.25, EvToEbitdaMrq: 3, FreeCashFlowTtm: 500, FiveYearAnnualDividendGrowthRate: 0.2},
-		{AssetUID: "a-mid", ForwardAnnualDividendYield: 8, DividendPayoutRatioFy: 55, NetDebtToEbitda: 1.5, EbitdaTtm: 100, Roic: 0.12, EvToEbitdaMrq: 6, FreeCashFlowTtm: 100, FiveYearAnnualDividendGrowthRate: 0.05},
-		{AssetUID: "a-weak", ForwardAnnualDividendYield: 7, DividendPayoutRatioFy: 95, NetDebtToEbitda: 3.5, EbitdaTtm: 100, Roic: 0.03, EvToEbitdaMrq: 12, FreeCashFlowTtm: 10, FiveYearAnnualDividendGrowthRate: -0.05},
-		{AssetUID: "a-gated", ForwardAnnualDividendYield: 30, DividendPayoutRatioFy: 130, NetDebtToEbitda: 5, EbitdaTtm: 100, FreeCashFlowTtm: -10},
+		{AssetUID: "a-strong", ForwardAnnualDividendYield: 10, DividendPayoutRatioFy: 45, NetDebtToEbitda: 0.3, EbitdaTtm: 100, Roic: 0.25, EvToEbitdaMrq: 3, FreeCashFlowTtm: 500, FiveYearAnnualDividendGrowthRate: 0.2, MarketCapitalization: aboveCapFloor},
+		{AssetUID: "a-mid", ForwardAnnualDividendYield: 8, DividendPayoutRatioFy: 55, NetDebtToEbitda: 1.5, EbitdaTtm: 100, Roic: 0.12, EvToEbitdaMrq: 6, FreeCashFlowTtm: 100, FiveYearAnnualDividendGrowthRate: 0.05, MarketCapitalization: aboveCapFloor},
+		{AssetUID: "a-weak", ForwardAnnualDividendYield: 7, DividendPayoutRatioFy: 95, NetDebtToEbitda: 3.5, EbitdaTtm: 100, Roic: 0.03, EvToEbitdaMrq: 12, FreeCashFlowTtm: 10, FiveYearAnnualDividendGrowthRate: -0.05, MarketCapitalization: aboveCapFloor},
+		{AssetUID: "a-gated", ForwardAnnualDividendYield: 30, DividendPayoutRatioFy: 130, NetDebtToEbitda: 5, EbitdaTtm: 100, FreeCashFlowTtm: -10, MarketCapitalization: aboveCapFloor},
 	}
 	return shares, funds
 }
@@ -80,8 +85,8 @@ func TestRankBonus_SharedAssetCoversAllInstruments(t *testing.T) {
 		{ID: "i-weak", AssetUID: "a-weak", Name: "Weak", DivYieldFlag: true},
 	}
 	funds := []*model.Fundamentals{
-		{AssetUID: "a-shared", ForwardAnnualDividendYield: 10, DividendPayoutRatioFy: 45, NetDebtToEbitda: 0.3, EbitdaTtm: 100, Roic: 0.25, EvToEbitdaMrq: 3, FreeCashFlowTtm: 500, FiveYearAnnualDividendGrowthRate: 0.2},
-		{AssetUID: "a-weak", ForwardAnnualDividendYield: 7, DividendPayoutRatioFy: 95, NetDebtToEbitda: 3.5, EbitdaTtm: 100, Roic: 0.03, EvToEbitdaMrq: 12, FreeCashFlowTtm: 10, FiveYearAnnualDividendGrowthRate: -0.05},
+		{AssetUID: "a-shared", ForwardAnnualDividendYield: 10, DividendPayoutRatioFy: 45, NetDebtToEbitda: 0.3, EbitdaTtm: 100, Roic: 0.25, EvToEbitdaMrq: 3, FreeCashFlowTtm: 500, FiveYearAnnualDividendGrowthRate: 0.2, MarketCapitalization: aboveCapFloor},
+		{AssetUID: "a-weak", ForwardAnnualDividendYield: 7, DividendPayoutRatioFy: 95, NetDebtToEbitda: 3.5, EbitdaTtm: 100, Roic: 0.03, EvToEbitdaMrq: 12, FreeCashFlowTtm: 10, FiveYearAnnualDividendGrowthRate: -0.05, MarketCapitalization: aboveCapFloor},
 	}
 
 	m := mocks.NewMockinstrumentsClient(t)

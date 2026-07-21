@@ -27,6 +27,7 @@ type ScoredCompany struct {
 // Причины отсева (стабильные строки для вывода и тестов).
 const (
 	reasonNoDividend    = "нет дивиденда"
+	reasonIlliquid      = "низкая ликвидность"
 	reasonHighLeverage  = "долг > порога"
 	reasonUnsustainable = "payout > порога"
 	reasonYieldTrap     = "yield trap"
@@ -40,13 +41,17 @@ func yieldOf(f *model.Fundamentals) float64 {
 }
 
 // gate возвращает (reason, isTrap). Пустой reason => компания проходит.
-// Единственное жёсткое основание отсева по данным — отсутствие дивиденда
-// (yield <= 0). Отсутствие EBITDA/payout (0 из-за proto3 omitempty) НЕ
-// исключает компанию — оно нейтрально учитывается в пиллярах.
+// Жёсткие основания отсева по данным: нет дивиденда (yield <= 0) и низкая
+// ликвидность (MarketCapitalization < MinMarketCap, в т.ч. 0 из-за proto3
+// omitempty). Отсутствие EBITDA/payout (0) НЕ исключает компанию — оно
+// нейтрально учитывается в пиллярах.
 func gate(f *model.Fundamentals, cfg Config) (string, bool) {
 	y := yieldOf(f)
 	if y <= 0 {
 		return reasonNoDividend, false
+	}
+	if f.MarketCapitalization < cfg.MinMarketCap {
+		return reasonIlliquid, false
 	}
 	trap := y >= cfg.YieldTrapMinYield &&
 		(f.DividendPayoutRatioFy > 100 || f.NetDebtToEbitda > 3 || f.FreeCashFlowTtm < 0)
