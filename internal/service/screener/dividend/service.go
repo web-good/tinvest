@@ -69,7 +69,7 @@ func (s *service) refresh(ctx context.Context) error {
 		return fmt.Errorf("dividend screener: fetch fundamentals: %w", err)
 	}
 
-	scored := rank.Rank(funds, s.cfg)
+	scored := rank.Rank(funds, nil, s.cfg) // TODO(task 5/6): pass real sector map
 
 	// Разделить на выживших (по порядку) и посчитать перцентильный ранг.
 	survivors := make([]rank.ScoredCompany, 0, len(scored))

@@ -103,7 +103,7 @@ func run(topN int, showGated bool, probeCSV string) error {
 	}
 
 	cfg := rank.DefaultConfig()
-	scored := rank.Rank(funds, cfg)
+	scored := rank.Rank(funds, nil, cfg) // TODO(task 5/6): pass real sector map
 
 	printRanked(scored, byUID, cfg, topN)
 	if showGated {

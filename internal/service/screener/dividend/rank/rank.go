@@ -147,7 +147,7 @@ func clamp01(x float64) float64 {
 	return x
 }
 
-func Rank(universe []*model.Fundamentals, cfg Config) []ScoredCompany {
+func Rank(universe []*model.Fundamentals, sectorByAsset map[string]SectorKind, cfg Config) []ScoredCompany {
 	survivors := make([]*model.Fundamentals, 0, len(universe))
 	gated := make([]ScoredCompany, 0)
 
@@ -173,11 +173,22 @@ func Rank(universe []*model.Fundamentals, cfg Config) []ScoredCompany {
 	scored := make([]ScoredCompany, 0, len(survivors))
 	for _, f := range survivors {
 		sc := ScoredCompany{AssetUID: f.AssetUID}
-		sc.Sustainability = 0.7*sustainabilityPayout(f.DividendPayoutRatioFy, cfg) + 0.3*boolScore(f.FreeCashFlowTtm > 0)
-		sc.Safety = leverageScore(f.NetDebtToEbitda)
+		kind := sectorByAsset[f.AssetUID] // отсутствующий ключ → SectorOther (нулевое значение)
+
+		switch kind {
+		case SectorFinancial:
+			// У банков FCF/EBITDA/leverage неприменимы (дыры данных / бессмысленны).
+			sc.Sustainability = sustainabilityPayout(f.DividendPayoutRatioFy, cfg)
+			sc.Safety = 0.5
+			sc.Valuation = bankValuation(f.PriceToBookTtm, cfg)
+		default:
+			sc.Sustainability = 0.7*sustainabilityPayout(f.DividendPayoutRatioFy, cfg) + 0.3*boolScore(f.FreeCashFlowTtm > 0)
+			sc.Safety = leverageScore(f.NetDebtToEbitda)
+			sc.Valuation = 1 - percentileOrNeutral(evEbitda, f.EvToEbitdaMrq) // ниже EV/EBITDA — лучше
+		}
+
 		sc.DivGrowth = percentileOrNeutral(divGrowth, f.FiveYearAnnualDividendGrowthRate)
 		sc.Quality = percentileOrNeutral(roic, qualityMetric(f))
-		sc.Valuation = 1 - percentileOrNeutral(evEbitda, f.EvToEbitdaMrq) // ниже EV/EBITDA — лучше
 		sc.YieldScore = clamp01(minf(yieldOf(f), cfg.YieldCapPct) / cfg.YieldCapPct)
 
 		sc.Composite = 100 * (cfg.WeightSustainability*sc.Sustainability +
