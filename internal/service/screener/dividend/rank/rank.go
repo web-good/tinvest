@@ -27,7 +27,6 @@ type ScoredCompany struct {
 // Причины отсева (стабильные строки для вывода и тестов).
 const (
 	reasonNoDividend    = "нет дивиденда"
-	reasonMissingData   = "нет ключевых данных"
 	reasonHighLeverage  = "долг > порога"
 	reasonUnsustainable = "payout > порога"
 	reasonYieldTrap     = "yield trap"
@@ -41,13 +40,13 @@ func yieldOf(f *model.Fundamentals) float64 {
 }
 
 // gate возвращает (reason, isTrap). Пустой reason => компания проходит.
+// Единственное жёсткое основание отсева по данным — отсутствие дивиденда
+// (yield <= 0). Отсутствие EBITDA/payout (0 из-за proto3 omitempty) НЕ
+// исключает компанию — оно нейтрально учитывается в пиллярах.
 func gate(f *model.Fundamentals, cfg Config) (string, bool) {
 	y := yieldOf(f)
 	if y <= 0 {
 		return reasonNoDividend, false
-	}
-	if f.EbitdaTtm <= 0 || f.DividendPayoutRatioFy <= 0 {
-		return reasonMissingData, false
 	}
 	trap := y >= cfg.YieldTrapMinYield &&
 		(f.DividendPayoutRatioFy > 100 || f.NetDebtToEbitda > 3 || f.FreeCashFlowTtm < 0)
@@ -77,6 +76,16 @@ func payoutFit(payout float64, cfg Config) float64 {
 		}
 		return clamp01((cfg.MaxPayoutPct - payout) / span)
 	}
+}
+
+// sustainabilityPayout: как payoutFit, но при отсутствии данных о payout
+// (0 из-за proto3 omitempty) возвращает нейтральные 0.5 — «неизвестно»
+// не должно ни вознаграждать, ни штрафовать компанию, которая платит дивиденд.
+func sustainabilityPayout(payout float64, cfg Config) float64 {
+	if payout <= 0 {
+		return 0.5
+	}
+	return payoutFit(payout, cfg)
 }
 
 // leverageScore: чем меньше долг, тем лучше. Чистый кэш (<0) — максимум.
@@ -131,7 +140,7 @@ func Rank(universe []*model.Fundamentals, cfg Config) []ScoredCompany {
 	scored := make([]ScoredCompany, 0, len(survivors))
 	for _, f := range survivors {
 		sc := ScoredCompany{AssetUID: f.AssetUID}
-		sc.Sustainability = 0.7*payoutFit(f.DividendPayoutRatioFy, cfg) + 0.3*boolScore(f.FreeCashFlowTtm > 0)
+		sc.Sustainability = 0.7*sustainabilityPayout(f.DividendPayoutRatioFy, cfg) + 0.3*boolScore(f.FreeCashFlowTtm > 0)
 		sc.Safety = leverageScore(f.NetDebtToEbitda)
 		sc.DivGrowth = indicators.PercentileRank(divGrowth, f.FiveYearAnnualDividendGrowthRate)
 		sc.Quality = indicators.PercentileRank(roic, qualityMetric(f))

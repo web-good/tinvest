@@ -47,13 +47,42 @@ func TestRank_YieldTrap(t *testing.T) {
 	}
 }
 
-func TestRank_MissingData(t *testing.T) {
+func TestRank_MissingFundamentalsNoLongerGated(t *testing.T) {
+	// Платит дивиденд (yield 8), но EBITDA и payout не пришли от API (0).
+	// Раньше отсеивалось как "нет ключевых данных" — теперь должно выживать.
 	u := []*model.Fundamentals{
 		{AssetUID: "nodata", ForwardAnnualDividendYield: 8, DividendPayoutRatioFy: 0, NetDebtToEbitda: 0, EbitdaTtm: 0},
 	}
 	got := byUID(Rank(u, DefaultConfig()))
-	if got["nodata"].GateReason == "" {
-		t.Fatalf("expected gate for missing data")
+	if got["nodata"].GateReason != "" {
+		t.Fatalf("dividend payer must survive, gated: %q", got["nodata"].GateReason)
+	}
+}
+
+func TestRank_KeepsBankLikeDividendPayer(t *testing.T) {
+	// SBER-подобный: банк платит дивиденд (yield через TTM 27),
+	// но EBITDA у банка отсутствует (0) и payout пришёл 0.
+	u := []*model.Fundamentals{
+		{AssetUID: "bank", DividendYieldDailyTtm: 27, DividendPayoutRatioFy: 0, NetDebtToEbitda: 0, EbitdaTtm: 0, Roe: 0.22, FreeCashFlowTtm: 100, EvToEbitdaMrq: 0},
+	}
+	got := byUID(Rank(u, DefaultConfig()))
+	if got["bank"].GateReason != "" {
+		t.Fatalf("bank dividend payer must survive, gated: %q", got["bank"].GateReason)
+	}
+}
+
+func TestRank_NeutralSustainabilityWhenPayoutMissing(t *testing.T) {
+	// payout отсутствует (0) → нейтральный payoutFit 0.5, а не 0;
+	// FCF > 0 добавляет 0.3. Sustainability = 0.7*0.5 + 0.3 = 0.65.
+	u := []*model.Fundamentals{
+		{AssetUID: "nopayout", DividendYieldDailyTtm: 12, DividendPayoutRatioFy: 0, NetDebtToEbitda: 0.5, EbitdaTtm: 0, Roe: 0.2, FreeCashFlowTtm: 100, EvToEbitdaMrq: 5},
+	}
+	got := byUID(Rank(u, DefaultConfig()))
+	if got["nopayout"].GateReason != "" {
+		t.Fatalf("should survive, gated: %q", got["nopayout"].GateReason)
+	}
+	if diff := got["nopayout"].Sustainability - 0.65; diff > 1e-9 || diff < -1e-9 {
+		t.Fatalf("Sustainability = %v, want 0.65 (neutral payout)", got["nopayout"].Sustainability)
 	}
 }
 
