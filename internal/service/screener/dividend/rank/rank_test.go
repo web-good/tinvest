@@ -11,6 +11,11 @@ import (
 // Читает актуальный сид, поэтому устойчива к калибровке порога.
 var aboveCapFloor = DefaultConfig().MinMarketCap + 1
 
+// aboveFloatFloor — free-float заведомо выше DefaultConfig().MinFreeFloat,
+// чтобы фильтр тонкого флоата не мешал тестам про другое поведение.
+// Читает актуальный сид, поэтому устойчива к калибровке порога.
+var aboveFloatFloor = DefaultConfig().MinFreeFloat + 0.01
+
 func byUID(scored []ScoredCompany) map[string]ScoredCompany {
 	m := make(map[string]ScoredCompany, len(scored))
 	for _, s := range scored {
@@ -21,7 +26,7 @@ func byUID(scored []ScoredCompany) map[string]ScoredCompany {
 
 func TestRank_GateHighLeverage(t *testing.T) {
 	u := []*model.Fundamentals{
-		{AssetUID: "lev", ForwardAnnualDividendYield: 10, DividendPayoutRatioFy: 50, NetDebtToEbitda: 5, EbitdaTtm: 100, Roic: 0.1, MarketCapitalization: aboveCapFloor},
+		{AssetUID: "lev", ForwardAnnualDividendYield: 10, DividendPayoutRatioFy: 50, NetDebtToEbitda: 5, EbitdaTtm: 100, Roic: 0.1, MarketCapitalization: aboveCapFloor, FreeFloat: aboveFloatFloor},
 	}
 	got := byUID(Rank(u, DefaultConfig()))
 	if got["lev"].GateReason == "" {
@@ -44,7 +49,7 @@ func TestRank_GateNoDividend(t *testing.T) {
 
 func TestRank_YieldTrap(t *testing.T) {
 	u := []*model.Fundamentals{
-		{AssetUID: "trap", ForwardAnnualDividendYield: 25, DividendPayoutRatioFy: 110, NetDebtToEbitda: 3.5, EbitdaTtm: 100, FreeCashFlowTtm: -50, Roic: 0.05, MarketCapitalization: aboveCapFloor},
+		{AssetUID: "trap", ForwardAnnualDividendYield: 25, DividendPayoutRatioFy: 110, NetDebtToEbitda: 3.5, EbitdaTtm: 100, FreeCashFlowTtm: -50, Roic: 0.05, MarketCapitalization: aboveCapFloor, FreeFloat: aboveFloatFloor},
 	}
 	got := byUID(Rank(u, DefaultConfig()))
 	if !got["trap"].YieldTrap || got["trap"].GateReason == "" {
@@ -56,7 +61,7 @@ func TestRank_MissingFundamentalsNoLongerGated(t *testing.T) {
 	// Платит дивиденд (yield 8), но EBITDA и payout не пришли от API (0).
 	// Раньше отсеивалось как "нет ключевых данных" — теперь должно выживать.
 	u := []*model.Fundamentals{
-		{AssetUID: "nodata", ForwardAnnualDividendYield: 8, DividendPayoutRatioFy: 0, NetDebtToEbitda: 0, EbitdaTtm: 0, MarketCapitalization: aboveCapFloor},
+		{AssetUID: "nodata", ForwardAnnualDividendYield: 8, DividendPayoutRatioFy: 0, NetDebtToEbitda: 0, EbitdaTtm: 0, MarketCapitalization: aboveCapFloor, FreeFloat: aboveFloatFloor},
 	}
 	got := byUID(Rank(u, DefaultConfig()))
 	if got["nodata"].GateReason != "" {
@@ -68,7 +73,7 @@ func TestRank_KeepsBankLikeDividendPayer(t *testing.T) {
 	// SBER-подобный: банк платит дивиденд (yield через TTM 27),
 	// но EBITDA у банка отсутствует (0) и payout пришёл 0.
 	u := []*model.Fundamentals{
-		{AssetUID: "bank", DividendYieldDailyTtm: 27, DividendPayoutRatioFy: 0, NetDebtToEbitda: 0, EbitdaTtm: 0, Roe: 0.22, FreeCashFlowTtm: 100, EvToEbitdaMrq: 0, MarketCapitalization: aboveCapFloor},
+		{AssetUID: "bank", DividendYieldDailyTtm: 27, DividendPayoutRatioFy: 0, NetDebtToEbitda: 0, EbitdaTtm: 0, Roe: 0.22, FreeCashFlowTtm: 100, EvToEbitdaMrq: 0, MarketCapitalization: aboveCapFloor, FreeFloat: aboveFloatFloor},
 	}
 	got := byUID(Rank(u, DefaultConfig()))
 	if got["bank"].GateReason != "" {
@@ -80,7 +85,7 @@ func TestRank_NeutralSustainabilityWhenPayoutMissing(t *testing.T) {
 	// payout отсутствует (0) → нейтральный payoutFit 0.5, а не 0;
 	// FCF > 0 добавляет 0.3. Sustainability = 0.7*0.5 + 0.3 = 0.65.
 	u := []*model.Fundamentals{
-		{AssetUID: "nopayout", DividendYieldDailyTtm: 12, DividendPayoutRatioFy: 0, NetDebtToEbitda: 0.5, EbitdaTtm: 0, Roe: 0.2, FreeCashFlowTtm: 100, EvToEbitdaMrq: 5, MarketCapitalization: aboveCapFloor},
+		{AssetUID: "nopayout", DividendYieldDailyTtm: 12, DividendPayoutRatioFy: 0, NetDebtToEbitda: 0.5, EbitdaTtm: 0, Roe: 0.2, FreeCashFlowTtm: 100, EvToEbitdaMrq: 5, MarketCapitalization: aboveCapFloor, FreeFloat: aboveFloatFloor},
 	}
 	got := byUID(Rank(u, DefaultConfig()))
 	if got["nopayout"].GateReason != "" {
@@ -94,9 +99,9 @@ func TestRank_NeutralSustainabilityWhenPayoutMissing(t *testing.T) {
 func TestRank_OrdersSurvivorsByComposite(t *testing.T) {
 	u := []*model.Fundamentals{
 		// сильная: низкий долг, идеальный payout, высокий ROIC, дешёвая, рост дивиденда
-		{AssetUID: "strong", ForwardAnnualDividendYield: 10, DividendPayoutRatioFy: 45, NetDebtToEbitda: 0.5, EbitdaTtm: 100, Roic: 0.25, EvToEbitdaMrq: 3, FreeCashFlowTtm: 500, FiveYearAnnualDividendGrowthRate: 0.15, MarketCapitalization: aboveCapFloor},
+		{AssetUID: "strong", ForwardAnnualDividendYield: 10, DividendPayoutRatioFy: 45, NetDebtToEbitda: 0.5, EbitdaTtm: 100, Roic: 0.25, EvToEbitdaMrq: 3, FreeCashFlowTtm: 500, FiveYearAnnualDividendGrowthRate: 0.15, MarketCapitalization: aboveCapFloor, FreeFloat: aboveFloatFloor},
 		// слабая: высокий долг (но <4), высокий payout, низкий ROIC, дорогая
-		{AssetUID: "weak", ForwardAnnualDividendYield: 7, DividendPayoutRatioFy: 95, NetDebtToEbitda: 3.5, EbitdaTtm: 100, Roic: 0.03, EvToEbitdaMrq: 12, FreeCashFlowTtm: 10, FiveYearAnnualDividendGrowthRate: -0.05, MarketCapitalization: aboveCapFloor},
+		{AssetUID: "weak", ForwardAnnualDividendYield: 7, DividendPayoutRatioFy: 95, NetDebtToEbitda: 3.5, EbitdaTtm: 100, Roic: 0.03, EvToEbitdaMrq: 12, FreeCashFlowTtm: 10, FiveYearAnnualDividendGrowthRate: -0.05, MarketCapitalization: aboveCapFloor, FreeFloat: aboveFloatFloor},
 	}
 	scored := Rank(u, DefaultConfig())
 	if scored[0].AssetUID != "strong" {
@@ -111,8 +116,8 @@ func TestRank_DegenerateGrowthPoolIsNeutral(t *testing.T) {
 	// Весь пул выживших имеет FiveYearAnnualDividendGrowthRate == 0 (поля нет у API).
 	// DivGrowth должен быть нейтральным 0.5, а не 0.
 	u := []*model.Fundamentals{
-		{AssetUID: "a", DividendYieldDailyTtm: 10, DividendPayoutRatioFy: 45, NetDebtToEbitda: 0.5, EbitdaTtm: 100, Roic: 0.2, EvToEbitdaMrq: 4, FreeCashFlowTtm: 100, FiveYearAnnualDividendGrowthRate: 0, MarketCapitalization: aboveCapFloor},
-		{AssetUID: "b", DividendYieldDailyTtm: 9, DividendPayoutRatioFy: 50, NetDebtToEbitda: 1.0, EbitdaTtm: 100, Roic: 0.1, EvToEbitdaMrq: 6, FreeCashFlowTtm: 100, FiveYearAnnualDividendGrowthRate: 0, MarketCapitalization: aboveCapFloor},
+		{AssetUID: "a", DividendYieldDailyTtm: 10, DividendPayoutRatioFy: 45, NetDebtToEbitda: 0.5, EbitdaTtm: 100, Roic: 0.2, EvToEbitdaMrq: 4, FreeCashFlowTtm: 100, FiveYearAnnualDividendGrowthRate: 0, MarketCapitalization: aboveCapFloor, FreeFloat: aboveFloatFloor},
+		{AssetUID: "b", DividendYieldDailyTtm: 9, DividendPayoutRatioFy: 50, NetDebtToEbitda: 1.0, EbitdaTtm: 100, Roic: 0.1, EvToEbitdaMrq: 6, FreeCashFlowTtm: 100, FiveYearAnnualDividendGrowthRate: 0, MarketCapitalization: aboveCapFloor, FreeFloat: aboveFloatFloor},
 	}
 	got := byUID(Rank(u, DefaultConfig()))
 	for _, id := range []string{"a", "b"} {
@@ -130,7 +135,7 @@ func TestRank_GateIlliquid(t *testing.T) {
 		// Платит дивиденд, но капа не пришла (0) → отсев по ликвидности.
 		{AssetUID: "nocap", ForwardAnnualDividendYield: 12, DividendPayoutRatioFy: 45, NetDebtToEbitda: 0.5, MarketCapitalization: 0},
 		// Платит дивиденд, капа выше порога → проходит.
-		{AssetUID: "big", ForwardAnnualDividendYield: 12, DividendPayoutRatioFy: 45, NetDebtToEbitda: 0.5, MarketCapitalization: cfg.MinMarketCap + 1},
+		{AssetUID: "big", ForwardAnnualDividendYield: 12, DividendPayoutRatioFy: 45, NetDebtToEbitda: 0.5, MarketCapitalization: cfg.MinMarketCap + 1, FreeFloat: aboveFloatFloor},
 	}
 	got := byUID(Rank(u, cfg))
 	if got["small"].GateReason != reasonIlliquid {
@@ -141,5 +146,27 @@ func TestRank_GateIlliquid(t *testing.T) {
 	}
 	if got["big"].GateReason != "" {
 		t.Fatalf("big must survive, gated: %q", got["big"].GateReason)
+	}
+}
+
+func TestRank_GateThinFloat(t *testing.T) {
+	cfg := DefaultConfig()
+	u := []*model.Fundamentals{
+		// Платит дивиденд, капа выше порога, но free-float ниже порога → отсев.
+		{AssetUID: "thin", ForwardAnnualDividendYield: 12, DividendPayoutRatioFy: 45, NetDebtToEbitda: 0.5, MarketCapitalization: aboveCapFloor, FreeFloat: cfg.MinFreeFloat - 0.001},
+		// free-float ровно на пороге → проходит (сравнение строгое <).
+		{AssetUID: "edge", ForwardAnnualDividendYield: 12, DividendPayoutRatioFy: 45, NetDebtToEbitda: 0.5, MarketCapitalization: aboveCapFloor, FreeFloat: cfg.MinFreeFloat},
+		// free-float 0 (нет данных / нулевой) при валидной капе и yield → отсев.
+		{AssetUID: "zero", ForwardAnnualDividendYield: 12, DividendPayoutRatioFy: 45, NetDebtToEbitda: 0.5, MarketCapitalization: aboveCapFloor, FreeFloat: 0},
+	}
+	got := byUID(Rank(u, cfg))
+	if got["thin"].GateReason != reasonThinFloat {
+		t.Fatalf("thin: GateReason = %q, want %q", got["thin"].GateReason, reasonThinFloat)
+	}
+	if got["zero"].GateReason != reasonThinFloat {
+		t.Fatalf("zero: GateReason = %q, want %q", got["zero"].GateReason, reasonThinFloat)
+	}
+	if got["edge"].GateReason != "" {
+		t.Fatalf("edge must survive, gated: %q", got["edge"].GateReason)
 	}
 }

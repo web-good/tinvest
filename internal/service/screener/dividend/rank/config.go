@@ -16,6 +16,7 @@ type Config struct {
 	YieldTrapMinYield  float64 // ниже этого yield trap не рассматривается
 	YieldCapPct        float64 // потолок для yield-подсчёта
 	MinMarketCap       float64 // ниже (в т.ч. 0 = нет данных) — отсев как неликвид
+	MinFreeFloat       float64 // доля акций в свободном обращении ниже этого (в т.ч. 0 = нет данных) — отсев как тонкий флоат
 
 	BonusScoreT1 float64 // композит >= T1 → бонус +1
 	BonusScoreT2 float64 // композит >= T2 → бонус +2
@@ -39,6 +40,7 @@ func DefaultConfig() Config {
 		YieldTrapMinYield:  20.0,
 		YieldCapPct:        14.0,
 		MinMarketCap:       50_000_000_000, // ₽50 млрд; live-калибровка 2026-07-21: единицы подтверждены как ₽ (не млн), curated-11 Golden X проходят с запасом (мин. TATNP ≈₽62.2 млрд), micro-cap (Мордовская энергосбытовая ≈₽1.2 млрд, ТНС энерго ≈₽1-14 млрд) отсеиваются
+		MinFreeFloat:       0.07,           // live-калибровка 2026-07-21: разрыв 5–9% между неликвидом (UDMN 0, BANE/GCHE 3, LEAS 4, AKRN/SIBN 5) и легитимными (min 9%); 0.07 посередине
 
 		BonusScoreT1: 56, // live-калибровка 2026-07-21 по перцентилям композита ликвидной вселенной (n=41): p25≈56.0
 		BonusScoreT2: 67, // p50≈67.1
