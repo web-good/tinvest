@@ -30,7 +30,7 @@ func DefaultConfig() Config {
 		WeightYield:          0.05,
 
 		MaxNetDebtToEbitda: 4.0,
-		MaxPayoutPct:       120.0,
+		MaxPayoutPct:       140.0,
 		YieldTrapMinYield:  20.0,
 		YieldCapPct:        14.0,
 
