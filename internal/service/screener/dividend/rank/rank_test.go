@@ -228,7 +228,7 @@ func TestRank_FinancialValuationByPB(t *testing.T) {
 		ForwardAnnualDividendYield: 10,
 		DividendPayoutRatioFy:      50,
 		EvToEbitdaMrq:              0,   // неприменимо; не должно давать 0.98
-		PriceToBookTtm:             1.0, // ≤ IdealHigh → 1.0
+		PriceToBookTtm:             0.5, // ≤ IdealHigh → 1.0
 		MarketCapitalization:       100e9,
 		FreeFloat:                  0.3,
 	}
@@ -261,7 +261,7 @@ func TestRank_NonFinancialUnchanged(t *testing.T) {
 }
 
 func TestBankValuation(t *testing.T) {
-	cfg := DefaultConfig() // IdealHigh=1.0, Zero=2.5
+	cfg := DefaultConfig() // IdealHigh=0.5, Zero=1.5
 	cases := []struct {
 		name string
 		pb   float64
@@ -269,11 +269,11 @@ func TestBankValuation(t *testing.T) {
 	}{
 		{"no data → neutral", 0, 0.5},
 		{"negative → neutral", -1, 0.5},
-		{"cheap at ideal high → max", 1.0, 1.0},
-		{"below ideal high → max", 0.6, 1.0},
-		{"at zero point → 0", 2.5, 0.0},
-		{"above zero point → 0", 3.0, 0.0},
-		{"midpoint → 0.5", 1.75, 0.5}, // (2.5-1.75)/(2.5-1.0)=0.5
+		{"cheap at ideal high → max", 0.5, 1.0},
+		{"below ideal high → max", 0.3, 1.0},
+		{"at zero point → 0", 1.5, 0.0},
+		{"above zero point → 0", 2.0, 0.0},
+		{"midpoint → 0.5", 1.0, 0.5}, // (1.5-1.0)/(1.5-0.5)=0.5
 	}
 	for _, c := range cases {
 		if got := bankValuation(c.pb, cfg); got != c.want {
