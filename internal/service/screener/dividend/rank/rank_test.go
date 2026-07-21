@@ -101,3 +101,18 @@ func TestRank_OrdersSurvivorsByComposite(t *testing.T) {
 		t.Fatalf("composite not ordered: %v <= %v", scored[0].Composite, scored[1].Composite)
 	}
 }
+
+func TestRank_DegenerateGrowthPoolIsNeutral(t *testing.T) {
+	// Весь пул выживших имеет FiveYearAnnualDividendGrowthRate == 0 (поля нет у API).
+	// DivGrowth должен быть нейтральным 0.5, а не 0.
+	u := []*model.Fundamentals{
+		{AssetUID: "a", DividendYieldDailyTtm: 10, DividendPayoutRatioFy: 45, NetDebtToEbitda: 0.5, EbitdaTtm: 100, Roic: 0.2, EvToEbitdaMrq: 4, FreeCashFlowTtm: 100, FiveYearAnnualDividendGrowthRate: 0},
+		{AssetUID: "b", DividendYieldDailyTtm: 9, DividendPayoutRatioFy: 50, NetDebtToEbitda: 1.0, EbitdaTtm: 100, Roic: 0.1, EvToEbitdaMrq: 6, FreeCashFlowTtm: 100, FiveYearAnnualDividendGrowthRate: 0},
+	}
+	got := byUID(Rank(u, DefaultConfig()))
+	for _, id := range []string{"a", "b"} {
+		if diff := got[id].DivGrowth - 0.5; diff > 1e-9 || diff < -1e-9 {
+			t.Fatalf("%s DivGrowth = %v, want 0.5 (neutral degenerate pool)", id, got[id].DivGrowth)
+		}
+	}
+}

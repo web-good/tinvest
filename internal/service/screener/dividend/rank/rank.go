@@ -142,9 +142,9 @@ func Rank(universe []*model.Fundamentals, cfg Config) []ScoredCompany {
 		sc := ScoredCompany{AssetUID: f.AssetUID}
 		sc.Sustainability = 0.7*sustainabilityPayout(f.DividendPayoutRatioFy, cfg) + 0.3*boolScore(f.FreeCashFlowTtm > 0)
 		sc.Safety = leverageScore(f.NetDebtToEbitda)
-		sc.DivGrowth = indicators.PercentileRank(divGrowth, f.FiveYearAnnualDividendGrowthRate)
-		sc.Quality = indicators.PercentileRank(roic, qualityMetric(f))
-		sc.Valuation = 1 - indicators.PercentileRank(evEbitda, f.EvToEbitdaMrq) // ниже EV/EBITDA — лучше
+		sc.DivGrowth = percentileOrNeutral(divGrowth, f.FiveYearAnnualDividendGrowthRate)
+		sc.Quality = percentileOrNeutral(roic, qualityMetric(f))
+		sc.Valuation = 1 - percentileOrNeutral(evEbitda, f.EvToEbitdaMrq) // ниже EV/EBITDA — лучше
 		sc.YieldScore = clamp01(minf(yieldOf(f), cfg.YieldCapPct) / cfg.YieldCapPct)
 
 		sc.Composite = 100 * (cfg.WeightSustainability*sc.Sustainability +
@@ -172,6 +172,30 @@ func qualityMetric(f *model.Fundamentals) float64 {
 		return f.Roic
 	}
 	return f.Roe
+}
+
+// percentileOrNeutral возвращает 0.5, когда в пуле нет разброса (все значения
+// равны — например, fundamental-поле отсутствует по всей вселенной), чтобы
+// мёртвый сигнал не занижал composite. Иначе — обычный PercentileRank.
+func percentileOrNeutral(pool []float64, x float64) float64 {
+	if !hasSpread(pool) {
+		return 0.5
+	}
+	return indicators.PercentileRank(pool, x)
+}
+
+// hasSpread сообщает, есть ли в пуле хотя бы два различных значения.
+func hasSpread(pool []float64) bool {
+	if len(pool) < 2 {
+		return false
+	}
+	first := pool[0]
+	for _, v := range pool[1:] {
+		if v != first {
+			return true
+		}
+	}
+	return false
 }
 
 func boolScore(b bool) float64 {
