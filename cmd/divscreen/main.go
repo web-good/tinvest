@@ -131,6 +131,9 @@ func printRanked(scored []rank.ScoredCompany, byUID map[string]*asset, cfg rank.
 	_, _ = fmt.Fprintln(w, "#\tTicker\tName\tComp\tBonus\tSust\tSafe\tGrow\tQual\tVal\tMktCap,₽млрд\tFloat%\tPayout%\tND/EBITDA\tYield%")
 	for i, sc := range survivors {
 		a := byUID[sc.AssetUID]
+		if a == nil || a.fund == nil {
+			continue
+		}
 		f := a.fund
 		_, _ = fmt.Fprintf(w, "%d\t%s\t%s\t%.0f\t+%d\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.1f\t%.0f\t%.0f\t%.2f\t%.2f\n",
 			i+1, a.ticker, trunc(a.name, 22), sc.Composite, bonusFromScore(sc.Composite, cfg),
