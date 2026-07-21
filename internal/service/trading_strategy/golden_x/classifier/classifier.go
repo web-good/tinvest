@@ -59,7 +59,7 @@ func Classify(detected []gxmodel.DetectResult, in dto.Trade) gxmodel.TradeResult
 //   - TrendWith:            +2
 //   - DivergenceOK:         +2
 //   - VolumeOK:             +1
-//   - FundamentalBonus:     +0..3 (dividend screener percentile rank)
+//   - FundamentalBonus:     +0..3 (dividend screener composite bands)
 func signalScore(sr gxmodel.ShareResult) int {
 	s := 0
 	switch sr.BuyTier {

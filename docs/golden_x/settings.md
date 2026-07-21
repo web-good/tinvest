@@ -33,7 +33,7 @@
 
 ## Фунд-бонус к Score (не часть `Settings`)
 
-`Score` каждой покупки может получать +0..+3 от перцентильного ранга дивидендного скринера (см. [strategy.md §Score сигнала](strategy.md#score-сигнала)). Это не поле `dto.Settings` — оно подключается снаружи через `golden_x.WithRankProvider(p dividend.RankProvider)` (см. `internal/service_provider/service.go:GetGoldenXTradingService`), а данные обновляются скринером `internal/service/screener/dividend` раз в ~24ч. Без вызова `WithRankProvider` бонус всегда 0 (no-op) — `Score` ведёт себя как раньше.
+`Score` каждой покупки может получать +0..+3 от абсолютных полос композита дивидендного скринера (см. [strategy.md §Score сигнала](strategy.md#score-сигнала) и `docs/dividend/screener.md`). Это не поле `dto.Settings` — оно подключается снаружи через `golden_x.WithRankProvider(p dividend.RankProvider)` (см. `internal/service_provider/service.go:GetGoldenXTradingService`), а данные обновляются скринером `internal/service/screener/dividend` раз в ~24ч. Без вызова `WithRankProvider` бонус всегда 0 (no-op) — `Score` ведёт себя как раньше.
 
 ## Per-share параметр: `RSILength`
 
