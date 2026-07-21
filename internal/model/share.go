@@ -21,4 +21,5 @@ type Share struct {
 	MinPriceIncrementAmount float64
 	AssetUID                string
 	DivYieldFlag            bool
+	Sector                  string
 }

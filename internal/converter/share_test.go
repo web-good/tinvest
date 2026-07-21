@@ -27,3 +27,14 @@ func TestConvertShareFromPb_MapsAssetUidAndDivFlag(t *testing.T) {
 		t.Fatalf("ID = %q, want %q", got.ID, "instr-uid-1")
 	}
 }
+
+func TestConvertShareFromPb_MapsSector(t *testing.T) {
+	got := ConvertShareFromPb(&investapi.Share{
+		Ticker:   "SBER",
+		Currency: "rub",
+		Sector:   "financial",
+	})
+	if got.Sector != "financial" {
+		t.Fatalf("Sector = %q, want %q", got.Sector, "financial")
+	}
+}

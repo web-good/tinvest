@@ -41,5 +41,6 @@ func ConvertShareFromPb(share *investapi.Share) *model.Share {
 		Trading:      share.ApiTradeAvailableFlag,
 		AssetUID:     share.AssetUid,
 		DivYieldFlag: share.DivYieldFlag,
+		Sector:       share.Sector,
 	}
 }
