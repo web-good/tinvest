@@ -128,11 +128,11 @@ func printRanked(scored []rank.ScoredCompany, byUID map[string]*asset, cfg rank.
 
 	fmt.Printf("\n=== Ранжировано: %d (показано %d) ===\n", countSurvivors(scored), len(survivors))
 	w := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
-	fmt.Fprintln(w, "#\tTicker\tName\tComp\tBonus\tSust\tSafe\tGrow\tQual\tVal\tMktCap,₽млрд\tFloat%\tPayout%\tND/EBITDA\tYield%")
+	_, _ = fmt.Fprintln(w, "#\tTicker\tName\tComp\tBonus\tSust\tSafe\tGrow\tQual\tVal\tMktCap,₽млрд\tFloat%\tPayout%\tND/EBITDA\tYield%")
 	for i, sc := range survivors {
 		a := byUID[sc.AssetUID]
 		f := a.fund
-		fmt.Fprintf(w, "%d\t%s\t%s\t%.0f\t+%d\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.1f\t%.0f\t%.0f\t%.2f\t%.2f\n",
+		_, _ = fmt.Fprintf(w, "%d\t%s\t%s\t%.0f\t+%d\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.1f\t%.0f\t%.0f\t%.2f\t%.2f\n",
 			i+1, a.ticker, trunc(a.name, 22), sc.Composite, bonusFromScore(sc.Composite, cfg),
 			sc.Sustainability, sc.Safety, sc.DivGrowth, sc.Quality, sc.Valuation,
 			f.MarketCapitalization/1e9, f.FreeFloat*100, f.DividendPayoutRatioFy, f.NetDebtToEbitda, yieldOf(f))
