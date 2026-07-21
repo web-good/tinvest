@@ -10,7 +10,7 @@ import (
 )
 
 const defaultTTL = 24 * time.Hour
-const defaultTopN = 15
+const defaultTopN = 25
 
 type instrumentsClient interface {
 	Shares(ctx context.Context) ([]*model.Share, error)
