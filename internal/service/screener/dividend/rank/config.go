@@ -1,8 +1,8 @@
 package rank
 
 // Config держит веса столпов (сумма = 1.0) и пороги ворот. Все значения —
-// точки калибровки (Task 8 сверяет с живыми данными). Единицы: yield и
-// payout в процентах (8.0 = 8%, 60 = 60%).
+// точки калибровки, сверенные с живыми данными Invest API. Единицы: yield и
+// payout в процентах (8.0 = 8%, 60 = 60%); MarketCapitalization — в рублях.
 type Config struct {
 	WeightSustainability float64
 	WeightSafety         float64
