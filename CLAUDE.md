@@ -20,7 +20,7 @@ Go-based trading/investment application built around the Tinkoff Invest gRPC API
   - indicators: `atr/`, `ema/`, `rsi.go`, `macd.go`, `volatility.go`
   - `notification/`, `backtest/`
 - `internal/service` — business logic, grouped by concern:
-  - `trading_strategy/` — `golden_x`, `reversion`, `bonds` (live strategies); `scalping/model/` and `scalping/strategy/` (shared core used by reversion (live) and the backtest engine; scalping live layer removed). Note: backtest-only strategies `levels`, `momentum`, `smc` were removed after walk-forward validation failed (2026-07-20).
+  - `trading_strategy/` — `golden_x`, `reversion`, `bonds` (live strategies); `scalping/model/` and `scalping/strategy/` (shared core used by reversion (live) and the backtest engine; scalping live layer removed); `scalping_rsimacd/` — backtest-only 5m long RSI+MACD scalper (`-strategy scalping_rsimacd`, docs: `docs/scalping_rsimacd/strategy.md`). Note: backtest-only strategies `levels`, `momentum`, `smc` were removed after walk-forward validation failed (2026-07-20).
   - `instrument/` — indicator calculators: `atr`, `ema`, `macd`, `rsi`, `volatility`
   - `notification/purchase_shares`
   - `portfolio/analyze`

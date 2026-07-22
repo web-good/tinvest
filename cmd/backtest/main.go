@@ -37,8 +37,8 @@ const (
 func main() {
 	var (
 		ticker       = flag.String("ticker", "", "ticker, e.g. RUAL (required)")
-		intervalS    = flag.String("interval", "Hour1", "candle timeframe: Minutes15|Minutes30|Hour1|Hour4|Day1|Week1")
-		strategyName = flag.String("strategy", "scalping", "strategy engine: scalping|reversion")
+		intervalS    = flag.String("interval", "Hour1", "candle timeframe: Minutes5|Minutes15|Minutes30|Hour1|Hour4|Day1|Week1")
+		strategyName = flag.String("strategy", "scalping", "strategy engine: scalping|reversion|scalping_rsimacd")
 		months       = flag.Int("months", 12, "lookback period in months")
 		cash         = flag.Float64("cash", 100000, "starting mock cash")
 		fraction     = flag.Float64("fraction", 1.0, "fraction of cash per Buy")
@@ -85,6 +85,8 @@ func main() {
 // parseInterval maps a timeframe flag string to the enum the candle API uses.
 func parseInterval(s string) (enum.Interval, error) {
 	switch s {
+	case "Minutes5":
+		return enum.Minutes5, nil
 	case "Minutes15":
 		return enum.Minutes15, nil
 	case "Minutes30":
@@ -98,7 +100,7 @@ func parseInterval(s string) (enum.Interval, error) {
 	case "Week1":
 		return enum.Week1, nil
 	default:
-		return 0, fmt.Errorf("unknown interval %q (want Minutes15|Hour1|Hour4|Day1|Week1)", s)
+		return 0, fmt.Errorf("unknown interval %q (want Minutes5|Minutes15|Minutes30|Hour1|Hour4|Day1|Week1)", s)
 	}
 }
 
@@ -155,8 +157,10 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 		binding = svc.ReversionLookupOrGeneric(ticker)
 	case "scalping":
 		binding = svc.LookupOrGeneric(ticker)
+	case "scalping_rsimacd":
+		binding = svc.ScalpingRSIMACDLookupOrGeneric(ticker)
 	default:
-		return fmt.Errorf("unknown strategy %q (want scalping|reversion)", strategyName)
+		return fmt.Errorf("unknown strategy %q (want scalping|reversion|scalping_rsimacd)", strategyName)
 	}
 
 	share, err := resolveShare(ctx, client, ticker)

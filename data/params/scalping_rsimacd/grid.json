@@ -1,0 +1,22 @@
+{
+  "_comment": "scalping_rsimacd phased grid. Phase 1 sweeps the entry geometry (RSI length/oversold zone + the MACD confirmation window); phase 2 sweeps risk and exits (RR, stop buffer, stochastic-exit ablation). MACD(3,6,9), the stochastic (14,3,3) and the session bounds are fixed by the strategy definition and are deliberately NOT swept — the grid stays at 27+12 combos to keep the fitting surface small. Judge on pooled OOS profit factor from a walk-forward, never on the in-sample best.",
+  "phases": [
+    {
+      "name": "entry",
+      "keepTop": 6,
+      "grid": {
+        "RSIPeriod": [3, 4, 5],
+        "RSIOversold": [20, 25, 30],
+        "MACDConfirmBars": [2, 3, 4]
+      }
+    },
+    {
+      "name": "risk",
+      "grid": {
+        "RR": [2.0, 2.5, 3.0],
+        "StopBufferATR": [0, 0.1],
+        "EnableStochExit": [0, 1]
+      }
+    }
+  ]
+}

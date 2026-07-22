@@ -26,13 +26,16 @@ import (
 const fetchPause = 300 * time.Millisecond
 
 // chunkDaysFor bounds each GetCandles request window per interval, since the API
-// caps the span per request by interval: sub-hour candles allow up to 3 weeks,
-// hour-and-up allow months. We stay safely under the cap to fetch long ranges in
-// pieces. Values are in days.
+// caps the span per request by interval (see the CandleInterval doc comments in
+// internal/pb/v1/marketdata.pb.go): 5-min candles span up to 1 week, 15/30-min up
+// to ~3 weeks, hour-and-up months. We stay at/under the cap to fetch long ranges
+// in pieces. Values are in days.
 func chunkDaysFor(i enum.Interval) int {
 	switch i {
+	case enum.Minutes5:
+		return 7 // API cap: 5-min candles span up to 1 week per request
 	case enum.Minutes15, enum.Minutes30:
-		return 14 // API cap is ~3 weeks for sub-hour candles
+		return 14 // API cap is ~3 weeks for 15/30-min candles
 	default:
 		return 30 // hour-and-up allow months; 30 is comfortable
 	}
