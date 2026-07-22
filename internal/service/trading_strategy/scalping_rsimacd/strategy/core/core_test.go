@@ -377,3 +377,150 @@ func TestNoEntryWhenAlreadyInPosition(t *testing.T) {
 		}
 	}
 }
+
+// openPos builds MarketData for an open long on a single trailing bar.
+func openPos(high, low, close float64, at time.Time, stop, tp float64) strategy.MarketData {
+	md := strategy.MarketData{
+		Price:  close,
+		Highs:  []float64{high},
+		Lows:   []float64{low},
+		Closes: []float64{close},
+		Times:  []time.Time{at},
+		Position: &strategy.Position{
+			PurchasePrice: 100,
+			Quantity:      1,
+			StopLoss:      stop,
+			TakeProfit:    tp,
+		},
+	}
+	return md
+}
+
+func TestExitStopLoss(t *testing.T) {
+	s := NewWithParams("TEST", DefaultParams())
+	md := openPos(101, 97, 98, mskAt(2026, 7, 20, 12, 0), 98.5, 110)
+	sig := s.Decide(md)
+	if sig.Kind != model.SignalSell || sig.Reason != "SL" {
+		t.Fatalf("kind=%v reason=%q want Sell/SL", sig.Kind, sig.Reason)
+	}
+	if sig.StopLoss != 98.5 {
+		t.Fatalf("StopLoss=%v want 98.5 (engine fills stops at min(level, open))", sig.StopLoss)
+	}
+}
+
+func TestExitTakeProfit(t *testing.T) {
+	s := NewWithParams("TEST", DefaultParams())
+	md := openPos(110.5, 104, 110, mskAt(2026, 7, 20, 12, 0), 95, 110)
+	sig := s.Decide(md)
+	if sig.Kind != model.SignalSell || sig.Reason != "TP" {
+		t.Fatalf("kind=%v reason=%q want Sell/TP", sig.Kind, sig.Reason)
+	}
+	if sig.TakeProfit != 110 {
+		t.Fatalf("TakeProfit=%v want 110", sig.TakeProfit)
+	}
+}
+
+func TestStopLossWinsWhenBothTouch(t *testing.T) {
+	s := NewWithParams("TEST", DefaultParams())
+	// The bar spans both levels; the conservative assumption is that the stop hit first.
+	md := openPos(112, 94, 105, mskAt(2026, 7, 20, 12, 0), 95, 110)
+	sig := s.Decide(md)
+	if sig.Reason != "SL" {
+		t.Fatalf("reason=%q want SL to win a same-bar SL/TP touch", sig.Reason)
+	}
+}
+
+// stochSeries builds a series whose %K sits above 80 on the second-to-last bar and drops
+// below 80 on the last one: a long flat-high range, then a close near the top, then a
+// close near the bottom of the same range.
+func stochSeries() (highs, lows, closes []float64) {
+	const n = 20
+	for i := 0; i < n; i++ {
+		highs = append(highs, 110)
+		lows = append(lows, 100)
+		closes = append(closes, 105)
+	}
+	closes[n-2] = 109.5 // %K = 95
+	closes[n-1] = 102   // %K = 20
+	return highs, lows, closes
+}
+
+func TestExitStochasticCrossDown(t *testing.T) {
+	highs, lows, closes := stochSeries()
+	n := len(closes)
+	times := sessionTimes(n)
+	s := NewWithParams("TEST", DefaultParams())
+
+	md := strategy.MarketData{
+		Price:  closes[n-1],
+		Highs:  highs,
+		Lows:   lows,
+		Closes: closes,
+		Times:  times,
+		Position: &strategy.Position{
+			PurchasePrice: 100, Quantity: 1, StopLoss: 90, TakeProfit: 200,
+		},
+	}
+	sig := s.Decide(md)
+	if sig.Kind != model.SignalSell || sig.Reason != "STOCH" {
+		t.Fatalf("kind=%v reason=%q want Sell/STOCH", sig.Kind, sig.Reason)
+	}
+	if model.IsStopReason(sig.Reason) {
+		t.Fatalf("STOCH must not be a stop-style reason: it fills at the bar close")
+	}
+}
+
+func TestStochasticExitDisabled(t *testing.T) {
+	highs, lows, closes := stochSeries()
+	n := len(closes)
+	p := DefaultParams()
+	p.EnableStochExit = 0
+	s := NewWithParams("TEST", p)
+
+	md := strategy.MarketData{
+		Price:  closes[n-1],
+		Highs:  highs,
+		Lows:   lows,
+		Closes: closes,
+		Times:  sessionTimes(n),
+		Position: &strategy.Position{
+			PurchasePrice: 100, Quantity: 1, StopLoss: 90, TakeProfit: 200,
+		},
+	}
+	if sig := s.Decide(md); sig.Kind == model.SignalSell {
+		t.Fatalf("stochastic exit fired while EnableStochExit=0 (reason=%q)", sig.Reason)
+	}
+}
+
+func TestExitEndOfDay(t *testing.T) {
+	s := NewWithParams("TEST", DefaultParams())
+	cases := []struct {
+		name string
+		at   time.Time
+		want bool
+	}{
+		{"monday midday", mskAt(2026, 7, 20, 12, 0), false},
+		{"monday last bar", mskAt(2026, 7, 20, 16, 55), true},
+		{"friday midday", mskAt(2026, 7, 24, 12, 0), false},
+		{"friday last bar", mskAt(2026, 7, 24, 13, 55), true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			md := openPos(101, 99, 100, tc.at, 90, 200)
+			sig := s.Decide(md)
+			got := sig.Kind == model.SignalSell && sig.Reason == "EOD"
+			if got != tc.want {
+				t.Fatalf("EOD exit = %v want %v (reason=%q)", got, tc.want, sig.Reason)
+			}
+		})
+	}
+}
+
+func TestNoExitWithoutTimes(t *testing.T) {
+	s := NewWithParams("TEST", DefaultParams())
+	md := openPos(101, 99, 100, time.Time{}, 90, 200)
+	md.Times = nil
+	if sig := s.Decide(md); sig.Kind == model.SignalSell {
+		t.Fatalf("missing Times must degrade the EOD exit to a no-op, got reason=%q", sig.Reason)
+	}
+}

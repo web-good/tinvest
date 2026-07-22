@@ -253,7 +253,47 @@ func (s *Strategy) entryReason(barsAgo int, rsiNow, stop, entry, tp, atr float64
 	)
 }
 
-// manage handles an open long. Implemented in Task 3.
+// manage handles an open long, exiting in precedence SL -> TP -> stochastic -> EOD. SL and
+// TP are read from the position (frozen at entry by the engine), never recomputed from
+// Params. The stochastic and EOD exits fill at the bar close — their reasons are
+// deliberately absent from model.IsStopReason.
 func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal {
+	pos := md.Position
+	n := len(md.Lows)
+	if pos == nil || n == 0 || len(md.Highs) != n || len(md.Closes) != n {
+		return sig
+	}
+	low, high := md.Lows[n-1], md.Highs[n-1]
+
+	switch {
+	case pos.StopLoss > 0 && low <= pos.StopLoss:
+		sig.Kind, sig.Reason = model.SignalSell, "SL"
+		sig.StopLoss = pos.StopLoss
+		sig.ExitReason = fmt.Sprintf("SL: low %.4f ≤ стоп %.4f (вход %.4f)", low, pos.StopLoss, pos.PurchasePrice)
+	case pos.TakeProfit > 0 && high >= pos.TakeProfit:
+		sig.Kind, sig.Reason = model.SignalSell, "TP"
+		sig.TakeProfit = pos.TakeProfit
+		sig.ExitReason = fmt.Sprintf("TP: high %.4f ≥ тейк %.4f (вход %.4f)", high, pos.TakeProfit, pos.PurchasePrice)
+	case s.p.EnableStochExit == 1 && s.stochExit(md):
+		sig.Kind, sig.Reason = model.SignalSell, "STOCH"
+		sig.ExitReason = fmt.Sprintf("STOCH: %%K вышел вниз из зоны %.0f, выход по закрытию %.4f (вход %.4f)",
+			s.p.StochOverbought, md.Closes[n-1], pos.PurchasePrice)
+	case s.isDayEnd(s.barTime(md)):
+		sig.Kind, sig.Reason = model.SignalSell, "EOD"
+		sig.ExitReason = fmt.Sprintf("EOD: закрытие на конец торгового дня по %.4f (вход %.4f)",
+			md.Closes[n-1], pos.PurchasePrice)
+	}
 	return sig
+}
+
+// stochExit reports whether %K left the overbought zone downward on the current bar.
+// StochasticSeries is right-aligned and shorter than the price series, so the two latest
+// values are read from the tail — never by bar index.
+func (s *Strategy) stochExit(md strategy.MarketData) bool {
+	ks, _ := indicators.StochasticSeries(md.Highs, md.Lows, md.Closes, s.p.StochK, s.p.StochD)
+	if len(ks) < 2 {
+		return false
+	}
+	prev, now := ks[len(ks)-2], ks[len(ks)-1]
+	return prev >= s.p.StochOverbought && now < s.p.StochOverbought
 }
