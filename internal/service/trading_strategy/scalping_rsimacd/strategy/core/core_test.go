@@ -2,6 +2,7 @@ package core
 
 import (
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -522,5 +523,32 @@ func TestNoExitWithoutTimes(t *testing.T) {
 	md.Times = nil
 	if sig := s.Decide(md); sig.Kind == model.SignalSell {
 		t.Fatalf("missing Times must degrade the EOD exit to a no-op, got reason=%q", sig.Reason)
+	}
+}
+
+func TestExplainReportsEveryGate(t *testing.T) {
+	highs, lows, closes := declineThenRally(60, 8, 100, 0.5, 0.2)
+	times := sessionTimes(len(closes))
+	s := NewWithParams("TEST", testParams())
+
+	out := s.Explain(mdPrefix(highs, lows, closes, times, 63))
+	for _, want := range []string{"сессия", "MACD", "RSI", "ATR", "стоп", "риск"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("Explain output missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestExplainHandlesShortHistory(t *testing.T) {
+	s := NewWithParams("TEST", DefaultParams())
+	md := strategy.MarketData{
+		Price:  10,
+		Highs:  []float64{10},
+		Lows:   []float64{9},
+		Closes: []float64{10},
+		Times:  []time.Time{mskAt(2026, 7, 20, 12, 0)},
+	}
+	if out := s.Explain(md); out == "" {
+		t.Fatalf("Explain must always return a diagnosis, even on short history")
 	}
 }

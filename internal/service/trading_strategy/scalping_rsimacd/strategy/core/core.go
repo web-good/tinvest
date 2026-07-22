@@ -10,6 +10,7 @@ package core
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"tinvest/internal/service/trading_strategy/scalping/model"
@@ -284,6 +285,61 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 			md.Closes[n-1], pos.PurchasePrice)
 	}
 	return sig
+}
+
+// Explain returns a gate-by-gate verdict for one bar, consumed by the engine's Trace
+// (-explain). It recomputes the same values enter() does and reports pass/fail per gate.
+func (s *Strategy) Explain(md strategy.MarketData) string {
+	var sb strings.Builder
+	n := len(md.Closes)
+	if n < 2 || len(md.Highs) != n || len(md.Lows) != n {
+		return "недостаточно свечей\n"
+	}
+	fmt.Fprintf(&sb, "сессия: %v (бар %v)\n", s.inSession(s.barTime(md)), s.barTime(md))
+
+	macd, signal := indicators.MACD(md.Closes, s.p.MACDFast, s.p.MACDSlow, s.p.MACDSignal)
+	if len(macd) != n || len(signal) != n {
+		sb.WriteString("MACD: недостаточно истории\n")
+		return sb.String()
+	}
+	i := n - 1
+	crossed := macd[i-1] <= signal[i-1] && macd[i] > signal[i]
+	fmt.Fprintf(&sb, "MACD(%d,%d,%d): линия %.5f сигнал %.5f, пересечение вверх? %v; обе ниже нуля? %v\n",
+		s.p.MACDFast, s.p.MACDSlow, s.p.MACDSignal, macd[i], signal[i], crossed, macd[i] < 0 && signal[i] < 0)
+
+	rsi := indicators.RSISeries(md.Closes, s.p.RSIPeriod)
+	if len(rsi) != n {
+		sb.WriteString("RSI: недостаточно истории\n")
+		return sb.String()
+	}
+	fmt.Fprintf(&sb, "RSI(%d) сейчас %.1f, зона %.0f\n", s.p.RSIPeriod, rsi[i], s.p.RSIOversold)
+	trig, ok := s.lastRSITrigger(rsi, n)
+	if !ok {
+		fmt.Fprintf(&sb, "RSI-триггер в окне %d бар(ов): нет\n", s.p.MACDConfirmBars)
+		return sb.String()
+	}
+	fmt.Fprintf(&sb, "RSI-триггер: бар -%d (RSI %.1f -> %.1f)\n", i-trig, rsi[trig-1], rsi[trig])
+
+	atr := indicators.ATR(md.Highs, md.Lows, md.Closes, s.p.ATRPeriod)
+	fmt.Fprintf(&sb, "ATR(%d): %.4f\n", s.p.ATRPeriod, atr)
+	if atr <= 0 {
+		return sb.String()
+	}
+	stop := md.Lows[trig] - s.p.StopBufferATR*atr
+	fmt.Fprintf(&sb, "стоп %.4f (лоу свечи кросса %.4f - %.2f×ATR); уровень удержан? %v\n",
+		stop, md.Lows[trig], s.p.StopBufferATR, s.triggerAlive(md, trig, n, stop))
+
+	risk := md.Closes[i] - stop
+	fmt.Fprintf(&sb, "риск %.4f в границах [%.4f..%.4f]? %v; тейк %.4f (RR=%.2f)\n",
+		risk, s.p.MinRiskATR*atr, s.p.MaxRiskATR*atr,
+		risk >= s.p.MinRiskATR*atr && risk <= s.p.MaxRiskATR*atr,
+		md.Closes[i]+s.p.RR*risk, s.p.RR)
+
+	if s.p.EnableStochExit == 1 {
+		fmt.Fprintf(&sb, "выход по стохастику(%d,%d) на этом баре? %v\n", s.p.StochK, s.p.StochD, s.stochExit(md))
+	}
+	fmt.Fprintf(&sb, "конец дня? %v\n", s.isDayEnd(s.barTime(md)))
+	return sb.String()
 }
 
 // stochExit reports whether %K left the overbought zone downward on the current bar.
