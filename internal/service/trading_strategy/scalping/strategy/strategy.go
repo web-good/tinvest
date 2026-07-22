@@ -14,6 +14,12 @@ type Position struct {
 	// trading, which does not yet persist entry state — see the levels
 	// entry-locked-stops spec). The backtest engine always populates it.
 	StopLoss float64
+	// TakeProfit is the fixed take-profit level frozen at entry (the signal's
+	// TakeProfit at the time the position was opened). Zero means "not set" (e.g. a
+	// trailing-only strategy with no fixed target, or live trading, which does not
+	// yet persist entry state). The backtest engine populates it whenever the
+	// entry signal carried a non-zero TakeProfit.
+	TakeProfit float64
 	// EntryATR is the ATR captured at entry, used as the arm threshold unit.
 	EntryATR float64
 	// MaxFavorablePrice is the highest close seen since entry (monotonic
