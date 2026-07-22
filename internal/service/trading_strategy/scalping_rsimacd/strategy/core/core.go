@@ -162,8 +162,12 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	if n < 2 || len(md.Highs) != n || len(md.Lows) != n {
 		return sig
 	}
-	// 1. session window (skipped when Times is absent or misaligned).
-	if !s.inSession(s.barTime(md)) {
+	// 1. session window (skipped when Times is absent or misaligned), and never on the
+	// day-end bar itself: manage() only runs from the NEXT bar onward, so an entry taken on
+	// the day-end bar could not be EOD-closed on its own bar and would risk carrying
+	// overnight (e.g. on a half-day, or any series that ends exactly at the session close).
+	t := s.barTime(md)
+	if !s.inSession(t) || s.isDayEnd(t) {
 		return sig
 	}
 	// 2. MACD bullish cross on the current bar, both lines below zero.
@@ -295,7 +299,9 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 	if n < 2 || len(md.Highs) != n || len(md.Lows) != n {
 		return "недостаточно свечей\n"
 	}
-	fmt.Fprintf(&sb, "сессия: %v (бар %v)\n", s.inSession(s.barTime(md)), s.barTime(md))
+	barT := s.barTime(md)
+	fmt.Fprintf(&sb, "сессия: %v (бар %v); конец дня (запрет входа)? %v\n",
+		s.inSession(barT), barT, s.isDayEnd(barT))
 
 	macd, signal := indicators.MACD(md.Closes, s.p.MACDFast, s.p.MACDSlow, s.p.MACDSignal)
 	if len(macd) != n || len(signal) != n {
@@ -338,7 +344,6 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 	if s.p.EnableStochExit == 1 {
 		fmt.Fprintf(&sb, "выход по стохастику(%d,%d) на этом баре? %v\n", s.p.StochK, s.p.StochD, s.stochExit(md))
 	}
-	fmt.Fprintf(&sb, "конец дня? %v\n", s.isDayEnd(s.barTime(md)))
 	return sb.String()
 }
 

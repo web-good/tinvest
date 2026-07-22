@@ -158,14 +158,18 @@ func declineThenRally(down, up int, start, step, wick float64) (highs, lows, clo
 	return highs, lows, closes
 }
 
-// sessionTimes returns len(n) MSK bar open-times, 5 minutes apart, starting Mon 10:00.
-func sessionTimes(n int) []time.Time {
+// sessionTimesFrom returns len(n) MSK bar open-times, 5 minutes apart, starting at base.
+func sessionTimesFrom(n int, base time.Time) []time.Time {
 	out := make([]time.Time, n)
-	base := mskAt(2026, 7, 20, 10, 0)
 	for i := range out {
 		out[i] = base.Add(time.Duration(i*barSpanMin) * time.Minute)
 	}
 	return out
+}
+
+// sessionTimes returns len(n) MSK bar open-times, 5 minutes apart, starting Mon 10:00.
+func sessionTimes(n int) []time.Time {
+	return sessionTimesFrom(n, mskAt(2026, 7, 20, 10, 0))
 }
 
 // mdPrefix builds MarketData over bars [0, i] of the given series (flat position).
@@ -244,26 +248,174 @@ func TestNoEntryOutsideSession(t *testing.T) {
 	}
 }
 
+func TestNoEntryOnDayEndBar(t *testing.T) {
+	highs, lows, closes := declineThenRally(60, 8, 100, 0.5, 0.2)
+	s := NewWithParams("TEST", testParams())
+
+	// Mid-session baseline: the RSI/MACD math is time-independent, so bar i is the entry
+	// opportunity regardless of which clock time it's stamped with.
+	baseline := sessionTimes(len(closes))
+	_, i, ok := firstBuy(s, highs, lows, closes, baseline)
+	if !ok {
+		t.Fatalf("baseline entry missing; the day-end assertions below would be vacuous")
+	}
+
+	// Shift the whole series so bar i opens at 16:55 Mon-Thu: in session (TestInSession's
+	// "mon last bar" case) but also the day-end bar (TestIsDayEnd's matching case) — the
+	// last bar that still ends inside the session. All earlier bars land between ~11:25 and
+	// 16:55, still comfortably mid-session on the same Monday.
+	monThu := sessionTimesFrom(len(closes), mskAt(2026, 7, 20, 16, 55).Add(-time.Duration(i*barSpanMin)*time.Minute))
+	if !s.inSession(monThu[i]) || !s.isDayEnd(monThu[i]) {
+		t.Fatalf("test setup broken: bar %d at %v must be in-session AND day-end", i, monThu[i])
+	}
+	if _, _, ok := firstBuy(s, highs, lows, closes, monThu); ok {
+		t.Fatalf("entry fired on the Mon-Thu day-end bar (16:55)")
+	}
+
+	// Same shift onto Friday's early close (13:55): the equivalent Friday day-end bar.
+	fri := sessionTimesFrom(len(closes), mskAt(2026, 7, 24, 13, 55).Add(-time.Duration(i*barSpanMin)*time.Minute))
+	if !s.inSession(fri[i]) || !s.isDayEnd(fri[i]) {
+		t.Fatalf("test setup broken: bar %d at %v must be in-session AND day-end", i, fri[i])
+	}
+	if _, _, ok := firstBuy(s, highs, lows, closes, fri); ok {
+		t.Fatalf("entry fired on the Friday day-end bar (13:55)")
+	}
+}
+
+// declineRallyPullbackRally builds a four-phase synthetic 5m series: decline(down1), rally
+// (up1) — a below-zero MACD cross fires here, same as declineThenRally — then a second
+// pullback decline(down2) and a second rally(up2). The second rally's residual momentum
+// from the first pushes MACD to a FRESH bullish cross with both lines already at/above
+// zero: the case the MACD-zero gate in enter() must reject. Without this second leg, the
+// only crosses ever offered sit deep below zero, making a "no Buy on an above-zero cross"
+// assertion vacuous (see task-5 review finding 2).
+func declineRallyPullbackRally(down1, up1, down2, up2 int, start, step, wick float64) (highs, lows, closes []float64) {
+	price := start
+	for i := 0; i < down1; i++ {
+		if i%7 == 6 {
+			price += step * 0.25
+		} else {
+			price -= step
+		}
+		closes = append(closes, price)
+	}
+	for i := 0; i < up1; i++ {
+		price += 2 * step
+		closes = append(closes, price)
+	}
+	for i := 0; i < down2; i++ {
+		if i%7 == 6 {
+			price += step * 0.25
+		} else {
+			price -= step
+		}
+		closes = append(closes, price)
+	}
+	for i := 0; i < up2; i++ {
+		price += 2 * step
+		closes = append(closes, price)
+	}
+	for _, c := range closes {
+		highs = append(highs, c+wick)
+		lows = append(lows, c-wick)
+	}
+	return highs, lows, closes
+}
+
 func TestEveryEntryHasBothMACDLinesBelowZero(t *testing.T) {
-	// A long rally eventually drags MACD above zero; no Buy may fire on such a cross.
-	highs, lows, closes := declineThenRally(60, 40, 100, 0.5, 0.2)
+	// Decline, rally (first, below-zero entry opportunity), pullback, second rally: the
+	// second rally offers a FRESH bullish MACD cross with both lines already at/above zero.
+	// Bar 75 sits squarely mid-session (16:15 Mon), so a Buy refusal there is attributable
+	// to the MACD-zero gate, not to the session gate (the fixture this test replaces put
+	// its only above-zero cross past 17:00, where the session gate alone explained every
+	// rejection — see task-5 review finding 2).
+	highs, lows, closes := declineRallyPullbackRally(60, 8, 6, 8, 100, 0.5, 0.2)
 	times := sessionTimes(len(closes))
 	s := NewWithParams("TEST", testParams())
 
-	var buys int
+	var buys, aboveZeroCrosses int
 	for i := 40; i < len(closes); i++ {
+		macd, signal := indicators.MACD(closes[:i+1], 3, 6, 9)
+		if macd[i-1] <= signal[i-1] && macd[i] > signal[i] && (macd[i] >= 0 || signal[i] >= 0) {
+			aboveZeroCrosses++
+		}
 		sig := s.Decide(mdPrefix(highs, lows, closes, times, i))
 		if sig.Kind != model.SignalBuy {
 			continue
 		}
 		buys++
-		macd, signal := indicators.MACD(closes[:i+1], 3, 6, 9)
 		if macd[i] >= 0 || signal[i] >= 0 {
 			t.Fatalf("Buy at bar %d with MACD above zero: macd=%v signal=%v", i, macd[i], signal[i])
 		}
 	}
 	if buys == 0 {
 		t.Fatalf("no Buy fired at all; the assertion above would be vacuous")
+	}
+	if aboveZeroCrosses == 0 {
+		t.Fatalf("fixture never offers an above-zero bullish MACD cross; the gate is untested")
+	}
+}
+
+// declineDoubleCrossBreach builds a synthetic 5m series where the RSI trigger (bar n-2) is
+// one bar older than the MACD-confirmed entry bar (n-1): a first rally crosses RSI and MACD
+// together, a sharp pullback drags MACD back under its signal line while RSI stays above
+// the oversold zone (so the pullback bar's RSI dip-and-recover never registers a fresher
+// trigger), and a further push re-crosses MACD bullish one bar later. That 1-bar gap is
+// exactly where a planted low-side wick on the entry bar — breaching the trigger bar's low,
+// i.e. the stop — exercises triggerAlive's wiring into enter() without touching any close
+// (RSI/MACD only look at closes, so the breach is invisible to every other gate).
+func declineDoubleCrossBreach() (highs, lows, closes []float64) {
+	price := 100.0
+	const step = 0.5
+	for i := 0; i < 60; i++ {
+		if i%7 == 6 {
+			price += step * 0.25
+		} else {
+			price -= step
+		}
+		closes = append(closes, price)
+	}
+	for _, d := range []float64{1, 0.3, -2.5, 0.5, 0.5} {
+		price += d
+		closes = append(closes, price)
+	}
+	const wick = 0.2
+	highs = make([]float64, len(closes))
+	lows = make([]float64, len(closes))
+	for i, c := range closes {
+		highs[i] = c + wick
+		lows[i] = c - wick
+	}
+	return highs, lows, closes
+}
+
+func TestTriggerAliveWiringBlocksEntry(t *testing.T) {
+	highs, lows, closes := declineDoubleCrossBreach()
+	n := len(closes)
+	times := sessionTimes(n)
+	s := NewWithParams("TEST", testParams())
+
+	// Sanity: the RSI trigger sits exactly one bar before the MACD-confirmed entry bar —
+	// otherwise the breach below wouldn't isolate triggerAlive from the other gates.
+	rsi := indicators.RSISeries(closes, s.p.RSIPeriod)
+	trig, found := s.lastRSITrigger(rsi, n)
+	if !found || trig != n-2 {
+		t.Fatalf("test setup broken: trig=%d found=%v want %d,true", trig, found, n-2)
+	}
+
+	// Baseline: with the stop untouched, this is a legitimate Buy.
+	baseline := s.Decide(mdPrefix(highs, lows, closes, times, n-1))
+	if baseline.Kind != model.SignalBuy {
+		t.Fatalf("baseline entry missing; the breach assertion below would be vacuous (sig=%+v)", baseline)
+	}
+
+	// Plant a deep wick on the entry bar's own low, breaching the trigger bar's low (the
+	// stop). No close changes, so RSI/MACD/session are unaffected — only triggerAlive can
+	// catch this.
+	breached := append([]float64(nil), lows...)
+	breached[n-1] = lows[trig] - 5
+	if sig := s.Decide(mdPrefix(highs, breached, closes, times, n-1)); sig.Kind == model.SignalBuy {
+		t.Fatalf("Buy fired despite a stop breach between the RSI trigger and the entry bar")
 	}
 }
 
