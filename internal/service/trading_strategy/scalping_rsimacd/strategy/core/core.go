@@ -9,9 +9,12 @@
 package core
 
 import (
+	"fmt"
 	"time"
 
+	"tinvest/internal/service/trading_strategy/scalping/model"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
+	"tinvest/pkg/indicators"
 )
 
 // barSpanMin is the bar length in minutes. The strategy is defined on 5-minute candles;
@@ -139,4 +142,118 @@ func (s *Strategy) barTime(md strategy.MarketData) time.Time {
 		return time.Time{}
 	}
 	return md.Times[n-1]
+}
+
+// Decide routes to entry (flat) or position management (open).
+func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
+	sig := model.Signal{Ticker: s.ticker, Price: md.Price}
+	if md.Position != nil {
+		return s.manage(md, sig) // implemented in Task 3
+	}
+	return s.enter(md, sig)
+}
+
+// enter emits a long when the current bar carries a below-zero MACD bullish cross that
+// confirms a recent RSI cross up out of the oversold zone, and the trigger's stop level
+// has held since. Everything is recomputed from md — no state survives between bars.
+func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal {
+	n := len(md.Closes)
+	if n < 2 || len(md.Highs) != n || len(md.Lows) != n {
+		return sig
+	}
+	// 1. session window (skipped when Times is absent or misaligned).
+	if !s.inSession(s.barTime(md)) {
+		return sig
+	}
+	// 2. MACD bullish cross on the current bar, both lines below zero.
+	macd, signal := indicators.MACD(md.Closes, s.p.MACDFast, s.p.MACDSlow, s.p.MACDSignal)
+	if len(macd) != n || len(signal) != n {
+		return sig
+	}
+	i := n - 1
+	if !(macd[i-1] <= signal[i-1] && macd[i] > signal[i]) {
+		return sig
+	}
+	if macd[i] >= 0 || signal[i] >= 0 {
+		return sig
+	}
+	// 3. the RSI trigger that this cross confirms.
+	rsi := indicators.RSISeries(md.Closes, s.p.RSIPeriod)
+	if len(rsi) != n {
+		return sig
+	}
+	trig, ok := s.lastRSITrigger(rsi, n)
+	if !ok {
+		return sig
+	}
+	// 4. ATR unit for the stop buffer and the risk sanity bounds.
+	atr := indicators.ATR(md.Highs, md.Lows, md.Closes, s.p.ATRPeriod)
+	if atr <= 0 {
+		return sig
+	}
+	stop := md.Lows[trig] - s.p.StopBufferATR*atr
+	// 5. the trigger's stop level must have held since the trigger bar.
+	if !s.triggerAlive(md, trig, n, stop) {
+		return sig
+	}
+	// 6. risk sanity: reject degenerate and abnormally wide stops.
+	entry := md.Closes[i]
+	risk := entry - stop
+	if risk < s.p.MinRiskATR*atr || risk > s.p.MaxRiskATR*atr {
+		return sig
+	}
+
+	tp := entry + s.p.RR*risk
+	sig.Kind = model.SignalBuy
+	sig.StopLoss = stop
+	sig.TakeProfit = tp
+	sig.ATR = atr
+	sig.RSI = rsi[i]
+	sig.Level = md.Lows[trig]
+	sig.EntryReason = s.entryReason(i-trig, rsi[i], stop, entry, tp, atr)
+	return sig
+}
+
+// lastRSITrigger returns the most recent bar in [n-1-MACDConfirmBars, n-1] on which RSI
+// crossed up through the oversold level and closed above it. The rsi[j-1] > 0 guard is
+// load-bearing: RSISeries fills warm-up positions with 0, which would otherwise read as
+// "was inside the oversold zone" and manufacture a phantom trigger.
+func (s *Strategy) lastRSITrigger(rsi []float64, n int) (int, bool) {
+	lo := n - 1 - s.p.MACDConfirmBars
+	if lo < 1 {
+		lo = 1
+	}
+	for j := n - 1; j >= lo; j-- {
+		if rsi[j-1] > 0 && rsi[j-1] < s.p.RSIOversold && rsi[j] > s.p.RSIOversold {
+			return j, true
+		}
+	}
+	return 0, false
+}
+
+// triggerAlive reports whether the stop level has held on every bar after the trigger and
+// the entry close still sits above it. A bar that already traded through the stop means
+// the setup was stopped out before it could be entered.
+func (s *Strategy) triggerAlive(md strategy.MarketData, t, n int, stop float64) bool {
+	for j := t + 1; j <= n-1; j++ {
+		if md.Lows[j] <= stop {
+			return false
+		}
+	}
+	return md.Closes[n-1] > stop
+}
+
+// entryReason renders the rationale shown in the trade journal. barsAgo is the distance
+// from the RSI trigger bar to the entry bar (0 = same bar).
+func (s *Strategy) entryReason(barsAgo int, rsiNow, stop, entry, tp, atr float64) string {
+	return fmt.Sprintf(
+		"RSI(%d) вышел вверх из зоны %.0f (сейчас %.1f), через %d бар(ов) MACD(%d,%d,%d) пересёкся ниже нуля; вход %.4f, стоп %.4f (лоу свечи кросса, буфер %.2f×ATR), тейк %.4f (RR=%.2f), ATR=%.4f",
+		s.p.RSIPeriod, s.p.RSIOversold, rsiNow, barsAgo, s.p.MACDFast, s.p.MACDSlow, s.p.MACDSignal,
+		entry, stop, s.p.StopBufferATR, tp, s.p.RR, atr,
+	)
+}
+
+// manage handles an open long. Implemented in Task 3.
+func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal {
+	return sig
 }
