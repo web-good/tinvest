@@ -89,7 +89,7 @@ func TestStrategyPositionNilWhenFlat(t *testing.T) {
 
 func TestPortfolioOpenFreezesStopAndSeedsFavorable(t *testing.T) {
 	p := newPortfolio(Config{InitialCash: 100000, Fraction: 1.0, Commission: 0, Lot: 1})
-	p.open(100, time.Unix(0, 0), 0, 0, 2, 95, "") // atr 2, stop 95
+	p.open(100, time.Unix(0, 0), 90, 110, 2, 95, "") // level 90, target 110, atr 2, stop 95
 	pos := p.strategyPosition()
 	if pos == nil {
 		t.Fatal("expected a position after open")
@@ -97,11 +97,20 @@ func TestPortfolioOpenFreezesStopAndSeedsFavorable(t *testing.T) {
 	if !approx(pos.StopLoss, 95) {
 		t.Errorf("StopLoss = %v, want 95 (frozen at entry)", pos.StopLoss)
 	}
+	if !approx(pos.TakeProfit, 110) {
+		t.Errorf("TakeProfit = %v, want 110 (frozen at entry)", pos.TakeProfit)
+	}
 	if !approx(pos.EntryATR, 2) {
 		t.Errorf("EntryATR = %v, want 2", pos.EntryATR)
 	}
 	if !approx(pos.MaxFavorablePrice, 100) {
 		t.Errorf("MaxFavorablePrice = %v, want 100 (seeded to entry price)", pos.MaxFavorablePrice)
+	}
+	// After close, TakeProfit must be cleared (position should be nil).
+	p.bar = 1
+	p.close(105, time.Unix(1, 0), "TP", "")
+	if p.strategyPosition() != nil {
+		t.Errorf("strategyPosition() = %v, want nil after close", p.strategyPosition())
 	}
 }
 
