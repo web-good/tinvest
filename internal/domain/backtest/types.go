@@ -21,6 +21,19 @@ type Config struct {
 	Commission      float64 // commission as a fraction of turnover (e.g. 0.0005)
 	Lot             int32   // share lot size (orders are whole lots)
 	RiskFractionPct float64 // >0 = risk this % of equity per trade, sized off the entry stop distance; 0 = legacy Fraction sizing; commission is excluded from the modeled stop-out loss
+
+	// HTFInterval is the bar-span of the higher-timeframe series passed to Run/Trace.
+	// Zero means 4 hours — the legacy span reversion was built on.
+	HTFInterval time.Duration
+}
+
+// htfSpan returns the configured higher-timeframe bar span, defaulting to 4 hours so
+// callers written before the field existed keep their behavior.
+func (c Config) htfSpan() time.Duration {
+	if c.HTFInterval > 0 {
+		return c.HTFInterval
+	}
+	return defaultHTFInterval
 }
 
 // Trade is one completed round-trip (entry -> exit).

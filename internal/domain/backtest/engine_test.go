@@ -520,3 +520,39 @@ func TestAssembleMarketData_MatchesPerBarFields(t *testing.T) {
 		t.Fatalf("HTFCloses = %v, want [9]", md.HTFCloses)
 	}
 }
+
+func TestConfigHTFSpanDefaultsTo4H(t *testing.T) {
+	if got := (Config{}).htfSpan(); got != 4*time.Hour {
+		t.Fatalf("zero HTFInterval must mean 4h, got %v", got)
+	}
+	if got := (Config{HTFInterval: time.Hour}).htfSpan(); got != time.Hour {
+		t.Fatalf("explicit HTFInterval must win, got %v", got)
+	}
+}
+
+func TestAssembleMarketDataWithHourlyHTF(t *testing.T) {
+	base := time.Date(2026, 7, 20, 10, 0, 0, 0, time.UTC)
+	window := []Candle{{Time: base.Add(2 * time.Hour), Open: 10, High: 11, Low: 9, Close: 10}}
+	htf := []Candle{
+		{Time: base, High: 2, Low: 1, Close: 1.5},
+		{Time: base.Add(time.Hour), High: 3, Low: 2, Close: 2.5},
+		{Time: base.Add(2 * time.Hour), High: 4, Low: 3, Close: 3.5},
+	}
+	cur := base.Add(2 * time.Hour) // третий часовой бар ещё формируется
+
+	md := AssembleMarketDataWithHTFInterval(window, nil, htf, cur, time.Hour)
+	if len(md.HTFCloses) != 2 {
+		t.Fatalf("hourly HTF: got %d completed bars, want 2", len(md.HTFCloses))
+	}
+	if md.HTFCloses[len(md.HTFCloses)-1] != 2.5 {
+		t.Fatalf("last completed hourly close = %v want 2.5", md.HTFCloses[len(md.HTFCloses)-1])
+	}
+	if len(md.HTFHighs) != 2 || len(md.HTFLows) != 2 {
+		t.Fatalf("highs/lows must stay index-aligned with closes: %d/%d", len(md.HTFHighs), len(md.HTFLows))
+	}
+
+	// Прежняя 4-часовая семантика: ни один бар ещё не закрыт.
+	if md4 := AssembleMarketData(window, nil, htf, cur); len(md4.HTFCloses) != 0 {
+		t.Fatalf("4h default: got %d completed bars, want 0", len(md4.HTFCloses))
+	}
+}

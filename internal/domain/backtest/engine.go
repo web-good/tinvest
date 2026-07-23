@@ -9,9 +9,10 @@ import (
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 )
 
-// htfInterval is the fixed bar-span of the Hour4 HTF series; Run/Trace pass it to
-// visibleCompletedHTF at each bar to decide which 4H bars have fully closed.
-const htfInterval = 4 * time.Hour
+// defaultHTFInterval is the HTF bar-span assumed when Config.HTFInterval is unset: the
+// Hour4 series reversion was built on. Run/Trace pass Config.htfSpan() to
+// visibleCompletedHTF at each bar to decide which HTF bars have fully closed.
+const defaultHTFInterval = 4 * time.Hour
 
 // mskLoc anchors the trading-day boundary used to decide which daily candles are
 // already closed at a given intraday bar. Fallback to UTC if the tz DB is absent.
@@ -111,7 +112,7 @@ func Run(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Candl
 	lastClose := candles[len(candles)-1].Close
 	for i := l - 1; i < len(candles); i++ {
 		p.bar = i
-		md := AssembleMarketData(candles[i-l+1:i+1], dailyCandles, htfCandles, candles[i].Time)
+		md := AssembleMarketDataWithHTFInterval(candles[i-l+1:i+1], dailyCandles, htfCandles, candles[i].Time, cfg.htfSpan())
 		md.TodayHigh, md.TodayLow = todayExtent(candles, i, mskLoc)
 		if p.qty != 0 {
 			p.mark(candles[i].Close)
@@ -175,7 +176,7 @@ func Trace(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Can
 	p := newPortfolio(cfg)
 	for i := l - 1; i < len(candles); i++ {
 		p.bar = i
-		md := AssembleMarketData(candles[i-l+1:i+1], dailyCandles, htfCandles, candles[i].Time)
+		md := AssembleMarketDataWithHTFInterval(candles[i-l+1:i+1], dailyCandles, htfCandles, candles[i].Time, cfg.htfSpan())
 		md.TodayHigh, md.TodayLow = todayExtent(candles, i, mskLoc)
 		if p.qty != 0 {
 			p.mark(candles[i].Close)
@@ -255,15 +256,23 @@ func buildMarketData(window []Candle) strategy.MarketData {
 	return md
 }
 
-// AssembleMarketData builds the per-bar snapshot from an oldest-first hourly window
-// plus completed-daily and 4H series, identically to Run's per-bar assembly — minus
-// TodayHigh/TodayLow, which the caller sets separately and the reversion core ignores.
-// cur is the open-time of the current (latest) bar; it anchors the no-lookahead
-// completeness test for daily and 4H series.
+// AssembleMarketData builds the per-bar snapshot with the default 4H higher-timeframe
+// span. Kept for callers built on the Hour4 series (reversion, including its live
+// market-data assembler).
 func AssembleMarketData(window, daily, htf []Candle, cur time.Time) strategy.MarketData {
+	return AssembleMarketDataWithHTFInterval(window, daily, htf, cur, defaultHTFInterval)
+}
+
+// AssembleMarketDataWithHTFInterval builds the per-bar snapshot from an oldest-first
+// window plus completed-daily and higher-timeframe series, identically to Run's per-bar
+// assembly — minus TodayHigh/TodayLow, which the caller sets separately. cur is the
+// open-time of the current (latest) bar; it anchors the no-lookahead completeness test
+// for the daily and HTF series. htfSpan is the bar-span of the htf series (e.g. 1h for
+// scalping_rsimacd, 4h for reversion).
+func AssembleMarketDataWithHTFInterval(window, daily, htf []Candle, cur time.Time, htfSpan time.Duration) strategy.MarketData {
 	md := buildMarketData(window)
 	md.DailyCloses = visibleDailyCloses(daily, cur, mskLoc)
 	md.DailyHighs, md.DailyLows = visibleDailyHighsLows(daily, cur, mskLoc)
-	md.HTFCloses, md.HTFHighs, md.HTFLows = visibleCompletedHTF(htf, cur, htfInterval)
+	md.HTFCloses, md.HTFHighs, md.HTFLows = visibleCompletedHTF(htf, cur, htfSpan)
 	return md
 }
