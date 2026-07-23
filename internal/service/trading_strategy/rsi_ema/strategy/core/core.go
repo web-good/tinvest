@@ -12,6 +12,7 @@ package core
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"time"
 
@@ -237,5 +238,88 @@ func (s *Strategy) entryReason(rsiNow, fastNow, slowNow, entry, stop, atr float6
 	)
 }
 
-// manage is implemented in Task 3.
-func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal { return sig }
+// cooldownElapsed is returned by barsSinceEntry when the entry time is unknown, so a missing
+// EntryTime never traps the position inside the cooldown.
+const cooldownElapsed = math.MaxInt32
+
+// barsSinceEntry counts bars from the position's entry to the current bar, purely from
+// EntryTime, the current bar time and the data-inferred span. Positions never survive the
+// EOD close, so the window is always within one session and the uniform span is exact.
+func (s *Strategy) barsSinceEntry(md strategy.MarketData) int {
+	pos := md.Position
+	t := s.barTime(md)
+	if pos == nil || pos.EntryTime.IsZero() || t.IsZero() {
+		return cooldownElapsed
+	}
+	span := barSpanMinutes(md.Times)
+	if span <= 0 {
+		return cooldownElapsed
+	}
+	return int(math.Round(t.Sub(pos.EntryTime).Minutes() / float64(span)))
+}
+
+// crossedDown reports whether series crossed down through level between i-1 and i. The
+// series[i-1] > 0 guard rejects RSISeries warm-up zeros.
+func crossedDown(series []float64, i int, level float64) bool {
+	return i >= 1 && series[i-1] > 0 && series[i-1] >= level && series[i] < level
+}
+
+// emaCrossDown reports whether the fast EMA crossed below the slow EMA between i-1 and i, with
+// both prior values warmed (>0).
+func emaCrossDown(fast, slow []float64, i int) bool {
+	return i >= 1 && fast[i-1] > 0 && slow[i-1] > 0 && fast[i-1] >= slow[i-1] && fast[i] < slow[i]
+}
+
+// manage handles an open long, exiting in precedence SL -> EMAX -> RSI70 -> RSI50 -> EOD. SL
+// is read from the position (frozen at entry), never recomputed. RSI70 fires on an UPWARD
+// cross of RSIUpper (profit into overbought); RSI50 fires on a DOWNWARD cross of RSIMid and is
+// the ONLY exit gated by the cooldown. EMAX/RSI70/RSI50/EOD fill at the bar close.
+func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal {
+	pos := md.Position
+	n := len(md.Closes)
+	if pos == nil || n < 2 || len(md.Highs) != n || len(md.Lows) != n {
+		return sig
+	}
+	i := n - 1
+	low := md.Lows[i]
+	closeP := md.Closes[i]
+
+	// 1. hard stop (always active).
+	if pos.StopLoss > 0 && low <= pos.StopLoss {
+		sig.Kind, sig.Reason = model.SignalSell, "SL"
+		sig.StopLoss = pos.StopLoss
+		sig.ExitReason = fmt.Sprintf("SL: low %.4f ≤ стоп %.4f (вход %.4f)", low, pos.StopLoss, pos.PurchasePrice)
+		return sig
+	}
+
+	rsi := indicators.RSISeries(md.Closes, s.p.RSIPeriod)
+	fast, slow, ok := s.emaPair(md.Closes)
+
+	// 2. EMA cross down (always active).
+	if ok && emaCrossDown(fast, slow, i) {
+		sig.Kind, sig.Reason = model.SignalSell, "EMAX"
+		sig.ExitReason = fmt.Sprintf("EMAX: EMA(%d) пересекла EMA(%d) сверху вниз, выход по %.4f (вход %.4f)",
+			s.p.EMAFast, s.p.EMASlow, closeP, pos.PurchasePrice)
+		return sig
+	}
+	// 3. RSI cross UP through the upper level — profit into overbought (always active).
+	if len(rsi) == n && crossedUp(rsi, i, s.p.RSIUpper) {
+		sig.Kind, sig.Reason = model.SignalSell, "RSI70"
+		sig.ExitReason = fmt.Sprintf("RSI70: RSI(%d) пересёк %.0f снизу вверх, выход по %.4f (вход %.4f)",
+			s.p.RSIPeriod, s.p.RSIUpper, closeP, pos.PurchasePrice)
+		return sig
+	}
+	// 4. RSI cross DOWN through the mid level (gated by the post-entry cooldown).
+	if len(rsi) == n && crossedDown(rsi, i, s.p.RSIMid) && s.barsSinceEntry(md) >= s.p.EntryCooldownBars {
+		sig.Kind, sig.Reason = model.SignalSell, "RSI50"
+		sig.ExitReason = fmt.Sprintf("RSI50: RSI(%d) пересёк %.0f сверху вниз, выход по %.4f (вход %.4f)",
+			s.p.RSIPeriod, s.p.RSIMid, closeP, pos.PurchasePrice)
+		return sig
+	}
+	// 5. end of day (always active).
+	if s.isDayEnd(s.barTime(md), barSpanMinutes(md.Times)) {
+		sig.Kind, sig.Reason = model.SignalSell, "EOD"
+		sig.ExitReason = fmt.Sprintf("EOD: закрытие на конец дня по %.4f (вход %.4f)", closeP, pos.PurchasePrice)
+	}
+	return sig
+}

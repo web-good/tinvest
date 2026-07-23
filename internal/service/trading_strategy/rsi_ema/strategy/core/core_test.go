@@ -253,3 +253,132 @@ func TestEnterRejectsOnDayEndBar(t *testing.T) {
 		t.Fatalf("entry on the day-end bar must be rejected")
 	}
 }
+
+// openPos builds an open long entered `entryBarsAgo` 15m bars before `end`.
+func openPos(entry float64, end time.Time, entryBarsAgo int) *strategy.Position {
+	return &strategy.Position{
+		PurchasePrice: entry,
+		Quantity:      1,
+		EntryTime:     end.Add(time.Duration(-entryBarsAgo*15) * time.Minute),
+	}
+}
+
+// firstExitBar scans Decide (with an open position entered entryBarsAgo bars ago) and returns
+// the first bar whose exit Reason equals want. Because it reads Decide directly, the returned
+// bar is one where `want` genuinely wins the exit precedence.
+func firstExitBar(t *testing.T, s *Strategy, closes, highs, lows []float64, want string, entryBarsAgo int) int {
+	t.Helper()
+	end := mskAt(2026, 7, 20, 12, 0)
+	for k := 60; k < len(closes); k++ {
+		pos := openPos(closes[k], end, entryBarsAgo)
+		if s.Decide(mdEndingAt(closes, highs, lows, k, end, pos)).Reason == want {
+			return k
+		}
+	}
+	t.Fatalf("no %s exit found in series", want)
+	return -1
+}
+
+func TestCrossedDown(t *testing.T) {
+	s := []float64{0, 60, 45} // warm-up 0, then 60>=50, then 45<50
+	if !crossedDown(s, 2, 50) {
+		t.Fatalf("60->45 must cross down through 50")
+	}
+	if crossedDown(s, 1, 50) {
+		t.Fatalf("warm-up 0 must not count")
+	}
+}
+
+func TestEmaCrossDown(t *testing.T) {
+	fast := []float64{10, 11, 9}
+	slow := []float64{10, 10, 10}
+	if !emaCrossDown(fast, slow, 2) {
+		t.Fatalf("fast 11>=10 then 9<10 must be a cross down")
+	}
+	if emaCrossDown([]float64{0, 9}, []float64{0, 10}, 1) {
+		t.Fatalf("unwarmed (prev 0) must not count")
+	}
+}
+
+func TestBarsSinceEntry(t *testing.T) {
+	s := NewWithParams("TEST", DefaultParams())
+	end := mskAt(2026, 7, 20, 12, 0)
+	md := mdEndingAt([]float64{1, 2, 3}, []float64{1, 2, 3}, []float64{1, 2, 3}, 2, end, openPos(2, end, 3))
+	if got := s.barsSinceEntry(md); got != 3 {
+		t.Fatalf("barsSinceEntry = %d want 3", got)
+	}
+}
+
+func TestBarsSinceEntryZeroEntryTimeDegrades(t *testing.T) {
+	s := NewWithParams("TEST", DefaultParams())
+	md := strategy.MarketData{
+		Closes:   []float64{100, 100},
+		Highs:    []float64{101, 101},
+		Lows:     []float64{99, 99},
+		Times:    []time.Time{mskAt(2026, 7, 20, 11, 45), mskAt(2026, 7, 20, 12, 0)},
+		Position: &strategy.Position{PurchasePrice: 100}, // zero EntryTime
+	}
+	if got := s.barsSinceEntry(md); got < 1_000_000 {
+		t.Fatalf("zero EntryTime must degrade to a large barsSinceEntry, got %d", got)
+	}
+}
+
+func TestManageSLFillsWhenStopBreached(t *testing.T) {
+	s := NewWithParams("TEST", DefaultParams())
+	pos := openPos(100, mskAt(2026, 7, 20, 12, 0), 5)
+	pos.StopLoss = 95
+	md := mdEndingAt([]float64{100, 100, 100}, []float64{101, 101, 101}, []float64{99, 99, 94}, 2, mskAt(2026, 7, 20, 12, 0), pos)
+	sig := s.Decide(md)
+	if sig.Kind != model.SignalSell || sig.Reason != "SL" {
+		t.Fatalf("want SL sell, got kind=%v reason=%q", sig.Kind, sig.Reason)
+	}
+}
+
+func TestManageEODClosesOnLastBar(t *testing.T) {
+	s := NewWithParams("TEST", DefaultParams())
+	pos := openPos(100, mskAt(2026, 7, 20, 17, 50), 5) // day-end bar
+	md := mdEndingAt([]float64{100, 100, 100}, []float64{101, 101, 101}, []float64{99, 99, 99}, 2, mskAt(2026, 7, 20, 17, 50), pos)
+	sig := s.Decide(md)
+	if sig.Kind != model.SignalSell || sig.Reason != "EOD" {
+		t.Fatalf("want EOD sell, got kind=%v reason=%q", sig.Kind, sig.Reason)
+	}
+}
+
+func TestManageEMAExitFires(t *testing.T) {
+	s := NewWithParams("TEST", DefaultParams())
+	closes, highs, lows := driftWalk(800, 2)
+	k := firstExitBar(t, s, closes, highs, lows, "EMAX", 5)
+	if s.Decide(mdEndingAt(closes, highs, lows, k, mskAt(2026, 7, 20, 12, 0), openPos(closes[k], mskAt(2026, 7, 20, 12, 0), 5))).Reason != "EMAX" {
+		t.Fatalf("EMAX exit must reproduce at bar %d", k)
+	}
+}
+
+func TestManageRSI70ExitUpwardIgnoresCooldown(t *testing.T) {
+	p := DefaultParams()
+	p.EntryCooldownBars = 100 // would suppress RSI50, must NOT affect RSI70
+	s := NewWithParams("TEST", p)
+	closes, highs, lows := driftWalk(800, 3)
+	// entered 1 bar ago (inside the huge cooldown); RSI70 must still fire.
+	k := firstExitBar(t, s, closes, highs, lows, "RSI70", 1)
+	if k < 0 {
+		t.Fatalf("expected an RSI70 exit despite cooldown")
+	}
+}
+
+func TestManageRSI50ExitGatedByCooldown(t *testing.T) {
+	p := DefaultParams() // cooldown 1
+	s := NewWithParams("TEST", p)
+	closes, highs, lows := driftWalk(800, 4)
+	// find a bar where RSI50 wins with the cooldown satisfied (entered 50 bars ago).
+	k := firstExitBar(t, s, closes, highs, lows, "RSI50", 50)
+
+	// same bar, but entered 1 bar ago with a huge cooldown → RSI50 suppressed.
+	p2 := p
+	p2.EntryCooldownBars = 100
+	s2 := NewWithParams("TEST", p2)
+	end := mskAt(2026, 7, 20, 12, 0)
+	md := mdEndingAt(closes, highs, lows, k, end, openPos(closes[k], end, 1))
+	if got := s2.Decide(md).Reason; got == "RSI50" {
+		t.Fatalf("RSI50 must be suppressed within cooldown, got %q", got)
+	}
+}
