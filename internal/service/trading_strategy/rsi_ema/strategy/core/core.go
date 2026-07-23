@@ -24,9 +24,11 @@ import (
 )
 
 // defaultBarSpanMin is the bar length in minutes assumed when the series carries no usable
-// open-times (live paths without Times). The reference timeframe is 15 minutes, but the EOD
-// gate reads the actual span from the data via barSpanMinutes.
-const defaultBarSpanMin = 5
+// open-times (a dead fallback in practice: the backtest and -explain paths always populate
+// Times, so barSpanMinutes infers the real span). It matches this strategy's 15-minute
+// reference timeframe so the EOD gate degrades sanely rather than under-detecting the day-end
+// bar; the actual span is read from the data via barSpanMinutes whenever Times is present.
+const defaultBarSpanMin = 15
 
 // Params holds every tunable. All fields are int or float64 so reflection grid calibration
 // can sweep them.
