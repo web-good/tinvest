@@ -635,6 +635,7 @@ func TestStochasticExitDisabled(t *testing.T) {
 	n := len(closes)
 	p := DefaultParams()
 	p.EnableStochExit = 0
+	p.EnableRSIExit = 0 // изолируем аблацию: иначе выход даст RSI на той же серии
 	s := NewWithParams("TEST", p)
 
 	md := strategy.MarketData{
@@ -791,11 +792,12 @@ func htfCloses(n int, start, step float64) []float64 {
 	return out
 }
 
-// TestDefaultParamsEnableHTFGate pins the shipped default. The gate started at 0 (off) and
-// was turned on at EMA(50) on 2026-07-23; calibration may still sweep it back to 0.
+// TestDefaultParamsEnableHTFGate pins that the gate ships ENABLED — it started at 0 (off) and
+// was turned on on 2026-07-23. The EMA period itself is a tuning knob (calibration may sweep
+// it, including back to 0), so the exact value is deliberately not asserted.
 func TestDefaultParamsEnableHTFGate(t *testing.T) {
-	if got := DefaultParams().HTFTrendEMA; got != 50 {
-		t.Fatalf("DefaultParams().HTFTrendEMA = %d want 50", got)
+	if got := DefaultParams().HTFTrendEMA; got <= 0 {
+		t.Fatalf("DefaultParams().HTFTrendEMA = %d, the H1 trend gate must ship enabled", got)
 	}
 }
 
@@ -980,13 +982,15 @@ func atrAt(highs, lows, closes []float64, bar, period int) float64 {
 	return indicators.ATR(highs[:bar+1], lows[:bar+1], closes[:bar+1], period)
 }
 
+// The shipped defaults must use the ATR geometry for both the stop and the target. The
+// multipliers themselves are tuning knobs the grid sweeps, so only "enabled" is pinned.
 func TestDefaultParamsUseATRStopAndTarget(t *testing.T) {
 	p := DefaultParams()
-	if p.StopATR != 1.0 {
-		t.Fatalf("DefaultParams().StopATR = %v want 1.0", p.StopATR)
+	if p.StopATR <= 0 {
+		t.Fatalf("DefaultParams().StopATR = %v, the stop must be ATR-sized by default", p.StopATR)
 	}
-	if p.TPATR != 2.0 {
-		t.Fatalf("DefaultParams().TPATR = %v want 2.0", p.TPATR)
+	if p.TPATR <= 0 {
+		t.Fatalf("DefaultParams().TPATR = %v, the target must be ATR-sized by default", p.TPATR)
 	}
 }
 
@@ -1056,5 +1060,126 @@ func TestATRStopSkipsVacuousRiskBounds(t *testing.T) {
 	p.MaxRiskATR = 3.0
 	if sig := NewWithParams("TEST", p).Decide(mdPrefix(highs, lows, closes, times, bar)); sig.Kind != model.SignalBuy {
 		t.Fatalf("ATR-режим не должен проверять вырожденные границы риска, got kind=%v", sig.Kind)
+	}
+}
+
+// rsiExitParams isolates the RSI exit: the stochastic exit is disarmed so only the new rule
+// can close the position.
+func rsiExitParams() Params {
+	p := DefaultParams()
+	p.EnableStochExit = 0
+	p.EnableRSIExit = 1
+	return p
+}
+
+// rsiFallSeries builds a series whose RSI(period) sits above RSIOversold on the
+// second-to-last bar and drops below it on the last one: a long steady rally, then one sharp
+// down bar. `drop` scales that last bar.
+func rsiFallSeries(n int, drop float64) (highs, lows, closes []float64) {
+	price := 100.0
+	for i := 0; i < n-1; i++ {
+		price += 0.3
+		closes = append(closes, price)
+	}
+	closes = append(closes, price-drop)
+	for _, c := range closes {
+		highs = append(highs, c+0.1)
+		lows = append(lows, c-0.1)
+	}
+	return highs, lows, closes
+}
+
+func exitMD(highs, lows, closes []float64, stop, tp float64) strategy.MarketData {
+	n := len(closes)
+	return strategy.MarketData{
+		Price:  closes[n-1],
+		Highs:  highs,
+		Lows:   lows,
+		Closes: closes,
+		Times:  sessionTimes(n),
+		Position: &strategy.Position{
+			PurchasePrice: 100, Quantity: 1, StopLoss: stop, TakeProfit: tp,
+		},
+	}
+}
+
+func TestDefaultParamsEnableRSIExit(t *testing.T) {
+	if got := DefaultParams().EnableRSIExit; got != 1 {
+		t.Fatalf("DefaultParams().EnableRSIExit = %d want 1", got)
+	}
+}
+
+func TestExitRSICrossDownThroughOversold(t *testing.T) {
+	p := rsiExitParams()
+	highs, lows, closes := rsiFallSeries(30, 6)
+	n := len(closes)
+
+	// Проверяем предпосылку теста: RSI действительно пересекает уровень вниз на последнем баре.
+	rsi := indicators.RSISeries(closes, p.RSIPeriod)
+	if !(rsi[n-2] >= p.RSIOversold && rsi[n-1] < p.RSIOversold) {
+		t.Fatalf("серия не даёт пересечения: RSI %.1f -> %.1f, зона %.0f", rsi[n-2], rsi[n-1], p.RSIOversold)
+	}
+
+	sig := NewWithParams("TEST", p).Decide(exitMD(highs, lows, closes, 50, 500))
+	if sig.Kind != model.SignalSell || sig.Reason != "RSI" {
+		t.Fatalf("kind=%v reason=%q want Sell/RSI", sig.Kind, sig.Reason)
+	}
+	if model.IsStopReason(sig.Reason) {
+		t.Fatalf("RSI exit fills at the bar close and must not be a stop-style reason")
+	}
+}
+
+func TestRSIExitSilentWhileRSIStaysAboveTheZone(t *testing.T) {
+	highs, lows, closes := rsiFallSeries(30, 0.1) // мягкий откат, RSI остаётся выше зоны
+	if sig := NewWithParams("TEST", rsiExitParams()).Decide(exitMD(highs, lows, closes, 50, 500)); sig.Kind == model.SignalSell {
+		t.Fatalf("RSI exit fired without crossing the zone (reason=%q)", sig.Reason)
+	}
+}
+
+// The zone must be entered from above on THIS bar. A series that is already deep inside it
+// gives no cross: the entry rule buys the way OUT of the zone, so "below the level" is the
+// normal state right before an entry and must not close the position on its first bars.
+func TestRSIExitNeedsTheCrossNotJustALowReading(t *testing.T) {
+	p := rsiExitParams()
+	highs, lows, closes := rsiFallSeries(30, 6)
+	n := len(closes)
+	closes = append(closes, closes[n-1]-0.05) // ещё один бар уже внутри зоны
+	highs = append(highs, closes[n]+0.1)
+	lows = append(lows, closes[n]-0.1)
+
+	rsi := indicators.RSISeries(closes, p.RSIPeriod)
+	if rsi[len(rsi)-2] >= p.RSIOversold {
+		t.Fatalf("предпосылка теста нарушена: предыдущий бар должен быть уже в зоне, RSI %.1f", rsi[len(rsi)-2])
+	}
+	if sig := NewWithParams("TEST", p).Decide(exitMD(highs, lows, closes, 50, 500)); sig.Kind == model.SignalSell {
+		t.Fatalf("RSI exit fired without a cross into the zone (reason=%q)", sig.Reason)
+	}
+}
+
+func TestRSIExitDisabled(t *testing.T) {
+	p := rsiExitParams()
+	p.EnableRSIExit = 0
+	highs, lows, closes := rsiFallSeries(30, 6)
+	if sig := NewWithParams("TEST", p).Decide(exitMD(highs, lows, closes, 50, 500)); sig.Kind == model.SignalSell {
+		t.Fatalf("RSI exit fired while EnableRSIExit=0 (reason=%q)", sig.Reason)
+	}
+}
+
+func TestRSIExitYieldsToStopLoss(t *testing.T) {
+	highs, lows, closes := rsiFallSeries(30, 6)
+	n := len(closes)
+	sig := NewWithParams("TEST", rsiExitParams()).Decide(exitMD(highs, lows, closes, closes[n-1]+1, 500))
+	if sig.Reason != "SL" {
+		t.Fatalf("reason=%q want SL to outrank the RSI exit", sig.Reason)
+	}
+}
+
+// RSISeries fills warm-up positions with zeros; a zero on the previous bar reads as "already
+// below the level" and must not be mistaken for a cross down from above.
+func TestRSIExitIgnoresWarmupZeros(t *testing.T) {
+	p := rsiExitParams()
+	highs, lows, closes := rsiFallSeries(p.RSIPeriod+1, 6)
+	if sig := NewWithParams("TEST", p).Decide(exitMD(highs, lows, closes, 50, 500)); sig.Kind == model.SignalSell {
+		t.Fatalf("RSI exit fired off warm-up zeros (reason=%q)", sig.Reason)
 	}
 }

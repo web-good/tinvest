@@ -3,7 +3,8 @@
 // by a MACD(3,6,9) bullish line cross that happens BELOW zero. Stop and target are sized in
 // ATR from the entry price (StopATR/TPATR); setting either to 0 restores the older geometry —
 // the swing low of the RSI-cross candle for the stop, RR times the risk for the target. An optional
-// stochastic exit closes the position when %K leaves the overbought zone downward, and
+// stochastic exit closes the position when %K leaves the overbought zone downward, an optional
+// RSI exit closes it when RSI re-enters the oversold zone from above, and
 // every position is force-closed at the end of the trading day. The decision logic is
 // pure, stateless between bars and ticker-agnostic. The reference timeframe is 5 minutes,
 // but the rules are timeframe-agnostic: the EOD gate infers the bar span from the series, so
@@ -47,6 +48,7 @@ type Params struct {
 	RR              float64 // take-profit = entry + RR*(entry-stop), used only when TPATR = 0
 	MinRiskATR      float64 // swing-low mode only: reject entries whose risk < MinRiskATR*ATR
 	MaxRiskATR      float64 // swing-low mode only: reject entries whose risk > MaxRiskATR*ATR
+	EnableRSIExit   int     // 1 = exit when RSI crosses DOWN through RSIOversold; 0 = off (grid 0/1)
 	EnableStochExit int     // 1 = stochastic exit active; 0 = SL/TP/EOD only (grid 0/1)
 	StochK          int     // stochastic %K period (fixed 14)
 	StochD          int     // stochastic %D smoothing (fixed 3)
@@ -66,14 +68,15 @@ func DefaultParams() Params {
 		MACDSignal:      9,
 		MACDConfirmBars: 3,
 		RSIEntryMin:     50,
-		HTFTrendEMA:     50,
+		HTFTrendEMA:     100,
 		ATRPeriod:       14,
 		StopATR:         1.0,
-		TPATR:           2.0,
+		TPATR:           1.5,
 		StopBufferATR:   0,
 		RR:              2.0,
 		MinRiskATR:      0.1,
 		MaxRiskATR:      3.0,
+		EnableRSIExit:   1,
 		EnableStochExit: 1,
 		StochK:          14,
 		StochD:          3,
@@ -383,6 +386,10 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 		sig.Kind, sig.Reason = model.SignalSell, "STOCH"
 		sig.ExitReason = fmt.Sprintf("STOCH: %%K вышел вниз из зоны %.0f, выход по закрытию %.4f (вход %.4f)",
 			s.p.StochOverbought, md.Closes[n-1], pos.PurchasePrice)
+	case s.p.EnableRSIExit == 1 && s.rsiExit(md):
+		sig.Kind, sig.Reason = model.SignalSell, "RSI"
+		sig.ExitReason = fmt.Sprintf("RSI: RSI(%d) вошёл в зону %.0f сверху вниз, выход по закрытию %.4f (вход %.4f)",
+			s.p.RSIPeriod, s.p.RSIOversold, md.Closes[n-1], pos.PurchasePrice)
 	case s.isDayEnd(s.barTime(md), barSpanMinutes(md.Times)):
 		sig.Kind, sig.Reason = model.SignalSell, "EOD"
 		sig.ExitReason = fmt.Sprintf("EOD: закрытие на конец торгового дня по %.4f (вход %.4f)",
@@ -477,7 +484,26 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 	if s.p.EnableStochExit == 1 {
 		fmt.Fprintf(&sb, "выход по стохастику(%d,%d) на этом баре? %v\n", s.p.StochK, s.p.StochD, s.stochExit(md))
 	}
+	if s.p.EnableRSIExit == 1 {
+		fmt.Fprintf(&sb, "выход по RSI (вход в зону %.0f сверху вниз) на этом баре? %v\n",
+			s.p.RSIOversold, s.rsiExit(md))
+	}
 	return sb.String()
+}
+
+// rsiExit reports whether RSI entered the oversold zone FROM ABOVE on the current bar: it was
+// at or above RSIOversold on the previous bar and is below it now. The cross, not the level,
+// is the signal — the entry rule buys the way OUT of that zone, so "below the level" is the
+// normal state around an entry and would otherwise close the position immediately. The
+// rsi[i-1] > 0 guard is the same one lastRSITrigger needs: RSISeries fills warm-up positions
+// with zeros, which would otherwise read as a genuine reading above nothing.
+func (s *Strategy) rsiExit(md strategy.MarketData) bool {
+	rsi := indicators.RSISeries(md.Closes, s.p.RSIPeriod)
+	i := len(rsi) - 1
+	if i < 1 {
+		return false
+	}
+	return rsi[i-1] > 0 && rsi[i-1] >= s.p.RSIOversold && rsi[i] < s.p.RSIOversold
 }
 
 // stochExit reports whether %K left the overbought zone downward on the current bar.
