@@ -81,6 +81,13 @@ func visibleCompletedHTF(htf []Candle, cur time.Time, interval time.Duration) (c
 // start. The closes/highs/lows backing arrays are precomputed once; each call returns
 // a prefix slice of them (no per-bar allocation). A nil *htfCursor is a valid
 // zero-cost no-op for the no-HTF case.
+//
+// Precondition: visible must be called with a non-decreasing cur across the lifetime
+// of a cursor, and htf must be sorted oldest-first (both hold for Run's and Trace's
+// forward bar loops, and the cache writer sorts/dedups before this cursor is built). A
+// rewound cur would NOT re-shrink idx, so visible would keep returning the wider prefix
+// already confirmed — i.e. lookahead — instead of the narrower one visibleCompletedHTF
+// would compute for that earlier cur.
 type htfCursor struct {
 	htf                 []Candle
 	closes, highs, lows []float64
@@ -118,7 +125,11 @@ func (h *htfCursor) visible(cur time.Time) (closes, highs, lows []float64) {
 	if h.idx == 0 {
 		return nil, nil, nil
 	}
-	return h.closes[:h.idx], h.highs[:h.idx], h.lows[:h.idx]
+	// Full slice expressions cap the returned prefix at its own length, so a caller
+	// appending to it (e.g. md.HTFCloses = append(md.HTFCloses, x)) forces a new backing
+	// array instead of silently overwriting the shared closes/highs/lows arrays that
+	// later bars still read from.
+	return h.closes[:h.idx:h.idx], h.highs[:h.idx:h.idx], h.lows[:h.idx:h.idx]
 }
 
 // todayExtent returns the high and low across all bars sharing candles[i]'s MSK
