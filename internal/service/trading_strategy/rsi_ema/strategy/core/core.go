@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 	"time"
 
 	"tinvest/internal/domain/ema"
@@ -322,4 +323,50 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 		sig.ExitReason = fmt.Sprintf("EOD: закрытие на конец дня по %.4f (вход %.4f)", closeP, pos.PurchasePrice)
 	}
 	return sig
+}
+
+// Explain returns a gate-by-gate verdict for one bar, consumed by the engine's Trace
+// (-explain). It recomputes the same values enter()/manage() do and reports each gate.
+func (s *Strategy) Explain(md strategy.MarketData) string {
+	var sb strings.Builder
+	n := len(md.Closes)
+	if n < 2 || len(md.Highs) != n || len(md.Lows) != n {
+		sb.WriteString("недостаточно свечей\n")
+		return sb.String()
+	}
+	i := n - 1
+	barT := s.barTime(md)
+	span := barSpanMinutes(md.Times)
+	fmt.Fprintf(&sb, "сессия: %v (бар %v); конец дня? %v\n", s.inSession(barT), barT, s.isDayEnd(barT, span))
+
+	rsi := indicators.RSISeries(md.Closes, s.p.RSIPeriod)
+	if len(rsi) == n {
+		fmt.Fprintf(&sb, "RSI(%d) пред %.1f тек %.1f; вход-крест вверх %.0f? %v; выход RSI70 вверх %.0f? %v; выход RSI50 вниз %.0f? %v\n",
+			s.p.RSIPeriod, rsi[i-1], rsi[i], s.p.RSIMid, crossedUp(rsi, i, s.p.RSIMid),
+			s.p.RSIUpper, crossedUp(rsi, i, s.p.RSIUpper), s.p.RSIMid, crossedDown(rsi, i, s.p.RSIMid))
+	} else {
+		sb.WriteString("RSI: недостаточно истории\n")
+	}
+
+	fast, slow, ok := s.emaPair(md.Closes)
+	if ok {
+		fmt.Fprintf(&sb, "EMA(%d) %.4f vs EMA(%d) %.4f: быстрая выше? %v; крест вниз? %v\n",
+			s.p.EMAFast, fast[i], s.p.EMASlow, slow[i], fast[i] > slow[i], emaCrossDown(fast, slow, i))
+	} else {
+		sb.WriteString("EMA: не прогрето\n")
+	}
+
+	if s.p.StopATR > 0 {
+		atr := indicators.ATR(md.Highs, md.Lows, md.Closes, s.p.ATRPeriod)
+		fmt.Fprintf(&sb, "ATR(%d) %.4f; стоп %.4f (вход − %.2f×ATR)\n",
+			s.p.ATRPeriod, atr, md.Closes[i]-s.p.StopATR*atr, s.p.StopATR)
+	} else {
+		sb.WriteString("стоп: выключен (StopATR=0)\n")
+	}
+
+	if md.Position != nil {
+		bse := s.barsSinceEntry(md)
+		fmt.Fprintf(&sb, "баров с входа %d; кулдаун RSI50 пройден (≥%d)? %v\n", bse, s.p.EntryCooldownBars, bse >= s.p.EntryCooldownBars)
+	}
+	return sb.String()
 }

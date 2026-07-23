@@ -2,6 +2,7 @@ package core
 
 import (
 	"math/rand"
+	"strings"
 	"testing"
 	"time"
 
@@ -381,4 +382,21 @@ func TestManageRSI50ExitGatedByCooldown(t *testing.T) {
 	if got := s2.Decide(md).Reason; got == "RSI50" {
 		t.Fatalf("RSI50 must be suppressed within cooldown, got %q", got)
 	}
+}
+
+func TestExplainReportsGates(t *testing.T) {
+	s := NewWithParams("TEST", DefaultParams())
+	closes, highs, lows := driftWalk(800, 1)
+	k := firstBuyBar(t, s, closes, highs, lows)
+	out := s.Explain(mdEndingAt(closes, highs, lows, k, mskAt(2026, 7, 20, 12, 0), nil))
+	for _, want := range []string{"сессия", "RSI", "EMA"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("Explain output missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestExplainShortSeriesDoesNotPanic(t *testing.T) {
+	s := NewWithParams("TEST", DefaultParams())
+	_ = s.Explain(strategy.MarketData{Closes: []float64{1}})
 }
