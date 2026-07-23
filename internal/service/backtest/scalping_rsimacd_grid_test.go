@@ -29,7 +29,7 @@ func TestScalpingRSIMACDGridFieldsExist(t *testing.T) {
 			}
 		}
 	}
-	wantSwept := []string{"RSIEntryMin", "HTFTrendEMA"}
+	wantSwept := []string{"RSIEntryMin", "HTFTrendEMA", "StopATR", "TPATR"}
 	for _, want := range wantSwept {
 		found := false
 		for _, got := range names {

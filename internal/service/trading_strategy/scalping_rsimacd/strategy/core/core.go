@@ -1,7 +1,8 @@
 // Package core implements a long-only intraday RSI+MACD scalping strategy. When flat it
 // looks for a fast RSI crossing up out of its oversold zone, confirmed within a few bars
-// by a MACD(3,6,9) bullish line cross that happens BELOW zero. The stop is frozen at the
-// low of the RSI-cross candle; the take-profit is RR times the entry risk. An optional
+// by a MACD(3,6,9) bullish line cross that happens BELOW zero. Stop and target are sized in
+// ATR from the entry price (StopATR/TPATR); setting either to 0 restores the older geometry —
+// the swing low of the RSI-cross candle for the stop, RR times the risk for the target. An optional
 // stochastic exit closes the position when %K leaves the overbought zone downward, and
 // every position is force-closed at the end of the trading day. The decision logic is
 // pure, stateless between bars and ticker-agnostic. The reference timeframe is 5 minutes,
@@ -39,11 +40,13 @@ type Params struct {
 	MACDConfirmBars int     // MACD cross accepted on the RSI bar or the next N bars (grid 2/3/4)
 	RSIEntryMin     float64 // minimum RSI on the MACD-cross bar; 0 disables the gate (grid 0/50/55)
 	HTFTrendEMA     int     // EMA period on completed H1 closes; entry needs close > EMA. 0 disables the gate (grid 0/20/50/100)
-	ATRPeriod       int     // ATR length; the unit of the risk sanity bounds
-	StopBufferATR   float64 // stop = low(RSI bar) - StopBufferATR*ATR (grid 0/0.1)
-	RR              float64 // take-profit = entry + RR*(entry-stop) (grid 2/2.5/3)
-	MinRiskATR      float64 // reject entries whose risk < MinRiskATR*ATR
-	MaxRiskATR      float64 // reject entries whose risk > MaxRiskATR*ATR
+	ATRPeriod       int     // ATR length; the unit of the stop, the target and the risk bounds
+	StopATR         float64 // stop = entry - StopATR*ATR; 0 falls back to the swing-low stop (grid 0.5/1/1.5)
+	TPATR           float64 // take-profit = entry + TPATR*ATR; 0 falls back to RR*risk (grid 1/2/3)
+	StopBufferATR   float64 // swing-low mode only: stop = low(RSI bar) - StopBufferATR*ATR
+	RR              float64 // take-profit = entry + RR*(entry-stop), used only when TPATR = 0
+	MinRiskATR      float64 // swing-low mode only: reject entries whose risk < MinRiskATR*ATR
+	MaxRiskATR      float64 // swing-low mode only: reject entries whose risk > MaxRiskATR*ATR
 	EnableStochExit int     // 1 = stochastic exit active; 0 = SL/TP/EOD only (grid 0/1)
 	StochK          int     // stochastic %K period (fixed 14)
 	StochD          int     // stochastic %D smoothing (fixed 3)
@@ -65,6 +68,8 @@ func DefaultParams() Params {
 		RSIEntryMin:     50,
 		HTFTrendEMA:     50,
 		ATRPeriod:       14,
+		StopATR:         1.0,
+		TPATR:           2.0,
 		StopBufferATR:   0,
 		RR:              2.0,
 		MinRiskATR:      0.1,
@@ -233,24 +238,36 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	if !htfOK {
 		return sig
 	}
-	// 4. ATR unit for the stop buffer and the risk sanity bounds.
+	// 4. ATR unit for the stop, the target and the risk sanity bounds.
 	atr := indicators.ATR(md.Highs, md.Lows, md.Closes, s.p.ATRPeriod)
 	if atr <= 0 {
 		return sig
 	}
-	stop := md.Lows[trig] - s.p.StopBufferATR*atr
-	// 5. the trigger's stop level must have held since the trigger bar.
-	if !s.triggerAlive(md, trig, n, stop) {
+	// 5. the structural level (the trigger's low) must have held since the trigger bar. This
+	// gates the entry in BOTH stop modes: a setup whose low has already been traded through is
+	// dead regardless of where the protective stop is later placed.
+	level := md.Lows[trig] - s.p.StopBufferATR*atr
+	if !s.triggerAlive(md, trig, n, level) {
 		return sig
 	}
-	// 6. risk sanity: reject degenerate and abnormally wide stops.
 	entry := md.Closes[i]
-	risk := entry - stop
-	if risk < s.p.MinRiskATR*atr || risk > s.p.MaxRiskATR*atr {
-		return sig
+	stop := level
+	if s.p.StopATR > 0 {
+		stop = entry - s.p.StopATR*atr
+	} else {
+		// 6. risk sanity: reject degenerate and abnormally wide stops. Only meaningful for the
+		// swing-low stop, whose distance is a market measurement; in ATR mode the risk is
+		// StopATR*ATR by construction and the same bounds would collapse into a constant
+		// verdict on Params alone.
+		if risk := entry - level; risk < s.p.MinRiskATR*atr || risk > s.p.MaxRiskATR*atr {
+			return sig
+		}
 	}
 
-	tp := entry + s.p.RR*risk
+	tp := entry + s.p.TPATR*atr
+	if s.p.TPATR <= 0 {
+		tp = entry + s.p.RR*(entry-stop)
+	}
 	sig.Kind = model.SignalBuy
 	sig.StopLoss = stop
 	sig.TakeProfit = tp
@@ -326,10 +343,18 @@ func (s *Strategy) entryReason(barsAgo int, rsiNow, stop, entry, tp, atr, htfClo
 	if s.p.HTFTrendEMA > 0 {
 		extra += fmt.Sprintf("; тренд H1 вверх (close %.4f > EMA(%d) %.4f)", htfClose, s.p.HTFTrendEMA, htfEMA)
 	}
+	stopHow := fmt.Sprintf("лоу свечи кросса, буфер %.2f×ATR", s.p.StopBufferATR)
+	if s.p.StopATR > 0 {
+		stopHow = fmt.Sprintf("вход − %.2f×ATR", s.p.StopATR)
+	}
+	tpHow := fmt.Sprintf("RR=%.2f", s.p.RR)
+	if s.p.TPATR > 0 {
+		tpHow = fmt.Sprintf("вход + %.2f×ATR", s.p.TPATR)
+	}
 	return fmt.Sprintf(
-		"RSI(%d) вышел вверх из зоны %.0f (сейчас %.1f), через %d бар(ов) MACD(%d,%d,%d) пересёкся ниже нуля; вход %.4f, стоп %.4f (лоу свечи кросса, буфер %.2f×ATR), тейк %.4f (RR=%.2f), ATR=%.4f%s",
+		"RSI(%d) вышел вверх из зоны %.0f (сейчас %.1f), через %d бар(ов) MACD(%d,%d,%d) пересёкся ниже нуля; вход %.4f, стоп %.4f (%s), тейк %.4f (%s), ATR=%.4f%s",
 		s.p.RSIPeriod, s.p.RSIOversold, rsiNow, barsAgo, s.p.MACDFast, s.p.MACDSlow, s.p.MACDSignal,
-		entry, stop, s.p.StopBufferATR, tp, s.p.RR, atr, extra,
+		entry, stop, stopHow, tp, tpHow, atr, extra,
 	)
 }
 
@@ -424,15 +449,30 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 	if atr <= 0 {
 		return sb.String()
 	}
-	stop := md.Lows[trig] - s.p.StopBufferATR*atr
-	fmt.Fprintf(&sb, "стоп %.4f (лоу свечи кросса %.4f - %.2f×ATR); уровень удержан? %v\n",
-		stop, md.Lows[trig], s.p.StopBufferATR, s.triggerAlive(md, trig, n, stop))
+	level := md.Lows[trig] - s.p.StopBufferATR*atr
+	fmt.Fprintf(&sb, "уровень %.4f (лоу свечи кросса %.4f - %.2f×ATR) удержан? %v\n",
+		level, md.Lows[trig], s.p.StopBufferATR, s.triggerAlive(md, trig, n, level))
 
-	risk := md.Closes[i] - stop
-	fmt.Fprintf(&sb, "риск %.4f в границах [%.4f..%.4f]? %v; тейк %.4f (RR=%.2f)\n",
-		risk, s.p.MinRiskATR*atr, s.p.MaxRiskATR*atr,
-		risk >= s.p.MinRiskATR*atr && risk <= s.p.MaxRiskATR*atr,
-		md.Closes[i]+s.p.RR*risk, s.p.RR)
+	entry := md.Closes[i]
+	if s.p.StopATR > 0 {
+		fmt.Fprintf(&sb, "стоп %.4f (вход %.4f - %.2f×ATR); границы риска не применяются в ATR-режиме\n",
+			entry-s.p.StopATR*atr, entry, s.p.StopATR)
+	} else {
+		risk := entry - level
+		fmt.Fprintf(&sb, "стоп %.4f (уровень); риск %.4f в границах [%.4f..%.4f]? %v\n",
+			level, risk, s.p.MinRiskATR*atr, s.p.MaxRiskATR*atr,
+			risk >= s.p.MinRiskATR*atr && risk <= s.p.MaxRiskATR*atr)
+	}
+
+	stop := level
+	if s.p.StopATR > 0 {
+		stop = entry - s.p.StopATR*atr
+	}
+	if s.p.TPATR > 0 {
+		fmt.Fprintf(&sb, "тейк %.4f (вход + %.2f×ATR)\n", entry+s.p.TPATR*atr, s.p.TPATR)
+	} else {
+		fmt.Fprintf(&sb, "тейк %.4f (RR=%.2f × риск)\n", entry+s.p.RR*(entry-stop), s.p.RR)
+	}
 
 	if s.p.EnableStochExit == 1 {
 		fmt.Fprintf(&sb, "выход по стохастику(%d,%d) на этом баре? %v\n", s.p.StochK, s.p.StochD, s.stochExit(md))

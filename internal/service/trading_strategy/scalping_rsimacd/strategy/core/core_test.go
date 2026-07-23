@@ -124,6 +124,10 @@ func testParams() Params {
 	p.StopBufferATR = 0
 	p.RSIEntryMin = 0
 	p.HTFTrendEMA = 0
+	// The swing-low geometry is the baseline the older gate tests are written against; the ATR
+	// stop/target get their own tests, which set StopATR/TPATR explicitly.
+	p.StopATR = 0
+	p.TPATR = 0
 	return p
 }
 
@@ -968,5 +972,89 @@ func TestEODClosesOnA15mSeries(t *testing.T) {
 	md.Times = []time.Time{mskAt(2026, 7, 20, 16, 0), mskAt(2026, 7, 20, 16, 15)}
 	if sig := s.Decide(md); sig.Kind == model.SignalSell && sig.Reason == "EOD" {
 		t.Fatalf("15m bar 16:15 is not the last bar of the session")
+	}
+}
+
+// atrAt returns the ATR the strategy sees on the entry bar of the baseline series.
+func atrAt(highs, lows, closes []float64, bar, period int) float64 {
+	return indicators.ATR(highs[:bar+1], lows[:bar+1], closes[:bar+1], period)
+}
+
+func TestDefaultParamsUseATRStopAndTarget(t *testing.T) {
+	p := DefaultParams()
+	if p.StopATR != 1.0 {
+		t.Fatalf("DefaultParams().StopATR = %v want 1.0", p.StopATR)
+	}
+	if p.TPATR != 2.0 {
+		t.Fatalf("DefaultParams().TPATR = %v want 2.0", p.TPATR)
+	}
+}
+
+func TestATRStopAndTargetAreMeasuredFromEntry(t *testing.T) {
+	highs, lows, closes, times, bar := baselineEntryBar(t)
+
+	p := testParams()
+	p.StopATR = 1.5
+	p.TPATR = 2.5
+	sig := NewWithParams("TEST", p).Decide(mdPrefix(highs, lows, closes, times, bar))
+	if sig.Kind != model.SignalBuy {
+		t.Fatalf("baseline entry must survive the ATR geometry, got kind=%v", sig.Kind)
+	}
+
+	entry := closes[bar]
+	atr := atrAt(highs, lows, closes, bar, p.ATRPeriod)
+	wantStop := entry - 1.5*atr
+	wantTP := entry + 2.5*atr
+	if math.Abs(sig.StopLoss-wantStop) > 1e-9 {
+		t.Fatalf("StopLoss = %.6f want %.6f (вход %.4f - 1.5×ATR %.4f)", sig.StopLoss, wantStop, entry, atr)
+	}
+	if math.Abs(sig.TakeProfit-wantTP) > 1e-9 {
+		t.Fatalf("TakeProfit = %.6f want %.6f (вход %.4f + 2.5×ATR %.4f)", sig.TakeProfit, wantTP, entry, atr)
+	}
+}
+
+func TestStopATRZeroKeepsStructuralStop(t *testing.T) {
+	highs, lows, closes, times, bar := baselineEntryBar(t)
+
+	p := testParams() // StopATR = 0
+	sig := NewWithParams("TEST", p).Decide(mdPrefix(highs, lows, closes, times, bar))
+	if sig.Kind != model.SignalBuy {
+		t.Fatalf("baseline entry expected, got kind=%v", sig.Kind)
+	}
+	if math.Abs(sig.StopLoss-sig.Level) > 1e-9 {
+		t.Fatalf("StopATR=0 must keep the swing-low stop: StopLoss %.6f vs level %.6f", sig.StopLoss, sig.Level)
+	}
+}
+
+func TestTPATRZeroKeepsRRTarget(t *testing.T) {
+	highs, lows, closes, times, bar := baselineEntryBar(t)
+
+	p := testParams()
+	p.StopATR = 1.0
+	p.TPATR = 0 // тейк снова считается как RR × риск
+	p.RR = 3.0
+	sig := NewWithParams("TEST", p).Decide(mdPrefix(highs, lows, closes, times, bar))
+	if sig.Kind != model.SignalBuy {
+		t.Fatalf("baseline entry expected, got kind=%v", sig.Kind)
+	}
+	entry := closes[bar]
+	wantTP := entry + 3.0*(entry-sig.StopLoss)
+	if math.Abs(sig.TakeProfit-wantTP) > 1e-9 {
+		t.Fatalf("TakeProfit = %.6f want %.6f (RR-режим)", sig.TakeProfit, wantTP)
+	}
+}
+
+// The [MinRiskATR..MaxRiskATR] bounds test entry-to-swing-low distance, which is a market
+// measurement. In ATR mode the risk is StopATR×ATR by construction, so the same bounds would
+// degenerate into a constant verdict on Params alone — the gate is skipped instead.
+func TestATRStopSkipsVacuousRiskBounds(t *testing.T) {
+	highs, lows, closes, times, bar := baselineEntryBar(t)
+
+	p := testParams()
+	p.StopATR = 1.0
+	p.MinRiskATR = 2.0 // отвергло бы вход, будь граница применена к ATR-риску
+	p.MaxRiskATR = 3.0
+	if sig := NewWithParams("TEST", p).Decide(mdPrefix(highs, lows, closes, times, bar)); sig.Kind != model.SignalBuy {
+		t.Fatalf("ATR-режим не должен проверять вырожденные границы риска, got kind=%v", sig.Kind)
 	}
 }
