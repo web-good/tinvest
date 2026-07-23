@@ -68,7 +68,7 @@ func TestIsDayEnd(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := s.isDayEnd(tc.at); got != tc.want {
+			if got := s.isDayEnd(tc.at, defaultBarSpanMin); got != tc.want {
 				t.Fatalf("isDayEnd(%v) = %v want %v", tc.at, got, tc.want)
 			}
 		})
@@ -77,7 +77,7 @@ func TestIsDayEnd(t *testing.T) {
 
 func TestIsDayEndZeroTimeIsNoOp(t *testing.T) {
 	s := NewWithParams("TEST", DefaultParams())
-	if s.isDayEnd(time.Time{}) {
+	if s.isDayEnd(time.Time{}, defaultBarSpanMin) {
 		t.Fatalf("zero time must degrade the EOD exit to a no-op")
 	}
 }
@@ -165,7 +165,7 @@ func declineThenRally(down, up int, start, step, wick float64) (highs, lows, clo
 func sessionTimesFrom(n int, base time.Time) []time.Time {
 	out := make([]time.Time, n)
 	for i := range out {
-		out[i] = base.Add(time.Duration(i*barSpanMin) * time.Minute)
+		out[i] = base.Add(time.Duration(i*defaultBarSpanMin) * time.Minute)
 	}
 	return out
 }
@@ -243,7 +243,7 @@ func TestNoEntryOutsideSession(t *testing.T) {
 	times := make([]time.Time, len(closes))
 	base := mskAt(2026, 7, 25, 10, 0)
 	for i := range times {
-		times[i] = base.Add(time.Duration(i*barSpanMin) * time.Minute)
+		times[i] = base.Add(time.Duration(i*defaultBarSpanMin) * time.Minute)
 	}
 	s := NewWithParams("TEST", testParams())
 	if _, _, ok := firstBuy(s, highs, lows, closes, times); ok {
@@ -267,8 +267,8 @@ func TestNoEntryOnDayEndBar(t *testing.T) {
 	// "mon last bar" case) but also the day-end bar (TestIsDayEnd's matching case) — the
 	// last bar that still ends inside the session. All earlier bars land between ~11:25 and
 	// 16:55, still comfortably mid-session on the same Monday.
-	monThu := sessionTimesFrom(len(closes), mskAt(2026, 7, 20, 16, 55).Add(-time.Duration(i*barSpanMin)*time.Minute))
-	if !s.inSession(monThu[i]) || !s.isDayEnd(monThu[i]) {
+	monThu := sessionTimesFrom(len(closes), mskAt(2026, 7, 20, 16, 55).Add(-time.Duration(i*defaultBarSpanMin)*time.Minute))
+	if !s.inSession(monThu[i]) || !s.isDayEnd(monThu[i], defaultBarSpanMin) {
 		t.Fatalf("test setup broken: bar %d at %v must be in-session AND day-end", i, monThu[i])
 	}
 	if _, _, ok := firstBuy(s, highs, lows, closes, monThu); ok {
@@ -276,8 +276,8 @@ func TestNoEntryOnDayEndBar(t *testing.T) {
 	}
 
 	// Same shift onto Friday's early close (13:55): the equivalent Friday day-end bar.
-	fri := sessionTimesFrom(len(closes), mskAt(2026, 7, 24, 13, 55).Add(-time.Duration(i*barSpanMin)*time.Minute))
-	if !s.inSession(fri[i]) || !s.isDayEnd(fri[i]) {
+	fri := sessionTimesFrom(len(closes), mskAt(2026, 7, 24, 13, 55).Add(-time.Duration(i*defaultBarSpanMin)*time.Minute))
+	if !s.inSession(fri[i]) || !s.isDayEnd(fri[i], defaultBarSpanMin) {
 		t.Fatalf("test setup broken: bar %d at %v must be in-session AND day-end", i, fri[i])
 	}
 	if _, _, ok := firstBuy(s, highs, lows, closes, fri); ok {
@@ -787,9 +787,11 @@ func htfCloses(n int, start, step float64) []float64 {
 	return out
 }
 
-func TestDefaultParamsLeaveHTFGateOff(t *testing.T) {
-	if got := DefaultParams().HTFTrendEMA; got != 0 {
-		t.Fatalf("DefaultParams().HTFTrendEMA = %d want 0 (gate off by default)", got)
+// TestDefaultParamsEnableHTFGate pins the shipped default. The gate started at 0 (off) and
+// was turned on at EMA(50) on 2026-07-23; calibration may still sweep it back to 0.
+func TestDefaultParamsEnableHTFGate(t *testing.T) {
+	if got := DefaultParams().HTFTrendEMA; got != 50 {
+		t.Fatalf("DefaultParams().HTFTrendEMA = %d want 50", got)
 	}
 }
 
@@ -869,5 +871,102 @@ func TestExplainReportsHTFGate(t *testing.T) {
 	out = NewWithParams("TEST", p).Explain(md)
 	if !strings.Contains(out, "тренд H1") {
 		t.Fatalf("Explain must report the H1 trend verdict, got:\n%s", out)
+	}
+}
+
+func TestBarSpanMinutesInfersTimeframe(t *testing.T) {
+	base := mskAt(2026, 7, 20, 10, 0)
+	series := func(n, stepMin int) []time.Time {
+		out := make([]time.Time, n)
+		for i := range out {
+			out[i] = base.Add(time.Duration(i*stepMin) * time.Minute)
+		}
+		return out
+	}
+	cases := []struct {
+		name  string
+		times []time.Time
+		want  int
+	}{
+		{"5m", series(20, 5), 5},
+		{"15m", series(20, 15), 15},
+		{"30m", series(20, 30), 30},
+		{"no times falls back", nil, defaultBarSpanMin},
+		{"single bar falls back", series(1, 15), defaultBarSpanMin},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := barSpanMinutes(tc.times); got != tc.want {
+				t.Fatalf("barSpanMinutes = %d want %d", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestBarSpanMinutesIgnoresOvernightGaps pins the median: an intraday series carries a
+// multi-hour jump at every session boundary, which must not be read as the bar span.
+func TestBarSpanMinutesIgnoresOvernightGaps(t *testing.T) {
+	var times []time.Time
+	for d := 0; d < 3; d++ {
+		day := mskAt(2026, 7, 20+d, 10, 0)
+		for i := 0; i < 10; i++ {
+			times = append(times, day.Add(time.Duration(i*15)*time.Minute))
+		}
+	}
+	if got := barSpanMinutes(times); got != 15 {
+		t.Fatalf("barSpanMinutes across day boundaries = %d want 15", got)
+	}
+}
+
+func TestIsDayEndScalesWithBarSpan(t *testing.T) {
+	s := NewWithParams("TEST", DefaultParams())
+	cases := []struct {
+		name    string
+		at      time.Time
+		spanMin int
+		want    bool
+	}{
+		// Mon-Thu close 17:00. A 15m bar opening at 16:50 ends at 17:05 — it is the last
+		// one, while a 5m bar opening at 16:50 ends exactly at 17:00 and is also last.
+		{"15m 16:45 is last bar", mskAt(2026, 7, 20, 16, 45), 15, true},
+		{"15m 16:30 is not", mskAt(2026, 7, 20, 16, 30), 15, false},
+		{"30m 16:30 is last bar", mskAt(2026, 7, 20, 16, 30), 30, true},
+		{"30m 16:00 is not", mskAt(2026, 7, 20, 16, 0), 30, false},
+		{"5m 16:30 is not", mskAt(2026, 7, 20, 16, 30), 5, false},
+		{"fri 15m 13:45 is last bar", mskAt(2026, 7, 24, 13, 45), 15, true},
+		{"fri 15m 13:30 is not", mskAt(2026, 7, 24, 13, 30), 15, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := s.isDayEnd(tc.at, tc.spanMin); got != tc.want {
+				t.Fatalf("isDayEnd(%v, %d) = %v want %v", tc.at, tc.spanMin, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestEODClosesOnLastBarOfA15mSeries is the end-to-end guard: with 15-minute candles the
+// forced close must fire on the 16:45 bar. Pinned against the pre-fix behavior, where the
+// hard-coded 5-minute span let the position ride past the session close.
+func TestEODClosesOnA15mSeries(t *testing.T) {
+	s := NewWithParams("TEST", testParams())
+	pos := &strategy.Position{PurchasePrice: 100, Quantity: 1}
+
+	md := strategy.MarketData{
+		Price:    100,
+		Highs:    []float64{100, 100},
+		Lows:     []float64{100, 100},
+		Closes:   []float64{100, 100},
+		Times:    []time.Time{mskAt(2026, 7, 20, 16, 30), mskAt(2026, 7, 20, 16, 45)},
+		Position: pos,
+	}
+	sig := s.Decide(md)
+	if sig.Kind != model.SignalSell || sig.Reason != "EOD" {
+		t.Fatalf("15m bar 16:45 must force the EOD close, got kind=%v reason=%q", sig.Kind, sig.Reason)
+	}
+
+	md.Times = []time.Time{mskAt(2026, 7, 20, 16, 0), mskAt(2026, 7, 20, 16, 15)}
+	if sig := s.Decide(md); sig.Kind == model.SignalSell && sig.Reason == "EOD" {
+		t.Fatalf("15m bar 16:15 is not the last bar of the session")
 	}
 }

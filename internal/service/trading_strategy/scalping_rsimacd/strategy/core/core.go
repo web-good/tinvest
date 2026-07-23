@@ -1,15 +1,18 @@
-// Package core implements a long-only 5-minute RSI+MACD scalping strategy. When flat it
+// Package core implements a long-only intraday RSI+MACD scalping strategy. When flat it
 // looks for a fast RSI crossing up out of its oversold zone, confirmed within a few bars
 // by a MACD(3,6,9) bullish line cross that happens BELOW zero. The stop is frozen at the
 // low of the RSI-cross candle; the take-profit is RR times the entry risk. An optional
 // stochastic exit closes the position when %K leaves the overbought zone downward, and
 // every position is force-closed at the end of the trading day. The decision logic is
-// pure, stateless between bars and ticker-agnostic. Run with
-// `-strategy scalping_rsimacd -interval Minutes5`.
+// pure, stateless between bars and ticker-agnostic. The reference timeframe is 5 minutes,
+// but the rules are timeframe-agnostic: the EOD gate infers the bar span from the series, so
+// `-interval Minutes15` and `-interval Minutes30` work as well. Run with
+// `-strategy scalping_rsimacd -interval Minutes5|Minutes15|Minutes30`.
 package core
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -19,9 +22,11 @@ import (
 	"tinvest/pkg/indicators"
 )
 
-// barSpanMin is the bar length in minutes. The strategy is defined on 5-minute candles;
-// the EOD gate uses it to close on the LAST bar that still ends inside the session.
-const barSpanMin = 5
+// defaultBarSpanMin is the bar length in minutes assumed when the series carries no usable
+// open-times. The strategy's reference timeframe is 5 minutes, but it also runs on 15m and
+// 30m candles: the EOD gate reads the actual span from the data via barSpanMinutes and uses
+// it to close on the LAST bar that still ends inside the session.
+const defaultBarSpanMin = 5
 
 // Params holds every tunable. All fields are int or float64 (flags as int 0/1) so
 // reflection grid calibration can sweep them.
@@ -58,7 +63,7 @@ func DefaultParams() Params {
 		MACDSignal:      9,
 		MACDConfirmBars: 3,
 		RSIEntryMin:     50,
-		HTFTrendEMA:     0,
+		HTFTrendEMA:     50,
 		ATRPeriod:       14,
 		StopBufferATR:   0,
 		RR:              2.0,
@@ -126,9 +131,11 @@ func (s *Strategy) inSession(t time.Time) bool {
 	return m >= s.p.SessionStartMin && m < s.sessionEndMin(tl)
 }
 
-// isDayEnd reports whether the bar opening at t is the last one that still ends inside
-// the session (or already sits outside it). A zero time degrades the EOD exit to a no-op.
-func (s *Strategy) isDayEnd(t time.Time) bool {
+// isDayEnd reports whether the bar opening at t, spanning spanMin minutes, is the last one
+// that still ends inside the session (or already sits outside it). A zero time degrades the
+// EOD exit to a no-op. spanMin comes from barSpanMinutes, so the gate follows whichever
+// timeframe the series actually carries.
+func (s *Strategy) isDayEnd(t time.Time, spanMin int) bool {
 	if t.IsZero() {
 		return false
 	}
@@ -137,7 +144,28 @@ func (s *Strategy) isDayEnd(t time.Time) bool {
 		return true
 	}
 	m := tl.Hour()*60 + tl.Minute()
-	return m+barSpanMin >= s.sessionEndMin(tl)
+	return m+spanMin >= s.sessionEndMin(tl)
+}
+
+// barSpanMinutes infers the bar length from the series' own open-times: the MEDIAN gap
+// between consecutive bars. The median, not the minimum or the last gap, because an
+// intraday series jumps by many hours at every session and weekend boundary. Falls back to
+// defaultBarSpanMin when Times is absent or too short to measure (live paths without Times).
+func barSpanMinutes(times []time.Time) int {
+	if len(times) < 2 {
+		return defaultBarSpanMin
+	}
+	gaps := make([]int, 0, len(times)-1)
+	for i := 1; i < len(times); i++ {
+		if d := int(times[i].Sub(times[i-1]) / time.Minute); d > 0 {
+			gaps = append(gaps, d)
+		}
+	}
+	if len(gaps) == 0 {
+		return defaultBarSpanMin
+	}
+	sort.Ints(gaps)
+	return gaps[len(gaps)/2]
 }
 
 // barTime returns the open-time of the latest bar, or the zero time when Times is absent
@@ -172,7 +200,7 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	// the day-end bar could not be EOD-closed on its own bar and would risk carrying
 	// overnight (e.g. on a half-day, or any series that ends exactly at the session close).
 	t := s.barTime(md)
-	if !s.inSession(t) || s.isDayEnd(t) {
+	if !s.inSession(t) || s.isDayEnd(t, barSpanMinutes(md.Times)) {
 		return sig
 	}
 	// 2. MACD bullish cross on the current bar, both lines below zero.
@@ -330,7 +358,7 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 		sig.Kind, sig.Reason = model.SignalSell, "STOCH"
 		sig.ExitReason = fmt.Sprintf("STOCH: %%K вышел вниз из зоны %.0f, выход по закрытию %.4f (вход %.4f)",
 			s.p.StochOverbought, md.Closes[n-1], pos.PurchasePrice)
-	case s.isDayEnd(s.barTime(md)):
+	case s.isDayEnd(s.barTime(md), barSpanMinutes(md.Times)):
 		sig.Kind, sig.Reason = model.SignalSell, "EOD"
 		sig.ExitReason = fmt.Sprintf("EOD: закрытие на конец торгового дня по %.4f (вход %.4f)",
 			md.Closes[n-1], pos.PurchasePrice)
@@ -348,7 +376,7 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 	}
 	barT := s.barTime(md)
 	fmt.Fprintf(&sb, "сессия: %v (бар %v); конец дня (запрет входа)? %v\n",
-		s.inSession(barT), barT, s.isDayEnd(barT))
+		s.inSession(barT), barT, s.isDayEnd(barT, barSpanMinutes(md.Times)))
 
 	macd, signal := indicators.MACD(md.Closes, s.p.MACDFast, s.p.MACDSlow, s.p.MACDSignal)
 	if len(macd) != n || len(signal) != n {
