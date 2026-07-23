@@ -11,11 +11,14 @@
 package core
 
 import (
+	"fmt"
 	"sort"
 	"time"
 
+	"tinvest/internal/domain/ema"
 	"tinvest/internal/service/trading_strategy/scalping/model"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
+	"tinvest/pkg/indicators"
 )
 
 // defaultBarSpanMin is the bar length in minutes assumed when the series carries no usable
@@ -161,8 +164,78 @@ func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 	return s.enter(md, sig)
 }
 
-// enter is implemented in Task 2.
-func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal { return sig }
+// emaPair computes the fast and slow EMA series (index-aligned to closes) and reports ok=true
+// only when both are warmed at the last bar. ema.Compute zero-fills warm-up positions, so an
+// unwarmed value would compare as a spurious 0.
+func (s *Strategy) emaPair(closes []float64) (fast, slow []float64, ok bool) {
+	fast = ema.Compute(closes, s.p.EMAFast)
+	slow = ema.Compute(closes, s.p.EMASlow)
+	i := len(closes) - 1
+	if i < 0 || len(fast) != len(closes) || len(slow) != len(closes) {
+		return nil, nil, false
+	}
+	return fast, slow, fast[i] > 0 && slow[i] > 0
+}
+
+// crossedUp reports whether series crossed strictly up through level between i-1 and i. The
+// series[i-1] > 0 guard rejects RSISeries warm-up zeros reading as "below the level".
+func crossedUp(series []float64, i int, level float64) bool {
+	return i >= 1 && series[i-1] > 0 && series[i-1] < level && series[i] > level
+}
+
+// enter emits a long when RSI crosses up through RSIMid on the current bar while the fast EMA
+// sits above the slow EMA. Everything is recomputed from md — no state survives between bars.
+func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal {
+	n := len(md.Closes)
+	if n < 2 || len(md.Highs) != n || len(md.Lows) != n {
+		return sig
+	}
+	// 1. session window, and never on the day-end bar (manage() only runs from the NEXT bar,
+	// so an entry on the day-end bar could not be EOD-closed on its own bar).
+	t := s.barTime(md)
+	if !s.inSession(t) || s.isDayEnd(t, barSpanMinutes(md.Times)) {
+		return sig
+	}
+	i := n - 1
+	// 2. RSI crosses up through the mid level on the current bar.
+	rsi := indicators.RSISeries(md.Closes, s.p.RSIPeriod)
+	if len(rsi) != n || !crossedUp(rsi, i, s.p.RSIMid) {
+		return sig
+	}
+	// 3. trend confirmation: fast EMA above slow EMA (both warmed).
+	fast, slow, ok := s.emaPair(md.Closes)
+	if !ok || fast[i] <= slow[i] {
+		return sig
+	}
+	// 4. optional ATR stop.
+	entry := md.Closes[i]
+	var stop, atr float64
+	if s.p.StopATR > 0 {
+		atr = indicators.ATR(md.Highs, md.Lows, md.Closes, s.p.ATRPeriod)
+		if atr <= 0 {
+			return sig
+		}
+		stop = entry - s.p.StopATR*atr
+	}
+	sig.Kind = model.SignalBuy
+	sig.StopLoss = stop
+	sig.ATR = atr
+	sig.RSI = rsi[i]
+	sig.EntryReason = s.entryReason(rsi[i], fast[i], slow[i], entry, stop, atr)
+	return sig
+}
+
+// entryReason renders the human-readable rationale shown in the trade journal.
+func (s *Strategy) entryReason(rsiNow, fastNow, slowNow, entry, stop, atr float64) string {
+	stopHow := "стоп выключен (StopATR=0)"
+	if s.p.StopATR > 0 {
+		stopHow = fmt.Sprintf("стоп %.4f (вход − %.2f×ATR, ATR=%.4f)", stop, s.p.StopATR, atr)
+	}
+	return fmt.Sprintf(
+		"RSI(%d) пересёк уровень %.0f снизу вверх (%.1f), EMA(%d) %.4f > EMA(%d) %.4f; вход %.4f, %s",
+		s.p.RSIPeriod, s.p.RSIMid, rsiNow, s.p.EMAFast, fastNow, s.p.EMASlow, slowNow, entry, stopHow,
+	)
+}
 
 // manage is implemented in Task 3.
 func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal { return sig }

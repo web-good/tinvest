@@ -1,9 +1,11 @@
 package core
 
 import (
+	"math/rand"
 	"testing"
 	"time"
 
+	"tinvest/internal/service/trading_strategy/scalping/model"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 )
 
@@ -124,5 +126,130 @@ func TestLookbackWarmsSlowEMA(t *testing.T) {
 func TestTickerRoundTrip(t *testing.T) {
 	if got := NewWithParams("SBER", DefaultParams()).Ticker(); got != "SBER" {
 		t.Fatalf("Ticker = %q want SBER", got)
+	}
+}
+
+// driftWalk builds a deterministic pseudo-random up-drift price walk. Over enough bars every
+// RSI/EMA cross geometry occurs many times, so a bar where RSI crosses 50 up WHILE EMAFast is
+// above EMASlow is guaranteed to exist. Fixed seed → reproducible.
+func driftWalk(n int, seed int64) (closes, highs, lows []float64) {
+	r := rand.New(rand.NewSource(seed))
+	c := 100.0
+	for i := 0; i < n; i++ {
+		c += 0.05 + r.NormFloat64()*0.9
+		if c < 5 {
+			c = 5
+		}
+		closes = append(closes, c)
+		highs = append(highs, c+0.3)
+		lows = append(lows, c-0.3)
+	}
+	return closes, highs, lows
+}
+
+// mdEndingAt builds MarketData over closes[:k+1] with 15m MSK bars whose LAST bar opens at
+// `end` (so barTime is controllable mid-session). pos may be nil.
+func mdEndingAt(closes, highs, lows []float64, k int, end time.Time, pos *strategy.Position) strategy.MarketData {
+	times := make([]time.Time, k+1)
+	for i := 0; i <= k; i++ {
+		times[i] = end.Add(time.Duration((i-k)*15) * time.Minute)
+	}
+	return strategy.MarketData{
+		Price:    closes[k],
+		Closes:   append([]float64(nil), closes[:k+1]...),
+		Highs:    append([]float64(nil), highs[:k+1]...),
+		Lows:     append([]float64(nil), lows[:k+1]...),
+		Times:    times,
+		Position: pos,
+	}
+}
+
+// firstBuyBar scans Decide over a flat series and returns the first bar it marks as a Buy.
+func firstBuyBar(t *testing.T, s *Strategy, closes, highs, lows []float64) int {
+	t.Helper()
+	for k := 60; k < len(closes); k++ {
+		md := mdEndingAt(closes, highs, lows, k, mskAt(2026, 7, 20, 12, 0), nil)
+		if s.Decide(md).Kind == model.SignalBuy {
+			return k
+		}
+	}
+	t.Fatalf("no entry bar found in series")
+	return -1
+}
+
+func TestCrossedUp(t *testing.T) {
+	s := []float64{0, 40, 55} // warm-up 0, then 40<50, then 55>50
+	if !crossedUp(s, 2, 50) {
+		t.Fatalf("40->55 must cross up through 50")
+	}
+	if crossedUp(s, 1, 50) {
+		t.Fatalf("warm-up 0 must not read as below the level")
+	}
+	if crossedUp([]float64{55, 60}, 1, 50) {
+		t.Fatalf("already above the level is not a fresh cross")
+	}
+}
+
+func TestEnterBuysOnRSICrossWithEMAUp(t *testing.T) {
+	s := NewWithParams("TEST", DefaultParams())
+	closes, highs, lows := driftWalk(800, 1)
+	k := firstBuyBar(t, s, closes, highs, lows)
+	sig := s.Decide(mdEndingAt(closes, highs, lows, k, mskAt(2026, 7, 20, 12, 0), nil))
+	if sig.Kind != model.SignalBuy {
+		t.Fatalf("Kind = %v want Buy at bar %d", sig.Kind, k)
+	}
+	if sig.StopLoss != 0 {
+		t.Fatalf("StopATR=0 must leave StopLoss zero, got %v", sig.StopLoss)
+	}
+	if sig.EntryReason == "" {
+		t.Fatalf("EntryReason must be set on Buy")
+	}
+}
+
+func TestEnterSetsATRStopWhenEnabled(t *testing.T) {
+	p := DefaultParams()
+	p.StopATR = 1.5
+	s := NewWithParams("TEST", p)
+	closes, highs, lows := driftWalk(800, 1)
+	k := firstBuyBar(t, s, closes, highs, lows)
+	sig := s.Decide(mdEndingAt(closes, highs, lows, k, mskAt(2026, 7, 20, 12, 0), nil))
+	if sig.Kind != model.SignalBuy {
+		t.Fatalf("want Buy, got %v", sig.Kind)
+	}
+	if sig.StopLoss <= 0 || sig.StopLoss >= closes[k] {
+		t.Fatalf("StopLoss = %v must be positive and below entry %v", sig.StopLoss, closes[k])
+	}
+}
+
+func TestEnterRejectsWhenEMANotWarmed(t *testing.T) {
+	// EMASlow larger than the whole series never warms → EMA guard fails → never buys.
+	p := DefaultParams()
+	p.EMASlow = 100000
+	s := NewWithParams("TEST", p)
+	closes, highs, lows := driftWalk(400, 1)
+	for k := 60; k < len(closes); k++ {
+		if s.Decide(mdEndingAt(closes, highs, lows, k, mskAt(2026, 7, 20, 12, 0), nil)).Kind == model.SignalBuy {
+			t.Fatalf("unwarmed EMASlow must never buy (bar %d)", k)
+		}
+	}
+}
+
+func TestEnterRejectsOutsideSession(t *testing.T) {
+	s := NewWithParams("TEST", DefaultParams())
+	closes, highs, lows := driftWalk(800, 1)
+	k := firstBuyBar(t, s, closes, highs, lows)
+	md := mdEndingAt(closes, highs, lows, k, mskAt(2026, 7, 20, 19, 0), nil) // after close
+	if s.Decide(md).Kind == model.SignalBuy {
+		t.Fatalf("entry outside session must be rejected")
+	}
+}
+
+func TestEnterRejectsOnDayEndBar(t *testing.T) {
+	s := NewWithParams("TEST", DefaultParams())
+	closes, highs, lows := driftWalk(800, 1)
+	k := firstBuyBar(t, s, closes, highs, lows)
+	md := mdEndingAt(closes, highs, lows, k, mskAt(2026, 7, 20, 17, 50), nil) // last 15m bar of the day
+	if s.Decide(md).Kind == model.SignalBuy {
+		t.Fatalf("entry on the day-end bar must be rejected")
 	}
 }
