@@ -1,5 +1,5 @@
 {
-  "_comment": "scalping_rsimacd phased grid. Phase 1 sweeps the entry geometry (RSI length/oversold zone + the MACD confirmation window) with RSIEntryMin already fixed at its default of 50 (the gate is active for every phase-1 combo, so the RSIEntryMin=0 arm explored in phase 2 is only ever tried over entry geometries that already won WITH the gate on, not over geometries re-optimized for the gate off); phase 2 sweeps the context gates (minimum RSI on the MACD-cross bar and the H1 trend EMA, 0 = gate off) on top of each phase-1 seed; phase 3 sweeps the ATR trade geometry and the exits (stop distance in ATR, target distance in ATR, stochastic-exit ablation) on top of each phase-2 seed. The legacy swing-low geometry (StopATR=0 with StopBufferATR/RR/MinRiskATR) stays reachable via -params for a manual run but is deliberately NOT swept. MACD(3,6,9), the stochastic (14,3,3) and the session bounds are fixed by the strategy definition and are deliberately NOT swept either. RunPhases expands each phase over the previous phase's keepTop seeds, so the grid evaluates 27 (phase 1) + 6x12 (phase 2, keepTop=6 seeds x 12 combos) + 6x18 (phase 3) = 207 combos total, not a flat 27+12+18. Judge on pooled OOS profit factor from a walk-forward, never on the in-sample best.",
+  "_comment": "scalping_rsimacd phased grid. Phase 1 sweeps the entry geometry (RSI length/oversold zone + the MACD confirmation window) with RSIEntryMin already fixed at its default of 50 (the gate is active for every phase-1 combo, so the RSIEntryMin=0 arm explored in phase 2 is only ever tried over entry geometries that already won WITH the gate on, not over geometries re-optimized for the gate off); phase 2 sweeps the context gates (minimum RSI on the MACD-cross bar and the H1 trend EMA, 0 = gate off) on top of each phase-1 seed; phase 3 sweeps the ATR trade geometry (stop and target distance in ATR) on top of each phase-2 seed; phase 4 sweeps the discretionary exits (stochastic-exit ablation x the ATR volatility-collapse zone, 0 = off) on top of each phase-3 seed. Geometry and exits are separate phases rather than one product because the combined sweep would cost 6x36 instead of 6x9 + 6x6. The legacy swing-low geometry (StopATR=0 with StopBufferATR/RR/MinRiskATR) stays reachable via -params for a manual run but is deliberately NOT swept. MACD(3,6,9), the stochastic (14,3,3), ATRPeriod/ATRAvgPeriod and the session bounds are fixed by the strategy definition and are deliberately NOT swept either. RunPhases expands each phase over the previous phase's keepTop seeds, so the grid evaluates 27 (phase 1) + 6x12 (phase 2) + 6x9 (phase 3) + 6x6 (phase 4) = 189 combos total, not a flat 27+12+9+6. Judge on pooled OOS profit factor from a walk-forward, never on the in-sample best.",
   "phases": [
     {
       "name": "entry",
@@ -20,10 +20,17 @@
     },
     {
       "name": "risk",
+      "keepTop": 6,
       "grid": {
         "StopATR": [0.5, 1.0, 1.5],
-        "TPATR": [1.0, 2.0, 3.0],
-        "EnableStochExit": [0, 1]
+        "TPATR": [1.0, 2.0, 3.0]
+      }
+    },
+    {
+      "name": "exits",
+      "grid": {
+        "EnableStochExit": [0, 1],
+        "ATRExitRatio": [0, 0.7, 0.8]
       }
     }
   ]

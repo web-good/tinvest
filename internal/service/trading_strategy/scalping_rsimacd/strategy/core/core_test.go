@@ -791,11 +791,12 @@ func htfCloses(n int, start, step float64) []float64 {
 	return out
 }
 
-// TestDefaultParamsEnableHTFGate pins the shipped default. The gate started at 0 (off) and
-// was turned on at EMA(50) on 2026-07-23; calibration may still sweep it back to 0.
+// TestDefaultParamsEnableHTFGate pins that the gate ships ENABLED — it started at 0 (off) and
+// was turned on on 2026-07-23. The EMA period itself is a tuning knob (calibration may sweep
+// it, including back to 0), so the exact value is deliberately not asserted.
 func TestDefaultParamsEnableHTFGate(t *testing.T) {
-	if got := DefaultParams().HTFTrendEMA; got != 50 {
-		t.Fatalf("DefaultParams().HTFTrendEMA = %d want 50", got)
+	if got := DefaultParams().HTFTrendEMA; got <= 0 {
+		t.Fatalf("DefaultParams().HTFTrendEMA = %d, the H1 trend gate must ship enabled", got)
 	}
 }
 
@@ -980,13 +981,15 @@ func atrAt(highs, lows, closes []float64, bar, period int) float64 {
 	return indicators.ATR(highs[:bar+1], lows[:bar+1], closes[:bar+1], period)
 }
 
+// The shipped defaults must use the ATR geometry for both the stop and the target. The
+// multipliers themselves are tuning knobs the grid sweeps, so only "enabled" is pinned.
 func TestDefaultParamsUseATRStopAndTarget(t *testing.T) {
 	p := DefaultParams()
-	if p.StopATR != 1.0 {
-		t.Fatalf("DefaultParams().StopATR = %v want 1.0", p.StopATR)
+	if p.StopATR <= 0 {
+		t.Fatalf("DefaultParams().StopATR = %v, the stop must be ATR-sized by default", p.StopATR)
 	}
-	if p.TPATR != 2.0 {
-		t.Fatalf("DefaultParams().TPATR = %v want 2.0", p.TPATR)
+	if p.TPATR <= 0 {
+		t.Fatalf("DefaultParams().TPATR = %v, the target must be ATR-sized by default", p.TPATR)
 	}
 }
 
@@ -1056,5 +1059,109 @@ func TestATRStopSkipsVacuousRiskBounds(t *testing.T) {
 	p.MaxRiskATR = 3.0
 	if sig := NewWithParams("TEST", p).Decide(mdPrefix(highs, lows, closes, times, bar)); sig.Kind != model.SignalBuy {
 		t.Fatalf("ATR-режим не должен проверять вырожденные границы риска, got kind=%v", sig.Kind)
+	}
+}
+
+// volCollapse builds a flat-priced series whose bar range (and therefore ATR) is `wide` for
+// the first `calm` bars and `narrow` afterwards. Closes never move, so the SL/TP/stochastic
+// exits stay silent and only the ATR exit can fire.
+func volCollapse(calm, quiet int, wide, narrow float64) (highs, lows, closes []float64) {
+	for i := 0; i < calm+quiet; i++ {
+		r := wide
+		if i >= calm {
+			r = narrow
+		}
+		highs = append(highs, 100+r)
+		lows = append(lows, 100-r)
+		closes = append(closes, 100)
+	}
+	return highs, lows, closes
+}
+
+// atrExitParams isolates the ATR exit: short ATR/averaging windows so a synthetic series can
+// reach them, every other exit disarmed.
+func atrExitParams() Params {
+	p := DefaultParams()
+	p.ATRPeriod = 3
+	p.ATRAvgPeriod = 5
+	p.ATRExitRatio = 0.8
+	p.EnableStochExit = 0
+	return p
+}
+
+func atrExitMD(highs, lows, closes []float64, stop, tp float64) strategy.MarketData {
+	n := len(closes)
+	return strategy.MarketData{
+		Price:  closes[n-1],
+		Highs:  highs,
+		Lows:   lows,
+		Closes: closes,
+		Times:  sessionTimes(n),
+		Position: &strategy.Position{
+			PurchasePrice: 100, Quantity: 1, StopLoss: stop, TakeProfit: tp,
+		},
+	}
+}
+
+func TestDefaultParamsEnableATRExit(t *testing.T) {
+	p := DefaultParams()
+	if p.ATRExitRatio != 0.8 {
+		t.Fatalf("DefaultParams().ATRExitRatio = %v want 0.8", p.ATRExitRatio)
+	}
+	if p.ATRAvgPeriod != 50 {
+		t.Fatalf("DefaultParams().ATRAvgPeriod = %d want 50", p.ATRAvgPeriod)
+	}
+}
+
+func TestATRExitFiresWhenVolatilityDropsIntoTheZone(t *testing.T) {
+	highs, lows, closes := volCollapse(20, 1, 1.0, 0.05)
+	sig := NewWithParams("TEST", atrExitParams()).Decide(atrExitMD(highs, lows, closes, 90, 200))
+	if sig.Kind != model.SignalSell || sig.Reason != "ATR" {
+		t.Fatalf("kind=%v reason=%q want Sell/ATR", sig.Kind, sig.Reason)
+	}
+	if model.IsStopReason(sig.Reason) {
+		t.Fatalf("ATR exit fills at the bar close and must not be a stop-style reason")
+	}
+}
+
+func TestATRExitSilentWhileVolatilityHolds(t *testing.T) {
+	highs, lows, closes := volCollapse(21, 0, 1.0, 1.0) // ровная волатильность, отношение = 1
+	if sig := NewWithParams("TEST", atrExitParams()).Decide(atrExitMD(highs, lows, closes, 90, 200)); sig.Kind == model.SignalSell {
+		t.Fatalf("ATR exit fired on flat volatility (reason=%q)", sig.Reason)
+	}
+}
+
+// The zone must be entered from above on THIS bar: a series that already sits deep inside it
+// gives no cross and must not exit, otherwise the rule degenerates into "low volatility = out".
+func TestATRExitNeedsTheCrossNotJustALowReading(t *testing.T) {
+	highs, lows, closes := volCollapse(20, 6, 1.0, 0.05)
+	if sig := NewWithParams("TEST", atrExitParams()).Decide(atrExitMD(highs, lows, closes, 90, 200)); sig.Kind == model.SignalSell {
+		t.Fatalf("ATR exit fired without a cross into the zone (reason=%q)", sig.Reason)
+	}
+}
+
+func TestATRExitDisabledByZeroRatio(t *testing.T) {
+	highs, lows, closes := volCollapse(20, 1, 1.0, 0.05)
+	p := atrExitParams()
+	p.ATRExitRatio = 0
+	if sig := NewWithParams("TEST", p).Decide(atrExitMD(highs, lows, closes, 90, 200)); sig.Kind == model.SignalSell {
+		t.Fatalf("ATR exit fired while ATRExitRatio=0 (reason=%q)", sig.Reason)
+	}
+}
+
+func TestATRExitYieldsToStopLoss(t *testing.T) {
+	highs, lows, closes := volCollapse(20, 1, 1.0, 0.05)
+	n := len(closes)
+	lows[n-1] = 95 // бар задевает стоп на том же баре, где ATR входит в зону
+	sig := NewWithParams("TEST", atrExitParams()).Decide(atrExitMD(highs, lows, closes, 96, 200))
+	if sig.Reason != "SL" {
+		t.Fatalf("reason=%q want SL to outrank the ATR exit", sig.Reason)
+	}
+}
+
+func TestATRExitSilentOnShortHistory(t *testing.T) {
+	highs, lows, closes := volCollapse(4, 1, 1.0, 0.05) // короче ATRPeriod+ATRAvgPeriod+1
+	if sig := NewWithParams("TEST", atrExitParams()).Decide(atrExitMD(highs, lows, closes, 90, 200)); sig.Kind == model.SignalSell {
+		t.Fatalf("ATR exit fired without enough history (reason=%q)", sig.Reason)
 	}
 }

@@ -3,7 +3,8 @@
 // by a MACD(3,6,9) bullish line cross that happens BELOW zero. Stop and target are sized in
 // ATR from the entry price (StopATR/TPATR); setting either to 0 restores the older geometry —
 // the swing low of the RSI-cross candle for the stop, RR times the risk for the target. An optional
-// stochastic exit closes the position when %K leaves the overbought zone downward, and
+// stochastic exit closes the position when %K leaves the overbought zone downward, an optional
+// ATR exit closes it when volatility drops into a critical zone from above, and
 // every position is force-closed at the end of the trading day. The decision logic is
 // pure, stateless between bars and ticker-agnostic. The reference timeframe is 5 minutes,
 // but the rules are timeframe-agnostic: the EOD gate infers the bar span from the series, so
@@ -47,6 +48,8 @@ type Params struct {
 	RR              float64 // take-profit = entry + RR*(entry-stop), used only when TPATR = 0
 	MinRiskATR      float64 // swing-low mode only: reject entries whose risk < MinRiskATR*ATR
 	MaxRiskATR      float64 // swing-low mode only: reject entries whose risk > MaxRiskATR*ATR
+	ATRExitRatio    float64 // exit when ATR/SMA(ATR) crosses DOWN through this level; 0 disables (grid 0/0.7/0.8)
+	ATRAvgPeriod    int     // window of the ATR baseline the exit ratio is measured against
 	EnableStochExit int     // 1 = stochastic exit active; 0 = SL/TP/EOD only (grid 0/1)
 	StochK          int     // stochastic %K period (fixed 14)
 	StochD          int     // stochastic %D smoothing (fixed 3)
@@ -66,14 +69,16 @@ func DefaultParams() Params {
 		MACDSignal:      9,
 		MACDConfirmBars: 3,
 		RSIEntryMin:     50,
-		HTFTrendEMA:     50,
+		HTFTrendEMA:     100,
 		ATRPeriod:       14,
 		StopATR:         1.0,
-		TPATR:           2.0,
+		TPATR:           1.5,
 		StopBufferATR:   0,
 		RR:              2.0,
 		MinRiskATR:      0.1,
 		MaxRiskATR:      3.0,
+		ATRExitRatio:    0.8,
+		ATRAvgPeriod:    50,
 		EnableStochExit: 1,
 		StochK:          14,
 		StochD:          3,
@@ -96,7 +101,8 @@ func NewWithParams(ticker string, p Params) *Strategy { return &Strategy{ticker:
 func (s *Strategy) Ticker() string { return s.ticker }
 
 // Lookback sizes the candle window to warm every consumer with margin: Wilder RSI
-// (period 3-5), MACD(3,6,9), the stochastic (14+3) and the confirmation window.
+// (period 3-5), MACD(3,6,9), the stochastic (14+3), the confirmation window, and the ATR
+// exit's baseline, which is the longest consumer at ATRPeriod + ATRAvgPeriod + 1 = 65 bars.
 func (s *Strategy) Lookback() int { return 120 }
 
 // mskLoc anchors the session windows to the Moscow calendar (UTC fallback).
@@ -383,6 +389,11 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 		sig.Kind, sig.Reason = model.SignalSell, "STOCH"
 		sig.ExitReason = fmt.Sprintf("STOCH: %%K вышел вниз из зоны %.0f, выход по закрытию %.4f (вход %.4f)",
 			s.p.StochOverbought, md.Closes[n-1], pos.PurchasePrice)
+	case s.atrExit(md):
+		sig.Kind, sig.Reason = model.SignalSell, "ATR"
+		ratio, _ := s.atrRatio(md, 0)
+		sig.ExitReason = fmt.Sprintf("ATR: волатильность вошла в зону сверху вниз (ATR/SMA(ATR,%d) = %.2f < %.2f), выход по закрытию %.4f (вход %.4f)",
+			s.p.ATRAvgPeriod, ratio, s.p.ATRExitRatio, md.Closes[n-1], pos.PurchasePrice)
 	case s.isDayEnd(s.barTime(md), barSpanMinutes(md.Times)):
 		sig.Kind, sig.Reason = model.SignalSell, "EOD"
 		sig.ExitReason = fmt.Sprintf("EOD: закрытие на конец торгового дня по %.4f (вход %.4f)",
@@ -477,7 +488,61 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 	if s.p.EnableStochExit == 1 {
 		fmt.Fprintf(&sb, "выход по стохастику(%d,%d) на этом баре? %v\n", s.p.StochK, s.p.StochD, s.stochExit(md))
 	}
+	if s.p.ATRExitRatio > 0 {
+		if ratio, ok := s.atrRatio(md, 0); !ok {
+			fmt.Fprintf(&sb, "выход по ATR: недостаточно истории для базы SMA(ATR,%d)\n", s.p.ATRAvgPeriod)
+		} else {
+			fmt.Fprintf(&sb, "выход по ATR: ATR/SMA(ATR,%d) = %.2f, зона %.2f, вход в зону сверху на этом баре? %v\n",
+				s.p.ATRAvgPeriod, ratio, s.p.ATRExitRatio, s.atrExit(md))
+		}
+	} else {
+		sb.WriteString("выход по ATR: выключен (ATRExitRatio=0)\n")
+	}
 	return sb.String()
+}
+
+// atrRatio returns ATR relative to its own SMA baseline, `back` bars from the last one
+// (back=0 is the current bar). ATR is an absolute price distance, so a raw threshold would
+// mean something different on every ticker and every timeframe; dividing by the instrument's
+// own recent ATR yields a dimensionless reading where 1.0 is "volatility as usual". ok is
+// false when the series is too short for a full baseline window of valid ATR values.
+func (s *Strategy) atrRatio(md strategy.MarketData, back int) (ratio float64, ok bool) {
+	if s.p.ATRAvgPeriod < 2 {
+		return 0, false
+	}
+	a := indicators.ATRSeries(md.Highs, md.Lows, md.Closes, s.p.ATRPeriod)
+	i := len(a) - 1 - back
+	// ATRSeries fills everything before index ATRPeriod with zeros; the baseline window must
+	// start at or after that seed bar or it would average in warm-up noise.
+	if i < 0 || i-s.p.ATRAvgPeriod+1 < s.p.ATRPeriod {
+		return 0, false
+	}
+	sum := 0.0
+	for j := i - s.p.ATRAvgPeriod + 1; j <= i; j++ {
+		sum += a[j]
+	}
+	avg := sum / float64(s.p.ATRAvgPeriod)
+	if avg <= 0 {
+		return 0, false
+	}
+	return a[i] / avg, true
+}
+
+// atrExit reports whether volatility entered the critical zone FROM ABOVE on the current bar:
+// the ATR ratio was at or above ATRExitRatio on the previous bar and is below it now. The
+// cross, not the level, is the signal — a position opened into an already-quiet market would
+// otherwise be closed on its very first bar. Insufficient history yields no exit (fail-open):
+// the position still has its stop, take-profit and the EOD close.
+func (s *Strategy) atrExit(md strategy.MarketData) bool {
+	if s.p.ATRExitRatio <= 0 {
+		return false
+	}
+	now, okNow := s.atrRatio(md, 0)
+	prev, okPrev := s.atrRatio(md, 1)
+	if !okNow || !okPrev {
+		return false
+	}
+	return prev >= s.p.ATRExitRatio && now < s.p.ATRExitRatio
 }
 
 // stochExit reports whether %K left the overbought zone downward on the current bar.
