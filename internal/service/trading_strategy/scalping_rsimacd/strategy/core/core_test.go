@@ -115,12 +115,14 @@ func TestTickerRoundTrip(t *testing.T) {
 }
 
 // testParams are permissive defaults for entry tests: the risk sanity bounds are opened
-// up so synthetic series never trip them, and the stop sits exactly on the trigger low.
+// up so synthetic series never trip them, the stop sits exactly on the trigger low, and
+// the RSI threshold gate is off unless a test turns it on.
 func testParams() Params {
 	p := DefaultParams()
 	p.MinRiskATR = 0
 	p.MaxRiskATR = 100
 	p.StopBufferATR = 0
+	p.RSIEntryMin = 0
 	return p
 }
 
@@ -702,5 +704,74 @@ func TestExplainHandlesShortHistory(t *testing.T) {
 	}
 	if out := s.Explain(md); out == "" {
 		t.Fatalf("Explain must always return a diagnosis, even on short history")
+	}
+}
+
+// baselineEntryBar returns the series, times and the bar index on which the permissive
+// testParams() strategy takes its first entry. Gate tests build on it so that a "no
+// entry" assertion can never be vacuous.
+func baselineEntryBar(t *testing.T) (highs, lows, closes []float64, times []time.Time, bar int) {
+	t.Helper()
+	highs, lows, closes = declineThenRally(60, 8, 100, 0.5, 0.2)
+	times = sessionTimes(len(closes))
+	_, bar, ok := firstBuy(NewWithParams("TEST", testParams()), highs, lows, closes, times)
+	if !ok {
+		t.Fatalf("baseline entry missing; gate assertions would be vacuous")
+	}
+	return highs, lows, closes, times, bar
+}
+
+func TestDefaultParamsEnableRSIEntryMin(t *testing.T) {
+	if got := DefaultParams().RSIEntryMin; got != 50 {
+		t.Fatalf("DefaultParams().RSIEntryMin = %v want 50", got)
+	}
+}
+
+func TestRSIEntryMinBlocksWeakCross(t *testing.T) {
+	highs, lows, closes, times, bar := baselineEntryBar(t)
+	rsi := indicators.RSISeries(closes[:bar+1], testParams().RSIPeriod)
+	at := rsi[bar]
+
+	p := testParams()
+	p.RSIEntryMin = at + 1 // порог выше фактического RSI на баре кросса
+	sig := NewWithParams("TEST", p).Decide(mdPrefix(highs, lows, closes, times, bar))
+	if sig.Kind == model.SignalBuy {
+		t.Fatalf("entry fired with RSI %.2f below the %.2f threshold", at, p.RSIEntryMin)
+	}
+}
+
+func TestRSIEntryMinAllowsStrongCross(t *testing.T) {
+	highs, lows, closes, times, bar := baselineEntryBar(t)
+	rsi := indicators.RSISeries(closes[:bar+1], testParams().RSIPeriod)
+	at := rsi[bar]
+
+	p := testParams()
+	p.RSIEntryMin = at - 1 // порог ниже фактического RSI
+	sig := NewWithParams("TEST", p).Decide(mdPrefix(highs, lows, closes, times, bar))
+	if sig.Kind != model.SignalBuy {
+		t.Fatalf("entry blocked though RSI %.2f clears the %.2f threshold", at, p.RSIEntryMin)
+	}
+	if !strings.Contains(sig.EntryReason, "RSI на кроссе") {
+		t.Fatalf("EntryReason must mention the RSI threshold gate, got %q", sig.EntryReason)
+	}
+}
+
+func TestRSIEntryMinZeroDisablesGate(t *testing.T) {
+	highs, lows, closes, times, bar := baselineEntryBar(t)
+	p := testParams()
+	p.RSIEntryMin = 0
+	sig := NewWithParams("TEST", p).Decide(mdPrefix(highs, lows, closes, times, bar))
+	if sig.Kind != model.SignalBuy {
+		t.Fatalf("RSIEntryMin=0 must not block anything")
+	}
+}
+
+func TestExplainReportsRSIEntryMin(t *testing.T) {
+	highs, lows, closes, times, bar := baselineEntryBar(t)
+	p := testParams()
+	p.RSIEntryMin = 50
+	out := NewWithParams("TEST", p).Explain(mdPrefix(highs, lows, closes, times, bar))
+	if !strings.Contains(out, "RSI на кроссе") {
+		t.Fatalf("Explain must report the RSI threshold gate, got:\n%s", out)
 	}
 }

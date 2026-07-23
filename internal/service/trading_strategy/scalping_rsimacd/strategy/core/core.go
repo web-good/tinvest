@@ -31,6 +31,7 @@ type Params struct {
 	MACDSlow        int     // MACD slow EMA (fixed 6)
 	MACDSignal      int     // MACD signal EMA (fixed 9)
 	MACDConfirmBars int     // MACD cross accepted on the RSI bar or the next N bars (grid 2/3/4)
+	RSIEntryMin     float64 // minimum RSI on the MACD-cross bar; 0 disables the gate (grid 0/50/55)
 	ATRPeriod       int     // ATR length; the unit of the risk sanity bounds
 	StopBufferATR   float64 // stop = low(RSI bar) - StopBufferATR*ATR (grid 0/0.1)
 	RR              float64 // take-profit = entry + RR*(entry-stop) (grid 2/2.5/3)
@@ -54,6 +55,7 @@ func DefaultParams() Params {
 		MACDSlow:        6,
 		MACDSignal:      9,
 		MACDConfirmBars: 3,
+		RSIEntryMin:     50,
 		ATRPeriod:       14,
 		StopBufferATR:   0,
 		RR:              2.0,
@@ -187,6 +189,10 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	if len(rsi) != n {
 		return sig
 	}
+	// 3a. momentum gate: the cross must happen with RSI already above the threshold.
+	if s.p.RSIEntryMin > 0 && rsi[i] <= s.p.RSIEntryMin {
+		return sig
+	}
 	trig, ok := s.lastRSITrigger(rsi, n)
 	if !ok {
 		return sig
@@ -249,12 +255,17 @@ func (s *Strategy) triggerAlive(md strategy.MarketData, t, n int, stop float64) 
 }
 
 // entryReason renders the rationale shown in the trade journal. barsAgo is the distance
-// from the RSI trigger bar to the entry bar (0 = same bar).
+// from the RSI trigger bar to the entry bar (0 = same bar). Optional gates contribute a
+// fragment only when they are enabled.
 func (s *Strategy) entryReason(barsAgo int, rsiNow, stop, entry, tp, atr float64) string {
+	var extra string
+	if s.p.RSIEntryMin > 0 {
+		extra += fmt.Sprintf("; RSI на кроссе %.1f > порога %.0f", rsiNow, s.p.RSIEntryMin)
+	}
 	return fmt.Sprintf(
-		"RSI(%d) вышел вверх из зоны %.0f (сейчас %.1f), через %d бар(ов) MACD(%d,%d,%d) пересёкся ниже нуля; вход %.4f, стоп %.4f (лоу свечи кросса, буфер %.2f×ATR), тейк %.4f (RR=%.2f), ATR=%.4f",
+		"RSI(%d) вышел вверх из зоны %.0f (сейчас %.1f), через %d бар(ов) MACD(%d,%d,%d) пересёкся ниже нуля; вход %.4f, стоп %.4f (лоу свечи кросса, буфер %.2f×ATR), тейк %.4f (RR=%.2f), ATR=%.4f%s",
 		s.p.RSIPeriod, s.p.RSIOversold, rsiNow, barsAgo, s.p.MACDFast, s.p.MACDSlow, s.p.MACDSignal,
-		entry, stop, s.p.StopBufferATR, tp, s.p.RR, atr,
+		entry, stop, s.p.StopBufferATR, tp, s.p.RR, atr, extra,
 	)
 }
 
@@ -319,6 +330,12 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 		return sb.String()
 	}
 	fmt.Fprintf(&sb, "RSI(%d) сейчас %.1f, зона %.0f\n", s.p.RSIPeriod, rsi[i], s.p.RSIOversold)
+	if s.p.RSIEntryMin > 0 {
+		fmt.Fprintf(&sb, "RSI на кроссе %.1f > порога %.0f? %v\n",
+			rsi[i], s.p.RSIEntryMin, rsi[i] > s.p.RSIEntryMin)
+	} else {
+		fmt.Fprintf(&sb, "RSI на кроссе: порог выключен (RSIEntryMin=0)\n")
+	}
 	trig, ok := s.lastRSITrigger(rsi, n)
 	if !ok {
 		fmt.Fprintf(&sb, "RSI-триггер в окне %d бар(ов): нет\n", s.p.MACDConfirmBars)
