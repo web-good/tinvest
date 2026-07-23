@@ -201,6 +201,11 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 	if err != nil {
 		return err
 	}
+	if strategyName == "scalping_rsimacd" {
+		if err := reportHTFCoverage(htfCandles, dailyFrom); err != nil {
+			return err
+		}
+	}
 
 	cfg := domain.Config{InitialCash: cash, Fraction: fraction, Commission: commission, Lot: share.Lot, RiskFractionPct: riskPct, HTFInterval: htfInterval}
 	periodDays := to.Sub(from).Hours() / 24
@@ -214,7 +219,11 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 		if err != nil {
 			return fmt.Errorf("parse -explain time %q (want 'YYYY-MM-DD HH:MM' MSK): %w", explain, err)
 		}
-		fmt.Println(domain.Trace(binding.Build(binding.DefaultParams()), candles, dailyCandles, htfCandles, cfg, target))
+		params, err := loadParams(binding, paramsPath)
+		if err != nil {
+			return err
+		}
+		fmt.Println(domain.Trace(binding.Build(params), candles, dailyCandles, htfCandles, cfg, target))
 		return nil
 	}
 
@@ -233,19 +242,31 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 		metaCommon(ticker, interval, from, to, cfg))
 }
 
+// loadParams resolves the strategy Params for a run: b.DefaultParams() when paramsPath
+// is empty, otherwise the JSON at paramsPath parsed via the binding. Shared by
+// runSingle and the -explain path so -explain diagnoses the SAME configuration a real
+// run would use, instead of silently falling back to defaults.
+func loadParams(b svc.Binding, paramsPath string) (any, error) {
+	if paramsPath == "" {
+		return b.DefaultParams(), nil
+	}
+	raw, err := os.ReadFile(paramsPath)
+	if err != nil {
+		return nil, fmt.Errorf("read params: %w", err)
+	}
+	params, err := b.ParseParams(raw)
+	if err != nil {
+		return nil, err
+	}
+	return params, nil
+}
+
 func runSingle(b svc.Binding, paramsPath string, candles []domain.Candle, dailyCandles, htfCandles []domain.Candle,
 	cfg domain.Config, periodDays float64, base string, meta domain.Meta,
 ) error {
-	params := b.DefaultParams()
-	if paramsPath != "" {
-		raw, err := os.ReadFile(paramsPath)
-		if err != nil {
-			return fmt.Errorf("read params: %w", err)
-		}
-		params, err = b.ParseParams(raw)
-		if err != nil {
-			return err
-		}
+	params, err := loadParams(b, paramsPath)
+	if err != nil {
+		return err
 	}
 
 	if len(candles) < b.Build(params).Lookback() {
@@ -362,6 +383,29 @@ func runCalibration(b svc.Binding, gridPath string, candles []domain.Candle, dai
 		}
 	}
 	fmt.Printf("calibration: %s (combos=%d, test_months=%d)\n", calibPath, len(results), testMonths)
+	return nil
+}
+
+// reportHTFCoverage guards scalping_rsimacd's fail-closed HTFTrendEMA gate against a
+// starved H1 cache: CandleProvider.Load only back-fills the tail of a warm cache, so
+// a cache whose earliest bar predates the requested lead-in silently yields a short
+// (or empty) H1 series. An empty series makes every gate-on grid arm produce 0 trades
+// and get dropped by the min-trades filter — exactly the "gate has no edge" misreading
+// the fail-closed design was meant to prevent, so an empty series is a hard error and a
+// short head is a loud warning, not a silent one.
+func reportHTFCoverage(htf []domain.Candle, leadInFrom time.Time) error {
+	if len(htf) == 0 {
+		return fmt.Errorf("H1-серия для HTFTrendEMA пуста: используйте -refresh, чтобы догрузить часовые свечи из API")
+	}
+	first, last := htf[0].Time, htf[len(htf)-1].Time
+	fmt.Printf("H1: %d баров, покрытие %s .. %s\n",
+		len(htf), first.Format("2006-01-02 15:04"), last.Format("2006-01-02 15:04"))
+	if first.After(leadInFrom) {
+		fmt.Printf("⚠️ H1-кэш короче запрошенного лид-ина (первый бар %s позже %s): "+
+			"запустите с -refresh, чтобы догрузить историю в начало кэша; "+
+			"иначе fail-closed фильтр HTFTrendEMA будет глушить входы на самых ранних фолдах\n",
+			first.Format("2006-01-02 15:04"), leadInFrom.Format("2006-01-02 15:04"))
+	}
 	return nil
 }
 

@@ -52,6 +52,12 @@ go run ./cmd/backtest -ticker <TICKER> -strategy scalping_rsimacd -interval Minu
 
 ## Разведочный прогон (single-run, defaults, 2026-07-22)
 
+> Цифры ниже сняты ДО гейтов от 2026-07-23 (`RSIEntryMin`, `HTFTrendEMA`) — на тогдашних
+> дефолтах `RSIEntryMin = 0` (фильтр выключен). Сейчас `RSIEntryMin` по умолчанию равен
+> 50, что само по себе отсекает примерно треть исходной выборки, так что этот прогон
+> больше не воспроизводим на текущих дефолтах и приведён только как исторический
+> ориентир.
+
 `go run ./cmd/backtest -ticker SBER -strategy scalping_rsimacd -interval Minutes5 -out ./reports/SBER -months 6`
 (defaults из `core.DefaultParams()`, без калибровки) дал 533 сделки за 6 месяцев,
 profit factor 0.158, win rate 16.5%, чистый PnL −45.21%. Это не повод менять пороги

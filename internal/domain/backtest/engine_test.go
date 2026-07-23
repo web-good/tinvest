@@ -1,6 +1,7 @@
 package backtest
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -554,5 +555,64 @@ func TestAssembleMarketDataWithHourlyHTF(t *testing.T) {
 	// Прежняя 4-часовая семантика: ни один бар ещё не закрыт.
 	if md4 := AssembleMarketData(window, nil, htf, cur); len(md4.HTFCloses) != 0 {
 		t.Fatalf("4h default: got %d completed bars, want 0", len(md4.HTFCloses))
+	}
+}
+
+// TestHTFCursorMatchesVisibleCompletedHTF pins htfCursor's incremental prefix to be
+// exactly what visibleCompletedHTF computes by rescanning from scratch, for every cur
+// in an increasing sequence — including the exact closing boundary (a bar whose
+// close time equals cur must be visible) and the empty-prefix case (cur before the
+// first bar closes).
+func TestHTFCursorMatchesVisibleCompletedHTF(t *testing.T) {
+	interval := time.Hour
+	base := time.Date(2026, 7, 20, 9, 0, 0, 0, time.UTC)
+	htf := []Candle{
+		{Time: base, High: 2, Low: 1, Close: 1.5},
+		{Time: base.Add(1 * time.Hour), High: 3, Low: 2, Close: 2.5},
+		{Time: base.Add(2 * time.Hour), High: 4, Low: 3, Close: 3.5},
+		{Time: base.Add(4 * time.Hour), High: 5, Low: 4, Close: 4.5}, // gap: no bar at +3h
+	}
+
+	// Increasing cur values, including: before any bar closes (empty prefix), the
+	// exact boundary of each close time, mid-bar values, and past the last close.
+	curs := []time.Time{
+		base.Add(-time.Minute),              // empty prefix
+		base,                                // before first bar closes (close at base+1h)
+		base.Add(30 * time.Minute),          // still empty
+		base.Add(1 * time.Hour),             // exact boundary: bar 0 closes now
+		base.Add(90 * time.Minute),          // between boundaries
+		base.Add(2 * time.Hour),             // exact boundary: bar 1 closes now
+		base.Add(3 * time.Hour),             // exact boundary: bar 2 closes now
+		base.Add(3*time.Hour + time.Minute), // still only 3 visible (gap)
+		base.Add(5 * time.Hour),             // exact boundary: bar 3 closes now
+		base.Add(24 * time.Hour),            // long past the end
+	}
+
+	cur := newHTFCursor(htf, interval)
+	for _, at := range curs {
+		gotC, gotH, gotL := cur.visible(at)
+		wantC, wantH, wantL := visibleCompletedHTF(htf, at, interval)
+		if !reflect.DeepEqual(gotC, wantC) {
+			t.Fatalf("cur=%v closes = %v, want %v", at, gotC, wantC)
+		}
+		if !reflect.DeepEqual(gotH, wantH) {
+			t.Fatalf("cur=%v highs = %v, want %v", at, gotH, wantH)
+		}
+		if !reflect.DeepEqual(gotL, wantL) {
+			t.Fatalf("cur=%v lows = %v, want %v", at, gotL, wantL)
+		}
+	}
+}
+
+// TestHTFCursorNilForEmptyHTF pins the no-HTF short-circuit: a nil htf slice must
+// yield a nil cursor whose visible() is a zero-cost no-op returning nil, nil, nil.
+func TestHTFCursorNilForEmptyHTF(t *testing.T) {
+	cur := newHTFCursor(nil, time.Hour)
+	if cur != nil {
+		t.Fatalf("newHTFCursor(nil, ...) = %v, want nil cursor", cur)
+	}
+	c, h, l := cur.visible(time.Now())
+	if c != nil || h != nil || l != nil {
+		t.Fatalf("nil cursor visible() = %v/%v/%v, want nil/nil/nil", c, h, l)
 	}
 }

@@ -74,6 +74,53 @@ func visibleCompletedHTF(htf []Candle, cur time.Time, interval time.Duration) (c
 	return closes, highs, lows
 }
 
+// htfCursor produces the same series visibleCompletedHTF would return, but amortized
+// O(1) per bar instead of O(len(htf)) per bar: since Run/Trace advance cur
+// monotonically, the completed-prefix boundary only ever moves forward, so each call
+// resumes scanning where the previous one left off instead of rescanning from the
+// start. The closes/highs/lows backing arrays are precomputed once; each call returns
+// a prefix slice of them (no per-bar allocation). A nil *htfCursor is a valid
+// zero-cost no-op for the no-HTF case.
+type htfCursor struct {
+	htf                 []Candle
+	closes, highs, lows []float64
+	interval            time.Duration
+	idx                 int // number of htf bars confirmed visible so far (monotonic non-decreasing)
+}
+
+// newHTFCursor builds a cursor over htf (oldest-first). Returns nil when htf is empty
+// so callers pay nothing for the no-HTF case.
+func newHTFCursor(htf []Candle, interval time.Duration) *htfCursor {
+	if len(htf) == 0 {
+		return nil
+	}
+	closes := make([]float64, len(htf))
+	highs := make([]float64, len(htf))
+	lows := make([]float64, len(htf))
+	for i, c := range htf {
+		closes[i] = c.Close
+		highs[i] = c.High
+		lows[i] = c.Low
+	}
+	return &htfCursor{htf: htf, closes: closes, highs: highs, lows: lows, interval: interval}
+}
+
+// visible returns the same (closes, highs, lows) visibleCompletedHTF(htf, cur, interval)
+// would, provided cur is non-decreasing across calls (Run/Trace's bar loop). Returns
+// nil, nil, nil for a nil cursor or an empty prefix, matching visibleCompletedHTF.
+func (h *htfCursor) visible(cur time.Time) (closes, highs, lows []float64) {
+	if h == nil {
+		return nil, nil, nil
+	}
+	for h.idx < len(h.htf) && !h.htf[h.idx].Time.Add(h.interval).After(cur) {
+		h.idx++
+	}
+	if h.idx == 0 {
+		return nil, nil, nil
+	}
+	return h.closes[:h.idx], h.highs[:h.idx], h.lows[:h.idx]
+}
+
 // todayExtent returns the high and low across all bars sharing candles[i]'s MSK
 // calendar day, scanning back from i only (no lookahead). Returns (0,0) when i is
 // out of range.
@@ -110,9 +157,13 @@ func Run(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Candl
 	}
 	p := newPortfolio(cfg)
 	lastClose := candles[len(candles)-1].Close
+	htf := newHTFCursor(htfCandles, cfg.htfSpan())
 	for i := l - 1; i < len(candles); i++ {
 		p.bar = i
-		md := AssembleMarketDataWithHTFInterval(candles[i-l+1:i+1], dailyCandles, htfCandles, candles[i].Time, cfg.htfSpan())
+		md := buildMarketData(candles[i-l+1 : i+1])
+		md.DailyCloses = visibleDailyCloses(dailyCandles, candles[i].Time, mskLoc)
+		md.DailyHighs, md.DailyLows = visibleDailyHighsLows(dailyCandles, candles[i].Time, mskLoc)
+		md.HTFCloses, md.HTFHighs, md.HTFLows = htf.visible(candles[i].Time)
 		md.TodayHigh, md.TodayLow = todayExtent(candles, i, mskLoc)
 		if p.qty != 0 {
 			p.mark(candles[i].Close)
@@ -174,9 +225,13 @@ func Trace(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Can
 		return "недостаточно свечей для lookback"
 	}
 	p := newPortfolio(cfg)
+	htf := newHTFCursor(htfCandles, cfg.htfSpan())
 	for i := l - 1; i < len(candles); i++ {
 		p.bar = i
-		md := AssembleMarketDataWithHTFInterval(candles[i-l+1:i+1], dailyCandles, htfCandles, candles[i].Time, cfg.htfSpan())
+		md := buildMarketData(candles[i-l+1 : i+1])
+		md.DailyCloses = visibleDailyCloses(dailyCandles, candles[i].Time, mskLoc)
+		md.DailyHighs, md.DailyLows = visibleDailyHighsLows(dailyCandles, candles[i].Time, mskLoc)
+		md.HTFCloses, md.HTFHighs, md.HTFLows = htf.visible(candles[i].Time)
 		md.TodayHigh, md.TodayLow = todayExtent(candles, i, mskLoc)
 		if p.qty != 0 {
 			p.mark(candles[i].Close)
