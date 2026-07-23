@@ -183,17 +183,26 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 		return err
 	}
 
-	// Reversion's optional 4H HTF trend filter needs real Hour4 candles, loaded with the
-	// same year lead-in as the daily series to warm the 4H EMA. Other strategies pass nil.
-	var htfCandles []domain.Candle
-	if strategyName == "reversion" {
+	// The optional HTF trend filters need real higher-timeframe candles, loaded with the
+	// same year lead-in as the daily series to warm the HTF EMA: Hour4 for reversion,
+	// Hour1 for scalping_rsimacd. Other strategies pass nil.
+	var (
+		htfCandles  []domain.Candle
+		htfInterval time.Duration
+	)
+	switch strategyName {
+	case "reversion":
+		htfInterval = 4 * time.Hour
 		htfCandles, err = provider.Load(ctx, ticker, share.ID, enum.Hour4, dailyFrom, to, refresh)
-		if err != nil {
-			return err
-		}
+	case "scalping_rsimacd":
+		htfInterval = time.Hour
+		htfCandles, err = provider.Load(ctx, ticker, share.ID, enum.Hour1, dailyFrom, to, refresh)
+	}
+	if err != nil {
+		return err
 	}
 
-	cfg := domain.Config{InitialCash: cash, Fraction: fraction, Commission: commission, Lot: share.Lot, RiskFractionPct: riskPct}
+	cfg := domain.Config{InitialCash: cash, Fraction: fraction, Commission: commission, Lot: share.Lot, RiskFractionPct: riskPct, HTFInterval: htfInterval}
 	periodDays := to.Sub(from).Hours() / 24
 
 	if explain != "" {
