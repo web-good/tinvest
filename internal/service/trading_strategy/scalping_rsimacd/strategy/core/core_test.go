@@ -123,6 +123,7 @@ func testParams() Params {
 	p.MaxRiskATR = 100
 	p.StopBufferATR = 0
 	p.RSIEntryMin = 0
+	p.HTFTrendEMA = 0
 	return p
 }
 
@@ -773,5 +774,100 @@ func TestExplainReportsRSIEntryMin(t *testing.T) {
 	out := NewWithParams("TEST", p).Explain(mdPrefix(highs, lows, closes, times, bar))
 	if !strings.Contains(out, "RSI на кроссе") {
 		t.Fatalf("Explain must report the RSI threshold gate, got:\n%s", out)
+	}
+}
+
+// htfCloses returns n synthetic hourly closes moving by step per bar from start
+// (negative step = downtrend), so the last close sits above (up) or below (down) its EMA.
+func htfCloses(n int, start, step float64) []float64 {
+	out := make([]float64, n)
+	for i := range out {
+		out[i] = start + float64(i)*step
+	}
+	return out
+}
+
+func TestDefaultParamsLeaveHTFGateOff(t *testing.T) {
+	if got := DefaultParams().HTFTrendEMA; got != 0 {
+		t.Fatalf("DefaultParams().HTFTrendEMA = %d want 0 (gate off by default)", got)
+	}
+}
+
+func TestHTFTrendGateAllowsUptrend(t *testing.T) {
+	highs, lows, closes, times, bar := baselineEntryBar(t)
+	p := testParams()
+	p.HTFTrendEMA = 20
+
+	md := mdPrefix(highs, lows, closes, times, bar)
+	md.HTFCloses = htfCloses(60, 100, 0.5) // растущий H1: цена выше EMA
+	sig := NewWithParams("TEST", p).Decide(md)
+	if sig.Kind != model.SignalBuy {
+		t.Fatalf("entry blocked though H1 close sits above its EMA")
+	}
+	if !strings.Contains(sig.EntryReason, "H1") {
+		t.Fatalf("EntryReason must mention the H1 trend gate, got %q", sig.EntryReason)
+	}
+}
+
+func TestHTFTrendGateBlocksDowntrend(t *testing.T) {
+	highs, lows, closes, times, bar := baselineEntryBar(t)
+	p := testParams()
+	p.HTFTrendEMA = 20
+
+	md := mdPrefix(highs, lows, closes, times, bar)
+	md.HTFCloses = htfCloses(60, 130, -0.5) // падающий H1: цена ниже EMA
+	if sig := NewWithParams("TEST", p).Decide(md); sig.Kind == model.SignalBuy {
+		t.Fatalf("entry fired against a falling H1 trend")
+	}
+}
+
+func TestHTFTrendGateFailsClosedWithoutData(t *testing.T) {
+	highs, lows, closes, times, bar := baselineEntryBar(t)
+	p := testParams()
+	p.HTFTrendEMA = 20
+
+	cases := map[string][]float64{
+		"nil":   nil,
+		"short": htfCloses(10, 100, 0.5), // короче периода EMA
+	}
+	for name, series := range cases {
+		t.Run(name, func(t *testing.T) {
+			md := mdPrefix(highs, lows, closes, times, bar)
+			md.HTFCloses = series
+			if sig := NewWithParams("TEST", p).Decide(md); sig.Kind == model.SignalBuy {
+				t.Fatalf("gate must fail closed when H1 history is missing")
+			}
+		})
+	}
+}
+
+func TestHTFTrendGateOffIgnoresMissingData(t *testing.T) {
+	highs, lows, closes, times, bar := baselineEntryBar(t)
+	p := testParams()
+	p.HTFTrendEMA = 0
+
+	md := mdPrefix(highs, lows, closes, times, bar)
+	md.HTFCloses = nil
+	if sig := NewWithParams("TEST", p).Decide(md); sig.Kind != model.SignalBuy {
+		t.Fatalf("HTFTrendEMA=0 must not require H1 data")
+	}
+}
+
+func TestExplainReportsHTFGate(t *testing.T) {
+	highs, lows, closes, times, bar := baselineEntryBar(t)
+	p := testParams()
+	p.HTFTrendEMA = 20
+
+	md := mdPrefix(highs, lows, closes, times, bar)
+	md.HTFCloses = nil
+	out := NewWithParams("TEST", p).Explain(md)
+	if !strings.Contains(out, "нет данных H1") {
+		t.Fatalf("Explain must report missing H1 data, got:\n%s", out)
+	}
+
+	md.HTFCloses = htfCloses(60, 100, 0.5)
+	out = NewWithParams("TEST", p).Explain(md)
+	if !strings.Contains(out, "тренд H1") {
+		t.Fatalf("Explain must report the H1 trend verdict, got:\n%s", out)
 	}
 }

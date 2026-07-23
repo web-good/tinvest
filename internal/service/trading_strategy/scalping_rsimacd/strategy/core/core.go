@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"tinvest/internal/domain/ema"
 	"tinvest/internal/service/trading_strategy/scalping/model"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 	"tinvest/pkg/indicators"
@@ -32,6 +33,7 @@ type Params struct {
 	MACDSignal      int     // MACD signal EMA (fixed 9)
 	MACDConfirmBars int     // MACD cross accepted on the RSI bar or the next N bars (grid 2/3/4)
 	RSIEntryMin     float64 // minimum RSI on the MACD-cross bar; 0 disables the gate (grid 0/50/55)
+	HTFTrendEMA     int     // EMA period on completed H1 closes; entry needs close > EMA. 0 disables the gate (grid 0/20/50/100)
 	ATRPeriod       int     // ATR length; the unit of the risk sanity bounds
 	StopBufferATR   float64 // stop = low(RSI bar) - StopBufferATR*ATR (grid 0/0.1)
 	RR              float64 // take-profit = entry + RR*(entry-stop) (grid 2/2.5/3)
@@ -56,6 +58,7 @@ func DefaultParams() Params {
 		MACDSignal:      9,
 		MACDConfirmBars: 3,
 		RSIEntryMin:     50,
+		HTFTrendEMA:     0,
 		ATRPeriod:       14,
 		StopBufferATR:   0,
 		RR:              2.0,
@@ -197,6 +200,11 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	if !ok {
 		return sig
 	}
+	// higher-timeframe trend gate (fail-closed when H1 history is missing).
+	htfOK, htfClose, htfEMA, _ := s.htfTrendOK(md)
+	if !htfOK {
+		return sig
+	}
 	// 4. ATR unit for the stop buffer and the risk sanity bounds.
 	atr := indicators.ATR(md.Highs, md.Lows, md.Closes, s.p.ATRPeriod)
 	if atr <= 0 {
@@ -221,7 +229,7 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	sig.ATR = atr
 	sig.RSI = rsi[i]
 	sig.Level = md.Lows[trig]
-	sig.EntryReason = s.entryReason(i-trig, rsi[i], stop, entry, tp, atr)
+	sig.EntryReason = s.entryReason(i-trig, rsi[i], stop, entry, tp, atr, htfClose, htfEMA)
 	return sig
 }
 
@@ -254,13 +262,41 @@ func (s *Strategy) triggerAlive(md strategy.MarketData, t, n int, stop float64) 
 	return md.Closes[n-1] > stop
 }
 
+// htfTrendOK evaluates the higher-timeframe (H1) trend gate. It reports the verdict, the
+// last completed H1 close, the EMA value, and whether there was enough H1 history at all.
+// The gate is FAIL-CLOSED: with the gate enabled and insufficient H1 data it returns
+// ok=false, haveData=false. Silently passing (as reversion does) would let a calibration
+// run on a period without H1 history collect trades that were effectively unfiltered and
+// inflate the profit factor.
+func (s *Strategy) htfTrendOK(md strategy.MarketData) (ok bool, htfClose, htfEMA float64, haveData bool) {
+	if s.p.HTFTrendEMA <= 0 {
+		return true, 0, 0, true
+	}
+	if len(md.HTFCloses) < s.p.HTFTrendEMA {
+		return false, 0, 0, false
+	}
+	e := ema.Compute(md.HTFCloses, s.p.HTFTrendEMA)
+	if len(e) == 0 {
+		return false, 0, 0, false
+	}
+	htfEMA = e[len(e)-1]
+	htfClose = md.HTFCloses[len(md.HTFCloses)-1]
+	if htfEMA <= 0 {
+		return false, htfClose, htfEMA, false
+	}
+	return htfClose > htfEMA, htfClose, htfEMA, true
+}
+
 // entryReason renders the rationale shown in the trade journal. barsAgo is the distance
 // from the RSI trigger bar to the entry bar (0 = same bar). Optional gates contribute a
 // fragment only when they are enabled.
-func (s *Strategy) entryReason(barsAgo int, rsiNow, stop, entry, tp, atr float64) string {
+func (s *Strategy) entryReason(barsAgo int, rsiNow, stop, entry, tp, atr, htfClose, htfEMA float64) string {
 	var extra string
 	if s.p.RSIEntryMin > 0 {
 		extra += fmt.Sprintf("; RSI на кроссе %.1f > порога %.0f", rsiNow, s.p.RSIEntryMin)
+	}
+	if s.p.HTFTrendEMA > 0 {
+		extra += fmt.Sprintf("; тренд H1 вверх (close %.4f > EMA(%d) %.4f)", htfClose, s.p.HTFTrendEMA, htfEMA)
 	}
 	return fmt.Sprintf(
 		"RSI(%d) вышел вверх из зоны %.0f (сейчас %.1f), через %d бар(ов) MACD(%d,%d,%d) пересёкся ниже нуля; вход %.4f, стоп %.4f (лоу свечи кросса, буфер %.2f×ATR), тейк %.4f (RR=%.2f), ATR=%.4f%s",
@@ -342,6 +378,18 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 		return sb.String()
 	}
 	fmt.Fprintf(&sb, "RSI-триггер: бар -%d (RSI %.1f -> %.1f)\n", i-trig, rsi[trig-1], rsi[trig])
+
+	if s.p.HTFTrendEMA > 0 {
+		htfOK, htfClose, htfEMA, haveData := s.htfTrendOK(md)
+		if !haveData {
+			fmt.Fprintf(&sb, "тренд H1: нет данных H1 (нужно ≥ %d закрытых часовых баров, есть %d) -> вход запрещён\n",
+				s.p.HTFTrendEMA, len(md.HTFCloses))
+		} else {
+			fmt.Fprintf(&sb, "тренд H1: close %.4f > EMA(%d) %.4f? %v\n", htfClose, s.p.HTFTrendEMA, htfEMA, htfOK)
+		}
+	} else {
+		sb.WriteString("тренд H1: фильтр выключен (HTFTrendEMA=0)\n")
+	}
 
 	atr := indicators.ATR(md.Highs, md.Lows, md.Closes, s.p.ATRPeriod)
 	fmt.Fprintf(&sb, "ATR(%d): %.4f\n", s.p.ATRPeriod, atr)
