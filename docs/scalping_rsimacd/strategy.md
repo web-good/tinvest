@@ -37,10 +37,25 @@ lead-in для прогрева EMA); движок видит только по�
 
 ## Запуск
 
+Калибровка (walk-forward, основной прогон):
+
 ```
-go run ./cmd/backtest -ticker <TICKER> -strategy scalping_rsimacd -interval Minutes5 \
-  -calibrate data/params/scalping_rsimacd/grid.json -out ./reports/<TICKER> \
-  -months 6 -test-months 3 -min-trades 20 -metric profit_factor
+go run ./cmd/backtest -ticker SBER -strategy scalping_rsimacd -interval Minutes5 \
+  -calibrate data/params/scalping_rsimacd/grid.json -out ./reports/SBER \
+  -months 24 -test-months 6 -min-trades 20 -metric profit_factor -refresh
+```
+
+`-refresh` обязателен на первом прогоне: часовой кэш в `data/candles` начинается
+с 2024-07-17, а провайдер досыпает только хвост серии, но не голову. Без `-refresh`
+H1-лид-ина не хватит на прогрев `EMA(100)`, и fail-closed гейт молча зарежет входы
+в ранних фолдах. CLI печатает покрытие H1 (число баров, первый и последний бар) и
+предупреждает, если голова всё равно короткая.
+
+Разведочный прогон без калибровки (на дефолтах: `RSIEntryMin = 50`, `HTFTrendEMA = 0`):
+
+```
+go run ./cmd/backtest -ticker SBER -strategy scalping_rsimacd -interval Minutes5 \
+  -out ./reports/SBER -months 6 -refresh
 ```
 
 Диагностика одного бара: добавить `-explain "2026-07-20 12:35"` (время MSK). `-explain`
