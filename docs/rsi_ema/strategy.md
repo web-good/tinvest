@@ -16,6 +16,11 @@
 2. EMA(`EMAFast`, 10) выше EMA(`EMASlow`, 50) на текущем баре (обе прогреты).
 3. Опциональный стоп: при `StopATR > 0` стоп = `вход − StopATR×ATR` (ATR Уайлдера,
    период `ATRPeriod`, на базовом таймфрейме). При `StopATR = 0` стопа нет. Тейка нет.
+4. **Фильтр свежести входа**: в окне из `EntryLookbackBars` (дефолт 5) баров перед крестом
+   считаются бары с `RSI > RSIMid`; если их `≥ EntryAboveMidLimit` (дефолт 3) — вход
+   отклоняется как перезаход-чоп (RSI недолго нырнул под 50 и тут же вернулся). При
+   `EntryAboveMidLimit ≤ 0` (или `EntryLookbackBars ≤ 0`) фильтр выключен. Подробности и
+   обоснование — `docs/superpowers/specs/2026-07-24-rsi-ema-fresh-entry-filter-design.md`.
 
 **Выходы** в порядке приоритета:
 
@@ -56,7 +61,8 @@ go run ./cmd/backtest -ticker SBER -strategy rsi_ema -interval Minutes15 \
 Диагностика одного бара: `-explain "2026-07-20 12:35"` (время MSK; учитывает `-params`).
 
 Грид `data/params/rsi_ema/grid.json`: фазы `entry` (RSIPeriod × EMAFast × EMASlow),
-`exits` (RSIUpper × EntryCooldownBars), `risk` (StopATR). 27 + 6×12 + 6×4 = 123 комбинации.
+`exits` (RSIUpper × EntryCooldownBars), `risk` (StopATR), `freshness`
+(EntryLookbackBars × EntryAboveMidLimit). 27 + 6×12 + 6×4 + 5×12 = 183 комбинации.
 
 ## Критерий приёмки
 

@@ -1,5 +1,5 @@
 {
-  "_comment": "rsi_ema phased grid. Phase 1 (entry) sweeps the indicator geometry: RSI length and the fast/slow EMA periods. Phase 2 (exits) sweeps the upper RSI exit level (crossed upward) and the RSI50 cooldown length on top of each phase-1 seed. Phase 3 (risk) sweeps the optional ATR stop (0 = stop off, plus a few multipliers) on top of each phase-2 seed. RunPhases expands each phase over the previous phase's keepTop seeds: 27 (phase 1) + 6x12 (phase 2) + 6x4 (phase 3) = 123 combos. The mid RSI level (50) and the session bounds are fixed by the strategy definition and are deliberately NOT swept. Judge on pooled OOS profit factor from a walk-forward, never on the in-sample best.",
+  "_comment": "rsi_ema phased grid. Phase 1 (entry) sweeps the indicator geometry: RSI length and the fast/slow EMA periods. Phase 2 (exits) sweeps the upper RSI exit level (crossed upward) and the RSI50 cooldown length on top of each phase-1 seed. Phase 3 (risk) sweeps the optional ATR stop (0 = stop off, plus a few multipliers) on top of each phase-2 seed. Phase 4 (freshness) sweeps the fresh-entry filter window/threshold (EntryAboveMidLimit=0 = filter off, the control point) on top of each phase-3 seed. RunPhases expands each phase over the previous phase's keepTop seeds: 27 (phase 1) + 6x12 (phase 2) + 6x4 (phase 3, keepTop defaults to 5) + 5x12 (phase 4) = 183 combos. The mid RSI level (50) and the session bounds are fixed by the strategy definition and are deliberately NOT swept. Judge on pooled OOS profit factor from a walk-forward, never on the in-sample best.",
   "phases": [
     {
       "name": "entry",
@@ -22,6 +22,13 @@
       "name": "risk",
       "grid": {
         "StopATR": [0, 1.0, 1.5, 2.0]
+      }
+    },
+    {
+      "name": "freshness",
+      "grid": {
+        "EntryLookbackBars": [4, 5, 6],
+        "EntryAboveMidLimit": [0, 2, 3, 4]
       }
     }
   ]
