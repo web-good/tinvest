@@ -29,7 +29,7 @@ func TestDefaultParams(t *testing.T) {
 	if p.StopATR != 0 || p.ATRPeriod != 14 {
 		t.Fatalf("risk defaults wrong: %+v", p)
 	}
-	if p.SessionStartMin != 420 || p.SessionEndMin != 1080 || p.FridayEndMin != 840 {
+	if p.SessionStartMin != 420 || p.SessionEndMin != 1080 || p.FridayEndMin != 840 || p.DayEndMin != 1380 {
 		t.Fatalf("session defaults wrong: %+v", p)
 	}
 }
@@ -75,10 +75,12 @@ func TestIsDayEnd(t *testing.T) {
 		want bool
 	}{
 		{"mon midday", mskAt(2026, 7, 20, 12, 0), 15, false},
-		{"mon 17:40", mskAt(2026, 7, 20, 17, 40), 15, false},
-		{"mon 17:45 last 15m bar closes 18:00", mskAt(2026, 7, 20, 17, 45), 15, true},
-		{"mon after close", mskAt(2026, 7, 20, 18, 5), 15, true},
-		{"fri 13:45 last 15m bar closes 14:00", mskAt(2026, 7, 24, 13, 45), 15, true},
+		{"mon 18:05 evening held, not day-end", mskAt(2026, 7, 20, 18, 5), 15, false},
+		{"mon 22:40", mskAt(2026, 7, 20, 22, 40), 15, false},
+		{"mon 22:45 last 15m bar closes 23:00", mskAt(2026, 7, 20, 22, 45), 15, true},
+		{"mon after 23:00", mskAt(2026, 7, 20, 23, 5), 15, true},
+		{"fri day-end uniform 23:00", mskAt(2026, 7, 24, 22, 45), 15, true},
+		{"fri 13:45 held into evening, not day-end", mskAt(2026, 7, 24, 13, 45), 15, false},
 		{"saturday always day end", mskAt(2026, 7, 25, 10, 0), 15, true},
 	}
 	for _, tc := range cases {
@@ -249,9 +251,22 @@ func TestEnterRejectsOnDayEndBar(t *testing.T) {
 	s := NewWithParams("TEST", DefaultParams())
 	closes, highs, lows := driftWalk(800, 1)
 	k := firstBuyBar(t, s, closes, highs, lows)
-	md := mdEndingAt(closes, highs, lows, k, mskAt(2026, 7, 20, 17, 50), nil) // last 15m bar of the day
+	md := mdEndingAt(closes, highs, lows, k, mskAt(2026, 7, 20, 22, 50), nil) // last 15m bar of the day (23:00 close)
 	if s.Decide(md).Kind == model.SignalBuy {
 		t.Fatalf("entry on the day-end bar must be rejected")
+	}
+}
+
+// TestEnterRejectedInEveningHoldWindow verifies the entry cutoff (18:00) is independent of the
+// day-end boundary (23:00): after 18:00 no new longs open, even though positions may still be
+// held and exited in that window.
+func TestEnterRejectedInEveningHoldWindow(t *testing.T) {
+	s := NewWithParams("TEST", DefaultParams())
+	closes, highs, lows := driftWalk(800, 1)
+	k := firstBuyBar(t, s, closes, highs, lows)
+	md := mdEndingAt(closes, highs, lows, k, mskAt(2026, 7, 20, 20, 0), nil) // 20:00 — past entry cutoff, before day-end
+	if s.Decide(md).Kind == model.SignalBuy {
+		t.Fatalf("entry after the 18:00 cutoff must be rejected")
 	}
 }
 
@@ -337,11 +352,23 @@ func TestManageSLFillsWhenStopBreached(t *testing.T) {
 
 func TestManageEODClosesOnLastBar(t *testing.T) {
 	s := NewWithParams("TEST", DefaultParams())
-	pos := openPos(100, mskAt(2026, 7, 20, 17, 50), 5) // day-end bar
-	md := mdEndingAt([]float64{100, 100, 100}, []float64{101, 101, 101}, []float64{99, 99, 99}, 2, mskAt(2026, 7, 20, 17, 50), pos)
+	pos := openPos(100, mskAt(2026, 7, 20, 22, 50), 5) // day-end bar (23:00 close)
+	md := mdEndingAt([]float64{100, 100, 100}, []float64{101, 101, 101}, []float64{99, 99, 99}, 2, mskAt(2026, 7, 20, 22, 50), pos)
 	sig := s.Decide(md)
 	if sig.Kind != model.SignalSell || sig.Reason != "EOD" {
 		t.Fatalf("want EOD sell, got kind=%v reason=%q", sig.Kind, sig.Reason)
+	}
+}
+
+// TestManageHoldsThroughEntryCutoff verifies a position opened inside the entry window is NOT
+// force-closed at the old 18:00 boundary: with no exit signal on an 18:05 evening bar, it stays
+// open until the 23:00 day-end.
+func TestManageHoldsThroughEntryCutoff(t *testing.T) {
+	s := NewWithParams("TEST", DefaultParams())
+	pos := openPos(100, mskAt(2026, 7, 20, 18, 5), 5) // evening bar, past the 18:00 cutoff
+	md := mdEndingAt([]float64{100, 100, 100}, []float64{101, 101, 101}, []float64{99, 99, 99}, 2, mskAt(2026, 7, 20, 18, 5), pos)
+	if sig := s.Decide(md); sig.Kind == model.SignalSell {
+		t.Fatalf("position must be held past the 18:00 cutoff, got sell reason=%q", sig.Reason)
 	}
 }
 

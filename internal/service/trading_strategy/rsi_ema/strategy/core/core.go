@@ -42,8 +42,9 @@ type Params struct {
 	StopATR           float64 // stop = entry - StopATR*ATR; 0 disables the stop (grid)
 	ATRPeriod         int     // ATR length; used only when StopATR>0
 	SessionStartMin   int     // entry window start, minutes from MSK midnight (420 = 07:00)
-	SessionEndMin     int     // Mon-Thu session end, minutes from MSK midnight (1080 = 18:00)
-	FridayEndMin      int     // Friday session end, minutes from MSK midnight (840 = 14:00)
+	SessionEndMin     int     // Mon-Thu ENTRY cutoff, minutes from MSK midnight (1080 = 18:00)
+	FridayEndMin      int     // Friday ENTRY cutoff, minutes from MSK midnight (840 = 14:00)
+	DayEndMin         int     // day-end force-close boundary, minutes from MSK midnight (1380 = 23:00)
 }
 
 // DefaultParams returns the spec's baseline; swept values come from calibration.
@@ -60,6 +61,7 @@ func DefaultParams() Params {
 		SessionStartMin:   420,
 		SessionEndMin:     1080,
 		FridayEndMin:      840,
+		DayEndMin:         1380,
 	}
 }
 
@@ -115,8 +117,9 @@ func (s *Strategy) inSession(t time.Time) bool {
 }
 
 // isDayEnd reports whether the bar opening at t, spanning spanMin minutes, is the last one
-// that still ends inside the session (or already sits outside it). A zero time degrades the
-// EOD exit to a no-op.
+// before the day-end force-close boundary (DayEndMin), decoupled from the entry cutoff so a
+// position opened inside the entry window (≤ SessionEndMin) is still held and managed through
+// the evening session up to DayEndMin. A zero time degrades the EOD exit to a no-op.
 func (s *Strategy) isDayEnd(t time.Time, spanMin int) bool {
 	if t.IsZero() {
 		return false
@@ -126,7 +129,7 @@ func (s *Strategy) isDayEnd(t time.Time, spanMin int) bool {
 		return true
 	}
 	m := tl.Hour()*60 + tl.Minute()
-	return m+spanMin >= s.sessionEndMin(tl)
+	return m+spanMin >= s.p.DayEndMin
 }
 
 // barSpanMinutes infers the bar length from the series' own open-times: the MEDIAN gap
