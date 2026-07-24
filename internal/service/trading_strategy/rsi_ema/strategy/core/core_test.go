@@ -8,6 +8,7 @@ import (
 
 	"tinvest/internal/service/trading_strategy/scalping/model"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
+	"tinvest/pkg/indicators"
 )
 
 // mskAt builds an MSK bar open-time for the given date and clock.
@@ -416,7 +417,7 @@ func TestExplainReportsGates(t *testing.T) {
 	closes, highs, lows := driftWalk(800, 1)
 	k := firstBuyBar(t, s, closes, highs, lows)
 	out := s.Explain(mdEndingAt(closes, highs, lows, k, mskAt(2026, 7, 20, 12, 0), nil))
-	for _, want := range []string{"сессия", "RSI", "EMA"} {
+	for _, want := range []string{"сессия", "RSI", "EMA", "фильтр свежести"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("Explain output missing %q:\n%s", want, out)
 		}
@@ -426,4 +427,75 @@ func TestExplainReportsGates(t *testing.T) {
 func TestExplainShortSeriesDoesNotPanic(t *testing.T) {
 	s := NewWithParams("TEST", DefaultParams())
 	_ = s.Explain(strategy.MarketData{Closes: []float64{1}})
+}
+
+func TestDefaultParamsFreshEntryFilter(t *testing.T) {
+	p := DefaultParams()
+	if p.EntryLookbackBars != 5 || p.EntryAboveMidLimit != 3 {
+		t.Fatalf("fresh-entry defaults wrong: %+v", p)
+	}
+}
+
+func TestFreshEntryFilter(t *testing.T) {
+	s := NewWithParams("TEST", DefaultParams()) // window 5, limit 3
+	cases := []struct {
+		name string
+		rsi  []float64 // indices 0..i-1 form the window when i = len(rsi)
+		want bool      // true = entry allowed
+	}{
+		// 5-bar window ending just before the cross bar (i = len(rsi)).
+		{"chop: 4 of 5 above -> reject", []float64{55, 55, 55, 55, 47}, false},
+		{"fresh: 1 of 5 above -> allow", []float64{55, 47, 47, 47, 47}, true},
+		{"boundary: exactly limit-1 (2) above -> allow", []float64{55, 55, 47, 47, 47}, true},
+		{"boundary: exactly limit (3) above -> reject", []float64{55, 55, 55, 47, 47}, false},
+		{"short history truncates, no panic", []float64{55, 47}, true}, // only 2 bars, 1 above < 3
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := s.freshEntry(tc.rsi, len(tc.rsi)); got != tc.want {
+				t.Fatalf("freshEntry=%v want %v (above=%d)", got, tc.want, s.barsAboveMid(tc.rsi, len(tc.rsi)))
+			}
+		})
+	}
+}
+
+func TestFreshEntryFilterDisabled(t *testing.T) {
+	p := DefaultParams()
+	p.EntryAboveMidLimit = 0 // off
+	s := NewWithParams("TEST", p)
+	if !s.freshEntry([]float64{55, 55, 55, 55, 47}, 5) {
+		t.Fatalf("EntryAboveMidLimit<=0 must disable the filter")
+	}
+	p2 := DefaultParams()
+	p2.EntryLookbackBars = 0 // off
+	s2 := NewWithParams("TEST", p2)
+	if !s2.freshEntry([]float64{55, 55, 55, 55, 47}, 5) {
+		t.Fatalf("EntryLookbackBars<=0 must disable the filter")
+	}
+}
+
+// TestEnterFilterRejectsChopReentry finds a bar that the filter-OFF strategy buys but where the
+// preceding window holds >= EntryAboveMidLimit bars above the mid, and asserts the default
+// (filter-ON) strategy rejects that exact bar.
+func TestEnterFilterRejectsChopReentry(t *testing.T) {
+	off := DefaultParams()
+	off.EntryAboveMidLimit = 0 // filter off
+	sOff := NewWithParams("TEST", off)
+	on := NewWithParams("TEST", DefaultParams()) // filter on (window 5, limit 3)
+	closes, highs, lows := driftWalk(1500, 7)
+	end := mskAt(2026, 7, 20, 12, 0)
+	for k := 60; k < len(closes); k++ {
+		md := mdEndingAt(closes, highs, lows, k, end, nil)
+		if sOff.Decide(md).Kind != model.SignalBuy {
+			continue
+		}
+		rsi := indicators.RSISeries(md.Closes, DefaultParams().RSIPeriod)
+		if on.barsAboveMid(rsi, k) >= DefaultParams().EntryAboveMidLimit {
+			if on.Decide(md).Kind == model.SignalBuy {
+				t.Fatalf("chop re-entry at bar %d must be filtered out", k)
+			}
+			return // found and verified a chop candidate
+		}
+	}
+	t.Fatalf("no chop re-entry candidate found in series (adjust the driftWalk seed)")
 }

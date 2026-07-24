@@ -45,6 +45,9 @@ type Params struct {
 	SessionEndMin     int     // Mon-Thu ENTRY cutoff, minutes from MSK midnight (1080 = 18:00)
 	FridayEndMin      int     // Friday ENTRY cutoff, minutes from MSK midnight (840 = 14:00)
 	DayEndMin         int     // day-end force-close boundary, minutes from MSK midnight (1380 = 23:00)
+
+	EntryLookbackBars  int // fresh-entry window: bars before the cross to inspect (grid; default 5)
+	EntryAboveMidLimit int // reject entry when >= this many bars in the window are above RSIMid; <=0 disables (grid; default 3)
 }
 
 // DefaultParams returns the spec's baseline; swept values come from calibration.
@@ -62,6 +65,9 @@ func DefaultParams() Params {
 		SessionEndMin:     1080,
 		FridayEndMin:      840,
 		DayEndMin:         1380,
+
+		EntryLookbackBars:  5,
+		EntryAboveMidLimit: 3,
 	}
 }
 
@@ -190,6 +196,33 @@ func crossedUp(series []float64, i int, level float64) bool {
 	return i >= 1 && series[i-1] > 0 && series[i-1] < level && series[i] > level
 }
 
+// barsAboveMid counts, within the EntryLookbackBars bars immediately before bar i (indices
+// i-EntryLookbackBars .. i-1, clamped at 0), how many had RSI strictly above RSIMid.
+func (s *Strategy) barsAboveMid(rsi []float64, i int) int {
+	start := i - s.p.EntryLookbackBars
+	if start < 0 {
+		start = 0
+	}
+	n := 0
+	for j := start; j < i && j < len(rsi); j++ {
+		if rsi[j] > s.p.RSIMid {
+			n++
+		}
+	}
+	return n
+}
+
+// freshEntry reports whether the RSI cross at bar i is "fresh": fewer than EntryAboveMidLimit
+// of the preceding EntryLookbackBars bars sat above RSIMid. This rejects choppy re-entries where
+// RSI only briefly dipped below the mid line after a sustained run above it. Disabled (always
+// true) when EntryAboveMidLimit<=0 or EntryLookbackBars<=0.
+func (s *Strategy) freshEntry(rsi []float64, i int) bool {
+	if s.p.EntryAboveMidLimit <= 0 || s.p.EntryLookbackBars <= 0 {
+		return true
+	}
+	return s.barsAboveMid(rsi, i) < s.p.EntryAboveMidLimit
+}
+
 // enter emits a long when RSI crosses up through RSIMid on the current bar while the fast EMA
 // sits above the slow EMA. Everything is recomputed from md — no state survives between bars.
 func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal {
@@ -212,6 +245,11 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	// 3. trend confirmation: fast EMA above slow EMA (both warmed).
 	fast, slow, ok := s.emaPair(md.Closes)
 	if !ok || fast[i] <= slow[i] {
+		return sig
+	}
+	// 3.5 freshness filter: reject re-entries where RSI recently sat above the mid line
+	// (short dip after a sustained run above 50 — chop around the mid, not a fresh reset).
+	if !s.freshEntry(rsi, i) {
 		return sig
 	}
 	// 4. optional ATR stop.
@@ -359,6 +397,11 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 			s.p.EMAFast, fast[i], s.p.EMASlow, slow[i], fast[i] > slow[i], emaCrossDown(fast, slow, i))
 	} else {
 		sb.WriteString("EMA: не прогрето\n")
+	}
+
+	if len(rsi) == n {
+		fmt.Fprintf(&sb, "фильтр свежести: баров выше %.0f в окне %d = %d (лимит %d); прошёл? %v\n",
+			s.p.RSIMid, s.p.EntryLookbackBars, s.barsAboveMid(rsi, i), s.p.EntryAboveMidLimit, s.freshEntry(rsi, i))
 	}
 
 	if s.p.StopATR > 0 {
