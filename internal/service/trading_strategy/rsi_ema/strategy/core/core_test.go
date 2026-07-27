@@ -635,3 +635,165 @@ func TestExplainReportsChopFilter(t *testing.T) {
 		t.Fatalf("Explain must mark disabled filters as выключен:\n%s", outOff)
 	}
 }
+
+func TestDefaultParamsVolumeFilterOff(t *testing.T) {
+	p := DefaultParams()
+	if p.UseVolume != 0 {
+		t.Fatalf("UseVolume = %d want 0 (filter off by default)", p.UseVolume)
+	}
+	if p.VolShortPeriod != 10 || p.VolLongPeriod != 50 || p.VolMult != 1.0 {
+		t.Fatalf("volume defaults wrong: %+v", p)
+	}
+}
+
+func TestAvgVolumeLastN(t *testing.T) {
+	vols := []int64{100, 200, 300, 400}
+	if avg, ok := avgVolumeLastN(vols, nil, 2); !ok || avg != 350 {
+		t.Fatalf("avg = %v ok = %v want 350 true", avg, ok)
+	}
+	if avg, ok := avgVolumeLastN(vols, nil, 10); !ok || avg != 250 {
+		t.Fatalf("window longer than the series must truncate: avg = %v ok = %v want 250 true", avg, ok)
+	}
+	if avg, ok := avgVolumeLastN([]int64{0, 0, 300}, nil, 3); !ok || avg != 300 {
+		t.Fatalf("non-positive volumes must be ignored: avg = %v ok = %v want 300 true", avg, ok)
+	}
+	if _, ok := avgVolumeLastN(nil, nil, 5); ok {
+		t.Fatalf("empty series must report ok=false")
+	}
+	if _, ok := avgVolumeLastN([]int64{0, 0}, nil, 2); ok {
+		t.Fatalf("no positive sample must report ok=false")
+	}
+	if _, ok := avgVolumeLastN(vols, nil, 0); ok {
+		t.Fatalf("non-positive window must report ok=false")
+	}
+}
+
+func TestAvgVolumeLastNExcludesWeekends(t *testing.T) {
+	// 2026-07-25 is a Saturday; its bar must be dropped when Times is aligned.
+	times := []time.Time{
+		mskAt(2026, 7, 24, 12, 0),
+		mskAt(2026, 7, 25, 12, 0), // Saturday
+		mskAt(2026, 7, 27, 12, 0),
+	}
+	vols := []int64{100, 9000, 300}
+	avg, ok := avgVolumeLastN(vols, times, 3)
+	if !ok || avg != 200 {
+		t.Fatalf("weekend bar must be excluded: avg = %v ok = %v want 200 true", avg, ok)
+	}
+	// Misaligned Times → weekend exclusion is skipped, all bars count.
+	avg2, ok2 := avgVolumeLastN(vols, times[:2], 3)
+	if !ok2 || avg2 != (100+9000+300)/3.0 {
+		t.Fatalf("misaligned Times must skip weekend exclusion: avg = %v ok = %v", avg2, ok2)
+	}
+}
+
+// withVolumes attaches a volume series to md: the last `short` bars carry `recent`, every
+// earlier bar carries `background`.
+func withVolumes(md strategy.MarketData, background, recent int64, short int) strategy.MarketData {
+	n := len(md.Closes)
+	vols := make([]int64, n)
+	for i := range vols {
+		vols[i] = background
+		if i >= n-short {
+			vols[i] = recent
+		}
+	}
+	md.Volumes = vols
+	return md
+}
+
+func TestVolumeRegimeGate(t *testing.T) {
+	closes, highs, lows := driftWalk(300, 1)
+	base := mdEndingAt(closes, highs, lows, 250, mskAt(2026, 7, 20, 12, 0), nil)
+
+	on := DefaultParams()
+	on.UseVolume = 1
+	sOn := NewWithParams("TEST", on)
+	// Recent 10 bars at 12000 over an 8000 background: the long window mixes both, so
+	// shortAvg (12000) clears longAvg (~8800) comfortably.
+	if !sOn.volumeRegimeOK(withVolumes(base, 8000, 12000, 10)) {
+		t.Fatalf("a live tape must pass the volume gate")
+	}
+	// Recent 10 bars at 5000: shortAvg falls well under the ~7400 background.
+	if sOn.volumeRegimeOK(withVolumes(base, 8000, 5000, 10)) {
+		t.Fatalf("a fading tape must be rejected")
+	}
+	// VolMult 1.2 with a barely-elevated tape (9000 vs a ~8200 long average): 9000 clears the
+	// plain average but not the 1.2x threshold.
+	mult := on
+	mult.VolMult = 1.2
+	if NewWithParams("TEST", mult).volumeRegimeOK(withVolumes(base, 8000, 9000, 10)) {
+		t.Fatalf("VolMult 1.2 must reject a merely-flat tape")
+	}
+}
+
+func TestVolumeRegimeGateDegrades(t *testing.T) {
+	closes, highs, lows := driftWalk(300, 1)
+	base := mdEndingAt(closes, highs, lows, 250, mskAt(2026, 7, 20, 12, 0), nil)
+	fading := withVolumes(base, 8000, 5000, 10) // would be rejected when armed
+
+	if !NewWithParams("TEST", DefaultParams()).volumeRegimeOK(fading) {
+		t.Fatalf("UseVolume=0 must disable the gate")
+	}
+
+	on := DefaultParams()
+	on.UseVolume = 1
+	if !NewWithParams("TEST", on).volumeRegimeOK(base) {
+		t.Fatalf("missing Volumes must never block an entry")
+	}
+
+	bad := on
+	bad.VolLongPeriod = bad.VolShortPeriod // long window must exceed short
+	if !NewWithParams("TEST", bad).volumeRegimeOK(fading) {
+		t.Fatalf("VolLongPeriod <= VolShortPeriod must disable the gate")
+	}
+
+	zeroVols := base
+	zeroVols.Volumes = make([]int64, len(base.Closes)) // all zero → no usable sample
+	if !NewWithParams("TEST", on).volumeRegimeOK(zeroVols) {
+		t.Fatalf("an all-zero volume series must never block an entry")
+	}
+}
+
+// TestEnterVolumeGateWiredOnEntryPath proves the gate sits on the real entry path: the same bar
+// that the defaults buy is rejected once the gate is armed against a fading tape, and still
+// bought when the tape is alive.
+func TestEnterVolumeGateWiredOnEntryPath(t *testing.T) {
+	closes, highs, lows := driftWalk(800, 1)
+	sDef := NewWithParams("TEST", DefaultParams())
+	k := firstBuyBar(t, sDef, closes, highs, lows)
+	md := mdEndingAt(closes, highs, lows, k, mskAt(2026, 7, 20, 12, 0), nil)
+
+	if sDef.Decide(withVolumes(md, 8000, 5000, 10)).Kind != model.SignalBuy {
+		t.Fatalf("defaults must ignore the volume background")
+	}
+
+	on := DefaultParams()
+	on.UseVolume = 1
+	sOn := NewWithParams("TEST", on)
+	if sOn.Decide(withVolumes(md, 8000, 5000, 10)).Kind == model.SignalBuy {
+		t.Fatalf("armed gate must reject an entry into a fading tape")
+	}
+	if sOn.Decide(withVolumes(md, 8000, 12000, 10)).Kind != model.SignalBuy {
+		t.Fatalf("armed gate must allow an entry on a live tape")
+	}
+}
+
+func TestExplainReportsVolumeGate(t *testing.T) {
+	closes, highs, lows := driftWalk(300, 1)
+	base := mdEndingAt(closes, highs, lows, 250, mskAt(2026, 7, 20, 12, 0), nil)
+
+	if out := NewWithParams("TEST", DefaultParams()).Explain(base); !strings.Contains(out, "фон объёмов: выключен") {
+		t.Fatalf("Explain must mark the volume gate as off:\n%s", out)
+	}
+
+	on := DefaultParams()
+	on.UseVolume = 1
+	sOn := NewWithParams("TEST", on)
+	if out := sOn.Explain(withVolumes(base, 8000, 12000, 10)); !strings.Contains(out, "отношение") {
+		t.Fatalf("Explain must report the volume ratio:\n%s", out)
+	}
+	if out := sOn.Explain(base); !strings.Contains(out, "нет данных") {
+		t.Fatalf("Explain must report missing volume data:\n%s", out)
+	}
+}

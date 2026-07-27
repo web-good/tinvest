@@ -50,6 +50,11 @@ type Params struct {
 	EntryLookbackBars    int // fresh-entry window: bars before the cross to inspect (grid; default 5)
 	EntryAboveMidLimit   int // reject entry when >= this many bars in the window are above RSIMid; <=0 disables (grid; default 0 = off)
 	EntryMaxMidCrossings int // reject entry when the window holds >= this many RSIMid crossings; <=0 disables (grid; default 0 = off)
+
+	UseVolume      int     // 1 arms the volume-regime entry gate; any other value disables it (grid; default 0 = off)
+	VolShortPeriod int     // recent-activity window in bars, INCLUDING the entry bar (default 10)
+	VolLongPeriod  int     // background window in bars; must exceed VolShortPeriod (default 50)
+	VolMult        float64 // entry requires shortAvg >= longAvg*VolMult (grid; default 1.0)
 }
 
 // DefaultParams returns the spec's baseline; swept values come from calibration.
@@ -71,6 +76,11 @@ func DefaultParams() Params {
 		EntryLookbackBars:    5,
 		EntryAboveMidLimit:   0,
 		EntryMaxMidCrossings: 0,
+
+		UseVolume:      0,
+		VolShortPeriod: 10,
+		VolLongPeriod:  50,
+		VolMult:        1.0,
 	}
 }
 
@@ -277,6 +287,56 @@ func (s *Strategy) freshEntry(rsi []float64, i int) bool {
 	return s.freshByBarsAbove(rsi, i) && s.freshByCrossings(rsi, i)
 }
 
+// avgVolumeLastN averages the volumes of the last n bars of vols, INCLUDING the final (entry)
+// bar — unlike reversion's average, the entry bar's own volume is part of the "recent activity"
+// this gate measures. When times is index-aligned to vols, weekend bars (Sat/Sun MSK) are
+// dropped; when times is empty or misaligned, weekend exclusion is skipped. Non-positive volumes
+// are ignored. ok is false when no sample survives — the caller must then skip the gate (never
+// block an entry on missing data).
+func avgVolumeLastN(vols []int64, times []time.Time, n int) (avg float64, ok bool) {
+	if len(vols) == 0 || n <= 0 {
+		return 0, false
+	}
+	lo := len(vols) - n
+	if lo < 0 {
+		lo = 0
+	}
+	haveTimes := len(times) == len(vols)
+	var sum float64
+	var count int
+	for j := lo; j < len(vols); j++ {
+		if haveTimes && isWeekend(times[j].In(mskLoc)) {
+			continue
+		}
+		if vols[j] <= 0 {
+			continue
+		}
+		sum += float64(vols[j])
+		count++
+	}
+	if count == 0 {
+		return 0, false
+	}
+	return sum / float64(count), true
+}
+
+// volumeRegimeOK reports whether the volume background allows an entry: the recent average
+// volume must hold at least VolMult times the longer background average, so entries into a dead
+// tape are skipped. The gate degrades to "allow" whenever it is disabled (UseVolume != 1),
+// misconfigured (non-positive or non-increasing windows) or unsupported by the data (no usable
+// volumes) — a missing volume series must never block an entry.
+func (s *Strategy) volumeRegimeOK(md strategy.MarketData) bool {
+	if s.p.UseVolume != 1 || s.p.VolShortPeriod <= 0 || s.p.VolLongPeriod <= s.p.VolShortPeriod {
+		return true
+	}
+	shortAvg, okShort := avgVolumeLastN(md.Volumes, md.Times, s.p.VolShortPeriod)
+	longAvg, okLong := avgVolumeLastN(md.Volumes, md.Times, s.p.VolLongPeriod)
+	if !okShort || !okLong || longAvg <= 0 {
+		return true
+	}
+	return shortAvg >= longAvg*s.p.VolMult
+}
+
 // enter emits a long when RSI crosses up through RSIMid on the current bar while the fast EMA
 // sits above the slow EMA. Everything is recomputed from md — no state survives between bars.
 func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal {
@@ -304,6 +364,11 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	// 3.5 freshness filter: reject re-entries where RSI recently sat above the mid line
 	// (short dip after a sustained run above 50 — chop around the mid, not a fresh reset).
 	if !s.freshEntry(rsi, i) {
+		return sig
+	}
+	// 3.6 volume regime: skip breakouts of the mid line on a dead tape (off by default; degrades
+	// to "allow" whenever the volume data cannot support the comparison).
+	if !s.volumeRegimeOK(md) {
 		return sig
 	}
 	// 4. optional ATR stop.
@@ -460,6 +525,21 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 		fmt.Fprintf(&sb, "фильтр пилы: пересечений %.0f в окне %d = %d (лимит %s); прошёл? %v\n",
 			s.p.RSIMid, s.p.EntryLookbackBars, s.midCrossings(rsi, i),
 			limitLabel(s.p.EntryMaxMidCrossings), s.freshByCrossings(rsi, i))
+	}
+
+	switch {
+	case s.p.UseVolume != 1:
+		sb.WriteString("фон объёмов: выключен (UseVolume=0)\n")
+	default:
+		shortAvg, okShort := avgVolumeLastN(md.Volumes, md.Times, s.p.VolShortPeriod)
+		longAvg, okLong := avgVolumeLastN(md.Volumes, md.Times, s.p.VolLongPeriod)
+		if okShort && okLong && longAvg > 0 {
+			fmt.Fprintf(&sb, "фон объёмов: short(%d) %.0f vs long(%d) %.0f, отношение %.2f, порог %.2f; прошёл? %v\n",
+				s.p.VolShortPeriod, shortAvg, s.p.VolLongPeriod, longAvg,
+				shortAvg/longAvg, s.p.VolMult, s.volumeRegimeOK(md))
+		} else {
+			sb.WriteString("фон объёмов: нет данных → гейт пропущен\n")
+		}
 	}
 
 	if s.p.StopATR > 0 {
