@@ -16,11 +16,22 @@
 2. EMA(`EMAFast`, 10) выше EMA(`EMASlow`, 50) на текущем баре (обе прогреты).
 3. Опциональный стоп: при `StopATR > 0` стоп = `вход − StopATR×ATR` (ATR Уайлдера,
    период `ATRPeriod`, на базовом таймфрейме). При `StopATR = 0` стопа нет. Тейка нет.
-4. **Фильтр свежести входа**: в окне из `EntryLookbackBars` (дефолт 5) баров перед крестом
-   считаются бары с `RSI > RSIMid`; если их `≥ EntryAboveMidLimit` (дефолт 3) — вход
-   отклоняется как перезаход-чоп (RSI недолго нырнул под 50 и тут же вернулся). При
-   `EntryAboveMidLimit ≤ 0` (или `EntryLookbackBars ≤ 0`) фильтр выключен. Подробности и
-   обоснование — `docs/superpowers/specs/2026-07-24-rsi-ema-fresh-entry-filter-design.md`.
+4. **Фильтры качества входа — все опциональны и по умолчанию ВЫКЛЮЧЕНЫ** (как `StopATR`);
+   включаются только гридом. Общее окно — `EntryLookbackBars` (дефолт 5) баров перед баром-крестом;
+   `EntryLookbackBars ≤ 0` выключает оба RSI-фильтра сразу.
+   - **Свежесть входа**: в окне считаются бары с `RSI > RSIMid`; если их `≥ EntryAboveMidLimit`
+     (дефолт 0 = выкл) — вход отклоняется как перезаход-чоп (RSI недолго нырнул под 50 и тут же
+     вернулся).
+   - **Пила**: в окне считаются пересечения `RSIMid` в любую сторону; если их
+     `≥ EntryMaxMidCrossings` (дефолт 0 = выкл) — вход отклоняется как боковик у средней линии.
+     Сам крест `i-1 → i` в окно не входит, максимум пересечений — `EntryLookbackBars - 1`.
+   - **Фон объёмов**: при `UseVolume = 1` (дефолт 0 = выкл) вход требует
+     `shortAvg ≥ longAvg × VolMult`, где `shortAvg` — средний объём последних `VolShortPeriod`
+     (10) баров включая бар входа, `longAvg` — средний за `VolLongPeriod` (50) баров. Выходные
+     исключаются. Если данных нет или окна невалидны — гейт пропускается, вход не блокируется.
+
+   Обоснование фильтра свежести — `docs/superpowers/specs/2026-07-24-rsi-ema-fresh-entry-filter-design.md`;
+   пила и фон объёмов — `docs/superpowers/specs/2026-07-25-rsi-ema-entry-quality-filters-design.md`.
 
 **Выходы** в порядке приоритета:
 
@@ -62,7 +73,10 @@ go run ./cmd/backtest -ticker SBER -strategy rsi_ema -interval Minutes15 \
 
 Грид `data/params/rsi_ema/grid.json`: фазы `entry` (RSIPeriod × EMAFast × EMASlow),
 `exits` (RSIUpper × EntryCooldownBars), `risk` (StopATR), `freshness`
-(EntryLookbackBars × EntryAboveMidLimit). 27 + 6×12 + 6×4 + 5×12 = 183 комбинации.
+(EntryLookbackBars × EntryAboveMidLimit), `chop` (EntryMaxMidCrossings), `volume`
+(UseVolume × VolMult). 27 + 6×12 + 6×4 + 5×12 + 5×3 + 5×4 = 218 комбинаций. В каждой
+фазе фильтров есть контрольная точка «выключено», совпадающая с дефолтом, — так базовая
+стратегия без фильтров участвует в сравнении наравне.
 
 ## Критерий приёмки
 

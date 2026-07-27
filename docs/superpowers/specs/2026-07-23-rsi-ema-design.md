@@ -59,9 +59,11 @@
 2. **RSI-крест вверх через `RSIMid`**: `rsi[i-1] < RSIMid && rsi[i] > RSIMid`.
    Guard `rsi[i-1] > 0` отсекает нули прогрева `RSISeries` (иначе прогревный 0
    прочитался бы как «был ниже уровня» и создал фантомный крест). Крест дополнительно
-   гейтится **фильтром свежести входа** (`EntryLookbackBars`/`EntryAboveMidLimit`,
-   отсекает перезаходы-чоп у линии 50) — см.
-   `docs/superpowers/specs/2026-07-24-rsi-ema-fresh-entry-filter-design.md`.
+   гейтится **фильтрами качества входа** (`EntryLookbackBars`/`EntryAboveMidLimit` —
+   перезаходы-чоп у линии 50; `EntryMaxMidCrossings` — пила по числу пересечений линии 50;
+   `UseVolume`/`VolMult` — фон объёмов). Все они опциональны и выключены по умолчанию. См.
+   `docs/superpowers/specs/2026-07-24-rsi-ema-fresh-entry-filter-design.md` и
+   `docs/superpowers/specs/2026-07-25-rsi-ema-entry-quality-filters-design.md`.
 3. **Тренд EMA**: `emaFast[i] > emaSlow[i]`. Обе EMA должны быть прогреты
    (`> 0`) — `ema.Compute` заполняет прогревные позиции нулём, и сравнение
    непрогретых значений дало бы ложный результат на границе прогрева.
