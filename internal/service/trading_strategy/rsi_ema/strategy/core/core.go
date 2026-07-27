@@ -95,8 +95,17 @@ func NewWithParams(ticker string, p Params) *Strategy { return &Strategy{ticker:
 
 func (s *Strategy) Ticker() string { return s.ticker }
 
-// Lookback sizes the candle window to warm the slow EMA, the RSI and the ATR with margin.
-func (s *Strategy) Lookback() int { return 120 }
+// Lookback sizes the candle window the engine feeds Decide on every bar. It must cover the
+// hungriest indicator with room to converge: ema.Compute seeds on an SMA over the first
+// `period` closes, so a window of exactly `period` bars yields a bare seed — and a window
+// SHORTER than the period yields an all-zero series, which silently fails the trend gate for
+// the whole run instead of erroring. Doubling the largest period leaves as many recursion
+// steps as the seed span; the +20 covers the two-bar cross lookups, the freshness/chop window
+// and the ATR's extra bar. The 120 floor is the window the defaults were calibrated with.
+func (s *Strategy) Lookback() int {
+	need := max(s.p.EMASlow, s.p.EMAFast, s.p.RSIPeriod, s.p.ATRPeriod, s.p.VolLongPeriod, s.p.EntryLookbackBars)
+	return max(120, 2*need+20)
+}
 
 // mskLoc anchors the session windows to the Moscow calendar (UTC fallback).
 var mskLoc = func() *time.Location {

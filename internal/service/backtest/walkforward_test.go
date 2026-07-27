@@ -225,6 +225,71 @@ func TestRunWalkForward(t *testing.T) {
 	}
 }
 
+// hungryStrategy's lookback grows with BOTH params, so a grid-aware bound has to accumulate
+// across fields instead of taking the best single override. Trading behaviour matches
+// alternatingStrategy so runs stay non-degenerate.
+type hungryParams struct{ SlowPeriod, WarmPeriod int }
+
+type hungryStrategy struct{ p hungryParams }
+
+func (hungryStrategy) Ticker() string  { return "TEST" }
+func (s hungryStrategy) Lookback() int { return s.p.SlowPeriod + s.p.WarmPeriod }
+func (hungryStrategy) Decide(md strategy.MarketData) model.Signal {
+	if md.Position == nil {
+		return model.Signal{Kind: model.SignalBuy}
+	}
+	return model.Signal{Kind: model.SignalSell, Reason: "TP"}
+}
+
+func hungryBinding() Binding {
+	return Binding{
+		DefaultParams: func() any { return hungryParams{SlowPeriod: 10, WarmPeriod: 5} },
+		Build:         func(p any) strategy.Strategy { return hungryStrategy{p: p.(hungryParams)} },
+		ParseParams:   func([]byte) (any, error) { return hungryParams{}, nil },
+	}
+}
+
+func TestMaxGridLookbackAccumulatesAcrossFieldsAndPhases(t *testing.T) {
+	phases := []Phase{
+		{Grid: Grid{"SlowPeriod": {10, 200, 40}}},
+		{Grid: Grid{"WarmPeriod": {5, 60}}},
+	}
+	got, err := maxGridLookback(hungryBinding(), phases)
+	if err != nil {
+		t.Fatalf("maxGridLookback: %v", err)
+	}
+	// 200+60. Not 15 (defaults only) and not 205 (best single override over the defaults).
+	if got != 260 {
+		t.Fatalf("maxGridLookback = %d, want 260", got)
+	}
+}
+
+func TestMaxGridLookbackRejectsUnknownField(t *testing.T) {
+	if _, err := maxGridLookback(hungryBinding(), []Phase{{Grid: Grid{"Nope": {1}}}}); err == nil {
+		t.Fatal("want an error for a grid field absent from Params")
+	}
+}
+
+// TestRunWalkForwardGuardsSweptLookback: the train window comfortably feeds the defaults'
+// lookback but not the hungriest grid combination. Sizing the guard from the defaults let
+// that pass, and every under-fed combo then scored zero trades with no error anywhere.
+func TestRunWalkForwardGuardsSweptLookback(t *testing.T) {
+	from, to := date(2025, time.January, 1), date(2025, time.July, 1) // 3+3 = one fold
+	candles := genHourly(from, to)
+	cfg := backtest.Config{InitialCash: 100000, Fraction: 1, Commission: 0.0005, Lot: 1}
+
+	// A 3-month hourly train slice is ~2160 bars: ample for the defaults' 15, impossible for 100000.
+	phases := []Phase{{Grid: Grid{"SlowPeriod": {10, 100000}}}}
+	_, err := RunWalkForward(hungryBinding(), phases, candles, nil, nil, cfg,
+		"profit_factor", 0, from, to, 3, 3)
+	if err == nil {
+		t.Fatal("want an error: the grid sweeps a lookback the train window cannot feed")
+	}
+	if !strings.Contains(err.Error(), "lookback") {
+		t.Fatalf("error should name the lookback, got: %v", err)
+	}
+}
+
 func TestRunWalkForwardNoFold(t *testing.T) {
 	from, to := date(2025, time.January, 1), date(2025, time.April, 1) // 3 months
 	candles := genHourly(from, to)

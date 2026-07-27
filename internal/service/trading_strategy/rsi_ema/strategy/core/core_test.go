@@ -120,10 +120,72 @@ func TestBarTimeRequiresAlignedTimes(t *testing.T) {
 	}
 }
 
-func TestLookbackWarmsSlowEMA(t *testing.T) {
-	s := NewWithParams("TEST", DefaultParams())
-	if got := s.Lookback(); got < DefaultParams().EMASlow+20 {
-		t.Fatalf("Lookback = %d too small to warm EMASlow", got)
+// TestLookbackExceedsEverySweptPeriod pins the invariant the old hardcoded 120 broke: the
+// window the engine feeds Decide must be wider than EVERY indicator period, for calibrated
+// params too, not just the defaults. ema.Compute returns an all-zero series when the window
+// is shorter than the period, so a violation costs the whole run silently.
+func TestLookbackExceedsEverySweptPeriod(t *testing.T) {
+	cases := []struct {
+		name string
+		mut  func(*Params)
+	}{
+		{"defaults", func(*Params) {}},
+		{"slow EMA past the old 120 constant", func(p *Params) { p.EMASlow = 200 }},
+		{"volume background past the old constant", func(p *Params) { p.VolLongPeriod = 300 }},
+		{"RSI past the old constant", func(p *Params) { p.RSIPeriod = 250 }},
+		{"ATR past the old constant", func(p *Params) { p.ATRPeriod = 400 }},
+		{"fresh-entry window past the old constant", func(p *Params) { p.EntryLookbackBars = 150 }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := DefaultParams()
+			tc.mut(&p)
+			got := NewWithParams("TEST", p).Lookback()
+			periods := map[string]int{
+				"EMASlow": p.EMASlow, "EMAFast": p.EMAFast, "RSIPeriod": p.RSIPeriod,
+				"ATRPeriod": p.ATRPeriod, "VolLongPeriod": p.VolLongPeriod,
+				"EntryLookbackBars": p.EntryLookbackBars,
+			}
+			for name, period := range periods {
+				if got <= period {
+					t.Fatalf("Lookback = %d does not exceed %s = %d: that indicator can never warm", got, name, period)
+				}
+			}
+		})
+	}
+}
+
+// TestLookbackKeepsBaselineWindow pins the window at the baseline periods to 120. Changing
+// it shifts every EMA reading and therefore every backtest result, so it must be a deliberate
+// edit, not a side effect. Written against explicit periods rather than DefaultParams() so
+// hand-tuning the defaults does not fail this test.
+func TestLookbackKeepsBaselineWindow(t *testing.T) {
+	p := DefaultParams()
+	p.EMASlow, p.EMAFast, p.RSIPeriod, p.ATRPeriod = 50, 10, 12, 14
+	p.VolLongPeriod, p.EntryLookbackBars = 50, 5
+	if got := NewWithParams("TEST", p).Lookback(); got != 120 {
+		t.Fatalf("Lookback at baseline periods = %d, want 120", got)
+	}
+}
+
+// TestLookbackWindowWarmsSlowEMA is the end-to-end regression: feed emaPair exactly as many
+// closes as Lookback() asks for and the trend gate must have real EMA values to compare. With
+// the old constant and EMASlow=200 it got 120 closes, ema.Compute returned zeros, emaPair
+// reported not-warmed, and enter() rejected every bar of every run — 0 trades, no error.
+func TestLookbackWindowWarmsSlowEMA(t *testing.T) {
+	for _, slow := range []int{50, 200} {
+		p := DefaultParams()
+		p.EMASlow = slow
+		s := NewWithParams("TEST", p)
+
+		closes, _, _ := driftWalk(s.Lookback(), 11)
+		fast, slowSeries, ok := s.emaPair(closes)
+		if !ok {
+			t.Fatalf("EMASlow=%d: emaPair not warmed on its own Lookback() window of %d bars", slow, len(closes))
+		}
+		if last := len(closes) - 1; fast[last] <= 0 || slowSeries[last] <= 0 {
+			t.Fatalf("EMASlow=%d: EMA tail not warmed (fast=%v slow=%v)", slow, fast[last], slowSeries[last])
+		}
 	}
 }
 

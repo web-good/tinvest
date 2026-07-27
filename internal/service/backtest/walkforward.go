@@ -165,6 +165,40 @@ func paramStability(folds []WalkForwardFold) (stable map[string]string, varied m
 	return stable, varied
 }
 
+// maxGridLookback bounds the candle window any combination of the phased grid can ask for.
+// Taking Lookback() from the defaults alone under-reports it whenever the grid sweeps a
+// period past its default, and an under-fed run reports zero trades rather than failing.
+//
+// It walks the phases greedily: starting from the defaults it tries every value of every
+// swept field one at a time and keeps whichever raises Lookback, carrying the winner into
+// the next field. Every strategy here derives Lookback as a max or a sum of periods, each
+// monotone in its own field, so one pass reaches the hungriest combination. That is an
+// estimate, not a proof — it only sizes the train-window sanity check, whose job is to fail
+// loudly instead of silently.
+func maxGridLookback(b Binding, phases []Phase) (int, error) {
+	params := b.DefaultParams()
+	best := b.Build(params).Lookback()
+	for _, ph := range phases {
+		names := make([]string, 0, len(ph.Grid))
+		for name := range ph.Grid {
+			names = append(names, name)
+		}
+		sort.Strings(names) // deterministic walk order
+		for _, name := range names {
+			for _, v := range ph.Grid[name] {
+				cand, err := applyField(params, name, v)
+				if err != nil {
+					return 0, err
+				}
+				if l := b.Build(cand).Lookback(); l > best {
+					best, params = l, cand
+				}
+			}
+		}
+	}
+	return best, nil
+}
+
 // RunWalkForward runs a rolling walk-forward for one ticker: for each fold it calibrates
 // the grid on the train window and runs that winner out-of-sample on the next window with
 // the train slice as indicator warm-up, keeping only trades entered at/after the OOS start.
@@ -179,7 +213,10 @@ func RunWalkForward(b Binding, phases []Phase, candles, dailyCandles, htfCandles
 	if err != nil {
 		return WalkForwardSummary{}, err
 	}
-	lookback := b.Build(b.DefaultParams()).Lookback()
+	lookback, err := maxGridLookback(b, phases)
+	if err != nil {
+		return WalkForwardSummary{}, err
+	}
 
 	var summary WalkForwardSummary
 	var pool []backtest.Trade
