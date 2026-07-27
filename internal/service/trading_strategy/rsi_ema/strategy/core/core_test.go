@@ -471,6 +471,20 @@ func TestFreshEntryFilter(t *testing.T) {
 	}
 }
 
+// TestBarsAboveMidExcludesEntryBar pins that the entry bar (index i) and beyond lie OUTSIDE the
+// window and must never be counted. Every case in TestFreshEntryFilter calls barsAboveMid/
+// freshEntry with i == len(rsi), so the `j < i && j < len(rsi)` guard is indistinguishable from
+// `j <= i` there — this case puts values ABOVE RSIMid at i and beyond while the window itself
+// sits entirely at/below RSIMid, so the two are distinguishable.
+func TestBarsAboveMidExcludesEntryBar(t *testing.T) {
+	s := NewWithParams("TEST", DefaultParams()) // window 5, RSIMid 50
+	// Window (indices 0..4): 40,40,40,40,40 — none above the mid. Index 5 (the entry bar) and
+	// index 6 (beyond) sit above the mid but must not be counted.
+	if got := s.barsAboveMid([]float64{40, 40, 40, 40, 40, 60, 60}, 5); got != 0 {
+		t.Fatalf("entry bar and beyond must not be counted: barsAboveMid = %d want 0", got)
+	}
+}
+
 func TestFreshEntryFilterDisabled(t *testing.T) {
 	p := freshParams()
 	p.EntryAboveMidLimit = 0 // off
@@ -535,6 +549,19 @@ func TestMidCrossings(t *testing.T) {
 				t.Fatalf("midCrossings = %d want %d", got, tc.want)
 			}
 		})
+	}
+}
+
+// TestMidCrossingsExcludesEntryCross pins that the entry cross (i-1 -> i) lies OUTSIDE the
+// window and must never be counted. Every case above calls midCrossings with i == len(rsi), so
+// the `end > len(rsi)` clamp makes `end = i` and a regressed `end = i + 1` behave identically —
+// this case uses data PAST index i so the two are distinguishable.
+func TestMidCrossingsExcludesEntryCross(t *testing.T) {
+	s := NewWithParams("TEST", DefaultParams()) // window 5, RSIMid 50
+	// Window (indices 0..4): 48, 49, 49, 49, 48 — all below the mid, 0 internal crossings.
+	// The entry cross 48(i-1=4) -> 55(i=5) is the cross itself, not part of the window.
+	if got := s.midCrossings([]float64{48, 49, 49, 49, 48, 55}, 5); got != 0 {
+		t.Fatalf("entry cross must not be counted: midCrossings = %d want 0", got)
 	}
 }
 
@@ -631,8 +658,21 @@ func TestExplainReportsChopFilter(t *testing.T) {
 	}
 	sOff := NewWithParams("TEST", DefaultParams())
 	outOff := sOff.Explain(mdEndingAt(closes, highs, lows, 200, mskAt(2026, 7, 20, 12, 0), nil))
-	if !strings.Contains(outOff, "выключен") {
-		t.Fatalf("Explain must mark disabled filters as выключен:\n%s", outOff)
+	// The generic "выключен" fragment also appears unconditionally in the volume-gate and
+	// stop lines at defaults, so it cannot discriminate whether the chop filter's own
+	// disabled-label path ran. Pin the chop filter's specific line instead.
+	var chopLine string
+	for _, line := range strings.Split(outOff, "\n") {
+		if strings.Contains(line, "фильтр пилы") {
+			chopLine = line
+			break
+		}
+	}
+	if chopLine == "" {
+		t.Fatalf("Explain must report the chop filter line when off:\n%s", outOff)
+	}
+	if !strings.Contains(chopLine, "50 в окне 5") || !strings.Contains(chopLine, "(лимит выключен)") {
+		t.Fatalf("chop filter disabled-label line wrong: %q\nfull output:\n%s", chopLine, outOff)
 	}
 }
 
@@ -801,5 +841,32 @@ func TestExplainReportsVolumeGate(t *testing.T) {
 	}
 	if out := sOn.Explain(base); !strings.Contains(out, "нет данных") {
 		t.Fatalf("Explain must report missing volume data:\n%s", out)
+	}
+}
+
+// TestExplainReportsVolumeMisconfiguration pins that Explain reports a distinct "некорректные
+// окна" line — not the generic "нет данных" (data problem) — for both ways the volume gate can
+// be misconfigured, mirroring volumeRegimeOK's own disable predicate.
+func TestExplainReportsVolumeMisconfiguration(t *testing.T) {
+	closes, highs, lows := driftWalk(300, 1)
+	base := mdEndingAt(closes, highs, lows, 250, mskAt(2026, 7, 20, 12, 0), nil)
+
+	longNotExceedingShort := DefaultParams()
+	longNotExceedingShort.UseVolume = 1
+	longNotExceedingShort.VolLongPeriod = longNotExceedingShort.VolShortPeriod
+	out := NewWithParams("TEST", longNotExceedingShort).Explain(withVolumes(base, 8000, 12000, 10))
+	if !strings.Contains(out, "некорректные окна") {
+		t.Fatalf("Explain must flag VolLongPeriod<=VolShortPeriod as misconfigured:\n%s", out)
+	}
+	if strings.Contains(out, "нет данных") || strings.Contains(out, "отношение") {
+		t.Fatalf("misconfiguration must not be reported as missing data or a real ratio verdict:\n%s", out)
+	}
+
+	nonPositiveShort := DefaultParams()
+	nonPositiveShort.UseVolume = 1
+	nonPositiveShort.VolShortPeriod = 0
+	out2 := NewWithParams("TEST", nonPositiveShort).Explain(withVolumes(base, 8000, 12000, 10))
+	if !strings.Contains(out2, "некорректные окна") {
+		t.Fatalf("Explain must flag VolShortPeriod<=0 as misconfigured:\n%s", out2)
 	}
 }

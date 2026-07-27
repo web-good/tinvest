@@ -530,6 +530,11 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 	switch {
 	case s.p.UseVolume != 1:
 		sb.WriteString("фон объёмов: выключен (UseVolume=0)\n")
+	case s.p.VolShortPeriod <= 0 || s.p.VolLongPeriod <= s.p.VolShortPeriod:
+		// Same misconfiguration predicate as volumeRegimeOK's own disable check — reported
+		// distinctly from "нет данных" (a data problem) since this is a config problem.
+		fmt.Fprintf(&sb, "фон объёмов: некорректные окна (VolShortPeriod=%d, VolLongPeriod=%d) → гейт пропущен\n",
+			s.p.VolShortPeriod, s.p.VolLongPeriod)
 	default:
 		shortAvg, okShort := avgVolumeLastN(md.Volumes, md.Times, s.p.VolShortPeriod)
 		longAvg, okLong := avgVolumeLastN(md.Volumes, md.Times, s.p.VolLongPeriod)
