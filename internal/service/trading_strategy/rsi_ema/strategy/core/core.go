@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -46,8 +47,9 @@ type Params struct {
 	FridayEndMin      int     // Friday ENTRY cutoff, minutes from MSK midnight (840 = 14:00)
 	DayEndMin         int     // day-end force-close boundary, minutes from MSK midnight (1380 = 23:00)
 
-	EntryLookbackBars  int // fresh-entry window: bars before the cross to inspect (grid; default 5)
-	EntryAboveMidLimit int // reject entry when >= this many bars in the window are above RSIMid; <=0 disables (grid; default 0 = off)
+	EntryLookbackBars    int // fresh-entry window: bars before the cross to inspect (grid; default 5)
+	EntryAboveMidLimit   int // reject entry when >= this many bars in the window are above RSIMid; <=0 disables (grid; default 0 = off)
+	EntryMaxMidCrossings int // reject entry when the window holds >= this many RSIMid crossings; <=0 disables (grid; default 0 = off)
 }
 
 // DefaultParams returns the spec's baseline; swept values come from calibration.
@@ -66,8 +68,9 @@ func DefaultParams() Params {
 		FridayEndMin:      840,
 		DayEndMin:         1380,
 
-		EntryLookbackBars:  5,
-		EntryAboveMidLimit: 0,
+		EntryLookbackBars:    5,
+		EntryAboveMidLimit:   0,
+		EntryMaxMidCrossings: 0,
 	}
 }
 
@@ -212,15 +215,66 @@ func (s *Strategy) barsAboveMid(rsi []float64, i int) int {
 	return n
 }
 
-// freshEntry reports whether the RSI cross at bar i is "fresh": fewer than EntryAboveMidLimit
-// of the preceding EntryLookbackBars bars sat above RSIMid. This rejects choppy re-entries where
-// RSI only briefly dipped below the mid line after a sustained run above it. Disabled (always
-// true) when EntryAboveMidLimit<=0 or EntryLookbackBars<=0.
+// midCrossings counts how many times RSI crossed RSIMid — in EITHER direction — between
+// consecutive bars inside the EntryLookbackBars window before bar i (indices
+// i-EntryLookbackBars .. i-1, clamped at 0). The entry cross itself (i-1 -> i) lies outside the
+// window and is never counted, so the maximum is EntryLookbackBars-1. The rsi[j-1] > 0 guard
+// rejects RSISeries warm-up zeros (same discipline as crossedUp/crossedDown); a bar sitting
+// exactly at RSIMid is treated as "no crossing".
+func (s *Strategy) midCrossings(rsi []float64, i int) int {
+	start := i - s.p.EntryLookbackBars
+	if start < 0 {
+		start = 0
+	}
+	end := i
+	if end > len(rsi) {
+		end = len(rsi)
+	}
+	n := 0
+	for j := start + 1; j < end; j++ {
+		prev, cur := rsi[j-1], rsi[j]
+		if prev <= 0 {
+			continue
+		}
+		if (prev < s.p.RSIMid && cur > s.p.RSIMid) || (prev > s.p.RSIMid && cur < s.p.RSIMid) {
+			n++
+		}
+	}
+	return n
+}
+
+// limitLabel renders an optional integer gate limit for Explain: the number when the sub-filter
+// is armed, "выключен" when it is off.
+func limitLabel(v int) string {
+	if v <= 0 {
+		return "выключен"
+	}
+	return strconv.Itoa(v)
+}
+
+// freshByBarsAbove reports whether the bars-above-mid sub-filter allows the entry: fewer than
+// EntryAboveMidLimit of the preceding bars sat above RSIMid. Rejects choppy re-entries where RSI
+// only briefly dipped below the mid line after a sustained run above it. Off (always true) when
+// EntryAboveMidLimit<=0.
+func (s *Strategy) freshByBarsAbove(rsi []float64, i int) bool {
+	return s.p.EntryAboveMidLimit <= 0 || s.barsAboveMid(rsi, i) < s.p.EntryAboveMidLimit
+}
+
+// freshByCrossings reports whether the chop sub-filter allows the entry: fewer than
+// EntryMaxMidCrossings crossings of RSIMid inside the window. Rejects saws where RSI flips
+// across the mid line every couple of bars. Off (always true) when EntryMaxMidCrossings<=0.
+func (s *Strategy) freshByCrossings(rsi []float64, i int) bool {
+	return s.p.EntryMaxMidCrossings <= 0 || s.midCrossings(rsi, i) < s.p.EntryMaxMidCrossings
+}
+
+// freshEntry reports whether the RSI cross at bar i is "fresh" — it must clear BOTH sub-filters.
+// EntryLookbackBars<=0 disables the whole gate; each sub-filter also has its own off switch, and
+// both are off in DefaultParams (the grid turns them on).
 func (s *Strategy) freshEntry(rsi []float64, i int) bool {
-	if s.p.EntryAboveMidLimit <= 0 || s.p.EntryLookbackBars <= 0 {
+	if s.p.EntryLookbackBars <= 0 {
 		return true
 	}
-	return s.barsAboveMid(rsi, i) < s.p.EntryAboveMidLimit
+	return s.freshByBarsAbove(rsi, i) && s.freshByCrossings(rsi, i)
 }
 
 // enter emits a long when RSI crosses up through RSIMid on the current bar while the fast EMA
@@ -400,8 +454,12 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 	}
 
 	if len(rsi) == n {
-		fmt.Fprintf(&sb, "фильтр свежести: баров выше %.0f в окне %d = %d (лимит %d); прошёл? %v\n",
-			s.p.RSIMid, s.p.EntryLookbackBars, s.barsAboveMid(rsi, i), s.p.EntryAboveMidLimit, s.freshEntry(rsi, i))
+		fmt.Fprintf(&sb, "фильтр свежести: баров выше %.0f в окне %d = %d (лимит %s); прошёл? %v\n",
+			s.p.RSIMid, s.p.EntryLookbackBars, s.barsAboveMid(rsi, i),
+			limitLabel(s.p.EntryAboveMidLimit), s.freshByBarsAbove(rsi, i))
+		fmt.Fprintf(&sb, "фильтр пилы: пересечений %.0f в окне %d = %d (лимит %s); прошёл? %v\n",
+			s.p.RSIMid, s.p.EntryLookbackBars, s.midCrossings(rsi, i),
+			limitLabel(s.p.EntryMaxMidCrossings), s.freshByCrossings(rsi, i))
 	}
 
 	if s.p.StopATR > 0 {

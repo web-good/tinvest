@@ -509,3 +509,129 @@ func TestEnterFilterRejectsChopReentry(t *testing.T) {
 	}
 	t.Fatalf("no chop re-entry candidate found in series (adjust the driftWalk seed)")
 }
+
+func TestDefaultParamsChopFilterOff(t *testing.T) {
+	if got := DefaultParams().EntryMaxMidCrossings; got != 0 {
+		t.Fatalf("EntryMaxMidCrossings = %d want 0 (filter off by default)", got)
+	}
+}
+
+func TestMidCrossings(t *testing.T) {
+	s := NewWithParams("TEST", DefaultParams()) // window 5, RSIMid 50
+	cases := []struct {
+		name string
+		rsi  []float64 // indices 0..i-1 form the window when i = len(rsi)
+		want int
+	}{
+		{"saw crosses three times", []float64{52, 48, 51, 49, 49}, 3},
+		{"quiet below the mid", []float64{48, 49, 49, 49, 49}, 0},
+		{"single cross down", []float64{55, 55, 55, 55, 47}, 1},
+		{"warm-up zeros do not count", []float64{0, 0, 0, 55, 47}, 1},
+		{"short history truncates, no panic", []float64{55, 47}, 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := s.midCrossings(tc.rsi, len(tc.rsi)); got != tc.want {
+				t.Fatalf("midCrossings = %d want %d", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestChopFilterRejectsSaw(t *testing.T) {
+	p := DefaultParams()
+	p.EntryMaxMidCrossings = 3
+	s := NewWithParams("TEST", p)
+	// saw crosses the mid line 3 times, twoCross only twice.
+	saw := []float64{52, 48, 51, 49, 49}
+	twoCross := []float64{52, 48, 51, 51, 51}
+	if s.freshEntry(saw, len(saw)) {
+		t.Fatalf("saw with 3 >= 3 crossings must be rejected")
+	}
+	if !s.freshEntry(twoCross, len(twoCross)) {
+		t.Fatalf("2 < 3 crossings must be allowed")
+	}
+}
+
+func TestChopFilterDisabled(t *testing.T) {
+	saw := []float64{52, 48, 51, 49, 49}
+	s := NewWithParams("TEST", DefaultParams()) // EntryMaxMidCrossings = 0
+	if !s.freshEntry(saw, len(saw)) {
+		t.Fatalf("EntryMaxMidCrossings<=0 must disable the chop filter")
+	}
+	p := DefaultParams()
+	p.EntryMaxMidCrossings = 3
+	p.EntryLookbackBars = 0 // the shared window switch disables both sub-filters
+	if !NewWithParams("TEST", p).freshEntry(saw, len(saw)) {
+		t.Fatalf("EntryLookbackBars<=0 must disable both sub-filters")
+	}
+}
+
+// TestEntrySubFiltersAreIndependent pins that each sub-filter cuts only its own pattern: the
+// chop filter rejects the saw and passes the dip-after-a-run, the bars-above-mid filter does
+// the opposite.
+func TestEntrySubFiltersAreIndependent(t *testing.T) {
+	saw := []float64{52, 48, 51, 49, 49} // 3 crossings, 2 bars above
+	dip := []float64{55, 55, 55, 55, 47} // 1 crossing, 4 bars above
+
+	chopOnly := DefaultParams()
+	chopOnly.EntryMaxMidCrossings = 3
+	sChop := NewWithParams("TEST", chopOnly)
+	if sChop.freshEntry(saw, len(saw)) {
+		t.Fatalf("chop filter must reject the saw")
+	}
+	if !sChop.freshEntry(dip, len(dip)) {
+		t.Fatalf("chop filter must not reject the dip (only 1 crossing)")
+	}
+
+	aboveOnly := freshParams() // EntryAboveMidLimit = 3, EntryMaxMidCrossings = 0
+	sAbove := NewWithParams("TEST", aboveOnly)
+	if sAbove.freshEntry(dip, len(dip)) {
+		t.Fatalf("bars-above-mid filter must reject the dip")
+	}
+	if !sAbove.freshEntry(saw, len(saw)) {
+		t.Fatalf("bars-above-mid filter must not reject the saw (only 2 bars above)")
+	}
+}
+
+// TestEnterFilterRejectsSawEntry finds a bar the defaults (all filters off) buy but whose
+// preceding window holds >= EntryMaxMidCrossings mid-line crossings, and asserts the chop-ON
+// strategy rejects that exact bar.
+func TestEnterFilterRejectsSawEntry(t *testing.T) {
+	off := NewWithParams("TEST", DefaultParams()) // every quality filter off
+	chop := DefaultParams()
+	chop.EntryMaxMidCrossings = 3
+	on := NewWithParams("TEST", chop)
+	closes, highs, lows := driftWalk(1500, 7)
+	end := mskAt(2026, 7, 20, 12, 0)
+	for k := 60; k < len(closes); k++ {
+		md := mdEndingAt(closes, highs, lows, k, end, nil)
+		if off.Decide(md).Kind != model.SignalBuy {
+			continue
+		}
+		rsi := indicators.RSISeries(md.Closes, DefaultParams().RSIPeriod)
+		if on.midCrossings(rsi, k) >= chop.EntryMaxMidCrossings {
+			if on.Decide(md).Kind == model.SignalBuy {
+				t.Fatalf("saw entry at bar %d must be filtered out", k)
+			}
+			return // found and verified a saw candidate
+		}
+	}
+	t.Fatalf("no saw candidate found in series (adjust the driftWalk seed)")
+}
+
+func TestExplainReportsChopFilter(t *testing.T) {
+	p := DefaultParams()
+	p.EntryMaxMidCrossings = 3
+	s := NewWithParams("TEST", p)
+	closes, highs, lows := driftWalk(800, 1)
+	out := s.Explain(mdEndingAt(closes, highs, lows, 200, mskAt(2026, 7, 20, 12, 0), nil))
+	if !strings.Contains(out, "фильтр пилы") {
+		t.Fatalf("Explain must report the chop filter:\n%s", out)
+	}
+	sOff := NewWithParams("TEST", DefaultParams())
+	outOff := sOff.Explain(mdEndingAt(closes, highs, lows, 200, mskAt(2026, 7, 20, 12, 0), nil))
+	if !strings.Contains(outOff, "выключен") {
+		t.Fatalf("Explain must mark disabled filters as выключен:\n%s", outOff)
+	}
+}
