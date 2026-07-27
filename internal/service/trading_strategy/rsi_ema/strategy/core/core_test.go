@@ -429,15 +429,27 @@ func TestExplainShortSeriesDoesNotPanic(t *testing.T) {
 	_ = s.Explain(strategy.MarketData{Closes: []float64{1}})
 }
 
+// freshParams returns the defaults with the bars-above-mid sub-filter explicitly ON.
+// DefaultParams ships every entry quality filter off, so tests that exercise the filter must
+// switch it on themselves.
+func freshParams() Params {
+	p := DefaultParams()
+	p.EntryAboveMidLimit = 3
+	return p
+}
+
 func TestDefaultParamsFreshEntryFilter(t *testing.T) {
 	p := DefaultParams()
-	if p.EntryLookbackBars != 5 || p.EntryAboveMidLimit != 3 {
-		t.Fatalf("fresh-entry defaults wrong: %+v", p)
+	if p.EntryLookbackBars != 5 {
+		t.Fatalf("EntryLookbackBars = %d want 5", p.EntryLookbackBars)
+	}
+	if p.EntryAboveMidLimit != 0 {
+		t.Fatalf("EntryAboveMidLimit = %d want 0 (quality filters are off by default)", p.EntryAboveMidLimit)
 	}
 }
 
 func TestFreshEntryFilter(t *testing.T) {
-	s := NewWithParams("TEST", DefaultParams()) // window 5, limit 3
+	s := NewWithParams("TEST", freshParams()) // window 5, limit 3
 	cases := []struct {
 		name string
 		rsi  []float64 // indices 0..i-1 form the window when i = len(rsi)
@@ -460,13 +472,13 @@ func TestFreshEntryFilter(t *testing.T) {
 }
 
 func TestFreshEntryFilterDisabled(t *testing.T) {
-	p := DefaultParams()
+	p := freshParams()
 	p.EntryAboveMidLimit = 0 // off
 	s := NewWithParams("TEST", p)
 	if !s.freshEntry([]float64{55, 55, 55, 55, 47}, 5) {
 		t.Fatalf("EntryAboveMidLimit<=0 must disable the filter")
 	}
-	p2 := DefaultParams()
+	p2 := freshParams()
 	p2.EntryLookbackBars = 0 // off
 	s2 := NewWithParams("TEST", p2)
 	if !s2.freshEntry([]float64{55, 55, 55, 55, 47}, 5) {
@@ -478,10 +490,8 @@ func TestFreshEntryFilterDisabled(t *testing.T) {
 // preceding window holds >= EntryAboveMidLimit bars above the mid, and asserts the default
 // (filter-ON) strategy rejects that exact bar.
 func TestEnterFilterRejectsChopReentry(t *testing.T) {
-	off := DefaultParams()
-	off.EntryAboveMidLimit = 0 // filter off
-	sOff := NewWithParams("TEST", off)
-	on := NewWithParams("TEST", DefaultParams()) // filter on (window 5, limit 3)
+	sOff := NewWithParams("TEST", DefaultParams()) // defaults: every quality filter off
+	on := NewWithParams("TEST", freshParams())     // filter on (window 5, limit 3)
 	closes, highs, lows := driftWalk(1500, 7)
 	end := mskAt(2026, 7, 20, 12, 0)
 	for k := 60; k < len(closes); k++ {
@@ -490,7 +500,7 @@ func TestEnterFilterRejectsChopReentry(t *testing.T) {
 			continue
 		}
 		rsi := indicators.RSISeries(md.Closes, DefaultParams().RSIPeriod)
-		if on.barsAboveMid(rsi, k) >= DefaultParams().EntryAboveMidLimit {
+		if on.barsAboveMid(rsi, k) >= freshParams().EntryAboveMidLimit {
 			if on.Decide(md).Kind == model.SignalBuy {
 				t.Fatalf("chop re-entry at bar %d must be filtered out", k)
 			}

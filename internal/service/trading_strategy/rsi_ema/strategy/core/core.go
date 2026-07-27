@@ -47,7 +47,7 @@ type Params struct {
 	DayEndMin         int     // day-end force-close boundary, minutes from MSK midnight (1380 = 23:00)
 
 	EntryLookbackBars  int // fresh-entry window: bars before the cross to inspect (grid; default 5)
-	EntryAboveMidLimit int // reject entry when >= this many bars in the window are above RSIMid; <=0 disables (grid; default 3)
+	EntryAboveMidLimit int // reject entry when >= this many bars in the window are above RSIMid; <=0 disables (grid; default 0 = off)
 }
 
 // DefaultParams returns the spec's baseline; swept values come from calibration.
@@ -67,7 +67,7 @@ func DefaultParams() Params {
 		DayEndMin:         1380,
 
 		EntryLookbackBars:  5,
-		EntryAboveMidLimit: 3,
+		EntryAboveMidLimit: 0,
 	}
 }
 
