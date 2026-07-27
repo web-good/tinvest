@@ -748,6 +748,12 @@ func TestVolumeRegimeGateDegrades(t *testing.T) {
 		t.Fatalf("VolLongPeriod <= VolShortPeriod must disable the gate")
 	}
 
+	bad2 := on
+	bad2.VolShortPeriod = 0 // VolLongPeriod (50) stays > VolShortPeriod, so only this disjunct fires
+	if !NewWithParams("TEST", bad2).volumeRegimeOK(fading) {
+		t.Fatalf("VolShortPeriod <= 0 must disable the gate")
+	}
+
 	zeroVols := base
 	zeroVols.Volumes = make([]int64, len(base.Closes)) // all zero → no usable sample
 	if !NewWithParams("TEST", on).volumeRegimeOK(zeroVols) {
