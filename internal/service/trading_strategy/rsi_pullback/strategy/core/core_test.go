@@ -213,6 +213,83 @@ func shiftTo(md *strategy.MarketData, last time.Time) {
 	}
 }
 
+// TestCrossHelpersBoundaries pins the comparison operators of crossedDown/crossedUp directly on
+// synthetic series. The gate tests above only feed extreme values, which survive an off-by-one
+// shift of any single comparison; the strategy's whole trade population hangs on these four
+// operators, so each one gets a case that flips when it is loosened or tightened by one step.
+// Verified mutationally: flipping `series[i] < level` to `<=`, `series[i-1] >= level` to `>`, or
+// `series[i-1] <= level` to `<` makes this test fail.
+func TestCrossHelpersBoundaries(t *testing.T) {
+	const lvl = 15.0
+	// justBelow/justAbove are one representable step off the level: the tightest possible probe
+	// of a strict comparison.
+	justBelow := math.Nextafter(lvl, 0)
+	justAbove := math.Nextafter(lvl, 100)
+
+	down := []struct {
+		name   string
+		series []float64
+		want   bool
+	}{
+		{"previous exactly on the level, current below: a cross", []float64{lvl, 14}, true},
+		{"previous exactly on the level, current one step below: a cross", []float64{lvl, justBelow}, true},
+		{"current exactly on the level: touching is not crossing", []float64{20, lvl}, false},
+		{"current one step above the level: not yet", []float64{20, justAbove}, false},
+		{"previous already below the level: no fresh cross", []float64{14, 13}, false},
+		{"previous below, current back on the level: no cross", []float64{14, lvl}, false},
+		{"previous is a warm-up zero: ignored", []float64{0, 14}, false},
+		{"single bar: no previous to cross from", []float64{14}, false},
+	}
+	for _, tc := range down {
+		t.Run("crossedDown/"+tc.name, func(t *testing.T) {
+			if got := crossedDown(tc.series, len(tc.series)-1, lvl); got != tc.want {
+				t.Fatalf("crossedDown(%v, %.20g) = %v, want %v", tc.series, lvl, got, tc.want)
+			}
+		})
+	}
+
+	const up = 70.0
+	upJustBelow := math.Nextafter(up, 0)
+	upJustAbove := math.Nextafter(up, 100)
+	ups := []struct {
+		name   string
+		series []float64
+		want   bool
+	}{
+		{"previous exactly on the level, current above: a cross", []float64{up, 71}, true},
+		{"previous exactly on the level, current one step above: a cross", []float64{up, upJustAbove}, true},
+		{"current exactly on the level: touching is not crossing", []float64{60, up}, false},
+		{"current one step below the level: not yet", []float64{60, upJustBelow}, false},
+		{"previous already above the level: no fresh cross", []float64{71, 72}, false},
+		{"previous above, current back on the level: no cross", []float64{71, up}, false},
+		// Documents the asymmetric warm-up guard (see crossedUp's comment): a leading 0 is
+		// treated as un-warmed even though Wilder's RSI can genuinely read 0, so the exit is
+		// suppressed rather than fired off an ambiguous value.
+		{"previous is zero: guarded, no cross", []float64{0, 71}, false},
+		{"single bar: no previous to cross from", []float64{71}, false},
+	}
+	for _, tc := range ups {
+		t.Run("crossedUp/"+tc.name, func(t *testing.T) {
+			if got := crossedUp(tc.series, len(tc.series)-1, up); got != tc.want {
+				t.Fatalf("crossedUp(%v, %.20g) = %v, want %v", tc.series, up, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestEnterAtSessionOpenBoundary pins the `m >= SessionStartMin` comparison: a bar opening
+// EXACTLY at 07:00 MSK is inside the entry window. Real GAZP 30m series carry that bar, and
+// TestEnterGates only probes 06:30, which survives a shift to a strict `>`.
+func TestEnterAtSessionOpenBoundary(t *testing.T) {
+	s := NewWithParams("T", DefaultParams())
+	md := entryFixture()
+	// 2026-06-01 is a Monday; 07:00 is SessionStartMin (420) to the minute.
+	shiftTo(&md, time.Date(2026, 6, 1, 7, 0, 0, 0, msk))
+	if got := s.Decide(md); got.Kind != model.SignalBuy {
+		t.Fatalf("Kind = %v, want Buy on the bar opening exactly at SessionStartMin", got.Kind)
+	}
+}
+
 // TestEnterCrossIsAnEventNotAState: once RSI already sits below the band on the PREVIOUS bar,
 // there is no fresh cross and therefore no entry.
 func TestEnterCrossIsAnEventNotAState(t *testing.T) {
@@ -247,19 +324,32 @@ func withPosition(md strategy.MarketData, entryPrice, stop float64, heldBars int
 	return md
 }
 
+// TestExitStopLoss covers the stop, including the exact-touch boundary: `low <= StopLoss` must
+// fire when the low lands ON the stop. A test that only puts the stop strictly inside the bar
+// survives a shift of that comparison to `<`.
 func TestExitStopLoss(t *testing.T) {
 	s := NewWithParams("T", DefaultParams())
-	md := entryFixture()
-	i := len(md.Closes) - 1
-	// Stop sits just above the bar's low: the stop must fire.
-	stop := md.Lows[i] * 1.0001
-	md = withPosition(md, md.Closes[i]*1.02, stop, 1)
-	got := s.Decide(md)
-	if got.Kind != model.SignalSell || got.Reason != "SL" {
-		t.Fatalf("Kind/Reason = %v/%q, want Sell/SL", got.Kind, got.Reason)
+	tests := []struct {
+		name string
+		stop func(low float64) float64
+	}{
+		{"low pierces the stop", func(low float64) float64 { return low * 1.0001 }},
+		{"low touches the stop exactly", func(low float64) float64 { return low }},
 	}
-	if math.Abs(got.StopLoss-stop) > 1e-9 {
-		t.Fatalf("StopLoss = %v, want the frozen position stop %v", got.StopLoss, stop)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			md := entryFixture()
+			i := len(md.Closes) - 1
+			stop := tc.stop(md.Lows[i])
+			md = withPosition(md, md.Closes[i]*1.02, stop, 1)
+			got := s.Decide(md)
+			if got.Kind != model.SignalSell || got.Reason != "SL" {
+				t.Fatalf("Kind/Reason = %v/%q, want Sell/SL", got.Kind, got.Reason)
+			}
+			if math.Abs(got.StopLoss-stop) > 1e-9 {
+				t.Fatalf("StopLoss = %v, want the frozen position stop %v", got.StopLoss, stop)
+			}
+		})
 	}
 }
 
@@ -333,7 +423,9 @@ func TestExitTimeStopDisabledAtZero(t *testing.T) {
 	s := NewWithParams("T", p)
 	md := entryFixture()
 	i := len(md.Closes) - 1
-	md = withPosition(md, md.Closes[i]*0.99, md.Lows[i]*0.5, 50)
+	// 10 bars back from the 12:00 bar is 07:00 of the SAME MSK day: a long hold that still keeps
+	// the EOD backstop (isDayEnd / crossedIntoNewDay) silent, so only the time stop is under test.
+	md = withPosition(md, md.Closes[i]*0.99, md.Lows[i]*0.5, 10)
 	if got := s.Decide(md); got.Kind != model.SignalNone {
 		t.Fatalf("Kind = %v (%q), want None: the time stop is disabled at MaxHoldBars=0", got.Kind, got.Reason)
 	}
@@ -364,6 +456,61 @@ func TestExitEndOfDay(t *testing.T) {
 	}
 }
 
+// TestExitEndOfDayOnTruncatedSession covers the case isDayEnd alone cannot: the session ended
+// early (data gap, halt, short trading day), so NO bar ever reaches DayEndMin and the day-end
+// force close never gets its trigger bar. With MaxHoldBars=0 — a value the calibration grid
+// really does offer — nothing else would close the position either, and it would ride overnight
+// under a frozen stop, against the "never hold into the next day" invariant. The first bar of the
+// next MSK day must close it as EOD.
+func TestExitEndOfDayOnTruncatedSession(t *testing.T) {
+	p := DefaultParams()
+	p.MaxHoldBars = 0 // the time stop must not be what saves us here
+	s := NewWithParams("T", p)
+
+	tests := []struct {
+		name       string
+		lastBar    time.Time
+		entryTime  time.Time
+		wantKind   model.SignalKind
+		wantReason string
+	}{
+		{
+			name: "first bar of the next trading day closes a position left over from a truncated session",
+			// 2026-06-01 is a Monday whose session is cut short at 20:30 (no 22:30 bar exists);
+			// the next bar the engine feeds is Tuesday's open.
+			lastBar:    time.Date(2026, 6, 2, 7, 0, 0, 0, msk),
+			entryTime:  time.Date(2026, 6, 1, 18, 0, 0, 0, msk),
+			wantKind:   model.SignalSell,
+			wantReason: "EOD",
+		},
+		{
+			name:      "same MSK day, still inside the evening session: nothing fires",
+			lastBar:   time.Date(2026, 6, 1, 19, 0, 0, 0, msk),
+			entryTime: time.Date(2026, 6, 1, 12, 0, 0, 0, msk),
+			wantKind:  model.SignalNone,
+		},
+		{
+			name:      "unknown entry time keeps the new-day check silent",
+			lastBar:   time.Date(2026, 6, 2, 7, 0, 0, 0, msk),
+			entryTime: time.Time{},
+			wantKind:  model.SignalNone,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			md := entryFixture()
+			shiftTo(&md, tc.lastBar)
+			i := len(md.Closes) - 1
+			md = withPosition(md, md.Closes[i]*0.99, md.Lows[i]*0.5, 2)
+			md.Position.EntryTime = tc.entryTime
+			got := s.Decide(md)
+			if got.Kind != tc.wantKind || got.Reason != tc.wantReason {
+				t.Fatalf("Kind/Reason = %v/%q, want %v/%q", got.Kind, got.Reason, tc.wantKind, tc.wantReason)
+			}
+		})
+	}
+}
+
 func TestExitHoldsThroughTheEveningSession(t *testing.T) {
 	p := DefaultParams()
 	p.MaxHoldBars = 0
@@ -385,6 +532,23 @@ func TestExplainMentionsEveryGate(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Fatalf("Explain() is missing %q; got:\n%s", want, out)
 		}
+	}
+}
+
+// TestExplainLabelsUnknownHold: the holdUnknown sentinel must never reach the diagnostics the
+// owner reads — "-1 баров" is not a hold.
+func TestExplainLabelsUnknownHold(t *testing.T) {
+	s := NewWithParams("T", DefaultParams())
+	md := entryFixture()
+	i := len(md.Closes) - 1
+	md = withPosition(md, md.Closes[i]*0.99, md.Lows[i]*0.5, 2)
+	md.Position.EntryTime = time.Time{}
+	out := s.Explain(md)
+	if strings.Contains(out, "-1 баров") {
+		t.Fatalf("Explain() leaked the holdUnknown sentinel; got:\n%s", out)
+	}
+	if !strings.Contains(out, "удержание: неизвестно") {
+		t.Fatalf("Explain() must label an unknown hold; got:\n%s", out)
 	}
 }
 
@@ -411,9 +575,13 @@ func TestNoLookaheadAcrossWindowCuts(t *testing.T) {
 	full := entryFixture()
 	n := len(full.Closes)
 
-	checked := 0
-	for _, from := range []int{0, 40, 80} {
-		want := s.Decide(full)
+	// Every cut must drop real history: `from = 0` would compare the full window with itself and
+	// assert nothing. The deepest cut still leaves ~245 bars, well past the slow EMA's warm-up.
+	want := s.Decide(full)
+	if want.Kind != model.SignalBuy {
+		t.Fatalf("fixture produced %v on the full window; the cuts would assert nothing", want.Kind)
+	}
+	for _, from := range []int{40, 80, 160} {
 		got := s.Decide(sliceMD(full, from, n))
 		if got.Kind != want.Kind || got.Reason != want.Reason {
 			t.Fatalf("cut at %d gave %v/%q, full window gave %v/%q",
@@ -428,10 +596,6 @@ func TestNoLookaheadAcrossWindowCuts(t *testing.T) {
 					from, got.StopLoss, want.StopLoss, rel)
 			}
 		}
-		checked++
-	}
-	if checked == 0 {
-		t.Fatal("fixture produced no comparisons")
 	}
 }
 

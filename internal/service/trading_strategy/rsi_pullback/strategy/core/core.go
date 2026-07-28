@@ -132,6 +132,21 @@ func (s *Strategy) isDayEnd(t time.Time, spanMin int) bool {
 	return m+spanMin >= s.p.DayEndMin
 }
 
+// crossedIntoNewDay reports whether the current bar belongs to a different MSK calendar date
+// than the position's entry. It backstops isDayEnd, which can only fire on a bar that actually
+// exists: on a truncated session (data gap, halt, short trading day) the series simply has no
+// bar reaching DayEndMin, and without this check a position would ride overnight — contradicting
+// the strategy's "never hold into the next day" invariant. Unknown times keep it silent, exactly
+// as the time stop does with a missing EntryTime.
+func crossedIntoNewDay(barT, entryT time.Time) bool {
+	if barT.IsZero() || entryT.IsZero() {
+		return false
+	}
+	by, bm, bd := barT.In(mskLoc).Date()
+	ey, em, ed := entryT.In(mskLoc).Date()
+	return by != ey || bm != em || bd != ed
+}
+
 // barSpanMinutes infers the bar length from the series' own open-times: the MEDIAN gap between
 // consecutive bars (robust to session and weekend jumps). Falls back to defaultBarSpanMin when
 // Times is absent or too short.
@@ -185,23 +200,36 @@ func crossedDown(series []float64, i int, level float64) bool {
 // crossedUp reports whether series crossed up through level between i-1 and i: it sat at or
 // below the level and is now strictly above. Mirrors crossedDown, so a bar sitting exactly ON
 // the level is treated as "not yet crossed" in both directions.
+//
+// The series[i-1] > 0 guard is deliberately kept even though it is NOT inert here the way it is
+// in crossedDown: Wilder's avgGain sits at exactly 0 while every bar since the seed is a loss
+// (pkg/indicators/rsi.go), so an RSI of 0 can be a real reading, and this guard suppresses a
+// cross that starts from it. That asymmetry is intentional and safe. The suppressed case needs
+// an up-bar worth several average losses right after an unbroken losing streak while a long is
+// open — a position that would almost certainly have hit its stop first — and the cost is
+// bounded: the exit is only delayed, SL/TIME/EOD stay armed. Dropping the guard would instead
+// let an RSISeries warm-up zero manufacture an exit out of nothing. Pinned by
+// TestCrossHelpersBoundaries.
 func crossedUp(series []float64, i int, level float64) bool {
 	return i >= 1 && series[i-1] > 0 && series[i-1] <= level && series[i] > level
 }
 
-// Decide routes to entry (flat) or position management (open).
+// Decide routes to entry (flat) or position management (open). The bar span is inferred once
+// here and threaded down: barSpanMinutes sorts a scratch slice, and the calibration sweeps this
+// path millions of times.
 func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 	sig := model.Signal{Ticker: s.ticker, Price: md.Price}
+	span := barSpanMinutes(md.Times)
 	if md.Position != nil {
-		return s.manage(md, sig)
+		return s.manage(md, sig, span)
 	}
-	return s.enter(md, sig)
+	return s.enter(md, sig, span)
 }
 
 // enter emits a long when a short RSI crosses DOWN through its lower band on the current bar
 // while the fast EMA sits above the slow one. Everything is recomputed from md — no state
 // survives between bars.
-func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal {
+func (s *Strategy) enter(md strategy.MarketData, sig model.Signal, span int) model.Signal {
 	n := len(md.Closes)
 	if n < 2 || len(md.Highs) != n || len(md.Lows) != n {
 		return sig
@@ -209,7 +237,7 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	// 1. session window, and never on the day-end bar (manage() only runs from the NEXT bar, so
 	// an entry on the day-end bar could not be EOD-closed on its own bar).
 	t := s.barTime(md)
-	if !s.inSession(t) || s.isDayEnd(t, barSpanMinutes(md.Times)) {
+	if !s.inSession(t) || s.isDayEnd(t, span) {
 		return sig
 	}
 	i := n - 1
@@ -259,16 +287,16 @@ func (s *Strategy) entryReason(rsiNow, fastNow, slowNow, entry, stop, atr float6
 const holdUnknown = -1
 
 // barsHeld counts bars from the position's entry to the current bar, purely from EntryTime, the
-// current bar time and the data-inferred span. Positions never survive the EOD close, so the
-// window is always within one session and the uniform span is exact.
-func (s *Strategy) barsHeld(md strategy.MarketData) int {
+// current bar time and the data-inferred span. A position is force-closed at the day end, so in
+// the normal case entry and current bar sit in the same session and the uniform span is exact.
+// The one exception is a truncated session, where the position survives to the first bar of the
+// next trading day (crossedIntoNewDay closes it there): that single count spans the overnight
+// gap and therefore OVERSTATES the hold. The error is one-sided and harmless — it can only make
+// an armed time stop fire on the very bar the EOD backstop would have closed anyway.
+func (s *Strategy) barsHeld(md strategy.MarketData, span int) int {
 	pos := md.Position
 	t := s.barTime(md)
-	if pos == nil || pos.EntryTime.IsZero() || t.IsZero() {
-		return holdUnknown
-	}
-	span := barSpanMinutes(md.Times)
-	if span <= 0 {
+	if pos == nil || pos.EntryTime.IsZero() || t.IsZero() || span <= 0 {
 		return holdUnknown
 	}
 	return int(math.Round(t.Sub(pos.EntryTime).Minutes() / float64(span)))
@@ -279,7 +307,7 @@ func (s *Strategy) barsHeld(md strategy.MarketData) int {
 // stop it dies by. RSI fires on an UPWARD cross of RSIUpper — taking the bounce into overbought.
 // RSI/TIME/EOD fill at the bar close; SL fills at the stop level (the engine handles that via
 // model.IsStopReason).
-func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal {
+func (s *Strategy) manage(md strategy.MarketData, sig model.Signal, span int) model.Signal {
 	pos := md.Position
 	n := len(md.Closes)
 	if pos == nil || n < 2 || len(md.Highs) != n || len(md.Lows) != n {
@@ -306,14 +334,16 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 		return sig
 	}
 	// 3. time stop: the setup had its chance and did not deliver.
-	if held := s.barsHeld(md); s.p.MaxHoldBars > 0 && held != holdUnknown && held >= s.p.MaxHoldBars {
+	if held := s.barsHeld(md, span); s.p.MaxHoldBars > 0 && held != holdUnknown && held >= s.p.MaxHoldBars {
 		sig.Kind, sig.Reason = model.SignalSell, "TIME"
 		sig.ExitReason = fmt.Sprintf("TIME: удержано %d баров ≥ %d, выход по %.4f (вход %.4f)",
 			held, s.p.MaxHoldBars, closeP, pos.PurchasePrice)
 		return sig
 	}
-	// 4. end of day (always active).
-	if s.isDayEnd(s.barTime(md), barSpanMinutes(md.Times)) {
+	// 4. end of day (always active): either this is the last bar before DayEndMin, or the session
+	// was truncated and we are already looking at a bar from a later MSK day.
+	barT := s.barTime(md)
+	if s.isDayEnd(barT, span) || crossedIntoNewDay(barT, pos.EntryTime) {
 		sig.Kind, sig.Reason = model.SignalSell, "EOD"
 		sig.ExitReason = fmt.Sprintf("EOD: закрытие на конец дня по %.4f (вход %.4f)", closeP, pos.PurchasePrice)
 	}
@@ -361,7 +391,8 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 	if md.Position == nil {
 		fmt.Fprintf(&sb, "удержание: позиции нет; тайм-стоп %s\n", holdLabel(s.p.MaxHoldBars))
 	} else {
-		fmt.Fprintf(&sb, "удержание: %d баров; тайм-стоп %s\n", s.barsHeld(md), holdLabel(s.p.MaxHoldBars))
+		fmt.Fprintf(&sb, "удержание: %s; тайм-стоп %s\n",
+			heldLabel(s.barsHeld(md, span)), holdLabel(s.p.MaxHoldBars))
 	}
 	return sb.String()
 }
@@ -370,6 +401,15 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 func holdLabel(v int) string {
 	if v <= 0 {
 		return "выключен"
+	}
+	return fmt.Sprintf("%d баров", v)
+}
+
+// heldLabel renders the measured hold for Explain, keeping the holdUnknown sentinel out of the
+// diagnostics the owner reads (it would otherwise print as "-1 баров").
+func heldLabel(v int) string {
+	if v == holdUnknown {
+		return "неизвестно"
 	}
 	return fmt.Sprintf("%d баров", v)
 }
