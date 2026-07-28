@@ -66,6 +66,51 @@ func entryFixture() strategy.MarketData {
 	return barSeries(closes, start)
 }
 
+// downtrendCloses builds a LONG DECLINE (so the fast EMA ends up AT OR BELOW the slow one)
+// followed by the same shape of multi-bar shock as pullbackCloses, calibrated so RSI(4) crosses
+// below the lower band (15) only on the LAST bar. This isolates the trend gate in
+// TestEnterGates's "downtrend" case: the RSI gate passes cleanly (same fresh-cross shape as the
+// buy fixture), so a rejection can only come from fast[i] <= slow[i].
+//
+// A pure monotonic decline will NOT work here: Wilder's avgGain sits at exactly 0 when every bar
+// is a loss (see pkg/indicators/rsi.go), which pins RSI(4) at its 0 floor from the very first
+// down bar — there is no ">= 15" bar left to cross down FROM. The baseline below alternates a
+// smaller up-tick with a larger down-tick (net down) to keep avgGain > 0 throughout, so RSI has
+// room to sit above 15 until the shock. The exact multipliers were found by a small offline
+// search over indicators.RSISeries/ema.Compute output (not eyeballed): with this shape,
+// rsi[n-2]=15.45 (>=15) and rsi[n-1]=11.40 (<15), while fast(10)=99.88 <= slow(100)=99.96.
+func downtrendCloses() []float64 {
+	const baseLen = 400
+	out := make([]float64, 0, baseLen+6)
+	p := 100.0
+	for i := 0; i < baseLen; i++ {
+		if i%2 == 0 {
+			p *= 0.9996
+		} else {
+			p *= 1.0004
+		}
+		out = append(out, p)
+	}
+	// Five consecutive down bars: same role as pullbackCloses' shock, calibrated so the RSI(4)
+	// cross below 15 lands on the LAST bar (not earlier).
+	for i := 0; i < 5; i++ {
+		p *= 0.9995
+		out = append(out, p)
+	}
+	return out
+}
+
+// downtrendFixture returns market data whose LAST bar clears the RSI entry gate (fresh cross
+// below RSILower) but sits inside a downtrend, so fast EMA <= slow EMA — used to prove the trend
+// gate alone blocks the entry.
+func downtrendFixture() strategy.MarketData {
+	closes := downtrendCloses()
+	// 2026-06-01 is a Monday. Place the last bar at 12:00 MSK (same slot as entryFixture).
+	last := time.Date(2026, 6, 1, 12, 0, 0, 0, msk)
+	start := last.Add(-time.Duration(len(closes)-1) * 30 * time.Minute)
+	return barSeries(closes, start)
+}
+
 func TestDefaultParams(t *testing.T) {
 	p := DefaultParams()
 	want := Params{
@@ -129,12 +174,19 @@ func TestEnterGates(t *testing.T) {
 			shiftTo(md, time.Date(2026, 6, 6, 12, 0, 0, 0, msk))
 		}},
 		{"downtrend: fast EMA below slow", func(_ *Params, md *strategy.MarketData) {
-			for i := range md.Closes {
-				md.Closes[i] = 200 - md.Closes[i]
-				md.Highs[i] = md.Closes[i] * 1.003
-				md.Lows[i] = md.Closes[i] * 0.997
-			}
-			md.Price = md.Closes[len(md.Closes)-1]
+			// Swap in a fixture whose RSI gate passes cleanly (same fresh-cross shape as the
+			// buy fixture) but whose price path is a genuine downtrend, so a rejection here can
+			// only be explained by the trend gate — not by an earlier RSI-gate failure.
+			*md = downtrendFixture()
+		}},
+		{"EMAFast == EMASlow: equality is not \"above\"", func(p *Params, _ *strategy.MarketData) {
+			// Reuse the untouched buy fixture (its RSI gate is already proven to pass) and force
+			// EMAFast and EMASlow to the SAME period. ema.Compute is a pure function of
+			// (closes, period), so two calls with an identical period produce BIT-IDENTICAL
+			// series — fast[i] == slow[i] exactly, no floating-point luck required. This isolates
+			// the "<=" in enter()'s trend check: a gate written as "< slow" instead of "<= slow"
+			// would let this exact-equality case through as a Buy.
+			p.EMAFast = p.EMASlow
 		}},
 		{"RSI stays above the lower band", func(p *Params, _ *strategy.MarketData) {
 			p.RSILower = 0.5
