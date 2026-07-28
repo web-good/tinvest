@@ -1,0 +1,49 @@
+{
+  "_comment": "vwap_rev phased grid, 124 combos. Phase 1 (entry) sweeps the two numbers that define the setup: how deep below the session VWAP the close must sit (EntryK, in sigmas) and how large that move must be in percent to clear the 0.1% round-trip cost (MinEdgePct). Phase 2 (context) sweeps the daily trend gate, including UseDailyTrend=0 which turns it off - at 0 the three DailyEMAPeriod values collapse to one identical control config, so duplicate rows on the leaderboard are expected. Phase 3 (quality) sweeps the two optional entry filters, each with its own off switch (MaxDevK=0, MinClosePos=0). Phase 4 (risk) sweeps the ATR stop multiplier. Phase 5 (hold) sweeps the time exit, MaxHoldBars=0 = off. Phase 6 (timing) sweeps how far into the session trading may start; on 30m bars anchored at 07:00 MSK the values map to 09:00 / 10:00 / 11:00 / 12:00. The session bounds, DayEndMin and the VWAP target itself are fixed by the strategy definition and deliberately NOT swept - the target is the thesis, not a knob. RunPhases expands each phase over the previous phase's keepTop seeds: 12 + 4x6 + 4x9 + 4x4 + 4x5 + 4x4 = 124 combos. Judge on pooled OOS profit factor from a walk-forward, never on the in-sample best.",
+  "phases": [
+    {
+      "name": "entry",
+      "keepTop": 4,
+      "grid": {
+        "EntryK": [1.0, 1.5, 2.0, 2.5],
+        "MinEdgePct": [0.25, 0.35, 0.5]
+      }
+    },
+    {
+      "name": "context",
+      "keepTop": 4,
+      "grid": {
+        "UseDailyTrend": [0, 1],
+        "DailyEMAPeriod": [20, 50, 100]
+      }
+    },
+    {
+      "name": "quality",
+      "keepTop": 4,
+      "grid": {
+        "MaxDevK": [0, 3.0, 4.0],
+        "MinClosePos": [0, 0.25, 0.33]
+      }
+    },
+    {
+      "name": "risk",
+      "keepTop": 4,
+      "grid": {
+        "StopATR": [0.8, 1.2, 1.6, 2.0]
+      }
+    },
+    {
+      "name": "hold",
+      "keepTop": 4,
+      "grid": {
+        "MaxHoldBars": [0, 4, 6, 8, 12]
+      }
+    },
+    {
+      "name": "timing",
+      "grid": {
+        "MinBarsFromOpen": [4, 6, 8, 10]
+      }
+    }
+  ]
+}
