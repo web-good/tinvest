@@ -46,6 +46,7 @@ type Params struct {
 	SessionStartMin int     // entry window start, minutes from MSK midnight (420 = 07:00)
 	SessionEndMin   int     // entry window end, minutes from MSK midnight (1020 = 17:00)
 	DayEndMin       int     // day-end force-close boundary, minutes from MSK midnight (1380 = 23:00)
+	DailyATRPeriod  int     // daily ATR length, computed over WEEKDAY completed daily candles (grid; default 14)
 }
 
 // DefaultParams returns the spec's baseline; swept values come from calibration.
@@ -62,6 +63,7 @@ func DefaultParams() Params {
 		SessionStartMin: 420,
 		SessionEndMin:   1020,
 		DayEndMin:       1380,
+		DailyATRPeriod:  14,
 	}
 }
 
@@ -100,6 +102,47 @@ var mskLoc = func() *time.Location {
 func isWeekend(tl time.Time) bool {
 	wd := tl.Weekday()
 	return wd == time.Saturday || wd == time.Sunday
+}
+
+// weekdayDaily drops weekend (Sat/Sun MSK) bars from the daily series, keeping the three
+// price slices aligned. MOEX runs weekend sessions and the candle cache contains them, but
+// those bars are 3-4x narrower and 8-17x thinner than weekday ones: leaving them in
+// understates the daily ATR by 9-16% (measured on GAZP/SBER/NVTK/RUAL), and that error would
+// propagate into the stop, the target and both thresholds of the day gate at once. When times
+// is empty or not aligned with the price slices there is nothing to filter by — the series is
+// returned untouched rather than guessed at.
+func weekdayDaily(highs, lows, closes []float64, times []time.Time) (h, l, c []float64) {
+	n := len(closes)
+	if n == 0 || len(highs) != n || len(lows) != n || len(times) != n {
+		return highs, lows, closes
+	}
+	h = make([]float64, 0, n)
+	l = make([]float64, 0, n)
+	c = make([]float64, 0, n)
+	for i := 0; i < n; i++ {
+		if isWeekend(times[i].In(mskLoc)) {
+			continue
+		}
+		h = append(h, highs[i])
+		l = append(l, lows[i])
+		c = append(c, closes[i])
+	}
+	return h, l, c
+}
+
+// dailyATR is the strategy's unit of risk: Wilder's ATR over COMPLETED weekday daily candles.
+// The engine only ever exposes days that closed before the current bar, so no lookahead is
+// possible here. Returns 0 whenever the data cannot support the calculation — the caller must
+// then refuse the entry, because without it there is neither a stop nor a target.
+func (s *Strategy) dailyATR(md strategy.MarketData) float64 {
+	if s.p.DailyATRPeriod <= 0 {
+		return 0
+	}
+	h, l, c := weekdayDaily(md.DailyHighs, md.DailyLows, md.DailyCloses, md.DailyTimes)
+	if len(c) < s.p.DailyATRPeriod+1 {
+		return 0
+	}
+	return indicators.ATR(h, l, c, s.p.DailyATRPeriod)
 }
 
 // inSession reports whether bar-time t falls inside the entry window in MSK. A zero time skips

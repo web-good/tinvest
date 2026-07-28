@@ -19,6 +19,28 @@ var msk = func() *time.Location {
 	return loc
 }()
 
+// dailyBars builds `days` consecutive calendar days ending the day BEFORE `before` (MSK),
+// oldest-first. Every bar closes at 100; a weekday bar spans `w` and a weekend bar spans
+// `we`, so a test can prove weekend sessions never reach the ATR. With a flat close the true
+// range of each bar equals its own width, so ATR over N equal weekday bars is exactly `w`.
+func dailyBars(before time.Time, days int, w, we float64) (highs, lows, closes []float64, times []time.Time) {
+	b := before.In(msk)
+	start := time.Date(b.Year(), b.Month(), b.Day(), 0, 0, 0, 0, msk).AddDate(0, 0, -days)
+	const price = 100.0
+	for i := 0; i < days; i++ {
+		d := start.AddDate(0, 0, i)
+		width := w
+		if d.Weekday() == time.Saturday || d.Weekday() == time.Sunday {
+			width = we
+		}
+		highs = append(highs, price+width/2)
+		lows = append(lows, price-width/2)
+		closes = append(closes, price)
+		times = append(times, d.Add(10*time.Hour))
+	}
+	return highs, lows, closes, times
+}
+
 // barSeries builds MarketData from closes, stamping bars every 30 minutes starting at start.
 // Highs/Lows are derived from the close with a fixed 0.3% envelope so ATR is always positive.
 func barSeries(closes []float64, start time.Time) strategy.MarketData {
@@ -119,6 +141,7 @@ func TestDefaultParams(t *testing.T) {
 		EMAFast: 10, EMASlow: 100,
 		StopATR: 1.2, ATRPeriod: 14, MaxHoldBars: 8,
 		SessionStartMin: 420, SessionEndMin: 1020, DayEndMin: 1380,
+		DailyATRPeriod: 14,
 	}
 	if p != want {
 		t.Fatalf("DefaultParams() = %+v, want %+v", p, want)
@@ -619,5 +642,63 @@ func TestNoLookaheadWithOpenPosition(t *testing.T) {
 			t.Fatalf("cut at %d gave %v/%q, full window gave %v/%q",
 				from, got.Kind, got.Reason, want.Kind, want.Reason)
 		}
+	}
+}
+
+func TestDailyATRIgnoresWeekends(t *testing.T) {
+	s := NewWithParams("TEST", DefaultParams())
+	now := time.Date(2026, 3, 2, 10, 0, 0, 0, msk) // понедельник
+
+	// 40 календарных дней: будни шириной 2.0, выходные — намеренно узкие 0.2.
+	h, l, c, ts := dailyBars(now, 40, 2.0, 0.2)
+	withWeekend := strategy.MarketData{DailyHighs: h, DailyLows: l, DailyCloses: c, DailyTimes: ts}
+
+	// Та же серия, но выходные вырезаны заранее.
+	var wh, wl, wc []float64
+	var wt []time.Time
+	for i := range c {
+		if wd := ts[i].In(msk).Weekday(); wd == time.Saturday || wd == time.Sunday {
+			continue
+		}
+		wh = append(wh, h[i])
+		wl = append(wl, l[i])
+		wc = append(wc, c[i])
+		wt = append(wt, ts[i])
+	}
+	weekdaysOnly := strategy.MarketData{DailyHighs: wh, DailyLows: wl, DailyCloses: wc, DailyTimes: wt}
+
+	got, want := s.dailyATR(withWeekend), s.dailyATR(weekdaysOnly)
+	if math.Abs(got-want) > 1e-9 {
+		t.Fatalf("ATR с выходными %.6f != ATR без выходных %.6f", got, want)
+	}
+	if math.Abs(got-2.0) > 1e-6 {
+		t.Fatalf("ATR = %.6f, want 2.0 (ширина буднего бара)", got)
+	}
+}
+
+func TestDailyATRZeroWhenDataCannotSupportIt(t *testing.T) {
+	s := NewWithParams("TEST", DefaultParams())
+	now := time.Date(2026, 3, 2, 10, 0, 0, 0, msk)
+
+	// Будних дней меньше, чем DailyATRPeriod+1.
+	h, l, c, ts := dailyBars(now, 10, 2.0, 0.2)
+	if got := s.dailyATR(strategy.MarketData{DailyHighs: h, DailyLows: l, DailyCloses: c, DailyTimes: ts}); got != 0 {
+		t.Fatalf("ATR на короткой истории = %.6f, want 0", got)
+	}
+	if got := s.dailyATR(strategy.MarketData{}); got != 0 {
+		t.Fatalf("ATR без дневных данных = %.6f, want 0", got)
+	}
+}
+
+func TestDailyATRDegradesWhenTimesMisaligned(t *testing.T) {
+	s := NewWithParams("TEST", DefaultParams())
+	now := time.Date(2026, 3, 2, 10, 0, 0, 0, msk)
+	h, l, c, ts := dailyBars(now, 40, 2.0, 0.2)
+
+	// Времена короче ценовых серий: фильтровать нечем — серия должна пойти в ATR как есть,
+	// а не обнулиться и не паниковать.
+	md := strategy.MarketData{DailyHighs: h, DailyLows: l, DailyCloses: c, DailyTimes: ts[:5]}
+	if got := s.dailyATR(md); got <= 0 {
+		t.Fatalf("ATR при рассинхроне времён = %.6f, want > 0 (деградация, не отказ)", got)
 	}
 }
