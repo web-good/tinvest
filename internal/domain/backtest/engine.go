@@ -30,32 +30,21 @@ func startOfDay(t time.Time, loc *time.Location) time.Time {
 	return time.Date(tl.Year(), tl.Month(), tl.Day(), 0, 0, 0, 0, loc)
 }
 
-// visibleDailyCloses returns closes of daily candles whose calendar day (in loc) is
-// strictly before t's calendar day — i.e. days that have fully closed by t. This is
-// the no-lookahead rule: the current, still-forming day is never visible.
-func visibleDailyCloses(daily []Candle, t time.Time, loc *time.Location) []float64 {
-	bound := startOfDay(t, loc)
-	out := make([]float64, 0, len(daily))
-	for _, c := range daily {
-		if c.Time.Before(bound) {
-			out = append(out, c.Close)
-		}
-	}
-	return out
-}
-
-// visibleDailyHighsLows returns highs and lows of daily candles whose calendar day
-// (in loc) is strictly before t's calendar day — the same completed days as
-// visibleDailyCloses, so the three series are index-aligned.
-func visibleDailyHighsLows(daily []Candle, t time.Time, loc *time.Location) (highs, lows []float64) {
+// visibleDaily returns the closes, highs, lows and open-times of daily candles whose
+// calendar day (in loc) is strictly before t's calendar day — i.e. days that have fully
+// closed by t. This is the no-lookahead rule: the current, still-forming day is never
+// visible. The four series are index-aligned, oldest-first.
+func visibleDaily(daily []Candle, t time.Time, loc *time.Location) (closes, highs, lows []float64, times []time.Time) {
 	bound := startOfDay(t, loc)
 	for _, c := range daily {
 		if c.Time.Before(bound) {
+			closes = append(closes, c.Close)
 			highs = append(highs, c.High)
 			lows = append(lows, c.Low)
+			times = append(times, c.Time)
 		}
 	}
-	return highs, lows
+	return closes, highs, lows, times
 }
 
 // visibleCompletedHTF returns closes/highs/lows of higher-timeframe candles that have
@@ -172,8 +161,7 @@ func Run(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Candl
 	for i := l - 1; i < len(candles); i++ {
 		p.bar = i
 		md := buildMarketData(candles[i-l+1 : i+1])
-		md.DailyCloses = visibleDailyCloses(dailyCandles, candles[i].Time, mskLoc)
-		md.DailyHighs, md.DailyLows = visibleDailyHighsLows(dailyCandles, candles[i].Time, mskLoc)
+		md.DailyCloses, md.DailyHighs, md.DailyLows, md.DailyTimes = visibleDaily(dailyCandles, candles[i].Time, mskLoc)
 		md.HTFCloses, md.HTFHighs, md.HTFLows = htf.visible(candles[i].Time)
 		md.TodayHigh, md.TodayLow = todayExtent(candles, i, mskLoc)
 		if p.qty != 0 {
@@ -240,8 +228,7 @@ func Trace(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Can
 	for i := l - 1; i < len(candles); i++ {
 		p.bar = i
 		md := buildMarketData(candles[i-l+1 : i+1])
-		md.DailyCloses = visibleDailyCloses(dailyCandles, candles[i].Time, mskLoc)
-		md.DailyHighs, md.DailyLows = visibleDailyHighsLows(dailyCandles, candles[i].Time, mskLoc)
+		md.DailyCloses, md.DailyHighs, md.DailyLows, md.DailyTimes = visibleDaily(dailyCandles, candles[i].Time, mskLoc)
 		md.HTFCloses, md.HTFHighs, md.HTFLows = htf.visible(candles[i].Time)
 		md.TodayHigh, md.TodayLow = todayExtent(candles, i, mskLoc)
 		if p.qty != 0 {
@@ -337,8 +324,7 @@ func AssembleMarketData(window, daily, htf []Candle, cur time.Time) strategy.Mar
 // scalping_rsimacd, 4h for reversion).
 func AssembleMarketDataWithHTFInterval(window, daily, htf []Candle, cur time.Time, htfSpan time.Duration) strategy.MarketData {
 	md := buildMarketData(window)
-	md.DailyCloses = visibleDailyCloses(daily, cur, mskLoc)
-	md.DailyHighs, md.DailyLows = visibleDailyHighsLows(daily, cur, mskLoc)
+	md.DailyCloses, md.DailyHighs, md.DailyLows, md.DailyTimes = visibleDaily(daily, cur, mskLoc)
 	md.HTFCloses, md.HTFHighs, md.HTFLows = visibleCompletedHTF(htf, cur, htfSpan)
 	return md
 }

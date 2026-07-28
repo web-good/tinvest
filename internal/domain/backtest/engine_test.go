@@ -125,27 +125,70 @@ func TestEngineWindowIsLookbackSized(t *testing.T) {
 	}
 }
 
-func TestVisibleDailyCloses(t *testing.T) {
+func TestVisibleDaily(t *testing.T) {
 	msk, _ := time.LoadLocation("Europe/Moscow")
 	day := func(y int, m time.Month, d int) Candle {
-		return Candle{Time: time.Date(y, m, d, 0, 0, 0, 0, time.UTC), Close: float64(d)}
+		return Candle{
+			Time:  time.Date(y, m, d, 0, 0, 0, 0, time.UTC),
+			High:  float64(d) + 0.5,
+			Low:   float64(d) - 0.5,
+			Close: float64(d),
+		}
 	}
 	daily := []Candle{day(2026, 1, 1), day(2026, 1, 2), day(2026, 1, 3)}
 
 	t3 := time.Date(2026, 1, 3, 12, 0, 0, 0, time.UTC)
-	got := visibleDailyCloses(daily, t3, msk)
-	if len(got) != 2 || got[0] != 1 || got[1] != 2 {
-		t.Fatalf("visible on Jan 3 = %v, want [1 2]", got)
+	closes, highs, lows, times := visibleDaily(daily, t3, msk)
+	if len(closes) != 2 || closes[0] != 1 || closes[1] != 2 {
+		t.Fatalf("closes on Jan 3 = %v, want [1 2]", closes)
+	}
+	if len(highs) != 2 || len(lows) != 2 || len(times) != 2 {
+		t.Fatalf("series not index-aligned: %d closes, %d highs, %d lows, %d times",
+			len(closes), len(highs), len(lows), len(times))
+	}
+	if highs[1] != 2.5 || lows[1] != 1.5 {
+		t.Fatalf("highs/lows on Jan 3 = %v/%v, want 2.5/1.5", highs[1], lows[1])
+	}
+	if !times[1].Equal(daily[1].Time) {
+		t.Fatalf("times[1] = %v, want %v", times[1], daily[1].Time)
 	}
 
 	t1 := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
-	if got := visibleDailyCloses(daily, t1, msk); len(got) != 0 {
-		t.Fatalf("visible on Jan 1 = %v, want []", got)
+	if closes, _, _, times := visibleDaily(daily, t1, msk); len(closes) != 0 || len(times) != 0 {
+		t.Fatalf("visible on Jan 1 = %v / %v, want empty", closes, times)
 	}
 
 	t9 := time.Date(2026, 1, 9, 0, 0, 0, 0, time.UTC)
-	if got := visibleDailyCloses(daily, t9, msk); len(got) != 3 {
-		t.Fatalf("visible on Jan 9 = %v, want 3 closes", got)
+	if closes, _, _, times := visibleDaily(daily, t9, msk); len(closes) != 3 || len(times) != 3 {
+		t.Fatalf("visible on Jan 9 = %d closes / %d times, want 3/3", len(closes), len(times))
+	}
+}
+
+func TestRunPopulatesDailyTimes(t *testing.T) {
+	base := time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC) // понедельник
+	candles := make([]Candle, 0, 4)
+	for i := 0; i < 4; i++ {
+		candles = append(candles, Candle{
+			Time: base.AddDate(0, 0, i), High: 101, Low: 99, Close: 100, Volume: 10,
+		})
+	}
+	daily := []Candle{
+		{Time: time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC), High: 102, Low: 98, Close: 100},
+		{Time: time.Date(2026, 1, 6, 0, 0, 0, 0, time.UTC), High: 103, Low: 97, Close: 101},
+	}
+	var seen []time.Time
+	var seenCloses []float64
+	s := scriptedStrategy{lookback: 1, decide: func(md strategy.MarketData) model.Signal {
+		seen = md.DailyTimes
+		seenCloses = md.DailyCloses
+		return model.Signal{Kind: model.SignalNone}
+	}}
+	Run(s, candles, daily, nil, Config{InitialCash: 1000, Fraction: 1.0, Lot: 1})
+	if len(seen) != len(seenCloses) {
+		t.Fatalf("DailyTimes len %d != DailyCloses len %d", len(seen), len(seenCloses))
+	}
+	if len(seen) != 2 {
+		t.Fatalf("DailyTimes on the last bar = %d, want 2", len(seen))
 	}
 }
 

@@ -56,6 +56,12 @@ type MarketData struct {
 	// candles as DailyCloses (aligned index-for-index). Empty when no daily data.
 	DailyHighs []float64
 	DailyLows  []float64
+	// DailyTimes are the open-times of the same COMPLETED daily candles as DailyCloses
+	// (aligned index-for-index). Empty when no daily data is supplied. Consumers that
+	// filter the daily series by calendar — e.g. dropping MOEX weekend sessions before
+	// computing a daily ATR — must degrade gracefully when it is empty or not
+	// length-aligned with the price slices.
+	DailyTimes []time.Time
 	// HTFCloses are oldest-first closes of COMPLETED higher-timeframe (4H) candles,
 	// aligned so the last element is the most recent 4H bar fully closed at/before the
 	// current bar. Empty if no HTF data is supplied or the filter is disabled.
