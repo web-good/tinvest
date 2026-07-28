@@ -387,3 +387,73 @@ func TestExplainMentionsEveryGate(t *testing.T) {
 		}
 	}
 }
+
+// sliceMD returns md restricted to bars [from:to).
+func sliceMD(md strategy.MarketData, from, to int) strategy.MarketData {
+	out := md
+	out.Highs = md.Highs[from:to]
+	out.Lows = md.Lows[from:to]
+	out.Closes = md.Closes[from:to]
+	out.Volumes = md.Volumes[from:to]
+	out.Times = md.Times[from:to]
+	out.Price = out.Closes[len(out.Closes)-1]
+	return out
+}
+
+// TestNoLookaheadAcrossWindowCuts is the load-bearing safety net: the decision on bar i must not
+// depend on how much history precedes it. Cuts stay far enough from bar i that every indicator
+// is warmed in both windows; the ATR-derived stop is compared with a relative tolerance because
+// indicators.ATR is an unbounded Wilder recursion whose value depends on the warm-up length —
+// but never on future bars. In production the engine always feeds a fixed-length Lookback()
+// window, so this discrepancy cannot arise there.
+func TestNoLookaheadAcrossWindowCuts(t *testing.T) {
+	s := NewWithParams("T", DefaultParams())
+	full := entryFixture()
+	n := len(full.Closes)
+
+	checked := 0
+	for _, from := range []int{0, 40, 80} {
+		want := s.Decide(full)
+		got := s.Decide(sliceMD(full, from, n))
+		if got.Kind != want.Kind || got.Reason != want.Reason {
+			t.Fatalf("cut at %d gave %v/%q, full window gave %v/%q",
+				from, got.Kind, got.Reason, want.Kind, want.Reason)
+		}
+		if math.Abs(got.RSI-want.RSI) > 1e-9 {
+			t.Fatalf("cut at %d gave RSI %v, full window %v", from, got.RSI, want.RSI)
+		}
+		if want.StopLoss > 0 {
+			if rel := math.Abs(got.StopLoss-want.StopLoss) / want.StopLoss; rel > 1e-3 {
+				t.Fatalf("cut at %d gave stop %v, full window %v (relative %g)",
+					from, got.StopLoss, want.StopLoss, rel)
+			}
+		}
+		checked++
+	}
+	if checked == 0 {
+		t.Fatal("fixture produced no comparisons")
+	}
+}
+
+// TestNoLookaheadWithOpenPosition covers the manage() path the same way.
+func TestNoLookaheadWithOpenPosition(t *testing.T) {
+	s := NewWithParams("T", DefaultParams())
+	full := upperCrossFixture()
+	n := len(full.Closes)
+	i := n - 1
+	full = withPosition(full, full.Closes[i]*0.97, full.Lows[i]*0.5, 2)
+
+	want := s.Decide(full)
+	if want.Kind == model.SignalNone {
+		t.Fatal("fixture produced no exit; the managed sub-case would assert nothing")
+	}
+	for _, from := range []int{40, 80} {
+		cut := sliceMD(full, from, n)
+		cut.Position = full.Position
+		got := s.Decide(cut)
+		if got.Kind != want.Kind || got.Reason != want.Reason {
+			t.Fatalf("cut at %d gave %v/%q, full window gave %v/%q",
+				from, got.Kind, got.Reason, want.Kind, want.Reason)
+		}
+	}
+}
