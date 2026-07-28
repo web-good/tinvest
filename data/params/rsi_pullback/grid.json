@@ -1,0 +1,41 @@
+{
+  "_comment": "rsi_pullback phased grid. Phase 1 (entry) sweeps the entry geometry: the RSI length and the lower band whose DOWNWARD cross opens the trade. Phase 2 (trend) sweeps the EMA pair that gates the entry. Phase 3 (exit) sweeps the upper band whose UPWARD cross closes the trade. Phase 4 (risk) sweeps the ATR stop multiplier — 0 is deliberately ABSENT: calibration must never be able to trade without a stop, even though the core supports StopATR=0. Phase 5 (hold) sweeps the time stop, whose 0 IS a real control point (time stop off). RunPhases expands each phase over the previous phase's keepTop seeds: 12 + 9 + 3 + 4 + 4 = 32 combos. The session bounds (SessionStartMin/SessionEndMin/DayEndMin) and ATRPeriod are fixed by the strategy definition and are deliberately NOT swept. Judge on pooled OOS profit factor from a walk-forward, never on the in-sample best.",
+  "phases": [
+    {
+      "name": "entry",
+      "keepTop": 6,
+      "grid": {
+        "RSIPeriod": [4, 5, 6],
+        "RSILower": [5, 10, 15, 20]
+      }
+    },
+    {
+      "name": "trend",
+      "keepTop": 5,
+      "grid": {
+        "EMAFast": [5, 10, 20],
+        "EMASlow": [50, 100, 200]
+      }
+    },
+    {
+      "name": "exit",
+      "keepTop": 5,
+      "grid": {
+        "RSIUpper": [60, 70, 80]
+      }
+    },
+    {
+      "name": "risk",
+      "keepTop": 5,
+      "grid": {
+        "StopATR": [0.8, 1.2, 1.6, 2.0]
+      }
+    },
+    {
+      "name": "hold",
+      "grid": {
+        "MaxHoldBars": [0, 4, 8, 12]
+      }
+    }
+  ]
+}
