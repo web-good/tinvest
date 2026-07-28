@@ -10,7 +10,9 @@ package core
 
 import (
 	"fmt"
+	"math"
 	"sort"
+	"strings"
 	"time"
 
 	"tinvest/internal/domain/ema"
@@ -183,8 +185,6 @@ func crossedDown(series []float64, i int, level float64) bool {
 // crossedUp reports whether series crossed up through level between i-1 and i: it sat at or
 // below the level and is now strictly above. Mirrors crossedDown, so a bar sitting exactly ON
 // the level is treated as "not yet crossed" in both directions.
-//
-//nolint:unused // wired into manage()'s RSI-upper exit by Task 2.
 func crossedUp(series []float64, i int, level float64) bool {
 	return i >= 1 && series[i-1] > 0 && series[i-1] <= level && series[i] > level
 }
@@ -254,8 +254,122 @@ func (s *Strategy) entryReason(rsiNow, fastNow, slowNow, entry, stop, atr float6
 	)
 }
 
-// manage handles an open long. Task 2 replaces this stub with the SL -> RSI -> TIME -> EOD
-// precedence.
+// holdUnknown is returned by barsHeld when the position's entry time is unknown. The time stop
+// treats it as "do not fire": a missing EntryTime must never close a position by itself.
+const holdUnknown = -1
+
+// barsHeld counts bars from the position's entry to the current bar, purely from EntryTime, the
+// current bar time and the data-inferred span. Positions never survive the EOD close, so the
+// window is always within one session and the uniform span is exact.
+func (s *Strategy) barsHeld(md strategy.MarketData) int {
+	pos := md.Position
+	t := s.barTime(md)
+	if pos == nil || pos.EntryTime.IsZero() || t.IsZero() {
+		return holdUnknown
+	}
+	span := barSpanMinutes(md.Times)
+	if span <= 0 {
+		return holdUnknown
+	}
+	return int(math.Round(t.Sub(pos.EntryTime).Minutes() / float64(span)))
+}
+
+// manage handles an open long, exiting in precedence SL -> RSI -> TIME -> EOD. SL is read from
+// the position (frozen at entry), never recomputed: the stop the trade was opened with is the
+// stop it dies by. RSI fires on an UPWARD cross of RSIUpper — taking the bounce into overbought.
+// RSI/TIME/EOD fill at the bar close; SL fills at the stop level (the engine handles that via
+// model.IsStopReason).
 func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal {
+	pos := md.Position
+	n := len(md.Closes)
+	if pos == nil || n < 2 || len(md.Highs) != n || len(md.Lows) != n {
+		return sig
+	}
+	i := n - 1
+	low := md.Lows[i]
+	closeP := md.Closes[i]
+
+	// 1. hard stop (always active, wins any same-bar tie).
+	if pos.StopLoss > 0 && low <= pos.StopLoss {
+		sig.Kind, sig.Reason = model.SignalSell, "SL"
+		sig.StopLoss = pos.StopLoss
+		sig.ExitReason = fmt.Sprintf("SL: low %.4f ≤ стоп %.4f (вход %.4f)", low, pos.StopLoss, pos.PurchasePrice)
+		return sig
+	}
+	// 2. RSI crosses UP through the upper band — the bounce reached overbought.
+	rsi := indicators.RSISeries(md.Closes, s.p.RSIPeriod)
+	if len(rsi) == n && crossedUp(rsi, i, s.p.RSIUpper) {
+		sig.Kind, sig.Reason = model.SignalSell, "RSI"
+		sig.RSI = rsi[i]
+		sig.ExitReason = fmt.Sprintf("RSI: RSI(%d) пересёк %.0f снизу вверх (%.1f), выход по %.4f (вход %.4f)",
+			s.p.RSIPeriod, s.p.RSIUpper, rsi[i], closeP, pos.PurchasePrice)
+		return sig
+	}
+	// 3. time stop: the setup had its chance and did not deliver.
+	if held := s.barsHeld(md); s.p.MaxHoldBars > 0 && held != holdUnknown && held >= s.p.MaxHoldBars {
+		sig.Kind, sig.Reason = model.SignalSell, "TIME"
+		sig.ExitReason = fmt.Sprintf("TIME: удержано %d баров ≥ %d, выход по %.4f (вход %.4f)",
+			held, s.p.MaxHoldBars, closeP, pos.PurchasePrice)
+		return sig
+	}
+	// 4. end of day (always active).
+	if s.isDayEnd(s.barTime(md), barSpanMinutes(md.Times)) {
+		sig.Kind, sig.Reason = model.SignalSell, "EOD"
+		sig.ExitReason = fmt.Sprintf("EOD: закрытие на конец дня по %.4f (вход %.4f)", closeP, pos.PurchasePrice)
+	}
 	return sig
+}
+
+// Explain returns a gate-by-gate verdict for one bar, consumed by the engine's Trace
+// (-explain). It recomputes the same values enter()/manage() do and reports each gate.
+func (s *Strategy) Explain(md strategy.MarketData) string {
+	var sb strings.Builder
+	n := len(md.Closes)
+	if n < 2 || len(md.Highs) != n || len(md.Lows) != n {
+		sb.WriteString("недостаточно свечей\n")
+		return sb.String()
+	}
+	i := n - 1
+	barT := s.barTime(md)
+	span := barSpanMinutes(md.Times)
+	fmt.Fprintf(&sb, "сессия: вход разрешён? %v (бар %v); конец дня? %v\n",
+		s.inSession(barT), barT, s.isDayEnd(barT, span))
+
+	rsi := indicators.RSISeries(md.Closes, s.p.RSIPeriod)
+	if len(rsi) == n {
+		fmt.Fprintf(&sb, "RSI(%d) пред %.1f тек %.1f; вход-крест вниз через %.0f? %v; выход-крест вверх через %.0f? %v\n",
+			s.p.RSIPeriod, rsi[i-1], rsi[i], s.p.RSILower, crossedDown(rsi, i, s.p.RSILower),
+			s.p.RSIUpper, crossedUp(rsi, i, s.p.RSIUpper))
+	} else {
+		sb.WriteString("RSI: недостаточно истории\n")
+	}
+
+	if fast, slow, ok := s.emaPair(md.Closes); ok {
+		fmt.Fprintf(&sb, "EMA(%d) %.4f vs EMA(%d) %.4f: тренд вверх? %v\n",
+			s.p.EMAFast, fast[i], s.p.EMASlow, slow[i], fast[i] > slow[i])
+	} else {
+		sb.WriteString("EMA: не прогрето\n")
+	}
+
+	if s.p.StopATR > 0 {
+		atr := indicators.ATR(md.Highs, md.Lows, md.Closes, s.p.ATRPeriod)
+		fmt.Fprintf(&sb, "стоп: вход − %.2f×ATR (ATR=%.4f)\n", s.p.StopATR, atr)
+	} else {
+		sb.WriteString("стоп: выключен (StopATR=0)\n")
+	}
+
+	if md.Position == nil {
+		fmt.Fprintf(&sb, "удержание: позиции нет; тайм-стоп %s\n", holdLabel(s.p.MaxHoldBars))
+	} else {
+		fmt.Fprintf(&sb, "удержание: %d баров; тайм-стоп %s\n", s.barsHeld(md), holdLabel(s.p.MaxHoldBars))
+	}
+	return sb.String()
+}
+
+// holdLabel renders the time stop for Explain: the bar count when armed, "выключен" when off.
+func holdLabel(v int) string {
+	if v <= 0 {
+		return "выключен"
+	}
+	return fmt.Sprintf("%d баров", v)
 }

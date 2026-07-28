@@ -2,6 +2,7 @@ package core
 
 import (
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -231,5 +232,158 @@ func TestEnterRejectsShortHistory(t *testing.T) {
 	md := barSeries([]float64{100, 99}, time.Date(2026, 6, 1, 11, 0, 0, 0, msk))
 	if got := s.Decide(md); got.Kind != model.SignalNone {
 		t.Fatalf("Kind = %v, want None on a two-bar series", got.Kind)
+	}
+}
+
+// withPosition attaches an open long entered heldBars bars before the last bar of md.
+func withPosition(md strategy.MarketData, entryPrice, stop float64, heldBars int) strategy.MarketData {
+	last := md.Times[len(md.Times)-1]
+	md.Position = &strategy.Position{
+		PurchasePrice: entryPrice,
+		StopLoss:      stop,
+		EntryATR:      entryPrice * 0.003,
+		EntryTime:     last.Add(-time.Duration(heldBars) * 30 * time.Minute),
+	}
+	return md
+}
+
+func TestExitStopLoss(t *testing.T) {
+	s := NewWithParams("T", DefaultParams())
+	md := entryFixture()
+	i := len(md.Closes) - 1
+	// Stop sits just above the bar's low: the stop must fire.
+	stop := md.Lows[i] * 1.0001
+	md = withPosition(md, md.Closes[i]*1.02, stop, 1)
+	got := s.Decide(md)
+	if got.Kind != model.SignalSell || got.Reason != "SL" {
+		t.Fatalf("Kind/Reason = %v/%q, want Sell/SL", got.Kind, got.Reason)
+	}
+	if math.Abs(got.StopLoss-stop) > 1e-9 {
+		t.Fatalf("StopLoss = %v, want the frozen position stop %v", got.StopLoss, stop)
+	}
+}
+
+// upperCrossFixture builds an uptrend whose LAST bar pushes RSI(4) above the upper band.
+//
+// The 1.010 up-tick from the plan's literal fixture only reaches RSI(4)=69.95 on the last bar —
+// just short of the 70 upper band, so no cross fires. Verified by an offline run of
+// indicators.RSISeries over this exact shape (not eyeballed): 1.012 clears it cleanly, with
+// rsi[n-2]=55.32 (<=70, not yet crossed) and rsi[n-1]=73.53 (>70, crossed).
+func upperCrossFixture() strategy.MarketData {
+	closes := make([]float64, 0, 410)
+	p := 100.0
+	for i := 0; i < 400; i++ {
+		p *= 1.0008
+		closes = append(closes, p)
+	}
+	// Three down bars pull RSI below the upper band, then two sharp up bars push it back above.
+	for i := 0; i < 3; i++ {
+		p *= 0.994
+		closes = append(closes, p)
+	}
+	for i := 0; i < 2; i++ {
+		p *= 1.012
+		closes = append(closes, p)
+	}
+	last := time.Date(2026, 6, 1, 14, 0, 0, 0, msk)
+	start := last.Add(-time.Duration(len(closes)-1) * 30 * time.Minute)
+	return barSeries(closes, start)
+}
+
+func TestExitOnRSIEnteringUpperBand(t *testing.T) {
+	s := NewWithParams("T", DefaultParams())
+	md := upperCrossFixture()
+	i := len(md.Closes) - 1
+	// Stop far below so only the RSI exit can fire.
+	md = withPosition(md, md.Closes[i]*0.97, md.Lows[i]*0.5, 2)
+	got := s.Decide(md)
+	if got.Kind != model.SignalSell || got.Reason != "RSI" {
+		t.Fatalf("Kind/Reason = %v/%q, want Sell/RSI", got.Kind, got.Reason)
+	}
+}
+
+func TestExitStopWinsOverRSIOnTheSameBar(t *testing.T) {
+	s := NewWithParams("T", DefaultParams())
+	md := upperCrossFixture()
+	i := len(md.Closes) - 1
+	// Stop inside the bar AND the RSI cross on the same bar: SL must win.
+	md = withPosition(md, md.Closes[i]*0.97, md.Lows[i]*1.0001, 2)
+	got := s.Decide(md)
+	if got.Reason != "SL" {
+		t.Fatalf("Reason = %q, want SL to take precedence over RSI", got.Reason)
+	}
+}
+
+func TestExitTimeStop(t *testing.T) {
+	p := DefaultParams()
+	p.MaxHoldBars = 3
+	s := NewWithParams("T", p)
+	md := entryFixture()
+	i := len(md.Closes) - 1
+	md = withPosition(md, md.Closes[i]*0.99, md.Lows[i]*0.5, 3)
+	got := s.Decide(md)
+	if got.Kind != model.SignalSell || got.Reason != "TIME" {
+		t.Fatalf("Kind/Reason = %v/%q, want Sell/TIME after 3 bars", got.Kind, got.Reason)
+	}
+}
+
+func TestExitTimeStopDisabledAtZero(t *testing.T) {
+	p := DefaultParams()
+	p.MaxHoldBars = 0
+	s := NewWithParams("T", p)
+	md := entryFixture()
+	i := len(md.Closes) - 1
+	md = withPosition(md, md.Closes[i]*0.99, md.Lows[i]*0.5, 50)
+	if got := s.Decide(md); got.Kind != model.SignalNone {
+		t.Fatalf("Kind = %v (%q), want None: the time stop is disabled at MaxHoldBars=0", got.Kind, got.Reason)
+	}
+}
+
+func TestExitTimeStopSilentOnUnknownEntryTime(t *testing.T) {
+	p := DefaultParams()
+	p.MaxHoldBars = 1
+	s := NewWithParams("T", p)
+	md := entryFixture()
+	i := len(md.Closes) - 1
+	md = withPosition(md, md.Closes[i]*0.99, md.Lows[i]*0.5, 5)
+	md.Position.EntryTime = time.Time{}
+	if got := s.Decide(md); got.Reason == "TIME" {
+		t.Fatal("TIME fired with an unknown entry time; it must stay silent")
+	}
+}
+
+func TestExitEndOfDay(t *testing.T) {
+	s := NewWithParams("T", DefaultParams())
+	md := entryFixture()
+	shiftTo(&md, time.Date(2026, 6, 1, 22, 30, 0, 0, msk))
+	i := len(md.Closes) - 1
+	md = withPosition(md, md.Closes[i]*0.99, md.Lows[i]*0.5, 2)
+	got := s.Decide(md)
+	if got.Kind != model.SignalSell || got.Reason != "EOD" {
+		t.Fatalf("Kind/Reason = %v/%q, want Sell/EOD on the 22:30 bar", got.Kind, got.Reason)
+	}
+}
+
+func TestExitHoldsThroughTheEveningSession(t *testing.T) {
+	p := DefaultParams()
+	p.MaxHoldBars = 0
+	s := NewWithParams("T", p)
+	md := entryFixture()
+	shiftTo(&md, time.Date(2026, 6, 1, 19, 0, 0, 0, msk))
+	i := len(md.Closes) - 1
+	md = withPosition(md, md.Closes[i]*0.99, md.Lows[i]*0.5, 2)
+	if got := s.Decide(md); got.Kind != model.SignalNone {
+		t.Fatalf("Kind = %v (%q), want None: 19:00 is past the entry window but before DayEndMin",
+			got.Kind, got.Reason)
+	}
+}
+
+func TestExplainMentionsEveryGate(t *testing.T) {
+	s := NewWithParams("T", DefaultParams())
+	out := s.Explain(entryFixture())
+	for _, want := range []string{"сессия", "RSI", "EMA", "стоп", "удержание"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("Explain() is missing %q; got:\n%s", want, out)
+		}
 	}
 }
