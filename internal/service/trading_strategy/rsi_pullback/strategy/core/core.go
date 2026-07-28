@@ -34,19 +34,28 @@ const minLookback = 120
 
 // Params holds every tunable. All fields are int or float64 so reflection grid calibration
 // can sweep them.
+//
+// MaxHoldBars and DayEndMin are no longer read by enter() — the entry side now sizes its stop
+// and target purely off the daily ATR and the two-sided day gate — but manage() and isDayEnd()
+// still depend on them for the bar-count time stop and the EOD force-close, both of which are
+// rebuilt in Task 4. Removing the fields now would break that still-live code, so they stay
+// until Task 4 rebuilds manage() around the daily ATR too.
 type Params struct {
 	RSIPeriod       int     // RSI length (grid; default 4)
 	RSILower        float64 // lower band; a DOWNWARD cross of it is the entry (grid; default 15)
 	RSIUpper        float64 // upper band; an UPWARD cross of it is the exit (grid; default 70)
 	EMAFast         int     // fast EMA period (grid; default 10)
 	EMASlow         int     // slow EMA period (grid; default 100)
-	StopATR         float64 // stop = entry - StopATR*ATR; 0 disables the stop (grid; never 0 in the grid)
-	ATRPeriod       int     // ATR length; used only when StopATR>0
-	MaxHoldBars     int     // time stop in bars; 0 disables it (grid)
+	DailyATRPeriod  int     // daily ATR length, over WEEKDAY completed dailies (grid; default 14)
+	UseDayATRGate   int     // 1 arms the two-sided day gate; any other value disables it (grid; default 1)
+	FreshDayATR     float64 // "day barely started": range so far <= FreshDayATR*dailyATR (grid; default 0.3)
+	SpentDayATR     float64 // "day spent": range so far >= SpentDayATR*dailyATR (grid; default 0.8)
+	StopDailyATR    float64 // stop = entry - StopDailyATR*dailyATR; 0 disables it (grid; never 0 in the grid)
+	TPDailyATR      float64 // target = entry + TPDailyATR*dailyATR; 0 disables it (grid)
+	MaxHoldBars     int     // time stop in bars, read by manage() only; 0 disables it (grid; removed in Task 4)
 	SessionStartMin int     // entry window start, minutes from MSK midnight (420 = 07:00)
 	SessionEndMin   int     // entry window end, minutes from MSK midnight (1020 = 17:00)
-	DayEndMin       int     // day-end force-close boundary, minutes from MSK midnight (1380 = 23:00)
-	DailyATRPeriod  int     // daily ATR length, computed over WEEKDAY completed daily candles (grid; default 14)
+	DayEndMin       int     // day-end force-close boundary, read by manage()/isDayEnd() only (removed in Task 4)
 }
 
 // DefaultParams returns the spec's baseline; swept values come from calibration.
@@ -57,13 +66,16 @@ func DefaultParams() Params {
 		RSIUpper:        70,
 		EMAFast:         10,
 		EMASlow:         100,
-		StopATR:         1.2,
-		ATRPeriod:       14,
+		DailyATRPeriod:  14,
+		UseDayATRGate:   1,
+		FreshDayATR:     0.3,
+		SpentDayATR:     0.8,
+		StopDailyATR:    1.0,
+		TPDailyATR:      0.6,
 		MaxHoldBars:     8,
 		SessionStartMin: 420,
 		SessionEndMin:   1020,
 		DayEndMin:       1380,
-		DailyATRPeriod:  14,
 	}
 }
 
@@ -83,9 +95,11 @@ func (s *Strategy) Ticker() string { return s.ticker }
 // `period` closes, so a window of exactly `period` bars yields a bare seed — and a window
 // SHORTER than the period yields an all-zero series, which silently fails the trend gate for
 // the whole run instead of erroring. Doubling the largest period leaves as many recursion steps
-// as the seed span; the +20 covers the two-bar cross lookups and the ATR's extra bar.
+// as the seed span; the +20 covers the two-bar cross lookups. DailyATRPeriod is excluded: it
+// counts completed DAYS from the separate daily series, not intraday bars, so it does not size
+// this window.
 func (s *Strategy) Lookback() int {
-	need := max(s.p.EMASlow, s.p.EMAFast, s.p.RSIPeriod, s.p.ATRPeriod)
+	need := max(s.p.EMASlow, s.p.EMAFast, s.p.RSIPeriod)
 	return max(minLookback, 2*need+20)
 }
 
@@ -157,6 +171,29 @@ func (s *Strategy) inSession(t time.Time) bool {
 	}
 	m := tl.Hour()*60 + tl.Minute()
 	return m >= s.p.SessionStartMin && m < s.p.SessionEndMin
+}
+
+// dayStateOK reports whether the current day is in one of the two states this strategy trades.
+// Either the day has barely started — its range so far is within FreshDayATR of the daily ATR,
+// so the whole move is still ahead — or the day is spent: the range has already reached
+// SpentDayATR, the sell-off has happened and a further leg down is less likely. The band
+// between the two is refused: there the day has moved meaningfully but is neither fresh nor
+// exhausted. The gate skips itself — never blocks — when disabled, when both thresholds are
+// non-positive, when the thresholds overlap (FreshDayATR >= SpentDayATR makes every day pass
+// anyway) or when the data cannot support it.
+func (s *Strategy) dayStateOK(md strategy.MarketData, atr float64) bool {
+	if s.p.UseDayATRGate != 1 || atr <= 0 {
+		return true
+	}
+	if md.TodayHigh <= 0 || md.TodayLow <= 0 || md.TodayHigh < md.TodayLow {
+		return true
+	}
+	fresh, spent := s.p.FreshDayATR, s.p.SpentDayATR
+	if fresh <= 0 && spent <= 0 {
+		return true
+	}
+	used := md.TodayHigh - md.TodayLow
+	return (fresh > 0 && used <= fresh*atr) || (spent > 0 && used >= spent*atr)
 }
 
 // isDayEnd reports whether the bar opening at t, spanning spanMin minutes, is the last one
@@ -257,30 +294,25 @@ func crossedUp(series []float64, i int, level float64) bool {
 	return i >= 1 && series[i-1] > 0 && series[i-1] <= level && series[i] > level
 }
 
-// Decide routes to entry (flat) or position management (open). The bar span is inferred once
-// here and threaded down: barSpanMinutes sorts a scratch slice, and the calibration sweeps this
-// path millions of times.
+// Decide routes to entry (flat) or position management (open).
 func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 	sig := model.Signal{Ticker: s.ticker, Price: md.Price}
-	span := barSpanMinutes(md.Times)
 	if md.Position != nil {
-		return s.manage(md, sig, span)
+		return s.manage(md, sig)
 	}
-	return s.enter(md, sig, span)
+	return s.enter(md, sig)
 }
 
 // enter emits a long when a short RSI crosses DOWN through its lower band on the current bar
-// while the fast EMA sits above the slow one. Everything is recomputed from md — no state
-// survives between bars.
-func (s *Strategy) enter(md strategy.MarketData, sig model.Signal, span int) model.Signal {
+// while the fast EMA sits above the slow one, the day is either fresh or spent, and the tape
+// is busy. Everything is recomputed from md — no state survives between bars.
+func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal {
 	n := len(md.Closes)
 	if n < 2 || len(md.Highs) != n || len(md.Lows) != n {
 		return sig
 	}
-	// 1. session window, and never on the day-end bar (manage() only runs from the NEXT bar, so
-	// an entry on the day-end bar could not be EOD-closed on its own bar).
-	t := s.barTime(md)
-	if !s.inSession(t) || s.isDayEnd(t, span) {
+	// 1. entry window.
+	if !s.inSession(s.barTime(md)) {
 		return sig
 	}
 	i := n - 1
@@ -294,34 +326,50 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal, span int) mod
 	if !ok || fast[i] <= slow[i] {
 		return sig
 	}
-	// 4. optional ATR stop; a non-positive ATR means the data cannot support the stop, and an
-	// entry without its planned protection is refused.
+	// 4. the daily ATR is the unit of both the stop and the target: no ATR, no trade.
+	atr := s.dailyATR(md)
+	if atr <= 0 {
+		return sig
+	}
+	// 5. the day must be either fresh or spent.
+	if !s.dayStateOK(md, atr) {
+		return sig
+	}
 	entry := md.Closes[i]
-	var stop, atr float64
-	if s.p.StopATR > 0 {
-		atr = indicators.ATR(md.Highs, md.Lows, md.Closes, s.p.ATRPeriod)
-		if atr <= 0 {
-			return sig
-		}
-		stop = entry - s.p.StopATR*atr
+	var stop, target float64
+	if s.p.StopDailyATR > 0 {
+		stop = entry - s.p.StopDailyATR*atr
+	}
+	if s.p.TPDailyATR > 0 {
+		target = entry + s.p.TPDailyATR*atr
 	}
 	sig.Kind = model.SignalBuy
 	sig.StopLoss = stop
+	sig.TakeProfit = target
 	sig.ATR = atr
 	sig.RSI = rsi[i]
-	sig.EntryReason = s.entryReason(rsi[i], fast[i], slow[i], entry, stop, atr)
+	sig.EntryReason = s.entryReason(rsi[i], fast[i], slow[i], entry, stop, target, atr, md)
 	return sig
 }
 
 // entryReason renders the human-readable rationale shown in the trade journal.
-func (s *Strategy) entryReason(rsiNow, fastNow, slowNow, entry, stop, atr float64) string {
-	stopHow := "стоп выключен (StopATR=0)"
-	if s.p.StopATR > 0 {
-		stopHow = fmt.Sprintf("стоп %.4f (вход − %.2f×ATR, ATR=%.4f)", stop, s.p.StopATR, atr)
+func (s *Strategy) entryReason(rsiNow, fastNow, slowNow, entry, stop, target, atr float64, md strategy.MarketData) string {
+	stopHow := "стоп выключен"
+	if stop > 0 {
+		stopHow = fmt.Sprintf("стоп %.4f (−%.2f ATR)", stop, s.p.StopDailyATR)
+	}
+	tpHow := "цель выключена"
+	if target > 0 {
+		tpHow = fmt.Sprintf("цель %.4f (+%.2f ATR)", target, s.p.TPDailyATR)
+	}
+	dayHow := "гейт дня выключен"
+	if s.p.UseDayATRGate == 1 && md.TodayHigh > 0 && md.TodayLow > 0 && atr > 0 {
+		dayHow = fmt.Sprintf("день прошёл %.2f ATR", (md.TodayHigh-md.TodayLow)/atr)
 	}
 	return fmt.Sprintf(
-		"RSI(%d) ушёл под %.0f (%.1f) на откате, EMA(%d) %.4f > EMA(%d) %.4f; вход %.4f, %s",
-		s.p.RSIPeriod, s.p.RSILower, rsiNow, s.p.EMAFast, fastNow, s.p.EMASlow, slowNow, entry, stopHow,
+		"RSI(%d) ушёл под %.0f (%.1f) на откате, EMA(%d) %.4f > EMA(%d) %.4f, %s (дневной ATR %.4f); вход %.4f, %s, %s",
+		s.p.RSIPeriod, s.p.RSILower, rsiNow, s.p.EMAFast, fastNow, s.p.EMASlow, slowNow,
+		dayHow, atr, entry, stopHow, tpHow,
 	)
 }
 
@@ -350,7 +398,11 @@ func (s *Strategy) barsHeld(md strategy.MarketData, span int) int {
 // stop it dies by. RSI fires on an UPWARD cross of RSIUpper — taking the bounce into overbought.
 // RSI/TIME/EOD fill at the bar close; SL fills at the stop level (the engine handles that via
 // model.IsStopReason).
-func (s *Strategy) manage(md strategy.MarketData, sig model.Signal, span int) model.Signal {
+func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal {
+	// Temporary for Task 3: Decide no longer computes span up front (enter() does not need it
+	// any more), so manage() infers it itself. Task 4 rebuilds this method around the daily ATR
+	// and this line goes away with it.
+	span := barSpanMinutes(md.Times)
 	pos := md.Position
 	n := len(md.Closes)
 	if pos == nil || n < 2 || len(md.Highs) != n || len(md.Lows) != n {
@@ -424,12 +476,11 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 		sb.WriteString("EMA: не прогрето\n")
 	}
 
-	if s.p.StopATR > 0 {
-		atr := indicators.ATR(md.Highs, md.Lows, md.Closes, s.p.ATRPeriod)
-		fmt.Fprintf(&sb, "стоп: вход − %.2f×ATR (ATR=%.4f)\n", s.p.StopATR, atr)
-	} else {
-		sb.WriteString("стоп: выключен (StopATR=0)\n")
-	}
+	// Minimal placeholder pending the Task 6 rewrite of Explain around the daily ATR gate: reports
+	// the same daily ATR, stop, target and day-gate verdict enter() now uses.
+	atr := s.dailyATR(md)
+	fmt.Fprintf(&sb, "дневной ATR %.4f; стоп −%.2f×ATR, цель +%.2f×ATR; гейт дня пройден? %v\n",
+		atr, s.p.StopDailyATR, s.p.TPDailyATR, s.dayStateOK(md, atr))
 
 	if md.Position == nil {
 		fmt.Fprintf(&sb, "удержание: позиции нет; тайм-стоп %s\n", holdLabel(s.p.MaxHoldBars))

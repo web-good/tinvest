@@ -80,6 +80,17 @@ func pullbackCloses() []float64 {
 	return out
 }
 
+// withDay attaches a completed weekday daily series (40 days, weekday width `atrWidth`) plus
+// an explicit intraday extent to md, so entry tests can drive the day gate deterministically.
+// The daily ATR of the attached series is exactly atrWidth.
+func withDay(md strategy.MarketData, atrWidth, todayHigh, todayLow float64) strategy.MarketData {
+	last := md.Times[len(md.Times)-1]
+	h, l, c, ts := dailyBars(last, 40, atrWidth, atrWidth/10)
+	md.DailyHighs, md.DailyLows, md.DailyCloses, md.DailyTimes = h, l, c, ts
+	md.TodayHigh, md.TodayLow = todayHigh, todayLow
+	return md
+}
+
 // entryFixture returns market data whose LAST bar is a valid entry bar at 12:00 MSK Monday.
 func entryFixture() strategy.MarketData {
 	closes := pullbackCloses()
@@ -139,9 +150,11 @@ func TestDefaultParams(t *testing.T) {
 	want := Params{
 		RSIPeriod: 4, RSILower: 15, RSIUpper: 70,
 		EMAFast: 10, EMASlow: 100,
-		StopATR: 1.2, ATRPeriod: 14, MaxHoldBars: 8,
-		SessionStartMin: 420, SessionEndMin: 1020, DayEndMin: 1380,
 		DailyATRPeriod: 14,
+		UseDayATRGate:  1, FreshDayATR: 0.3, SpentDayATR: 0.8,
+		StopDailyATR: 1.0, TPDailyATR: 0.6,
+		MaxHoldBars:     8,
+		SessionStartMin: 420, SessionEndMin: 1020, DayEndMin: 1380,
 	}
 	if p != want {
 		t.Fatalf("DefaultParams() = %+v, want %+v", p, want)
@@ -162,13 +175,13 @@ func TestLookbackCoversSlowEMA(t *testing.T) {
 
 func TestEnterBuysThePullback(t *testing.T) {
 	s := NewWithParams("T", DefaultParams())
-	md := entryFixture()
+	md := withDay(entryFixture(), 10.0, 101, 100)
 	got := s.Decide(md)
 	if got.Kind != model.SignalBuy {
 		t.Fatalf("Kind = %v, want Buy (EntryReason %q)", got.Kind, got.EntryReason)
 	}
 	i := len(md.Closes) - 1
-	wantStop := md.Closes[i] - DefaultParams().StopATR*got.ATR
+	wantStop := md.Closes[i] - DefaultParams().StopDailyATR*got.ATR
 	if got.ATR <= 0 {
 		t.Fatalf("ATR = %v, want > 0", got.ATR)
 	}
@@ -308,6 +321,7 @@ func TestEnterAtSessionOpenBoundary(t *testing.T) {
 	md := entryFixture()
 	// 2026-06-01 is a Monday; 07:00 is SessionStartMin (420) to the minute.
 	shiftTo(&md, time.Date(2026, 6, 1, 7, 0, 0, 0, msk))
+	md = withDay(md, 10.0, 101, 100)
 	if got := s.Decide(md); got.Kind != model.SignalBuy {
 		t.Fatalf("Kind = %v, want Buy on the bar opening exactly at SessionStartMin", got.Kind)
 	}
@@ -332,6 +346,114 @@ func TestEnterRejectsShortHistory(t *testing.T) {
 	md := barSeries([]float64{100, 99}, time.Date(2026, 6, 1, 11, 0, 0, 0, msk))
 	if got := s.Decide(md); got.Kind != model.SignalNone {
 		t.Fatalf("Kind = %v, want None on a two-bar series", got.Kind)
+	}
+}
+
+func TestDayStateGateBothBranches(t *testing.T) {
+	p := DefaultParams() // FreshDayATR 0.3, SpentDayATR 0.8
+	s := NewWithParams("TEST", p)
+	const atr = 10.0
+	cases := []struct {
+		name string
+		used float64
+		want bool
+	}{
+		{"день только начался", 1.0, true},
+		{"ровно на границе свежести", 3.0, true},
+		{"чуть выше границы свежести", 3.0001, false},
+		{"мёртвая зона", 5.0, false},
+		{"чуть ниже границы исчерпания", 7.9999, false},
+		{"ровно на границе исчерпания", 8.0, true},
+		{"день исчерпан", 12.0, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			md := strategy.MarketData{TodayHigh: 100 + tc.used, TodayLow: 100}
+			if got := s.dayStateOK(md, atr); got != tc.want {
+				t.Fatalf("used=%.4f: dayStateOK = %v, want %v", tc.used, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestDayStateGateDegradations(t *testing.T) {
+	base := DefaultParams()
+	dead := strategy.MarketData{TodayHigh: 105, TodayLow: 100} // ровно мёртвая зона при atr=10
+
+	off := base
+	off.UseDayATRGate = 0
+	if !NewWithParams("TEST", off).dayStateOK(dead, 10) {
+		t.Fatal("выключенный гейт обязан пропускать")
+	}
+
+	noThresholds := base
+	noThresholds.FreshDayATR, noThresholds.SpentDayATR = 0, 0
+	if !NewWithParams("TEST", noThresholds).dayStateOK(dead, 10) {
+		t.Fatal("гейт без порогов обязан пропускать")
+	}
+
+	degenerate := base
+	degenerate.FreshDayATR, degenerate.SpentDayATR = 0.8, 0.3 // ветки перекрываются
+	if !NewWithParams("TEST", degenerate).dayStateOK(dead, 10) {
+		t.Fatal("вырожденная конфигурация обязана пропускать всё")
+	}
+
+	s := NewWithParams("TEST", base)
+	if !s.dayStateOK(strategy.MarketData{}, 10) {
+		t.Fatal("без TodayHigh/TodayLow гейт обязан пропускать")
+	}
+	if !s.dayStateOK(dead, 0) {
+		t.Fatal("без ATR гейт обязан пропускать (вход отсекается отдельной проверкой)")
+	}
+}
+
+// entryDailyATRStart anchors barSeries(pullbackCloses(), ...) so the LAST of its 405 bars lands
+// well inside the entry session. pullbackCloses() has a fixed length, so the offset from start to
+// the last bar is always exactly 404*30min = 8 days 10 hours: starting at 07:00 (the session
+// open) would land the last bar at exactly 17:00 the following Tuesday — SessionEndMin to the
+// minute, which inSession's `< SessionEndMin` excludes. Starting an hour earlier keeps the last
+// bar at 16:00, comfortably inside the window, without changing which bar is "last" (the RSI
+// cross this fixture relies on is a property of bar order, not of the clock).
+var entryDailyATRStart = time.Date(2026, 3, 2, 6, 0, 0, 0, msk)
+
+func TestEnterSetsStopAndTargetFromDailyATR(t *testing.T) {
+	p := DefaultParams()
+	s := NewWithParams("TEST", p)
+	md := barSeries(pullbackCloses(), entryDailyATRStart)
+	md = withDay(md, 10.0, 101, 100) // used = 1 <= 0.3*10 -> ветка «день только начался»
+
+	sig := s.Decide(md)
+	if sig.Kind != model.SignalBuy {
+		t.Fatalf("Kind = %v, want Buy", sig.Kind)
+	}
+	entry := md.Closes[len(md.Closes)-1]
+	wantStop := entry - p.StopDailyATR*10.0
+	wantTP := entry + p.TPDailyATR*10.0
+	if math.Abs(sig.StopLoss-wantStop) > 1e-9 {
+		t.Fatalf("StopLoss = %.6f, want %.6f", sig.StopLoss, wantStop)
+	}
+	if math.Abs(sig.TakeProfit-wantTP) > 1e-9 {
+		t.Fatalf("TakeProfit = %.6f, want %.6f", sig.TakeProfit, wantTP)
+	}
+	if math.Abs(sig.ATR-10.0) > 1e-9 {
+		t.Fatalf("ATR = %.6f, want 10.0 (дневной)", sig.ATR)
+	}
+}
+
+func TestEnterRefusedWithoutDailyATR(t *testing.T) {
+	s := NewWithParams("TEST", DefaultParams())
+	md := barSeries(pullbackCloses(), entryDailyATRStart) // дневных серий нет вовсе
+	md.TodayHigh, md.TodayLow = 101, 100
+	if sig := s.Decide(md); sig.Kind == model.SignalBuy {
+		t.Fatal("вход без дневного ATR запрещён: нечем выставить стоп и цель")
+	}
+}
+
+func TestEnterBlockedInTheDeadBand(t *testing.T) {
+	s := NewWithParams("TEST", DefaultParams())
+	md := withDay(barSeries(pullbackCloses(), entryDailyATRStart), 10.0, 105, 100) // used = 5, мёртвая зона
+	if sig := s.Decide(md); sig.Kind == model.SignalBuy {
+		t.Fatal("вход в мёртвой зоне гейта запрещён")
 	}
 }
 
@@ -589,13 +711,13 @@ func sliceMD(md strategy.MarketData, from, to int) strategy.MarketData {
 
 // TestNoLookaheadAcrossWindowCuts is the load-bearing safety net: the decision on bar i must not
 // depend on how much history precedes it. Cuts stay far enough from bar i that every indicator
-// is warmed in both windows; the ATR-derived stop is compared with a relative tolerance because
-// indicators.ATR is an unbounded Wilder recursion whose value depends on the warm-up length —
-// but never on future bars. In production the engine always feeds a fixed-length Lookback()
-// window, so this discrepancy cannot arise there.
+// is warmed in both windows. The stop/target are still compared with a relative tolerance for
+// robustness, even though the daily ATR they derive from is untouched by sliceMD (it lives in
+// DailyHighs/DailyLows/DailyCloses, none of which sliceMD trims) and is therefore identical
+// across every cut.
 func TestNoLookaheadAcrossWindowCuts(t *testing.T) {
 	s := NewWithParams("T", DefaultParams())
-	full := entryFixture()
+	full := withDay(entryFixture(), 10.0, 101, 100)
 	n := len(full.Closes)
 
 	// Every cut must drop real history: `from = 0` would compare the full window with itself and
