@@ -1,6 +1,7 @@
 package core
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -167,5 +168,124 @@ func TestEnterRejectedOnFirstSessionOfWindow(t *testing.T) {
 func TestLookbackCoversAFullSession(t *testing.T) {
 	if got := NewWithParams("T", DefaultParams()).Lookback(); got < 300 {
 		t.Fatalf("Lookback = %d want >= 300", got)
+	}
+}
+
+// openAt returns MarketData for a held position entered `heldBars` bars before the last bar.
+func withPosition(md strategy.MarketData, entryPrice, stop float64, heldBars int) strategy.MarketData {
+	last := md.Times[len(md.Times)-1]
+	md.Position = &strategy.Position{
+		PurchasePrice: entryPrice,
+		Quantity:      10,
+		StopLoss:      stop,
+		EntryTime:     last.Add(-time.Duration(heldBars) * 30 * time.Minute),
+	}
+	return md
+}
+
+func TestExitStopWinsOverTargetOnTheSameBar(t *testing.T) {
+	md := setupEntry()
+	i := len(md.Closes) - 1
+	// The bar sweeps both the stop below and the VWAP above.
+	md.Lows[i] = 90
+	md.Highs[i] = 120
+	md = withPosition(md, 99.5, 95, 1)
+	sig := decide(t, DefaultParams(), md)
+	if sig.Kind != model.SignalSell || sig.Reason != "SL" {
+		t.Fatalf("Kind/Reason = %v/%q want Sell/SL", sig.Kind, sig.Reason)
+	}
+	if sig.StopLoss != 95 {
+		t.Fatalf("StopLoss = %v want 95 (frozen at entry)", sig.StopLoss)
+	}
+}
+
+func TestExitTargetIsPreviousBarVWAP(t *testing.T) {
+	md := setupEntry()
+	i := len(md.Closes) - 1
+	md.Highs[i] = 1000 // certainly reaches any target
+	md.Lows[i] = 99
+	md = withPosition(md, 99.5, 1, 1)
+
+	vwap, _, _, ok := NewWithParams("T", DefaultParams()).sessionVWAP(md)
+	if !ok {
+		t.Fatalf("sessionVWAP not usable in the fixture")
+	}
+	sig := decide(t, DefaultParams(), md)
+	if sig.Kind != model.SignalSell || sig.Reason != "TP" {
+		t.Fatalf("Kind/Reason = %v/%q want Sell/TP", sig.Kind, sig.Reason)
+	}
+	if sig.TakeProfit != vwap[i-1] {
+		t.Fatalf("TakeProfit = %v want previous-bar VWAP %v (current bar's is %v)",
+			sig.TakeProfit, vwap[i-1], vwap[i])
+	}
+}
+
+func TestExitTimeStop(t *testing.T) {
+	base := setupEntry()
+	i := len(base.Closes) - 1
+	base.Highs[i] = 99.7 // never reaches the VWAP
+	base.Lows[i] = 99.4
+
+	tests := []struct {
+		name     string
+		held     int
+		maxHold  int
+		wantKind model.SignalKind
+	}{
+		{"not held long enough", 2, 8, model.SignalNone},
+		{"held exactly the limit", 8, 8, model.SignalSell},
+		{"MaxHoldBars<=0 disables", 50, 0, model.SignalNone},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			p := DefaultParams()
+			p.MaxHoldBars = tc.maxHold
+			md := withPosition(base, 99.5, 1, tc.held)
+			sig := decide(t, p, md)
+			if sig.Kind != tc.wantKind {
+				t.Fatalf("Kind = %v want %v", sig.Kind, tc.wantKind)
+			}
+			if tc.wantKind == model.SignalSell && sig.Reason != "TIME" {
+				t.Fatalf("Reason = %q want TIME", sig.Reason)
+			}
+		})
+	}
+}
+
+// A zero EntryTime must NOT be read as "held forever" — the time exit degrades to off.
+func TestExitTimeStopSilentOnUnknownEntryTime(t *testing.T) {
+	md := setupEntry()
+	i := len(md.Closes) - 1
+	md.Highs[i] = 99.7
+	md.Lows[i] = 99.4
+	md = withPosition(md, 99.5, 1, 1)
+	md.Position.EntryTime = time.Time{}
+	if got := decide(t, DefaultParams(), md).Kind; got != model.SignalNone {
+		t.Fatalf("Kind = %v want SignalNone when EntryTime is unknown", got)
+	}
+}
+
+func TestExitEndOfDay(t *testing.T) {
+	md := setupEntry()
+	i := len(md.Closes) - 1
+	md.Highs[i] = 99.7
+	md.Lows[i] = 99.4
+	// Move the last bar to 22:30 MSK: it is the last one before DayEndMin (23:00).
+	md.Times[i] = time.Date(2026, 3, 3, 22, 30, 0, 0, msk)
+	md = withPosition(md, 99.5, 1, 1)
+	p := DefaultParams()
+	p.MaxHoldBars = 0 // isolate the EOD rule
+	sig := decide(t, p, md)
+	if sig.Kind != model.SignalSell || sig.Reason != "EOD" {
+		t.Fatalf("Kind/Reason = %v/%q want Sell/EOD", sig.Kind, sig.Reason)
+	}
+}
+
+func TestExplainMentionsEveryGate(t *testing.T) {
+	out := NewWithParams("T", DefaultParams()).Explain(setupEntry())
+	for _, want := range []string{"сессия", "VWAP", "σ", "MinEdgePct", "дневной тренд", "стоп"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("Explain missing %q; got:\n%s", want, out)
+		}
 	}
 }

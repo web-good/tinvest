@@ -8,7 +8,9 @@ package core
 
 import (
 	"fmt"
+	"math"
 	"sort"
+	"strings"
 	"time"
 
 	"tinvest/internal/domain/ema"
@@ -293,7 +295,119 @@ func (s *Strategy) entryReason(vwapNow, sigmaNow, entry, stop, atr float64) stri
 	)
 }
 
-// manage is filled in by the exits task; a flat no-op keeps the package compiling.
+// barsHeld counts bars from the position's entry to the current bar, purely from EntryTime,
+// the current bar time and the data-inferred span. Returns -1 when either time is unknown, so
+// the TIME exit degrades to "do not fire" instead of closing the position on its first managed
+// bar. Positions never survive the EOD close, so the window is always inside one session and
+// the uniform span is exact.
+func (s *Strategy) barsHeld(md strategy.MarketData) int {
+	pos := md.Position
+	t := s.barTime(md)
+	if pos == nil || pos.EntryTime.IsZero() || t.IsZero() {
+		return -1
+	}
+	span := barSpanMinutes(md.Times)
+	if span <= 0 {
+		return -1
+	}
+	return int(math.Round(t.Sub(pos.EntryTime).Minutes() / float64(span)))
+}
+
+// manage handles an open long, exiting in precedence SL -> TP -> TIME -> EOD.
+//
+// SL is read from the position (frozen at entry) and is checked BEFORE the target: the
+// intrabar order of the two is unknown, so the worst case is assumed. The target is the
+// PREVIOUS bar's session VWAP — the level a resting limit order could have carried into this
+// bar; using the current bar's VWAP would be look-ahead. SL fills at the stop (gap-adjusted by
+// the engine), TP at max(target, open), TIME and EOD at the bar close.
 func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal {
+	pos := md.Position
+	n := len(md.Closes)
+	if pos == nil || n < 2 || len(md.Highs) != n || len(md.Lows) != n {
+		return sig
+	}
+	i := n - 1
+	high, low, closeP := md.Highs[i], md.Lows[i], md.Closes[i]
+
+	// 1. hard stop (always active, checked first by design).
+	if pos.StopLoss > 0 && low <= pos.StopLoss {
+		sig.Kind, sig.Reason = model.SignalSell, "SL"
+		sig.StopLoss = pos.StopLoss
+		sig.ExitReason = fmt.Sprintf("SL: low %.4f ≤ стоп %.4f (вход %.4f)", low, pos.StopLoss, pos.PurchasePrice)
+		return sig
+	}
+	// 2. target — the previous bar's VWAP, reachable intrabar.
+	if vwap, _, _, ok := s.sessionVWAP(md); ok && vwap[i-1] > 0 && high >= vwap[i-1] {
+		sig.Kind, sig.Reason = model.SignalSell, "TP"
+		sig.TakeProfit = vwap[i-1]
+		sig.ExitReason = fmt.Sprintf("TP: high %.4f достиг VWAP предыдущего бара %.4f (вход %.4f)",
+			high, vwap[i-1], pos.PurchasePrice)
+		return sig
+	}
+	// 3. time stop: a reversion that has not happened by now probably will not.
+	if s.p.MaxHoldBars > 0 {
+		if held := s.barsHeld(md); held >= 0 && held >= s.p.MaxHoldBars {
+			sig.Kind, sig.Reason = model.SignalSell, "TIME"
+			sig.ExitReason = fmt.Sprintf("TIME: удержание %d баров ≥ %d, выход по %.4f (вход %.4f)",
+				held, s.p.MaxHoldBars, closeP, pos.PurchasePrice)
+			return sig
+		}
+	}
+	// 4. end of day (always active).
+	if s.isDayEnd(s.barTime(md), barSpanMinutes(md.Times)) {
+		sig.Kind, sig.Reason = model.SignalSell, "EOD"
+		sig.ExitReason = fmt.Sprintf("EOD: закрытие на конец дня по %.4f (вход %.4f)", closeP, pos.PurchasePrice)
+	}
 	return sig
+}
+
+// Explain returns a gate-by-gate verdict for one bar, consumed by the engine's Trace
+// (-explain). It recomputes the same values enter()/manage() do and reports each gate.
+func (s *Strategy) Explain(md strategy.MarketData) string {
+	var sb strings.Builder
+	n := len(md.Closes)
+	if n < 2 || len(md.Highs) != n || len(md.Lows) != n {
+		sb.WriteString("недостаточно свечей\n")
+		return sb.String()
+	}
+	i := n - 1
+	barT := s.barTime(md)
+	span := barSpanMinutes(md.Times)
+	fmt.Fprintf(&sb, "сессия: вход разрешён? %v (бар %v); конец дня? %v\n",
+		s.inSession(barT), barT, s.isDayEnd(barT, span))
+
+	vwap, sigma, bfo, ok := s.sessionVWAP(md)
+	if !ok || vwap[i] <= 0 || sigma[i] <= 0 {
+		sb.WriteString("VWAP: не прогрет (нет времён, нет объёма или окно невалидно)\n")
+		return sb.String()
+	}
+	closeP := md.Closes[i]
+	dev := vwap[i] - closeP
+	fmt.Fprintf(&sb, "бар в сессии №%d (нужно ≥ %d); VWAP %.4f, σ %.4f\n",
+		bfo[i], s.p.MinBarsFromOpen, vwap[i], sigma[i])
+	fmt.Fprintf(&sb, "отклонение вниз %.4f = %.2f×σ; порог входа %.2f×σ? %v; не глубже %.2f×σ? %v\n",
+		dev, dev/sigma[i], s.p.EntryK, dev >= s.p.EntryK*sigma[i],
+		s.p.MaxDevK, s.p.MaxDevK <= 0 || dev <= s.p.MaxDevK*sigma[i])
+	fmt.Fprintf(&sb, "ход до цели %.2f%%; MinEdgePct %.2f%%? %v\n",
+		dev/closeP*100, s.p.MinEdgePct, dev/closeP*100 >= s.p.MinEdgePct)
+	fmt.Fprintf(&sb, "закрытие не в нижней части бара (порог %.2f)? %v\n",
+		s.p.MinClosePos, s.closePosOK(md.Highs[i], md.Lows[i], closeP))
+	if s.p.UseDailyTrend != 1 {
+		sb.WriteString("дневной тренд: гейт выключен (UseDailyTrend=0)\n")
+	} else {
+		fmt.Fprintf(&sb, "дневной тренд: цена выше EMA(%d) по дневкам (дней %d)? %v\n",
+			s.p.DailyEMAPeriod, len(md.DailyCloses), s.dailyTrendOK(md.DailyCloses, closeP))
+	}
+	if s.p.StopATR > 0 {
+		atr := indicators.ATR(md.Highs, md.Lows, md.Closes, s.p.ATRPeriod)
+		fmt.Fprintf(&sb, "ATR(%d) %.4f; стоп %.4f (вход − %.2f×ATR)\n",
+			s.p.ATRPeriod, atr, closeP-s.p.StopATR*atr, s.p.StopATR)
+	} else {
+		sb.WriteString("стоп: выключен (StopATR=0)\n")
+	}
+	if md.Position != nil {
+		fmt.Fprintf(&sb, "позиция открыта: удержано баров %d (лимит %d); цель = VWAP пред. бара %.4f\n",
+			s.barsHeld(md), s.p.MaxHoldBars, vwap[i-1])
+	}
+	return sb.String()
 }
