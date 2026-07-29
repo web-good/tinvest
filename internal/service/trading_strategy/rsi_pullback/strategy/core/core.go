@@ -399,6 +399,14 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	if s.p.StopDailyATR > 0 {
 		stop = entry - s.p.StopDailyATR*atr
 	}
+	// A stop that lands at or below zero is not a floor, it is a naked long: entry minus the
+	// stop distance ate through the whole price. manage() only ever checks pos.StopLoss > 0, so
+	// a non-positive stop here would silently hold the position across nights and weekends with
+	// no protective exit at all. Refuse the entry outright rather than let that through armed
+	// with a target and an RSI exit only.
+	if s.p.StopDailyATR > 0 && stop <= 0 {
+		return sig
+	}
 	if s.p.TPDailyATR > 0 {
 		target = entry + s.p.TPDailyATR*atr
 	}

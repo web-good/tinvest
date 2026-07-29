@@ -204,7 +204,8 @@ func TestEnterBuysThePullback(t *testing.T) {
 // always has what it needs and cannot mask whichever earlier gate the case is meant to isolate.
 // Without that, entryFixture() alone carries no daily series, dailyATR() is 0, and gate 4 rejects
 // every case regardless of what the tweak broke — verified mutationally: before this fix, removing
-// the session gate, the RSI-cross gate or the trend gate from enter() did not fail this test.
+// the session gate, the RSI-cross gate, the trend gate or the volume gate from enter() did not
+// fail this test.
 func TestEnterGates(t *testing.T) {
 	base := DefaultParams()
 	tests := []struct {
@@ -244,6 +245,13 @@ func TestEnterGates(t *testing.T) {
 		}},
 		{"RSI stays above the lower band", func(p *Params, _ *strategy.MarketData) {
 			p.RSILower = 0.5
+		}},
+		{"tape not busier than usual: volume gate", func(_ *Params, md *strategy.MarketData) {
+			// barSeries always boosts the LAST bar's volume 10x so every other case in this table
+			// clears the volume gate by default; flatten it back to the series' flat background so
+			// this case alone exercises gate 6 — pinning that enter() actually calls volumeOK
+			// (volumeOK itself is covered in isolation, but the call site was not).
+			md.Volumes[len(md.Volumes)-1] = 1000
 		}},
 	}
 	for _, tc := range tests {
@@ -467,6 +475,20 @@ func TestEnterRefusedWithoutDailyATR(t *testing.T) {
 	md.TodayHigh, md.TodayLow = 101, 100
 	if sig := s.Decide(md); sig.Kind == model.SignalBuy {
 		t.Fatal("вход без дневного ATR запрещён: нечем выставить стоп и цель")
+	}
+}
+
+// TestEnterRefusesNonPositiveStop: when StopDailyATR*dailyATR eats through the entire entry
+// price, the computed stop lands at or below zero. manage() only ever checks pos.StopLoss > 0,
+// so a non-positive stop here would silently hold a multi-day, multi-night position with no
+// protective exit at all — the entry must be refused instead.
+func TestEnterRefusesNonPositiveStop(t *testing.T) {
+	s := NewWithParams("TEST", DefaultParams())
+	// entryFixture's last close is ~136 (see pullbackCloses); a daily ATR of 200 with the
+	// default StopDailyATR=1.0 makes the stop distance dwarf the entry price.
+	md := withDay(entryFixture(), 200.0, 101, 100)
+	if sig := s.Decide(md); sig.Kind == model.SignalBuy {
+		t.Fatalf("вход с неположительным стопом (ATR=200 » цена входа) должен быть запрещён, StopLoss=%.4f", sig.StopLoss)
 	}
 }
 
