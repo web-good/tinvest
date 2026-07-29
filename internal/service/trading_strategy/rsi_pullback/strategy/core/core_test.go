@@ -198,7 +198,13 @@ func TestEnterBuysThePullback(t *testing.T) {
 	}
 }
 
-// TestEnterGates breaks exactly one precondition at a time and requires no entry.
+// TestEnterGates breaks exactly one precondition at a time and requires no entry. Every case
+// attaches a daily series via withDay (atr=10, TodayHigh/TodayLow=101/100, the same "day just
+// started" shape TestEnterBuysThePullback uses) AFTER the tweak runs, so the daily-ATR gate (4)
+// always has what it needs and cannot mask whichever earlier gate the case is meant to isolate.
+// Without that, entryFixture() alone carries no daily series, dailyATR() is 0, and gate 4 rejects
+// every case regardless of what the tweak broke — verified mutationally: before this fix, removing
+// the session gate, the RSI-cross gate or the trend gate from enter() did not fail this test.
 func TestEnterGates(t *testing.T) {
 	base := DefaultParams()
 	tests := []struct {
@@ -211,9 +217,15 @@ func TestEnterGates(t *testing.T) {
 		{"after the entry window closes", func(_ *Params, md *strategy.MarketData) {
 			shiftTo(md, time.Date(2026, 6, 1, 17, 0, 0, 0, msk))
 		}},
-		{"weekend", func(_ *Params, md *strategy.MarketData) {
+		{"weekend", func(p *Params, md *strategy.MarketData) {
 			// 2026-06-06 is a Saturday.
 			shiftTo(md, time.Date(2026, 6, 6, 12, 0, 0, 0, msk))
+			// volumeOK only ever inspects WEEKDAY bars: on a Saturday last bar it skips straight
+			// past barSeries' boosted last-bar volume (it is a weekend bar) and falls back to the
+			// flat weekday volume behind it, which would ALSO fail the volume gate — confounding
+			// this case with gate 6 instead of isolating gate 1's weekend check. Disable the
+			// volume gate explicitly so only the session gate can block this entry.
+			p.UseVolume = 0
 		}},
 		{"downtrend: fast EMA below slow", func(_ *Params, md *strategy.MarketData) {
 			// Swap in a fixture whose RSI gate passes cleanly (same fresh-cross shape as the
@@ -239,6 +251,7 @@ func TestEnterGates(t *testing.T) {
 			p := base
 			md := entryFixture()
 			tc.tweak(&p, &md)
+			md = withDay(md, 10.0, 101, 100)
 			if got := NewWithParams("T", p).Decide(md); got.Kind != model.SignalNone {
 				t.Fatalf("Kind = %v, want None (reason %q)", got.Kind, got.EntryReason)
 			}
@@ -333,7 +346,9 @@ func TestEnterAtSessionOpenBoundary(t *testing.T) {
 }
 
 // TestEnterCrossIsAnEventNotAState: once RSI already sits below the band on the PREVIOUS bar,
-// there is no fresh cross and therefore no entry.
+// there is no fresh cross and therefore no entry. withDay attaches a daily series so the daily-ATR
+// gate (4) cannot mask the RSI gate (2) this case is meant to isolate — without it, dailyATR()
+// is 0 and gate 4 alone would explain the None verdict regardless of the RSI-cross check.
 func TestEnterCrossIsAnEventNotAState(t *testing.T) {
 	s := NewWithParams("T", DefaultParams())
 	md := entryFixture()
@@ -341,6 +356,7 @@ func TestEnterCrossIsAnEventNotAState(t *testing.T) {
 	last := md.Closes[len(md.Closes)-1] * 0.994
 	md = barSeries(append(md.Closes, last), md.Times[0])
 	shiftTo(&md, time.Date(2026, 6, 1, 12, 30, 0, 0, msk))
+	md = withDay(md, 10.0, 101, 100)
 	if got := s.Decide(md); got.Kind != model.SignalNone {
 		t.Fatalf("Kind = %v, want None: RSI was already below the band on the previous bar", got.Kind)
 	}
