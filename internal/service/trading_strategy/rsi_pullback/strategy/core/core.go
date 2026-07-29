@@ -292,10 +292,13 @@ func (s *Strategy) volumeOK(md strategy.MarketData) bool {
 		if isWeekend(md.Times[i].In(mskLoc)) {
 			continue
 		}
-		checked++
 		if md.Volumes[i] <= 0 {
+			// A non-positive volume is missing data, not a quiet bar: it must never consume a
+			// slot in the lookback window (which would let a run of broken readings starve the
+			// gate down to "no bar to judge" instead of reaching further back for a real one).
 			continue
 		}
+		checked++
 		base, hasSlot := bySlot[slotOf(md.Times[i])]
 		if !hasSlot || base <= 0 {
 			base = flat
@@ -436,7 +439,7 @@ func (s *Strategy) entryReason(rsiNow, fastNow, slowNow, entry, stop, target, at
 		tpHow = fmt.Sprintf("цель %.4f (+%.2f ATR)", target, s.p.TPDailyATR)
 	}
 	dayHow := "гейт дня выключен"
-	if s.p.UseDayATRGate == 1 && md.TodayHigh > 0 && md.TodayLow > 0 && atr > 0 {
+	if s.p.UseDayATRGate == 1 && md.TodayHigh > 0 && md.TodayLow > 0 && md.TodayHigh >= md.TodayLow && atr > 0 {
 		dayHow = fmt.Sprintf("день прошёл %.2f ATR", (md.TodayHigh-md.TodayLow)/atr)
 	}
 	return fmt.Sprintf(
@@ -526,7 +529,7 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 	switch {
 	case s.p.UseDayATRGate != 1:
 		sb.WriteString("состояние дня: гейт выключен (UseDayATRGate=0)\n")
-	case atr <= 0 || md.TodayHigh <= 0 || md.TodayLow <= 0:
+	case atr <= 0 || md.TodayHigh <= 0 || md.TodayLow <= 0 || md.TodayHigh < md.TodayLow:
 		sb.WriteString("состояние дня: нет данных, гейт пропускает\n")
 	default:
 		used := (md.TodayHigh - md.TodayLow) / atr

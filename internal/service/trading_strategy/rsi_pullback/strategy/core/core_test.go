@@ -945,6 +945,27 @@ func TestVolumeGateIgnoresWeekendBars(t *testing.T) {
 	}
 }
 
+// TestVolumeGateSkipsBrokenReadingsInsteadOfBlocking: bars with non-positive volume are missing
+// data, not "checked and quiet" bars. Before the fix, each such bar still consumed a slot of
+// VolLookbackBars, so a run of broken readings could exhaust the window and block the entry
+// outright even with a genuinely busy bar sitting right behind them — violating volumeOK's own
+// "missing volume must never block an entry" contract.
+func TestVolumeGateSkipsBrokenReadingsInsteadOfBlocking(t *testing.T) {
+	p := DefaultParams()
+	p.VolBaseDays, p.VolLookbackBars, p.VolMult = 5, 3, 1.5
+	s := NewWithParams("TEST", p)
+	md := volSeries(time.Date(2026, 3, 2, 0, 0, 0, 0, msk), 6, 8, 10000, 1000)
+	last := len(md.Volumes) - 1
+
+	md.Volumes[last] = 0
+	md.Volumes[last-1] = -5
+	md.Volumes[last-2] = 0
+	md.Volumes[last-3] = 2000 // 2x its own slot base (1000): would open the gate if reached.
+	if !s.volumeOK(md) {
+		t.Fatal("нулевые/битые объёмы не должны занимать место в окне и блокировать вход")
+	}
+}
+
 func TestVolumeGateDegradations(t *testing.T) {
 	base := DefaultParams()
 	base.VolBaseDays, base.VolLookbackBars, base.VolMult = 5, 3, 1.5
