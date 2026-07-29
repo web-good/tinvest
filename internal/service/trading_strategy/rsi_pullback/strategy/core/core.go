@@ -217,7 +217,7 @@ func crossedDown(series []float64, i int, level float64) bool {
 // cross that starts from it. That asymmetry is intentional and safe. The suppressed case needs
 // an up-bar worth several average losses right after an unbroken losing streak while a long is
 // open — a position that would almost certainly have hit its stop first — and the cost is
-// bounded: the exit is only delayed, SL/TIME/EOD stay armed. Dropping the guard would instead
+// bounded: the exit is only delayed, SL/TP stay armed. Dropping the guard would instead
 // let an RSISeries warm-up zero manufacture an exit out of nothing. Pinned by
 // TestCrossHelpersBoundaries.
 func crossedUp(series []float64, i int, level float64) bool {
