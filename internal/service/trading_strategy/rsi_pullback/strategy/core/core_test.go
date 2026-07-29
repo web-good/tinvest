@@ -157,9 +157,9 @@ func TestDefaultParams(t *testing.T) {
 		EMAFast: 10, EMASlow: 100,
 		DailyATRPeriod: 14,
 		UseDayATRGate:  1, FreshDayATR: 0.3, SpentDayATR: 0.8,
-		StopDailyATR: 1.0, TPDailyATR: 0.6,
+		StopDailyATR: 0.5, TPDailyATR: 0.6,
 		SessionStartMin: 420, SessionEndMin: 1020,
-		UseVolume: 1, VolBaseDays: 5, VolLookbackBars: 3, VolMult: 1.5,
+		UseVolume: 0, VolBaseDays: 5, VolLookbackBars: 3, VolMult: 1.5,
 	}
 	if p != want {
 		t.Fatalf("DefaultParams() = %+v, want %+v", p, want)
@@ -246,11 +246,13 @@ func TestEnterGates(t *testing.T) {
 		{"RSI stays above the lower band", func(p *Params, _ *strategy.MarketData) {
 			p.RSILower = 0.5
 		}},
-		{"tape not busier than usual: volume gate", func(_ *Params, md *strategy.MarketData) {
-			// barSeries always boosts the LAST bar's volume 10x so every other case in this table
-			// clears the volume gate by default; flatten it back to the series' flat background so
-			// this case alone exercises gate 6 — pinning that enter() actually calls volumeOK
-			// (volumeOK itself is covered in isolation, but the call site was not).
+		{"tape not busier than usual: volume gate", func(p *Params, md *strategy.MarketData) {
+			// The gate ships disabled (UseVolume=0 in DefaultParams), so arm it here — this case
+			// exists to pin that enter() actually calls volumeOK, which only matters when the
+			// gate is on. barSeries always boosts the LAST bar's volume 10x so every other case
+			// in this table would clear the gate anyway; flatten it back to the series' flat
+			// background so gate 6 is the only thing that can reject this entry.
+			p.UseVolume = 1
 			md.Volumes[len(md.Volumes)-1] = 1000
 		}},
 	}
@@ -483,9 +485,11 @@ func TestEnterRefusedWithoutDailyATR(t *testing.T) {
 // so a non-positive stop here would silently hold a multi-day, multi-night position with no
 // protective exit at all — the entry must be refused instead.
 func TestEnterRefusesNonPositiveStop(t *testing.T) {
-	s := NewWithParams("TEST", DefaultParams())
-	// entryFixture's last close is ~136 (see pullbackCloses); a daily ATR of 200 with the
-	// default StopDailyATR=1.0 makes the stop distance dwarf the entry price.
+	p := DefaultParams()
+	p.StopDailyATR = 1.0 // pinned here, not inherited: the case is about the stop maths, not the default
+	s := NewWithParams("TEST", p)
+	// entryFixture's last close is ~136 (see pullbackCloses); a daily ATR of 200 at
+	// StopDailyATR=1.0 makes the stop distance dwarf the entry price.
 	md := withDay(entryFixture(), 200.0, 101, 100)
 	if sig := s.Decide(md); sig.Kind == model.SignalBuy {
 		t.Fatalf("вход с неположительным стопом (ATR=200 » цена входа) должен быть запрещён, StopLoss=%.4f", sig.StopLoss)
@@ -865,7 +869,8 @@ func volSeries(firstDay time.Time, days, perDay int, openVol, midVol int64) stra
 
 func TestVolumeGateComparesAgainstItsOwnSlot(t *testing.T) {
 	p := DefaultParams()
-	p.VolBaseDays, p.VolLookbackBars, p.VolMult = 5, 3, 1.5
+	// The gate is armed explicitly: these cases test its mechanics, not whether it ships on.
+	p.UseVolume, p.VolBaseDays, p.VolLookbackBars, p.VolMult = 1, 5, 3, 1.5
 	s := NewWithParams("TEST", p)
 
 	// Профиль: открытие 10000, середина дня 1000. Текущий бар — середина дня с объёмом 2000:
@@ -890,7 +895,8 @@ func TestVolumeGateComparesAgainstItsOwnSlot(t *testing.T) {
 
 func TestVolumeGateAnyOfTheLastThreeBars(t *testing.T) {
 	p := DefaultParams()
-	p.VolBaseDays, p.VolLookbackBars, p.VolMult = 5, 3, 1.5
+	// The gate is armed explicitly: these cases test its mechanics, not whether it ships on.
+	p.UseVolume, p.VolBaseDays, p.VolLookbackBars, p.VolMult = 1, 5, 3, 1.5
 	s := NewWithParams("TEST", p)
 	md := volSeries(time.Date(2026, 3, 2, 0, 0, 0, 0, msk), 6, 8, 10000, 1000)
 	last := len(md.Volumes) - 1
@@ -912,7 +918,8 @@ func TestVolumeGateAnyOfTheLastThreeBars(t *testing.T) {
 
 func TestVolumeGateIgnoresWeekendBars(t *testing.T) {
 	p := DefaultParams()
-	p.VolBaseDays, p.VolLookbackBars, p.VolMult = 5, 3, 1.5
+	// The gate is armed explicitly: these cases test its mechanics, not whether it ships on.
+	p.UseVolume, p.VolBaseDays, p.VolLookbackBars, p.VolMult = 1, 5, 3, 1.5
 	s := NewWithParams("TEST", p)
 	const perDay = 8
 	md := volSeries(time.Date(2026, 3, 2, 0, 0, 0, 0, msk), 6, perDay, 10000, 1000)
@@ -961,7 +968,8 @@ func TestVolumeGateIgnoresWeekendBars(t *testing.T) {
 // "missing volume must never block an entry" contract.
 func TestVolumeGateSkipsBrokenReadingsInsteadOfBlocking(t *testing.T) {
 	p := DefaultParams()
-	p.VolBaseDays, p.VolLookbackBars, p.VolMult = 5, 3, 1.5
+	// The gate is armed explicitly: these cases test its mechanics, not whether it ships on.
+	p.UseVolume, p.VolBaseDays, p.VolLookbackBars, p.VolMult = 1, 5, 3, 1.5
 	s := NewWithParams("TEST", p)
 	md := volSeries(time.Date(2026, 3, 2, 0, 0, 0, 0, msk), 6, 8, 10000, 1000)
 	last := len(md.Volumes) - 1
@@ -977,7 +985,8 @@ func TestVolumeGateSkipsBrokenReadingsInsteadOfBlocking(t *testing.T) {
 
 func TestVolumeGateDegradations(t *testing.T) {
 	base := DefaultParams()
-	base.VolBaseDays, base.VolLookbackBars, base.VolMult = 5, 3, 1.5
+	// Armed explicitly: each case below turns exactly one knob off, so the baseline must be on.
+	base.UseVolume, base.VolBaseDays, base.VolLookbackBars, base.VolMult = 1, 5, 3, 1.5
 	quiet := volSeries(time.Date(2026, 3, 2, 0, 0, 0, 0, msk), 6, 8, 10000, 1000)
 
 	off := base
