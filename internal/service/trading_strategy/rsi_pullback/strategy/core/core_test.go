@@ -153,16 +153,31 @@ func downtrendFixture() strategy.MarketData {
 func TestDefaultParams(t *testing.T) {
 	p := DefaultParams()
 	want := Params{
-		RSIPeriod: 4, RSILower: 15, RSIUpper: 70,
+		RSIPeriod: 4, RSILower: 30, RSIUpper: 70,
 		EMAFast: 10, EMASlow: 100,
 		DailyATRPeriod: 14,
-		UseDayATRGate:  1, FreshDayATR: 0.3, SpentDayATR: 0.8,
+		UseDayATRGate:  1, FreshDayATR: 0, SpentDayATR: 0.8,
 		StopDailyATR: 0.5, TPDailyATR: 0.6,
-		UseVolume: 0, VolBaseDays: 5, VolLookbackBars: 3, VolMult: 1.5,
+		UseVolume: 0, VolBaseDays: 14, VolLookbackBars: 3, VolMult: 1.2,
 	}
 	if p != want {
 		t.Fatalf("DefaultParams() = %+v, want %+v", p, want)
 	}
+}
+
+// entryParams returns the parameters the entry fixtures were BUILT for, not whatever ships in
+// DefaultParams today. entryFixture()'s RSI drops from ~15.6 to ~11.1 on the last bar, and
+// withDay(md, 10, 101, 100) reports a day that has used 0.1 of its daily ATR — so the fixtures
+// only reach enter()'s later gates while the lower band sits at 15 and the "day barely started"
+// branch is armed. Calibration moves both numbers in the shipped defaults; inheriting them here
+// would silently turn every entry test into a vacuous "None for some other reason" — exactly the
+// failure a mutation run caught in these tests once already. Tests that are ABOUT the defaults
+// (TestDefaultParams) or about a gate's own mechanics set their values themselves.
+func entryParams() Params {
+	p := DefaultParams()
+	p.RSILower = 15
+	p.FreshDayATR = 0.3
+	return p
 }
 
 func TestLookbackCoversSlowEMA(t *testing.T) {
@@ -178,14 +193,14 @@ func TestLookbackCoversSlowEMA(t *testing.T) {
 }
 
 func TestEnterBuysThePullback(t *testing.T) {
-	s := NewWithParams("T", DefaultParams())
+	s := NewWithParams("T", entryParams())
 	md := withDay(entryFixture(), 10.0, 101, 100)
 	got := s.Decide(md)
 	if got.Kind != model.SignalBuy {
 		t.Fatalf("Kind = %v, want Buy (EntryReason %q)", got.Kind, got.EntryReason)
 	}
 	i := len(md.Closes) - 1
-	wantStop := md.Closes[i] - DefaultParams().StopDailyATR*got.ATR
+	wantStop := md.Closes[i] - entryParams().StopDailyATR*got.ATR
 	if got.ATR <= 0 {
 		t.Fatalf("ATR = %v, want > 0", got.ATR)
 	}
@@ -206,7 +221,7 @@ func TestEnterBuysThePullback(t *testing.T) {
 // the weekday gate, the RSI-cross gate, the trend gate or the volume gate from enter() did not
 // fail this test.
 func TestEnterGates(t *testing.T) {
-	base := DefaultParams()
+	base := entryParams()
 	tests := []struct {
 		name  string
 		tweak func(p *Params, md *strategy.MarketData)
@@ -347,7 +362,7 @@ func TestEnterHasNoTimeOfDayWindow(t *testing.T) {
 		time.Date(2026, 6, 1, 23, 30, 0, 0, msk),
 	} {
 		t.Run(at.Format("15:04"), func(t *testing.T) {
-			s := NewWithParams("T", DefaultParams())
+			s := NewWithParams("T", entryParams())
 			md := entryFixture()
 			shiftTo(&md, at)
 			md = withDay(md, 10.0, 101, 100)
@@ -385,7 +400,12 @@ func TestEnterRejectsShortHistory(t *testing.T) {
 }
 
 func TestDayStateGateBothBranches(t *testing.T) {
-	p := DefaultParams() // FreshDayATR 0.3, SpentDayATR 0.8
+	p := DefaultParams()
+	// Both branches are armed here explicitly: this test is about the gate's geometry — two
+	// windows and the dead band between them — not about which branch the shipped defaults
+	// happen to enable. Collapsing a branch is a legitimate calibration choice (FreshDayATR = 0
+	// disables the early one); TestDayStateGateDegradations covers those cases.
+	p.UseDayATRGate, p.FreshDayATR, p.SpentDayATR = 1, 0.3, 0.8
 	s := NewWithParams("TEST", p)
 	const atr = 10.0
 	cases := []struct {
@@ -433,6 +453,34 @@ func TestDayStateGateDegradations(t *testing.T) {
 		t.Fatal("вырожденная конфигурация обязана пропускать всё")
 	}
 
+	// Схлопывание одной ветки — рабочий приём калибровки (data/params/rsi_pullback/cal_day_spent.json),
+	// а не вырожденный случай: FreshDayATR = 0 оставляет только «день исчерпан». Держится это на
+	// условии `fresh > 0 &&` в dayStateOK: без него `used <= 0*atr` пропускало бы день с нулевым
+	// диапазоном, то есть ровно самое начало дня — тот вход, который отключением и убирали.
+	spentOnly := base
+	spentOnly.UseDayATRGate, spentOnly.FreshDayATR, spentOnly.SpentDayATR = 1, 0, 0.8
+	sSpent := NewWithParams("TEST", spentOnly)
+	for _, used := range []float64{0, 1, 5, 7.9999} {
+		md := strategy.MarketData{TodayHigh: 100 + used, TodayLow: 100}
+		if sSpent.dayStateOK(md, 10) {
+			t.Fatalf("FreshDayATR=0: день, прошедший %.4f ATR, обязан быть отклонён", used)
+		}
+	}
+	if !sSpent.dayStateOK(strategy.MarketData{TodayHigh: 109, TodayLow: 100}, 10) {
+		t.Fatal("FreshDayATR=0: исчерпанный день обязан проходить")
+	}
+
+	// Симметрично: SpentDayATR = 0 оставляет только ветку «день только начался».
+	freshOnly := base
+	freshOnly.UseDayATRGate, freshOnly.FreshDayATR, freshOnly.SpentDayATR = 1, 0.3, 0
+	sFresh := NewWithParams("TEST", freshOnly)
+	if !sFresh.dayStateOK(strategy.MarketData{TodayHigh: 101, TodayLow: 100}, 10) {
+		t.Fatal("SpentDayATR=0: свежий день обязан проходить")
+	}
+	if sFresh.dayStateOK(strategy.MarketData{TodayHigh: 120, TodayLow: 100}, 10) {
+		t.Fatal("SpentDayATR=0: исчерпанный день обязан быть отклонён")
+	}
+
 	s := NewWithParams("TEST", base)
 	if !s.dayStateOK(strategy.MarketData{}, 10) {
 		t.Fatal("без TodayHigh/TodayLow гейт обязан пропускать")
@@ -449,8 +497,44 @@ func TestDayStateGateDegradations(t *testing.T) {
 // longer matters (see TestEnterHasNoTimeOfDayWindow); the weekday does.
 var entryDailyATRStart = time.Date(2026, 3, 2, 6, 0, 0, 0, msk)
 
-func TestEnterSetsStopAndTargetFromDailyATR(t *testing.T) {
+// shallowPullbackCloses is pullbackCloses with a THREE-bar shock instead of five: RSI(4) then
+// reads 33.9 on the previous bar and 22.6 on the last, a clean downward cross of the shipped
+// RSILower = 30 (the five-bar shock overshoots — it is already at 15.6 before the last bar, so
+// no cross of 30 lands on bar i). Multipliers come from a sweep over indicators.RSISeries, not
+// from eyeballing.
+func shallowPullbackCloses() []float64 {
+	const rise = 400
+	out := make([]float64, 0, rise+3)
+	p := 100.0
+	for i := 0; i < rise; i++ {
+		p *= 1.0008
+		out = append(out, p)
+	}
+	for i := 0; i < 3; i++ {
+		p *= 0.998
+		out = append(out, p)
+	}
+	return out
+}
+
+// TestShippedDefaultsCanEnter is the counterweight to entryParams(): every other entry test pins
+// its own band and day branch, so none of them would notice if DefaultParams drifted into a
+// combination that can never fire at all (e.g. a day gate whose only armed branch contradicts the
+// entry conditions). This one runs the defaults exactly as they ship — RSILower = 30, the
+// spent-day branch, volume gate off — against a series and a day shaped to satisfy them, and
+// requires an actual Buy.
+func TestShippedDefaultsCanEnter(t *testing.T) {
 	p := DefaultParams()
+	md := barSeries(shallowPullbackCloses(), entryDailyATRStart)
+	// used = 9 >= SpentDayATR(0.8) * 10 -> the "day is spent" branch, the only one armed by default.
+	md = withDay(md, 10.0, 109, 100)
+	if got := NewWithParams("T", p).Decide(md); got.Kind != model.SignalBuy {
+		t.Fatalf("Kind = %v, want Buy: the shipped defaults must be able to enter at all", got.Kind)
+	}
+}
+
+func TestEnterSetsStopAndTargetFromDailyATR(t *testing.T) {
+	p := entryParams()
 	s := NewWithParams("TEST", p)
 	md := barSeries(pullbackCloses(), entryDailyATRStart)
 	md = withDay(md, 10.0, 101, 100) // used = 1 <= 0.3*10 -> ветка «день только начался»
@@ -723,7 +807,7 @@ func sliceMDFull(md strategy.MarketData, from, to, dailyFrom int) strategy.Marke
 // DailyHighs/DailyLows/DailyCloses, none of which sliceMD trims) and is therefore identical
 // across every cut.
 func TestNoLookaheadAcrossWindowCuts(t *testing.T) {
-	s := NewWithParams("T", DefaultParams())
+	s := NewWithParams("T", entryParams())
 	full := withDay(entryFixture(), 10.0, 101, 100)
 	n := len(full.Closes)
 

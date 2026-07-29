@@ -47,20 +47,20 @@ type Params struct {
 func DefaultParams() Params {
 	return Params{
 		RSIPeriod:       4,
-		RSILower:        15,
+		RSILower:        30,
 		RSIUpper:        70,
 		EMAFast:         10,
 		EMASlow:         100,
 		DailyATRPeriod:  14,
 		UseDayATRGate:   1,
-		FreshDayATR:     0.3,
+		FreshDayATR:     0,
 		SpentDayATR:     0.8,
 		StopDailyATR:    0.5,
 		TPDailyATR:      0.6,
 		UseVolume:       0,
-		VolBaseDays:     5,
+		VolBaseDays:     14,
 		VolLookbackBars: 3,
-		VolMult:         1.5,
+		VolMult:         1.2,
 	}
 }
 
