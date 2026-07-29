@@ -1,12 +1,12 @@
 {
-  "_comment": "rsi_pullback phased grid. Phase 1 (entry) sweeps the entry geometry: the RSI length and the lower band whose DOWNWARD cross opens the trade. Phase 2 (trend) sweeps the EMA pair that gates the entry. Phase 3 (exit) sweeps the upper band whose UPWARD cross closes the trade. Phase 4 (risk) sweeps the ATR stop multiplier — 0 is deliberately ABSENT: calibration must never be able to trade without a stop, even though the core supports StopATR=0. Phase 5 (hold) sweeps the time stop, whose 0 IS a real control point (time stop off). RunPhases expands each phase over the previous phase's keepTop seeds: 12 + 9 + 3 + 4 + 4 = 32 combos. The session bounds (SessionStartMin/SessionEndMin/DayEndMin) and ATRPeriod are fixed by the strategy definition and are deliberately NOT swept. Judge on pooled OOS profit factor from a walk-forward, never on the in-sample best.",
+  "_comment": "rsi_pullback phased grid. Phase 1 (entry) sweeps the pullback trigger: RSI length and the lower band a DOWNWARD cross of which opens the trade. Phase 2 (trend) sweeps the EMA pair that must confirm an uptrend. Phase 3 (day) sweeps the two-sided day gate: entries are allowed either while the day is barely started (range <= FreshDayATR*dailyATR) or after it is spent (range >= SpentDayATR*dailyATR), never in between; UseDayATRGate=0 turns the whole gate off, and at 0 the Fresh/Spent values collapse to one identical control config, so duplicate leaderboard rows are expected. Phase 4 (volume) sweeps the slot-based volume-background gate, UseVolume=0 = off, with the same duplicate-row caveat. Phase 5 (risk) sweeps the stop and the target, both in daily-ATR units; TPDailyATR values above StopDailyATR are included on purpose so calibration can test whether the 0.6:1 reward-to-risk actually pays. StopDailyATR=0 is deliberately ABSENT: multi-day holding without a stop is not an option calibration may choose. Phase 6 (exit) sweeps the RSI band whose upward cross closes the trade. The session bounds and the daily ATR period are fixed by the strategy definition and NOT swept. RunPhases expands each phase over the previous phase's keepTop seeds: 9 + 6x9 + 5x12 + 5x12 + 4x9 + 4x3 = up to 231 backtest evaluations (fewer when minTrades floors a phase's ranking below keepTop). Judge on pooled OOS profit factor from a walk-forward, never on the in-sample best.",
   "phases": [
     {
       "name": "entry",
       "keepTop": 6,
       "grid": {
         "RSIPeriod": [4, 5, 6],
-        "RSILower": [5, 10, 15, 20]
+        "RSILower": [10, 15, 20]
       }
     },
     {
@@ -18,23 +18,35 @@
       }
     },
     {
-      "name": "exit",
+      "name": "day",
       "keepTop": 5,
       "grid": {
-        "RSIUpper": [60, 70, 80]
+        "UseDayATRGate": [0, 1],
+        "FreshDayATR": [0.3, 0.5],
+        "SpentDayATR": [0.8, 1.0, 1.3]
+      }
+    },
+    {
+      "name": "volume",
+      "keepTop": 4,
+      "grid": {
+        "UseVolume": [0, 1],
+        "VolMult": [1.2, 1.5, 2.0],
+        "VolBaseDays": [5, 10]
       }
     },
     {
       "name": "risk",
-      "keepTop": 5,
+      "keepTop": 4,
       "grid": {
-        "StopATR": [0.8, 1.2, 1.6, 2.0]
+        "StopDailyATR": [0.8, 1.0, 1.3],
+        "TPDailyATR": [0.6, 1.0, 1.5]
       }
     },
     {
-      "name": "hold",
+      "name": "exit",
       "grid": {
-        "MaxHoldBars": [0, 4, 8, 12]
+        "RSIUpper": [60, 70, 80]
       }
     }
   ]

@@ -502,17 +502,40 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 		sb.WriteString("EMA: не прогрето\n")
 	}
 
-	// Minimal placeholder pending the Task 6 rewrite of Explain around the daily ATR gate: reports
-	// the same daily ATR, stop, target and day-gate verdict enter() now uses.
 	atr := s.dailyATR(md)
-	fmt.Fprintf(&sb, "дневной ATR %.4f; стоп −%.2f×ATR, цель +%.2f×ATR; гейт дня пройден? %v\n",
-		atr, s.p.StopDailyATR, s.p.TPDailyATR, s.dayStateOK(md, atr))
-
-	if md.Position == nil {
-		sb.WriteString("удержание: позиции нет; ограничения по времени нет\n")
+	if atr > 0 {
+		fmt.Fprintf(&sb, "дневной ATR(%d) по будням: %.4f\n", s.p.DailyATRPeriod, atr)
 	} else {
-		fmt.Fprintf(&sb, "удержание: без ограничения по времени; SL %.4f, TP %.4f (вход %.4f)\n",
-			md.Position.StopLoss, md.Position.TakeProfit, md.Position.PurchasePrice)
+		sb.WriteString("дневной ATR: не посчитан — вход невозможен\n")
+	}
+
+	switch {
+	case s.p.UseDayATRGate != 1:
+		sb.WriteString("состояние дня: гейт выключен (UseDayATRGate=0)\n")
+	case atr <= 0 || md.TodayHigh <= 0 || md.TodayLow <= 0:
+		sb.WriteString("состояние дня: нет данных, гейт пропускает\n")
+	default:
+		used := (md.TodayHigh - md.TodayLow) / atr
+		fmt.Fprintf(&sb, "состояние дня: пройдено %.2f ATR (свежий ≤%.2f, исчерпан ≥%.2f); пройден? %v\n",
+			used, s.p.FreshDayATR, s.p.SpentDayATR, s.dayStateOK(md, atr))
+	}
+
+	if s.p.UseVolume != 1 {
+		sb.WriteString("фон объёмов: гейт выключен (UseVolume=0)\n")
+	} else {
+		fmt.Fprintf(&sb, "фон объёмов: хотя бы один из %d баров ≥ %.2f× своего слота за %d дней? %v\n",
+			s.p.VolLookbackBars, s.p.VolMult, s.p.VolBaseDays, s.volumeOK(md))
+	}
+
+	if s.p.StopDailyATR > 0 && atr > 0 {
+		fmt.Fprintf(&sb, "стоп: вход − %.2f×ATR (%.4f)\n", s.p.StopDailyATR, s.p.StopDailyATR*atr)
+	} else {
+		sb.WriteString("стоп: выключен\n")
+	}
+	if s.p.TPDailyATR > 0 && atr > 0 {
+		fmt.Fprintf(&sb, "цель: вход + %.2f×ATR (%.4f)\n", s.p.TPDailyATR, s.p.TPDailyATR*atr)
+	} else {
+		sb.WriteString("цель: выключена\n")
 	}
 	return sb.String()
 }

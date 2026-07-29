@@ -634,11 +634,13 @@ func TestPositionSurvivesWeekend(t *testing.T) {
 }
 
 func TestExplainMentionsEveryGate(t *testing.T) {
-	s := NewWithParams("T", DefaultParams())
-	out := s.Explain(entryFixture())
-	for _, want := range []string{"сессия", "RSI", "EMA", "стоп", "удержание"} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("Explain() is missing %q; got:\n%s", want, out)
+	s := NewWithParams("TEST", DefaultParams())
+	start := time.Date(2026, 3, 2, 7, 0, 0, 0, msk)
+	md := withDay(barSeries(pullbackCloses(), start), 10.0, 101, 100)
+	got := s.Explain(md)
+	for _, want := range []string{"сессия", "RSI", "EMA", "дневной ATR", "состояние дня", "фон объёмов", "стоп", "цель"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("Explain не упоминает %q:\n%s", want, got)
 		}
 	}
 }
@@ -652,6 +654,21 @@ func sliceMD(md strategy.MarketData, from, to int) strategy.MarketData {
 	out.Volumes = md.Volumes[from:to]
 	out.Times = md.Times[from:to]
 	out.Price = out.Closes[len(out.Closes)-1]
+	return out
+}
+
+// sliceMDFull is sliceMD plus a cut of the daily series: it drops the oldest dailyFrom entries
+// from DailyHighs/DailyLows/DailyCloses/DailyTimes. TodayHigh/TodayLow are left untouched — they
+// describe the CURRENT day's extent and do not shrink when older completed-day history is
+// trimmed away.
+func sliceMDFull(md strategy.MarketData, from, to, dailyFrom int) strategy.MarketData {
+	out := sliceMD(md, from, to)
+	if dailyFrom > 0 && dailyFrom <= len(md.DailyCloses) {
+		out.DailyHighs = md.DailyHighs[dailyFrom:]
+		out.DailyLows = md.DailyLows[dailyFrom:]
+		out.DailyCloses = md.DailyCloses[dailyFrom:]
+		out.DailyTimes = md.DailyTimes[dailyFrom:]
+	}
 	return out
 }
 
@@ -686,6 +703,18 @@ func TestNoLookaheadAcrossWindowCuts(t *testing.T) {
 				t.Fatalf("cut at %d gave stop %v, full window %v (relative %g)",
 					from, got.StopLoss, want.StopLoss, rel)
 			}
+		}
+	}
+
+	// The daily series feeds the daily ATR, which sizes the stop/target and both day-gate
+	// thresholds. Cutting it alongside the intraday window (dropping older completed weekday
+	// days, TodayHigh/TodayLow held fixed) must not move the verdict on the same last bar: ATR
+	// only ever reads the most recent DailyATRPeriod+1 weekday days.
+	for _, dailyFrom := range []int{0, 5, 10} {
+		got := s.Decide(sliceMDFull(full, 160, n, dailyFrom))
+		if got.Kind != want.Kind || got.Reason != want.Reason {
+			t.Fatalf("daily cut at %d gave %v/%q, full window gave %v/%q",
+				dailyFrom, got.Kind, got.Reason, want.Kind, want.Reason)
 		}
 	}
 }

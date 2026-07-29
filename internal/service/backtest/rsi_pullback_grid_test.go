@@ -41,43 +41,72 @@ func TestRSIPullbackGridFieldsExist(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackGridHasTimeStopOffPoint pins the one deliberate control point: the time stop
-// must be sweepable to "off" (0), while the ATR stop must NOT be — calibration may never choose
-// to trade without protection.
-func TestRSIPullbackGridHasTimeStopOffPoint(t *testing.T) {
-	var sawHoldOff, sawStop bool
+// TestRSIPullbackGridControlPoints pins the deliberate on/off points: both optional gates must
+// be sweepable to "off", and the stop must NOT be — calibration may never choose to hold a
+// multi-day position without protection.
+func TestRSIPullbackGridControlPoints(t *testing.T) {
+	var sawDayOff, sawVolumeOff, sawStop, sawTPAboveStop bool
+	maxStop := 0.0
 	for _, ph := range rsiPullbackGrid(t) {
-		for _, v := range ph.Grid["MaxHoldBars"] {
+		for _, v := range ph.Grid["UseDayATRGate"] {
 			if v == 0 {
-				sawHoldOff = true
+				sawDayOff = true
 			}
 		}
-		for _, v := range ph.Grid["StopATR"] {
+		for _, v := range ph.Grid["UseVolume"] {
+			if v == 0 {
+				sawVolumeOff = true
+			}
+		}
+		for _, v := range ph.Grid["StopDailyATR"] {
 			sawStop = true
 			if v == 0 {
-				t.Fatal("StopATR=0 is in the grid: calibration must not be able to disable the stop")
+				t.Fatal("StopDailyATR=0 is in the grid: calibration must not be able to disable the stop")
+			}
+			if v > maxStop {
+				maxStop = v
 			}
 		}
 	}
-	if !sawHoldOff {
-		t.Fatal("no MaxHoldBars=0 control point in the grid")
+	for _, ph := range rsiPullbackGrid(t) {
+		for _, v := range ph.Grid["TPDailyATR"] {
+			if v > maxStop {
+				sawTPAboveStop = true
+			}
+		}
+	}
+	if !sawDayOff {
+		t.Fatal("no UseDayATRGate=0 control point in the grid")
+	}
+	if !sawVolumeOff {
+		t.Fatal("no UseVolume=0 control point in the grid")
 	}
 	if !sawStop {
-		t.Fatal("the grid never sweeps StopATR")
+		t.Fatal("the grid never sweeps StopDailyATR")
+	}
+	if !sawTPAboveStop {
+		t.Fatal("the grid never tests a target above the stop: the 0.6:1 asymmetry stays untested")
 	}
 }
 
-// TestRSIPullbackGridCombos pins the documented size so a silent grid edit is visible.
-func TestRSIPullbackGridCombos(t *testing.T) {
+// TestRSIPullbackGridEvaluationCost pins the real cost of a phased calibration. RunPhases
+// expands every phase over the previous phase's keepTop seeds, so the number of backtest runs
+// is NOT the sum of the grid sizes — an earlier revision of this file understated it fourfold.
+func TestRSIPullbackGridEvaluationCost(t *testing.T) {
+	phases := rsiPullbackGrid(t)
+	seeds := 1
 	total := 0
-	for _, ph := range rsiPullbackGrid(t) {
+	for _, ph := range phases {
 		n := 1
 		for _, values := range ph.Grid {
 			n *= len(values)
 		}
-		total += n
+		total += seeds * n
+		if ph.KeepTop > 0 {
+			seeds = ph.KeepTop
+		}
 	}
-	if total != 32 {
-		t.Fatalf("grid has %d combos, want the documented 32", total)
+	if total != 231 {
+		t.Fatalf("phased calibration costs %d evaluations, want the documented 231", total)
 	}
 }
