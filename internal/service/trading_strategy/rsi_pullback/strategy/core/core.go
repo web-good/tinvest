@@ -85,13 +85,18 @@ func (s *Strategy) Ticker() string { return s.ticker }
 // SHORTER than the period yields an all-zero series, which silently fails the trend gate for
 // the whole run instead of erroring. Doubling the largest period leaves as many recursion steps
 // as the seed span; the +20 covers the two-bar cross lookups. When the volume gate is armed the
-// window must additionally hold VolBaseDays completed days plus the current one, which on
-// 30-minute bars dominates everything else.
+// window must additionally hold VolBaseDays completed WEEKDAY days plus the current one, which
+// on 30-minute bars dominates everything else. Sizing that purely off calendar days (VolBaseDays
+// * maxBarsPerDay) undercounts: on MOEX 30-minute data roughly a third of all bars fall on a
+// Saturday or Sunday (measured on GAZP), so a calendar window that size can contain fewer than
+// VolBaseDays weekday days once the weekend bars inside it are discounted — the baseline then
+// silently shrinks instead of failing loudly. Scaling by 7/5 accounts for the two weekend days
+// riding along with every five weekday ones.
 func (s *Strategy) Lookback() int {
 	need := max(s.p.EMASlow, s.p.EMAFast, s.p.RSIPeriod)
 	vol := 0
 	if s.p.UseVolume == 1 && s.p.VolBaseDays > 0 {
-		vol = (s.p.VolBaseDays + 1) * maxBarsPerDay
+		vol = (s.p.VolBaseDays + 1) * maxBarsPerDay * 7 / 5
 	}
 	return max(minLookback, 2*need+20, vol)
 }
@@ -190,8 +195,9 @@ func (s *Strategy) dayStateOK(md strategy.MarketData, atr float64) bool {
 }
 
 // maxBarsPerDay caps how many 30-minute bars a single calendar day can contribute (24h / 30m).
-// It deliberately oversizes the window: the volume baseline needs whole days, and an
-// undersized window would silently shrink the baseline instead of failing loudly.
+// It is a per-day bar count, not a per-day calendar allowance: Lookback multiplies it by a 7/5
+// factor to also cover the weekend bars that ride along with every window of weekday days (see
+// Lookback for why a plain calendar count silently undersizes the window).
 const maxBarsPerDay = 48
 
 // dayOf returns midnight of t's MSK calendar day — the grouping key for baseline days.
