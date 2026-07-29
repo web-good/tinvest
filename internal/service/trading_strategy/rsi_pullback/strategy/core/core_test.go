@@ -746,8 +746,15 @@ func TestNoLookaheadAcrossWindowCuts(t *testing.T) {
 
 	// The daily series feeds the daily ATR, which sizes the stop/target and both day-gate
 	// thresholds. Cutting it alongside the intraday window (dropping older completed weekday
-	// days, TodayHigh/TodayLow held fixed) must not move the verdict on the same last bar: ATR
-	// only ever reads the most recent DailyATRPeriod+1 weekday days.
+	// days, TodayHigh/TodayLow held fixed) must not move the verdict on the same last bar. This
+	// is NOT because indicators.ATR only reads a fixed-size tail of its input: it seeds at index
+	// `period` of WHATEVER slice it is given and Wilder-smooths across the full remaining length,
+	// so in general a longer daily history does shift the value. It is invariant here only
+	// because withDay's fixture (dailyBars) gives every weekday day the exact same true range —
+	// with a constant input, Wilder's EWMA has already converged on the very first smoothing
+	// step, so feeding it more identical days changes nothing. This is not lookahead either way:
+	// the engine always feeds the same daily history for a given bar regardless of how the test
+	// slices it.
 	for _, dailyFrom := range []int{0, 5, 10} {
 		got := s.Decide(sliceMDFull(full, 160, n, dailyFrom))
 		if got.Kind != want.Kind || got.Reason != want.Reason {
@@ -919,8 +926,10 @@ func TestVolumeGateIgnoresWeekendBars(t *testing.T) {
 	}
 
 	// Вклеиваем тонкую субботнюю сессию (те же слоты, объём 50) перед последним днём.
-	// Если бы выходные попадали в базу, слотовая база упала бы с 1000 до (5*1000+50)/6 = 842,
-	// и тот же бар дал бы 1400/842 = 1.66 ≥ 1.5 — гейт бы открылся. Он открыться не должен.
+	// Если бы выходные попадали в базу, суббота заняла бы один из VolBaseDays=5 слотов
+	// дневного счётчика и вытеснила бы будний день: слотовая база упала бы с 1000 до
+	// (4*1000+50)/5 = 810, и тот же бар дал бы 1400/810 ≈ 1.73 ≥ 1.5 — гейт бы открылся.
+	// Он открыться не должен.
 	sat := time.Date(2026, 3, 7, 7, 0, 0, 0, msk)
 	insertAt := len(md.Times) - perDay
 	for b := 0; b < perDay; b++ {
