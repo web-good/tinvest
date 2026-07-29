@@ -158,7 +158,6 @@ func TestDefaultParams(t *testing.T) {
 		DailyATRPeriod: 14,
 		UseDayATRGate:  1, FreshDayATR: 0.3, SpentDayATR: 0.8,
 		StopDailyATR: 0.5, TPDailyATR: 0.6,
-		SessionStartMin: 420, SessionEndMin: 1020,
 		UseVolume: 0, VolBaseDays: 5, VolLookbackBars: 3, VolMult: 1.5,
 	}
 	if p != want {
@@ -204,7 +203,7 @@ func TestEnterBuysThePullback(t *testing.T) {
 // always has what it needs and cannot mask whichever earlier gate the case is meant to isolate.
 // Without that, entryFixture() alone carries no daily series, dailyATR() is 0, and gate 4 rejects
 // every case regardless of what the tweak broke — verified mutationally: before this fix, removing
-// the session gate, the RSI-cross gate, the trend gate or the volume gate from enter() did not
+// the weekday gate, the RSI-cross gate, the trend gate or the volume gate from enter() did not
 // fail this test.
 func TestEnterGates(t *testing.T) {
 	base := DefaultParams()
@@ -212,12 +211,6 @@ func TestEnterGates(t *testing.T) {
 		name  string
 		tweak func(p *Params, md *strategy.MarketData)
 	}{
-		{"before the session opens", func(_ *Params, md *strategy.MarketData) {
-			shiftTo(md, time.Date(2026, 6, 1, 6, 30, 0, 0, msk))
-		}},
-		{"after the entry window closes", func(_ *Params, md *strategy.MarketData) {
-			shiftTo(md, time.Date(2026, 6, 1, 17, 0, 0, 0, msk))
-		}},
 		{"weekend", func(p *Params, md *strategy.MarketData) {
 			// 2026-06-06 is a Saturday.
 			shiftTo(md, time.Date(2026, 6, 6, 12, 0, 0, 0, msk))
@@ -225,7 +218,7 @@ func TestEnterGates(t *testing.T) {
 			// past barSeries' boosted last-bar volume (it is a weekend bar) and falls back to the
 			// flat weekday volume behind it, which would ALSO fail the volume gate — confounding
 			// this case with gate 6 instead of isolating gate 1's weekend check. Disable the
-			// volume gate explicitly so only the session gate can block this entry.
+			// volume gate explicitly so only the weekday gate can block this entry.
 			p.UseVolume = 0
 		}},
 		{"downtrend: fast EMA below slow", func(_ *Params, md *strategy.MarketData) {
@@ -341,17 +334,28 @@ func TestCrossHelpersBoundaries(t *testing.T) {
 	}
 }
 
-// TestEnterAtSessionOpenBoundary pins the `m >= SessionStartMin` comparison: a bar opening
-// EXACTLY at 07:00 MSK is inside the entry window. Real GAZP 30m series carry that bar, and
-// TestEnterGates only probes 06:30, which survives a shift to a strict `>`.
-func TestEnterAtSessionOpenBoundary(t *testing.T) {
-	s := NewWithParams("T", DefaultParams())
-	md := entryFixture()
-	// 2026-06-01 is a Monday; 07:00 is SessionStartMin (420) to the minute.
-	shiftTo(&md, time.Date(2026, 6, 1, 7, 0, 0, 0, msk))
-	md = withDay(md, 10.0, 101, 100)
-	if got := s.Decide(md); got.Kind != model.SignalBuy {
-		t.Fatalf("Kind = %v, want Buy on the bar opening exactly at SessionStartMin", got.Kind)
+// TestEnterHasNoTimeOfDayWindow pins the removal of the entry window: the hour of a weekday bar
+// must not influence the entry decision at all. The three probes are the times the retired
+// 07:00-17:00 window used to reject — before the old open, exactly at the old close (which the
+// old `< SessionEndMin` excluded), and deep into the evening session. A reintroduced window of
+// any plausible shape fails at least one of them.
+func TestEnterHasNoTimeOfDayWindow(t *testing.T) {
+	// 2026-06-01 is a Monday, so every probe below is a weekday bar.
+	for _, at := range []time.Time{
+		time.Date(2026, 6, 1, 6, 30, 0, 0, msk),
+		time.Date(2026, 6, 1, 17, 0, 0, 0, msk),
+		time.Date(2026, 6, 1, 23, 30, 0, 0, msk),
+	} {
+		t.Run(at.Format("15:04"), func(t *testing.T) {
+			s := NewWithParams("T", DefaultParams())
+			md := entryFixture()
+			shiftTo(&md, at)
+			md = withDay(md, 10.0, 101, 100)
+			if got := s.Decide(md); got.Kind != model.SignalBuy {
+				t.Fatalf("Kind = %v, want Buy: the hour of a weekday bar must not gate the entry",
+					got.Kind)
+			}
+		})
 	}
 }
 
@@ -439,12 +443,10 @@ func TestDayStateGateDegradations(t *testing.T) {
 }
 
 // entryDailyATRStart anchors barSeries(pullbackCloses(), ...) so the LAST of its 405 bars lands
-// well inside the entry session. pullbackCloses() has a fixed length, so the offset from start to
-// the last bar is always exactly 404*30min = 8 days 10 hours: starting at 07:00 (the session
-// open) would land the last bar at exactly 17:00 the following Tuesday — SessionEndMin to the
-// minute, which inSession's `< SessionEndMin` excludes. Starting an hour earlier keeps the last
-// bar at 16:00, comfortably inside the window, without changing which bar is "last" (the RSI
-// cross this fixture relies on is a property of bar order, not of the clock).
+// on a WEEKDAY — the only calendar condition enter() still imposes. pullbackCloses() has a fixed
+// length, so the offset from start to the last bar is always exactly 404*30min = 8 days 10 hours:
+// this Monday start puts the last bar on the Tuesday of the following week at 16:00. The hour no
+// longer matters (see TestEnterHasNoTimeOfDayWindow); the weekday does.
 var entryDailyATRStart = time.Date(2026, 3, 2, 6, 0, 0, 0, msk)
 
 func TestEnterSetsStopAndTargetFromDailyATR(t *testing.T) {
@@ -680,7 +682,7 @@ func TestExplainMentionsEveryGate(t *testing.T) {
 	start := time.Date(2026, 3, 2, 7, 0, 0, 0, msk)
 	md := withDay(barSeries(pullbackCloses(), start), 10.0, 101, 100)
 	got := s.Explain(md)
-	for _, want := range []string{"сессия", "RSI", "EMA", "дневной ATR", "состояние дня", "фон объёмов", "стоп", "цель"} {
+	for _, want := range []string{"день", "RSI", "EMA", "дневной ATR", "состояние дня", "фон объёмов", "стоп", "цель"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("Explain не упоминает %q:\n%s", want, got)
 		}

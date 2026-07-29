@@ -20,7 +20,7 @@ import (
 )
 
 // minLookback floors the candle window at roughly one trading week of 30-minute bars, so the
-// session and RSI gates always see enough history even with short indicator periods.
+// RSI and volume gates always see enough history even with short indicator periods.
 const minLookback = 120
 
 // Params holds every tunable. All fields are int or float64 so reflection grid calibration
@@ -37,8 +37,6 @@ type Params struct {
 	SpentDayATR     float64 // "day spent": range so far >= SpentDayATR*dailyATR (grid; default 0.8)
 	StopDailyATR    float64 // stop = entry - StopDailyATR*dailyATR; 0 disables it (grid; never 0 in the grid)
 	TPDailyATR      float64 // target = entry + TPDailyATR*dailyATR; 0 disables it (grid)
-	SessionStartMin int     // entry window start, minutes from MSK midnight (420 = 07:00)
-	SessionEndMin   int     // entry window end, minutes from MSK midnight (1020 = 17:00)
 	UseVolume       int     // 1 arms the volume-background gate; any other value disables it (grid; default 1)
 	VolBaseDays     int     // completed WEEKDAY days behind the baseline (grid; default 5)
 	VolLookbackBars int     // how many recent weekday bars may open the gate (grid; default 3)
@@ -59,8 +57,6 @@ func DefaultParams() Params {
 		SpentDayATR:     0.8,
 		StopDailyATR:    0.5,
 		TPDailyATR:      0.6,
-		SessionStartMin: 420,
-		SessionEndMin:   1020,
 		UseVolume:       0,
 		VolBaseDays:     5,
 		VolLookbackBars: 3,
@@ -101,7 +97,7 @@ func (s *Strategy) Lookback() int {
 	return max(minLookback, 2*need+20, vol)
 }
 
-// mskLoc anchors the session windows to the Moscow calendar (UTC fallback).
+// mskLoc anchors every calendar rule (weekday check, day and slot keys) to Moscow (UTC fallback).
 var mskLoc = func() *time.Location {
 	loc, err := time.LoadLocation("Europe/Moscow")
 	if err != nil {
@@ -157,18 +153,17 @@ func (s *Strategy) dailyATR(md strategy.MarketData) float64 {
 	return indicators.ATR(h, l, c, s.p.DailyATRPeriod)
 }
 
-// inSession reports whether bar-time t falls inside the entry window in MSK. A zero time skips
-// the gate — never block on missing data.
-func (s *Strategy) inSession(t time.Time) bool {
+// tradingDay reports whether an entry may be opened on bar-time t. The only calendar restriction
+// left is the weekday one: there is no time-of-day entry window, so any bar of a Mon-Fri MSK day
+// can open a trade. Weekend bars stay excluded because MOEX weekend sessions are 3-4x narrower
+// and 8-17x thinner than weekday ones — an entry priced off them is priced off a different market
+// than the daily ATR that sizes its stop. A zero time skips the gate — never block on missing
+// data.
+func (s *Strategy) tradingDay(t time.Time) bool {
 	if t.IsZero() {
 		return true
 	}
-	tl := t.In(mskLoc)
-	if isWeekend(tl) {
-		return false
-	}
-	m := tl.Hour()*60 + tl.Minute()
-	return m >= s.p.SessionStartMin && m < s.p.SessionEndMin
+	return !isWeekend(t.In(mskLoc))
 }
 
 // dayStateOK reports whether the current day is in one of the two states this strategy trades.
@@ -375,8 +370,8 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	if n < 2 || len(md.Highs) != n || len(md.Lows) != n {
 		return sig
 	}
-	// 1. entry window.
-	if !s.inSession(s.barTime(md)) {
+	// 1. weekday: any time of a trading day will do, weekends will not.
+	if !s.tradingDay(s.barTime(md)) {
 		return sig
 	}
 	i := n - 1
@@ -501,7 +496,7 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 	}
 	i := n - 1
 	barT := s.barTime(md)
-	fmt.Fprintf(&sb, "сессия: вход разрешён? %v (бар %v)\n", s.inSession(barT), barT)
+	fmt.Fprintf(&sb, "день: вход разрешён? %v (бар %v, выходные закрыты)\n", s.tradingDay(barT), barT)
 
 	rsi := indicators.RSISeries(md.Closes, s.p.RSIPeriod)
 	if len(rsi) == n {
