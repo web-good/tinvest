@@ -153,8 +153,7 @@ func TestDefaultParams(t *testing.T) {
 		DailyATRPeriod: 14,
 		UseDayATRGate:  1, FreshDayATR: 0.3, SpentDayATR: 0.8,
 		StopDailyATR: 1.0, TPDailyATR: 0.6,
-		MaxHoldBars:     8,
-		SessionStartMin: 420, SessionEndMin: 1020, DayEndMin: 1380,
+		SessionStartMin: 420, SessionEndMin: 1020,
 	}
 	if p != want {
 		t.Fatalf("DefaultParams() = %+v, want %+v", p, want)
@@ -549,124 +548,82 @@ func TestExitStopWinsOverRSIOnTheSameBar(t *testing.T) {
 	}
 }
 
-func TestExitTimeStop(t *testing.T) {
-	p := DefaultParams()
-	p.MaxHoldBars = 3
-	s := NewWithParams("T", p)
-	md := entryFixture()
+func TestExitTakeProfit(t *testing.T) {
+	s := NewWithParams("TEST", DefaultParams())
+	start := time.Date(2026, 3, 2, 7, 0, 0, 0, msk)
+	md := barSeries([]float64{100, 100, 100, 100}, start)
 	i := len(md.Closes) - 1
-	md = withPosition(md, md.Closes[i]*0.99, md.Lows[i]*0.5, 3)
-	got := s.Decide(md)
-	if got.Kind != model.SignalSell || got.Reason != "TIME" {
-		t.Fatalf("Kind/Reason = %v/%q, want Sell/TIME after 3 bars", got.Kind, got.Reason)
+	md.Highs[i] = 110
+	md.Position = &strategy.Position{
+		PurchasePrice: 100, Quantity: 1, StopLoss: 90, TakeProfit: 106,
+		EntryTime: md.Times[0],
+	}
+	sig := s.Decide(md)
+	if sig.Kind != model.SignalSell || sig.Reason != "TP" {
+		t.Fatalf("Kind/Reason = %v/%q, want Sell/TP", sig.Kind, sig.Reason)
+	}
+	if sig.TakeProfit != 106 {
+		t.Fatalf("TakeProfit = %.4f, want 106 (уровень из позиции)", sig.TakeProfit)
 	}
 }
 
-func TestExitTimeStopDisabledAtZero(t *testing.T) {
-	p := DefaultParams()
-	p.MaxHoldBars = 0
-	s := NewWithParams("T", p)
-	md := entryFixture()
+func TestExitStopWinsOverTakeProfitOnTheSameBar(t *testing.T) {
+	s := NewWithParams("TEST", DefaultParams())
+	start := time.Date(2026, 3, 2, 7, 0, 0, 0, msk)
+	md := barSeries([]float64{100, 100, 100, 100}, start)
 	i := len(md.Closes) - 1
-	// 10 bars back from the 12:00 bar is 07:00 of the SAME MSK day: a long hold that still keeps
-	// the EOD backstop (isDayEnd / crossedIntoNewDay) silent, so only the time stop is under test.
-	md = withPosition(md, md.Closes[i]*0.99, md.Lows[i]*0.5, 10)
-	if got := s.Decide(md); got.Kind != model.SignalNone {
-		t.Fatalf("Kind = %v (%q), want None: the time stop is disabled at MaxHoldBars=0", got.Kind, got.Reason)
+	md.Highs[i], md.Lows[i] = 110, 90 // бар задевает и цель, и стоп
+	md.Position = &strategy.Position{
+		PurchasePrice: 100, Quantity: 1, StopLoss: 95, TakeProfit: 105,
+		EntryTime: md.Times[0],
+	}
+	if sig := s.Decide(md); sig.Reason != "SL" {
+		t.Fatalf("Reason = %q, want SL: внутрибарный порядок неизвестен, побеждает худший исход", sig.Reason)
 	}
 }
 
-func TestExitTimeStopSilentOnUnknownEntryTime(t *testing.T) {
+func TestExitTakeProfitDisabledAtZero(t *testing.T) {
 	p := DefaultParams()
-	p.MaxHoldBars = 1
-	s := NewWithParams("T", p)
-	md := entryFixture()
-	i := len(md.Closes) - 1
-	md = withPosition(md, md.Closes[i]*0.99, md.Lows[i]*0.5, 5)
-	md.Position.EntryTime = time.Time{}
-	if got := s.Decide(md); got.Reason == "TIME" {
-		t.Fatal("TIME fired with an unknown entry time; it must stay silent")
+	p.TPDailyATR = 0
+	s := NewWithParams("TEST", p)
+	start := time.Date(2026, 3, 2, 7, 0, 0, 0, msk)
+	md := barSeries([]float64{100, 100, 100, 100}, start)
+	md.Highs[len(md.Highs)-1] = 500
+	md.Position = &strategy.Position{
+		PurchasePrice: 100, Quantity: 1, StopLoss: 90, TakeProfit: 0,
+		EntryTime: md.Times[0],
+	}
+	if sig := s.Decide(md); sig.Kind == model.SignalSell && sig.Reason == "TP" {
+		t.Fatal("цель выключена (TakeProfit=0), выхода по TP быть не должно")
 	}
 }
 
-func TestExitEndOfDay(t *testing.T) {
-	s := NewWithParams("T", DefaultParams())
-	md := entryFixture()
-	shiftTo(&md, time.Date(2026, 6, 1, 22, 30, 0, 0, msk))
-	i := len(md.Closes) - 1
-	md = withPosition(md, md.Closes[i]*0.99, md.Lows[i]*0.5, 2)
-	got := s.Decide(md)
-	if got.Kind != model.SignalSell || got.Reason != "EOD" {
-		t.Fatalf("Kind/Reason = %v/%q, want Sell/EOD on the 22:30 bar", got.Kind, got.Reason)
+func TestPositionSurvivesOvernight(t *testing.T) {
+	s := NewWithParams("TEST", DefaultParams())
+	// Понедельник 22:30 -> вторник 07:00: смена календарного дня и разрыв в серии.
+	closes := []float64{100, 100, 100, 100}
+	md := barSeries(closes, time.Date(2026, 3, 2, 21, 30, 0, 0, msk))
+	md.Times[len(md.Times)-1] = time.Date(2026, 3, 3, 7, 0, 0, 0, msk)
+	md.Position = &strategy.Position{
+		PurchasePrice: 100, Quantity: 1, StopLoss: 90, TakeProfit: 110,
+		EntryTime: md.Times[0],
+	}
+	if sig := s.Decide(md); sig.Kind == model.SignalSell {
+		t.Fatalf("позиция закрыта на переходе через ночь (%q), а перенос разрешён", sig.Reason)
 	}
 }
 
-// TestExitEndOfDayOnTruncatedSession covers the case isDayEnd alone cannot: the session ended
-// early (data gap, halt, short trading day), so NO bar ever reaches DayEndMin and the day-end
-// force close never gets its trigger bar. With MaxHoldBars=0 — a value the calibration grid
-// really does offer — nothing else would close the position either, and it would ride overnight
-// under a frozen stop, against the "never hold into the next day" invariant. The first bar of the
-// next MSK day must close it as EOD.
-func TestExitEndOfDayOnTruncatedSession(t *testing.T) {
-	p := DefaultParams()
-	p.MaxHoldBars = 0 // the time stop must not be what saves us here
-	s := NewWithParams("T", p)
-
-	tests := []struct {
-		name       string
-		lastBar    time.Time
-		entryTime  time.Time
-		wantKind   model.SignalKind
-		wantReason string
-	}{
-		{
-			name: "first bar of the next trading day closes a position left over from a truncated session",
-			// 2026-06-01 is a Monday whose session is cut short at 20:30 (no 22:30 bar exists);
-			// the next bar the engine feeds is Tuesday's open.
-			lastBar:    time.Date(2026, 6, 2, 7, 0, 0, 0, msk),
-			entryTime:  time.Date(2026, 6, 1, 18, 0, 0, 0, msk),
-			wantKind:   model.SignalSell,
-			wantReason: "EOD",
-		},
-		{
-			name:      "same MSK day, still inside the evening session: nothing fires",
-			lastBar:   time.Date(2026, 6, 1, 19, 0, 0, 0, msk),
-			entryTime: time.Date(2026, 6, 1, 12, 0, 0, 0, msk),
-			wantKind:  model.SignalNone,
-		},
-		{
-			name:      "unknown entry time keeps the new-day check silent",
-			lastBar:   time.Date(2026, 6, 2, 7, 0, 0, 0, msk),
-			entryTime: time.Time{},
-			wantKind:  model.SignalNone,
-		},
+func TestPositionSurvivesWeekend(t *testing.T) {
+	s := NewWithParams("TEST", DefaultParams())
+	// Пятница -> понедельник.
+	md := barSeries([]float64{100, 100, 100, 100}, time.Date(2026, 3, 6, 21, 30, 0, 0, msk))
+	md.Times[len(md.Times)-1] = time.Date(2026, 3, 9, 7, 0, 0, 0, msk)
+	md.Position = &strategy.Position{
+		PurchasePrice: 100, Quantity: 1, StopLoss: 90, TakeProfit: 110,
+		EntryTime: md.Times[0],
 	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			md := entryFixture()
-			shiftTo(&md, tc.lastBar)
-			i := len(md.Closes) - 1
-			md = withPosition(md, md.Closes[i]*0.99, md.Lows[i]*0.5, 2)
-			md.Position.EntryTime = tc.entryTime
-			got := s.Decide(md)
-			if got.Kind != tc.wantKind || got.Reason != tc.wantReason {
-				t.Fatalf("Kind/Reason = %v/%q, want %v/%q", got.Kind, got.Reason, tc.wantKind, tc.wantReason)
-			}
-		})
-	}
-}
-
-func TestExitHoldsThroughTheEveningSession(t *testing.T) {
-	p := DefaultParams()
-	p.MaxHoldBars = 0
-	s := NewWithParams("T", p)
-	md := entryFixture()
-	shiftTo(&md, time.Date(2026, 6, 1, 19, 0, 0, 0, msk))
-	i := len(md.Closes) - 1
-	md = withPosition(md, md.Closes[i]*0.99, md.Lows[i]*0.5, 2)
-	if got := s.Decide(md); got.Kind != model.SignalNone {
-		t.Fatalf("Kind = %v (%q), want None: 19:00 is past the entry window but before DayEndMin",
-			got.Kind, got.Reason)
+	if sig := s.Decide(md); sig.Kind == model.SignalSell {
+		t.Fatalf("позиция закрыта на переходе через выходные (%q)", sig.Reason)
 	}
 }
 
@@ -677,23 +634,6 @@ func TestExplainMentionsEveryGate(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Fatalf("Explain() is missing %q; got:\n%s", want, out)
 		}
-	}
-}
-
-// TestExplainLabelsUnknownHold: the holdUnknown sentinel must never reach the diagnostics the
-// owner reads — "-1 баров" is not a hold.
-func TestExplainLabelsUnknownHold(t *testing.T) {
-	s := NewWithParams("T", DefaultParams())
-	md := entryFixture()
-	i := len(md.Closes) - 1
-	md = withPosition(md, md.Closes[i]*0.99, md.Lows[i]*0.5, 2)
-	md.Position.EntryTime = time.Time{}
-	out := s.Explain(md)
-	if strings.Contains(out, "-1 баров") {
-		t.Fatalf("Explain() leaked the holdUnknown sentinel; got:\n%s", out)
-	}
-	if !strings.Contains(out, "удержание: неизвестно") {
-		t.Fatalf("Explain() must label an unknown hold; got:\n%s", out)
 	}
 }
 

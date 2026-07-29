@@ -1,17 +1,15 @@
-// Package core implements a long-only intraday RSI pullback strategy. When flat it buys the dip
+// Package core implements a long-only multi-day RSI pullback strategy. When flat it buys the dip
 // inside an uptrend: the fast EMA must sit above the slow one and a short RSI must cross DOWN
-// through its lower band on the current bar. The position is closed on the first of: the ATR
-// stop, RSI crossing UP through the upper band, a time stop measured in bars, or the day-end
-// force close — positions never survive into the next day. The decision logic is pure, stateless
-// between bars and ticker-agnostic. The reference timeframe is 30 minutes; the EOD gate infers
-// the bar span from the series, so other -interval values work as well. Run with
-// `-strategy rsi_pullback -interval Minutes30`.
+// through its lower band on the current bar. The stop and target are sized off the daily ATR at
+// entry and frozen on the position; the trade is closed on the first of: the stop, the target, or
+// RSI crossing UP through the upper band. There is no time stop and no end-of-day close — the
+// position is held across nights and weekends until one of those three exits fires. The decision
+// logic is pure, stateless between bars and ticker-agnostic. The reference timeframe is 30
+// minutes. Run with `-strategy rsi_pullback -interval Minutes30`.
 package core
 
 import (
 	"fmt"
-	"math"
-	"sort"
 	"strings"
 	"time"
 
@@ -21,25 +19,12 @@ import (
 	"tinvest/pkg/indicators"
 )
 
-// defaultBarSpanMin is the bar length in minutes assumed when the series carries no usable
-// open-times (a dead fallback in practice: the backtest and -explain paths always populate
-// Times, so barSpanMinutes infers the real span). It matches this strategy's 30-minute
-// reference timeframe so the EOD gate degrades sanely rather than under-detecting the day-end
-// bar.
-const defaultBarSpanMin = 30
-
 // minLookback floors the candle window at roughly one trading week of 30-minute bars, so the
 // session and RSI gates always see enough history even with short indicator periods.
 const minLookback = 120
 
 // Params holds every tunable. All fields are int or float64 so reflection grid calibration
 // can sweep them.
-//
-// MaxHoldBars and DayEndMin are no longer read by enter() — the entry side now sizes its stop
-// and target purely off the daily ATR and the two-sided day gate — but manage() and isDayEnd()
-// still depend on them for the bar-count time stop and the EOD force-close, both of which are
-// rebuilt in Task 4. Removing the fields now would break that still-live code, so they stay
-// until Task 4 rebuilds manage() around the daily ATR too.
 type Params struct {
 	RSIPeriod       int     // RSI length (grid; default 4)
 	RSILower        float64 // lower band; a DOWNWARD cross of it is the entry (grid; default 15)
@@ -52,10 +37,8 @@ type Params struct {
 	SpentDayATR     float64 // "day spent": range so far >= SpentDayATR*dailyATR (grid; default 0.8)
 	StopDailyATR    float64 // stop = entry - StopDailyATR*dailyATR; 0 disables it (grid; never 0 in the grid)
 	TPDailyATR      float64 // target = entry + TPDailyATR*dailyATR; 0 disables it (grid)
-	MaxHoldBars     int     // time stop in bars, read by manage() only; 0 disables it (grid; removed in Task 4)
 	SessionStartMin int     // entry window start, minutes from MSK midnight (420 = 07:00)
 	SessionEndMin   int     // entry window end, minutes from MSK midnight (1020 = 17:00)
-	DayEndMin       int     // day-end force-close boundary, read by manage()/isDayEnd() only (removed in Task 4)
 }
 
 // DefaultParams returns the spec's baseline; swept values come from calibration.
@@ -72,10 +55,8 @@ func DefaultParams() Params {
 		SpentDayATR:     0.8,
 		StopDailyATR:    1.0,
 		TPDailyATR:      0.6,
-		MaxHoldBars:     8,
 		SessionStartMin: 420,
 		SessionEndMin:   1020,
-		DayEndMin:       1380,
 	}
 }
 
@@ -194,57 +175,6 @@ func (s *Strategy) dayStateOK(md strategy.MarketData, atr float64) bool {
 	}
 	used := md.TodayHigh - md.TodayLow
 	return (fresh > 0 && used <= fresh*atr) || (spent > 0 && used >= spent*atr)
-}
-
-// isDayEnd reports whether the bar opening at t, spanning spanMin minutes, is the last one
-// before the day-end force-close boundary (DayEndMin). It is decoupled from the entry cutoff so
-// a position opened inside the entry window is still managed through the evening session up to
-// DayEndMin. A zero time degrades the EOD exit to a no-op.
-func (s *Strategy) isDayEnd(t time.Time, spanMin int) bool {
-	if t.IsZero() {
-		return false
-	}
-	tl := t.In(mskLoc)
-	if isWeekend(tl) {
-		return true
-	}
-	m := tl.Hour()*60 + tl.Minute()
-	return m+spanMin >= s.p.DayEndMin
-}
-
-// crossedIntoNewDay reports whether the current bar belongs to a different MSK calendar date
-// than the position's entry. It backstops isDayEnd, which can only fire on a bar that actually
-// exists: on a truncated session (data gap, halt, short trading day) the series simply has no
-// bar reaching DayEndMin, and without this check a position would ride overnight — contradicting
-// the strategy's "never hold into the next day" invariant. Unknown times keep it silent, exactly
-// as the time stop does with a missing EntryTime.
-func crossedIntoNewDay(barT, entryT time.Time) bool {
-	if barT.IsZero() || entryT.IsZero() {
-		return false
-	}
-	by, bm, bd := barT.In(mskLoc).Date()
-	ey, em, ed := entryT.In(mskLoc).Date()
-	return by != ey || bm != em || bd != ed
-}
-
-// barSpanMinutes infers the bar length from the series' own open-times: the MEDIAN gap between
-// consecutive bars (robust to session and weekend jumps). Falls back to defaultBarSpanMin when
-// Times is absent or too short.
-func barSpanMinutes(times []time.Time) int {
-	if len(times) < 2 {
-		return defaultBarSpanMin
-	}
-	gaps := make([]int, 0, len(times)-1)
-	for i := 1; i < len(times); i++ {
-		if d := int(times[i].Sub(times[i-1]) / time.Minute); d > 0 {
-			gaps = append(gaps, d)
-		}
-	}
-	if len(gaps) == 0 {
-		return defaultBarSpanMin
-	}
-	sort.Ints(gaps)
-	return gaps[len(gaps)/2]
 }
 
 // barTime returns the open-time of the latest bar, or the zero time when Times is absent or
@@ -373,74 +303,43 @@ func (s *Strategy) entryReason(rsiNow, fastNow, slowNow, entry, stop, target, at
 	)
 }
 
-// holdUnknown is returned by barsHeld when the position's entry time is unknown. The time stop
-// treats it as "do not fire": a missing EntryTime must never close a position by itself.
-const holdUnknown = -1
-
-// barsHeld counts bars from the position's entry to the current bar, purely from EntryTime, the
-// current bar time and the data-inferred span. A position is force-closed at the day end, so in
-// the normal case entry and current bar sit in the same session and the uniform span is exact.
-// The one exception is a truncated session, where the position survives to the first bar of the
-// next trading day (crossedIntoNewDay closes it there): that single count spans the overnight
-// gap and therefore OVERSTATES the hold. The error is one-sided and harmless — it can only make
-// an armed time stop fire on the very bar the EOD backstop would have closed anyway.
-func (s *Strategy) barsHeld(md strategy.MarketData, span int) int {
-	pos := md.Position
-	t := s.barTime(md)
-	if pos == nil || pos.EntryTime.IsZero() || t.IsZero() || span <= 0 {
-		return holdUnknown
-	}
-	return int(math.Round(t.Sub(pos.EntryTime).Minutes() / float64(span)))
-}
-
-// manage handles an open long, exiting in precedence SL -> RSI -> TIME -> EOD. SL is read from
-// the position (frozen at entry), never recomputed: the stop the trade was opened with is the
-// stop it dies by. RSI fires on an UPWARD cross of RSIUpper — taking the bounce into overbought.
-// RSI/TIME/EOD fill at the bar close; SL fills at the stop level (the engine handles that via
-// model.IsStopReason).
+// manage handles an open long, exiting in precedence SL -> TP -> RSI. Both levels are read
+// from the position (frozen at entry), never recomputed: the stop and target the trade was
+// opened with are the ones it dies by. SL fills at the stop level and TP at the target (the
+// engine handles that via model.IsStopReason and the "TP" reason); RSI fills at the bar close.
+// There is no time stop and no end-of-day close — the position is held until one of the three
+// exits fires, across nights and weekends.
 func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal {
-	// Temporary for Task 3: Decide no longer computes span up front (enter() does not need it
-	// any more), so manage() infers it itself. Task 4 rebuilds this method around the daily ATR
-	// and this line goes away with it.
-	span := barSpanMinutes(md.Times)
 	pos := md.Position
 	n := len(md.Closes)
 	if pos == nil || n < 2 || len(md.Highs) != n || len(md.Lows) != n {
 		return sig
 	}
 	i := n - 1
-	low := md.Lows[i]
-	closeP := md.Closes[i]
+	high, low, closeP := md.Highs[i], md.Lows[i], md.Closes[i]
 
-	// 1. hard stop (always active, wins any same-bar tie).
+	// 1. hard stop. It wins a same-bar tie with the target: the intrabar order of the two
+	// touches is unknowable from OHLC, and assuming the worse of the two is the honest choice.
 	if pos.StopLoss > 0 && low <= pos.StopLoss {
 		sig.Kind, sig.Reason = model.SignalSell, "SL"
 		sig.StopLoss = pos.StopLoss
 		sig.ExitReason = fmt.Sprintf("SL: low %.4f ≤ стоп %.4f (вход %.4f)", low, pos.StopLoss, pos.PurchasePrice)
 		return sig
 	}
-	// 2. RSI crosses UP through the upper band — the bounce reached overbought.
+	// 2. fixed target.
+	if pos.TakeProfit > 0 && high >= pos.TakeProfit {
+		sig.Kind, sig.Reason = model.SignalSell, "TP"
+		sig.TakeProfit = pos.TakeProfit
+		sig.ExitReason = fmt.Sprintf("TP: high %.4f ≥ цель %.4f (вход %.4f)", high, pos.TakeProfit, pos.PurchasePrice)
+		return sig
+	}
+	// 3. RSI crosses UP through the upper band — the bounce reached overbought.
 	rsi := indicators.RSISeries(md.Closes, s.p.RSIPeriod)
 	if len(rsi) == n && crossedUp(rsi, i, s.p.RSIUpper) {
 		sig.Kind, sig.Reason = model.SignalSell, "RSI"
 		sig.RSI = rsi[i]
 		sig.ExitReason = fmt.Sprintf("RSI: RSI(%d) пересёк %.0f снизу вверх (%.1f), выход по %.4f (вход %.4f)",
 			s.p.RSIPeriod, s.p.RSIUpper, rsi[i], closeP, pos.PurchasePrice)
-		return sig
-	}
-	// 3. time stop: the setup had its chance and did not deliver.
-	if held := s.barsHeld(md, span); s.p.MaxHoldBars > 0 && held != holdUnknown && held >= s.p.MaxHoldBars {
-		sig.Kind, sig.Reason = model.SignalSell, "TIME"
-		sig.ExitReason = fmt.Sprintf("TIME: удержано %d баров ≥ %d, выход по %.4f (вход %.4f)",
-			held, s.p.MaxHoldBars, closeP, pos.PurchasePrice)
-		return sig
-	}
-	// 4. end of day (always active): either this is the last bar before DayEndMin, or the session
-	// was truncated and we are already looking at a bar from a later MSK day.
-	barT := s.barTime(md)
-	if s.isDayEnd(barT, span) || crossedIntoNewDay(barT, pos.EntryTime) {
-		sig.Kind, sig.Reason = model.SignalSell, "EOD"
-		sig.ExitReason = fmt.Sprintf("EOD: закрытие на конец дня по %.4f (вход %.4f)", closeP, pos.PurchasePrice)
 	}
 	return sig
 }
@@ -456,9 +355,7 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 	}
 	i := n - 1
 	barT := s.barTime(md)
-	span := barSpanMinutes(md.Times)
-	fmt.Fprintf(&sb, "сессия: вход разрешён? %v (бар %v); конец дня? %v\n",
-		s.inSession(barT), barT, s.isDayEnd(barT, span))
+	fmt.Fprintf(&sb, "сессия: вход разрешён? %v (бар %v)\n", s.inSession(barT), barT)
 
 	rsi := indicators.RSISeries(md.Closes, s.p.RSIPeriod)
 	if len(rsi) == n {
@@ -483,27 +380,10 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 		atr, s.p.StopDailyATR, s.p.TPDailyATR, s.dayStateOK(md, atr))
 
 	if md.Position == nil {
-		fmt.Fprintf(&sb, "удержание: позиции нет; тайм-стоп %s\n", holdLabel(s.p.MaxHoldBars))
+		sb.WriteString("удержание: позиции нет; ограничения по времени нет\n")
 	} else {
-		fmt.Fprintf(&sb, "удержание: %s; тайм-стоп %s\n",
-			heldLabel(s.barsHeld(md, span)), holdLabel(s.p.MaxHoldBars))
+		fmt.Fprintf(&sb, "удержание: без ограничения по времени; SL %.4f, TP %.4f (вход %.4f)\n",
+			md.Position.StopLoss, md.Position.TakeProfit, md.Position.PurchasePrice)
 	}
 	return sb.String()
-}
-
-// holdLabel renders the time stop for Explain: the bar count when armed, "выключен" when off.
-func holdLabel(v int) string {
-	if v <= 0 {
-		return "выключен"
-	}
-	return fmt.Sprintf("%d баров", v)
-}
-
-// heldLabel renders the measured hold for Explain, keeping the holdUnknown sentinel out of the
-// diagnostics the owner reads (it would otherwise print as "-1 баров").
-func heldLabel(v int) string {
-	if v == holdUnknown {
-		return "неизвестно"
-	}
-	return fmt.Sprintf("%d баров", v)
 }
