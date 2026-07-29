@@ -1,0 +1,12 @@
+{
+  "_comment": "RISK: stop and target, both in daily-ATR units, both frozen at entry. 16 evaluations. Values follow the main grid.json (StopDailyATR down to 0.5, TPDailyATR from 0.7) plus one wider point on each axis. StopDailyATR=0 is deliberately ABSENT and must never be added: a position held across nights and weekends without a stop is not a configuration calibration may choose. Note that 0.5 daily ATR is roughly 1-1.5% of price on MOEX equities, tight enough that ordinary overnight gaps can take it out — check the SL share of exits, not just the profit factor. TPDailyATR is swept both below and above the stop on purpose: a target under the stop needs a win rate above 50% just to break even before commission, and this file is what confirms or kills that asymmetry. Watch the average holding time too — a wide stop with a far target turns this into a multi-week position strategy. Run: go run ./cmd/backtest -ticker GAZP -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/cal_risk.json -out ./reports/GAZP_risk -months 24 -min-trades 20 -test-months 6 -metric profit_factor",
+  "phases": [
+    {
+      "name": "risk",
+      "grid": {
+        "StopDailyATR": [0.5, 0.8, 1.0, 1.3],
+        "TPDailyATR": [0.7, 1.0, 1.5, 2.0]
+      }
+    }
+  ]
+}
