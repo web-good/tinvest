@@ -43,6 +43,10 @@ func dailyBars(before time.Time, days int, w, we float64) (highs, lows, closes [
 
 // barSeries builds MarketData from closes, stamping bars every 30 minutes starting at start.
 // Highs/Lows are derived from the close with a fixed 0.3% envelope so ATR is always positive.
+// Volume is flat at 1000 except the LAST bar, which is boosted 10x: with DefaultParams()'s
+// volume-background gate armed (UseVolume=1), a flat series never beats its own slot average, so
+// every entry fixture built from this helper would be blocked by a gate it isn't testing. Tests
+// that exercise the volume gate itself build their own series via volSeries instead.
 func barSeries(closes []float64, start time.Time) strategy.MarketData {
 	n := len(closes)
 	md := strategy.MarketData{
@@ -58,6 +62,7 @@ func barSeries(closes []float64, start time.Time) strategy.MarketData {
 		md.Volumes[i] = 1000
 		md.Times[i] = start.Add(time.Duration(i) * 30 * time.Minute)
 	}
+	md.Volumes[n-1] = 10000
 	md.Price = closes[n-1]
 	return md
 }
@@ -154,6 +159,7 @@ func TestDefaultParams(t *testing.T) {
 		UseDayATRGate:  1, FreshDayATR: 0.3, SpentDayATR: 0.8,
 		StopDailyATR: 1.0, TPDailyATR: 0.6,
 		SessionStartMin: 420, SessionEndMin: 1020,
+		UseVolume: 1, VolBaseDays: 5, VolLookbackBars: 3, VolMult: 1.5,
 	}
 	if p != want {
 		t.Fatalf("DefaultParams() = %+v, want %+v", p, want)
@@ -749,6 +755,177 @@ func TestDailyATRZeroWhenDataCannotSupportIt(t *testing.T) {
 	}
 	if got := s.dailyATR(strategy.MarketData{}); got != 0 {
 		t.Fatalf("ATR без дневных данных = %.6f, want 0", got)
+	}
+}
+
+// volSeries builds `days` weekday days of `perDay` 30-minute bars starting at 07:00 MSK, with
+// a U-shaped volume profile: the first bar of each day is `openVol`, the rest are `midVol`.
+// The last bar of the last day is the "current" bar.
+func volSeries(firstDay time.Time, days, perDay int, openVol, midVol int64) strategy.MarketData {
+	var md strategy.MarketData
+	d := firstDay
+	for added := 0; added < days; {
+		if d.Weekday() == time.Saturday || d.Weekday() == time.Sunday {
+			d = d.AddDate(0, 0, 1)
+			continue
+		}
+		for b := 0; b < perDay; b++ {
+			t := time.Date(d.Year(), d.Month(), d.Day(), 7, 0, 0, 0, msk).
+				Add(time.Duration(b) * 30 * time.Minute)
+			v := midVol
+			if b == 0 {
+				v = openVol
+			}
+			md.Times = append(md.Times, t)
+			md.Volumes = append(md.Volumes, v)
+			md.Closes = append(md.Closes, 100)
+			md.Highs = append(md.Highs, 100.3)
+			md.Lows = append(md.Lows, 99.7)
+		}
+		added++
+		d = d.AddDate(0, 0, 1)
+	}
+	md.Price = 100
+	return md
+}
+
+func TestVolumeGateComparesAgainstItsOwnSlot(t *testing.T) {
+	p := DefaultParams()
+	p.VolBaseDays, p.VolLookbackBars, p.VolMult = 5, 3, 1.5
+	s := NewWithParams("TEST", p)
+
+	// Профиль: открытие 10000, середина дня 1000. Текущий бар — середина дня с объёмом 2000:
+	// это вдвое выше своего слота (1000), но впятеро ниже утреннего.
+	md := volSeries(time.Date(2026, 3, 2, 0, 0, 0, 0, msk), 6, 8, 10000, 1000)
+	last := len(md.Volumes) - 1
+	md.Volumes[last] = 2000
+	md.Volumes[last-1], md.Volumes[last-2] = 1000, 1000
+
+	// Слотовая база для 10:30 равна 1000, значит 2000 — это 2.0x, гейт открыт.
+	// На плоской базе тот же бар НЕ прошёл бы: она равна (10000 + 7*1000)/8 = 2125,
+	// и 2000/2125 = 0.94 < 1.5. Именно это различает две реализации.
+	if !s.volumeOK(md) {
+		t.Fatal("бар вдвое выше своего слота обязан открывать гейт (плоская база дала бы отказ)")
+	}
+
+	md.Volumes[last] = 1000
+	if s.volumeOK(md) {
+		t.Fatal("бар ровно на уровне своего слота не должен открывать гейт при VolMult=1.5")
+	}
+}
+
+func TestVolumeGateAnyOfTheLastThreeBars(t *testing.T) {
+	p := DefaultParams()
+	p.VolBaseDays, p.VolLookbackBars, p.VolMult = 5, 3, 1.5
+	s := NewWithParams("TEST", p)
+	md := volSeries(time.Date(2026, 3, 2, 0, 0, 0, 0, msk), 6, 8, 10000, 1000)
+	last := len(md.Volumes) - 1
+
+	md.Volumes[last], md.Volumes[last-1], md.Volumes[last-2] = 1000, 1000, 1000
+	if s.volumeOK(md) {
+		t.Fatal("три тихих бара не должны открывать гейт")
+	}
+	md.Volumes[last-2] = 2000 // всплеск на третьем баре назад
+	if !s.volumeOK(md) {
+		t.Fatal("всплеск на любом из последних трёх баров обязан открывать гейт")
+	}
+	md.Volumes[last-2] = 1000
+	md.Volumes[last-3] = 5000 // четвёртый бар назад — уже вне окна
+	if s.volumeOK(md) {
+		t.Fatal("всплеск за пределами VolLookbackBars не должен открывать гейт")
+	}
+}
+
+func TestVolumeGateIgnoresWeekendBars(t *testing.T) {
+	p := DefaultParams()
+	p.VolBaseDays, p.VolLookbackBars, p.VolMult = 5, 3, 1.5
+	s := NewWithParams("TEST", p)
+	const perDay = 8
+	md := volSeries(time.Date(2026, 3, 2, 0, 0, 0, 0, msk), 6, perDay, 10000, 1000)
+
+	// Текущий бар — 1.4x своего слота: ниже порога 1.5, гейт закрыт.
+	last := len(md.Volumes) - 1
+	md.Volumes[last] = 1400
+	md.Volumes[last-1], md.Volumes[last-2] = 1000, 1000
+	if s.volumeOK(md) {
+		t.Fatal("1.4x от слотовой базы не должно открывать гейт при VolMult=1.5")
+	}
+
+	// Вклеиваем тонкую субботнюю сессию (те же слоты, объём 50) перед последним днём.
+	// Если бы выходные попадали в базу, слотовая база упала бы с 1000 до (5*1000+50)/6 = 842,
+	// и тот же бар дал бы 1400/842 = 1.66 ≥ 1.5 — гейт бы открылся. Он открыться не должен.
+	sat := time.Date(2026, 3, 7, 7, 0, 0, 0, msk)
+	insertAt := len(md.Times) - perDay
+	for b := 0; b < perDay; b++ {
+		bt := sat.Add(time.Duration(b) * 30 * time.Minute)
+		md.Times = append(md.Times[:insertAt], append([]time.Time{bt}, md.Times[insertAt:]...)...)
+		md.Volumes = append(md.Volumes[:insertAt], append([]int64{50}, md.Volumes[insertAt:]...)...)
+		md.Closes = append(md.Closes[:insertAt], append([]float64{100}, md.Closes[insertAt:]...)...)
+		md.Highs = append(md.Highs[:insertAt], append([]float64{100.3}, md.Highs[insertAt:]...)...)
+		md.Lows = append(md.Lows[:insertAt], append([]float64{99.7}, md.Lows[insertAt:]...)...)
+		insertAt++
+	}
+	if s.volumeOK(md) {
+		t.Fatal("выходная сессия занизила базу: выходные обязаны выпадать из расчёта")
+	}
+
+	// И выходные не должны занимать места в окне последних трёх баров: всплеск на третьем
+	// БУДНЕМ баре назад обязан открывать гейт.
+	md.Volumes[len(md.Volumes)-1] = 1000
+	md.Volumes[len(md.Volumes)-3] = 2000
+	if !s.volumeOK(md) {
+		t.Fatal("выходные бары не должны вытеснять будние из окна VolLookbackBars")
+	}
+}
+
+func TestVolumeGateDegradations(t *testing.T) {
+	base := DefaultParams()
+	base.VolBaseDays, base.VolLookbackBars, base.VolMult = 5, 3, 1.5
+	quiet := volSeries(time.Date(2026, 3, 2, 0, 0, 0, 0, msk), 6, 8, 10000, 1000)
+
+	off := base
+	off.UseVolume = 0
+	if !NewWithParams("TEST", off).volumeOK(quiet) {
+		t.Fatal("выключенный гейт обязан пропускать")
+	}
+
+	for name, mutate := range map[string]func(p *Params){
+		"VolBaseDays=0":     func(p *Params) { p.VolBaseDays = 0 },
+		"VolLookbackBars=0": func(p *Params) { p.VolLookbackBars = 0 },
+		"VolMult=0":         func(p *Params) { p.VolMult = 0 },
+	} {
+		p := base
+		mutate(&p)
+		if !NewWithParams("TEST", p).volumeOK(quiet) {
+			t.Fatalf("%s: сломанная конфигурация обязана пропускать", name)
+		}
+	}
+
+	s := NewWithParams("TEST", base)
+	if !s.volumeOK(strategy.MarketData{}) {
+		t.Fatal("без объёмов гейт обязан пропускать")
+	}
+	noTimes := quiet
+	noTimes.Times = nil
+	if !s.volumeOK(noTimes) {
+		t.Fatal("без времён гейт обязан пропускать")
+	}
+	// Только один день истории: базы нет вовсе.
+	oneDay := volSeries(time.Date(2026, 3, 2, 0, 0, 0, 0, msk), 1, 8, 10000, 1000)
+	if !s.volumeOK(oneDay) {
+		t.Fatal("без завершённых дней в базе гейт обязан пропускать")
+	}
+}
+
+func TestLookbackCoversVolumeBaseline(t *testing.T) {
+	p := DefaultParams()
+	p.UseVolume, p.VolBaseDays = 1, 10
+	if got := NewWithParams("TEST", p).Lookback(); got < 11*maxBarsPerDay {
+		t.Fatalf("Lookback = %d, want >= %d (11 дней по %d баров)", got, 11*maxBarsPerDay, maxBarsPerDay)
+	}
+	p.UseVolume = 0
+	if got := NewWithParams("TEST", p).Lookback(); got >= 11*maxBarsPerDay {
+		t.Fatalf("Lookback = %d: с выключенным гейтом окно не должно раздуваться", got)
 	}
 }
 

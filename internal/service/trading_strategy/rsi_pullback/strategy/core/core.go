@@ -39,6 +39,10 @@ type Params struct {
 	TPDailyATR      float64 // target = entry + TPDailyATR*dailyATR; 0 disables it (grid)
 	SessionStartMin int     // entry window start, minutes from MSK midnight (420 = 07:00)
 	SessionEndMin   int     // entry window end, minutes from MSK midnight (1020 = 17:00)
+	UseVolume       int     // 1 arms the volume-background gate; any other value disables it (grid; default 1)
+	VolBaseDays     int     // completed WEEKDAY days behind the baseline (grid; default 5)
+	VolLookbackBars int     // how many recent weekday bars may open the gate (grid; default 3)
+	VolMult         float64 // a bar opens the gate at volume >= VolMult * its slot baseline (grid; default 1.5)
 }
 
 // DefaultParams returns the spec's baseline; swept values come from calibration.
@@ -57,6 +61,10 @@ func DefaultParams() Params {
 		TPDailyATR:      0.6,
 		SessionStartMin: 420,
 		SessionEndMin:   1020,
+		UseVolume:       1,
+		VolBaseDays:     5,
+		VolLookbackBars: 3,
+		VolMult:         1.5,
 	}
 }
 
@@ -76,12 +84,16 @@ func (s *Strategy) Ticker() string { return s.ticker }
 // `period` closes, so a window of exactly `period` bars yields a bare seed — and a window
 // SHORTER than the period yields an all-zero series, which silently fails the trend gate for
 // the whole run instead of erroring. Doubling the largest period leaves as many recursion steps
-// as the seed span; the +20 covers the two-bar cross lookups. DailyATRPeriod is excluded: it
-// counts completed DAYS from the separate daily series, not intraday bars, so it does not size
-// this window.
+// as the seed span; the +20 covers the two-bar cross lookups. When the volume gate is armed the
+// window must additionally hold VolBaseDays completed days plus the current one, which on
+// 30-minute bars dominates everything else.
 func (s *Strategy) Lookback() int {
 	need := max(s.p.EMASlow, s.p.EMAFast, s.p.RSIPeriod)
-	return max(minLookback, 2*need+20)
+	vol := 0
+	if s.p.UseVolume == 1 && s.p.VolBaseDays > 0 {
+		vol = (s.p.VolBaseDays + 1) * maxBarsPerDay
+	}
+	return max(minLookback, 2*need+20, vol)
 }
 
 // mskLoc anchors the session windows to the Moscow calendar (UTC fallback).
@@ -177,6 +189,119 @@ func (s *Strategy) dayStateOK(md strategy.MarketData, atr float64) bool {
 	return (fresh > 0 && used <= fresh*atr) || (spent > 0 && used >= spent*atr)
 }
 
+// maxBarsPerDay caps how many 30-minute bars a single calendar day can contribute (24h / 30m).
+// It deliberately oversizes the window: the volume baseline needs whole days, and an
+// undersized window would silently shrink the baseline instead of failing loudly.
+const maxBarsPerDay = 48
+
+// dayOf returns midnight of t's MSK calendar day — the grouping key for baseline days.
+func dayOf(t time.Time) time.Time {
+	tl := t.In(mskLoc)
+	return time.Date(tl.Year(), tl.Month(), tl.Day(), 0, 0, 0, 0, mskLoc)
+}
+
+// slotOf returns the bar's intraday slot: minutes from MSK midnight. Bars sharing a slot are
+// the same half-hour of the trading day across different days.
+func slotOf(t time.Time) int {
+	tl := t.In(mskLoc)
+	return tl.Hour()*60 + tl.Minute()
+}
+
+// volumeBaseline builds the per-slot average volume over the last baseDays COMPLETED WEEKDAY
+// days present in the window, plus a flat average over the same bars as a fallback for slots
+// with fewer than two observations. The current day is excluded entirely, so the bars being
+// judged never contaminate their own baseline and the baseline does not drift from bar to bar
+// within a day. Weekend sessions are excluded: on MOEX they carry 8-17x less volume and would
+// drag the baseline down, turning the gate into a free pass. Non-positive volumes are ignored.
+// ok is false when no usable bar was found at all.
+func volumeBaseline(vols []int64, times []time.Time, baseDays int) (bySlot map[int]float64, flat float64, ok bool) {
+	n := len(vols)
+	if n == 0 || len(times) != n || baseDays <= 0 {
+		return nil, 0, false
+	}
+	current := dayOf(times[n-1])
+	sums := make(map[int]float64)
+	counts := make(map[int]int)
+	var flatSum float64
+	var flatCount int
+	var lastDay time.Time
+	days := 0
+	for i := n - 1; i >= 0; i-- {
+		t := times[i]
+		if isWeekend(t.In(mskLoc)) {
+			continue
+		}
+		d := dayOf(t)
+		if !d.Before(current) {
+			continue
+		}
+		if !d.Equal(lastDay) {
+			if days == baseDays {
+				break
+			}
+			days++
+			lastDay = d
+		}
+		if vols[i] <= 0 {
+			continue
+		}
+		sl := slotOf(t)
+		sums[sl] += float64(vols[i])
+		counts[sl]++
+		flatSum += float64(vols[i])
+		flatCount++
+	}
+	if flatCount == 0 {
+		return nil, 0, false
+	}
+	bySlot = make(map[int]float64, len(sums))
+	for sl, c := range counts {
+		if c >= 2 {
+			bySlot[sl] = sums[sl] / float64(c)
+		}
+	}
+	return bySlot, flatSum / float64(flatCount), true
+}
+
+// volumeOK reports whether the recent tape is busier than usual FOR THIS TIME OF DAY: at least
+// one of the last VolLookbackBars weekday bars must carry VolMult times the average volume of
+// its own intraday slot. Comparing against a slot rather than a flat average matters because
+// 30-minute volume is U-shaped — an opening bar dwarfs a midday one — so a flat baseline would
+// measure the clock instead of the activity. The gate degrades to "allow" whenever it is
+// disabled, misconfigured or unsupported by the data: missing volume must never block an entry.
+func (s *Strategy) volumeOK(md strategy.MarketData) bool {
+	if s.p.UseVolume != 1 || s.p.VolBaseDays <= 0 || s.p.VolLookbackBars <= 0 || s.p.VolMult <= 0 {
+		return true
+	}
+	n := len(md.Volumes)
+	if n == 0 || len(md.Times) != n {
+		return true
+	}
+	bySlot, flat, ok := volumeBaseline(md.Volumes, md.Times, s.p.VolBaseDays)
+	if !ok || flat <= 0 {
+		return true
+	}
+	checked := 0
+	for i := n - 1; i >= 0 && checked < s.p.VolLookbackBars; i-- {
+		if isWeekend(md.Times[i].In(mskLoc)) {
+			continue
+		}
+		checked++
+		if md.Volumes[i] <= 0 {
+			continue
+		}
+		base, hasSlot := bySlot[slotOf(md.Times[i])]
+		if !hasSlot || base <= 0 {
+			base = flat
+		}
+		if float64(md.Volumes[i]) >= base*s.p.VolMult {
+			return true
+		}
+	}
+	// No weekday bar to judge at all — allow, same as any other missing-data case.
+	return checked == 0
+}
+
 // barTime returns the open-time of the latest bar, or the zero time when Times is absent or
 // misaligned with Closes (so time-based gates degrade instead of misfiring).
 func (s *Strategy) barTime(md strategy.MarketData) time.Time {
@@ -263,6 +388,10 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	}
 	// 5. the day must be either fresh or spent.
 	if !s.dayStateOK(md, atr) {
+		return sig
+	}
+	// 6. the tape must be busier than usual for this time of day.
+	if !s.volumeOK(md) {
 		return sig
 	}
 	entry := md.Closes[i]
