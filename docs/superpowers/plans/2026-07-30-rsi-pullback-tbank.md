@@ -1,6 +1,6 @@
 # rsi_pullback: подготовка ТБанка (T) к прогону — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Добавить в backtest-стратегию `rsi_pullback` по-тикерный пакет параметров ТБанка (тикер `T`), разложить тикер-специфичные гриды по подкаталогам, починить три красных теста и убрать молчаливое усечение окна свечей — чтобы прогон T запускался готовой командой и его отчёт был построен на полной истории.
 
@@ -51,7 +51,7 @@
 
 Причина: `gazp` уже несёт пост-грид литерал (`RSILower 25`, `EMASlow 70`, `SpentDayATR 0.9`, `TPDailyATR 0.7`, `VolBaseDays 7`, `VolLookbackBars 2`, `VolMult 1`), а тест сравнивает его с `core.DefaultParams()`. Проверку «пакет отслеживает baseline» надо вести на тикере, который его действительно отслеживает (`SBER`), а для калиброванного тикера пинить обратное — что он от baseline отвязан.
 
-- [ ] **Step 1: Заменить два теста в `rsi_pullback_registry_test.go`**
+- [x] **Step 1: Заменить два теста в `rsi_pullback_registry_test.go`**
 
 Полностью заменить `TestRSIPullbackBindingBuildsForTicker` (строки 9–25) и `TestRSIPullbackParseParamsLayersOverDefaults` (строки 27–41) на:
 
@@ -119,12 +119,12 @@ func TestRSIPullbackParseParamsLayersOverDefaults(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Прогнать тесты реестра**
+- [x] **Step 2: Прогнать тесты реестра**
 
 Run: `go test ./internal/service/backtest/ -run 'TestRSIPullbackBinding|TestRSIPullbackCalibrated|TestRSIPullbackParseParams' -v`
 Expected: PASS все четыре (`...BindingBuildsForTicker`, `...CalibratedBindingKeepsItsOwnLiteral`, `...ParseParamsLayersOverDefaults`, `...ParseParamsRejectsGarbage`).
 
-- [ ] **Step 3: Коммит**
+- [x] **Step 3: Коммит**
 
 ```bash
 git add internal/service/backtest/rsi_pullback_registry_test.go
@@ -153,7 +153,7 @@ EOF
 
 Две причины падений. Первая: точка `UseDayATRGate = 0` живёт не в `grid.json`, а в `cal_screen.json` — так и записано в `_comment` файла `cal_day.json` («The UseDayATRGate=0 control point lives in cal_screen.json»). Тест должен требовать существование контроля в НАБОРЕ файлов стратегии, иначе он запрещает осмысленную реорганизацию. Вторая: risk-фаза выросла до 4×4, фактическая стоимость — 277 вызовов (9 + 6×12 + 5×12 + 5×12 + 4×16 + 4×3), а тест и `_comment` всё ещё называют 243.
 
-- [ ] **Step 1: Заменить `TestRSIPullbackGridControlPoints` (строки 114–160)**
+- [x] **Step 1: Заменить `TestRSIPullbackGridControlPoints` (строки 114–160)**
 
 ```go
 // TestRSIPullbackGridControlPoints pins the deliberate on/off points. The two optional gates
@@ -213,7 +213,7 @@ func TestRSIPullbackGridControlPoints(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Обновить ожидаемую стоимость в `TestRSIPullbackGridEvaluationCost`**
+- [x] **Step 2: Обновить ожидаемую стоимость в `TestRSIPullbackGridEvaluationCost`**
 
 Заменить блок в конце теста (строка ~183):
 
@@ -223,7 +223,7 @@ func TestRSIPullbackGridControlPoints(t *testing.T) {
 	}
 ```
 
-- [ ] **Step 3: Обновить формулу в `_comment` файла `data/params/rsi_pullback/grid.json`**
+- [x] **Step 3: Обновить формулу в `_comment` файла `data/params/rsi_pullback/grid.json`**
 
 Найти подстроку `9 + 6x9 + 5x12 + 5x12 + 4x12 + 4x3 = up to 243 backtest evaluations` и заменить на:
 
@@ -233,12 +233,12 @@ func TestRSIPullbackGridControlPoints(t *testing.T) {
 
 Остальной текст комментария (включая абзац про отсутствие `StopDailyATR=0`) не трогать.
 
-- [ ] **Step 4: Прогнать все тесты пакета — он должен стать полностью зелёным**
+- [x] **Step 4: Прогнать все тесты пакета — он должен стать полностью зелёным**
 
 Run: `go test ./internal/service/backtest/`
 Expected: `ok` без FAIL. Если что-то падает — это регресс, а не наследство: три исходных красных теста закрыты задачами 1 и 2.
 
-- [ ] **Step 5: Коммит**
+- [x] **Step 5: Коммит**
 
 ```bash
 git add internal/service/backtest/rsi_pullback_grid_test.go data/params/rsi_pullback/grid.json
@@ -270,7 +270,7 @@ EOF
 
 Отдельно оговорено поведение при легитимно короткой истории: `fetchRange` возвращает ошибку, если API не отдал ни одной свечи. Для головы это нормальная ситуация (инструмент не торговался так давно), поэтому голова не роняет прогон — пишется предупреждение через `logger.Warn`, и загрузка продолжается с тем, что есть. Молчание заменяется явным сигналом, но молодой инструмент по-прежнему прогоняется.
 
-- [ ] **Step 1: Написать падающий тест**
+- [x] **Step 1: Написать падающий тест**
 
 Добавить в конец `internal/service/backtest/candles_test.go`:
 
@@ -383,12 +383,12 @@ import (
 )
 ```
 
-- [ ] **Step 2: Прогнать тест — он должен упасть**
+- [x] **Step 2: Прогнать тест — он должен упасть**
 
 Run: `go test ./internal/service/backtest/ -run 'TestLoadFetchesMissingHead|TestLoadShortHistoryDoesNotFail' -v`
 Expected: FAIL. `TestLoadFetchesMissingHead` — «loaded 3 candles, want 5 — the head of the window was not fetched» (мок вообще не будет вызван, mockery дополнительно сообщит о неудовлетворённом ожидании). `TestLoadShortHistoryDoesNotFail` может пройти уже сейчас — это нормально, он охраняет поведение, вводимое следующим шагом.
 
-- [ ] **Step 3: Реализовать симметричный добор**
+- [x] **Step 3: Реализовать симметричный добор**
 
 В `internal/service/backtest/candles.go` заменить хвост функции `Load` (строки 96–107, начиная с `last := cached[len(cached)-1].Time`) на:
 
@@ -427,17 +427,17 @@ Expected: FAIL. `TestLoadFetchesMissingHead` — «loaded 3 candles, want 5 — 
 
 Хвост сохраняет прежнюю семантику (ошибка возвращается): отсутствие свежих данных означает проблему с загрузкой, а не короткую историю инструмента.
 
-- [ ] **Step 4: Прогнать тесты провайдера**
+- [x] **Step 4: Прогнать тесты провайдера**
 
 Run: `go test ./internal/service/backtest/ -run 'TestLoad' -v`
 Expected: PASS все три (`TestLoadNoFileFetchesAndCaches`, `TestLoadFetchesMissingHead`, `TestLoadShortHistoryDoesNotFail`). Важно: `TestLoadNoFileFetchesAndCaches` проверяет, что тёплый полный кэш не рефетчится — если он покраснел, добор головы срабатывает там, где нечего добирать.
 
-- [ ] **Step 5: Прогнать весь пакет**
+- [x] **Step 5: Прогнать весь пакет**
 
 Run: `go test ./internal/service/backtest/`
 Expected: `ok`.
 
-- [ ] **Step 6: Коммит**
+- [x] **Step 6: Коммит**
 
 ```bash
 git add internal/service/backtest/candles.go internal/service/backtest/candles_test.go
@@ -468,7 +468,7 @@ EOF
 
 Имя пакета — `tbank`, не `t`: однобуквенный пакет дал бы `t.DefaultParams()` на вызове и столкнулся бы с идиомой `t *testing.T`. Тикером в API остаётся `"T"`.
 
-- [ ] **Step 1: Написать падающий тест переносимости**
+- [x] **Step 1: Написать падающий тест переносимости**
 
 Добавить в конец `internal/service/backtest/rsi_pullback_registry_test.go`:
 
@@ -493,12 +493,12 @@ func TestRSIPullbackTBankStartsFromGAZPConfig(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Прогнать тест — он должен упасть**
+- [x] **Step 2: Прогнать тест — он должен упасть**
 
 Run: `go test ./internal/service/backtest/ -run TestRSIPullbackTBankStartsFromGAZPConfig -v`
 Expected: FAIL — `T` не зарегистрирован, `RSIPullbackLookupOrGeneric` отдаёт generic-биндинг с `core.DefaultParams()`, и первое же сравнение с GAZP не проходит.
 
-- [ ] **Step 3: Создать пакет `tbank`**
+- [x] **Step 3: Создать пакет `tbank`**
 
 Создать `internal/service/trading_strategy/rsi_pullback/strategy/tbank/tbank.go`:
 
@@ -545,7 +545,7 @@ func DefaultParams() core.Params {
 }
 ```
 
-- [ ] **Step 4: Зарегистрировать тикер**
+- [x] **Step 4: Зарегистрировать тикер**
 
 В `internal/service/backtest/rsi_pullback_registry.go` добавить импорт после строки с `rsipullbacksfin` (алфавитный порядок по алиасу):
 
@@ -559,17 +559,17 @@ func DefaultParams() core.Params {
 	rsipullbacktbank.Ticker: rsiPullbackBindingFor(rsipullbacktbank.Ticker, rsipullbacktbank.DefaultParams),
 ```
 
-- [ ] **Step 5: Прогнать тесты и `gofmt`**
+- [x] **Step 5: Прогнать тесты и `gofmt`**
 
 Run: `gofmt -l ./internal && go test ./internal/service/backtest/ -run TestRSIPullback -v`
 Expected: `gofmt -l` не печатает файлов; все `TestRSIPullback*` — PASS. Особо проверить `TestRSIPullbackRegistryEntriesMatchTheirTicker/T` (пакет зарегистрирован под тем тикером, который объявляет) и `TestRSIPullbackRegistryKeepsTheStopArmed` (стоп не нулевой).
 
-- [ ] **Step 6: Прогнать весь пакет**
+- [x] **Step 6: Прогнать весь пакет**
 
 Run: `go test ./internal/service/backtest/`
 Expected: `ok`.
 
-- [ ] **Step 7: Коммит**
+- [x] **Step 7: Коммит**
 
 ```bash
 git add internal/service/trading_strategy/rsi_pullback/strategy/tbank/tbank.go \
@@ -602,7 +602,7 @@ EOF
 - Consumes: `rsiPullbackParamsDir` (константа, строка 13), `rsiPullbackPhases(t, path)`, `ParsePhases(raw []byte) ([]Phase, error)`, `applyField(p core.Params, name string, v float64) (core.Params, error)`.
 - Produces: `rsiPullbackGridFiles(t)` начинает возвращать пути и из подкаталогов — на него опираются `TestRSIPullbackCalFilesValid`, `TestRSIPullbackGridControlPoints` (задача 2) и новый plateau-тест.
 
-- [ ] **Step 1: Сделать обход каталога рекурсивным**
+- [x] **Step 1: Сделать обход каталога рекурсивным**
 
 В `internal/service/backtest/rsi_pullback_grid_test.go` заменить `rsiPullbackGridFiles` (строки 38–48) на:
 
@@ -636,7 +636,7 @@ func rsiPullbackGridFiles(t *testing.T) []string {
 
 Добавить `"io/fs"` в импорты файла (получится блок: `encoding/json`, `io/fs`, `os`, `path/filepath`, `strings`, `testing`, затем `tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core`).
 
-- [ ] **Step 2: Добавить тест «плато-файл — это точка»**
+- [x] **Step 2: Добавить тест «плато-файл — это точка»**
 
 Добавить в конец `internal/service/backtest/rsi_pullback_grid_test.go`:
 
@@ -672,12 +672,12 @@ func TestRSIPullbackPlateauFilesArePoints(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3: Прогнать грид-тесты — они должны проходить на текущей плоской раскладке**
+- [x] **Step 3: Прогнать грид-тесты — они должны проходить на текущей плоской раскладке**
 
 Run: `go test ./internal/service/backtest/ -run 'TestRSIPullbackGrid|TestRSIPullbackCalFiles|TestRSIPullbackPlateau' -v`
 Expected: PASS. Рекурсивный обход на плоском каталоге даёт тот же набор файлов, а четыре существующих `plateau_*` уже фиксируют по одному значению на ключ — тест проверяет это до переезда, чтобы переезд можно было отличить от содержательной поломки.
 
-- [ ] **Step 4: Переместить GAZP-плато в подкаталог**
+- [x] **Step 4: Переместить GAZP-плато в подкаталог**
 
 ```bash
 mkdir -p data/params/rsi_pullback/gazp
@@ -689,7 +689,7 @@ git mv data/params/rsi_pullback/plateau_rsilower30.json data/params/rsi_pullback
 
 В каждом из четырёх файлов в `_comment` поправить путь в команде запуска: `data/params/rsi_pullback/plateau_rsilower15.json` → `data/params/rsi_pullback/gazp/plateau_rsilower15.json` (аналогично для 20, 25, 30). Остальной текст, включая «post-grid GAZP config as of 2026-07-30», не трогать — эти файлы GAZP-специфичны по содержанию, и `-ticker GAZP` в их команде остаётся правильным.
 
-- [ ] **Step 5: Создать плато-набор T**
+- [x] **Step 5: Создать плато-набор T**
 
 Создать `data/params/rsi_pullback/t/plateau_rsilower25.json` — точка, равная GAZP-конфигу:
 
@@ -722,7 +722,7 @@ git mv data/params/rsi_pullback/plateau_rsilower30.json data/params/rsi_pullback
 
 Флаг `-refresh` в командах обязателен для первого прогона T: кэш `data/candles/T_*.json` покрывает лишь ~12 месяцев 30m и устаревший Day1.
 
-- [ ] **Step 6: Обобщить команды в тикер-агностичных развёртках**
+- [x] **Step 6: Обобщить команды в тикер-агностичных развёртках**
 
 В восьми файлах `data/params/rsi_pullback/cal_*.json` (`cal_day`, `cal_day_spent`, `cal_entry`, `cal_exit`, `cal_risk`, `cal_screen`, `cal_trend`, `cal_volume`) в конце `_comment` после существующей команды `Run: go run ./cmd/backtest -ticker GAZP ...` добавить предложение:
 
@@ -732,22 +732,23 @@ GAZP is only the example instrument here: this file sweeps one theme and is tick
 
 `<theme>` в каждом файле заменить на его тему (`day`, `day_spent`, `entry`, `exit`, `risk`, `screen`, `trend`, `volume`). Имя самого файла из `_comment` не убирать — `TestRSIPullbackCalFilesValid` требует, чтобы комментарий называл свой файл.
 
-- [ ] **Step 7: Прогнать грид-тесты на новой раскладке**
+- [x] **Step 7: Прогнать грид-тесты на новой раскладке**
 
 Run: `go test ./internal/service/backtest/ -run 'TestRSIPullbackGrid|TestRSIPullbackCalFiles|TestRSIPullbackPlateau' -v`
 Expected: PASS. `TestRSIPullbackPlateauFilesArePoints` должен показать восемь подтестов (`gazp/plateau_*` и `t/plateau_*`) — если их четыре, рекурсивный обход не подхватил подкаталог.
 
-- [ ] **Step 8: Проверить JSON-валидность и число точек глазами**
+- [x] **Step 8: Проверить JSON-валидность и число точек глазами**
 
 Run: `python3 -c "import json,glob;[json.load(open(f)) for f in glob.glob('data/params/rsi_pullback/**/*.json',recursive=True)];print('json ok', len(glob.glob('data/params/rsi_pullback/**/*.json',recursive=True)))"`
 Expected: `json ok 17` (grid.json + 8 cal + 4 gazp/plateau + 4 t/plateau).
 
-- [ ] **Step 9: Коммит**
+- [x] **Step 9: Коммит**
 
 ```bash
 git add data/params/rsi_pullback internal/service/backtest/rsi_pullback_grid_test.go
 git commit -m "$(cat <<'EOF'
 feat(rsi_pullback): раскладка гридов по тикерам и плато-набор T
+
 Плато-файлы GAZP уехали в gazp/ — их значения тикер-специфичны и в корне
 вводили в заблуждение. Появился t/ с четырьмя точками вокруг RSILower:
 точка 25 — GAZP-конфиг на T as-is, соседние показывают, плато это или
@@ -773,7 +774,7 @@ EOF
 
 Документация разошлась с файлами по всем размерам гридов — это проверено пересчётом: `grid.json` 243→**277**, `cal_day` 12→**120**, `cal_entry` 12→**20**, `cal_trend` 12→**36**, `cal_risk` 16→**24**, `cal_volume` 18→**24**. Совпадают только `cal_screen` (4), `cal_day_spent` (5), `cal_exit` (6).
 
-- [ ] **Step 1: Проверить размеры перед правкой (не доверять плану на слово)**
+- [x] **Step 1: Проверить размеры перед правкой (не доверять плану на слово)**
 
 Run:
 ```bash
@@ -791,11 +792,11 @@ EOF
 ```
 Expected: `grid.json 277`, `cal_day.json 120`, `cal_day_spent.json 5`, `cal_entry.json 20`, `cal_exit.json 6`, `cal_risk.json 24`, `cal_screen.json 4`, `cal_trend.json 36`, `cal_volume.json 24`, все восемь `plateau` — по `1`. Числа из вывода и идут в документацию.
 
-- [ ] **Step 2: Обновить формулу и число в разделе 8**
+- [x] **Step 2: Обновить формулу и число в разделе 8**
 
 В `docs/rsi_pullback/strategy.md` строка ~230: `9 + 6·9 + 5·12 + 5·12 + 4·12 + 4·3 = 243` → `9 + 6·12 + 5·12 + 5·12 + 4·16 + 4·3 = 277`. В том же абзаце «243 вызова движка» → «277 вызовов движка». В строке ~264 «полный `grid.json` на 243 прогона» → «на 277 прогонов». В строке ~335 «тратить 243 прогона» → «тратить 277 прогонов».
 
-- [ ] **Step 3: Привести таблицу раздела 8.0 к факту и дополнить её плато-файлами**
+- [x] **Step 3: Привести таблицу раздела 8.0 к факту и дополнить её плато-файлами**
 
 Заменить таблицу (строки ~243–252) на:
 
@@ -814,7 +815,7 @@ Expected: `grid.json 277`, `cal_day.json 120`, `cal_day_spent.json 5`, `cal_entr
 | `<ticker>/plateau_rsilower*.json` | 1 каждый | фиксированная точка: PF принадлежит конфигурации, а не отбору |
 ```
 
-- [ ] **Step 4: Добавить подраздел про по-тикерные пакеты и прогон нового тикера**
+- [x] **Step 4: Добавить подраздел про по-тикерные пакеты и прогон нового тикера**
 
 Вставить перед `### 8.1.` новый подраздел:
 
@@ -870,26 +871,27 @@ go run ./cmd/backtest -ticker T -strategy rsi_pullback -interval Minutes30 \
 `TestRSIPullbackTBankStartsFromGAZPConfig` — переписан под новые значения.
 ```
 
-- [ ] **Step 5: Обновить абзац про проверку файлов каталога**
+- [x] **Step 5: Обновить абзац про проверку файлов каталога**
 
 В конце раздела 8.0 (строки ~269–273) в предложении «Все файлы каталога проверяются тестом `TestRSIPullbackCalFilesValid`…» добавить, что обход рекурсивный и покрывает подкаталоги `<ticker>/`, а требование «команда в `_comment` называет свой файл» относится к `cal_*.json`.
 
-- [ ] **Step 6: Проверить, что в документации не осталось расхождений**
+- [x] **Step 6: Проверить, что в документации не осталось расхождений**
 
 Run: `grep -n "243\|4·12\|6·9" docs/rsi_pullback/strategy.md`
 Expected: пусто (ни одного вхождения).
 
-- [ ] **Step 7: Финальный гейт качества**
+- [x] **Step 7: Финальный гейт качества**
 
 Run: `./bin/mage ci`
 Expected: lint без замечаний, `go test -race ./...` зелёный, проверка дрейфа моков зелёная. Если `./bin/mage` отсутствует — сначала `go run ./magefiles tools` согласно `docs/tooling/mage.md`.
 
-- [ ] **Step 8: Коммит**
+- [x] **Step 8: Коммит**
 
 ```bash
 git add docs/rsi_pullback/strategy.md
 git commit -m "$(cat <<'EOF'
 docs(rsi_pullback): раскладка параметров по тикерам и порядок прогона T
+
 Размеры гридов приведены к факту (grid 243->277, cal_day 12->120,
 cal_entry 12->20, cal_trend 12->36, cal_risk 16->24, cal_volume 18->24).
 Новый подраздел: три состояния по-тикерного пакета, тикер-агностичные
@@ -905,9 +907,9 @@ EOF
 
 ## Проверка результата целиком
 
-- [ ] `./bin/mage ci` зелёный.
-- [ ] `go test ./internal/service/backtest/ -run TestRSIPullback -v` — все подтесты PASS, среди них `TestRSIPullbackRegistryEntriesMatchTheirTicker/T` и восемь подтестов `TestRSIPullbackPlateauFilesArePoints`.
-- [ ] `ls data/params/rsi_pullback/` — в корне только `grid.json` и восемь `cal_*.json`; подкаталоги `gazp/` и `t/` по четыре файла.
-- [ ] `git status` чистый, история ветки — шесть новых коммитов.
+- [x] `./bin/mage ci` зелёный.
+- [x] `go test ./internal/service/backtest/ -run TestRSIPullback -v` — все подтесты PASS, среди них `TestRSIPullbackRegistryEntriesMatchTheirTicker/T` и восемь подтестов `TestRSIPullbackPlateauFilesArePoints`.
+- [x] `ls data/params/rsi_pullback/` — в корне только `grid.json` и восемь `cal_*.json`; подкаталоги `gazp/` и `t/` по четыре файла.
+- [x] `git status` чистый, история ветки — шесть новых коммитов.
 
 Прогон калибровки T (шаги из раздела 8.0.1 документации) выполняет владелец репозитория — он требует токена и сети и в этот план не входит.
