@@ -93,13 +93,31 @@ func (p *CandleProvider) Load(ctx context.Context, ticker, instrumentID string,
 		return sliceWindow(fetched, from, to), nil
 	}
 
-	last := cached[len(cached)-1].Time
-	if last.Before(to) {
+	// The head and the tail are topped up symmetrically. Topping up only the tail let a warm
+	// but SHORT cache return a truncated window with no error: a run asking for 24 months on a
+	// 12-month cache would quietly calibrate on half the history. A missing head is NOT fatal,
+	// though — an instrument may simply not have traded that far back, so we warn and continue
+	// with what exists instead of failing the run.
+	dirty := false
+	if first := cached[0].Time; first.After(from) {
+		head, ferr := p.fetchRange(ctx, instrumentID, interval, from, first)
+		if ferr != nil {
+			logger.Warn(fmt.Sprintf("backtest: %s (%s) has no candles before %s — the window starts where its history does, not at %s",
+				ticker, interval.String(), first, from))
+		} else {
+			cached = mergeCandles(cached, head)
+			dirty = true
+		}
+	}
+	if last := cached[len(cached)-1].Time; last.Before(to) {
 		tail, ferr := p.fetchRange(ctx, instrumentID, interval, last, to)
 		if ferr != nil {
 			return nil, ferr
 		}
 		cached = mergeCandles(cached, tail)
+		dirty = true
+	}
+	if dirty {
 		if werr := p.writeCache(path, cached); werr != nil {
 			return nil, werr
 		}

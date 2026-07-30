@@ -2,6 +2,9 @@ package backtest
 
 import (
 	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -12,7 +15,16 @@ import (
 	"tinvest/internal/enum"
 	"tinvest/internal/model"
 	"tinvest/internal/service/backtest/mocks"
+	"tinvest/pkg/logger"
 )
+
+// TestMain initializes the package-level logger: Load's head top-up warns via
+// logger.Warn on a legitimately short history, and that call panics on a nil
+// logger if Init is never called.
+func TestMain(m *testing.M) {
+	logger.Init()
+	os.Exit(m.Run())
+}
 
 func qt(v float64) model.Quotation { return model.Quotation{Units: int64(v), Nano: 0} }
 
@@ -96,5 +108,91 @@ func TestLoadNoFileFetchesAndCaches(t *testing.T) {
 	}
 	if calls != callsAfterFirst {
 		t.Fatalf("warm cache refetched: calls %d -> %d", callsAfterFirst, calls)
+	}
+}
+
+// TestLoadFetchesMissingHead pins that a warm but SHORT cache does not silently truncate the
+// requested window. Load used to top up only the tail, so a cache starting later than `from`
+// returned a shorter series with no error at all — a walk-forward would then be built on part
+// of the history while the report still claimed the full range.
+func TestLoadFetchesMissingHead(t *testing.T) {
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	// Cache holds hours 2..4 only; the caller asks for hours 0..4.
+	cached := []backtest.Candle{
+		{Time: base.Add(2 * time.Hour), Close: 12},
+		{Time: base.Add(3 * time.Hour), Close: 13},
+		{Time: base.Add(4 * time.Hour), Close: 14},
+	}
+	dir := t.TempDir()
+	raw, err := json.Marshal(cached)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "T_Hour1.json"), raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var reqFrom, reqTo time.Time
+	var calls int
+	m := mocks.NewMockcandleFetcher(t)
+	m.EXPECT().GetCandles(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		RunAndReturn(func(_ context.Context, _ *string, _ int32, from, to *timestamppb.Timestamp, _ *int32, _ bool) ([]*model.CandleItemTechAnalyse, error) {
+			calls++
+			reqFrom, reqTo = from.AsTime().UTC(), to.AsTime().UTC()
+			return []*model.CandleItemTechAnalyse{
+				bar(base, 10, true),
+				bar(base.Add(time.Hour), 11, true),
+			}, nil
+		})
+
+	p := NewCandleProvider(m, dir)
+	got, err := p.Load(context.Background(), "T", "id-T", enum.Hour1, base, base.Add(4*time.Hour), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 5 {
+		t.Fatalf("loaded %d candles, want 5 — the head of the window was not fetched", len(got))
+	}
+	if !got[0].Time.Equal(base) {
+		t.Fatalf("first candle = %s, want the requested from %s", got[0].Time, base)
+	}
+	if calls != 1 {
+		t.Fatalf("fetcher called %d times, want exactly 1 (head only; the tail is already cached)", calls)
+	}
+	if !reqFrom.Equal(base) || !reqTo.Equal(base.Add(2*time.Hour)) {
+		t.Fatalf("head fetch asked for [%s, %s], want [%s, %s] — only the missing head",
+			reqFrom, reqTo, base, base.Add(2*time.Hour))
+	}
+}
+
+// TestLoadShortHistoryDoesNotFail pins the legitimate case behind the head top-up: an
+// instrument that simply did not trade as far back as `from`. The head fetch returns nothing,
+// and Load must still return the cached window instead of failing the whole run.
+func TestLoadShortHistoryDoesNotFail(t *testing.T) {
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	cached := []backtest.Candle{
+		{Time: base.Add(2 * time.Hour), Close: 12},
+		{Time: base.Add(3 * time.Hour), Close: 13},
+	}
+	dir := t.TempDir()
+	raw, err := json.Marshal(cached)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "T_Hour1.json"), raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	m := mocks.NewMockcandleFetcher(t)
+	m.EXPECT().GetCandles(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(nil, nil) // no candles that far back
+
+	p := NewCandleProvider(m, dir)
+	got, err := p.Load(context.Background(), "T", "id-T", enum.Hour1, base, base.Add(3*time.Hour), false)
+	if err != nil {
+		t.Fatalf("Load failed on an instrument with a short history: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("loaded %d candles, want the 2 cached ones", len(got))
 	}
 }
