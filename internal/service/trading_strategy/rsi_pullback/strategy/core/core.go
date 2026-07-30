@@ -33,7 +33,7 @@ type Params struct {
 	EMASlow         int     // slow EMA period (grid; default 100)
 	DailyATRPeriod  int     // daily ATR length, over WEEKDAY completed dailies (grid; default 14)
 	UseDayATRGate   int     // 1 arms the two-sided day gate; any other value disables it (grid; default 1)
-	FreshDayATR     float64 // "day barely started": range so far <= FreshDayATR*dailyATR (grid; default 0.3)
+	FreshDayATR     float64 // "day barely started": range so far <= FreshDayATR*dailyATR (grid; default 0)
 	SpentDayATR     float64 // "day spent": range so far >= SpentDayATR*dailyATR (grid; default 0.8)
 	StopDailyATR    float64 // stop = entry - StopDailyATR*dailyATR; 0 disables it (grid; never 0 in the grid)
 	TPDailyATR      float64 // target = entry + TPDailyATR*dailyATR; 0 disables it (grid)
@@ -53,7 +53,7 @@ func DefaultParams() Params {
 		EMASlow:         100,
 		DailyATRPeriod:  14,
 		UseDayATRGate:   1,
-		FreshDayATR:     0.2,
+		FreshDayATR:     0,
 		SpentDayATR:     0.8,
 		StopDailyATR:    0.5,
 		TPDailyATR:      0.6,
