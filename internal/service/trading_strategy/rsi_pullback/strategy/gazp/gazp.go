@@ -1,10 +1,12 @@
 // Package gazp supplies the ticker and starting rsi_pullback Params for GAZP (Gazprom).
 //
-// Calibration has NOT been run for this ticker: the body returns core.DefaultParams()
-// unchanged rather than copying its fields, so a change to the baseline still reaches every
-// uncalibrated ticker instead of silently drifting away from it. Once -calibrate picks a
-// winning combination for GAZP, replace the body with an explicit literal — from that point
-// the ticker must stop tracking the baseline.
+// Calibration HAS been run for this ticker. The values below are GAZP's own post-grid result,
+// copied in as an explicit literal rather than left as core.DefaultParams() — the two consequences
+// of that are deliberate. First, this package does NOT track the baseline: a future change to
+// core.DefaultParams() must not reach GAZP silently, because these values came from GAZP's own
+// calibration, not from the generic starting point. Second, once a fresh -calibrate run picks a
+// different winning combination for GAZP, this literal must be REPLACED — leaving the old numbers
+// in place after a newer run would ship a config the latest data never endorsed.
 package gazp
 
 import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
@@ -12,7 +14,8 @@ import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 // Ticker is the instrument this package configures.
 const Ticker = "GAZP"
 
-// DefaultParams returns GAZP's starting rsi_pullback parameters (pre-calibration).
+// DefaultParams returns GAZP's calibrated rsi_pullback parameters: its own post-grid result,
+// not core.DefaultParams().
 func DefaultParams() core.Params {
 	return core.Params{
 		RSIPeriod:       4,
