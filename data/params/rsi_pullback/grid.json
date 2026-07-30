@@ -14,16 +14,16 @@
       "keepTop": 5,
       "grid": {
         "EMAFast": [5, 10, 20],
-        "EMASlow": [50, 100, 200]
+        "EMASlow": [50, 100, 150, 200]
       }
     },
     {
       "name": "day",
       "keepTop": 5,
       "grid": {
-        "UseDayATRGate": [0, 1],
-        "FreshDayATR": [0.3, 0.5],
-        "SpentDayATR": [0.8, 1.0, 1.3]
+        "UseDayATRGate": [1],
+        "FreshDayATR": [0.3, 0.2, 0],
+        "SpentDayATR": [0.6, 0.8, 1.0, 1.3]
       }
     },
     {
@@ -39,8 +39,8 @@
       "name": "risk",
       "keepTop": 4,
       "grid": {
-        "StopDailyATR": [0.5,0.8, 1.0, 1.3],
-        "TPDailyATR": [0.7, 1.0, 1.5]
+        "StopDailyATR": [0.5,0.8, 1.0, 0.6],
+        "TPDailyATR": [0.7, 1.0, 1.5, 2.0]
       }
     },
     {

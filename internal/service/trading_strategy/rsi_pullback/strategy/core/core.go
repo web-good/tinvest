@@ -53,7 +53,7 @@ func DefaultParams() Params {
 		EMASlow:         100,
 		DailyATRPeriod:  14,
 		UseDayATRGate:   1,
-		FreshDayATR:     0,
+		FreshDayATR:     0.2,
 		SpentDayATR:     0.8,
 		StopDailyATR:    0.5,
 		TPDailyATR:      0.6,

@@ -6,7 +6,7 @@
       "grid": {
         "UseVolume": [1],
         "VolMult": [1.1, 1.2, 1.5, 1.75, 2.0, 2.5],
-        "VolBaseDays": [3, 5, 10]
+        "VolBaseDays": [3, 5, 10, 14]
       }
     }
   ]
