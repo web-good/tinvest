@@ -127,3 +127,22 @@ func TestRSIPullbackParseParamsRejectsGarbage(t *testing.T) {
 		t.Fatal("ParseParams accepted malformed JSON, want an error")
 	}
 }
+
+// TestRSIPullbackTBankStartsFromGAZPConfig pins a DELIBERATE hypothesis, not a fact: T starts
+// from GAZP's post-grid literal to test whether parameters transfer between liquid names. The
+// equality is pinned so the link cannot dissolve unnoticed — once T is calibrated on its own
+// data, this test must be rewritten to pin T's own literal, and the rewrite is the moment the
+// hypothesis gets consciously retired.
+func TestRSIPullbackTBankStartsFromGAZPConfig(t *testing.T) {
+	tb := RSIPullbackLookupOrGeneric("T").DefaultParams().(core.Params)
+	gz := RSIPullbackLookupOrGeneric("GAZP").DefaultParams().(core.Params)
+	if tb != gz {
+		t.Fatalf("T params = %+v, want GAZP's %+v — T is seeded from the GAZP config on purpose", tb, gz)
+	}
+	if tb == core.DefaultParams() {
+		t.Fatal("T returns the baseline: the GAZP seed was lost")
+	}
+	if got := RSIPullbackLookupOrGeneric("T").Build(tb).Ticker(); got != "T" {
+		t.Fatalf("Ticker() = %q, want T", got)
+	}
+}
