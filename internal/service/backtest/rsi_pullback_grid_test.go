@@ -2,6 +2,7 @@ package backtest
 
 import (
 	"encoding/json"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -36,12 +37,25 @@ func rsiPullbackPhases(t *testing.T, path string) []Phase {
 	return phases
 }
 
-// rsiPullbackGridFiles lists every grid file shipped for the strategy.
+// rsiPullbackGridFiles lists every grid file shipped for the strategy, including the
+// per-ticker subdirectories (gazp/, t/). The walk is recursive on purpose: ticker-specific
+// fixed configs live in subdirectories, and a flat glob would silently exempt exactly those
+// files from the field and stop checks below.
 func rsiPullbackGridFiles(t *testing.T) []string {
 	t.Helper()
-	files, err := filepath.Glob(filepath.Join(rsiPullbackParamsDir, "*.json"))
+	var files []string
+	err := filepath.WalkDir(rsiPullbackParamsDir, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if d.IsDir() || filepath.Ext(path) != ".json" {
+			return nil
+		}
+		files = append(files, path)
+		return nil
+	})
 	if err != nil {
-		t.Fatalf("glob grids: %v", err)
+		t.Fatalf("walk grids: %v", err)
 	}
 	if len(files) < 2 {
 		t.Fatalf("expected the phased grid plus the cal_*.json files, found %d", len(files))
@@ -186,5 +200,35 @@ func TestRSIPullbackGridEvaluationCost(t *testing.T) {
 	}
 	if total != 277 {
 		t.Fatalf("phased calibration costs %d evaluations, want the documented 277", total)
+	}
+}
+
+// TestRSIPullbackPlateauFilesArePoints pins what makes a plateau check meaningful: every key
+// carries exactly ONE value, so each walk-forward fold has a single combo to rank and the
+// calibrator makes no choice at all. The pooled OOS profit factor then belongs to that fixed
+// configuration. Let any key carry two values and the number silently becomes the result of a
+// selection procedure — which is the very thing a plateau check exists to rule out.
+func TestRSIPullbackPlateauFilesArePoints(t *testing.T) {
+	var seen int
+	for _, path := range rsiPullbackGridFiles(t) {
+		name := filepath.Base(path)
+		if !strings.HasPrefix(name, "plateau_") {
+			continue
+		}
+		seen++
+		rel := filepath.Join(filepath.Base(filepath.Dir(path)), name)
+		t.Run(rel, func(t *testing.T) {
+			for _, ph := range rsiPullbackPhases(t, path) {
+				for field, values := range ph.Grid {
+					if len(values) != 1 {
+						t.Fatalf("phase %q pins %s over %d values: a plateau file must carry exactly one value per key",
+							ph.Name, field, len(values))
+					}
+				}
+			}
+		})
+	}
+	if seen == 0 {
+		t.Fatal("no plateau_*.json files found: the plateau checks are part of the shipped set")
 	}
 }
