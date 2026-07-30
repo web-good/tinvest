@@ -6,26 +6,51 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 )
 
+// TestRSIPullbackBindingBuildsForTicker checks the wiring on a ticker whose package still
+// tracks the baseline. SBER is deliberate: pinning this to a CALIBRATED ticker would turn
+// every future calibration into a red test, which is exactly how this test broke before.
 func TestRSIPullbackBindingBuildsForTicker(t *testing.T) {
-	b := RSIPullbackLookupOrGeneric("GAZP")
+	b := RSIPullbackLookupOrGeneric("SBER")
 	p, ok := b.DefaultParams().(core.Params)
 	if !ok {
 		t.Fatalf("DefaultParams() returned %T, want core.Params", b.DefaultParams())
 	}
 	if p != core.DefaultParams() {
-		t.Fatalf("DefaultParams() = %+v, want %+v", p, core.DefaultParams())
+		t.Fatalf("DefaultParams() = %+v, want the baseline %+v", p, core.DefaultParams())
 	}
 	s := b.Build(p)
-	if s.Ticker() != "GAZP" {
-		t.Fatalf("Ticker() = %q, want GAZP", s.Ticker())
+	if s.Ticker() != "SBER" {
+		t.Fatalf("Ticker() = %q, want SBER", s.Ticker())
 	}
 	if s.Lookback() < 220 {
 		t.Fatalf("Lookback() = %d, want >= 220", s.Lookback())
 	}
 }
 
+// TestRSIPullbackCalibratedBindingKeepsItsOwnLiteral pins the opposite direction for a ticker
+// that HAS been calibrated: GAZP must not drift back to the baseline. A package whose literal
+// silently collapses into core.DefaultParams() would look calibrated while trading generic
+// values, and the report would carry the ticker's name either way.
+func TestRSIPullbackCalibratedBindingKeepsItsOwnLiteral(t *testing.T) {
+	b := RSIPullbackLookupOrGeneric("GAZP")
+	p, ok := b.DefaultParams().(core.Params)
+	if !ok {
+		t.Fatalf("DefaultParams() returned %T, want core.Params", b.DefaultParams())
+	}
+	if p == core.DefaultParams() {
+		t.Fatal("GAZP returns the baseline: its calibrated literal was lost")
+	}
+	if got := b.Build(p).Ticker(); got != "GAZP" {
+		t.Fatalf("Ticker() = %q, want GAZP", got)
+	}
+}
+
+// TestRSIPullbackParseParamsLayersOverDefaults pins that partial calibration JSON overrides
+// only the fields it names. It compares against the BINDING's own defaults, not the package
+// baseline: for a calibrated ticker those differ, and the test is about layering, not baseline.
 func TestRSIPullbackParseParamsLayersOverDefaults(t *testing.T) {
 	b := RSIPullbackLookupOrGeneric("GAZP")
+	base := b.DefaultParams().(core.Params)
 	got, err := b.ParseParams([]byte(`{"RSILower": 10}`))
 	if err != nil {
 		t.Fatalf("ParseParams: %v", err)
@@ -34,9 +59,12 @@ func TestRSIPullbackParseParamsLayersOverDefaults(t *testing.T) {
 	if p.RSILower != 10 {
 		t.Fatalf("RSILower = %v, want the JSON value 10", p.RSILower)
 	}
-	if p.RSIUpper != core.DefaultParams().RSIUpper {
-		t.Fatalf("RSIUpper = %v, want the default %v (partial JSON must not zero other fields)",
-			p.RSIUpper, core.DefaultParams().RSIUpper)
+	if p.RSIUpper != base.RSIUpper {
+		t.Fatalf("RSIUpper = %v, want the binding default %v (partial JSON must not zero other fields)",
+			p.RSIUpper, base.RSIUpper)
+	}
+	if p.EMASlow != base.EMASlow {
+		t.Fatalf("EMASlow = %v, want the binding default %v", p.EMASlow, base.EMASlow)
 	}
 }
 
