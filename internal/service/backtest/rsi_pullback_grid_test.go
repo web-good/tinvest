@@ -111,23 +111,37 @@ func TestRSIPullbackCalFilesValid(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackGridControlPoints pins the deliberate on/off points: both optional gates must
-// be sweepable to "off", and the stop must NOT be — calibration may never choose to hold a
-// multi-day position without protection.
+// TestRSIPullbackGridControlPoints pins the deliberate on/off points. The two optional gates
+// must be sweepable to "off" SOMEWHERE in the shipped set — the control lives in
+// cal_screen.json, not in grid.json, and pinning it to one file forbids that split — while the
+// stop must never be sweepable to zero anywhere, and the full grid must test a target above the
+// stop so the reward-to-risk asymmetry does not stay an assumption.
 func TestRSIPullbackGridControlPoints(t *testing.T) {
-	var sawDayOff, sawVolumeOff, sawStop, sawTPAboveStop bool
+	var sawDayOff, sawVolumeOff bool
+	for _, path := range rsiPullbackGridFiles(t) {
+		for _, ph := range rsiPullbackPhases(t, path) {
+			for _, v := range ph.Grid["UseDayATRGate"] {
+				if v == 0 {
+					sawDayOff = true
+				}
+			}
+			for _, v := range ph.Grid["UseVolume"] {
+				if v == 0 {
+					sawVolumeOff = true
+				}
+			}
+		}
+	}
+	if !sawDayOff {
+		t.Fatal("no UseDayATRGate=0 control point in any grid file: the day gate can never be measured against off")
+	}
+	if !sawVolumeOff {
+		t.Fatal("no UseVolume=0 control point in any grid file: the volume gate can never be measured against off")
+	}
+
+	var sawStop, sawTPAboveStop bool
 	maxStop := 0.0
 	for _, ph := range rsiPullbackGrid(t) {
-		for _, v := range ph.Grid["UseDayATRGate"] {
-			if v == 0 {
-				sawDayOff = true
-			}
-		}
-		for _, v := range ph.Grid["UseVolume"] {
-			if v == 0 {
-				sawVolumeOff = true
-			}
-		}
 		for _, v := range ph.Grid["StopDailyATR"] {
 			sawStop = true
 			if v == 0 {
@@ -145,17 +159,11 @@ func TestRSIPullbackGridControlPoints(t *testing.T) {
 			}
 		}
 	}
-	if !sawDayOff {
-		t.Fatal("no UseDayATRGate=0 control point in the grid")
-	}
-	if !sawVolumeOff {
-		t.Fatal("no UseVolume=0 control point in the grid")
-	}
 	if !sawStop {
 		t.Fatal("the grid never sweeps StopDailyATR")
 	}
 	if !sawTPAboveStop {
-		t.Fatal("the grid never tests a target above the stop: the 0.6:1 asymmetry stays untested")
+		t.Fatal("the grid never tests a target above the stop: the reward-to-risk asymmetry stays untested")
 	}
 }
 
@@ -176,7 +184,7 @@ func TestRSIPullbackGridEvaluationCost(t *testing.T) {
 			seeds = ph.KeepTop
 		}
 	}
-	if total != 243 {
-		t.Fatalf("phased calibration costs %d evaluations, want the documented 243", total)
+	if total != 277 {
+		t.Fatalf("phased calibration costs %d evaluations, want the documented 277", total)
 	}
 }
