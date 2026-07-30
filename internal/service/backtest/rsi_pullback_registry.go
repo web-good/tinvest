@@ -40,9 +40,11 @@ func rsiPullbackBindingFor(ticker string, defaults func() core.Params) Binding {
 	}
 }
 
-// rsiPullbackRegistry gives every tracked ticker its own parameter package. Each entry currently
-// returns the generic baseline — calibration is pending — so the map exists to give a ticker
-// somewhere to put its winning combination, not to claim the tickers are already tuned.
+// rsiPullbackRegistry gives every tracked ticker its own parameter package. An entry is in one of
+// three states, documented on the package itself: baseline-tracking (DefaultParams() as-is,
+// calibration pending), calibrated (an explicit literal from that ticker's own walk-forward, e.g.
+// gazp), or seeded from another ticker's literal as an explicit transferability hypothesis, not a
+// claim of being tuned (e.g. tbank, copied from gazp — see docs/rsi_pullback/strategy.md §8.0.1).
 var rsiPullbackRegistry = map[string]Binding{
 	rsipullbackafks.Ticker:  rsiPullbackBindingFor(rsipullbackafks.Ticker, rsipullbackafks.DefaultParams),
 	rsipullbackastr.Ticker:  rsiPullbackBindingFor(rsipullbackastr.Ticker, rsipullbackastr.DefaultParams),

@@ -27,7 +27,7 @@ const minLookback = 120
 // can sweep them.
 type Params struct {
 	RSIPeriod       int     // RSI length (grid; default 4)
-	RSILower        float64 // lower band; a DOWNWARD cross of it is the entry (grid; default 15)
+	RSILower        float64 // lower band; a DOWNWARD cross of it is the entry (grid; default 30)
 	RSIUpper        float64 // upper band; an UPWARD cross of it is the exit (grid; default 70)
 	EMAFast         int     // fast EMA period (grid; default 10)
 	EMASlow         int     // slow EMA period (grid; default 100)
@@ -37,10 +37,10 @@ type Params struct {
 	SpentDayATR     float64 // "day spent": range so far >= SpentDayATR*dailyATR (grid; default 0.8)
 	StopDailyATR    float64 // stop = entry - StopDailyATR*dailyATR; 0 disables it (grid; never 0 in the grid)
 	TPDailyATR      float64 // target = entry + TPDailyATR*dailyATR; 0 disables it (grid)
-	UseVolume       int     // 1 arms the volume-background gate; any other value disables it (grid; default 1)
-	VolBaseDays     int     // completed WEEKDAY days behind the baseline (grid; default 5)
+	UseVolume       int     // 1 arms the volume-background gate; any other value disables it (grid; default 0)
+	VolBaseDays     int     // completed WEEKDAY days behind the baseline (grid; default 14)
 	VolLookbackBars int     // how many recent weekday bars may open the gate (grid; default 3)
-	VolMult         float64 // a bar opens the gate at volume >= VolMult * its slot baseline (grid; default 1.5)
+	VolMult         float64 // a bar opens the gate at volume >= VolMult * its slot baseline (grid; default 1.2)
 }
 
 // DefaultParams returns the spec's baseline; swept values come from calibration.

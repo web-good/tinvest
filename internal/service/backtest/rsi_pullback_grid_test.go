@@ -88,8 +88,12 @@ func TestRSIPullbackGridFieldsExist(t *testing.T) {
 func TestRSIPullbackCalFilesValid(t *testing.T) {
 	for _, path := range rsiPullbackGridFiles(t) {
 		name := filepath.Base(path)
-		t.Run(name, func(t *testing.T) {
+		rel := filepath.Join(filepath.Base(filepath.Dir(path)), name)
+		t.Run(rel, func(t *testing.T) {
 			for _, ph := range rsiPullbackPhases(t, path) {
+				if len(ph.Grid) == 0 {
+					t.Fatalf("%s: phase %q has an empty grid — that silently degenerates to DefaultParams() at runtime instead of the pinned point the file and its report claim", name, ph.Name)
+				}
 				for field, values := range ph.Grid {
 					if len(values) == 0 {
 						t.Fatalf("phase %q: field %q has no values", ph.Name, field)
@@ -219,6 +223,9 @@ func TestRSIPullbackPlateauFilesArePoints(t *testing.T) {
 		rel := filepath.Join(filepath.Base(filepath.Dir(path)), name)
 		t.Run(rel, func(t *testing.T) {
 			for _, ph := range rsiPullbackPhases(t, path) {
+				if len(ph.Grid) == 0 {
+					t.Fatalf("%s: phase %q has an empty grid — that silently degenerates to DefaultParams() at runtime instead of the pinned point the file and its report claim", rel, ph.Name)
+				}
 				for field, values := range ph.Grid {
 					if len(values) != 1 {
 						t.Fatalf("phase %q pins %s over %d values: a plateau file must carry exactly one value per key",

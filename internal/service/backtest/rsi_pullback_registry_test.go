@@ -50,7 +50,10 @@ func TestRSIPullbackCalibratedBindingKeepsItsOwnLiteral(t *testing.T) {
 // baseline: for a calibrated ticker those differ, and the test is about layering, not baseline.
 func TestRSIPullbackParseParamsLayersOverDefaults(t *testing.T) {
 	b := RSIPullbackLookupOrGeneric("GAZP")
-	base := b.DefaultParams().(core.Params)
+	base, ok := b.DefaultParams().(core.Params)
+	if !ok {
+		t.Fatalf("DefaultParams() returned %T, want core.Params", b.DefaultParams())
+	}
 	got, err := b.ParseParams([]byte(`{"RSILower": 10}`))
 	if err != nil {
 		t.Fatalf("ParseParams: %v", err)
@@ -134,8 +137,16 @@ func TestRSIPullbackParseParamsRejectsGarbage(t *testing.T) {
 // data, this test must be rewritten to pin T's own literal, and the rewrite is the moment the
 // hypothesis gets consciously retired.
 func TestRSIPullbackTBankStartsFromGAZPConfig(t *testing.T) {
-	tb := RSIPullbackLookupOrGeneric("T").DefaultParams().(core.Params)
-	gz := RSIPullbackLookupOrGeneric("GAZP").DefaultParams().(core.Params)
+	tbRaw := RSIPullbackLookupOrGeneric("T").DefaultParams()
+	tb, ok := tbRaw.(core.Params)
+	if !ok {
+		t.Fatalf("T: DefaultParams() returned %T, want core.Params", tbRaw)
+	}
+	gzRaw := RSIPullbackLookupOrGeneric("GAZP").DefaultParams()
+	gz, ok := gzRaw.(core.Params)
+	if !ok {
+		t.Fatalf("GAZP: DefaultParams() returned %T, want core.Params", gzRaw)
+	}
 	if tb != gz {
 		t.Fatalf("T params = %+v, want GAZP's %+v — T is seeded from the GAZP config on purpose", tb, gz)
 	}
