@@ -677,7 +677,8 @@ func TestExitOnRSIEnteringUpperBand(t *testing.T) {
 	s := NewWithParams("T", DefaultParams())
 	md := upperCrossFixture()
 	i := len(md.Closes) - 1
-	// Stop far below so only the RSI exit can fire.
+	// The stop argument is inert here: withPosition zeroes EntryATR, which disables the
+	// protective level in desiredStop regardless of this value, so only the RSI exit can fire.
 	md = withPosition(md, md.Closes[i]*0.97, md.Lows[i]*0.5, 2)
 	got := s.Decide(md)
 	if got.Kind != model.SignalSell || got.Reason != "RSI" {
@@ -889,6 +890,8 @@ func TestNoLookaheadWithOpenPosition(t *testing.T) {
 	full := upperCrossFixture()
 	n := len(full.Closes)
 	i := n - 1
+	// The stop argument is inert: withPosition zeroes EntryATR, which disables the protective
+	// level regardless of this value.
 	full = withPosition(full, full.Closes[i]*0.97, full.Lows[i]*0.5, 2)
 
 	want := s.Decide(full)
@@ -1416,6 +1419,8 @@ func TestUseRSIExitZeroKeepsPosition(t *testing.T) {
 	s := NewWithParams("T", p)
 	md := upperCrossFixture()
 	i := len(md.Closes) - 1
+	// The stop argument is inert: withPosition zeroes EntryATR, which disables the protective
+	// level regardless of this value.
 	md = withPosition(md, md.Closes[i]*0.97, md.Lows[i]*0.5, 2)
 	if got := s.Decide(md); got.Kind == model.SignalSell {
 		t.Fatalf("выход %q при UseRSIExit=0: RSI-выход должен быть отключён", got.Reason)
@@ -1431,6 +1436,8 @@ func TestDefaultsPreserveLegacyExits(t *testing.T) {
 	// RSI-выход работает.
 	md := upperCrossFixture()
 	i := len(md.Closes) - 1
+	// The stop argument is inert: withPosition zeroes EntryATR, which disables the protective
+	// level regardless of this value.
 	md = withPosition(md, md.Closes[i]*0.97, md.Lows[i]*0.5, 2)
 	if got := s.Decide(md); got.Kind != model.SignalSell || got.Reason != "RSI" {
 		t.Fatalf("Kind/Reason = %v/%q, want Sell/RSI на дефолтах", got.Kind, got.Reason)
