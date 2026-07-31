@@ -276,7 +276,7 @@ profit factor ≥ 1.5** по walk-forward-калибровке, никогда �
 | `cal_volume.json` | 24 | фон объёмов при `UseVolume = 1`: `VolMult` × `VolBaseDays` |
 | `cal_risk.json` | 24 | стоп и цель в дневных ATR |
 | `cal_exit.json` | 6 | уровень выхода `RSIUpper` |
-| `cal_trail.json` | 36 | трейл `TrailDailyATR` + отключение RSI-выхода `UseRSIExit` + `RSIUpper` |
+| `cal_trail.json` | 60 | трейл `TrailDailyATR` + отключение RSI-выхода `UseRSIExit` + `RSIUpper` |
 | `<ticker>/plateau_rsilower*.json` | 1 каждый | фиксированная точка: PF принадлежит конфигурации, а не отбору |
 
 Разница принципиальная: **`cal_*.json` не наследуют результаты друг друга**. Каждый файл
