@@ -40,6 +40,6 @@ func DefaultParams() core.Params {
 		VolMult:         1.2,
 		UseRSIExit:      1,
 		UseTrail:        0,
-		TrailDailyATR:   0,
+		TrailDailyATR:   0.5,
 	}
 }

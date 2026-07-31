@@ -1,0 +1,22 @@
+{
+  "_comment": "TRAIL band, calibrated specifically for T (T-Bank) — this grid is NOT the root data/params/rsi_pullback/cal_trail.json rescaled, it is rebuilt around T's own risk pair. The root file sweeps TrailDailyATR over 0.5..1.5, which on T is mostly dead: T's DefaultParams carry StopDailyATR=0.5 and TPDailyATR=1.5, and the trail only becomes the binding stop once maxFav - Trail*dailyATR rises above entry - 0.5*dailyATR, i.e. once price has advanced (Trail - 0.5) daily ATR above entry. A trail of 1.5 therefore needs the full +1.0 ATR move that the target closes out at +1.5 anyway, so the root grid's top half never fires on T. This file sweeps 0.2..1.0 instead, dense below the stop. Read the halves differently: 0.2-0.4 is not really trailing, it TIGHTENS the initial stop (maxFav starts at the entry price, so the level sits at entry - Trail*dailyATR from the first bar and is closer than the fixed 0.5 stop before price has moved at all) — a win there is a stop recalibration wearing trail parameters, and belongs back in cal_risk.json, not here. 0.5 is the neutral point that matches the fixed stop at entry and only tightens as new highs print; 0.7 and 1.0 are the genuinely late trails, arming after +0.2 and +0.5 ATR. TrailDailyATR=0 with UseTrail=1 is the control row, not a mistake: desiredStop guards the trail with `TrailDailyATR > 0`, so that row IS the fixed-stop configuration and gives the phase its own baseline without the duplicate combos a UseTrail:[0,1] axis would generate. Phase 1 forces UseRSIExit=0 on purpose — on T's calibrated literal the RSI exit closed 45 of 67 trades and fires before the trail can ever bind, so a trail swept under it measures nothing; phase 2 puts the exit band back over the 5 surviving trails and asks whether the RSI exit still pays once a trail exists. 7 + 40 = 47 evaluations. Watch the TRAIL share of exits, not just the profit factor: a set where the trail never fires is really just the old fixed-stop configuration wearing new parameters. Stop and target are deliberately absent — they are already T's calibrated pair, and re-sweeping them here would just refit the risk phase on the same in-sample window. Run: go run ./cmd/backtest -ticker T -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/t/cal_trail.json -out ./reports/T_trail -months 24 -min-trades 20 -test-months 6 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "trail",
+      "keepTop": 5,
+      "grid": {
+        "UseRSIExit": [0],
+        "UseTrail": [1],
+        "TrailDailyATR": [0, 0.2, 0.3, 0.4, 0.5, 0.7, 1.0]
+      }
+    },
+    {
+      "name": "exit_band",
+      "grid": {
+        "UseTrail": [0],
+        "UseRSIExit": [1],
+        "RSIUpper": [60, 65, 70, 75]
+      }
+    }
+  ]
+}
