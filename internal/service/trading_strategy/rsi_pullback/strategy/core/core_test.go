@@ -159,6 +159,7 @@ func TestDefaultParams(t *testing.T) {
 		UseDayATRGate:  1, FreshDayATR: 0, SpentDayATR: 0.8,
 		StopDailyATR: 0.5, TPDailyATR: 0.6,
 		UseVolume: 0, VolBaseDays: 14, VolLookbackBars: 3, VolMult: 1.2,
+		UseRSIExit: 1, UseTrail: 0, TrailDailyATR: 0,
 	}
 	if p != want {
 		t.Fatalf("DefaultParams() = %+v, want %+v", p, want)
@@ -1118,6 +1119,126 @@ func TestLookbackCoversVolumeBaseline(t *testing.T) {
 	p.UseVolume = 0
 	if got := NewWithParams("TEST", p).Lookback(); got >= 11*maxBarsPerDay {
 		t.Fatalf("Lookback = %d: с выключенным гейтом окно не должно раздуваться", got)
+	}
+}
+
+// TestDesiredStopBindsTheNearestLevel фиксирует главное правило уровня: среди активных
+// компонентов связывает ЧИСЛЕННО БОЛЬШИЙ — он ближе к цене, и падающая цена коснётся его
+// первым. Таблица заодно пинует каждое условие отключения по отдельности: тест, который
+// проверяет только «трейл выше SL», переживает удаление любой из guard-веток.
+func TestDesiredStopBindsTheNearestLevel(t *testing.T) {
+	base := DefaultParams()
+	base.StopDailyATR = 0.5
+	base.UseTrail = 1
+	base.TrailDailyATR = 1.0
+
+	tests := []struct {
+		name       string
+		mutate     func(p *Params)
+		entry      float64
+		dailyATR   float64
+		maxFav     float64
+		wantLevel  float64
+		wantReason string
+	}{
+		{
+			name:       "трейл ещё ниже SL — связывает SL",
+			entry:      100,
+			dailyATR:   10,
+			maxFav:     100, // трейл = 100-10 = 90, SL = 100-5 = 95
+			wantLevel:  95,
+			wantReason: "SL",
+		},
+		{
+			name:       "цена ушла вверх — трейл перехватывает",
+			entry:      100,
+			dailyATR:   10,
+			maxFav:     112, // трейл = 112-10 = 102 > SL 95
+			wantLevel:  102,
+			wantReason: "TRAIL",
+		},
+		{
+			name:       "трейл ровно на уровне SL — SL удерживает связь",
+			entry:      100,
+			dailyATR:   10,
+			maxFav:     105, // трейл = 95 == SL 95, строгое > не срабатывает
+			wantLevel:  95,
+			wantReason: "SL",
+		},
+		{
+			name:       "UseTrail выключен",
+			mutate:     func(p *Params) { p.UseTrail = 0 },
+			entry:      100,
+			dailyATR:   10,
+			maxFav:     112,
+			wantLevel:  95,
+			wantReason: "SL",
+		},
+		{
+			name:       "TrailDailyATR=0 при включённом UseTrail",
+			mutate:     func(p *Params) { p.TrailDailyATR = 0 },
+			entry:      100,
+			dailyATR:   10,
+			maxFav:     112,
+			wantLevel:  95,
+			wantReason: "SL",
+		},
+		{
+			name:       "maxFav=0 — трейлить не от чего",
+			entry:      100,
+			dailyATR:   10,
+			maxFav:     0,
+			wantLevel:  95,
+			wantReason: "SL",
+		},
+		{
+			name:       "дневной ATR не посчитан — стопов нет вовсе",
+			entry:      100,
+			dailyATR:   0,
+			maxFav:     112,
+			wantLevel:  0,
+			wantReason: "",
+		},
+		{
+			name:       "SL отключён, трейл несёт уровень один",
+			mutate:     func(p *Params) { p.StopDailyATR = 0 },
+			entry:      100,
+			dailyATR:   10,
+			maxFav:     112,
+			wantLevel:  102,
+			wantReason: "TRAIL",
+		},
+		{
+			name:       "оба отключены",
+			mutate:     func(p *Params) { p.StopDailyATR = 0; p.UseTrail = 0 },
+			entry:      100,
+			dailyATR:   10,
+			maxFav:     112,
+			wantLevel:  0,
+			wantReason: "",
+		},
+		{
+			name:       "уровень провалился в ноль — не пол, а голый лонг",
+			mutate:     func(p *Params) { p.StopDailyATR = 20; p.UseTrail = 0 },
+			entry:      100,
+			dailyATR:   10,
+			maxFav:     100,
+			wantLevel:  0,
+			wantReason: "",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			p := base
+			if tc.mutate != nil {
+				tc.mutate(&p)
+			}
+			level, reason := desiredStop(p, tc.entry, tc.dailyATR, tc.maxFav)
+			if math.Abs(level-tc.wantLevel) > 1e-9 || reason != tc.wantReason {
+				t.Fatalf("desiredStop = (%.4f, %q), want (%.4f, %q)", level, reason, tc.wantLevel, tc.wantReason)
+			}
+		})
 	}
 }
 

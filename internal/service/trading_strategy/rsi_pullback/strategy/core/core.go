@@ -41,6 +41,9 @@ type Params struct {
 	VolBaseDays     int     // completed WEEKDAY days behind the baseline (grid; default 14)
 	VolLookbackBars int     // how many recent weekday bars may open the gate (grid; default 3)
 	VolMult         float64 // a bar opens the gate at volume >= VolMult * its slot baseline (grid; default 1.2)
+	UseRSIExit      int     // 1 arms the RSI exit; any other value disables it (grid; default 1)
+	UseTrail        int     // 1 arms the ATR trailing stop; any other value disables it (grid; default 0)
+	TrailDailyATR   float64 // trail = maxFav - TrailDailyATR*dailyATR; 0 disables it (grid)
 }
 
 // DefaultParams returns the spec's baseline; swept values come from calibration.
@@ -61,6 +64,9 @@ func DefaultParams() Params {
 		VolBaseDays:     14,
 		VolLookbackBars: 3,
 		VolMult:         1.2,
+		UseRSIExit:      1,
+		UseTrail:        0,
+		TrailDailyATR:   0,
 	}
 }
 
@@ -483,6 +489,33 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 			s.p.RSIPeriod, s.p.RSIUpper, rsi[i], closeP, pos.PurchasePrice)
 	}
 	return sig
+}
+
+// desiredStop returns the single protective stop level for an open position and the reason of
+// the binding component ("SL" | "TRAIL"), or (0, "") when no stop is enabled or the daily ATR
+// could not be computed. maxFav is the monotonic max of closes the trail may trail from;
+// callers pass Position.PrevMaxFavorablePrice, never MaxFavorablePrice — see manage() for why.
+// dailyATR<=0 disables every price stop outright (the live-trading guard: EntryATR is not
+// persisted there). Among the active components the numerically GREATEST level binds: it is the
+// closest to price, and therefore the first one price would touch as it falls. A level at or
+// below zero is not a floor but a naked long, and is reported as "no stop" rather than passed on.
+func desiredStop(p Params, entry, dailyATR, maxFav float64) (float64, string) {
+	if dailyATR <= 0 {
+		return 0, ""
+	}
+	level, reason := 0.0, ""
+	if p.StopDailyATR > 0 {
+		level, reason = entry-p.StopDailyATR*dailyATR, "SL"
+	}
+	if p.UseTrail == 1 && p.TrailDailyATR > 0 && maxFav > 0 {
+		if l := maxFav - p.TrailDailyATR*dailyATR; l > level {
+			level, reason = l, "TRAIL"
+		}
+	}
+	if level <= 0 {
+		return 0, ""
+	}
+	return level, reason
 }
 
 // Explain returns a gate-by-gate verdict for one bar, consumed by the engine's Trace

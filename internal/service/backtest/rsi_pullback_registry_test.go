@@ -124,6 +124,23 @@ func TestRSIPullbackUnknownTickerFallsBackToGeneric(t *testing.T) {
 	}
 }
 
+// TestRSIPullbackTickersKeepTheRSIExitArmed сторожит ловушку нулевого значения: тикерные
+// пакеты, задающие core.Params ЛИТЕРАЛОМ, получают 0 в каждом поле, которое забыли
+// перечислить, а UseRSIExit=0 означает выключенный выход. ParseParams стартует именно с этих
+// дефолтов, поэтому пропуск молча меняет поведение откалиброванного тикера, не роняя ничего.
+func TestRSIPullbackTickersKeepTheRSIExitArmed(t *testing.T) {
+	for ticker, b := range rsiPullbackRegistry {
+		p, ok := b.DefaultParams().(core.Params)
+		if !ok {
+			t.Fatalf("%s: DefaultParams вернул %T, want core.Params", ticker, b.DefaultParams())
+		}
+		if p.UseRSIExit != 1 {
+			t.Errorf("%s: UseRSIExit = %d, want 1 — поле забыто в литерале core.Params",
+				ticker, p.UseRSIExit)
+		}
+	}
+}
+
 func TestRSIPullbackParseParamsRejectsGarbage(t *testing.T) {
 	b := RSIPullbackLookupOrGeneric("GAZP")
 	if _, err := b.ParseParams([]byte(`{"RSILower":`)); err == nil {

@@ -36,5 +36,8 @@ func DefaultParams() core.Params {
 		VolBaseDays:     5,
 		VolLookbackBars: 3,
 		VolMult:         1.2,
+		UseRSIExit:      1,
+		UseTrail:        0,
+		TrailDailyATR:   0,
 	}
 }
