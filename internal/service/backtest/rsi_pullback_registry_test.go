@@ -148,27 +148,44 @@ func TestRSIPullbackParseParamsRejectsGarbage(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackTBankStartsFromGAZPConfig pins a DELIBERATE hypothesis, not a fact: T starts
-// from GAZP's post-grid literal to test whether parameters transfer between liquid names. The
-// equality is pinned so the link cannot dissolve unnoticed — once T is calibrated on its own
-// data, this test must be rewritten to pin T's own literal, and the rewrite is the moment the
-// hypothesis gets consciously retired.
-func TestRSIPullbackTBankStartsFromGAZPConfig(t *testing.T) {
+// TestRSIPullbackTBankKeepsItsOwnCalibratedLiteral used to pin a DELIBERATE hypothesis — T
+// starting from GAZP's post-grid literal, to test whether parameters transfer between liquid
+// names. That hypothesis is now retired: T has been calibrated on its own data (report
+// reports/T/T_rsi_pullback_Minutes30_20260731_134407.md, 67 trades, in-sample PF 1.312), and its
+// literal no longer equals GAZP's. This test pins T's own values instead, the same shape as
+// TestRSIPullbackCalibratedBindingKeepsItsOwnLiteral: catch a silent collapse back to
+// core.DefaultParams(), and catch T's literal drifting away from what its report was run on.
+func TestRSIPullbackTBankKeepsItsOwnCalibratedLiteral(t *testing.T) {
+	want := core.Params{
+		RSIPeriod:       5,
+		RSILower:        20,
+		RSIUpper:        65,
+		EMAFast:         20,
+		EMASlow:         100,
+		DailyATRPeriod:  14,
+		UseDayATRGate:   1,
+		FreshDayATR:     0,
+		SpentDayATR:     0.9,
+		StopDailyATR:    0.5,
+		TPDailyATR:      1.5,
+		UseVolume:       0,
+		VolBaseDays:     5,
+		VolLookbackBars: 3,
+		VolMult:         1.2,
+		UseRSIExit:      1,
+		UseTrail:        0,
+		TrailDailyATR:   0,
+	}
 	tbRaw := RSIPullbackLookupOrGeneric("T").DefaultParams()
 	tb, ok := tbRaw.(core.Params)
 	if !ok {
 		t.Fatalf("T: DefaultParams() returned %T, want core.Params", tbRaw)
 	}
-	gzRaw := RSIPullbackLookupOrGeneric("GAZP").DefaultParams()
-	gz, ok := gzRaw.(core.Params)
-	if !ok {
-		t.Fatalf("GAZP: DefaultParams() returned %T, want core.Params", gzRaw)
-	}
-	if tb != gz {
-		t.Fatalf("T params = %+v, want GAZP's %+v — T is seeded from the GAZP config on purpose", tb, gz)
-	}
 	if tb == core.DefaultParams() {
-		t.Fatal("T returns the baseline: the GAZP seed was lost")
+		t.Fatal("T returns the baseline: its calibrated literal was lost")
+	}
+	if tb != want {
+		t.Fatalf("T params = %+v, want the calibrated literal %+v — it must match the report T was run on", tb, want)
 	}
 	if got := RSIPullbackLookupOrGeneric("T").Build(tb).Ticker(); got != "T" {
 		t.Fatalf("Ticker() = %q, want T", got)
