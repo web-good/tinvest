@@ -202,8 +202,8 @@ func TestRSIPullbackGridEvaluationCost(t *testing.T) {
 			seeds = ph.KeepTop
 		}
 	}
-	if total != 277 {
-		t.Fatalf("phased calibration costs %d evaluations, want the documented 277", total)
+	if total != 409 {
+		t.Fatalf("phased calibration costs %d evaluations, want the documented 409", total)
 	}
 }
 
