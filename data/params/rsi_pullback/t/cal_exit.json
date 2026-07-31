@@ -1,0 +1,11 @@
+{
+  "_comment": "EXIT band: the RSI level whose UPWARD cross closes the trade (6 evaluations). 55 fixes profit early, making trades shorter and smaller; 80 holds for outright overbought, which more often lets the stop or the target fire first. This is the third-priority exit behind SL and TP, so its effect is entangled with cal_risk.json — calibrate risk first, then sweep this over the surviving stop/target pair rather than over DefaultParams. Everything else inherits DefaultParams. Run: go run ./cmd/backtest -ticker GAZP -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/cal_exit.json -out ./reports/GAZP_exit -months 24 -min-trades 20 -test-months 6 -metric profit_factor. GAZP is only the example instrument here: this file sweeps one theme and is ticker-agnostic, so replace -ticker and -out to calibrate another name (e.g. -ticker T -out ./reports/T_exit, adding -refresh on a ticker whose candle cache is short).",
+  "phases": [
+    {
+      "name": "exit",
+      "grid": {
+        "RSIUpper": [55, 60, 65, 70, 75, 80]
+      }
+    }
+  ]
+}

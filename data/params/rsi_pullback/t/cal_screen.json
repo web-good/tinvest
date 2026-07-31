@@ -1,0 +1,12 @@
+{
+  "_comment": "SCREEN: what each optional gate costs in trades. Sweeps the two on/off switches only (4 evaluations) and leaves everything else at DefaultParams. Run this FIRST: the strategy's trade count is the binding constraint, not its profit factor, and this file measures it directly. Read the trade count of each of the four rows before deciding what -min-trades the other files can honestly use; -min-trades 1 here is deliberate, otherwise the very rows you are trying to measure get filtered out of the report. Run: go run ./cmd/backtest -ticker GAZP -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/cal_screen.json -out ./reports/GAZP_screen -months 24 -min-trades 1 -test-months 6 -metric profit_factor. GAZP is only the example instrument here: this file sweeps one theme and is ticker-agnostic, so replace -ticker and -out to calibrate another name (e.g. -ticker T -out ./reports/T_screen, adding -refresh on a ticker whose candle cache is short).",
+  "phases": [
+    {
+      "name": "gates",
+      "grid": {
+        "UseDayATRGate": [0, 1],
+        "UseVolume": [0, 1]
+      }
+    }
+  ]
+}
