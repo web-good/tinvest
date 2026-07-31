@@ -39,7 +39,9 @@
 
 **Files:**
 - Modify: `internal/service/trading_strategy/rsi_pullback/strategy/core/core.go:28-65` (Params, DefaultParams), новая функция после `manage`
+- Modify: `internal/service/trading_strategy/rsi_pullback/strategy/tbank/tbank.go`, `.../gazp/gazp.go` (литералы `core.Params`)
 - Test: `internal/service/trading_strategy/rsi_pullback/strategy/core/core_test.go:153-166` (TestDefaultParams) + новые тесты
+- Test: `internal/service/backtest/rsi_pullback_registry_test.go` (guard на литералы по тикерам)
 
 **Interfaces:**
 - Consumes: ничего от других задач.
@@ -194,6 +196,59 @@ Expected: FAIL — `undefined: desiredStop`, `p.UseTrail undefined`, `p.TrailDai
 		TrailDailyATR:   0,
 ```
 
+- [ ] **Step 3a: Дописать новые поля в литералы по тикерам**
+
+**Это самая опасная точка плана.** `ParseParams` строит параметры прогона, стартуя с ТИКЕРНЫХ дефолтов и накладывая JSON поверх (`internal/service/backtest/rsi_pullback_registry.go:34`). Два тикера задают `core.Params` литералом, а не через `core.DefaultParams()`, и в литерале отсутствующее поле получает нулевое значение — то есть `UseRSIExit: 0`, **выключенный RSI-выход**. Это молча изменит поведение обоих откалиброванных тикеров.
+
+В `internal/service/trading_strategy/rsi_pullback/strategy/tbank/tbank.go` после `VolMult: 1.2,` добавить:
+
+```go
+		UseRSIExit:      1,
+		UseTrail:        0,
+		TrailDailyATR:   0,
+```
+
+В `internal/service/trading_strategy/rsi_pullback/strategy/gazp/gazp.go` после `VolMult: 1,` добавить те же три строки.
+
+Остальные 12 тикеров (`afks`, `astr`, `eutr`, `mdmg`, `nvtk`, `pikk`, `plzl`, `rusal`, `sber`, `sfin`, `ugld`, `ydex`) возвращают `core.DefaultParams()` без копирования полей и правок НЕ требуют — трогать их нельзя, они намеренно отслеживают базовую линию.
+
+Проверить, что ни один тикер не остался с нулём:
+
+```bash
+grep -rL "UseRSIExit" internal/service/trading_strategy/rsi_pullback/strategy/*/  --include=*.go \
+  | xargs grep -l "core.Params{" || echo "OK: литералов без UseRSIExit не осталось"
+```
+
+Expected: `OK: литералов без UseRSIExit не осталось`.
+
+- [ ] **Step 3b: Запинить это тестом в реестре**
+
+`grep` из предыдущего шага живёт ровно один раз; тест переживёт добавление тринадцатого тикера. Добавить в `internal/service/backtest/rsi_pullback_registry_test.go`:
+
+```go
+// TestRSIPullbackTickersKeepTheRSIExitArmed сторожит ловушку нулевого значения: тикерные
+// пакеты, задающие core.Params ЛИТЕРАЛОМ, получают 0 в каждом поле, которое забыли
+// перечислить, а UseRSIExit=0 означает выключенный выход. ParseParams стартует именно с этих
+// дефолтов, поэтому пропуск молча меняет поведение откалиброванного тикера, не роняя ничего.
+func TestRSIPullbackTickersKeepTheRSIExitArmed(t *testing.T) {
+	for ticker, b := range rsiPullbackRegistry {
+		p, ok := b.DefaultParams().(core.Params)
+		if !ok {
+			t.Fatalf("%s: DefaultParams вернул %T, want core.Params", ticker, b.DefaultParams())
+		}
+		if p.UseRSIExit != 1 {
+			t.Errorf("%s: UseRSIExit = %d, want 1 — поле забыто в литерале core.Params",
+				ticker, p.UseRSIExit)
+		}
+	}
+}
+```
+
+Импорт `core` в этом файле уже есть (реестр им пользуется); если тестовый файл его ещё не импортирует — добавить `"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"`.
+
+Run: `go test ./internal/service/backtest/ -run TestRSIPullbackTickersKeepTheRSIExitArmed -v`
+Expected: PASS для всех 14 тикеров. Если падает — литерал из Step 3a пропущен.
+
 - [ ] **Step 4: Написать `desiredStop`**
 
 В `core.go` сразу после функции `manage`:
@@ -257,13 +312,21 @@ Expected: PASS. Ни один существующий тест не долже�
 
 ```bash
 git add internal/service/trading_strategy/rsi_pullback/strategy/core/core.go \
-        internal/service/trading_strategy/rsi_pullback/strategy/core/core_test.go
+        internal/service/trading_strategy/rsi_pullback/strategy/core/core_test.go \
+        internal/service/trading_strategy/rsi_pullback/strategy/tbank/tbank.go \
+        internal/service/trading_strategy/rsi_pullback/strategy/gazp/gazp.go \
+        internal/service/backtest/rsi_pullback_registry_test.go
 git commit -m "feat(rsi_pullback): параметры трейла и функция desiredStop
 
 Уровень защитного стопа считает одна чистая функция: среди активных
 компонентов связывает ближайший к цене. Форма зеркалит reversion.DesiredStop,
 но работает на дневном ATR. Дефолты нейтральны (UseTrail=0, UseRSIExit=1),
 поведение выходов пока не меняется — desiredStop ещё никем не вызывается.
+
+Литералы core.Params у tbank и gazp получили новые поля явно: ParseParams
+стартует с тикерных дефолтов, а пропущенное в литерале поле дало бы
+UseRSIExit=0 и молча выключило RSI-выход у обоих откалиброванных тикеров.
+Запинено тестом в реестре, который переживёт добавление новых тикеров.
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ```
