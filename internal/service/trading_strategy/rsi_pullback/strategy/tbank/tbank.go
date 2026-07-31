@@ -21,20 +21,20 @@ const Ticker = "T"
 // unverified on T.
 func DefaultParams() core.Params {
 	return core.Params{
-		RSIPeriod:       4,
-		RSILower:        25,
-		RSIUpper:        70,
-		EMAFast:         10,
-		EMASlow:         70,
+		RSIPeriod:       5,
+		RSILower:        20,
+		RSIUpper:        65,
+		EMAFast:         20,
+		EMASlow:         100,
 		DailyATRPeriod:  14,
 		UseDayATRGate:   1,
 		FreshDayATR:     0,
 		SpentDayATR:     0.9,
 		StopDailyATR:    0.5,
-		TPDailyATR:      0.7,
+		TPDailyATR:      1.5,
 		UseVolume:       0,
-		VolBaseDays:     7,
-		VolLookbackBars: 2,
-		VolMult:         1,
+		VolBaseDays:     5,
+		VolLookbackBars: 3,
+		VolMult:         1.2,
 	}
 }
