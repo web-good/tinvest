@@ -84,7 +84,11 @@ func TestRSIPullbackGridFieldsExist(t *testing.T) {
 // full grid gets: every swept field must resolve through applyField, no phase may be empty, and
 // StopDailyATR=0 must not appear anywhere — a stopless multi-day hold is not a configuration any
 // grid file may offer. For the cal_*.json files it also pins that the _comment names that same
-// file, because those comments carry the run command and are written by copying a sibling.
+// file's path relative to rsiPullbackParamsDir (e.g. "t/cal_risk.json"), not just its basename,
+// because those comments carry the run command and are written by copying a sibling: a
+// basename-only check would pass for a per-ticker file (data/params/rsi_pullback/t/cal_risk.json)
+// whose comment was copied from the root file of the same name and still says
+// "data/params/rsi_pullback/cal_risk.json" — same basename, wrong directory, wrong ticker.
 func TestRSIPullbackCalFilesValid(t *testing.T) {
 	for _, path := range rsiPullbackGridFiles(t) {
 		name := filepath.Base(path)
@@ -122,8 +126,8 @@ func TestRSIPullbackCalFilesValid(t *testing.T) {
 			if err := json.Unmarshal(raw, &doc); err != nil {
 				t.Fatalf("unmarshal %s: %v", path, err)
 			}
-			if !strings.Contains(doc.Comment, name) {
-				t.Fatalf("_comment of %s does not name the file itself — the run command was copied from a sibling", name)
+			if !strings.Contains(doc.Comment, rel) {
+				t.Fatalf("_comment of %s does not name the file's own path (%q) — the run command was copied from a sibling", name, rel)
 			}
 		})
 	}

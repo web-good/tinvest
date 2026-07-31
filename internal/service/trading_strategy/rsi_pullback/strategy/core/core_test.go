@@ -558,6 +558,34 @@ func TestEnterSetsStopAndTargetFromDailyATR(t *testing.T) {
 	}
 }
 
+// TestEnterStopLossMatchesDesiredStop пинует тождество, которое сегодня выполняется только по
+// построению, а не по коду: enter() кладёт в sig.StopLoss значение entry-StopDailyATR*atr
+// напрямую, а manage() каждый бар пересчитывает протективный уровень через desiredStop(). Если
+// когда-нибудь в enter() появится округление по шагу цены (или любая другая правка формулы
+// стопа), эти два места молча разойдутся: sig.StopLoss уже успел уйти в позицию, в
+// risk-sizing (internal/domain/backtest/portfolio.go) и в журнал сделки, а manage() будет
+// защищать другой уровень. Тест сверяет их напрямую на первом баре, где PrevMaxFavorablePrice
+// ещё равен цене входа.
+func TestEnterStopLossMatchesDesiredStop(t *testing.T) {
+	p := entryParams()
+	s := NewWithParams("TEST", p)
+	md := barSeries(pullbackCloses(), entryDailyATRStart)
+	md = withDay(md, 10.0, 101, 100) // used = 1 <= 0.3*10 -> ветка «день только начался»
+
+	sig := s.Decide(md)
+	if sig.Kind != model.SignalBuy {
+		t.Fatalf("Kind = %v, want Buy", sig.Kind)
+	}
+	entry := md.Closes[len(md.Closes)-1]
+	wantLevel, wantReason := desiredStop(p, entry, sig.ATR, entry)
+	if wantReason != "SL" {
+		t.Fatalf("desiredStop reason = %q, want SL (трейл выключен в entryParams)", wantReason)
+	}
+	if math.Abs(sig.StopLoss-wantLevel) > 1e-9 {
+		t.Fatalf("sig.StopLoss = %.6f, desiredStop() = %.6f — enter() и manage() разошлись в замороженном стопе", sig.StopLoss, wantLevel)
+	}
+}
+
 func TestEnterRefusedWithoutDailyATR(t *testing.T) {
 	s := NewWithParams("TEST", DefaultParams())
 	md := barSeries(pullbackCloses(), entryDailyATRStart) // дневных серий нет вовсе

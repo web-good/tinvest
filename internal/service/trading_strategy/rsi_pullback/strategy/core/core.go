@@ -438,6 +438,13 @@ func (s *Strategy) entryReason(rsiNow, fastNow, slowNow, entry, stop, target, at
 	if stop > 0 {
 		stopHow = fmt.Sprintf("стоп %.4f (−%.2f ATR)", stop, s.p.StopDailyATR)
 	}
+	if s.p.UseTrail == 1 && s.p.TrailDailyATR > 0 {
+		// Трейл считается от PrevMaxFavorablePrice и уже с первого бара может стоять теснее
+		// фиксированного стопа выше — тогда именно он, а не stopHow, был бы реальной защитой
+		// сделки. Печатаем его тут же, чтобы запись в журнале не называла один уровень (SL),
+		// пока сделку с первого бара мог связывать другой (TRAIL).
+		stopHow += fmt.Sprintf(", трейл −%.2f ATR от максимума (с первого бара)", s.p.TrailDailyATR)
+	}
 	tpHow := "цель выключена"
 	if target > 0 {
 		tpHow = fmt.Sprintf("цель %.4f (+%.2f ATR)", target, s.p.TPDailyATR)

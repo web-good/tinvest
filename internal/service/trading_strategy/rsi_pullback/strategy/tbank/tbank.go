@@ -1,12 +1,14 @@
 // Package tbank supplies the ticker and starting rsi_pullback Params for T (T-Bank).
 //
-// Calibration has NOT been run for this ticker. The values below are a COPY of GAZP's
-// post-grid literal, taken as an explicit hypothesis that parameters transfer between liquid
-// names — they are not a claim that T is tuned. Two consequences follow. First, this package
-// does NOT track core.DefaultParams(): a change to the baseline must not reach it silently,
-// because these values came from a different instrument's calibration. Second, once -calibrate
-// picks a winning combination for T, this literal must be REPLACED — leaving GAZP's numbers in
-// place after a run of T's own would ship a config the data never endorsed.
+// The transferability hypothesis this package started from — seed T with GAZP's post-grid
+// literal and see whether it holds up — is retired. T has since been calibrated on its own
+// data (report reports/T/T_rsi_pullback_Minutes30_20260731_134407.md, 67 trades, in-sample
+// profit factor 1.312), and the literal below is that run's result, not a copy of GAZP's (which
+// is 4/25/70/10/70/TP 0.7 vs T's 5/20/65/20/100/TP 1.5). Two consequences follow. First, this
+// package does NOT track core.DefaultParams(): a change to the baseline must not reach it
+// silently, because these values came from T's own calibration, not the shared default. Second,
+// in-sample PF is not an edge claim — this literal has NOT been validated by walk-forward OOS,
+// so treat it as a calibration starting point, not a trade-ready configuration.
 //
 // The package is named tbank rather than t: a one-letter package reads as t.DefaultParams() at
 // the call site and collides with the t *testing.T idiom. The exchange ticker stays "T".
@@ -17,8 +19,8 @@ import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 // Ticker is the instrument this package configures.
 const Ticker = "T"
 
-// DefaultParams returns T's starting rsi_pullback parameters: GAZP's calibrated config,
-// unverified on T.
+// DefaultParams returns T's starting rsi_pullback parameters: T's own calibrated literal
+// (in-sample only, not yet validated by walk-forward OOS).
 func DefaultParams() core.Params {
 	return core.Params{
 		RSIPeriod:       5,
