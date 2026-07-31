@@ -796,7 +796,7 @@ func TestExplainMentionsEveryGate(t *testing.T) {
 	start := time.Date(2026, 3, 2, 7, 0, 0, 0, msk)
 	md := withDay(barSeries(pullbackCloses(), start), 10.0, 101, 100)
 	got := s.Explain(md)
-	for _, want := range []string{"день", "RSI", "EMA", "дневной ATR", "состояние дня", "фон объёмов", "стоп", "цель"} {
+	for _, want := range []string{"день", "RSI", "EMA", "дневной ATR", "состояние дня", "фон объёмов", "стоп", "цель", "трейл", "выход по RSI"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("Explain не упоминает %q:\n%s", want, got)
 		}

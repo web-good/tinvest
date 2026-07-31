@@ -1,11 +1,13 @@
 // Package core implements a long-only multi-day RSI pullback strategy. When flat it buys the dip
 // inside an uptrend: the fast EMA must sit above the slow one and a short RSI must cross DOWN
 // through its lower band on the current bar. The stop and target are sized off the daily ATR at
-// entry and frozen on the position; the trade is closed on the first of: the stop, the target, or
-// RSI crossing UP through the upper band. There is no time stop and no end-of-day close — the
-// position is held across nights and weekends until one of those three exits fires. The decision
-// logic is pure, stateless between bars and ticker-agnostic. The reference timeframe is 30
-// minutes. Run with `-strategy rsi_pullback -interval Minutes30`.
+// entry and frozen on the position; the trade is closed on the first of: the protective stop
+// (the fixed SL or the ATR trail, whichever binds), the target, or RSI crossing UP through the
+// upper band. The RSI exit can be disabled with UseRSIExit=0, leaving the stop and the target to
+// carry the trade. There is no time stop and no end-of-day close — the position is held across
+// nights and weekends until one of those exits fires. The decision logic is pure, stateless
+// between bars and ticker-agnostic. The reference timeframe is 30 minutes. Run with
+// `-strategy rsi_pullback -interval Minutes30`.
 package core
 
 import (
@@ -594,6 +596,17 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 		fmt.Fprintf(&sb, "цель: вход + %.2f×ATR (%.4f)\n", s.p.TPDailyATR, s.p.TPDailyATR*atr)
 	} else {
 		sb.WriteString("цель: выключена\n")
+	}
+	if s.p.UseTrail == 1 && s.p.TrailDailyATR > 0 && atr > 0 {
+		fmt.Fprintf(&sb, "трейл: максимум − %.2f×ATR (%.4f); отсчёт от PrevMaxFavorablePrice\n",
+			s.p.TrailDailyATR, s.p.TrailDailyATR*atr)
+	} else {
+		sb.WriteString("трейл: выключен\n")
+	}
+	if s.p.UseRSIExit == 1 {
+		fmt.Fprintf(&sb, "выход по RSI: крест вверх через %.0f\n", s.p.RSIUpper)
+	} else {
+		sb.WriteString("выход по RSI: выключен (UseRSIExit=0)\n")
 	}
 	return sb.String()
 }
