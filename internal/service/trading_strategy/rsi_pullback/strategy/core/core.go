@@ -450,12 +450,13 @@ func (s *Strategy) entryReason(rsiNow, fastNow, slowNow, entry, stop, target, at
 	)
 }
 
-// manage handles an open long, exiting in precedence SL -> TP -> RSI. Both levels are read
-// from the position (frozen at entry), never recomputed: the stop and target the trade was
-// opened with are the ones it dies by. SL fills at the stop level and TP at the target (the
-// engine handles that via model.IsStopReason and the "TP" reason); RSI fills at the bar close.
-// There is no time stop and no end-of-day close — the position is held until one of the three
-// exits fires, across nights and weekends.
+// manage handles an open long. It exits on one of four signals, evaluated in precedence order
+// STOP(SL|TRAIL) → TP → RSI. The protective stop and the target trigger INTRABAR (the bar's low
+// touching the level, the bar's high reaching the target), because a real stop or limit order
+// fills as soon as price trades through it during the bar; the engine handles their fill pricing
+// via model.IsStopReason and the "TP" reason. The RSI exit fills at the bar close and can be
+// disabled with UseRSIExit=0. There is no time stop and no end-of-day close — the position is
+// held until one of the exits fires, across nights and weekends.
 func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal {
 	pos := md.Position
 	n := len(md.Closes)
@@ -465,12 +466,20 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 	i := n - 1
 	high, low, closeP := md.Highs[i], md.Lows[i], md.Closes[i]
 
-	// 1. hard stop. It wins a same-bar tie with the target: the intrabar order of the two
+	// 1. protective stop: the fixed SL and the ATR trail resolved into one level by
+	// desiredStop. It wins a same-bar tie with the target: the intrabar order of the two
 	// touches is unknowable from OHLC, and assuming the worse of the two is the honest choice.
-	if pos.StopLoss > 0 && low <= pos.StopLoss {
-		sig.Kind, sig.Reason = model.SignalSell, "SL"
-		sig.StopLoss = pos.StopLoss
-		sig.ExitReason = fmt.Sprintf("SL: low %.4f ≤ стоп %.4f (вход %.4f)", low, pos.StopLoss, pos.PurchasePrice)
+	// The trail reads PrevMaxFavorablePrice, NOT MaxFavorablePrice: the engine marks the
+	// position to market before calling Decide, so MaxFavorablePrice already contains this
+	// bar's close, while the level is tested against this bar's low. An exchange stop order
+	// working during bar i was placed after bar i-1 closed and cannot know about a close that
+	// may have happened after the low. Since MaxFavorablePrice >= PrevMaxFavorablePrice always,
+	// reading the former yields a level never below the honest one — it fires no less often and
+	// fills no worse, inflating the result in both directions at once.
+	if level, reason := desiredStop(s.p, pos.PurchasePrice, pos.EntryATR, pos.PrevMaxFavorablePrice); level > 0 && low <= level {
+		sig.Kind, sig.Reason = model.SignalSell, reason
+		sig.StopLoss = level
+		sig.ExitReason = fmt.Sprintf("%s: low %.4f ≤ уровень %.4f (вход %.4f)", reason, low, level, pos.PurchasePrice)
 		return sig
 	}
 	// 2. fixed target.
@@ -481,6 +490,9 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 		return sig
 	}
 	// 3. RSI crosses UP through the upper band — the bounce reached overbought.
+	if s.p.UseRSIExit != 1 {
+		return sig
+	}
 	rsi := indicators.RSISeries(md.Closes, s.p.RSIPeriod)
 	if len(rsi) == n && crossedUp(rsi, i, s.p.RSIUpper) {
 		sig.Kind, sig.Reason = model.SignalSell, "RSI"

@@ -597,36 +597,50 @@ func withPosition(md strategy.MarketData, entryPrice, stop float64, heldBars int
 	md.Position = &strategy.Position{
 		PurchasePrice: entryPrice,
 		StopLoss:      stop,
-		EntryATR:      entryPrice * 0.003,
-		EntryTime:     last.Add(-time.Duration(heldBars) * 30 * time.Minute),
+		// EntryATR=0 гасит защитный уровень целиком: фикстура обслуживает тесты о ДРУГИХ
+		// выходах, и пересчитанный стоп там только мешал бы. Тесты про сам стоп задают
+		// EntryATR явно.
+		EntryATR:              0,
+		MaxFavorablePrice:     entryPrice,
+		PrevMaxFavorablePrice: entryPrice,
+		EntryTime:             last.Add(-time.Duration(heldBars) * 30 * time.Minute),
 	}
 	return md
 }
 
-// TestExitStopLoss covers the stop, including the exact-touch boundary: `low <= StopLoss` must
-// fire when the low lands ON the stop. A test that only puts the stop strictly inside the bar
+// TestExitStopLoss covers the stop, including the exact-touch boundary: `low <= level` must
+// fire when the low lands ON the level. A test that only puts the stop strictly inside the bar
 // survives a shift of that comparison to `<`.
 func TestExitStopLoss(t *testing.T) {
-	s := NewWithParams("T", DefaultParams())
+	p := DefaultParams()
+	p.StopDailyATR = 0.5
+	s := NewWithParams("T", p)
 	tests := []struct {
-		name string
-		stop func(low float64) float64
+		name  string
+		lowAt func(level float64) float64
 	}{
-		{"low pierces the stop", func(low float64) float64 { return low * 1.0001 }},
-		{"low touches the stop exactly", func(low float64) float64 { return low }},
+		{"low pierces the stop", func(level float64) float64 { return level * 0.999 }},
+		{"low touches the stop exactly", func(level float64) float64 { return level }},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			md := entryFixture()
+			start := time.Date(2026, 3, 2, 7, 0, 0, 0, msk)
+			md := barSeries([]float64{100, 100, 100, 100}, start)
 			i := len(md.Closes) - 1
-			stop := tc.stop(md.Lows[i])
-			md = withPosition(md, md.Closes[i]*1.02, stop, 1)
+			// entry 100, EntryATR 10, StopDailyATR 0.5 -> уровень 95.
+			const level = 95.0
+			md.Lows[i] = tc.lowAt(level)
+			md.Position = &strategy.Position{
+				PurchasePrice: 100, Quantity: 1, StopLoss: level,
+				EntryATR: 10, MaxFavorablePrice: 100, PrevMaxFavorablePrice: 100,
+				EntryTime: md.Times[0],
+			}
 			got := s.Decide(md)
 			if got.Kind != model.SignalSell || got.Reason != "SL" {
 				t.Fatalf("Kind/Reason = %v/%q, want Sell/SL", got.Kind, got.Reason)
 			}
-			if math.Abs(got.StopLoss-stop) > 1e-9 {
-				t.Fatalf("StopLoss = %v, want the frozen position stop %v", got.StopLoss, stop)
+			if math.Abs(got.StopLoss-level) > 1e-9 {
+				t.Fatalf("StopLoss = %v, want %v", got.StopLoss, level)
 			}
 		})
 	}
@@ -672,13 +686,23 @@ func TestExitOnRSIEnteringUpperBand(t *testing.T) {
 }
 
 func TestExitStopWinsOverRSIOnTheSameBar(t *testing.T) {
-	s := NewWithParams("T", DefaultParams())
+	p := DefaultParams()
+	p.StopDailyATR = 0.5
+	s := NewWithParams("T", p)
 	md := upperCrossFixture()
 	i := len(md.Closes) - 1
-	// Stop inside the bar AND the RSI cross on the same bar: SL must win.
-	md = withPosition(md, md.Closes[i]*0.97, md.Lows[i]*1.0001, 2)
-	got := s.Decide(md)
-	if got.Reason != "SL" {
+	// entry близко к текущей цене (не 0.97, как в других фикстурах этого файла): при 3%
+	// дисконте entry падает НИЖЕ low бара (у upperCrossFixture low = close*0.997), и тогда
+	// формула ниже требует отрицательный ATR, который desiredStop трактует как «стоп
+	// выключен» — SL молчал бы. Уровень при этом всё равно алгебраически равен low*1.0001
+	// независимо от entry; меняется только знак ATR.
+	entry := md.Closes[i] * 0.999
+	// EntryATR подобран так, чтобы уровень стопа лёг внутрь бара: level = entry - 0.5*atr.
+	atr := (entry - md.Lows[i]*1.0001) / 0.5
+	md = withPosition(md, entry, 0, 2)
+	md.Position.EntryATR = atr
+	md.Position.MaxFavorablePrice, md.Position.PrevMaxFavorablePrice = entry, entry
+	if got := s.Decide(md); got.Reason != "SL" {
 		t.Fatalf("Reason = %q, want SL to take precedence over RSI", got.Reason)
 	}
 }
@@ -703,13 +727,17 @@ func TestExitTakeProfit(t *testing.T) {
 }
 
 func TestExitStopWinsOverTakeProfitOnTheSameBar(t *testing.T) {
-	s := NewWithParams("TEST", DefaultParams())
+	p := DefaultParams()
+	p.StopDailyATR = 0.5
+	s := NewWithParams("TEST", p)
 	start := time.Date(2026, 3, 2, 7, 0, 0, 0, msk)
 	md := barSeries([]float64{100, 100, 100, 100}, start)
 	i := len(md.Closes) - 1
 	md.Highs[i], md.Lows[i] = 110, 90 // бар задевает и цель, и стоп
 	md.Position = &strategy.Position{
 		PurchasePrice: 100, Quantity: 1, StopLoss: 95, TakeProfit: 105,
+		// entry 100, EntryATR 10, StopDailyATR 0.5 -> уровень 95, low 90 его пробивает.
+		EntryATR: 10, MaxFavorablePrice: 100, PrevMaxFavorablePrice: 100,
 		EntryTime: md.Times[0],
 	}
 	if sig := s.Decide(md); sig.Reason != "SL" {
@@ -1252,5 +1280,176 @@ func TestDailyATRDegradesWhenTimesMisaligned(t *testing.T) {
 	md := strategy.MarketData{DailyHighs: h, DailyLows: l, DailyCloses: c, DailyTimes: ts[:5]}
 	if got := s.dailyATR(md); got <= 0 {
 		t.Fatalf("ATR при рассинхроне времён = %.6f, want > 0 (деградация, не отказ)", got)
+	}
+}
+
+// trailFixture строит позицию с включённым трейлом на плоской серии, где всё, кроме
+// low последнего бара и двух максимумов позиции, зафиксировано. entry=100, EntryATR=10.
+func trailFixture(p Params, low, maxFav, prevMaxFav float64) (*Strategy, strategy.MarketData) {
+	s := NewWithParams("TEST", p)
+	start := time.Date(2026, 3, 2, 7, 0, 0, 0, msk)
+	md := barSeries([]float64{100, 100, 100, 105}, start)
+	i := len(md.Closes) - 1
+	md.Lows[i], md.Highs[i], md.Closes[i] = low, 105, 105
+	md.Price = 105
+	md.Position = &strategy.Position{
+		PurchasePrice:         100,
+		Quantity:              1,
+		StopLoss:              0, // фиксированный SL выключен: изолируем трейл
+		TakeProfit:            0,
+		EntryATR:              10,
+		MaxFavorablePrice:     maxFav,
+		PrevMaxFavorablePrice: prevMaxFav,
+		EntryTime:             md.Times[0],
+	}
+	return s, md
+}
+
+// TestTrailReadsPrevMaxFavorable — регресс на lookahead. Движок марк-ту-маркетит позицию
+// ДО Decide, поэтому MaxFavorablePrice уже знает close текущего бара, а стоп проверяется по
+// low того же бара. Отсчёт трейла от MaxFavorablePrice выдал бы уровень, которого биржевой
+// ордер в момент прохода low знать не мог. Тест падает при подмене поля.
+func TestTrailReadsPrevMaxFavorable(t *testing.T) {
+	p := DefaultParams()
+	p.StopDailyATR = 0
+	p.UseTrail = 1
+	p.TrailDailyATR = 0.5 // трейл = maxFav - 5
+	p.UseRSIExit = 0      // изолируем стоп от RSI-ветки
+
+	// Бар: low 96, close 105. maxFav после mark = 105 -> уровень 100, low 96 его пробил бы.
+	// prevMaxFav = 100 -> уровень 95, low 96 его НЕ достаёт.
+	s, md := trailFixture(p, 96, 105, 100)
+	got := s.Decide(md)
+	if got.Kind == model.SignalSell {
+		t.Fatalf("выход %q по уровню от MaxFavorablePrice: трейл обязан считаться от "+
+			"PrevMaxFavorablePrice (95), а low 96 его не достаёт", got.Reason)
+	}
+}
+
+// TestExitTrailFiresOnLow проверяет само срабатывание, включая точное касание: `low <= level`
+// должно сработать, когда low ложится РОВНО на уровень. Тест только со строгим пробоем
+// пережил бы замену сравнения на `<`.
+func TestExitTrailFiresOnLow(t *testing.T) {
+	tests := []struct {
+		name string
+		low  float64
+	}{
+		{"low пробил трейл", 94.9},
+		{"low коснулся трейла ровно", 95},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			p := DefaultParams()
+			p.StopDailyATR = 0
+			p.UseTrail = 1
+			p.TrailDailyATR = 0.5
+			p.UseRSIExit = 0
+
+			// prevMaxFav = 100, EntryATR = 10 -> уровень 100 - 0.5*10 = 95.
+			s, md := trailFixture(p, tc.low, 100, 100)
+			got := s.Decide(md)
+			if got.Kind != model.SignalSell || got.Reason != "TRAIL" {
+				t.Fatalf("Kind/Reason = %v/%q, want Sell/TRAIL", got.Kind, got.Reason)
+			}
+			if math.Abs(got.StopLoss-95) > 1e-9 {
+				t.Fatalf("StopLoss = %v, want 95: движок заливает по min(level, open), "+
+					"и без уровня в сигнале он зальёт по close", got.StopLoss)
+			}
+		})
+	}
+}
+
+// TestTrailNeverGoesBelowSL: широкий трейл не должен ослаблять фиксированный стоп.
+func TestTrailNeverGoesBelowSL(t *testing.T) {
+	p := DefaultParams()
+	p.StopDailyATR = 0.5 // SL = 100 - 5 = 95
+	p.UseTrail = 1
+	p.TrailDailyATR = 3.0 // трейл = 100 - 30 = 70, сильно ниже
+	p.UseRSIExit = 0
+
+	s, md := trailFixture(p, 94.9, 100, 100)
+	got := s.Decide(md)
+	if got.Kind != model.SignalSell || got.Reason != "SL" {
+		t.Fatalf("Kind/Reason = %v/%q, want Sell/SL: широкий трейл не ослабляет стоп",
+			got.Kind, got.Reason)
+	}
+}
+
+// TestTrailDisabledWithoutEntryATR — live-guard: без ATR на входе трейл не считается.
+func TestTrailDisabledWithoutEntryATR(t *testing.T) {
+	p := DefaultParams()
+	p.StopDailyATR = 0
+	p.UseTrail = 1
+	p.TrailDailyATR = 0.5
+	p.UseRSIExit = 0
+
+	s, md := trailFixture(p, 50, 100, 100)
+	md.Position.EntryATR = 0
+	if got := s.Decide(md); got.Kind == model.SignalSell {
+		t.Fatalf("выход %q без EntryATR: трейл обязан молчать, когда линейка не известна",
+			got.Reason)
+	}
+}
+
+// TestTrailWinsOverTakeProfitOnTheSameBar: приоритет стопа над целью держится и для трейла.
+func TestTrailWinsOverTakeProfitOnTheSameBar(t *testing.T) {
+	p := DefaultParams()
+	p.StopDailyATR = 0
+	p.UseTrail = 1
+	p.TrailDailyATR = 0.5
+	p.UseRSIExit = 0
+
+	s, md := trailFixture(p, 94.9, 100, 100)
+	i := len(md.Closes) - 1
+	md.Highs[i] = 130
+	md.Position.TakeProfit = 120 // бар задевает и цель, и трейл
+	if got := s.Decide(md); got.Reason != "TRAIL" {
+		t.Fatalf("Reason = %q, want TRAIL: внутрибарный порядок неизвестен, побеждает худший исход",
+			got.Reason)
+	}
+}
+
+// TestUseRSIExitZeroKeepsPosition: при UseRSIExit=0 крест RSI вверх позицию не закрывает.
+func TestUseRSIExitZeroKeepsPosition(t *testing.T) {
+	p := DefaultParams()
+	p.UseRSIExit = 0
+	s := NewWithParams("T", p)
+	md := upperCrossFixture()
+	i := len(md.Closes) - 1
+	md = withPosition(md, md.Closes[i]*0.97, md.Lows[i]*0.5, 2)
+	if got := s.Decide(md); got.Kind == model.SignalSell {
+		t.Fatalf("выход %q при UseRSIExit=0: RSI-выход должен быть отключён", got.Reason)
+	}
+}
+
+// TestDefaultsPreserveLegacyExits: на дефолтах трейла нет, RSI-выход есть — то же поведение,
+// что до появления обоих параметров. Это страховка совместимости уже откалиброванных наборов
+// по тикерам, в которых новых ключей нет и которые поэтому получат дефолты.
+func TestDefaultsPreserveLegacyExits(t *testing.T) {
+	s := NewWithParams("T", DefaultParams())
+
+	// RSI-выход работает.
+	md := upperCrossFixture()
+	i := len(md.Closes) - 1
+	md = withPosition(md, md.Closes[i]*0.97, md.Lows[i]*0.5, 2)
+	if got := s.Decide(md); got.Kind != model.SignalSell || got.Reason != "RSI" {
+		t.Fatalf("Kind/Reason = %v/%q, want Sell/RSI на дефолтах", got.Kind, got.Reason)
+	}
+
+	// Трейла нет: позиция глубоко в прибыли, но проседание её не закрывает.
+	p := DefaultParams()
+	p.StopDailyATR = 0
+	p.UseRSIExit = 0
+	s2, md2 := trailFixture(p, 50, 200, 200)
+	if got := s2.Decide(md2); got.Kind == model.SignalSell {
+		t.Fatalf("выход %q на дефолтах: UseTrail=0, трейла быть не должно", got.Reason)
+	}
+}
+
+// TestTrailIsAStopReason пинует неявную связь со движком: "TRAIL" обязан числиться стоповой
+// причиной, иначе бэктест зальёт выход по close и потеряет модель гэпа min(level, open).
+func TestTrailIsAStopReason(t *testing.T) {
+	if !model.IsStopReason("TRAIL") {
+		t.Fatal(`model.IsStopReason("TRAIL") = false: движок зальёт трейл по close`)
 	}
 }
