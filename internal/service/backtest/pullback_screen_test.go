@@ -179,3 +179,149 @@ func TestClampPF(t *testing.T) {
 		t.Fatalf("clampPF with cap<=0 must pass through, got %v,%v", got, capped)
 	}
 }
+
+// screenTrade builds one trade entered `dayOffset` days from `base` with the given PnL.
+func screenTrade(base time.Time, dayOffset int, pnl float64) backtest.Trade {
+	entry := base.AddDate(0, 0, dayOffset)
+	return backtest.Trade{EntryTime: entry, ExitTime: entry.AddDate(0, 0, 1), PnL: pnl}
+}
+
+func TestAggregateRanksByMedianNotBest(t *testing.T) {
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	split := base.AddDate(0, 6, 0)
+	grid := PullbackGrid()
+
+	// 23 mediocre configurations (PF 1.0) and one lucky outlier (PF 5.0).
+	results := make([]ConfigResult, 0, len(grid))
+	for i, p := range grid {
+		trades := []backtest.Trade{screenTrade(base, 1, 100), screenTrade(base, 2, -100)}
+		if i == 0 {
+			trades = []backtest.Trade{screenTrade(base, 1, 500), screenTrade(base, 2, -100)}
+		}
+		results = append(results, ConfigResult{Params: p, Trades: trades})
+	}
+	row := Aggregate("XXXX", "Test", results, split, DefaultScreenOpts())
+
+	if math.Abs(row.PFMed-1.0) > 1e-9 {
+		t.Fatalf("PFMed = %v, want 1.0 — the median must ignore the single lucky config", row.PFMed)
+	}
+	if math.Abs(row.BestPF-5.0) > 1e-9 {
+		t.Fatalf("BestPF = %v, want 5.0", row.BestPF)
+	}
+	if row.Best != grid[0] {
+		t.Fatalf("Best = %+v, want the outlier config %+v", row.Best, grid[0])
+	}
+}
+
+func TestAggregatePlateauShare(t *testing.T) {
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	split := base.AddDate(0, 6, 0)
+	grid := PullbackGrid()
+	opts := DefaultScreenOpts() // PlateauPF 1.3, PlateauTrades 10
+
+	results := make([]ConfigResult, 0, len(grid))
+	for i, p := range grid {
+		var trades []backtest.Trade
+		switch {
+		case i < 12: // PF 2.0 on 12 trades -> counts toward the plateau
+			for d := 0; d < 8; d++ {
+				trades = append(trades, screenTrade(base, d, 100))
+			}
+			for d := 8; d < 12; d++ {
+				trades = append(trades, screenTrade(base, d, -100))
+			}
+		case i < 18: // PF 2.0 but only 3 trades -> too thin to count
+			trades = []backtest.Trade{screenTrade(base, 0, 100), screenTrade(base, 1, 100), screenTrade(base, 2, -100)}
+		default: // PF 0.5 on 12 trades -> below the PF bar
+			for d := 0; d < 4; d++ {
+				trades = append(trades, screenTrade(base, d, 100))
+			}
+			for d := 4; d < 12; d++ {
+				trades = append(trades, screenTrade(base, d, -100))
+			}
+		}
+		results = append(results, ConfigResult{Params: p, Trades: trades})
+	}
+	row := Aggregate("XXXX", "Test", results, split, opts)
+
+	if math.Abs(row.Plateau-0.5) > 1e-9 {
+		t.Fatalf("Plateau = %v, want 0.5 (12 of 24 configs clear both PF>=1.3 and trades>=10)", row.Plateau)
+	}
+}
+
+func TestAggregateClampsUnboundedPF(t *testing.T) {
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	split := base.AddDate(0, 6, 0)
+	results := make([]ConfigResult, 0, len(PullbackGrid()))
+	for _, p := range PullbackGrid() {
+		// Every configuration wins twice and never loses: PF is +Inf before clamping.
+		results = append(results, ConfigResult{Params: p, Trades: []backtest.Trade{
+			screenTrade(base, 1, 1000), screenTrade(base, 2, 2000),
+		}})
+	}
+	row := Aggregate("XXXX", "Test", results, split, DefaultScreenOpts())
+
+	if row.PFMed != 10 {
+		t.Fatalf("PFMed = %v, want the 10.0 cap", row.PFMed)
+	}
+	if row.Capped != 24 {
+		t.Fatalf("Capped = %d, want 24", row.Capped)
+	}
+}
+
+func TestAggregateSplitsTrainAndHoldout(t *testing.T) {
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	split := base.AddDate(0, 0, 100)
+	results := make([]ConfigResult, 0, len(PullbackGrid()))
+	for _, p := range PullbackGrid() {
+		results = append(results, ConfigResult{Params: p, Trades: []backtest.Trade{
+			screenTrade(base, 1, 200),   // train: PF 2.0
+			screenTrade(base, 2, -100),  // train
+			screenTrade(base, 150, 50),  // holdout: PF 0.5
+			screenTrade(base, 151, -100), // holdout
+		}})
+	}
+	row := Aggregate("XXXX", "Test", results, split, DefaultScreenOpts())
+
+	if math.Abs(row.PFMed-2.0) > 1e-9 {
+		t.Fatalf("PFMed(train) = %v, want 2.0", row.PFMed)
+	}
+	if math.Abs(row.PFMedHO-0.5) > 1e-9 {
+		t.Fatalf("PFMed(holdout) = %v, want 0.5", row.PFMedHO)
+	}
+	if row.TradesMed != 2 || row.TradesMedHO != 2 {
+		t.Fatalf("TradesMed/HO = %v/%v, want 2/2", row.TradesMed, row.TradesMedHO)
+	}
+}
+
+func TestAggregateNoSignals(t *testing.T) {
+	split := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	results := make([]ConfigResult, 0, len(PullbackGrid()))
+	for _, p := range PullbackGrid() {
+		results = append(results, ConfigResult{Params: p, Trades: nil})
+	}
+	row := Aggregate("XXXX", "Test", results, split, DefaultScreenOpts())
+	if !row.NoSignals {
+		t.Fatal("NoSignals = false, want true when every configuration produced zero trades")
+	}
+	if row.PFMed != 0 || row.Plateau != 0 {
+		t.Fatalf("PFMed/Plateau = %v/%v, want 0/0", row.PFMed, row.Plateau)
+	}
+}
+
+func TestAggregateOneTradingConfigIsNotNoSignals(t *testing.T) {
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	split := base.AddDate(0, 6, 0)
+	results := make([]ConfigResult, 0, len(PullbackGrid()))
+	for i, p := range PullbackGrid() {
+		var trades []backtest.Trade
+		if i == 3 {
+			trades = []backtest.Trade{screenTrade(base, 1, 100), screenTrade(base, 2, -50)}
+		}
+		results = append(results, ConfigResult{Params: p, Trades: trades})
+	}
+	row := Aggregate("XXXX", "Test", results, split, DefaultScreenOpts())
+	if row.NoSignals {
+		t.Fatal("NoSignals = true, want false when at least one configuration traded")
+	}
+}

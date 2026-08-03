@@ -124,3 +124,104 @@ func clampPF(pf, limit float64) (float64, bool) {
 	}
 	return pf, false
 }
+
+// ConfigResult is one grid configuration's trade list on one ticker.
+type ConfigResult struct {
+	Params core.Params
+	Trades []backtest.Trade
+}
+
+// ScreenOpts are the knobs of one screening run.
+type ScreenOpts struct {
+	PFCap         float64 // ranking cap on profit factor; 0 disables clamping
+	PlateauPF     float64 // a configuration joins the plateau at this profit factor
+	PlateauTrades int     // ...and at this many trades
+	Cash          float64 // mock portfolio starting cash
+	Fraction      float64 // fraction of cash per entry
+	Commission    float64 // commission as a fraction of turnover, per side
+}
+
+// DefaultScreenOpts are the screener's defaults; the CLI overrides them by flag.
+func DefaultScreenOpts() ScreenOpts {
+	return ScreenOpts{
+		PFCap:         10,
+		PlateauPF:     1.3,
+		PlateauTrades: 10,
+		Cash:          100000,
+		Fraction:      1.0,
+		Commission:    0.0005,
+	}
+}
+
+// PullbackRow is one ticker's screening result.
+type PullbackRow struct {
+	Ticker      string
+	Name        string
+	TurnoverM   float64 // mean daily turnover, millions of RUB (filled by ScreenTicker)
+	DailyATRPct float64 // mean weekday daily ATR as a percentage of close (filled by ScreenTicker)
+	Bars        int     // 30-minute bars the run replayed (filled by ScreenTicker)
+
+	PFMed     float64 // MEDIAN profit factor across the grid on the train window: the ranking key
+	TradesMed float64 // median trade count on the train window
+	Plateau   float64 // share of configurations clearing PlateauPF at PlateauTrades trades
+	Capped    int     // configurations whose train profit factor hit PFCap
+
+	PFMedHO     float64 // median profit factor on the holdout window: a red flag, never a ranking key
+	TradesMedHO float64
+
+	Best      core.Params // configuration with the highest train profit factor (reference only)
+	BestPF    float64
+	NoSignals bool // every configuration produced zero trades: profit factor does not exist
+}
+
+// Aggregate reduces one ticker's per-configuration results to a report row. The
+// ranking key is the MEDIAN profit factor, never the best one: across 271 tickers
+// and 24 configurations the maximum is a lottery, while the median asks whether the
+// strategy works across a band of parameters.
+func Aggregate(ticker, name string, results []ConfigResult, split time.Time, opts ScreenOpts) PullbackRow {
+	row := PullbackRow{Ticker: ticker, Name: name, NoSignals: true}
+	pfs := make([]float64, 0, len(results))
+	counts := make([]float64, 0, len(results))
+	pfsHO := make([]float64, 0, len(results))
+	countsHO := make([]float64, 0, len(results))
+	var plateau int
+
+	for _, r := range results {
+		train, holdout := splitTrades(r.Trades, split)
+
+		pf, n := profitFactor(train)
+		if n > 0 {
+			row.NoSignals = false
+		}
+		if pf > row.BestPF {
+			row.BestPF, row.Best = pf, r.Params
+		}
+		pf, capped := clampPF(pf, opts.PFCap)
+		if capped {
+			row.Capped++
+		}
+		if pf >= opts.PlateauPF && n >= opts.PlateauTrades {
+			plateau++
+		}
+		pfs = append(pfs, pf)
+		counts = append(counts, float64(n))
+
+		pfHO, nHO := profitFactor(holdout)
+		if nHO > 0 {
+			row.NoSignals = false
+		}
+		pfHO, _ = clampPF(pfHO, opts.PFCap)
+		pfsHO = append(pfsHO, pfHO)
+		countsHO = append(countsHO, float64(nHO))
+	}
+
+	row.BestPF, _ = clampPF(row.BestPF, opts.PFCap)
+	row.PFMed = medianF(pfs)
+	row.TradesMed = medianF(counts)
+	row.PFMedHO = medianF(pfsHO)
+	row.TradesMedHO = medianF(countsHO)
+	if len(results) > 0 {
+		row.Plateau = float64(plateau) / float64(len(results))
+	}
+	return row
+}
