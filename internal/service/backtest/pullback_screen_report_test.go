@@ -39,6 +39,7 @@ func TestFilterAndRankNoSignalsGatedToo(t *testing.T) {
 }
 
 func TestDistribution(t *testing.T) {
+	// Odd-sized sample: N=5
 	rows := []PullbackRow{
 		{PFMed: 0.5}, {PFMed: 1.0}, {PFMed: 1.5}, {PFMed: 2.0}, {PFMed: 3.0},
 	}
@@ -54,6 +55,57 @@ func TestDistribution(t *testing.T) {
 	}
 	if math.Abs(d.ShareAbove15-0.6) > 1e-9 {
 		t.Fatalf("ShareAbove15 = %v, want 0.6 (three of five at or above 1.5)", d.ShareAbove15)
+	}
+	// Q1 and Q3 must be computed; for N=5 sorted [0.5, 1.0, 1.5, 2.0, 3.0]:
+	// Q1 = median of [0.5, 1.0] = 0.75, Q3 = median of [2.0, 3.0] = 2.5
+	if math.Abs(d.Q1-0.75) > 1e-9 {
+		t.Fatalf("Q1 = %v, want 0.75", d.Q1)
+	}
+	if math.Abs(d.Q3-2.5) > 1e-9 {
+		t.Fatalf("Q3 = %v, want 2.5", d.Q3)
+	}
+}
+
+func TestDistributionEvenSized(t *testing.T) {
+	// Even-sized sample: N=4
+	rows := []PullbackRow{
+		{PFMed: 1.0}, {PFMed: 2.0}, {PFMed: 3.0}, {PFMed: 4.0},
+	}
+	d := Distribution(rows)
+	if d.N != 4 {
+		t.Fatalf("N = %d, want 4", d.N)
+	}
+	if math.Abs(d.Median-2.5) > 1e-9 {
+		t.Fatalf("median = %v, want 2.5 (midpoint of 2.0 and 3.0)", d.Median)
+	}
+	// Q1 = median of [1.0, 2.0] = 1.5, Q3 = median of [3.0, 4.0] = 3.5
+	if math.Abs(d.Q1-1.5) > 1e-9 {
+		t.Fatalf("Q1 = %v, want 1.5", d.Q1)
+	}
+	if math.Abs(d.Q3-3.5) > 1e-9 {
+		t.Fatalf("Q3 = %v, want 3.5", d.Q3)
+	}
+}
+
+func TestDistributionSingleValue(t *testing.T) {
+	// Single-row universe (N=1): Q1 and Q3 must equal the median to avoid
+	// misleading 0.00 values in the report
+	rows := []PullbackRow{{PFMed: 2.5}}
+	d := Distribution(rows)
+	if d.N != 1 {
+		t.Fatalf("N = %d, want 1", d.N)
+	}
+	if math.Abs(d.Min-2.5) > 1e-9 || math.Abs(d.Max-2.5) > 1e-9 {
+		t.Fatalf("min/max = %v/%v, want both 2.5", d.Min, d.Max)
+	}
+	if math.Abs(d.Median-2.5) > 1e-9 {
+		t.Fatalf("median = %v, want 2.5", d.Median)
+	}
+	if math.Abs(d.Q1-2.5) > 1e-9 {
+		t.Fatalf("Q1 = %v, want 2.5 (must equal median for N=1)", d.Q1)
+	}
+	if math.Abs(d.Q3-2.5) > 1e-9 {
+		t.Fatalf("Q3 = %v, want 2.5 (must equal median for N=1)", d.Q3)
 	}
 }
 
@@ -112,5 +164,14 @@ func TestRenderPullbackScreenMarkdownRespectsTopN(t *testing.T) {
 	md := RenderPullbackScreenMarkdown(ranked, nil, meta)
 	if !strings.Contains(md, "FIRST") || strings.Contains(md, "SECOND") {
 		t.Fatal("TopN=1 must render exactly one ranking row")
+	}
+}
+
+func TestRenderPullbackScreenMarkdownRendersAllWhenTopNIsZero(t *testing.T) {
+	meta := ScreenMeta{Months: 36, HoldoutMonths: 6, TopN: 0, Split: time.Now(), PFCap: 10} // TopN=0 means all
+	ranked := []PullbackRow{{Ticker: "FIRST", PFMed: 2}, {Ticker: "SECOND", PFMed: 1}}
+	md := RenderPullbackScreenMarkdown(ranked, nil, meta)
+	if !strings.Contains(md, "FIRST") || !strings.Contains(md, "SECOND") {
+		t.Fatal("TopN=0 must render all ranking rows")
 	}
 }

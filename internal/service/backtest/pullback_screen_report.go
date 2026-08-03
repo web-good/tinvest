@@ -53,7 +53,8 @@ type PFDist struct {
 	N                        int
 }
 
-// Distribution summarizes PFMed across the ranked rows.
+// Distribution summarizes PFMed across the ranked rows. For N=1, quartiles
+// equal the median to avoid misleading 0.00 values in the report.
 func Distribution(ranked []PullbackRow) PFDist {
 	if len(ranked) == 0 {
 		return PFDist{}
@@ -67,11 +68,17 @@ func Distribution(ranked []PullbackRow) PFDist {
 		}
 	}
 	sort.Float64s(vals)
+	median := medianF(vals)
+	q1, q3 := median, median // default for N=1
+	if len(vals) > 1 {
+		q1 = medianF(vals[:len(vals)/2])
+		q3 = medianF(vals[(len(vals)+1)/2:])
+	}
 	return PFDist{
 		Min:          vals[0],
-		Q1:           medianF(vals[:len(vals)/2]),
-		Median:       medianF(vals),
-		Q3:           medianF(vals[(len(vals)+1)/2:]),
+		Q1:           q1,
+		Median:       median,
+		Q3:           q3,
 		Max:          vals[len(vals)-1],
 		ShareAbove15: float64(above) / float64(len(ranked)),
 		N:            len(ranked),
