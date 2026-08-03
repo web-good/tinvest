@@ -83,12 +83,35 @@ type shareInfo struct {
 	Lot    int32
 }
 
+// refreshWorkerCap is the most concurrent tickers -refresh may run with. The candle
+// provider (internal/service/backtest/candles.go) logs a failed chunk and keeps going on
+// error, and Load(refresh=true) then writes whatever it managed to fetch back over the
+// existing cache file — so a slow-down from rate limiting is not the risk, a partially
+// overwritten 540MB local cache is. 8 workers sit around 26 req/s against market-data,
+// well above what the API tolerates before chunks start failing.
+const refreshWorkerCap = 2
+
+// effectiveWorkers returns the worker count run() should actually use, and whether it
+// clamped the caller's request. Pure so the -refresh safety rule is unit-testable without
+// standing up a gRPC client.
+func effectiveWorkers(requested int, refresh bool) (workers int, capped bool) {
+	if refresh && requested > refreshWorkerCap {
+		return refreshWorkerCap, true
+	}
+	return requested, false
+}
+
 func run(ctx context.Context, cfg runCfg) error {
 	if cfg.holdoutMonths >= cfg.months {
 		return fmt.Errorf("-holdout-months (%d) must be smaller than -months (%d)", cfg.holdoutMonths, cfg.months)
 	}
 	if cfg.workers < 1 {
 		return fmt.Errorf("-workers must be at least 1")
+	}
+	if workers, capped := effectiveWorkers(cfg.workers, cfg.refresh); capped {
+		fmt.Printf("pullscreen: -refresh forces -workers %d -> %d to avoid punching holes in the local candle cache (see refreshWorkerCap)\n",
+			cfg.workers, workers)
+		cfg.workers = workers
 	}
 	token, err := loadToken()
 	if err != nil {
