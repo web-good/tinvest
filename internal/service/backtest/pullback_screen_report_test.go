@@ -1,6 +1,7 @@
 package backtest
 
 import (
+	"fmt"
 	"math"
 	"strings"
 	"testing"
@@ -25,6 +26,30 @@ func TestFilterAndRankGates(t *testing.T) {
 	}
 	if len(rejected) != 2 {
 		t.Fatalf("rejected = %+v, want THIN and CALM", rejected)
+	}
+}
+
+func TestFilterAndRankBreaksTiesByTicker(t *testing.T) {
+	// The worker pool in cmd/pullscreen fills rows in completion order, which varies
+	// run to run. Rows tied on PFMed (common once the zero-trade-config PF=0 rows pile
+	// up — see Aggregate's SilentCfg) must not depend on that arrival order: two runs
+	// against the same cache must render the same report.
+	rows := []PullbackRow{
+		{Ticker: "ZZZZ", TurnoverM: 100, DailyATRPct: 2.0, PFMed: 0},
+		{Ticker: "AAAA", TurnoverM: 100, DailyATRPct: 2.0, PFMed: 0},
+		{Ticker: "MMMM", TurnoverM: 100, DailyATRPct: 2.0, PFMed: 1.5},
+		{Ticker: "BBBB", TurnoverM: 100, DailyATRPct: 2.0, PFMed: 1.5},
+	}
+	ranked, _, _ := FilterAndRank(rows, 50, 1.5)
+	got := make([]string, len(ranked))
+	for i, r := range ranked {
+		got[i] = r.Ticker
+	}
+	want := []string{"BBBB", "MMMM", "AAAA", "ZZZZ"}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("ranked order = %v, want %v (PFMed desc, Ticker asc within a tie)", got, want)
+		}
 	}
 }
 
@@ -147,6 +172,30 @@ func TestRenderPullbackScreenMarkdown(t *testing.T) {
 		if !strings.Contains(md, want) {
 			t.Fatalf("report is missing %q\n---\n%s", want, md)
 		}
+	}
+}
+
+func TestRenderPullbackScreenMarkdownShowsCappedFraction(t *testing.T) {
+	// Spec §4.1: the report must surface HOW MANY of the 24 grid configurations hit the
+	// PF cap, not just the cap value in the header — a row whose "best" config is itself
+	// capped is a thin/no-loss sample dressed up as a strong PFmed, and the reader needs
+	// that visible next to the row, not just knowable from the raw PF header note.
+	meta := ScreenMeta{Months: 36, HoldoutMonths: 6, TopN: 50, Split: time.Now(), PFCap: 10}
+	ranked := []PullbackRow{
+		{Ticker: "AFKS", PFMed: 2.19, Capped: 2},
+		{Ticker: "CALM", PFMed: 1.1, Capped: 0},
+	}
+	md := RenderPullbackScreenMarkdown(ranked, nil, meta)
+
+	denom := fmt.Sprintf("/%d", len(PullbackGrid()))
+	if !strings.Contains(md, "2"+denom) {
+		t.Fatalf("report is missing the capped fraction \"2%s\" for AFKS\n---\n%s", denom, md)
+	}
+	if !strings.Contains(md, "0"+denom) {
+		t.Fatalf("report is missing the capped fraction \"0%s\" for CALM\n---\n%s", denom, md)
+	}
+	if !strings.Contains(md, "Capped") {
+		t.Fatal("report is missing a Capped column header")
 	}
 }
 

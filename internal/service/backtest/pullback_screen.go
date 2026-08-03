@@ -166,6 +166,7 @@ type PullbackRow struct {
 	TradesMed float64 // median trade count on the train window
 	Plateau   float64 // share of configurations clearing PlateauPF at PlateauTrades trades
 	Capped    int     // configurations whose train profit factor hit PFCap
+	SilentCfg int     // configurations with zero train trades; each contributes PF=0 to PFMed
 
 	PFMedHO     float64 // median profit factor on the holdout window: a red flag, never a ranking key
 	TradesMedHO float64
@@ -186,6 +187,7 @@ func Aggregate(ticker, name string, results []ConfigResult, split time.Time, opt
 	pfsHO := make([]float64, 0, len(results))
 	countsHO := make([]float64, 0, len(results))
 	var plateau int
+	var haveBest bool // tracks whether row.Best has ever been assigned a real grid entry
 
 	for _, r := range results {
 		train, holdout := splitTrades(r.Trades, split)
@@ -193,9 +195,19 @@ func Aggregate(ticker, name string, results []ConfigResult, split time.Time, opt
 		pf, n := profitFactor(train)
 		if n > 0 {
 			row.NoSignals = false
+		} else {
+			row.SilentCfg++
 		}
-		if pf > row.BestPF {
+		// The first configuration always claims Best regardless of its own PF: a strict
+		// "pf > row.BestPF" starting from the zero PullbackRow would never assign Best at
+		// all when every configuration's raw PF is exactly 0 (e.g. all-losing train
+		// windows), leaving row.Best at the zero-value core.Params{} — which the report
+		// renders as "RSI 0/0, EMA 0/0, TP 0.0", a value that reads as a real (and wrong)
+		// configuration rather than "no winner". Best must reference an actual grid entry
+		// whenever results is non-empty.
+		if !haveBest || pf > row.BestPF {
 			row.BestPF, row.Best = pf, r.Params
+			haveBest = true
 		}
 		pf, capped := clampPF(pf, opts.PFCap)
 		if capped {

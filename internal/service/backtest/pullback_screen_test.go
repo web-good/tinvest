@@ -249,6 +249,36 @@ func TestAggregatePlateauShare(t *testing.T) {
 	}
 }
 
+func TestAggregateCountsSilentConfigs(t *testing.T) {
+	// A configuration with zero train trades still contributes a PF=0 to the median
+	// (profitFactor's documented behavior for an empty subset): on a thin-history ticker
+	// this can dominate PFmed and make it look like the strategy fails everywhere, when
+	// really most configurations just never got a chance to trade. SilentCfg must count
+	// those separately so the report doesn't hide the difference between "tried and
+	// lost" and "never traded".
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	split := base.AddDate(0, 6, 0)
+	grid := PullbackGrid()
+	results := make([]ConfigResult, 0, len(grid))
+	for i, p := range grid {
+		var trades []backtest.Trade
+		if i < 16 { // 16 of 24 configs never trade in train
+			trades = nil
+		} else { // the rest trade and lose, keeping NoSignals false
+			trades = []backtest.Trade{screenTrade(base, 1, 100), screenTrade(base, 2, -200)}
+		}
+		results = append(results, ConfigResult{Params: p, Trades: trades})
+	}
+	row := Aggregate("LKOH", "Test", results, split, DefaultScreenOpts())
+
+	if row.SilentCfg != 16 {
+		t.Fatalf("SilentCfg = %d, want 16", row.SilentCfg)
+	}
+	if row.NoSignals {
+		t.Fatal("NoSignals = true, want false: 8 configurations traded")
+	}
+}
+
 func TestAggregateClampsUnboundedPF(t *testing.T) {
 	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	split := base.AddDate(0, 6, 0)
@@ -323,6 +353,35 @@ func TestAggregateOneTradingConfigIsNotNoSignals(t *testing.T) {
 	row := Aggregate("XXXX", "Test", results, split, DefaultScreenOpts())
 	if row.NoSignals {
 		t.Fatal("NoSignals = true, want false when at least one configuration traded")
+	}
+}
+
+func TestAggregateAllZeroPFStillPicksARealBest(t *testing.T) {
+	// When every configuration's train PF is exactly 0 (all trades present but all
+	// losing), the strict "pf > row.BestPF" comparison starting from a zero BestPF
+	// never fires for any candidate, so row.Best stays the zero-value core.Params{} —
+	// which the report renders as "RSI 0/0, EMA 0/0, TP 0.0": a value that reads as a
+	// real (and nonsensical) grid configuration rather than "no winner". Best must
+	// always reference an actual grid entry when the grid is non-empty; BestPF stays 0
+	// because that genuinely is the best (only) raw PF any configuration reached.
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	split := base.AddDate(0, 6, 0)
+	grid := PullbackGrid()
+	results := make([]ConfigResult, 0, len(grid))
+	for _, p := range grid {
+		// Every config has exactly one losing trade: profitFactor returns (0, 1).
+		results = append(results, ConfigResult{Params: p, Trades: []backtest.Trade{screenTrade(base, 1, -100)}})
+	}
+	row := Aggregate("XXXX", "Test", results, split, DefaultScreenOpts())
+
+	if row.BestPF != 0 {
+		t.Fatalf("BestPF = %v, want 0 (no configuration has a positive profit factor)", row.BestPF)
+	}
+	if row.Best != grid[0] {
+		t.Fatalf("Best = %+v, want grid[0] %+v — a real grid entry, not the zero-value core.Params{} the report would render as \"RSI 0/0, EMA 0/0, TP 0.0\"", row.Best, grid[0])
+	}
+	if row.NoSignals {
+		t.Fatal("NoSignals = true, want false: every configuration traded once")
 	}
 }
 

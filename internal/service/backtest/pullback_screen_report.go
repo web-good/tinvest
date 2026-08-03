@@ -37,7 +37,16 @@ func FilterAndRank(rows []PullbackRow, minTurnoverM, minATRPct float64) (ranked,
 		}
 		ranked = append(ranked, r)
 	}
-	sort.SliceStable(ranked, func(i, j int) bool { return ranked[i].PFMed > ranked[j].PFMed })
+	sort.SliceStable(ranked, func(i, j int) bool {
+		if ranked[i].PFMed != ranked[j].PFMed {
+			return ranked[i].PFMed > ranked[j].PFMed
+		}
+		// The worker pool fills rows in completion order, which is nondeterministic run
+		// to run; a tie on PFMed (common once zero-trade configurations pile up 0s into
+		// the median, see Aggregate's SilentCfg) must not let that order leak into the
+		// report. Tiebreak by ticker so a rerun against the same cache renders byte-identical.
+		return ranked[i].Ticker < ranked[j].Ticker
+	})
 	sort.SliceStable(noSignals, func(i, j int) bool { return noSignals[i].Ticker < noSignals[j].Ticker })
 	return ranked, noSignals, rejected
 }
@@ -105,9 +114,10 @@ func RenderPullbackScreenMarkdown(ranked, noSignals []PullbackRow, meta ScreenMe
 		d.Min, d.Q1, d.Median, d.Q3, d.Max, d.ShareAbove15*100, d.N)
 	b.WriteString("Читать эту строку раньше первой строки топа: если планку проходит половина вселенной, планка ничего не значит.\n\n")
 
+	gridSize := len(PullbackGrid())
 	b.WriteString("## Рейтинг\n\n")
-	b.WriteString("| # | Ticker | Name | Оборот, млн | ATR% дн | Бары | TradesMed | PFmed | Plateau | PFmed HO | Trades HO | Лучшая конфигурация |\n")
-	b.WriteString("|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+	b.WriteString("| # | Ticker | Name | Оборот, млн | ATR% дн | Бары | TradesMed | PFmed | Capped | SilentCfg | Plateau | PFmed HO | Trades HO | Лучшая конфигурация |\n")
+	b.WriteString("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	limit := len(ranked)
 	if meta.TopN > 0 && meta.TopN < limit {
 		limit = meta.TopN
@@ -115,11 +125,14 @@ func RenderPullbackScreenMarkdown(ranked, noSignals []PullbackRow, meta ScreenMe
 	for i, r := range ranked[:limit] {
 		best := fmt.Sprintf("RSI %d/%.0f, EMA %d/%d, TP %.1f",
 			r.Best.RSIPeriod, r.Best.RSILower, r.Best.EMAFast, r.Best.EMASlow, r.Best.TPDailyATR)
-		fmt.Fprintf(&b, "| %d | %s | %s | %.0f | %.2f | %d | %.0f | %.2f | %.0f%% | %.2f | %.0f | %s |\n",
+		fmt.Fprintf(&b, "| %d | %s | %s | %.0f | %.2f | %d | %.0f | %.2f | %d/%d | %d/%d | %.0f%% | %.2f | %.0f | %s |\n",
 			i+1, r.Ticker, r.Name, r.TurnoverM, r.DailyATRPct, r.Bars,
-			r.TradesMed, r.PFMed, r.Plateau*100, r.PFMedHO, r.TradesMedHO, best)
+			r.TradesMed, r.PFMed, r.Capped, gridSize, r.SilentCfg, gridSize,
+			r.Plateau*100, r.PFMedHO, r.TradesMedHO, best)
 	}
 	b.WriteString("\nКолонка «лучшая конфигурация» — справочная стартовая точка для ручной калибровки, а не рекомендация.\n")
+	b.WriteString("`Capped` — число из 24 конфигураций, чей train-PF упёрся в потолок `-pf-cap`: их PFmed завышен относительно реального (неограниченного) значения.\n")
+	b.WriteString("`SilentCfg` — число из 24 конфигураций без единой train-сделки; они входят в медиану как PF=0 (см. «Как это читать»).\n")
 	b.WriteString("`PFmed HO` в сортировке не участвует: это красный флаг («работало и развалилось»), а не критерий отбора.\n\n")
 
 	if len(noSignals) > 0 {
