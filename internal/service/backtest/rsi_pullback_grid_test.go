@@ -11,14 +11,11 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 )
 
-// rsiPullbackParamsDir holds the full phased grid plus the single-concern cal_*.json files.
+// rsiPullbackParamsDir holds the per-ticker single-concern cal_*.json files and the plateau
+// points. There is deliberately no ticker-agnostic grid.json any more: calibration is run
+// theme by theme out of a ticker's own subdirectory, because the useful axis of every phase
+// (how deep an RSI pullback is, how many daily ATRs a stop is worth) is instrument-specific.
 const rsiPullbackParamsDir = "../../../data/params/rsi_pullback"
-
-// rsiPullbackGrid loads the shipped grid file.
-func rsiPullbackGrid(t *testing.T) []Phase {
-	t.Helper()
-	return rsiPullbackPhases(t, filepath.Join(rsiPullbackParamsDir, "grid.json"))
-}
 
 // rsiPullbackPhases parses one grid file and fails the test if it is empty or malformed.
 func rsiPullbackPhases(t *testing.T, path string) []Phase {
@@ -37,10 +34,9 @@ func rsiPullbackPhases(t *testing.T, path string) []Phase {
 	return phases
 }
 
-// rsiPullbackGridFiles lists every grid file shipped for the strategy, including the
-// per-ticker subdirectories (gazp/, t/). The walk is recursive on purpose: ticker-specific
-// fixed configs live in subdirectories, and a flat glob would silently exempt exactly those
-// files from the field and stop checks below.
+// rsiPullbackGridFiles lists every grid file shipped for the strategy. They all live in
+// per-ticker subdirectories (gazp/, t/, ugld/), so the walk must be recursive: a flat glob
+// would match nothing at all and silently exempt the whole set from the checks below.
 func rsiPullbackGridFiles(t *testing.T) []string {
 	t.Helper()
 	var files []string
@@ -58,26 +54,9 @@ func rsiPullbackGridFiles(t *testing.T) []string {
 		t.Fatalf("walk grids: %v", err)
 	}
 	if len(files) < 2 {
-		t.Fatalf("expected the phased grid plus the cal_*.json files, found %d", len(files))
+		t.Fatalf("expected the per-ticker cal_*.json files, found %d", len(files))
 	}
 	return files
-}
-
-// TestRSIPullbackGridFieldsExist drives every swept value through applyField, which errors on an
-// unknown field name — so a typo in the grid fails this test.
-func TestRSIPullbackGridFieldsExist(t *testing.T) {
-	for _, ph := range rsiPullbackGrid(t) {
-		for name, values := range ph.Grid {
-			if len(values) == 0 {
-				t.Fatalf("phase %q: field %q has no values", ph.Name, name)
-			}
-			for _, v := range values {
-				if _, err := applyField(core.DefaultParams(), name, v); err != nil {
-					t.Fatalf("phase %q: applyField(%s=%v): %v", ph.Name, name, v, err)
-				}
-			}
-		}
-	}
 }
 
 // TestRSIPullbackCalFilesValid guards the single-concern cal_*.json files with the same rules the
@@ -134,13 +113,15 @@ func TestRSIPullbackCalFilesValid(t *testing.T) {
 }
 
 // TestRSIPullbackGridControlPoints pins the deliberate on/off points. The two optional gates
-// must be sweepable to "off" SOMEWHERE in the shipped set — the control lives in
-// cal_screen.json, not in grid.json, and pinning it to one file forbids that split — while the
-// stop must never be sweepable to zero anywhere, and the full grid must test a target above the
-// stop so the reward-to-risk asymmetry does not stay an assumption.
+// must be sweepable to "off" SOMEWHERE in the shipped set — that control lives in cal_screen.json
+// and pinning it to any one file would forbid the split — while the reward-to-risk asymmetry is
+// checked WITHIN each file: a target must clear the widest stop the same file sweeps. Comparing
+// across files would be meaningless, since a stop of 1.0 daily ATR buys a different amount of
+// room on T than it does on UGLD.
 func TestRSIPullbackGridControlPoints(t *testing.T) {
-	var sawDayOff, sawVolumeOff bool
+	var sawDayOff, sawVolumeOff, sawStop bool
 	for _, path := range rsiPullbackGridFiles(t) {
+		maxStop := 0.0
 		for _, ph := range rsiPullbackPhases(t, path) {
 			for _, v := range ph.Grid["UseDayATRGate"] {
 				if v == 0 {
@@ -152,6 +133,27 @@ func TestRSIPullbackGridControlPoints(t *testing.T) {
 					sawVolumeOff = true
 				}
 			}
+			for _, v := range ph.Grid["StopDailyATR"] {
+				sawStop = true
+				if v > maxStop {
+					maxStop = v
+				}
+			}
+		}
+		if maxStop == 0 {
+			continue // this file does not sweep the stop, so it cannot state an asymmetry
+		}
+		var sawTP, sawTPAboveStop bool
+		for _, ph := range rsiPullbackPhases(t, path) {
+			for _, v := range ph.Grid["TPDailyATR"] {
+				sawTP = true
+				if v > maxStop {
+					sawTPAboveStop = true
+				}
+			}
+		}
+		if sawTP && !sawTPAboveStop {
+			t.Fatalf("%s sweeps the stop up to %.2f daily ATR but no target above it: the reward-to-risk asymmetry stays untested", path, maxStop)
 		}
 	}
 	if !sawDayOff {
@@ -160,54 +162,8 @@ func TestRSIPullbackGridControlPoints(t *testing.T) {
 	if !sawVolumeOff {
 		t.Fatal("no UseVolume=0 control point in any grid file: the volume gate can never be measured against off")
 	}
-
-	var sawStop, sawTPAboveStop bool
-	maxStop := 0.0
-	for _, ph := range rsiPullbackGrid(t) {
-		for _, v := range ph.Grid["StopDailyATR"] {
-			sawStop = true
-			if v == 0 {
-				t.Fatal("StopDailyATR=0 is in the grid: calibration must not be able to disable the stop")
-			}
-			if v > maxStop {
-				maxStop = v
-			}
-		}
-	}
-	for _, ph := range rsiPullbackGrid(t) {
-		for _, v := range ph.Grid["TPDailyATR"] {
-			if v > maxStop {
-				sawTPAboveStop = true
-			}
-		}
-	}
 	if !sawStop {
-		t.Fatal("the grid never sweeps StopDailyATR")
-	}
-	if !sawTPAboveStop {
-		t.Fatal("the grid never tests a target above the stop: the reward-to-risk asymmetry stays untested")
-	}
-}
-
-// TestRSIPullbackGridEvaluationCost pins the real cost of a phased calibration. RunPhases
-// expands every phase over the previous phase's keepTop seeds, so the number of backtest runs
-// is NOT the sum of the grid sizes — an earlier revision of this file understated it fourfold.
-func TestRSIPullbackGridEvaluationCost(t *testing.T) {
-	phases := rsiPullbackGrid(t)
-	seeds := 1
-	total := 0
-	for _, ph := range phases {
-		n := 1
-		for _, values := range ph.Grid {
-			n *= len(values)
-		}
-		total += seeds * n
-		if ph.KeepTop > 0 {
-			seeds = ph.KeepTop
-		}
-	}
-	if total != 409 {
-		t.Fatalf("phased calibration costs %d evaluations, want the documented 409", total)
+		t.Fatal("no grid file sweeps StopDailyATR")
 	}
 }
 

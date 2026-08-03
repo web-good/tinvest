@@ -191,8 +191,9 @@ ROSN 2.60%, GAZP 2.66%, NVTK 3.03%. Стоп в один дневной ATR — 
 основном стратегия «покупаем пролив после того, как день выработал ход», а раннее утро —
 добавка на четверть входов. Именно этот перекос и стал причиной, по которой шипуемый дефолт
 с тех пор изменился: `FreshDayATR = 0` (см. §8.1, «Как отключить одну ветку») отключает
-раннюю ветку целиком, оставляя только доминирующую «день исчерпан»; 0.3 остаётся точкой в
-`grid.json`, а не текущим дефолтом.
+раннюю ветку целиком, оставляя только доминирующую «день исчерпан»; 0.3 остаётся точкой на
+оси `cal_day.json`, а не общим дефолтом — но именно 0.3 победило при калибровке UGLD, где
+обе ветки работают.
 
 ## 6. Фон объёмов: слотовая база
 
@@ -242,55 +243,60 @@ EMA: `2·100 + 20 = 220` баров. С включённым гейтом и `Vo
 ## 8. Калибровка
 
 ```bash
-go run ./cmd/backtest -ticker GAZP -strategy rsi_pullback -interval Minutes30 \
-  -calibrate data/params/rsi_pullback/grid.json -out ./reports/GAZP \
+go run ./cmd/backtest -ticker UGLD -strategy rsi_pullback -interval Minutes30 \
+  -calibrate data/params/rsi_pullback/ugld/cal_screen.json -out ./reports/UGLD \
   -months 24 -min-trades 20 -test-months 6 -metric profit_factor
 ```
 
-Грид (`data/params/rsi_pullback/grid.json`) — фазовый: entry (`RSIPeriod`×`RSILower`) →
-trend (`EMAFast`×`EMASlow`) → day (`UseDayATRGate`×`FreshDayATR`×`SpentDayATR`) → volume
+Калибровка идёт **по темам, из каталога своего тикера** — `data/params/rsi_pullback/<ticker>/`.
+Единого тикер-агностичного `grid.json` больше нет: он был удалён при калибровке UGLD, потому
+что полезная ось почти каждой фазы инструмент-специфична. Насколько глубоким бывает откат по
+RSI и сколько цены стоит дневной ATR — величины разные на T и на UGLD, и общая сетка либо
+промахивалась мимо рабочего диапазона, либо тратила прогоны на заведомо пустые точки.
+Порядок фаз при этом сохранён как порядок запусков: entry (`RSIPeriod`×`RSILower`) → trend
+(`EMAFast`×`EMASlow`) → day (`UseDayATRGate`×`FreshDayATR`×`SpentDayATR`) → volume
 (`UseVolume`×`VolMult`×`VolBaseDays`) → risk (`StopDailyATR`×`TPDailyATR`) → trail
-(`UseRSIExit`×`RSIUpper`×`UseTrail`×`TrailDailyATR`). `RunPhases` разворачивает каждую фазу
-на **каждом** seed предыдущей фазы, а не суммирует размеры сеток — честная цена прогона
-составляет `9 + 6·12 + 5·12 + 5·12 + 4·16 + 4·36 = 409` вызовов движка, запинено
-`TestRSIPullbackGridEvaluationCost`. Тест намеренно пинует само число: расширение любой
-фазы стоит дороже, чем кажется по размеру её сетки, и это должно быть видно в диффе.
+(`UseRSIExit`×`RSIUpper`×`UseTrail`×`TrailDailyATR`).
+
+Цена одного файла — не сумма размеров его сеток: `RunPhases` разворачивает каждую фазу на
+**каждом** seed предыдущей, так что многофазный файл стоит произведение, а не сумму. Считать
+по этому правилу, а не по числу значений в JSON.
 
 Планка приёмки — та же, что для прошлых backtest-only стратегий репозитория: **pooled OOS
 profit factor ≥ 1.5** по walk-forward-калибровке, никогда по in-sample лучшему результату
 одной сетки. По этой планке уже закрыты `vwap_rev`, `orb`, `daylow`, `levels`, `momentum`,
 `smc`.
 
-### 8.0. Полный грид против однотемных файлов
+### 8.0. Однотемные файлы
 
-В `data/params/rsi_pullback/` лежат два вида сеток:
+В `data/params/rsi_pullback/<ticker>/` лежит по одному файлу на тему. Стоимость в прогонах
+указана для каталога `ugld/` — у `t/` те же темы, но оси шире или уже, поэтому числа свои:
 
-| Файл | Прогонов | Что меряет |
+| Файл | Прогонов (ugld) | Что меряет |
 |---|---|---|
-| `grid.json` | 409 | полная фазовая калибровка, шесть фаз подряд с наследованием seed'ов |
 | `cal_screen.json` | 4 | цена двух опциональных гейтов в сделках (`UseDayATRGate` × `UseVolume`) |
-| `cal_entry.json` | 20 | форма отката: `RSIPeriod` × `RSILower` |
-| `cal_trend.json` | 36 | тренд: `EMAFast` × `EMASlow` |
-| `cal_day.json` | 120 | пороги гейта дня при `UseDayATRGate = 1`, вместе с `RSILower`/`RSIPeriod` |
-| `cal_day_spent.json` | 5 | только ветка «день исчерпан»: `FreshDayATR = 0` + свип `SpentDayATR` |
-| `cal_volume.json` | 24 | фон объёмов при `UseVolume = 1`: `VolMult` × `VolBaseDays` |
-| `cal_risk.json` | 24 | стоп и цель в дневных ATR |
+| `cal_entry.json` | 80 | форма отката: `RSIPeriod` × `RSILower` |
+| `cal_trend.json` | 16 | тренд: `EMAFast` × `EMASlow` |
+| `cal_day.json` | 60 | пороги гейта дня при `UseDayATRGate = 1` |
+| `cal_day_spent.json` | 7 | только ветка «день исчерпан»: `FreshDayATR = 0` + свип `SpentDayATR` |
+| `cal_volume.json` | 20 | фон объёмов при `UseVolume = 1`: `VolMult` × `VolBaseDays` |
+| `cal_risk.json` | 30 | стоп и цель в дневных ATR |
 | `cal_exit.json` | 6 | уровень выхода `RSIUpper` |
-| `cal_trail.json` | 60 | трейл `TrailDailyATR` + отключение RSI-выхода `UseRSIExit` + `RSIUpper` |
+| `cal_trail.json` | 12 | трейл `TrailDailyATR` + отключение RSI-выхода `UseRSIExit` |
 | `<ticker>/plateau_rsilower*.json` | 1 каждый | фиксированная точка: PF принадлежит конфигурации, а не отбору |
 
-Разница принципиальная: **`cal_*.json` не наследуют результаты друг друга**. Каждый файл
-свипает свою тему поверх `DefaultParams`, поэтому его лидерборд отвечает на вопрос «что
-лучше при прочих дефолтных», а не «что лучше в связке». Это делает их дешёвыми и
-интерпретируемыми, но они не заменяют `grid.json`: последовательное наследование фаз —
-единственный режим, где параметры настраиваются с учётом друг друга.
+Главное свойство: **`cal_*.json` не наследуют результаты друг друга**. Каждый файл свипает
+свою тему поверх `DefaultParams`, поэтому его лидерборд отвечает на вопрос «что лучше при
+прочих дефолтных», а не «что лучше в связке». Связку приходится собирать руками — прогнать
+тему, вписать победителя в тикерный `DefaultParams()`, идти дальше — и это осознанная цена
+отказа от сквозного грида: дешевле, прозрачнее в диффе, но взаимодействия между параметрами
+не ищутся автоматически.
 
 Разумный порядок работы: сначала `cal_screen.json` — узнать, сколько сделок остаётся при
-каждой комбинации гейтов и какой `-min-trades` вообще имеет смысл; затем один-два
-однотемных файла по тем ручкам, которые вызывают сомнение; и только потом полный
-`grid.json` на 409 прогонов. Файлы `cal_risk.json` и `cal_exit.json` связаны между собой
-(выход по RSI — третий по приоритету после SL и TP), поэтому `cal_exit.json` осмысленно
-запускать уже с зафиксированной парой стоп/цель, а не поверх дефолтов.
+каждой комбинации гейтов и какой `-min-trades` вообще имеет смысл; затем темы в порядке
+фаз из §8. Файлы `cal_risk.json` и `cal_exit.json` связаны между собой (выход по RSI —
+третий по приоритету после SL и TP), поэтому `cal_exit.json` осмысленно запускать уже с
+зафиксированной парой стоп/цель, а не поверх дефолтов.
 
 Все файлы каталога проверяются тестом `TestRSIPullbackCalFilesValid`: обход рекурсивный и
 покрывает подкаталоги `<ticker>/`, каждое имя поля обязано резолвиться через `applyField`
@@ -314,10 +320,12 @@ Doc-комментарий пакета обязан честно называт
 | откалиброван | явный литерал; связь с baseline разорвана осознанно | `gazp`, `tbank` (тикер `T`, откалиброван собственным прогоном 2026-07-31, отчёт `reports/T/T_rsi_pullback_Minutes30_20260731_134407.md`, 67 сделок, in-sample PF 1.312 — walk-forward OOS ещё не подтверждён) |
 | засеян чужим конфигом | явный литерал-копия + пометка «гипотеза, не настроен» | нет текущих примеров: `tbank` был в этом состоянии (засеян GAZP-конфигом) до собственной калибровки 2026-07-31 |
 
-Файлы параметров разложены по тому же принципу: тикер-агностичные развёртки (`grid.json`,
-`cal_*.json`) лежат в корне `data/params/rsi_pullback/` и переиспользуются любым тикером —
-в их командах GAZP только пример; тикер-специфичные фиксированные конфиги живут в
-`data/params/rsi_pullback/<ticker>/`. Все файлы, включая подкаталоги, проходят
+Файлы параметров разложены по тому же принципу: **всё лежит в
+`data/params/rsi_pullback/<ticker>/`**, тикер-агностичных развёрток в корне каталога больше
+нет. Новому тикеру сетки заводят копированием ближайшего по характеру соседа с последующей
+пересадкой осей на его собственные измеренные распределения — так сделан `ugld/`, и каждый
+его `_comment` несёт эти замеры. Копия без пересадки осей — типовая ошибка: команда в
+`_comment` тогда называет чужой файл, и это ловит тест ниже. Все файлы проходят
 `TestRSIPullbackCalFilesValid` (имена полей резолвятся через `applyField`, `StopDailyATR = 0`
 запрещён везде) и `TestRSIPullbackPlateauFilesArePoints` (в `plateau_*` ровно одно значение
 на ключ).
@@ -328,19 +336,20 @@ Doc-комментарий пакета обязан честно называт
 # 1. Цена гейтов в сделках + прогрев кэша до полных 24 месяцев.
 #    -refresh обязателен на первом прогоне: кэш нового тикера обычно короче запрошенного окна.
 go run ./cmd/backtest -ticker T -strategy rsi_pullback -interval Minutes30 \
-  -calibrate data/params/rsi_pullback/cal_screen.json -out ./reports/T_screen \
+  -calibrate data/params/rsi_pullback/t/cal_screen.json -out ./reports/T_screen \
   -months 24 -min-trades 1 -test-months 6 -metric profit_factor -refresh
 
-# 2. Полная фазовая калибровка, 409 вызовов движка.
-go run ./cmd/backtest -ticker T -strategy rsi_pullback -interval Minutes30 \
-  -calibrate data/params/rsi_pullback/grid.json -out ./reports/T \
-  -months 24 -min-trades 20 -test-months 6 -metric profit_factor
-
-# 3. Однотемные файлы, зафиксированные под T (шире корневых одноимённых — см. §8.0):
-#    по одному прогону на тему, каждый поверх DefaultParams, а не поверх результата шага 2.
+# 2. Дальше — по теме за раз, в порядке фаз из §8. Каждый файл свипает поверх DefaultParams,
+#    поэтому победителя темы вписывают в DefaultParams() тикера перед следующим запуском.
 go run ./cmd/backtest -ticker T -strategy rsi_pullback -interval Minutes30 \
   -calibrate data/params/rsi_pullback/t/cal_entry.json -out ./reports/T_entry \
   -months 24 -min-trades 20 -test-months 6 -metric profit_factor
+
+# 3. Итог проверяют rolling walk-forward'ом (-train-months, шаг = -test-months),
+#    а не лучшей строкой in-sample лидерборда.
+go run ./cmd/backtest -ticker T -strategy rsi_pullback -interval Minutes30 \
+  -calibrate data/params/rsi_pullback/t/cal_risk.json -out ./reports/T \
+  -months 24 -train-months 12 -test-months 3 -min-trades 20 -metric profit_factor
 ```
 
 Шаг 3 в общем случае можно запускать и ДО шага 2 — однотемные файлы дёшевы и дают раннюю
