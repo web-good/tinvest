@@ -455,15 +455,60 @@ func TestScreenTickerFlatSeriesProducesNoSignals(t *testing.T) {
 	}
 }
 
+// pullbackFixtureCandles builds n 30-minute bars on weekday MSK sessions (weekends
+// skipped) that the rsi_pullback grid actually trades: a steady +0.25%/bar uptrend
+// (keeps EMAFast above EMASlow) interrupted every dipEvery bars by a dipLen-bar, -1.5%/bar
+// pullback sharp enough to push RSI(4) below 10. Unlike tinyCandles/dailyCandlesMSK, which
+// deliberately never trade, this fixture exists so TestScreenTickerRunsTheGridParamsVerbatim
+// has a trade count that can actually tell "ran the grid config" apart from "ran the
+// ticker's registered literal" — see that test.
+func pullbackFixtureCandles(n int) []backtest.Candle {
+	const (
+		driftPct = 0.0025
+		dipPct   = -0.015
+		dipEvery = 68
+		dipLen   = 4
+	)
+	t := time.Date(2026, 2, 2, 0, 0, 0, 0, screenMSK) // Monday
+	out := make([]backtest.Candle, 0, n)
+	price := 100.0
+	cycle := dipEvery + dipLen
+	for i := 0; len(out) < n; {
+		if t.Weekday() == time.Saturday || t.Weekday() == time.Sunday {
+			t = t.Add(30 * time.Minute)
+			continue
+		}
+		pct := driftPct
+		if i%cycle >= dipEvery {
+			pct = dipPct
+		}
+		open := price
+		close := price * (1 + pct)
+		high, low := open, close
+		if close > open {
+			high, low = close, open
+		}
+		out = append(out, backtest.Candle{Time: t, Open: open, High: high, Low: low, Close: close, Volume: 10000})
+		price = close
+		t = t.Add(30 * time.Minute)
+		i++
+	}
+	return out
+}
+
 func TestScreenTickerRunsTheGridParamsVerbatim(t *testing.T) {
 	// The screener compares tickers on ONE grid. UGLD is a REGISTERED ticker whose
 	// package carries a calibrated literal (RSIPeriod 6, EMASlow 150, UseVolume 1,
 	// UseTrail 1); grading it on that literal instead of the grid config would make
 	// its row incomparable with the other 268. This pins the equivalence: one grid
 	// config through ScreenTicker must reproduce a direct engine run with that same
-	// config, bit for bit.
-	bars := tinyCandles(600)
-	daily := dailyCandlesMSK(60, 100, 2)
+	// config, bit for bit. A fixture that produces zero trades under BOTH paths cannot
+	// tell them apart — the assertions below would degrade into comparing 0 to 0 and
+	// stay green even if ScreenTicker were simplified to run the registered literal
+	// instead of the grid — so pullbackFixtureCandles is built specifically to trade,
+	// and the guard below re-checks that on every run rather than trusting it forever.
+	bars := pullbackFixtureCandles(1200)
+	daily := dailyCandlesMSK(150, 100, 2)
 	split := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
 	opts := DefaultScreenOpts()
 
@@ -475,12 +520,16 @@ func TestScreenTickerRunsTheGridParamsVerbatim(t *testing.T) {
 	)
 	wantPF, wantN := profitFactor(want.Trades)
 
+	trainWant, _ := splitTrades(want.Trades, split)
+	trainPF, trainN := profitFactor(trainWant)
+	if trainN == 0 {
+		t.Fatal("fixture produces no trades: the test cannot discriminate ScreenTicker's parameter source (grid config vs. registered literal) from a degenerate zero-trade run")
+	}
+	trainPF, _ = clampPF(trainPF, opts.PFCap)
+
 	row := ScreenTicker("UGLD", "calibrated", bars, daily, 1, []core.Params{cfg}, split, opts)
 
 	gotPF, _ := clampPF(wantPF, opts.PFCap)
-	trainWant, _ := splitTrades(want.Trades, split)
-	trainPF, trainN := profitFactor(trainWant)
-	trainPF, _ = clampPF(trainPF, opts.PFCap)
 
 	if row.PFMed != trainPF {
 		t.Fatalf("PFMed = %v, want %v — ScreenTicker must run the grid config, not the ticker's calibrated literal (whole-window PF was %v on %d trades)",
