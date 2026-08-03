@@ -17,8 +17,9 @@ type ScreenMeta struct {
 	MinATRPct     float64
 	PFCap         float64
 	Scanned       int // universe size after the currency/trading filter
-	Passed        int // rows that cleared both gates
+	Passed        int // rows in the ranking table: cleared both gates AND produced at least one signal (cmd/pullscreen sets this to len(ranked), which excludes the no-signal bucket reported separately)
 	Skipped       int // tickers whose candles failed to load
+	Rejected      int // rows that failed a hard gate (liquidity or daily ATR%); see FilterAndRank
 }
 
 // FilterAndRank applies the two hard gates and splits the survivors into the ranking
@@ -106,8 +107,8 @@ func RenderPullbackScreenMarkdown(ranked, noSignals []PullbackRow, meta ScreenMe
 		len(PullbackGrid()))
 	fmt.Fprintf(&b, "Гейты: оборот >= %.0f млн ₽/день, дневной ATR >= %.2f%%. PF зажат сверху на %.1f.\n",
 		meta.MinTurnoverM, meta.MinATRPct, meta.PFCap)
-	fmt.Fprintf(&b, "Вселенная: scanned=%d passed=%d no-signal=%d skipped=%d.\n\n",
-		meta.Scanned, meta.Passed, len(noSignals), meta.Skipped)
+	fmt.Fprintf(&b, "Вселенная: scanned=%d passed=%d no-signal=%d rejected=%d skipped=%d.\n\n",
+		meta.Scanned, meta.Passed, len(noSignals), meta.Rejected, meta.Skipped)
 
 	b.WriteString("## Распределение PFmed по прошедшей вселенной\n\n")
 	fmt.Fprintf(&b, "min %.2f · Q1 %.2f · медиана %.2f · Q3 %.2f · max %.2f · доля PFmed >= 1.5: %.0f%% (n=%d)\n\n",

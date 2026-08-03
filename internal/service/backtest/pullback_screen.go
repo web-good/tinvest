@@ -252,7 +252,12 @@ var screenMSK = func() *time.Location {
 // percent. Weekend bars are dropped for the same reason the strategy drops them:
 // MOEX weekend sessions are 3-4x narrower, and leaving them in understates the daily
 // ATR by 9-16% (docs/rsi_pullback/strategy.md, section 5). Returns 0 when the series
-// cannot support the calculation.
+// cannot support the calculation. The caller (cmd/pullscreen) loads the daily series with
+// a one-year warm-up lead-in ahead of the declared -months window (so the strategy's own
+// daily ATR gate has history to converge on from the very first train bar), and passes
+// that whole series in here unsliced — so this column is measured over months+12, not the
+// declared window; the drift is small in practice (worst case measured: AFKS 3.662 ->
+// 3.522 when narrowed to the declared window) but this is why the two won't match exactly.
 func MeanDailyATRPct(daily []backtest.Candle, period int) float64 {
 	if period <= 0 {
 		return 0

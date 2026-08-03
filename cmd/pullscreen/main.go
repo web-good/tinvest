@@ -178,7 +178,7 @@ func run(ctx context.Context, cfg runCfg) error {
 	meta := svc.ScreenMeta{
 		Months: cfg.months, HoldoutMonths: cfg.holdoutMonths, TopN: cfg.topN, Split: split,
 		MinTurnoverM: cfg.minTurnoverM, MinATRPct: cfg.minATRPct, PFCap: cfg.opts.PFCap,
-		Scanned: len(universe), Passed: len(ranked), Skipped: int(skipped),
+		Scanned: len(universe), Passed: len(ranked), Skipped: int(skipped), Rejected: len(rejected),
 	}
 
 	if err := os.MkdirAll(cfg.outDir, 0o755); err != nil {

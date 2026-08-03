@@ -146,7 +146,7 @@ func TestRenderPullbackScreenMarkdown(t *testing.T) {
 		Months: 36, HoldoutMonths: 6, TopN: 50,
 		Split:        time.Date(2026, 2, 3, 0, 0, 0, 0, time.UTC),
 		MinTurnoverM: 50, MinATRPct: 1.5, PFCap: 10,
-		Scanned: 271, Passed: 2, Skipped: 3,
+		Scanned: 271, Passed: 2, Skipped: 3, Rejected: 15,
 	}
 	ranked := []PullbackRow{
 		{Ticker: "BEST", Name: "Best Co", TurnoverM: 120.5, DailyATRPct: 2.4, Bars: 20000,
@@ -164,6 +164,7 @@ func TestRenderPullbackScreenMarkdown(t *testing.T) {
 		"# RSI pullback screener",
 		"2026-02-03",   // the train/holdout split date
 		"scanned=271",  // universe accounting
+		"rejected=15",  // gate rejections, previously stdout-only (cmd/pullscreen)
 		"BEST", "GOOD", // ranking rows
 		"QUIET",               // no-signal section
 		"Распределение PFmed", // the universe backdrop
