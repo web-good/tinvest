@@ -113,10 +113,10 @@ func TestProfitFactor(t *testing.T) {
 func TestSplitTradesByEntryTime(t *testing.T) {
 	split := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
 	trades := []backtest.Trade{
-		{EntryTime: split.AddDate(0, 0, -10), ExitTime: split.AddDate(0, 0, -9), PnL: 1},  // train
-		{EntryTime: split.AddDate(0, 0, -1), ExitTime: split.AddDate(0, 0, 3), PnL: 2},    // train: straddles the split, classified by ENTRY
-		{EntryTime: split, ExitTime: split.AddDate(0, 0, 1), PnL: 3},                      // holdout: exactly on the boundary
-		{EntryTime: split.AddDate(0, 0, 5), ExitTime: split.AddDate(0, 0, 6), PnL: 4},     // holdout
+		{EntryTime: split.AddDate(0, 0, -10), ExitTime: split.AddDate(0, 0, -9), PnL: 1}, // train
+		{EntryTime: split.AddDate(0, 0, -1), ExitTime: split.AddDate(0, 0, 3), PnL: 2},   // train: straddles the split, classified by ENTRY
+		{EntryTime: split, ExitTime: split.AddDate(0, 0, 1), PnL: 3},                     // holdout: exactly on the boundary
+		{EntryTime: split.AddDate(0, 0, 5), ExitTime: split.AddDate(0, 0, 6), PnL: 4},    // holdout
 	}
 	train, holdout := splitTrades(trades, split)
 	if len(train) != 2 || train[0].PnL != 1 || train[1].PnL != 2 {
@@ -275,9 +275,9 @@ func TestAggregateSplitsTrainAndHoldout(t *testing.T) {
 	results := make([]ConfigResult, 0, len(PullbackGrid()))
 	for _, p := range PullbackGrid() {
 		results = append(results, ConfigResult{Params: p, Trades: []backtest.Trade{
-			screenTrade(base, 1, 200),   // train: PF 2.0
-			screenTrade(base, 2, -100),  // train
-			screenTrade(base, 150, 50),  // holdout: PF 0.5
+			screenTrade(base, 1, 200),    // train: PF 2.0
+			screenTrade(base, 2, -100),   // train
+			screenTrade(base, 150, 50),   // holdout: PF 0.5
 			screenTrade(base, 151, -100), // holdout
 		}})
 	}
@@ -323,5 +323,76 @@ func TestAggregateOneTradingConfigIsNotNoSignals(t *testing.T) {
 	row := Aggregate("XXXX", "Test", results, split, DefaultScreenOpts())
 	if row.NoSignals {
 		t.Fatal("NoSignals = true, want false when at least one configuration traded")
+	}
+}
+
+func TestAggregateSelectsBestByRawPF(t *testing.T) {
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	split := base.AddDate(0, 6, 0)
+	grid := PullbackGrid()
+	results := make([]ConfigResult, 0, len(grid))
+
+	// Two configurations with raw PF above PFCap (10), distinct values.
+	// Config 0: raw PF 12 (clamped to 10)
+	// Config 1: raw PF 50 (clamped to 10)
+	// If Best is selected by clamped value, both would look equal (10).
+	// If Best is selected by raw value, config 1 wins (50 > 12).
+	for i, p := range grid {
+		var trades []backtest.Trade
+		switch i {
+		case 0:
+			// PF = 1200/100 = 12
+			for j := 0; j < 12; j++ {
+				trades = append(trades, screenTrade(base, j, 100))
+			}
+			trades = append(trades, screenTrade(base, 12, -100))
+		case 1:
+			// PF = 5000/100 = 50
+			for j := 0; j < 50; j++ {
+				trades = append(trades, screenTrade(base, j, 100))
+			}
+			trades = append(trades, screenTrade(base, 50, -100))
+		default:
+			// Other configs have no trades
+		}
+		results = append(results, ConfigResult{Params: p, Trades: trades})
+	}
+	row := Aggregate("XXXX", "Test", results, split, DefaultScreenOpts())
+
+	// Both raw PF values exceed PFCap of 10 and are clamped.
+	if math.Abs(row.BestPF-10) > 1e-9 {
+		t.Fatalf("BestPF = %v, want 10 (clamped)", row.BestPF)
+	}
+	// Best must be config 1, not config 0, proving raw PF (50 vs 12) was used.
+	if row.Best != grid[1] {
+		t.Fatalf("Best = %+v, want grid[1] (raw PF 50 > 12), proving selection by raw PF", row.Best)
+	}
+}
+
+func TestAggregateHoldoutSignalsSetsNoSignalsFalse(t *testing.T) {
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	split := base.AddDate(0, 0, 100)
+	results := make([]ConfigResult, 0, len(PullbackGrid()))
+
+	// All configurations have trades ONLY in holdout (after split).
+	// NoSignals should be false because at least one config produced trades.
+	for _, p := range PullbackGrid() {
+		results = append(results, ConfigResult{Params: p, Trades: []backtest.Trade{
+			screenTrade(base, 150, 100),  // holdout only
+			screenTrade(base, 151, -100), // holdout only
+		}})
+	}
+	row := Aggregate("XXXX", "Test", results, split, DefaultScreenOpts())
+
+	if row.NoSignals {
+		t.Fatal("NoSignals = true, want false when holdout has trades")
+	}
+	// Train should be empty, so PFMed should be 0.
+	if row.PFMed != 0 {
+		t.Fatalf("PFMed(train) = %v, want 0 (no train trades)", row.PFMed)
+	}
+	// Holdout should have PF 1.0 (100 / 100).
+	if math.Abs(row.PFMedHO-1.0) > 1e-9 {
+		t.Fatalf("PFMedHO = %v, want 1.0", row.PFMedHO)
 	}
 }
