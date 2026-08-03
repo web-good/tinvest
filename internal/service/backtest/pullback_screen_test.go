@@ -369,6 +369,128 @@ func TestAggregateSelectsBestByRawPF(t *testing.T) {
 	}
 }
 
+// dailyCandlesMSK builds `n` consecutive daily candles starting at 2026-01-05 (a
+// Monday) with a constant true range of `rangePct` percent around `close`, in MSK.
+func dailyCandlesMSK(n int, closePrice, rangePct float64) []backtest.Candle {
+	msk, err := time.LoadLocation("Europe/Moscow")
+	if err != nil {
+		msk = time.UTC
+	}
+	base := time.Date(2026, 1, 5, 10, 0, 0, 0, msk) // Monday
+	out := make([]backtest.Candle, 0, n)
+	half := closePrice * rangePct / 100 / 2
+	for i := 0; i < n; i++ {
+		out = append(out, backtest.Candle{
+			Time:   base.AddDate(0, 0, i),
+			Open:   closePrice,
+			High:   closePrice + half,
+			Low:    closePrice - half,
+			Close:  closePrice,
+			Volume: 1000,
+		})
+	}
+	return out
+}
+
+func TestMeanDailyATRPct(t *testing.T) {
+	// 40 days of a constant 2% range: ATR% must converge on 2%.
+	got := MeanDailyATRPct(dailyCandlesMSK(40, 100, 2), 14)
+	if math.Abs(got-2.0) > 0.2 {
+		t.Fatalf("MeanDailyATRPct = %v, want ~2.0", got)
+	}
+}
+
+func TestMeanDailyATRPctDropsWeekends(t *testing.T) {
+	// Weekend bars are 10x narrower. Leaving them in drags the mean down; the
+	// strategy itself filters them out (docs/rsi_pullback/strategy.md, section 5)
+	// and the screener must measure the same ruler.
+	full := dailyCandlesMSK(60, 100, 2)
+	msk := full[0].Time.Location()
+	for i := range full {
+		wd := full[i].Time.In(msk).Weekday()
+		if wd == time.Saturday || wd == time.Sunday {
+			full[i].High = 100.1
+			full[i].Low = 99.9
+		}
+	}
+	got := MeanDailyATRPct(full, 14)
+	if math.Abs(got-2.0) > 0.3 {
+		t.Fatalf("MeanDailyATRPct = %v, want ~2.0 — weekend bars must be dropped before the ATR", got)
+	}
+}
+
+func TestMeanDailyATRPctInsufficientData(t *testing.T) {
+	if got := MeanDailyATRPct(dailyCandlesMSK(5, 100, 2), 14); got != 0 {
+		t.Fatalf("MeanDailyATRPct = %v on 5 bars with period 14, want 0", got)
+	}
+	if got := MeanDailyATRPct(nil, 14); got != 0 {
+		t.Fatalf("MeanDailyATRPct = %v on empty input, want 0", got)
+	}
+}
+
+func TestScreenTickerFlatSeriesProducesNoSignals(t *testing.T) {
+	// A dead-flat series never crosses RSI down through the lower band, so no
+	// configuration can enter: the row must land in the "no signals" bucket rather
+	// than in the ranking with a fabricated profit factor.
+	bars := tinyCandles(600)
+	for i := range bars {
+		bars[i].Open, bars[i].High, bars[i].Low, bars[i].Close = 100, 100, 100, 100
+	}
+	daily := dailyCandlesMSK(60, 100, 2)
+	split := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+
+	row := ScreenTicker("XXXX", "Test", bars, daily, 1, PullbackGrid(), split, DefaultScreenOpts())
+
+	if !row.NoSignals {
+		t.Fatalf("NoSignals = false on a flat series, row = %+v", row)
+	}
+	if row.Bars != len(bars) {
+		t.Fatalf("Bars = %d, want %d", row.Bars, len(bars))
+	}
+	if row.DailyATRPct <= 0 {
+		t.Fatalf("DailyATRPct = %v, want the daily series to be measured even with no trades", row.DailyATRPct)
+	}
+	if row.TurnoverM <= 0 {
+		t.Fatalf("TurnoverM = %v, want > 0", row.TurnoverM)
+	}
+}
+
+func TestScreenTickerRunsTheGridParamsVerbatim(t *testing.T) {
+	// The screener compares tickers on ONE grid. UGLD is a REGISTERED ticker whose
+	// package carries a calibrated literal (RSIPeriod 6, EMASlow 150, UseVolume 1,
+	// UseTrail 1); grading it on that literal instead of the grid config would make
+	// its row incomparable with the other 268. This pins the equivalence: one grid
+	// config through ScreenTicker must reproduce a direct engine run with that same
+	// config, bit for bit.
+	bars := tinyCandles(600)
+	daily := dailyCandlesMSK(60, 100, 2)
+	split := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	opts := DefaultScreenOpts()
+
+	cfg := PullbackGrid()[0]
+	want := backtest.Run(
+		core.NewWithParams("UGLD", cfg),
+		bars, daily, nil,
+		backtest.Config{InitialCash: opts.Cash, Fraction: opts.Fraction, Commission: opts.Commission, Lot: 1},
+	)
+	wantPF, wantN := profitFactor(want.Trades)
+
+	row := ScreenTicker("UGLD", "calibrated", bars, daily, 1, []core.Params{cfg}, split, opts)
+
+	gotPF, _ := clampPF(wantPF, opts.PFCap)
+	trainWant, _ := splitTrades(want.Trades, split)
+	trainPF, trainN := profitFactor(trainWant)
+	trainPF, _ = clampPF(trainPF, opts.PFCap)
+
+	if row.PFMed != trainPF {
+		t.Fatalf("PFMed = %v, want %v — ScreenTicker must run the grid config, not the ticker's calibrated literal (whole-window PF was %v on %d trades)",
+			row.PFMed, trainPF, gotPF, wantN)
+	}
+	if row.TradesMed != float64(trainN) {
+		t.Fatalf("TradesMed = %v, want %v", row.TradesMed, float64(trainN))
+	}
+}
+
 func TestAggregateHoldoutSignalsSetsNoSignalsFalse(t *testing.T) {
 	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	split := base.AddDate(0, 0, 100)

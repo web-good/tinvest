@@ -7,6 +7,7 @@ import (
 
 	"tinvest/internal/domain/backtest"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
+	"tinvest/pkg/indicators"
 )
 
 // Pinned screener axes. The screener answers "is this ticker worth calibrating",
@@ -223,5 +224,85 @@ func Aggregate(ticker, name string, results []ConfigResult, split time.Time, opt
 	if len(results) > 0 {
 		row.Plateau = float64(plateau) / float64(len(results))
 	}
+	return row
+}
+
+// screenMSK anchors the weekday rule to Moscow, matching the strategy core.
+var screenMSK = func() *time.Location {
+	loc, err := time.LoadLocation("Europe/Moscow")
+	if err != nil {
+		return time.UTC
+	}
+	return loc
+}()
+
+// MeanDailyATRPct is the mean of ATR(period)/close over WEEKDAY daily candles, in
+// percent. Weekend bars are dropped for the same reason the strategy drops them:
+// MOEX weekend sessions are 3-4x narrower, and leaving them in understates the daily
+// ATR by 9-16% (docs/rsi_pullback/strategy.md, section 5). Returns 0 when the series
+// cannot support the calculation.
+func MeanDailyATRPct(daily []backtest.Candle, period int) float64 {
+	if period <= 0 {
+		return 0
+	}
+	highs := make([]float64, 0, len(daily))
+	lows := make([]float64, 0, len(daily))
+	closes := make([]float64, 0, len(daily))
+	for _, c := range daily {
+		switch c.Time.In(screenMSK).Weekday() {
+		case time.Saturday, time.Sunday:
+			continue
+		}
+		highs = append(highs, c.High)
+		lows = append(lows, c.Low)
+		closes = append(closes, c.Close)
+	}
+	if len(closes) < period+1 {
+		return 0
+	}
+	atr := indicators.ATRSeries(highs, lows, closes, period)
+	var sum float64
+	var n int
+	for i := range atr {
+		if atr[i] <= 0 || closes[i] <= 0 {
+			continue
+		}
+		sum += atr[i] / closes[i]
+		n++
+	}
+	if n == 0 {
+		return 0
+	}
+	return sum / float64(n) * 100
+}
+
+// screenDailyATRPeriod matches the strategy's fixed DailyATRPeriod: the ATR% column
+// must be measured with the same ruler the strategy sizes its stop with.
+const screenDailyATRPeriod = 14
+
+// ScreenTicker replays every grid configuration over one ticker and reduces the runs
+// to a report row. The strategy is built directly with core.NewWithParams and NOT
+// through RSIPullbackLookupOrGeneric: registered tickers (GAZP, T, UGLD) carry their
+// own calibrated literals, and grading them on those would make their rows
+// incomparable with the other 268.
+func ScreenTicker(ticker, name string, bars, daily []backtest.Candle, lot int32,
+	cfgs []core.Params, split time.Time, opts ScreenOpts,
+) PullbackRow {
+	cfg := backtest.Config{
+		InitialCash: opts.Cash,
+		Fraction:    opts.Fraction,
+		Commission:  opts.Commission,
+		Lot:         lot,
+	}
+	results := make([]ConfigResult, 0, len(cfgs))
+	for _, p := range cfgs {
+		// rsi_pullback needs no higher-timeframe series: htfCandles is nil.
+		res := backtest.Run(core.NewWithParams(ticker, p), bars, daily, nil, cfg)
+		results = append(results, ConfigResult{Params: p, Trades: res.Trades})
+	}
+	row := Aggregate(ticker, name, results, split, opts)
+	row.Bars = len(bars)
+	row.TurnoverM = backtest.MeanDailyTurnoverM(bars, lot)
+	row.DailyATRPct = MeanDailyATRPct(daily, screenDailyATRPeriod)
 	return row
 }
