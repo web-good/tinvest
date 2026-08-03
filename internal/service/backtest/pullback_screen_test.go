@@ -1,8 +1,12 @@
 package backtest
 
 import (
+	"math"
+	"reflect"
 	"testing"
+	"time"
 
+	"tinvest/internal/domain/backtest"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 )
 
@@ -66,5 +70,112 @@ func TestPullbackGridNeverDisablesTheStop(t *testing.T) {
 		if p.StopDailyATR <= 0 {
 			t.Fatalf("StopDailyATR = %v, want > 0", p.StopDailyATR)
 		}
+	}
+}
+
+func TestProfitFactor(t *testing.T) {
+	tests := []struct {
+		name    string
+		pnl     []float64
+		wantPF  float64
+		wantInf bool
+		wantN   int
+	}{
+		{name: "mixed", pnl: []float64{100, -50, 50, -50}, wantPF: 1.5, wantN: 4},
+		{name: "no losses is infinite, not gross profit", pnl: []float64{100, 200}, wantInf: true, wantN: 2},
+		{name: "no profit", pnl: []float64{-100, -50}, wantPF: 0, wantN: 2},
+		{name: "empty", pnl: nil, wantPF: 0, wantN: 0},
+		{name: "zero pnl counts as a win side", pnl: []float64{0, -100}, wantPF: 0, wantN: 2},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			trades := make([]backtest.Trade, 0, len(tt.pnl))
+			for _, p := range tt.pnl {
+				trades = append(trades, backtest.Trade{PnL: p})
+			}
+			pf, n := profitFactor(trades)
+			if n != tt.wantN {
+				t.Fatalf("n = %d, want %d", n, tt.wantN)
+			}
+			if tt.wantInf {
+				if !math.IsInf(pf, 1) {
+					t.Fatalf("pf = %v, want +Inf", pf)
+				}
+				return
+			}
+			if math.Abs(pf-tt.wantPF) > 1e-9 {
+				t.Fatalf("pf = %v, want %v", pf, tt.wantPF)
+			}
+		})
+	}
+}
+
+func TestSplitTradesByEntryTime(t *testing.T) {
+	split := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
+	trades := []backtest.Trade{
+		{EntryTime: split.AddDate(0, 0, -10), ExitTime: split.AddDate(0, 0, -9), PnL: 1},  // train
+		{EntryTime: split.AddDate(0, 0, -1), ExitTime: split.AddDate(0, 0, 3), PnL: 2},    // train: straddles the split, classified by ENTRY
+		{EntryTime: split, ExitTime: split.AddDate(0, 0, 1), PnL: 3},                      // holdout: exactly on the boundary
+		{EntryTime: split.AddDate(0, 0, 5), ExitTime: split.AddDate(0, 0, 6), PnL: 4},     // holdout
+	}
+	train, holdout := splitTrades(trades, split)
+	if len(train) != 2 || train[0].PnL != 1 || train[1].PnL != 2 {
+		t.Fatalf("train = %+v, want the two trades entered before the split", train)
+	}
+	if len(holdout) != 2 || holdout[0].PnL != 3 || holdout[1].PnL != 4 {
+		t.Fatalf("holdout = %+v, want the boundary trade and the later one", holdout)
+	}
+}
+
+func TestSplitTradesEmptySides(t *testing.T) {
+	split := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
+	all := []backtest.Trade{{EntryTime: split.AddDate(0, 0, 1)}}
+	train, holdout := splitTrades(all, split)
+	if len(train) != 0 || len(holdout) != 1 {
+		t.Fatalf("train/holdout = %d/%d, want 0/1", len(train), len(holdout))
+	}
+	train, holdout = splitTrades(nil, split)
+	if len(train) != 0 || len(holdout) != 0 {
+		t.Fatalf("train/holdout = %d/%d on empty input, want 0/0", len(train), len(holdout))
+	}
+}
+
+func TestMedianF(t *testing.T) {
+	tests := []struct {
+		name string
+		in   []float64
+		want float64
+	}{
+		{name: "odd", in: []float64{3, 1, 2}, want: 2},
+		{name: "even averages the middles", in: []float64{4, 1, 3, 2}, want: 2.5},
+		{name: "all zero", in: []float64{0, 0, 0}, want: 0},
+		{name: "empty", in: nil, want: 0},
+		{name: "single", in: []float64{7}, want: 7},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := append([]float64(nil), tt.in...)
+			if got := medianF(in); math.Abs(got-tt.want) > 1e-9 {
+				t.Fatalf("medianF = %v, want %v", got, tt.want)
+			}
+			if !reflect.DeepEqual(in, tt.in) {
+				t.Fatalf("medianF mutated its input: %v != %v", in, tt.in)
+			}
+		})
+	}
+}
+
+func TestClampPF(t *testing.T) {
+	if got, capped := clampPF(3, 10); got != 3 || capped {
+		t.Fatalf("clampPF(3,10) = %v,%v, want 3,false", got, capped)
+	}
+	if got, capped := clampPF(math.Inf(1), 10); got != 10 || !capped {
+		t.Fatalf("clampPF(+Inf,10) = %v,%v, want 10,true", got, capped)
+	}
+	if got, capped := clampPF(25, 10); got != 10 || !capped {
+		t.Fatalf("clampPF(25,10) = %v,%v, want 10,true", got, capped)
+	}
+	if got, capped := clampPF(math.Inf(1), 0); !math.IsInf(got, 1) || capped {
+		t.Fatalf("clampPF with cap<=0 must pass through, got %v,%v", got, capped)
 	}
 }

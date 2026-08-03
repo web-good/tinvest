@@ -1,6 +1,11 @@
 package backtest
 
 import (
+	"math"
+	"sort"
+	"time"
+
+	"tinvest/internal/domain/backtest"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 )
 
@@ -51,4 +56,71 @@ func PullbackGrid() []core.Params {
 		}
 	}
 	return out
+}
+
+// profitFactor is gross profit over gross loss on an arbitrary SUBSET of trades.
+// It deliberately differs from ComputeMetrics on one point: with no losing trade
+// it returns +Inf rather than gross profit. The screener takes a MEDIAN across 24
+// configurations, and a currency amount masquerading as a ratio would poison it;
+// the caller clamps the infinity with clampPF instead.
+func profitFactor(trades []backtest.Trade) (float64, int) {
+	var gross, loss float64
+	for _, t := range trades {
+		if t.PnL >= 0 {
+			gross += t.PnL
+			continue
+		}
+		loss += -t.PnL
+	}
+	switch {
+	case len(trades) == 0:
+		return 0, 0
+	case loss == 0 && gross > 0:
+		return math.Inf(1), len(trades)
+	case loss == 0:
+		return 0, len(trades)
+	}
+	return gross / loss, len(trades)
+}
+
+// splitTrades cuts a trade list into the selection window and the holdout by ENTRY
+// time: a trade opened before the split belongs to train even if it closed after it,
+// because the entry is the decision the screener is grading. A trade entered exactly
+// at the split goes to the holdout.
+func splitTrades(trades []backtest.Trade, split time.Time) (train, holdout []backtest.Trade) {
+	for _, t := range trades {
+		if t.EntryTime.Before(split) {
+			train = append(train, t)
+			continue
+		}
+		holdout = append(holdout, t)
+	}
+	return train, holdout
+}
+
+// medianF is the median of vals; it copies before sorting so callers keep their order.
+func medianF(vals []float64) float64 {
+	if len(vals) == 0 {
+		return 0
+	}
+	s := append([]float64(nil), vals...)
+	sort.Float64s(s)
+	mid := len(s) / 2
+	if len(s)%2 == 1 {
+		return s[mid]
+	}
+	return (s[mid-1] + s[mid]) / 2
+}
+
+// clampPF caps a profit factor for ranking purposes and reports whether it bit.
+// A limit of zero or less disables clamping. (The parameter is named `limit`, not
+// `cap`, to avoid shadowing the builtin.)
+func clampPF(pf, limit float64) (float64, bool) {
+	if limit <= 0 {
+		return pf, false
+	}
+	if pf > limit {
+		return limit, true
+	}
+	return pf, false
 }
