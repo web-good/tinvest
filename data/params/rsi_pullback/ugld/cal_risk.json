@@ -1,0 +1,12 @@
+{
+  "_comment": "RISK: stop and target, both in daily-ATR units, both frozen at entry, calibrated specifically for UGLD (ЮГК). 30 evaluations. The whole axis is rescaled from the root data/params/rsi_pullback/cal_risk.json because a daily ATR means something else on this instrument: measured on the shipped daily cache, UGLD's ATR(14) runs a median 4.28% of price (p10 3.39%, p90 5.56%) against roughly 1.5-2% on GAZP or T. So 0.5 daily ATR is about 2.1% here, not the 1-1.5% the root file warns about, and the fixed costs it has to clear are tiny in comparison: 0.05% commission per side and a 0.0001 RUB tick, which on a ~0.60 RUB price is 0.017%. That headroom is what licenses the 0.3 and 0.4 stop rows, which the root grid does not offer. It does NOT make them safe: the median UGLD session covers only 0.67 daily ATR (p25 0.43, p75 1.25), so a 0.3-ATR stop sits inside ordinary intraday noise — nearly half a typical day's whole range — and will be taken out by drift, not by the setup failing. Read the SL share of exits, not just the profit factor. The target axis reaches 2.5 (about 10.7% of price) because a 4%-a-day instrument can actually travel that far, and is swept below the stop as well: a target under the stop needs a win rate above 50% just to break even, and this file is what confirms or kills that asymmetry. StopDailyATR=0 is deliberately ABSENT and must never be added — a position held across nights and weekends without a stop is not a configuration calibration may choose, least of all on a gold miner that gaps on the metal. Watch the average holding time: a 1.0 stop with a 2.5 target turns this into a multi-week position strategy. Run: go run ./cmd/backtest -ticker UGLD -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/ugld/cal_risk.json -out ./reports/UGLD_risk -months 24 -min-trades 30 -test-months 6 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "risk",
+      "grid": {
+        "StopDailyATR": [0.3, 0.4, 0.5, 0.7, 1.0],
+        "TPDailyATR": [0.5, 0.7, 1.0, 1.5, 2.0, 2.5]
+      }
+    }
+  ]
+}

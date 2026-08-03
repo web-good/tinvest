@@ -1,0 +1,11 @@
+{
+  "_comment": "EXIT band, calibrated specifically for UGLD (ЮГК) — same 6-evaluation axis as the root data/params/rsi_pullback/cal_exit.json: the RSI level whose UPWARD cross closes the trade. The axis needs no rescaling (RSI is bounded 0-100 regardless of how volatile the instrument is), but the frequencies behind it are UGLD's own: on the shipped 30m cache, upward crosses number 1425/1294/1043/818/562/385 at 55/60/65/70/75/80 for RSI(4) and 1253/1066/829/604/410/264 for RSI(5), so even 80 fires often enough that this exit is a live competitor, not a formality. 55 fixes profit early, making trades shorter and smaller; 80 holds for outright overbought, which more often lets the stop or the target fire first. This is the third-priority exit behind SL and TP, so its effect is entangled with ugld/cal_risk.json — and on UGLD that entanglement is sharp, because DefaultParams ships TPDailyATR=0.6 against StopDailyATR=0.5, a target so close that it frequently resolves the trade before RSI can. Calibrate risk first and sweep this over the surviving stop/target pair rather than over DefaultParams, otherwise this file mostly measures how often the 0.6 target got there first. Run: go run ./cmd/backtest -ticker UGLD -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/ugld/cal_exit.json -out ./reports/UGLD_exit -months 24 -min-trades 30 -test-months 6 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "exit",
+      "grid": {
+        "RSIUpper": [55, 60, 65, 70, 75, 80]
+      }
+    }
+  ]
+}

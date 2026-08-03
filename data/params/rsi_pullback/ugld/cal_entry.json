@@ -1,0 +1,13 @@
+{
+  "_comment": "ENTRY shape, calibrated specifically for UGLD (ЮГК) — the axis is shifted DEEPER than the root data/params/rsi_pullback/cal_entry.json and the t/ one, because UGLD has signal to spare. Counted on the shipped 30m cache (12 months, 11515 bars), downward crosses of the lower band come out as: RSI(4) 864 at 30, 602 at 25, 405 at 20, 237 at 15, 113 at 10; RSI(5) 639/424/267/144/57; RSI(6) 493/332/179/84/26; RSI(7) 405/243/126/51/15. Even the strictest corner of this grid (RSI(7) crossing 10) still fires more often than a strategy holding multi-day positions can take, so the shallow end (RSILower 30-35, RSIPeriod 3) is dropped: on this instrument it buys noise, not a pullback. 80 evaluations (4 x 4 x 5). RSIUpper rides along because it decides how much of each pullback is kept, and the entry depth and the exit band trade against each other — a deeper entry earns a higher exit band. Everything else inherits DefaultParams, which for UGLD is core.DefaultParams() (this ticker has no calibrated literal yet). Because signal frequency is not the constraint here, -min-trades 30 is honest — check it against what cal_screen.json actually reported before trusting any ranking. Run: go run ./cmd/backtest -ticker UGLD -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/ugld/cal_entry.json -out ./reports/UGLD_entry -months 24 -min-trades 30 -test-months 6 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "entry",
+      "grid": {
+        "RSIPeriod": [4, 5, 6, 7],
+        "RSILower": [10, 15, 20, 25],
+        "RSIUpper": [60, 65, 70, 75, 80]
+      }
+    }
+  ]
+}

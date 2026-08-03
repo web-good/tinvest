@@ -1,0 +1,12 @@
+{
+  "_comment": "TREND filter, calibrated specifically for UGLD (ЮГК) — deliberately NARROWER than the root data/params/rsi_pullback/cal_trend.json (36 evaluations) and than t/cal_trend.json, because on UGLD this axis is close to degenerate. Measured on the shipped 30m cache (12 months), the share of bars where EMAFast > EMASlow is 45-48% for EVERY pair from 5/50 through 50/200 — a three-point spread across the whole root grid. UGLD went 0.47 -> 1.09 -> 0.60 over that window, so any EMA pair cuts the history near the middle and the gate is close to a coin flip regardless of the periods; sweeping 36 pairs would buy 36 chances to fit noise for almost no change in what the gate admits. So this file sweeps 16 well-separated pairs (4 x 4) instead of crowding six near-identical values on each axis, and the number to read is NOT which pair scores best — the differences will be small and unstable — but whether the trend gate helps AT ALL on an instrument this two-sided. If the best pair here does not clearly beat the worst, treat the gate as a wash and spend the calibration budget on entry and risk instead. EMASlow is also the most expensive parameter for warm-up (it sets the 2*need+20 floor of Lookback), so 200 needs a longer candle window than the rest. Everything else inherits DefaultParams (core.DefaultParams() for this uncalibrated ticker). Run: go run ./cmd/backtest -ticker UGLD -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/ugld/cal_trend.json -out ./reports/UGLD_trend -months 24 -min-trades 30 -test-months 6 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "trend",
+      "grid": {
+        "EMAFast": [5, 10, 20, 30],
+        "EMASlow": [50, 100, 150, 200]
+      }
+    }
+  ]
+}

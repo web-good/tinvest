@@ -1,0 +1,14 @@
+{
+  "_comment": "DAY-STATE gate, both branches, calibrated specifically for UGLD (ЮГК). The thresholds are placed on UGLD's own measured distribution rather than copied: on the shipped daily cache the session range divided by the daily ATR has p10 0.22, p25 0.43, median 0.67, p75 1.25, p90 1.69. Read the SpentDayATR axis through that — 0.5 admits roughly 60% of sessions, 0.6 about 55%, 0.8 about 40%, 1.0 about 33%, 1.2 about 27%. The root grid's 1.6 is dropped: it would reach only the top decile of days and starve the branch. FreshDayATR is capped at 0.3 for the mirror-image reason — a full UGLD session clears 0.22 ATR nine times out of ten, so 'the day has barely started' stops meaning anything much past that. FreshDayATR=0 is not a small value but an OFF switch: dayStateOK guards the early branch with `fresh > 0 &&`, so exactly 0 removes it and the row becomes spent-only. RSILower rides along because the two branches want different entry depths — the fresh branch buys a dip into an unformed day, the spent branch buys after the sell-off already happened — and pinning one depth would hand the comparison to whichever branch happens to suit RSILower=30. 60 evaluations (4 x 5 x 3). Beware what this file cannot separate: the day-state gate covers two DIFFERENT strategies sharing one code path, and a profit factor computed over both averages them together, hiding a branch that pays for the other — ugld/cal_day_spent.json isolates the second one. The UseDayATRGate=0 control point lives in ugld/cal_screen.json. Run: go run ./cmd/backtest -ticker UGLD -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/ugld/cal_day.json -out ./reports/UGLD_day -months 24 -min-trades 20 -test-months 6 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "day",
+      "grid": {
+        "UseDayATRGate": [1],
+        "FreshDayATR": [0, 0.1, 0.2, 0.3],
+        "SpentDayATR": [0.5, 0.6, 0.8, 1.0, 1.2],
+        "RSILower": [15, 20, 25]
+      }
+    }
+  ]
+}

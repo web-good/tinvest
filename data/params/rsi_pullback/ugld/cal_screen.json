@@ -1,0 +1,12 @@
+{
+  "_comment": "SCREEN, calibrated specifically for UGLD (Yuzhuralzoloto / ЮГК) — same 4-evaluation grid as the root data/params/rsi_pullback/cal_screen.json, but read against a very different instrument. Run this FIRST anyway, for the opposite reason it is run first on GAZP or T: on those tickers the binding constraint is the trade count, on UGLD it is almost certainly not. The shipped 30m cache (11515 bars, 2025-07-28..2026-07-27, 340 sessions, median 35 bars per session) contains 864 downward crosses of RSI(4) through 30 and still 179 through 20 at RSI(6) — roughly 70 raw signals a month before any gate. What this file measures on UGLD is therefore not 'can we afford the gates' but 'do the gates leave the trades that matter': read the trade count AND the profit factor of all four rows together. -min-trades 1 is deliberate, otherwise the very rows being measured get filtered out. Note that UGLD is NOT calibrated: rsi_pullback/strategy/ugld returns core.DefaultParams() unchanged (RSI 4, 30/70, EMA 10/100, SpentDayATR 0.8, stop 0.5, TP 0.6), so every file in this directory sweeps over the shared baseline, not over a ticker literal — unlike t/, where the baseline is T's own calibration result. Run: go run ./cmd/backtest -ticker UGLD -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/ugld/cal_screen.json -out ./reports/UGLD_screen -months 24 -min-trades 1 -metric profit_factor. The 30m cache currently holds 12 months and the daily cache starts 2025-12-18, so the first 24-month run needs network and a token to top up the head; without them, drop to -months 12.",
+  "phases": [
+    {
+      "name": "gates",
+      "grid": {
+        "UseDayATRGate": [0, 1],
+        "UseVolume": [0, 1]
+      }
+    }
+  ]
+}

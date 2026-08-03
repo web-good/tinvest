@@ -1,0 +1,13 @@
+{
+  "_comment": "VOLUME background gate, calibrated specifically for UGLD (ЮГК) — the multiplier axis is pushed HIGHER than the root data/params/rsi_pullback/cal_volume.json (1.1..2.5) because on UGLD the mild settings barely gate anything. VolMult is the ratio against the bar's OWN half-hour slot averaged over the last VolBaseDays completed weekday days; measured on the shipped 30m cache with a 5-day baseline, the share of bars that clear the threshold is 32% at 1.1, 29% at 1.2, 24% at 1.5, 18% at 2.0, 14% at 2.5 and 11% at 3.0 (the median ratio is 0.61 — UGLD's volume distribution is heavily right-skewed, so the mean baseline sits well above the typical bar and a threshold near 1.0 is not the 'barely above normal' it reads as). 1.1 is therefore dropped and 3.0 added: on this instrument only the high end asks for a genuine burst. 20 evaluations (5 x 4). VolBaseDays trades adaptivity for stability — 3 days follow a regime change quickly (and admit more: 36% at 1.1 vs 27% at 14 days), 14 days shrug off one freak session but push Lookback to about 1008 bars, making this the slowest file here. VolLookbackBars stays fixed at 3 by strategy definition. This gate is normally the single largest cut on trade count, but UGLD starts from roughly 70 raw RSI signals a month, so it can afford the strict end — read ugld/cal_screen.json's numbers first and confirm that before trusting any ranking. Run: go run ./cmd/backtest -ticker UGLD -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/ugld/cal_volume.json -out ./reports/UGLD_volume -months 24 -min-trades 20 -test-months 6 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "volume",
+      "grid": {
+        "UseVolume": [1],
+        "VolMult": [1.2, 1.5, 2.0, 2.5, 3.0],
+        "VolBaseDays": [3, 5, 10, 14]
+      }
+    }
+  ]
+}
