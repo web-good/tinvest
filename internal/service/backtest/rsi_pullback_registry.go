@@ -4,21 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 
-	rsipullbackafks "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/afks"
-	rsipullbackastr "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/astr"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
-	rsipullbackeutr "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/eutr"
 	rsipullbackgazp "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/gazp"
-	rsipullbackmdmg "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/mdmg"
 	rsipullbacknvtk "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/nvtk"
-	rsipullbackpikk "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/pikk"
-	rsipullbackplzl "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/plzl"
-	rsipullbackrusal "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/rusal"
-	rsipullbacksber "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sber"
-	rsipullbacksfin "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sfin"
 	rsipullbacktbank "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/tbank"
 	rsipullbackugld "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ugld"
-	rsipullbackydex "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ydex"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 )
 
@@ -46,20 +36,10 @@ func rsiPullbackBindingFor(ticker string, defaults func() core.Params) Binding {
 // e.g. gazp, tbank), or seeded from another ticker's literal as an explicit transferability
 // hypothesis, not a claim of being tuned — see docs/rsi_pullback/strategy.md §8.0.1.
 var rsiPullbackRegistry = map[string]Binding{
-	rsipullbackafks.Ticker:  rsiPullbackBindingFor(rsipullbackafks.Ticker, rsipullbackafks.DefaultParams),
-	rsipullbackastr.Ticker:  rsiPullbackBindingFor(rsipullbackastr.Ticker, rsipullbackastr.DefaultParams),
-	rsipullbackeutr.Ticker:  rsiPullbackBindingFor(rsipullbackeutr.Ticker, rsipullbackeutr.DefaultParams),
 	rsipullbackgazp.Ticker:  rsiPullbackBindingFor(rsipullbackgazp.Ticker, rsipullbackgazp.DefaultParams),
-	rsipullbackmdmg.Ticker:  rsiPullbackBindingFor(rsipullbackmdmg.Ticker, rsipullbackmdmg.DefaultParams),
 	rsipullbacknvtk.Ticker:  rsiPullbackBindingFor(rsipullbacknvtk.Ticker, rsipullbacknvtk.DefaultParams),
-	rsipullbackpikk.Ticker:  rsiPullbackBindingFor(rsipullbackpikk.Ticker, rsipullbackpikk.DefaultParams),
-	rsipullbackplzl.Ticker:  rsiPullbackBindingFor(rsipullbackplzl.Ticker, rsipullbackplzl.DefaultParams),
-	rsipullbackrusal.Ticker: rsiPullbackBindingFor(rsipullbackrusal.Ticker, rsipullbackrusal.DefaultParams),
-	rsipullbacksber.Ticker:  rsiPullbackBindingFor(rsipullbacksber.Ticker, rsipullbacksber.DefaultParams),
-	rsipullbacksfin.Ticker:  rsiPullbackBindingFor(rsipullbacksfin.Ticker, rsipullbacksfin.DefaultParams),
 	rsipullbacktbank.Ticker: rsiPullbackBindingFor(rsipullbacktbank.Ticker, rsipullbacktbank.DefaultParams),
 	rsipullbackugld.Ticker:  rsiPullbackBindingFor(rsipullbackugld.Ticker, rsipullbackugld.DefaultParams),
-	rsipullbackydex.Ticker:  rsiPullbackBindingFor(rsipullbackydex.Ticker, rsipullbackydex.DefaultParams),
 }
 
 // RSIPullbackLookupOrGeneric returns the registered rsi_pullback binding for a ticker, or a
