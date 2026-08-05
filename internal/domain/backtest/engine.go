@@ -121,10 +121,18 @@ func (h *htfCursor) visible(cur time.Time) (closes, highs, lows []float64) {
 	return h.closes[:h.idx:h.idx], h.highs[:h.idx:h.idx], h.lows[:h.idx:h.idx]
 }
 
-// todayExtent returns the high and low across all bars sharing candles[i]'s MSK
+// TodayExtent returns the high and low of the MSK calendar day that bar i belongs to,
+// scanning back through the (oldest-first) window. Exported so a live runner fills
+// MarketData.TodayHigh/TodayLow with the ENGINE's own rule instead of a lookalike:
+// AssembleMarketData deliberately leaves those two fields to the caller.
+func TodayExtent(candles []Candle, i int) (high, low float64) {
+	return todayExtentIn(candles, i, mskLoc)
+}
+
+// todayExtentIn returns the high and low across all bars sharing candles[i]'s MSK
 // calendar day, scanning back from i only (no lookahead). Returns (0,0) when i is
 // out of range.
-func todayExtent(candles []Candle, i int, loc *time.Location) (high, low float64) {
+func todayExtentIn(candles []Candle, i int, loc *time.Location) (high, low float64) {
 	if i < 0 || i >= len(candles) {
 		return 0, 0
 	}
@@ -163,7 +171,7 @@ func Run(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Candl
 		md := buildMarketData(candles[i-l+1 : i+1])
 		md.DailyCloses, md.DailyHighs, md.DailyLows, md.DailyTimes = visibleDaily(dailyCandles, candles[i].Time, mskLoc)
 		md.HTFCloses, md.HTFHighs, md.HTFLows = htf.visible(candles[i].Time)
-		md.TodayHigh, md.TodayLow = todayExtent(candles, i, mskLoc)
+		md.TodayHigh, md.TodayLow = todayExtentIn(candles, i, mskLoc)
 		if p.qty != 0 {
 			p.mark(candles[i].Close)
 		}
@@ -230,7 +238,7 @@ func Trace(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Can
 		md := buildMarketData(candles[i-l+1 : i+1])
 		md.DailyCloses, md.DailyHighs, md.DailyLows, md.DailyTimes = visibleDaily(dailyCandles, candles[i].Time, mskLoc)
 		md.HTFCloses, md.HTFHighs, md.HTFLows = htf.visible(candles[i].Time)
-		md.TodayHigh, md.TodayLow = todayExtent(candles, i, mskLoc)
+		md.TodayHigh, md.TodayLow = todayExtentIn(candles, i, mskLoc)
 		if p.qty != 0 {
 			p.mark(candles[i].Close)
 		}
