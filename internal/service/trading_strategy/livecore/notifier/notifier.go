@@ -29,8 +29,10 @@ func Skip(ticker, reason string) string {
 }
 
 // Alert renders an operational alert (e.g. state reconstructed, order rejected).
-func Alert(ticker, message string) string {
-	return fmt.Sprintf("⚠️ <b>Reversion %s</b>\n  %s", ticker, message)
+// strategy — метка раннера в заголовке: пакет общий для нескольких стратегий, и по
+// сообщению должно быть видно, чей раннер его прислал.
+func Alert(strategy, ticker, message string) string {
+	return fmt.Sprintf("⚠️ <b>%s %s</b>\n  %s", strategy, ticker, message)
 }
 
 // StopSet reports a protective stop order (re)placed at price for reason.

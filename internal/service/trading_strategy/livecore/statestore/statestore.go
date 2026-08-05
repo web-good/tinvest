@@ -21,6 +21,12 @@ type Entry struct {
 	MaxFav     float64   `json:"maxFav"`
 	Quantity   int64     `json:"quantity"`
 
+	// TakeProfit — цель, замороженная на входе. Бэктест хранит её на позиции
+	// (strategy.Position.TakeProfit), а живой раннер обязан пережить её через перезапуск,
+	// иначе close-модель TP не с чем сравнивать high бара. reversion её не пишет —
+	// omitempty оставляет формат файла прежним.
+	TakeProfit float64 `json:"takeProfit,omitempty"`
+
 	StopOrderID string  `json:"stopOrderId,omitempty"` // активная биржевая стоп-заявка ("" = нет)
 	StopPrice   float64 `json:"stopPrice,omitempty"`   // уровень выставленной заявки
 	StopReason  string  `json:"stopReason,omitempty"`  // компонент уровня: SL | ATRSL | TRAIL

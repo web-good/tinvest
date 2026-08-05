@@ -5,11 +5,11 @@ import (
 	"fmt"
 
 	imodel "tinvest/internal/model"
+	"tinvest/internal/service/trading_strategy/livecore/notifier"
+	"tinvest/internal/service/trading_strategy/livecore/statestore"
 	"tinvest/internal/service/trading_strategy/livecore/stoporders"
 	"tinvest/internal/service/trading_strategy/reversion/live/marketdata"
-	"tinvest/internal/service/trading_strategy/reversion/live/notifier"
 	"tinvest/internal/service/trading_strategy/reversion/live/reconstruct"
-	"tinvest/internal/service/trading_strategy/reversion/live/statestore"
 	"tinvest/internal/service/trading_strategy/reversion/strategy/core"
 	"tinvest/internal/service/trading_strategy/scalping/model"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
@@ -34,7 +34,7 @@ func (s *service) managePass(ctx context.Context) error {
 
 	activeStops, listErr := s.stops.List(ctx) // один вызов на весь пасс
 	if listErr != nil {
-		s.notify(notifier.Alert("reversion", "GetStopOrders недоступен: "+listErr.Error()))
+		s.notify(notifier.Alert("Reversion", "", "GetStopOrders недоступен: "+listErr.Error()))
 	}
 	stopByInstrument := map[string]stoporders.ActiveStop{}
 	stopByID := map[string]stoporders.ActiveStop{}
@@ -64,7 +64,7 @@ func (s *service) managePass(ctx context.Context) error {
 				// Не можем свериться с биржей, есть ли ещё живая заявка — значит не можем
 				// отличить сработавший стоп от ручной продажи с осиротевшей заявкой.
 				// Консервативно: alert, стейт не трогаем, повтор на следующем часовом тике.
-				s.notify(notifier.Alert(ticker, "позиция исчезла, но GetStopOrders недоступен — не могу подтвердить срабатывание стопа, стейт сохранён"))
+				s.notify(notifier.Alert("Reversion", ticker, "позиция исчезла, но GetStopOrders недоступен — не могу подтвердить срабатывание стопа, стейт сохранён"))
 			case entry.StopOrderID == "":
 				// Нет заявки, за которой нужно присматривать, — просто чистим стейт.
 				delete(state, ticker)
@@ -75,10 +75,10 @@ func (s *service) managePass(ctx context.Context) error {
 					// стоп (например, вручную в приложении брокера). Снимаем осиротевшую
 					// заявку, иначе она позже продаст новую позицию по этому тикеру.
 					if err := s.stops.Cancel(ctx, entry.StopOrderID); err != nil {
-						s.notify(notifier.Alert(ticker, "позиция продана вне раннера, не удалось снять осиротевший стоп: "+err.Error()))
+						s.notify(notifier.Alert("Reversion", ticker, "позиция продана вне раннера, не удалось снять осиротевший стоп: "+err.Error()))
 						// Стейт не чистим — ретрай на следующем часовом тике.
 					} else {
-						s.notify(notifier.Alert(ticker, "позиция продана вне раннера, снял осиротевший стоп"))
+						s.notify(notifier.Alert("Reversion", ticker, "позиция продана вне раннера, снял осиротевший стоп"))
 						delete(state, ticker)
 						_ = store.Save(state)
 					}
@@ -88,7 +88,7 @@ func (s *service) managePass(ctx context.Context) error {
 					// при его недоступности считаем срабатыванием (как раньше) — на PnL
 					// это не влияет, вопрос только в тексте уведомления.
 					if fired, ferr := s.stops.Executed(ctx, entry.StopOrderID); ferr == nil && !fired {
-						s.notify(notifier.Alert(ticker, "позиция закрыта и стоп-заявка снята вне раннера — чищу стейт"))
+						s.notify(notifier.Alert("Reversion", ticker, "позиция закрыта и стоп-заявка снята вне раннера — чищу стейт"))
 					} else {
 						s.notify(notifier.Exit(ticker, entry.StopReason, entry.StopPrice, entry.Quantity, false))
 					}
@@ -106,7 +106,7 @@ func (s *service) managePass(ctx context.Context) error {
 				utils.CombinePrice(pos.PurchasePrice.Units, pos.PurchasePrice.Nano),
 				atrPeriodFor(ticker), st.Lookback(), now)
 			if err != nil {
-				s.notify(notifier.Alert(ticker, "позиция без локального стейта, реконструкция не удалась: "+err.Error()))
+				s.notify(notifier.Alert("Reversion", ticker, "позиция без локального стейта, реконструкция не удалась: "+err.Error()))
 				logger.ErrorContext(ctx, fmt.Sprintf("reversion: reconstruct %s: %v", ticker, err))
 				continue
 			}
@@ -114,7 +114,7 @@ func (s *service) managePass(ctx context.Context) error {
 			entry = rebuilt
 			state[ticker] = entry
 			_ = store.Save(state)
-			s.notify(notifier.Alert(ticker, fmt.Sprintf("стейт восстановлен из API: вход %.4f, ATR %.4f", entry.EntryPrice, entry.EntryATR)))
+			s.notify(notifier.Alert("Reversion", ticker, fmt.Sprintf("стейт восстановлен из API: вход %.4f, ATR %.4f", entry.EntryPrice, entry.EntryATR)))
 		}
 
 		// Позиция усохла (частичный стоп или ручная продажа) — реконсилируем количество
@@ -128,7 +128,7 @@ func (s *service) managePass(ctx context.Context) error {
 			entry.Quantity = pos.Quantity
 			state[ticker] = entry
 			_ = store.Save(state)
-			s.notify(notifier.Alert(ticker, fmt.Sprintf("позиция уменьшилась частично (стоп или ручная продажа), осталось %d", pos.Quantity)))
+			s.notify(notifier.Alert("Reversion", ticker, fmt.Sprintf("позиция уменьшилась частично (стоп или ручная продажа), осталось %d", pos.Quantity)))
 		}
 
 		md, err := marketdata.Assemble(ctx, s.market, sh.ID, st.Lookback(), MaxHTFTrendEMA([]string{ticker}), now)
@@ -161,7 +161,7 @@ func (s *service) managePass(ctx context.Context) error {
 			// оставила бы позицию без биржевой защиты навсегда (replaceStop с тем же
 			// guard'ом её не вернёт).
 			if sh.Lot <= 0 {
-				s.notify(notifier.Alert(ticker, "sh.Lot == 0 — невозможно вычислить лоты для продажи, пропуск"))
+				s.notify(notifier.Alert("Reversion", ticker, "sh.Lot == 0 — невозможно вычислить лоты для продажи, пропуск"))
 				logger.ErrorContext(ctx, fmt.Sprintf("reversion: %s sh.Lot=%d, skipping sell to avoid divide-by-zero", ticker, sh.Lot))
 				continue
 			}
@@ -170,7 +170,7 @@ func (s *service) managePass(ctx context.Context) error {
 			hadStop := entry.StopOrderID != ""
 			if hadStop {
 				if err := s.stops.Cancel(ctx, entry.StopOrderID); err != nil {
-					s.notify(notifier.Alert(ticker, "не удалось снять стоп-заявку перед продажей: "+err.Error()))
+					s.notify(notifier.Alert("Reversion", ticker, "не удалось снять стоп-заявку перед продажей: "+err.Error()))
 					logger.ErrorContext(ctx, fmt.Sprintf("reversion: %s cancel before sell: %v", ticker, err))
 					continue // без снятия продавать нельзя — двойная продажа
 				}
@@ -182,7 +182,7 @@ func (s *service) managePass(ctx context.Context) error {
 			lots := pos.Quantity / int64(sh.Lot)
 			res, err := s.exec.Sell(ctx, sh.ID, lots)
 			if err != nil {
-				s.notify(notifier.Alert(ticker, "ордер на продажу отклонён: "+err.Error()))
+				s.notify(notifier.Alert("Reversion", ticker, "ордер на продажу отклонён: "+err.Error()))
 				logger.ErrorContext(ctx, fmt.Sprintf("reversion: %s sell rejected: %v", ticker, err))
 				// Стоп уже снят, а продажа не прошла — позиция «голая» до следующего
 				// тика. Возвращаем биржевую защиту на прежнем уровне (дубль StopSet
@@ -192,7 +192,7 @@ func (s *service) managePass(ctx context.Context) error {
 					state[ticker] = entry
 					_ = store.Save(state)
 					if entry.StopOrderID != "" {
-						s.notify(notifier.Alert(ticker, "стоп-заявка перевыставлена после отклонённой продажи"))
+						s.notify(notifier.Alert("Reversion", ticker, "стоп-заявка перевыставлена после отклонённой продажи"))
 					}
 				}
 				continue // retried next tick
@@ -218,10 +218,10 @@ func (s *service) managePass(ctx context.Context) error {
 			if entry.StopOrderID != "" && listErr == nil {
 				if _, alive := stopByID[entry.StopOrderID]; alive {
 					if err := s.stops.Cancel(ctx, entry.StopOrderID); err != nil {
-						s.notify(notifier.Alert(ticker, "close-модель: не удалось снять оставшуюся стоп-заявку: "+err.Error()))
+						s.notify(notifier.Alert("Reversion", ticker, "close-модель: не удалось снять оставшуюся стоп-заявку: "+err.Error()))
 						continue // заявка жива — стейт не трогаем, ретрай на следующем тике
 					}
-					s.notify(notifier.Alert(ticker, "close-модель: снял оставшуюся биржевую стоп-заявку"))
+					s.notify(notifier.Alert("Reversion", ticker, "close-модель: снял оставшуюся биржевую стоп-заявку"))
 				}
 				entry.StopOrderID, entry.StopPrice, entry.StopReason = "", 0, ""
 				state[ticker] = entry
@@ -245,7 +245,7 @@ func (s *service) managePass(ctx context.Context) error {
 					switch {
 					case ferr != nil:
 						// Не репостим вслепую — ретрай на следующем часовом тике.
-						s.notify(notifier.Alert(ticker, "стоп-заявка исчезла из ACTIVE, но EXECUTED недоступен — репост отложен: "+ferr.Error()))
+						s.notify(notifier.Alert("Reversion", ticker, "стоп-заявка исчезла из ACTIVE, но EXECUTED недоступен — репост отложен: "+ferr.Error()))
 						continue
 					case fired:
 						s.notify(notifier.Exit(ticker, entry.StopReason, entry.StopPrice, entry.Quantity, false))
@@ -253,14 +253,14 @@ func (s *service) managePass(ctx context.Context) error {
 						_ = store.Save(state)
 						continue
 					default:
-						s.notify(notifier.Alert(ticker, "стоп-заявка снята вне раннера — перевыставляю"))
+						s.notify(notifier.Alert("Reversion", ticker, "стоп-заявка снята вне раннера — перевыставляю"))
 						entry.StopOrderID = ""
 					}
 				}
 			} else if stray, ok := stopByInstrument[sh.ID]; ok {
 				// Чужая/устаревшая заявка (например, после reconstruct) — снять.
 				if err := s.stops.Cancel(ctx, stray.StopOrderID); err != nil {
-					s.notify(notifier.Alert(ticker, "не удалось снять неизвестную стоп-заявку: "+err.Error()))
+					s.notify(notifier.Alert("Reversion", ticker, "не удалось снять неизвестную стоп-заявку: "+err.Error()))
 					// Не ставим новую заявку в этом тике: stray-заявка всё ещё жива на
 					// бирже и продолжает защищать позицию (см. guard ниже). Без этого
 					// флага на бирже оказались бы ДВЕ живые SELL-заявки на один
@@ -307,7 +307,7 @@ func (s *service) managePass(ctx context.Context) error {
 			entry = s.replaceStop(ctx, ticker, sh, entry, level, reason)
 		case sizeMismatch, desired > current:
 			if err := s.stops.Cancel(ctx, entry.StopOrderID); err != nil {
-				s.notify(notifier.Alert(ticker, "не удалось снять стоп для переноса: "+err.Error()))
+				s.notify(notifier.Alert("Reversion", ticker, "не удалось снять стоп для переноса: "+err.Error()))
 				break // старая заявка продолжает защищать
 			}
 			entry.StopOrderID = ""
@@ -344,14 +344,14 @@ func (s *service) replaceStop(ctx context.Context, ticker string, sh *imodel.Sha
 	entry statestore.Entry, level float64, reason string) statestore.Entry {
 
 	if sh.Lot <= 0 {
-		s.notify(notifier.Alert(ticker, "sh.Lot == 0 — невозможно вычислить лоты для стоп-заявки, пропуск"))
+		s.notify(notifier.Alert("Reversion", ticker, "sh.Lot == 0 — невозможно вычислить лоты для стоп-заявки, пропуск"))
 		logger.ErrorContext(ctx, fmt.Sprintf("reversion: %s sh.Lot=%d, skipping stop placement to avoid divide-by-zero", ticker, sh.Lot))
 		return entry
 	}
 	lots := entry.Quantity / int64(sh.Lot)
 	res, err := s.stops.Place(ctx, sh.ID, lots, level, sh.MinPriceIncrement)
 	if err != nil {
-		s.notify(notifier.Alert(ticker, "стоп-заявка не выставлена: "+err.Error()))
+		s.notify(notifier.Alert("Reversion", ticker, "стоп-заявка не выставлена: "+err.Error()))
 		logger.ErrorContext(ctx, fmt.Sprintf("reversion: %s place stop: %v", ticker, err))
 		return entry
 	}

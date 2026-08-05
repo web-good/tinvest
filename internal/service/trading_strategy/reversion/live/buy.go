@@ -5,10 +5,10 @@ import (
 	"fmt"
 
 	imodel "tinvest/internal/model"
+	"tinvest/internal/service/trading_strategy/livecore/notifier"
 	"tinvest/internal/service/trading_strategy/livecore/sizing"
+	"tinvest/internal/service/trading_strategy/livecore/statestore"
 	"tinvest/internal/service/trading_strategy/reversion/live/marketdata"
-	"tinvest/internal/service/trading_strategy/reversion/live/notifier"
-	"tinvest/internal/service/trading_strategy/reversion/live/statestore"
 	"tinvest/internal/service/trading_strategy/reversion/strategy/core"
 	"tinvest/internal/service/trading_strategy/scalping/model"
 	"tinvest/pkg/logger"
@@ -33,7 +33,7 @@ func (s *service) buyPass(ctx context.Context) error {
 	for _, ticker := range s.cfg.Tickers {
 		st, ok := StrategyFor(ticker)
 		if !ok {
-			s.notify(notifier.Alert(ticker, "тикер не зарегистрирован в reversion — пропуск"))
+			s.notify(notifier.Alert("Reversion", ticker, "тикер не зарегистрирован в reversion — пропуск"))
 			continue
 		}
 		sh, ok := shares[ticker]
@@ -77,7 +77,7 @@ func (s *service) buyPass(ctx context.Context) error {
 
 		res, err := s.exec.Buy(ctx, sh.ID, lots)
 		if err != nil {
-			s.notify(notifier.Alert(ticker, "ордер на покупку отклонён: "+err.Error()))
+			s.notify(notifier.Alert("Reversion", ticker, "ордер на покупку отклонён: "+err.Error()))
 			logger.ErrorContext(ctx, fmt.Sprintf("reversion: %s buy rejected: %v", ticker, err))
 			continue // state unchanged; retried next tick
 		}

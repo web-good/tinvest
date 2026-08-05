@@ -13,8 +13,8 @@ import (
 
 	"tinvest/internal/enum"
 	imodel "tinvest/internal/model"
+	"tinvest/internal/service/trading_strategy/livecore/statestore"
 	"tinvest/internal/service/trading_strategy/reversion/live/marketdata"
-	"tinvest/internal/service/trading_strategy/reversion/live/statestore"
 	"tinvest/internal/utils"
 	grpcmodel "tinvest/pkg/client/grpc/model"
 	"tinvest/pkg/indicators"

@@ -24,8 +24,18 @@ func TestExitAndSkipAndAlert(t *testing.T) {
 	if !strings.Contains(Skip("EUTR", "кэша не хватает"), "кэша не хватает") {
 		t.Fatal("Skip must carry the reason")
 	}
-	if !strings.Contains(Alert("UGLD", "стейт потерян"), "⚠️") {
+	if !strings.Contains(Alert("Reversion", "UGLD", "стейт потерян"), "⚠️") {
 		t.Fatal("Alert must be visibly flagged")
+	}
+}
+
+func TestAlertUsesStrategyLabel(t *testing.T) {
+	got := Alert("RSI Pullback", "UGLD", "стоп не выставлен")
+	if !strings.Contains(got, "RSI Pullback UGLD") {
+		t.Fatalf("Alert = %q, want it to name the strategy and the ticker", got)
+	}
+	if strings.Contains(got, "Reversion") {
+		t.Fatalf("Alert = %q, must not hardcode Reversion", got)
 	}
 }
 
