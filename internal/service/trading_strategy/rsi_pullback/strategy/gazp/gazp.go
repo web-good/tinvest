@@ -7,6 +7,9 @@
 // calibration, not from the generic starting point. Second, once a fresh -calibrate run picks a
 // different winning combination for GAZP, this literal must be REPLACED — leaving the old numbers
 // in place after a newer run would ship a config the latest data never endorsed.
+//
+// Как и T, GAZP уходит в прод БЕЗ walk-forward подтверждения (решение владельца от
+// 2026-08-05): есть только пост-грид литерал, OOS-прогона не было.
 package gazp
 
 import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"

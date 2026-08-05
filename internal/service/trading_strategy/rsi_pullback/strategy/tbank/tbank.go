@@ -7,8 +7,11 @@
 // is 4/25/70/10/70/TP 0.7 vs T's 5/20/65/20/100/TP 1.5). Two consequences follow. First, this
 // package does NOT track core.DefaultParams(): a change to the baseline must not reach it
 // silently, because these values came from T's own calibration, not the shared default. Second,
-// in-sample PF is not an edge claim — this literal has NOT been validated by walk-forward OOS,
-// so treat it as a calibration starting point, not a trade-ready configuration.
+// this literal goes to production WITHOUT walk-forward confirmation. The owner decided so on
+// 2026-08-05 knowing the numbers: in-sample PF 1.312 over 67 trades, but two consecutive losing
+// years inside that sample (2023 PF 0.43, 2024 PF 0.58) and no OOS run at all. Treat a live
+// drawdown here as expected variance of an unvalidated configuration, not as evidence that
+// something broke.
 //
 // The package is named tbank rather than t: a one-letter package reads as t.DefaultParams() at
 // the call site and collides with the t *testing.T idiom. The exchange ticker stays "T".

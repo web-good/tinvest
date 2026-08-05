@@ -9,5 +9,6 @@ type Config struct {
 	TelegramClient *TelegramClient
 	PortfolioYield *PortfolioYieldConfig
 	Reversion      *ReversionConfig
+	RSIPullback    *RSIPullbackConfig
 	News           *NewsConfig
 }
