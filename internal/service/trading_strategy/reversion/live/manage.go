@@ -5,11 +5,11 @@ import (
 	"fmt"
 
 	imodel "tinvest/internal/model"
+	"tinvest/internal/service/trading_strategy/livecore/stoporders"
 	"tinvest/internal/service/trading_strategy/reversion/live/marketdata"
 	"tinvest/internal/service/trading_strategy/reversion/live/notifier"
 	"tinvest/internal/service/trading_strategy/reversion/live/reconstruct"
 	"tinvest/internal/service/trading_strategy/reversion/live/statestore"
-	"tinvest/internal/service/trading_strategy/reversion/live/stoporders"
 	"tinvest/internal/service/trading_strategy/reversion/strategy/core"
 	"tinvest/internal/service/trading_strategy/scalping/model"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"

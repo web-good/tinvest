@@ -1,5 +1,5 @@
-// Package sizing computes whole-lot order quantities for the reversion runner from a
-// percentage of total account value, capped by available cash.
+// Package sizing computes whole-lot order quantities for the live strategy runners from
+// a percentage of total account value, capped by available cash.
 package sizing
 
 import (

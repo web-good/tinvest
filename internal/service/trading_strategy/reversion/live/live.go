@@ -9,11 +9,11 @@ import (
 
 	"tinvest/internal/config"
 	imodel "tinvest/internal/model"
+	"tinvest/internal/service/trading_strategy/livecore/executor"
+	"tinvest/internal/service/trading_strategy/livecore/stoporders"
 	"tinvest/internal/service/trading_strategy/reversion/live/dto"
-	"tinvest/internal/service/trading_strategy/reversion/live/executor"
 	"tinvest/internal/service/trading_strategy/reversion/live/marketdata"
 	"tinvest/internal/service/trading_strategy/reversion/live/statestore"
-	"tinvest/internal/service/trading_strategy/reversion/live/stoporders"
 	grpcmodel "tinvest/pkg/client/grpc/model"
 	"tinvest/pkg/client/telegram"
 )

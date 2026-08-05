@@ -1,5 +1,5 @@
-// Package executor places (or dry-runs) whole-position market orders for the
-// reversion runner. Each order carries a fresh UUID order_id for idempotency.
+// Package executor places (or dry-runs) whole-position market orders for the live
+// strategy runners. Each order carries a fresh UUID order_id for idempotency.
 package executor
 
 import (

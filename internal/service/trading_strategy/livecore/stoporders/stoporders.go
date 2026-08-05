@@ -1,6 +1,6 @@
 // Package stoporders places (or dry-runs) the single protective stop-market SELL
-// order the reversion runner keeps on the exchange per open position. Each order
-// carries a fresh UUID order_id for idempotency.
+// order a live runner keeps on the exchange per open position. Each order carries a
+// fresh UUID order_id for idempotency.
 package stoporders
 
 import (

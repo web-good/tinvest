@@ -8,7 +8,7 @@ import (
 	"google.golang.org/grpc"
 
 	investapi "tinvest/internal/pb/v1"
-	"tinvest/internal/service/trading_strategy/reversion/live/stoporders/mocks"
+	"tinvest/internal/service/trading_strategy/livecore/stoporders/mocks"
 	"tinvest/internal/utils"
 )
 

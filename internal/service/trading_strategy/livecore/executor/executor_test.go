@@ -8,7 +8,7 @@ import (
 	"google.golang.org/grpc"
 
 	investapi "tinvest/internal/pb/v1"
-	"tinvest/internal/service/trading_strategy/reversion/live/executor/mocks"
+	"tinvest/internal/service/trading_strategy/livecore/executor/mocks"
 )
 
 func TestBuy_PlacesMarketOrder(t *testing.T) {

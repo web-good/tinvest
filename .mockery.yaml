@@ -21,7 +21,7 @@ packages:
       Service:
       instrumentsClient:
       operationsClient:
-  tinvest/internal/service/trading_strategy/reversion/live/executor:
+  tinvest/internal/service/trading_strategy/livecore/executor:
     interfaces:
       OrdersClient:
   tinvest/internal/service/trading_strategy/reversion/live/marketdata:
@@ -30,7 +30,7 @@ packages:
   tinvest/internal/service/trading_strategy/reversion/live/reconstruct:
     interfaces:
       TradesClient:
-  tinvest/internal/service/trading_strategy/reversion/live/stoporders:
+  tinvest/internal/service/trading_strategy/livecore/stoporders:
     interfaces:
       Client:
   tinvest/internal/service/trading_strategy/scalping/strategy:
