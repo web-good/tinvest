@@ -1,6 +1,46 @@
 package main
 
-import "testing"
+import (
+	"context"
+	"testing"
+	"time"
+)
+
+func TestPauseAfterTickerSleepsForTheRequestedDelay(t *testing.T) {
+	start := time.Now()
+	if !pauseAfterTicker(context.Background(), 30*time.Millisecond) {
+		t.Fatal("pauseAfterTicker returned false on a live context, want true")
+	}
+	if elapsed := time.Since(start); elapsed < 30*time.Millisecond {
+		t.Fatalf("slept %v, want at least 30ms — the whole point of -pause is to idle the CPU", elapsed)
+	}
+}
+
+func TestPauseAfterTickerIsFreeWhenDisabled(t *testing.T) {
+	// -pause 0 is the default: no timer, no allocation, no measurable delay.
+	start := time.Now()
+	if !pauseAfterTicker(context.Background(), 0) {
+		t.Fatal("pauseAfterTicker returned false for a zero delay, want true")
+	}
+	if elapsed := time.Since(start); elapsed > 5*time.Millisecond {
+		t.Fatalf("slept %v on a zero delay, want an immediate return", elapsed)
+	}
+}
+
+func TestPauseAfterTickerAbandonsTheSleepOnCancel(t *testing.T) {
+	// Ctrl+C during a paced overnight run must not wait out the pause on every
+	// in-flight worker before the pool unwinds.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	start := time.Now()
+	if pauseAfterTicker(ctx, time.Hour) {
+		t.Fatal("pauseAfterTicker returned true on a cancelled context, want false")
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("took %v to notice cancellation, want an immediate return", elapsed)
+	}
+}
 
 func TestEffectiveWorkersCapsOnRefresh(t *testing.T) {
 	// 8 workers against the market-data API is roughly 26 req/s, well above what the

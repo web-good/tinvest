@@ -47,6 +47,7 @@ func main() {
 		tickersCSV    = flag.String("tickers", "", "comma-separated tickers instead of the full universe (diagnostics/smoke runs)")
 		outDir        = flag.String("out", "reports/pullback_screen", "report output directory")
 		refresh       = flag.Bool("refresh", false, "force candle refetch (ignore cache)")
+		pause         = flag.Duration("pause", 0, "idle time after each ticker, e.g. 500ms or 2s: trades wall-clock for a cooler CPU")
 	)
 	flag.Parse()
 	logger.Init()
@@ -60,7 +61,7 @@ func main() {
 	if err := run(context.Background(), runCfg{
 		months: *months, holdoutMonths: *holdoutMonths, topN: *topN, workers: *workers,
 		minTurnoverM: *minTurnoverM, minATRPct: *minATRPct,
-		tickers: splitCSV(*tickersCSV), outDir: *outDir, refresh: *refresh, opts: opts,
+		tickers: splitCSV(*tickersCSV), outDir: *outDir, refresh: *refresh, pause: *pause, opts: opts,
 	}); err != nil {
 		log.Fatalf("pullscreen: %v", err)
 	}
@@ -72,7 +73,26 @@ type runCfg struct {
 	tickers                              []string
 	outDir                               string
 	refresh                              bool
+	pause                                time.Duration
 	opts                                 svc.ScreenOpts
+}
+
+// pauseAfterTicker idles a worker between tickers so a full-universe run does not
+// pin every core for 20+ minutes. It reports whether the pause completed: a
+// cancelled context abandons the sleep immediately, so Ctrl+C unwinds the pool at
+// once instead of once per outstanding pause.
+func pauseAfterTicker(ctx context.Context, d time.Duration) bool {
+	if d <= 0 {
+		return ctx.Err() == nil
+	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return true
+	case <-ctx.Done():
+		return false
+	}
 }
 
 // shareInfo is the per-ticker metadata the worker pool needs.
@@ -170,6 +190,11 @@ func run(ctx context.Context, cfg runCfg) error {
 			mu.Lock()
 			rows = append(rows, row)
 			mu.Unlock()
+
+			// Held inside the semaphore slot on purpose: releasing first would let the
+			// next ticker start while this one idles, and the pool would stay just as
+			// hot as before.
+			pauseAfterTicker(ctx, cfg.pause)
 		}(u)
 	}
 	wg.Wait()
