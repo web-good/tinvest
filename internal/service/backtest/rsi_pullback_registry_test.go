@@ -191,3 +191,25 @@ func TestRSIPullbackTBankKeepsItsOwnCalibratedLiteral(t *testing.T) {
 		t.Fatalf("Ticker() = %q, want T", got)
 	}
 }
+
+// TestRSIPullbackDOMRFIsRegisteredAndTracksBaseline пинует ДВА разных факта, которые
+// RSIPullbackLookupOrGeneric снаружи неотличимы: DOMRF присутствует в карте (а не проваливается
+// в generic-ветку) И при этом возвращает baseline, а не литерал. Второе — это статус «калибровка
+// не проводилась» из docs/rsi_pullback/strategy.md §8.0.1: истории у DOMRF 8.4 месяца с IPO
+// 2025-11-20, и любой литерал здесь означал бы, что тикер откалиброван, чего нет.
+func TestRSIPullbackDOMRFIsRegisteredAndTracksBaseline(t *testing.T) {
+	b, ok := rsiPullbackRegistry["DOMRF"]
+	if !ok {
+		t.Fatal("DOMRF отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
+	}
+	p, pok := b.DefaultParams().(core.Params)
+	if !pok {
+		t.Fatalf("DefaultParams() вернул %T, want core.Params", b.DefaultParams())
+	}
+	if p != core.DefaultParams() {
+		t.Fatalf("DOMRF params = %+v, want baseline %+v — литерал означал бы «откалиброван»", p, core.DefaultParams())
+	}
+	if got := b.Build(p).Ticker(); got != "DOMRF" {
+		t.Fatalf("Ticker() = %q, want DOMRF", got)
+	}
+}
