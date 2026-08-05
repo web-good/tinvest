@@ -3,6 +3,7 @@ package statestore
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -68,5 +69,25 @@ func TestEntryWithoutTakeProfitLoadsAsZero(t *testing.T) {
 	}
 	if got["UGLD"].TakeProfit != 0 {
 		t.Fatalf("TakeProfit = %v, want 0", got["UGLD"].TakeProfit)
+	}
+}
+
+// reversion никогда не пишет TakeProfit — omitempty обязан держать ключ "takeProfit" вне
+// файла стейта при нулевом значении, иначе формат живого файла реальной стратегии
+// начнёт обрастать лишним ключом на каждом Save. Проверяем сырые байты файла, а не
+// разобранную структуру: это единственный способ поймать снятие omitempty.
+func TestEntrySaveOmitsZeroTakeProfitFromFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	s := New(path)
+	in := map[string]Entry{"UGLD": {Ticker: "UGLD", EntryPrice: 0.6}} // TakeProfit не задан — 0
+	if err := s.Save(in); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if strings.Contains(string(b), "takeProfit") {
+		t.Fatalf("state file must omit zero-value takeProfit, got: %s", b)
 	}
 }
