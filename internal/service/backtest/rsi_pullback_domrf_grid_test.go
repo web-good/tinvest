@@ -52,10 +52,14 @@ func TestDOMRFSignalGridsPinTheirMeasuredAxes(t *testing.T) {
 		t.Errorf("cal_exit.json: RSIUpper имеет %d значений, want 5", got)
 	}
 
+	// Файл существует, чтобы оценить каждый гейт против его собственного отсутствия — свип
+	// должен быть именно {0,1}, а не просто парой значений: [0,0] или [1,1] пройдёт проверку
+	// длины, но убьёт единственный смысл файла.
 	gates := domrfGrid(t, "cal_screen.json")
 	for _, field := range []string{"UseDayATRGate", "UseVolume"} {
-		if len(gates[field]) != 2 {
-			t.Errorf("cal_screen.json: %s должен свипуть обе точки [0,1], got %v", field, gates[field])
+		got := gates[field]
+		if len(got) != 2 || !((got[0] == 0 && got[1] == 1) || (got[0] == 1 && got[1] == 0)) {
+			t.Errorf("cal_screen.json: %s должен свипуть ровно точки {0,1}, got %v", field, got)
 		}
 	}
 
@@ -73,13 +77,13 @@ func TestDOMRFRiskGridsPinTheirMeasuredAxes(t *testing.T) {
 
 	// Круг издержек (0.05% за сторону) стоит 0.052 дневного ATR. Стоп 0.3 ATR = 0.58% цены,
 	// из которых 17% съедает комиссия, а медианный день покрывает 0.99 ATR — такой стоп сидит
-	// внутри обычного внутридневного шума и будет снят сносом, а не провалом сетапа.
+	// внутри обычного внутридневного шума и будет снят сносом, а не провалом сетапа. Отдельно,
+	// StopDailyATR=0 запрещён везде: стратегия держит позицию через ночи и выходные, и
+	// многодневное удержание без стопа недопустимо (эту границу v < 0.5 уже ловит, а
+	// TestRSIPullbackCalFilesValid проверяет её по всему каталогу независимо от этого теста).
 	for _, v := range risk["StopDailyATR"] {
 		if v < 0.5 {
 			t.Errorf("cal_risk.json свипует StopDailyATR=%v: ниже 0.5 стоп внутри дневного шума (медианный день 0.99 ATR)", v)
-		}
-		if v == 0 {
-			t.Errorf("cal_risk.json свипует StopDailyATR=0: многодневное удержание без стопа недопустимо")
 		}
 	}
 	if len(risk["TPDailyATR"]) != 4 {
