@@ -110,14 +110,50 @@ func TestDOMRFRiskGridsPinTheirMeasuredAxes(t *testing.T) {
 	if got := spent["FreshDayATR"]; len(got) != 1 || got[0] != 0 {
 		t.Errorf("cal_day_spent.json: FreshDayATR = %v, want ровно [0] — ветка «день начался» выключена целиком", got)
 	}
+	// Ось начинается с 0.6 как контрольная строка «гейт почти выключен» и уходит до 1.75
+	// (9.0% дней). Точки 0.4-0.5 из ugld/ здесь означают почти отсутствие гейта: 0.6
+	// на DOMRF уже достигают 88.2% будних дней, а 0.4-0.5 — и того больше.
+	for _, v := range spent["SpentDayATR"] {
+		if v < 0.6 {
+			t.Errorf("cal_day_spent.json свипует SpentDayATR=%v: ниже 0.6 порог почти не гейтит (0.6 достигают 88%% дней)", v)
+		}
+	}
 
 	vol := domrfGrid(t, "cal_volume.json")
 	if got := vol["UseVolume"]; len(got) != 1 || got[0] != 1 {
 		t.Errorf("cal_volume.json: UseVolume = %v, want ровно [1] — точка «гейт выключен» принадлежит cal_screen.json", got)
 	}
+	// Верхняя граница 2.0: гейт проходят 39.2% баров при 1.0, 32.3% при 1.2, 25.4% при 1.5,
+	// 17.5% при 2.0. Выборка дефицитная (146 кроссов RSI(4)@15 за всю историю), поэтому
+	// строки 2.5 и 3.0 из ugld/ здесь неисполнимы — они срежут и без того тонкую выборку в ноль.
+	for _, v := range vol["VolMult"] {
+		if v > 2.0 {
+			t.Errorf("cal_volume.json свипует VolMult=%v: выше 2.0 неисполнимо на дефицитной выборке DOMRF (146 кроссов за всю историю)", v)
+		}
+	}
+	// Только две базы, 5 и 10: короткая быстрее реагирует на смену активности, длинная
+	// устойчивее к одиночному всплеску. База 3 из ugld/ на растущем обороте DOMRF
+	// систематически завышает отношение объёма к базе, потому что база отстаёт от тренда.
+	for _, v := range vol["VolBaseDays"] {
+		if v != 5 && v != 10 {
+			t.Errorf("cal_volume.json свипует VolBaseDays=%v: обоснованы только 5 и 10 (короткая база отстаёт от растущего оборота DOMRF)", v)
+		}
+	}
 
 	trail := domrfGrid(t, "cal_trail.json")
 	if len(trail["UseRSIExit"]) != 2 {
 		t.Errorf("cal_trail.json: UseRSIExit = %v, want обе точки [0,1]", trail["UseRSIExit"])
+	}
+	// Правый край 0.8, а не 0.6 как у ugld/: там потолок задавала цель TPDailyATR=0.6, выше
+	// которой трейл не успевал взвестись до закрытия сделки; здесь ось цели поднята до 2.0,
+	// и трейл получает пространство для по-настоящему позднего срабатывания.
+	hasFarTrail := false
+	for _, v := range trail["TrailDailyATR"] {
+		if v == 0.8 {
+			hasFarTrail = true
+		}
+	}
+	if !hasFarTrail {
+		t.Errorf("cal_trail.json: TrailDailyATR = %v, не содержит правый край 0.8 (цель поднята до 2.0, трейл должен получить пространство)", trail["TrailDailyATR"])
 	}
 }
