@@ -30,17 +30,21 @@ const chunkDays = 14
 // Year holidays and a halted instrument without turning a data outage into an endless loop.
 const maxChunks = 8
 
-// m30Limit is the API's per-request cap on 30-minute candles.
-const m30Limit int32 = 1200
-
-// dailyFetchDays sizes the single daily request. DailyATRPeriod+1 = 15 completed WEEKDAY
-// dailies is the most any registered ticker needs; 90 calendar days covers that with room
-// for the January holidays, and one request is enough because the daily interval allows
-// windows up to six years.
-const dailyFetchDays = 90
-
-// dailyLimit caps the daily request; 200 comfortably exceeds dailyFetchDays.
-const dailyLimit int32 = 200
+// dailyFetchDays sizes the single daily request. This is NOT about how many dailies the
+// gate/ATR window needs (DailyATRPeriod+1 = 15 weekday bars would do) — it is about
+// matching the backtest's Wilder-seed convergence. indicators.ATRSeries seeds its
+// recursion with the average TR of the FIRST period bars of whatever series it is given,
+// then decays that seed by a (period-1)/period factor per step. The backtest feeds it
+// dailies from a year before the run window (cmd/backtest/main.go's ~250 trading days of
+// lead-in), so by any bar in the run the seed's weight is negligible. A 90-day live fetch
+// gives ATR(14) only ~46 completed-weekday smoothing steps, leaving the seed at
+// (13/14)^46 ≈ 3.3% weight — enough to shift the daily ATR by 1-3%, which the stop, the
+// target and BOTH day-gate thresholds are multiples of, and the gate is a threshold
+// comparison: any day whose range sits within that margin of the threshold flips relative
+// to the backtest. 730 days (two years) decays the seed to ~1e-16: both builds converge on
+// the same ATR. One request is enough because the daily interval allows windows up to six
+// years.
+const dailyFetchDays = 730
 
 // Assemble builds the MarketData snapshot as of `now`. lookbackBars is the 30-minute window
 // size (Strategy.Lookback()). Position is left nil for the caller to set.
@@ -81,9 +85,11 @@ func fetch30m(ctx context.Context, c candles.CandleClient, instrumentID string,
 	to := now
 	for chunk := 0; chunk < maxChunks && len(all) < lookbackBars; chunk++ {
 		from := to.AddDate(0, 0, -chunkDays)
-		limit := m30Limit
+		// limit is nil, exactly like the backtest's candle provider (internal/service/backtest/candles.go):
+		// the request window is already bounded by chunkDays/the interval's API cap, and an
+		// explicit Limit is just another way to silently truncate differently from the engine.
 		raw, err := c.GetCandles(ctx, &instrumentID, enum.Minutes30.ToNumberInvestAPI(),
-			timestamppb.New(from), timestamppb.New(to), &limit, true)
+			timestamppb.New(from), timestamppb.New(to), nil, true)
 		if err != nil {
 			return nil, fmt.Errorf("rsi_pullback marketdata: 30m candles: %w", err)
 		}
@@ -111,9 +117,9 @@ func fetchDaily(ctx context.Context, c candles.CandleClient, instrumentID string
 	now time.Time) ([]backtest.Candle, error) {
 
 	from := now.AddDate(0, 0, -dailyFetchDays)
-	limit := dailyLimit
+	// limit is nil for the same reason as fetch30m: the window already bounds the request.
 	raw, err := c.GetCandles(ctx, &instrumentID, enum.Day1.ToNumberInvestAPI(),
-		timestamppb.New(from), timestamppb.New(now), &limit, true)
+		timestamppb.New(from), timestamppb.New(now), nil, true)
 	if err != nil {
 		return nil, fmt.Errorf("rsi_pullback marketdata: daily candles: %w", err)
 	}

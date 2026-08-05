@@ -21,12 +21,10 @@ var msk = func() *time.Location {
 type fakeClient struct {
 	m30, day []*imodel.CandleItemTechAnalyse
 	windows  []int32 // интервалы запросов в порядке вызова
-	calls    int
 }
 
 func (f *fakeClient) GetCandles(_ context.Context, _ *string, interval int32,
 	from, to *timestamppb.Timestamp, limit *int32, _ bool) ([]*imodel.CandleItemTechAnalyse, error) {
-	f.calls++
 	f.windows = append(f.windows, interval)
 	src := f.m30
 	if interval == enum.Day1.ToNumberInvestAPI() {
@@ -76,6 +74,20 @@ func series30m(end time.Time, n int) []*imodel.CandleItemTechAnalyse {
 		out[n-1-i] = c
 	}
 	return out
+}
+
+// setExtent overwrites the High/Low of the bar at exactly time t (comparing instants, so
+// callers may build t in any location). Fails the test if no bar has that open-time.
+func setExtent(t *testing.T, bars []*imodel.CandleItemTechAnalyse, at time.Time, high, low int64) {
+	t.Helper()
+	for _, b := range bars {
+		if b.Time.Equal(at) {
+			b.High = q(high)
+			b.Low = q(low)
+			return
+		}
+	}
+	t.Fatalf("setExtent: no bar at %v", at)
 }
 
 // seriesDaily строит n дневных баров, последний открывается в MSK-полночь дня end.
@@ -181,15 +193,64 @@ func TestAssembleKeepsWeekendBarsInTheWindow(t *testing.T) {
 	}
 }
 
-// TodayHigh/Low обязаны считаться правилом движка, а не похожим кодом.
+// TodayHigh/Low обязаны считаться правилом движка (граница MSK-дня), а не похожим кодом,
+// который берёт экстремум по всему окну. Вчерашний бар получает заведомо более широкий
+// диапазон (500/10), чем любой сегодняшний (105-110/90-97): реализация, которая сканирует
+// всё 403-бара окно вместо бары одного MSK-дня, поймает вчерашний экстремум и провалится.
 func TestAssembleFillsTodayExtentFromEngine(t *testing.T) {
 	now := time.Date(2026, 3, 10, 12, 0, 0, 0, msk)
-	f := &fakeClient{m30: series30m(now.Add(-30*time.Minute), 900), day: seriesDaily(now, 90)}
+	bars := series30m(now.Add(-30*time.Minute), 900)
+
+	// Вчера (9 марта) — намеренно шире ожидаемого сегодняшнего диапазона.
+	setExtent(t, bars, time.Date(2026, 3, 9, 15, 0, 0, 0, msk), 500, 10)
+
+	// Сегодня (10 марта), все бары с открытия сессии (09:00) до последнего завершённого
+	// (11:30) — узкий, точно известный диапазон.
+	today := []struct {
+		hour, min int
+		high, low int64
+	}{
+		{9, 0, 105, 95},
+		{9, 30, 110, 90}, // максимум High=110, минимум Low=90 — ожидаемые TodayHigh/TodayLow
+		{10, 0, 103, 97},
+		{10, 30, 108, 92},
+		{11, 0, 106, 94},
+		{11, 30, 104, 96},
+	}
+	for _, b := range today {
+		setExtent(t, bars, time.Date(2026, 3, 10, b.hour, b.min, 0, 0, msk), b.high, b.low)
+	}
+
+	f := &fakeClient{m30: bars, day: seriesDaily(now, 90)}
 	md, err := Assemble(context.Background(), f, "uid", 403, now)
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
-	if md.TodayHigh <= 0 || md.TodayLow <= 0 || md.TodayHigh < md.TodayLow {
-		t.Fatalf("TodayHigh/TodayLow = %v/%v, want a valid range", md.TodayHigh, md.TodayLow)
+	if md.TodayHigh != 110 || md.TodayLow != 90 {
+		t.Fatalf("TodayHigh/TodayLow = %v/%v, want 110/90 (today's MSK-day bars only, not the whole window)",
+			md.TodayHigh, md.TodayLow)
+	}
+}
+
+// cur, переданный в backtest.AssembleMarketData, обязан быть временем открытия ПОСЛЕДНЕГО
+// ЗАВЕРШЁННОГО 30m-бара, а не now: now только что перевалило за полночь МСК (00:10 10
+// марта), а последний завершённый бар — ещё 22:30 9 марта, т.е. день 9 марта по часам
+// последнего бара ЕЩЁ НЕ ЗАКРЫТ. Если бы cur = now, граница дня сдвинулась бы на полночь
+// 10 марта, и дневная свеча за 9 марта ошибочно попала бы в Daily* — заглядывание в
+// будущее относительно того, что реально видел последний бар.
+func TestAssembleUsesLastBarTimeNotNowForDailyBoundary(t *testing.T) {
+	now := time.Date(2026, 3, 10, 0, 10, 0, 0, msk)
+	lastBar := time.Date(2026, 3, 9, 22, 30, 0, 0, msk)
+	f := &fakeClient{m30: series30m(lastBar, 900), day: seriesDaily(now, 90)}
+	md, err := Assemble(context.Background(), f, "uid", 403, now)
+	if err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+	mar9 := time.Date(2026, 3, 9, 0, 0, 0, 0, msk)
+	for _, dt := range md.DailyTimes {
+		if dt.In(msk).Equal(mar9) {
+			t.Fatalf("DailyTimes includes the 9 March daily (%v); want it excluded — "+
+				"the day is not closed as of the last completed bar (%v)", dt, lastBar)
+		}
 	}
 }
