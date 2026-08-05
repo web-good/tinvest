@@ -13,16 +13,9 @@ import (
 
 	"tinvest/internal/domain/backtest"
 	"tinvest/internal/enum"
-	imodel "tinvest/internal/model"
+	"tinvest/internal/service/trading_strategy/livecore/candles"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
-	"tinvest/internal/utils"
 )
-
-// CandleClient is the slice of the market-data client the assembler needs.
-type CandleClient interface {
-	GetCandles(ctx context.Context, instrumentUID *string, interval int32,
-		from, to *timestamppb.Timestamp, limit *int32, withHoliday bool) ([]*imodel.CandleItemTechAnalyse, error)
-}
 
 // Conservative lower bounds on completed trading bars per calendar day on MOEX, used
 // to size the fetch window so it always contains enough warm-up bars after weekends
@@ -59,30 +52,10 @@ var candleRequestCaps = map[enum.Interval]candleRequestCap{
 	enum.Hour4: {spanMonths: 3, maxLimit: 700},
 }
 
-// ToCandles converts oldest-first API candles to domain candles. When completedOnly is
-// true the still-forming trailing bar (IsComplete=false) is dropped.
-func ToCandles(in []*imodel.CandleItemTechAnalyse, completedOnly bool) []backtest.Candle {
-	out := make([]backtest.Candle, 0, len(in))
-	for _, c := range in {
-		if completedOnly && !c.IsComplete {
-			continue
-		}
-		out = append(out, backtest.Candle{
-			Time:   c.Time,
-			Open:   utils.CombinePrice(c.Open.Units, c.Open.Nano),
-			High:   utils.CombinePrice(c.High.Units, c.High.Nano),
-			Low:    utils.CombinePrice(c.Low.Units, c.Low.Nano),
-			Close:  utils.CombinePrice(c.Close.Units, c.Close.Nano),
-			Volume: c.Volume,
-		})
-	}
-	return out
-}
-
 // fetchCompleted pulls `bars` completed candles of one interval ending at `now`,
 // returning the last `bars` (oldest-first). It requests a calendar window generous
 // enough to survive non-trading hours.
-func fetchCompleted(ctx context.Context, c CandleClient, instrumentID string,
+func fetchCompleted(ctx context.Context, c candles.CandleClient, instrumentID string,
 	interval enum.Interval, bars, barsPerDay int, now time.Time) ([]backtest.Candle, error) {
 	if bars <= 0 {
 		return nil, nil
@@ -106,7 +79,7 @@ func fetchCompleted(ctx context.Context, c CandleClient, instrumentID string,
 	if err != nil {
 		return nil, err
 	}
-	completed := ToCandles(raw, true)
+	completed := candles.ToCandles(raw, true)
 	if len(completed) > bars {
 		completed = completed[len(completed)-bars:]
 	}
@@ -116,7 +89,7 @@ func fetchCompleted(ctx context.Context, c CandleClient, instrumentID string,
 // Assemble builds the MarketData snapshot. lookbackBars is the hourly window size
 // (Strategy.Lookback()); htfEMAPeriod>0 triggers a 4H fetch warmed to that period.
 // Position is left nil for the caller to set.
-func Assemble(ctx context.Context, c CandleClient, instrumentID string,
+func Assemble(ctx context.Context, c candles.CandleClient, instrumentID string,
 	lookbackBars, htfEMAPeriod int, now time.Time) (strategy.MarketData, error) {
 	window, err := fetchCompleted(ctx, c, instrumentID, enum.Hour1, lookbackBars, barsPerCalendarDayHourly, now)
 	if err != nil {

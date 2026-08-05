@@ -13,8 +13,8 @@ import (
 
 	"tinvest/internal/enum"
 	imodel "tinvest/internal/model"
+	"tinvest/internal/service/trading_strategy/livecore/candles"
 	"tinvest/internal/service/trading_strategy/livecore/statestore"
-	"tinvest/internal/service/trading_strategy/reversion/live/marketdata"
 	"tinvest/internal/utils"
 	grpcmodel "tinvest/pkg/client/grpc/model"
 	"tinvest/pkg/indicators"
@@ -26,7 +26,7 @@ type TradesClient interface {
 }
 
 // Entry reconstructs the entry-state for an open position.
-func Entry(ctx context.Context, tc TradesClient, cc marketdata.CandleClient,
+func Entry(ctx context.Context, tc TradesClient, cc candles.CandleClient,
 	accountID, instrumentID, ticker string, purchasePrice float64,
 	atrPeriod, lookbackBars int, now time.Time) (statestore.Entry, error) {
 

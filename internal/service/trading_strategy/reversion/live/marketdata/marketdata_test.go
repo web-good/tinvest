@@ -11,7 +11,7 @@ import (
 
 	"tinvest/internal/domain/backtest"
 	imodel "tinvest/internal/model"
-	"tinvest/internal/service/trading_strategy/reversion/live/marketdata/mocks"
+	"tinvest/internal/service/trading_strategy/livecore/candles/mocks"
 )
 
 // newFakeCandleClient returns a mock that answers the hourly request (interval==4 per

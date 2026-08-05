@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	imodel "tinvest/internal/model"
-	marketdatamocks "tinvest/internal/service/trading_strategy/reversion/live/marketdata/mocks"
+	marketdatamocks "tinvest/internal/service/trading_strategy/livecore/candles/mocks"
 	"tinvest/internal/service/trading_strategy/reversion/live/reconstruct/mocks"
 	grpcmodel "tinvest/pkg/client/grpc/model"
 )

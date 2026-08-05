@@ -24,7 +24,7 @@ packages:
   tinvest/internal/service/trading_strategy/livecore/executor:
     interfaces:
       OrdersClient:
-  tinvest/internal/service/trading_strategy/reversion/live/marketdata:
+  tinvest/internal/service/trading_strategy/livecore/candles:
     interfaces:
       CandleClient:
   tinvest/internal/service/trading_strategy/reversion/live/reconstruct:

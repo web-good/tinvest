@@ -4,10 +4,9 @@ package mocks
 
 import (
 	context "context"
+	model "tinvest/internal/model"
 
 	mock "github.com/stretchr/testify/mock"
-
-	model "tinvest/internal/model"
 
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 )

@@ -9,11 +9,11 @@ import (
 
 	"tinvest/internal/config"
 	imodel "tinvest/internal/model"
+	"tinvest/internal/service/trading_strategy/livecore/candles"
 	"tinvest/internal/service/trading_strategy/livecore/executor"
 	"tinvest/internal/service/trading_strategy/livecore/statestore"
 	"tinvest/internal/service/trading_strategy/livecore/stoporders"
 	"tinvest/internal/service/trading_strategy/reversion/live/dto"
-	"tinvest/internal/service/trading_strategy/reversion/live/marketdata"
 	grpcmodel "tinvest/pkg/client/grpc/model"
 	"tinvest/pkg/client/telegram"
 )
@@ -41,7 +41,7 @@ type service struct {
 	// their Load→mutate→Save cycles and silently drop each other's state writes.
 	mu          sync.Mutex
 	instruments instrumentsClient
-	market      marketdata.CandleClient
+	market      candles.CandleClient
 	ops         operationsClient
 	exec        *executor.Executor
 	stops       *stoporders.Executor
@@ -54,7 +54,7 @@ type service struct {
 // only when TradeEnabled is false and no order will ever be placed (tests/dry-run).
 func NewService(
 	instruments instrumentsClient,
-	market marketdata.CandleClient,
+	market candles.CandleClient,
 	ops operationsClient,
 	orders executor.OrdersClient,
 	stops stoporders.Client,
