@@ -1136,9 +1136,12 @@ git commit -m "feat(rsi_pullback): cmd/pullparity — сверка live-сбор
 
 ---
 
-### Task 7: Каркас сервиса и вход в позицию
+### Task 7: Единственный пасс — сервис, вход и выходы
 
-Сервис, единственный пасс и путь входа: сигнал → сайзинг от процента счёта → market BUY → стейт → немедленный защитный стоп.
+Весь торговый путь одной задачей. Часть А: сервис, пасс и вход (сигнал → сайзинг от
+процента счёта → market BUY → стейт → немедленный защитный стоп). Часть Б: три выхода и
+ведение биржевой стоп-заявки. Части разделены только ради порядка работы и промежуточного
+коммита — гейт ревью один, на цельном пассе.
 
 **Files:**
 - Create: `internal/service/trading_strategy/rsi_pullback/live/dto/run.go`
@@ -1448,7 +1451,8 @@ type passCtx struct {
 }
 ```
 
-Заглушка `manage` в этой задаче — пустое тело, возвращающее `nil` (реализуется в Task 8):
+Заглушка `manage` — промежуточное состояние ВНУТРИ этой задачи: часть Б ниже заменяет её
+настоящей реализацией, и задача не считается сделанной, пока это не произошло.
 
 ```go
 func (s *service) manage(ctx context.Context, pc *passCtx, ticker string, sh *imodel.Share,
@@ -1523,11 +1527,11 @@ git add -A
 git commit -m "feat(rsi_pullback): live-сервис и вход в позицию"
 ```
 
----
+#### Часть Б: сопровождение позиции — выходы и синхронизация стоп-заявки
 
-### Task 8: Сопровождение позиции — выходы и синхронизация стоп-заявки
-
-Три выхода и ведение биржевой заявки. Здесь же экспорт `DesiredStop` из ядра: уровень обязан считаться той же функцией, что в бэктесте.
+Три выхода и ведение биржевой заявки. Здесь же экспорт `DesiredStop` из ядра: уровень
+обязан считаться той же функцией, что в бэктесте. **Задача НЕ завершена, пока часть Б не
+заменила заглушку `manage` из части А** — иначе позиция остаётся без сопровождения.
 
 **Files:**
 - Modify: `internal/service/trading_strategy/rsi_pullback/strategy/core/core.go` (экспорт `DesiredStop`), `core_test.go`
@@ -1538,7 +1542,7 @@ git commit -m "feat(rsi_pullback): live-сервис и вход в позици
 - Consumes: всё из Task 7.
 - Produces: `core.DesiredStop(p Params, entry, dailyATR, maxFav float64) (float64, string)` — уровень защитного стопа и причина (`"SL"` | `"TRAIL"`), `(0, "")` когда стопа нет.
 
-- [ ] **Step 1: Экспортировать `DesiredStop`**
+- [ ] **Step 8: Экспортировать `DesiredStop`**
 
 В `rsi_pullback/strategy/core/core.go` переименовать `desiredStop` → `DesiredStop`, обновить два вызова (`manage`, и вызов внутри самого ядра) и вызовы в `core_test.go`. Doc-комментарий дополнить строкой:
 
@@ -1547,7 +1551,7 @@ git commit -m "feat(rsi_pullback): live-сервис и вход в позици
 // же функцией, иначе прод и бэктест разъедутся по самому частому механизму выхода.
 ```
 
-- [ ] **Step 2: Написать падающие тесты выходов**
+- [ ] **Step 9: Написать падающие тесты выходов**
 
 Дописать в `service_test.go`. Понадобится ещё одна фикстура:
 
@@ -1657,12 +1661,12 @@ func TestVanishedStopWithUnavailableExecutedDefersRepost(t *testing.T)
 func TestShrunkPositionReconcilesQuantity(t *testing.T)
 ```
 
-- [ ] **Step 3: Прогнать тесты — убедиться, что падают**
+- [ ] **Step 10: Прогнать тесты — убедиться, что падают**
 
 Run: `go test ./internal/service/trading_strategy/rsi_pullback/live/ -race -v`
 Expected: FAIL — `manage` пустой, ни одного вызова моков.
 
-- [ ] **Step 4: Реализовать `manage`**
+- [ ] **Step 11: Реализовать `manage`**
 
 Перенести структуру `reversion/live/manage.go` целиком, с четырьмя отличиями:
 
@@ -1685,19 +1689,19 @@ Expected: FAIL — `manage` пустой, ни одного вызова мок�
 
 Порядок работы с maxFav сохраняется дословно: `prevMaxFav := entry.MaxFav` до подъёма, подъём по `md.Price`, `Decide`, затем уровень новой заявки от **обновлённого** `entry.MaxFav`.
 
-- [ ] **Step 5: Прогнать тесты**
+- [ ] **Step 12: Прогнать тесты**
 
 Run: `go test ./internal/service/trading_strategy/rsi_pullback/... -race -v`
 Expected: PASS.
 
-- [ ] **Step 6: Мутационная проверка ключевого теста**
+- [ ] **Step 13: Мутационная проверка ключевого теста**
 
 Временно заменить в `manage` `PrevMaxFavorablePrice: prevMaxFav` на `PrevMaxFavorablePrice: entry.MaxFav` и прогнать `TestTrailDecisionUsesPrevMaxFavorable`.
 
 Run: `go test ./internal/service/trading_strategy/rsi_pullback/live/ -run TrailDecisionUsesPrev -v`
 Expected: FAIL. Если тест проходит — он не проверяет то, ради чего написан (скорее всего `risingWithDeepLow30m` не разводит два уровня по разные стороны от `low` последнего бара); починить фикстуру, затем вернуть код.
 
-- [ ] **Step 7: Полный гейт и коммит**
+- [ ] **Step 14: Полный гейт и коммит**
 
 Run: `./bin/mage ci`
 Expected: EXIT=0.
@@ -1709,7 +1713,7 @@ git commit -m "feat(rsi_pullback): выходы SL/TRAIL/TP/RSI и ведени�
 
 ---
 
-### Task 9: Восстановление стейта по API
+### Task 8: Восстановление стейта по API
 
 Позиция есть у брокера, локального стейта нет (переезд контейнера, потерянный том). Без восстановления раннер не знает ни `EntryATR`, ни цели — то есть не может ни защитить позицию, ни закрыть её.
 
@@ -1870,7 +1874,7 @@ git commit -m "feat(rsi_pullback): восстановление стейта п�
 
 ---
 
-### Task 10: Планировщик, проводка в приложение и документация
+### Task 9: Планировщик, проводка в приложение и документация
 
 Последняя миля: cron-обёртка, отдельный gRPC-клиент под токен второго счёта, тема Telegram, горутины в `runDev`/`runProd` и справочник раннера.
 
@@ -1971,7 +1975,7 @@ git commit -m "feat(rsi_pullback): планировщик, проводка в �
 
 ## Приёмка
 
-После Task 10:
+После Task 9:
 
 1. `./bin/mage ci` — EXIT=0.
 2. `go run ./cmd/pullparity -tickers UGLD,T,GAZP -months 24` — ноль расхождений по всем трём тикерам.
