@@ -413,7 +413,7 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	}
 	// A stop that lands at or below zero is not a floor, it is a naked long: entry minus the
 	// stop distance ate through the whole price. manage() rebuilds the protective level from
-	// entry and EntryATR via desiredStop, and only ever acts on it when it comes back > 0, so a
+	// entry and EntryATR via DesiredStop, and only ever acts on it when it comes back > 0, so a
 	// non-positive stop here would silently hold the position with no protective exit at all —
 	// TP and RSI (when armed) are not a substitute, and RSI can be disabled outright via
 	// UseRSIExit. Refuse the entry outright rather than let that through unprotected.
@@ -477,7 +477,7 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 	high, low, closeP := md.Highs[i], md.Lows[i], md.Closes[i]
 
 	// 1. protective stop: the fixed SL and the ATR trail resolved into one level by
-	// desiredStop. It wins a same-bar tie with the target: the intrabar order of the two
+	// DesiredStop. It wins a same-bar tie with the target: the intrabar order of the two
 	// touches is unknowable from OHLC, and assuming the worse of the two is the honest choice.
 	// The trail reads PrevMaxFavorablePrice, NOT MaxFavorablePrice: the engine marks the
 	// position to market before calling Decide, so MaxFavorablePrice already contains this
@@ -486,7 +486,7 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 	// may have happened after the low. Since MaxFavorablePrice >= PrevMaxFavorablePrice always,
 	// reading the former yields a level never below the honest one — it fires no less often and
 	// fills no worse, inflating the result in both directions at once.
-	if level, reason := desiredStop(s.p, pos.PurchasePrice, pos.EntryATR, pos.PrevMaxFavorablePrice); level > 0 && low <= level {
+	if level, reason := DesiredStop(s.p, pos.PurchasePrice, pos.EntryATR, pos.PrevMaxFavorablePrice); level > 0 && low <= level {
 		sig.Kind, sig.Reason = model.SignalSell, reason
 		sig.StopLoss = level
 		sig.ExitReason = fmt.Sprintf("%s: low %.4f ≤ уровень %.4f (вход %.4f)", reason, low, level, pos.PurchasePrice)
@@ -513,7 +513,7 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 	return sig
 }
 
-// desiredStop returns the single protective stop level for an open position and the reason of
+// DesiredStop returns the single protective stop level for an open position and the reason of
 // the binding component ("SL" | "TRAIL"), or (0, "") when no stop is enabled or the daily ATR
 // could not be computed. maxFav is the monotonic max of closes the trail may trail from;
 // callers pass Position.PrevMaxFavorablePrice, never MaxFavorablePrice — see manage() for why.
@@ -521,7 +521,10 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 // persisted there). Among the active components the numerically GREATEST level binds: it is the
 // closest to price, and therefore the first one price would touch as it falls. A level at or
 // below zero is not a floor but a naked long, and is reported as "no stop" rather than passed on.
-func desiredStop(p Params, entry, dailyATR, maxFav float64) (float64, string) {
+//
+// Экспортирована ради живого раннера: уровень биржевой стоп-заявки обязан считаться этой
+// же функцией, иначе прод и бэктест разъедутся по самому частому механизму выхода.
+func DesiredStop(p Params, entry, dailyATR, maxFav float64) (float64, string) {
 	if dailyATR <= 0 {
 		return 0, ""
 	}

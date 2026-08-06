@@ -560,7 +560,7 @@ func TestEnterSetsStopAndTargetFromDailyATR(t *testing.T) {
 
 // TestEnterStopLossMatchesDesiredStop пинует тождество, которое сегодня выполняется только по
 // построению, а не по коду: enter() кладёт в sig.StopLoss значение entry-StopDailyATR*atr
-// напрямую, а manage() каждый бар пересчитывает протективный уровень через desiredStop(). Если
+// напрямую, а manage() каждый бар пересчитывает протективный уровень через DesiredStop(). Если
 // когда-нибудь в enter() появится округление по шагу цены (или любая другая правка формулы
 // стопа), эти два места молча разойдутся: sig.StopLoss уже успел уйти в позицию, в
 // risk-sizing (internal/domain/backtest/portfolio.go) и в журнал сделки, а manage() будет
@@ -577,12 +577,12 @@ func TestEnterStopLossMatchesDesiredStop(t *testing.T) {
 		t.Fatalf("Kind = %v, want Buy", sig.Kind)
 	}
 	entry := md.Closes[len(md.Closes)-1]
-	wantLevel, wantReason := desiredStop(p, entry, sig.ATR, entry)
+	wantLevel, wantReason := DesiredStop(p, entry, sig.ATR, entry)
 	if wantReason != "SL" {
-		t.Fatalf("desiredStop reason = %q, want SL (трейл выключен в entryParams)", wantReason)
+		t.Fatalf("DesiredStop reason = %q, want SL (трейл выключен в entryParams)", wantReason)
 	}
 	if math.Abs(sig.StopLoss-wantLevel) > 1e-9 {
-		t.Fatalf("sig.StopLoss = %.6f, desiredStop() = %.6f — enter() и manage() разошлись в замороженном стопе", sig.StopLoss, wantLevel)
+		t.Fatalf("sig.StopLoss = %.6f, DesiredStop() = %.6f — enter() и manage() разошлись в замороженном стопе", sig.StopLoss, wantLevel)
 	}
 }
 
@@ -706,7 +706,7 @@ func TestExitOnRSIEnteringUpperBand(t *testing.T) {
 	md := upperCrossFixture()
 	i := len(md.Closes) - 1
 	// The stop argument is inert here: withPosition zeroes EntryATR, which disables the
-	// protective level in desiredStop regardless of this value, so only the RSI exit can fire.
+	// protective level in DesiredStop regardless of this value, so only the RSI exit can fire.
 	md = withPosition(md, md.Closes[i]*0.97, md.Lows[i]*0.5, 2)
 	got := s.Decide(md)
 	if got.Kind != model.SignalSell || got.Reason != "RSI" {
@@ -722,7 +722,7 @@ func TestExitStopWinsOverRSIOnTheSameBar(t *testing.T) {
 	i := len(md.Closes) - 1
 	// entry близко к текущей цене (не 0.97, как в других фикстурах этого файла): при 3%
 	// дисконте entry падает НИЖЕ low бара (у upperCrossFixture low = close*0.997), и тогда
-	// формула ниже требует отрицательный ATR, который desiredStop трактует как «стоп
+	// формула ниже требует отрицательный ATR, который DesiredStop трактует как «стоп
 	// выключен» — SL молчал бы. Уровень при этом всё равно алгебраически равен low*1.0001
 	// независимо от entry; меняется только знак ATR.
 	entry := md.Closes[i] * 0.999
@@ -1293,9 +1293,9 @@ func TestDesiredStopBindsTheNearestLevel(t *testing.T) {
 			if tc.mutate != nil {
 				tc.mutate(&p)
 			}
-			level, reason := desiredStop(p, tc.entry, tc.dailyATR, tc.maxFav)
+			level, reason := DesiredStop(p, tc.entry, tc.dailyATR, tc.maxFav)
 			if math.Abs(level-tc.wantLevel) > 1e-9 || reason != tc.wantReason {
-				t.Fatalf("desiredStop = (%.4f, %q), want (%.4f, %q)", level, reason, tc.wantLevel, tc.wantReason)
+				t.Fatalf("DesiredStop = (%.4f, %q), want (%.4f, %q)", level, reason, tc.wantLevel, tc.wantReason)
 			}
 		})
 	}

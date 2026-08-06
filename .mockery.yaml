@@ -21,6 +21,13 @@ packages:
       Service:
       instrumentsClient:
       operationsClient:
+  tinvest/internal/service/trading_strategy/rsi_pullback/live:
+    config:
+      all: false
+    interfaces:
+      Service:
+      instrumentsClient:
+      operationsClient:
   tinvest/internal/service/trading_strategy/livecore/executor:
     interfaces:
       OrdersClient:
