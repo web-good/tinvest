@@ -280,6 +280,47 @@ func TestBuySignalPlacesOrderStateAndProtectiveStop(t *testing.T) {
 	}
 }
 
+// Боевой вход (TradeEnabled=true): в dry-run и executor, и stoporders коротят до gRPC, то
+// есть главная гарантия задачи — «после реального фила сразу уходит реальная стоп-заявка» —
+// проверяется только здесь. Заодно пинуется цепочка «ответ брокера → стейт → размер
+// заявки»: фил пришёл на 40 лотов по 101 (а не запрошенные 50 по сигнальным 100), значит
+// в стейте обязаны быть 400 штук и вход 101, а на бирже — стоп на 40 лотов по 101−0.5×10=96.
+func TestLiveBuyPlacesRealOrderAndStopFromTheFill(t *testing.T) {
+	now := time.Date(2026, 3, 10, 12, 1, 0, 0, msk)
+	lastBar := time.Date(2026, 3, 10, 11, 30, 0, 0, msk)
+
+	e := newEnv(t, "GAZP", now, func(c *config.RSIPullbackConfig) { c.TradeEnabled = true })
+	e.instruments.EXPECT().Shares(mock.Anything).Return(shareFor("GAZP"), nil)
+	e.expectCandles(pullback30m(lastBar, 400), dailies(now, 60))
+	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(nil, nil)
+	e.ops.EXPECT().GetPortfolioTotal(mock.Anything, mock.Anything).Return(1_000_000.0, nil)
+	e.ops.EXPECT().GetAvailableCash(mock.Anything, mock.Anything).Return(1_000_000.0, nil)
+	e.stops.EXPECT().GetStopOrders(mock.Anything, mock.Anything).Return(emptyStopList(), nil)
+	e.orders.EXPECT().PostOrder(mock.Anything, mock.MatchedBy(func(in *investapi.PostOrderRequest) bool {
+		return in.GetQuantity() == 50 && // 5% от 1 000 000 при цене 100 и лоте 10
+			in.GetDirection() == investapi.OrderDirection_ORDER_DIRECTION_BUY
+	})).Return(filledOrder(40, 101), nil).Once()
+	e.stops.EXPECT().PostStopOrder(mock.Anything, mock.MatchedBy(func(in *investapi.PostStopOrderRequest) bool {
+		return in.GetQuantity() == 40 &&
+			utils.CombinePrice(in.GetStopPrice().GetUnits(), in.GetStopPrice().GetNano()) == 96
+	})).Return(&investapi.PostStopOrderResponse{StopOrderId: "so-1"}, nil).Once()
+	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
+
+	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	got, ok := e.state(t)["GAZP"]
+	if !ok {
+		t.Fatal("после боевого входа в стейте нет записи по GAZP")
+	}
+	if got.EntryPrice != 101 || got.MaxFav != 101 || got.Quantity != 400 {
+		t.Fatalf("стейт после фила: %+v, want вход 101, MaxFav 101, 400 штук", got)
+	}
+	if got.StopOrderID != "so-1" || got.StopPrice != 96 || got.StopReason != "SL" {
+		t.Fatalf("биржевая защита после входа: %+v, want so-1 на 96 по причине SL", got)
+	}
+}
+
 // Сайзинг идёт от BuyPct конфига, а не от захардкоженного числа: тот же прогон с
 // BuyPct=5 против BuyPct=50 обязан дать разное Quantity в стейте (при цене 100 и лоте 10
 // это 500 против 5000 штук при счёте 1 000 000).
@@ -345,22 +386,38 @@ func TestNoSecondEntryWhenBrokerAlreadyHolds(t *testing.T) {
 	e.orders.AssertNotCalled(t, "PostOrder", mock.Anything, mock.Anything)
 }
 
-// То же, но позиция известна только из стейта (ордер прошёл, портфель ещё не догнал).
-func TestNoSecondEntryWhenStateAlreadyHasEntry(t *testing.T) {
+// Свежий вход, который портфель брокера ещё не показывает, обязан пережить пасс целиком:
+// расчёты отстают от исполненного ордера, и трактовать это как «продали вне раннера»
+// значит снять ЖИВОЙ защитный стоп и стереть стейт — после чего следующий пасс вошёл бы
+// в позицию второй раз. Заодно пинует гейт повторного входа: лента та же, что даёт BUY
+// в тесте входа, а PostOrder не зовётся ни разу.
+func TestFreshEntrySurvivesLaggingPortfolio(t *testing.T) {
 	now := time.Date(2026, 3, 10, 12, 1, 0, 0, msk)
 	lastBar := time.Date(2026, 3, 10, 11, 30, 0, 0, msk)
 
 	e := newEnv(t, "GAZP", now, func(c *config.RSIPullbackConfig) { c.TradeEnabled = true })
-	e.seed(t, statestore.Entry{Ticker: "GAZP", EntryPrice: 100, EntryATR: 10, MaxFav: 100,
-		TakeProfit: 107, Quantity: 500, EntryTime: lastBar.Add(-time.Hour)})
+	fresh := openEntry("so-1")
+	fresh.EntryTime = lastBar // вход был на предыдущем баре, полчаса назад
+	e.seed(t, fresh)
 	e.instruments.EXPECT().Shares(mock.Anything).Return(shareFor("GAZP"), nil)
 	e.expectCandles(pullback30m(lastBar, 400), dailies(now, 60))
-	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(nil, nil)
-	e.stops.EXPECT().GetStopOrders(mock.Anything, mock.Anything).Return(emptyStopList(), nil)
-	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
+	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(nil, nil) // портфель отстаёт
+	e.stops.EXPECT().GetStopOrders(mock.Anything, mock.MatchedBy(statusIs(investapi.StopOrderStatusOption_STOP_ORDER_STATUS_ACTIVE))).
+		Return(activeList("uid-GAZP", "so-1", 95, 10), nil)
+	// stops без ожидания на CancelStopOrder: снятие живой защиты провалит мок.
+	e.tg.EXPECT().SendMessage(mock.MatchedBy(func(s string) bool {
+		return strings.Contains(s, "портфель")
+	})).Return(nil).Once()
 
 	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
 		t.Fatalf("Run: %v", err)
+	}
+	got, ok := e.state(t)["GAZP"]
+	if !ok {
+		t.Fatal("свежая запись стёрта из стейта: отставание портфеля принято за продажу вне раннера")
+	}
+	if got.StopOrderID != "so-1" {
+		t.Fatalf("StopOrderID = %q, want so-1 (защитный стоп обязан остаться на бирже)", got.StopOrderID)
 	}
 	e.orders.AssertNotCalled(t, "PostOrder", mock.Anything, mock.Anything)
 }
@@ -694,6 +751,84 @@ func TestTrailDecisionUsesPrevMaxFavorable(t *testing.T) {
 	}
 	if st["UGLD"].StopPrice != 107 || st["UGLD"].StopReason != "TRAIL" {
 		t.Fatalf("новая заявка: %+v, want уровень 107 по причине TRAIL", st["UGLD"])
+	}
+}
+
+// Перенос трейла — самая частая операция раннера в проде (у UGLD UseTrail=1, стоп
+// подтягивается каждые полчаса): старая заявка снимается, новая ставится на подтянутый
+// уровень. Порядок обязателен — постановка второй заявки до снятия первой оставила бы на
+// бирже два живых SELL-стопа, и второй продал бы уже не имеющиеся бумаги.
+func TestTrailRepostCancelsBeforePlacing(t *testing.T) {
+	now := time.Date(2026, 3, 10, 12, 1, 0, 0, msk)
+	lastBar := time.Date(2026, 3, 10, 11, 30, 0, 0, msk)
+
+	e := newEnv(t, "UGLD", now, func(c *config.RSIPullbackConfig) { c.TradeEnabled = true })
+	e.seed(t, statestore.Entry{Ticker: "UGLD", EntryPrice: 100, EntryATR: 10, MaxFav: 100,
+		TakeProfit: 200, Quantity: 100, EntryTime: time.Date(2026, 3, 9, 11, 30, 0, 0, msk),
+		StopOrderID: "so-1", StopPrice: 95, StopReason: "SL"})
+	e.instruments.EXPECT().Shares(mock.Anything).Return(shareFor("UGLD"), nil)
+	e.expectCandles(risingWithDeepLow30m(lastBar, 500), dailies(now, 60))
+	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(
+		[]*grpcmodel.Position{{ShareID: "uid-UGLD", InstrumentType: "share", Quantity: 100,
+			PurchasePrice: gq(100)}}, nil)
+	e.stops.EXPECT().GetStopOrders(mock.Anything, mock.MatchedBy(statusIs(investapi.StopOrderStatusOption_STOP_ORDER_STATUS_ACTIVE))).
+		Return(activeList("uid-UGLD", "so-1", 95, 10), nil)
+
+	var seq []string
+	e.stops.EXPECT().CancelStopOrder(mock.Anything, mock.MatchedBy(func(in *investapi.CancelStopOrderRequest) bool {
+		return in.GetStopOrderId() == "so-1"
+	})).Run(func(_ context.Context, _ *investapi.CancelStopOrderRequest, _ ...grpc.CallOption) {
+		seq = append(seq, "cancel")
+	}).Return(&investapi.CancelStopOrderResponse{}, nil).Once()
+	// Новый уровень — трейл от обновлённого максимума: 112 − 0.5×10 = 107 > прежних 95.
+	e.stops.EXPECT().PostStopOrder(mock.Anything, mock.MatchedBy(func(in *investapi.PostStopOrderRequest) bool {
+		return utils.CombinePrice(in.GetStopPrice().GetUnits(), in.GetStopPrice().GetNano()) == 107
+	})).Run(func(_ context.Context, _ *investapi.PostStopOrderRequest, _ ...grpc.CallOption) {
+		seq = append(seq, "post")
+	}).Return(&investapi.PostStopOrderResponse{StopOrderId: "so-2"}, nil).Once()
+	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
+
+	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(seq) != 2 || seq[0] != "cancel" || seq[1] != "post" {
+		t.Fatalf("порядок вызовов %v, want [cancel post]", seq)
+	}
+	got := e.state(t)["UGLD"]
+	if got.StopOrderID != "so-2" || got.StopPrice != 107 || got.StopReason != "TRAIL" {
+		t.Fatalf("стейт после переноса трейла: %+v, want so-2 на 107 по причине TRAIL", got)
+	}
+}
+
+// Размер живой заявки важнее неизменного уровня: после частичного исполнения на бирже
+// висит SELL-стоп на 10 лотов при позиции в 6, и он продал бы бумаг больше, чем есть.
+// Уровень при этом тот же (95), то есть переставить заявку заставляет ровно size-mismatch.
+func TestOversizedStopIsRepostedAtTheSameLevel(t *testing.T) {
+	now := time.Date(2026, 3, 10, 12, 1, 0, 0, msk)
+	lastBar := time.Date(2026, 3, 10, 11, 30, 0, 0, msk)
+
+	e := newEnv(t, "GAZP", now, func(c *config.RSIPullbackConfig) { c.TradeEnabled = true })
+	e.seed(t, openEntry("so-old")) // Quantity 100 = 10 лотов, уровень 95
+	e.instruments.EXPECT().Shares(mock.Anything).Return(shareFor("GAZP"), nil)
+	e.expectCandles(flat30m(lastBar, 400), dailies(now, 60)) // ровная лента: уровень остаётся 95
+	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(heldGAZP(60), nil)
+	e.stops.EXPECT().GetStopOrders(mock.Anything, mock.MatchedBy(statusIs(investapi.StopOrderStatusOption_STOP_ORDER_STATUS_ACTIVE))).
+		Return(activeList("uid-GAZP", "so-old", 95, 10), nil) // биржа всё ещё держит 10 лотов
+	e.stops.EXPECT().CancelStopOrder(mock.Anything, mock.MatchedBy(func(in *investapi.CancelStopOrderRequest) bool {
+		return in.GetStopOrderId() == "so-old"
+	})).Return(&investapi.CancelStopOrderResponse{}, nil).Once() // ровно один cancel, не два
+	e.stops.EXPECT().PostStopOrder(mock.Anything, mock.MatchedBy(func(in *investapi.PostStopOrderRequest) bool {
+		return in.GetQuantity() == 6 &&
+			utils.CombinePrice(in.GetStopPrice().GetUnits(), in.GetStopPrice().GetNano()) == 95
+	})).Return(&investapi.PostStopOrderResponse{StopOrderId: "so-new"}, nil).Once()
+	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
+
+	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	got := e.state(t)["GAZP"]
+	if got.Quantity != 60 || got.StopOrderID != "so-new" || got.StopPrice != 95 {
+		t.Fatalf("стейт после реконсиляции размера заявки: %+v", got)
 	}
 }
 

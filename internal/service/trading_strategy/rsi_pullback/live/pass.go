@@ -24,6 +24,15 @@ import (
 // bar is a decision taken on the wrong price.
 const maxBarAge = 60 * time.Minute
 
+// freshEntryGrace is how long after an entry the position's absence from the broker's
+// portfolio is NOT taken as a sale. Settlement lags the filled order, so the pass right
+// after an entry can still see an empty portfolio — and reading that as "sold outside the
+// runner" would cancel the live protective stop and wipe the state of a position that is
+// actually open. Two bars (the entry pass plus the next one) leave room for one skipped
+// tick; beyond that a settlement lag is no longer plausible, and staying silent about a
+// vanished position becomes the more dangerous of the two errors.
+const freshEntryGrace = 2 * maxBarAge
+
 // passCtx несёт состояние, общее для всех тикеров одного пасса: снапшот биржевых заявок
 // берётся ОДИН раз на пасс, иначе повторный Cancel одной и той же заявки в одном тике
 // дал бы ложный алерт.
@@ -439,6 +448,13 @@ func (s *service) settleGonePosition(ctx context.Context, pc *passCtx, ticker st
 	switch {
 	case !hadState:
 		// Ничего не знаем про тикер — не наша забота.
+	case pc.now.Sub(entry.EntryTime) < freshEntryGrace:
+		// Позиция слишком свежая, чтобы её отсутствие в портфеле что-то доказывало:
+		// расчёты брокера отстают от исполненного ордера. Трактовать это как продажу
+		// нельзя — ниже такая трактовка снимает биржевой стоп и чистит стейт, то есть
+		// оставила бы РЕАЛЬНО открытую позицию без защиты, а следующий пасс, увидев
+		// пустой стейт, вошёл бы в неё второй раз.
+		s.notify(notifier.Alert(alertLabel, ticker, "портфель ещё не показывает свежую позицию — сопровождение отложено, стоп и стейт не тронуты"))
 	case pc.listErr != nil:
 		// Не можем свериться с биржей, есть ли ещё живая заявка — значит не можем
 		// отличить сработавший стоп от ручной продажи с осиротевшей заявкой.
