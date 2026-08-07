@@ -107,4 +107,7 @@ jobs:
             docker rm $CONTAINER_NAME
 
             # Run a new container from a new image
-            docker run -e T_BANK=${{ secrets.T_BANK }} -e PORTFOLIO_YTD_START_VALUE=463402 -e PROFILES=${{ secrets.PROFILES }}  -e REVERSION_TOKEN=${{ secrets.REVERSION_TOKEN }} -e SCALPING_ACCOUNT_ID=1 -e TELEGRAM=${{ secrets.TELEGRAM }} -d -p 50051:50051 --name $CONTAINER_NAME -t $REGISTRY/koshelevoleg/$IMAGE_NAME:$TAG_NAME
+            # RSI_PULLBACK_TOKEN: пока секрет не заведён, подставится пустая строка — воркер
+            # rsi_pullback не поднимется (config.RSIPullback.Ready()), остальное приложение
+            # и оба воркера reversion работают как обычно.
+            docker run -e T_BANK=${{ secrets.T_BANK }} -e PORTFOLIO_YTD_START_VALUE=463402 -e PROFILES=${{ secrets.PROFILES }}  -e REVERSION_TOKEN=${{ secrets.REVERSION_TOKEN }} -e RSI_PULLBACK_TOKEN=${{ secrets.RSI_PULLBACK_TOKEN }} -e SCALPING_ACCOUNT_ID=1 -e TELEGRAM=${{ secrets.TELEGRAM }} -d -p 50051:50051 --name $CONTAINER_NAME -t $REGISTRY/koshelevoleg/$IMAGE_NAME:$TAG_NAME

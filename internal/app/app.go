@@ -109,6 +109,14 @@ func (a *App) runDev(ctx context.Context) {
 	}()
 	go func() {
 		defer wg.Done()
+		// Раннер поднимается только со своим счётом и токеном. Отсутствие переменных —
+		// штатное состояние (счёт заводится отдельно), и оно не должно ни ронять
+		// приложение, ни поднимать раннер с пустым токеном: рядом работают воркеры
+		// reversion, ведущие реальные позиции.
+		if !a.config.RSIPullback.Ready() {
+			logger.Warn("RSI Pullback worker disabled: RSI_PULLBACK_ACCOUNT_ID/RSI_PULLBACK_TOKEN are not set")
+			return
+		}
 		err := rsipullbackscheduler.NewSchedulerService(a.sp.GetRSIPullbackLiveService()).Run(
 			ctx,
 			rsipullbackdto.Run{Scheduler: a.config.RSIPullback.Schedule},
@@ -201,6 +209,14 @@ func (a *App) runProd(ctx context.Context) {
 	}()
 	go func() {
 		defer wg.Done()
+		// Раннер поднимается только со своим счётом и токеном. Отсутствие переменных —
+		// штатное состояние (счёт заводится отдельно), и оно не должно ни ронять
+		// приложение, ни поднимать раннер с пустым токеном: рядом работают воркеры
+		// reversion, ведущие реальные позиции.
+		if !a.config.RSIPullback.Ready() {
+			logger.Warn("RSI Pullback worker disabled: RSI_PULLBACK_ACCOUNT_ID/RSI_PULLBACK_TOKEN are not set")
+			return
+		}
 		err := rsipullbackscheduler.NewSchedulerService(a.sp.GetRSIPullbackLiveService()).Run(
 			ctx,
 			rsipullbackdto.Run{Scheduler: a.config.RSIPullback.Schedule},
