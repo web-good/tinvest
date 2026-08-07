@@ -1064,3 +1064,183 @@ func TestShrunkPositionReconcilesQuantity(t *testing.T) {
 		t.Fatalf("стейт после реконсиляции размера: %+v", got)
 	}
 }
+
+// flatAt30m — ровная лента из n баров с заданной ценой (flat30m прибит к 100).
+func flatAt30m(end time.Time, n int, price float64) []*imodel.CandleItemTechAnalyse {
+	closes := make([]float64, n)
+	for i := range closes {
+		closes[i] = price
+	}
+	return tape30m(end, closes)
+}
+
+// shareWithLot — та же бумага, что shareFor, но с заданным размером лота. Lot=0 приходит
+// от брокера как «инструмент есть, торговые параметры недоступны» и служит прямым делителем
+// при пересчёте штук в лоты.
+func shareWithLot(ticker string, lot int32) []*imodel.Share {
+	s := shareFor(ticker)
+	s[0].Lot = lot
+	return s
+}
+
+// Lot=0 — деление на ноль на пути «штуки → лоты». Guard обязан отбить постановку заявки
+// алертом; без него пасс падает паникой прямо внутри cron-джоба, а это уносит весь процесс
+// вместе с воркерами живого reversion. Стейт при этом не должен получить ни ID заявки, ни
+// уровня: заявки на бирже нет.
+func TestZeroLotBlocksStopPlacement(t *testing.T) {
+	now := time.Date(2026, 3, 10, 12, 1, 0, 0, msk)
+	lastBar := time.Date(2026, 3, 10, 11, 30, 0, 0, msk)
+
+	e := newEnv(t, "GAZP", now, func(c *config.RSIPullbackConfig) { c.TradeEnabled = true })
+	e.seed(t, openEntry("")) // стейт есть, биржевой заявки нет — путь ведёт в replaceStop
+	e.instruments.EXPECT().Shares(mock.Anything).Return(shareWithLot("GAZP", 0), nil)
+	e.expectCandles(flat30m(lastBar, 400), dailies(now, 60))
+	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(heldGAZP(100), nil)
+	e.stops.EXPECT().GetStopOrders(mock.Anything, mock.Anything).Return(emptyStopList(), nil)
+	e.tg.EXPECT().SendMessage(mock.MatchedBy(func(s string) bool {
+		return strings.Contains(s, "sh.Lot == 0")
+	})).Return(nil).Once()
+	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
+
+	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	e.stops.AssertNotCalled(t, "PostStopOrder", mock.Anything, mock.Anything)
+	if got := e.state(t)["GAZP"]; got.StopOrderID != "" || got.StopPrice != 0 {
+		t.Fatalf("стейт получил заявку, которой на бирже нет: %+v", got)
+	}
+}
+
+// Чужая заявка по инструменту не снялась — свою в этом тике ставить НЕЛЬЗЯ: чужая всё ещё
+// жива и продолжает защищать позицию, а две SELL-заявки на один инструмент без OCO продадут
+// вдвое больше, чем есть. Ретрай снятия — на следующем получасовом тике.
+func TestStrayCancelFailureBlocksNewStop(t *testing.T) {
+	now := time.Date(2026, 3, 10, 12, 1, 0, 0, msk)
+	lastBar := time.Date(2026, 3, 10, 11, 30, 0, 0, msk)
+
+	e := newEnv(t, "GAZP", now, func(c *config.RSIPullbackConfig) { c.TradeEnabled = true })
+	e.seed(t, openEntry("")) // своей заявки нет
+	e.instruments.EXPECT().Shares(mock.Anything).Return(shareFor("GAZP"), nil)
+	e.expectCandles(flat30m(lastBar, 400), dailies(now, 60))
+	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(heldGAZP(100), nil)
+	// На бирже висит заявка по этому инструменту, которой нет в стейте.
+	e.stops.EXPECT().GetStopOrders(mock.Anything, mock.MatchedBy(statusIs(investapi.StopOrderStatusOption_STOP_ORDER_STATUS_ACTIVE))).
+		Return(activeList("uid-GAZP", "so-stray", 90, 10), nil)
+	e.stops.EXPECT().CancelStopOrder(mock.Anything, mock.Anything).
+		Return(nil, fmt.Errorf("boom")).Once()
+	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
+
+	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	e.stops.AssertNotCalled(t, "PostStopOrder", mock.Anything, mock.Anything)
+}
+
+// Снять стоп перед продажей не удалось — продавать нельзя: заявка осталась на бирже и при
+// касании уровня продаст те же бумаги второй раз. Лента — TP-шная (high достаёт цель),
+// то есть SELL ядро выдаёт, и остановить продажу может только этот guard.
+func TestSellBlockedWhenStopCancelFails(t *testing.T) {
+	now := time.Date(2026, 3, 10, 12, 1, 0, 0, msk)
+	lastBar := time.Date(2026, 3, 10, 11, 30, 0, 0, msk)
+
+	e := newEnv(t, "GAZP", now, func(c *config.RSIPullbackConfig) { c.TradeEnabled = true })
+	e.seed(t, openEntry("so-1"))
+	e.instruments.EXPECT().Shares(mock.Anything).Return(shareFor("GAZP"), nil)
+	e.expectCandles(tpHit30m(lastBar, 400), dailies(now, 60))
+	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(heldGAZP(100), nil)
+	e.stops.EXPECT().GetStopOrders(mock.Anything, mock.MatchedBy(statusIs(investapi.StopOrderStatusOption_STOP_ORDER_STATUS_ACTIVE))).
+		Return(activeList("uid-GAZP", "so-1", 95, 10), nil)
+	e.stops.EXPECT().CancelStopOrder(mock.Anything, mock.Anything).
+		Return(nil, fmt.Errorf("boom")).Once()
+	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
+
+	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	e.orders.AssertNotCalled(t, "PostOrder", mock.Anything, mock.Anything)
+	if _, ok := e.state(t)["GAZP"]; !ok {
+		t.Fatal("несостоявшаяся продажа не должна стирать позицию из стейта")
+	}
+}
+
+// Позицию продали вне раннера, а наша заявка ЖИВА в ACTIVE — её обязательно снять: иначе
+// она позже продаст новую позицию по этому же тикеру, которую откроет следующий вход.
+func TestOrphanedStopIsCancelledWhenPositionSoldOutside(t *testing.T) {
+	now := time.Date(2026, 3, 10, 12, 1, 0, 0, msk)
+	lastBar := time.Date(2026, 3, 10, 11, 30, 0, 0, msk)
+
+	e := newEnv(t, "GAZP", now, func(c *config.RSIPullbackConfig) { c.TradeEnabled = true })
+	e.seed(t, openEntry("so-1")) // EntryTime — вчера, grace-период свежего входа не действует
+	e.instruments.EXPECT().Shares(mock.Anything).Return(shareFor("GAZP"), nil)
+	e.expectCandles(flat30m(lastBar, 400), dailies(now, 60))
+	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(nil, nil) // позиции нет
+	e.stops.EXPECT().GetStopOrders(mock.Anything, mock.MatchedBy(statusIs(investapi.StopOrderStatusOption_STOP_ORDER_STATUS_ACTIVE))).
+		Return(activeList("uid-GAZP", "so-1", 95, 10), nil) // заявка жива
+	e.stops.EXPECT().CancelStopOrder(mock.Anything, mock.MatchedBy(func(in *investapi.CancelStopOrderRequest) bool {
+		return in.GetStopOrderId() == "so-1"
+	})).Return(&investapi.CancelStopOrderResponse{}, nil).Once()
+	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
+
+	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if st := e.state(t); len(st) != 0 {
+		t.Fatalf("после продажи вне раннера стейт обязан очиститься, got %+v", st)
+	}
+}
+
+// Стоп двигается только ВВЕРХ. Заявка на бирже стоит выше желаемого уровня (98 против 95 —
+// например, её перенесли вручную), и трогать её нельзя: cancel+repost опустил бы защиту,
+// оставив позицию с бо́льшим риском, чем сейчас, да ещё и с окном без заявки между двумя
+// вызовами.
+func TestStopIsNeverMovedDown(t *testing.T) {
+	now := time.Date(2026, 3, 10, 12, 1, 0, 0, msk)
+	lastBar := time.Date(2026, 3, 10, 11, 30, 0, 0, msk)
+
+	e := newEnv(t, "GAZP", now, func(c *config.RSIPullbackConfig) { c.TradeEnabled = true })
+	e.seed(t, openEntry("so-1")) // желаемый уровень GAZP: 100 − 0.5×10 = 95
+	e.instruments.EXPECT().Shares(mock.Anything).Return(shareFor("GAZP"), nil)
+	e.expectCandles(flat30m(lastBar, 400), dailies(now, 60))
+	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(heldGAZP(100), nil)
+	e.stops.EXPECT().GetStopOrders(mock.Anything, mock.MatchedBy(statusIs(investapi.StopOrderStatusOption_STOP_ORDER_STATUS_ACTIVE))).
+		Return(activeList("uid-GAZP", "so-1", 98, 10), nil) // на бирже ВЫШЕ желаемого
+	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
+
+	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	e.stops.AssertNotCalled(t, "CancelStopOrder", mock.Anything, mock.Anything)
+	e.stops.AssertNotCalled(t, "PostStopOrder", mock.Anything, mock.Anything)
+}
+
+// MaxFav монотонен: он держит максимум закрытий за всю жизнь позиции, и падение цены его
+// не опускает. Иначе трейл-стоп поехал бы вслед за рынком вниз — то есть перестал бы быть
+// трейлом. Тикер UGLD: у GAZP UseTrail=0, и тест был бы зелёным при любой реализации.
+func TestMaxFavNeverDropsOnALowerClose(t *testing.T) {
+	now := time.Date(2026, 3, 10, 12, 1, 0, 0, msk)
+	lastBar := time.Date(2026, 3, 10, 11, 30, 0, 0, msk)
+
+	e := newEnv(t, "UGLD", now, func(c *config.RSIPullbackConfig) { c.TradeEnabled = true })
+	e.seed(t, statestore.Entry{Ticker: "UGLD", EntryPrice: 100, EntryATR: 10, MaxFav: 112,
+		TakeProfit: 200, Quantity: 100, EntryTime: time.Date(2026, 3, 9, 11, 30, 0, 0, msk),
+		StopOrderID: "so-1", StopPrice: 107, StopReason: "TRAIL"})
+	e.instruments.EXPECT().Shares(mock.Anything).Return(shareFor("UGLD"), nil)
+	// Ровная лента по 110: закрытие НИЖЕ сохранённого максимума 112, но low (110) выше
+	// трейл-уровня 112 − 0.5×10 = 107, иначе сработал бы сам стоп и тест проверял бы выход,
+	// а не монотонность максимума.
+	e.expectCandles(flatAt30m(lastBar, 500, 110), dailies(now, 60))
+	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(
+		[]*grpcmodel.Position{{ShareID: "uid-UGLD", InstrumentType: "share", Quantity: 100,
+			PurchasePrice: gq(100)}}, nil)
+	e.stops.EXPECT().GetStopOrders(mock.Anything, mock.MatchedBy(statusIs(investapi.StopOrderStatusOption_STOP_ORDER_STATUS_ACTIVE))).
+		Return(activeList("uid-UGLD", "so-1", 107, 10), nil)
+	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
+
+	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	got := e.state(t)["UGLD"]
+	if got.MaxFav != 112 {
+		t.Fatalf("MaxFav = %v, want 112 (максимум закрытий не опускается вслед за ценой)", got.MaxFav)
+	}
+}
