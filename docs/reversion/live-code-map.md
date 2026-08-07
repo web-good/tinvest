@@ -38,7 +38,7 @@ EUTR) заявки нет вовсе — выход по STOP идёт обыч�
 ```
 cron "0 7-23 * * 1-5"  ─┐
   (ModeBuy)             ├─► scheduler.Run ─► service.Run ─┬─► buyPass     ─► core.Decide ─► executor.Buy  ─► placeInitialStop: UseIntrabarStop=1? stoporders.Place : no-op ─► statestore.Save
-cron "0 7-23,0 * * *"  ─┘                  (под мьютексом) └─► managePass  ─► stoporders.List ─► core.Decide ─┬─► SignalSell: stoporders.Cancel (если есть) ─► executor.Sell ─► statestore.Save
+cron "0 7-23,0 * * *"  ─┘                  (под мьютексом) └─► managePass  ─► stoporders.List ─► судьба своей заявки (нет в ACTIVE? EXECUTED?) ─► core.Decide ─┬─► SignalSell: stoporders.Cancel (если есть) ─► executor.Sell ─► statestore.Save
                                                                                                                 ├─► UseIntrabarStop≠1: снять оставшуюся заявку (если есть) ─► statestore.Save
                                                                                                                 └─► UseIntrabarStop=1: sync стоп-заявки (Cancel+Place при росте уровня/несовпадении лотов) ─► statestore.Save
 ```
@@ -251,22 +251,36 @@ func (s *service) Run(ctx context.Context, in dto.Run) error {
      общем level-switch (см. следующий пункт). Актуально только для тикеров с
      `UseIntrabarStop=1` — у close-тикеров `StopOrderID` всегда пуст, условие не
      срабатывает.
-   - **125-129** `marketdata.Assemble(...)` — свежий снимок рынка.
-   - **131** `prevMaxFav := entry.MaxFav` — уровень, от которого была посчитана
+   - **134-138** `marketdata.Assemble(...)` — свежий снимок рынка.
+   - **140-172** **судьба своей биржевой заявки — ДО `core.Decide`** (только когда `List`
+     в шаге 2 не упал и `StopOrderID` непуст). Если заявки нет среди живых, спрашиваем
+     список EXECUTED: `fired` → `notifier.Exit` по сохранённым `StopReason`/`StopPrice`,
+     запись из state удаляется, `continue`; `Executed` недоступен → alert и `continue`
+     (репост вслепую запрещён); иначе заявку сняли вне раннера → сбрасываем `StopOrderID`
+     и идём дальше, синхронизация ниже поставит новую.
+     **Почему до `Decide`, а не после.** Уровень заявки и уровень, по которому решает
+     ядро, совпадают по построению: заявка выставлена от того же `prevMaxFav`, а
+     округление вниз по шагу цены делает биржевой уровень не выше ядрового. Значит
+     сработавший внутри бара стоп ВСЕГДА сопровождается `SignalSell` от `Decide` на этом
+     же баре. Если при этом расчёты брокера ещё не показали закрытие позиции, шаг «57-69»
+     выше не сработает, и решение по `Decide` увело бы раннер продавать рыночным ордером
+     бумаги, которых уже нет. Проверка идёт **независимо от `UseIntrabarStop`**: заявка
+     могла остаться от прежней модели и сработать — позицию это закрывает так же.
+   - **174** `prevMaxFav := entry.MaxFav` — уровень, от которого была посчитана
      заявка, стоящая сейчас на бирже (нужен ниже как `PrevMaxFavorablePrice`).
-   - **131-139** **обновление `MaxFav`**: если текущая цена (последний закрытый
+   - **174-182** **обновление `MaxFav`**: если текущая цена (последний закрытый
      close) выше сохранённого максимума — поднимаем и сохраняем. Монотонный рост,
      нужен для TRAIL и breakeven (в обеих моделях — close-модель тоже поднимает
      `MaxFav`, просто trail-компонента `manage()` читает его без лага, см.
      `strategy.md`).
-   - **141-147** собираем `md.Position` из state: цена входа, количество,
+   - **184-190** собираем `md.Position` из state: цена входа, количество,
      **замороженный `EntryATR`**, `MaxFavorablePrice` (обновлённый) и
      `PrevMaxFavorablePrice` (до обновления этого тика) — оба поля идут в
      `core.DesiredStop`/`manage()`, см. `strategy.md` → «Модель исполнения стопов»
      (`manage()` сам выбирает, какое из двух полей использовать, по
      `UseIntrabarStop`).
-   - **149** `sig := st.Decide(md)`.
-   - **150-186** **если `SignalSell`** (`OB`/`RSI50`/`BE`/`RSIOS`/`EMAX`/`STOP` —
+   - **192** `sig := st.Decide(md)`.
+   - **193-246** **если `SignalSell`** (`OB`/`RSI50`/`BE`/`RSIOS`/`EMAX`/`STOP` —
      оба варианта STOP: интрабарный триггер по low у `UseIntrabarStop=1` и
      close-триггер у `UseIntrabarStop=0`, оба возвращаются из `core.Decide` как
      обычный `SignalSell`): сначала `s.stops.Cancel(entry.StopOrderID)`, **если
@@ -276,7 +290,7 @@ func (s *service) Run(ctx context.Context, in dto.Run) error {
      (причина коммита `guard sell divide-by-zero`), `exec.Sell(...)`. Ошибка
      продажи → alert, state не трогаем (retry на следующем тике). Успех → удаляем
      запись из state, `notifier.Exit`.
-   - **188-208** **гейт модели** (`p := mustParams(ticker); if p.UseIntrabarStop != 1`)
+   - **247-267** **гейт модели** (`p := mustParams(ticker); if p.UseIntrabarStop != 1`)
      — весь остаток функции (синхронизация биржевой заявки) относится только к
      тикерам на интрабарной модели. Для close-тикера этот блок вместо синхронизации
      лишь **подчищает переходное состояние**: если в `entry.StopOrderID` завалялась
@@ -287,26 +301,27 @@ func (s *service) Run(ctx context.Context, in dto.Run) error {
      недоступном `List` или провале `Cancel` — алерт, ничего не трогаем, ретрай на
      следующем тике. `continue` после этого блока — до конца итерации остаток
      функции (синхронизация) не выполняется.
-   - **210-229** (только когда `List` в шаге 2 не упал, и только для
-     `UseIntrabarStop=1`) **синхронизация**: если `StopOrderID` есть, но его нет
-     среди живых заявок биржи — считаем, что потерялась (сбрасываем `StopOrderID`,
-     alert); если своей заявки нет, а на бирже висит чужая/устаревшая на этот
-     инструмент (например, после `reconstruct`) — отменяем её.
-   - **232** `level, reason := core.DesiredStop(...)` от **обновлённого** `MaxFav`.
-   - **238-246** `sizeMismatch` — живая заявка держит не те лоты, что реально в
+   - **269-288** (только когда `List` в шаге 2 не упал, и только для
+     `UseIntrabarStop=1`) **синхронизация**: судьба СВОЕЙ заявки уже разобрана в шаге
+     «140-172», поэтому здесь остаётся один случай — своей заявки нет, а на бирже висит
+     чужая/устаревшая на этот инструмент (например, после `reconstruct`): отменяем её.
+     Провал отмены поднимает `strayCancelFailed`, и новая заявка в этом тике НЕ ставится —
+     чужая всё ещё защищает позицию, а две живые SELL-заявки продали бы больше, чем есть.
+   - **290** `level, reason := core.DesiredStop(...)` от **обновлённого** `MaxFav`.
+   - **295-308** `sizeMismatch` — живая заявка держит не те лоты, что реально в
      позиции (`live.Lots != entry.Quantity/sh.Lot`), например после частичного
      исполнения из шага «частичное исполнение».
-   - **248-266** финальный `switch`: `reason==""` → ценовые стопы выключены,
+   - **310-328** финальный `switch`: `reason==""` → ценовые стопы выключены,
      ничего не делаем; `StopOrderID==""` → `s.replaceStop` выставляет первую
      заявку; `sizeMismatch || level > entry.StopPrice` → `Cancel` старой +
      `s.replaceStop` новой (оверсайз или подъём трейла). Провал `Cancel` здесь —
      alert, **старая заявка не трогается**, ретрай на следующем часовом тике.
-   - **267-270** сохраняем итоговый `state[ticker]`.
+   - **329-334** сохраняем итоговый `state[ticker]`.
 
-`atrPeriodFor` (276-281) — отдаёт `ATRPeriod` тикера для пересчёта ATR в
-reconstruct (дефолт 14). `mustParams` (284-287) — тонкая обёртка над `ParamsFor` для
+`atrPeriodFor` (340-345) — отдаёт `ATRPeriod` тикера для пересчёта ATR в
+reconstruct (дефолт 14). `mustParams` (348-351) — тонкая обёртка над `ParamsFor` для
 кейса, где тикер уже прошёл `StrategyFor` выше по стеку, так что `ok` гарантированно
-`true`. `replaceStop` (291-315) — хелпер `manage.go`, вызывает `s.stops.Place`,
+`true`. `replaceStop` (356-380) — хелпер `manage.go`, вызывает `s.stops.Place`,
 штампует `entry.StopOrderID` **только если реально размещено** (`res.Placed`), но
 `entry.StopPrice`/`entry.StopReason` — **всегда** (в том числе в dry-run, чтобы
 бумажный state отражал уровень, который был бы на бирже), и шлёт `notifier.StopSet`,
