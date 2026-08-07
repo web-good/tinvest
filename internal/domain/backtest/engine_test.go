@@ -533,7 +533,9 @@ func TestEngineFreezesEntryStopAndTracksFavorable(t *testing.T) {
 	}
 }
 
-func TestAssembleMarketData_MatchesPerBarFields(t *testing.T) {
+// Точечная проверка отбора завершённых серий на руками посчитанных числах. Совпадение
+// сборки с тем, что Run отдаёт в Decide, проверяет TestAssembleMarketDataMatchesWhatRunFeedsDecide.
+func TestAssembleMarketDataSelectsCompletedSeries(t *testing.T) {
 	base := time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC) // Monday 10:00
 	window := []Candle{
 		{Time: base, Open: 10, High: 11, Low: 9, Close: 10, Volume: 100},
@@ -562,6 +564,78 @@ func TestAssembleMarketData_MatchesPerBarFields(t *testing.T) {
 	}
 	if len(md.HTFCloses) != 1 || md.HTFCloses[0] != 9 {
 		t.Fatalf("HTFCloses = %v, want [9]", md.HTFCloses)
+	}
+}
+
+// Живые раннеры собирают MarketData через AssembleMarketData + TodayExtent, а бэктест — в
+// Run своим внутренним кодом. Расхождение между этими двумя сборками означает, что live
+// торгует не по той стратегии, которую откалибровал бэктест, — и оно не видно ни одному
+// тесту, который проверяет AssembleMarketData по руками посчитанным числам. Здесь снимок,
+// который Run реально передал в Decide, сравнивается со снимком публичной сборки целиком
+// (reflect.DeepEqual), поэтому новое поле MarketData автоматически попадает под проверку.
+func TestAssembleMarketDataMatchesWhatRunFeedsDecide(t *testing.T) {
+	// Три торговых дня по 8 часовых баров: смена MSK-суток внутри ленты (TodayHigh/Low),
+	// закрытие 4H-баров внутри дня (HTF) и появление новых завершённых дневок (Daily).
+	// Сессия начинается в 01:00 MSK, то есть первые два бара каждого дня приходятся ещё на
+	// предыдущие сутки UTC, и на них же посажен размах-«шип»: календарь дня обязан считаться
+	// по Москве, иначе шип выпадает из TodayHigh/TodayLow и снимки разойдутся.
+	msk := time.FixedZone("MSK", 3*60*60)
+	start := time.Date(2026, 1, 12, 1, 0, 0, 0, msk) // понедельник
+	var candles []Candle
+	price := 100.0
+	for d := 0; d < 3; d++ {
+		day := start.AddDate(0, 0, d)
+		for h := 0; h < 8; h++ {
+			price += float64((d*8+h)%5) - 2
+			width := 1.5
+			if h == 0 {
+				width = 50
+			}
+			ts := day.Add(time.Duration(h) * time.Hour)
+			candles = append(candles, Candle{Time: ts, Open: price, High: price + width, Low: price - width, Close: price, Volume: int64(100 + h)})
+		}
+	}
+	var daily, htf []Candle
+	for d := -2; d < 3; d++ {
+		t0 := time.Date(2026, 1, 12+d, 0, 0, 0, 0, msk)
+		daily = append(daily, Candle{Time: t0, Open: 90 + float64(d), High: 95 + float64(d), Low: 85 + float64(d), Close: 92 + float64(d)})
+	}
+	for i := 0; i < 20; i++ {
+		t0 := start.Add(-8 * time.Hour).Add(time.Duration(i) * 4 * time.Hour)
+		htf = append(htf, Candle{Time: t0, Open: 80 + float64(i), High: 85 + float64(i), Low: 75 + float64(i), Close: 82 + float64(i)})
+	}
+
+	const lookback = 4
+	var seen []strategy.MarketData
+	s := scriptedStrategy{lookback: lookback, decide: func(md strategy.MarketData) model.Signal {
+		seen = append(seen, md)
+		return model.Signal{Kind: model.SignalNone}
+	}}
+	Run(s, candles, daily, htf, Config{InitialCash: 100000, Fraction: 1, Lot: 1})
+
+	if want := len(candles) - lookback + 1; len(seen) != want {
+		t.Fatalf("Decide вызван %d раз, want %d", len(seen), want)
+	}
+	for k, got := range seen {
+		i := k + lookback - 1
+		want := AssembleMarketData(candles[i-lookback+1:i+1], daily, htf, candles[i].Time)
+		want.TodayHigh, want.TodayLow = TodayExtent(candles, i)
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("бар %d (%s): Run передал в Decide снимок, отличный от AssembleMarketData+TodayExtent\n got: %+v\nwant: %+v",
+				i, candles[i].Time.Format(time.RFC3339), got, want)
+		}
+	}
+
+	// Проверка не должна быть пустой: лента обязана двигать каждое из сравниваемых
+	// семейств полей, иначе DeepEqual сверяет нули с нулями.
+	first, last := seen[0], seen[len(seen)-1]
+	switch {
+	case len(last.DailyCloses) <= len(first.DailyCloses) || len(first.DailyCloses) == 0:
+		t.Fatalf("лента не добавляет завершённых дневок: %d -> %d", len(first.DailyCloses), len(last.DailyCloses))
+	case len(last.HTFCloses) <= len(first.HTFCloses) || len(first.HTFCloses) == 0:
+		t.Fatalf("лента не закрывает 4H-баров: %d -> %d", len(first.HTFCloses), len(last.HTFCloses))
+	case last.TodayHigh == first.TodayHigh:
+		t.Fatalf("лента не меняет MSK-сутки: TodayHigh неизменен (%v)", last.TodayHigh)
 	}
 }
 

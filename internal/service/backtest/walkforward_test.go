@@ -341,3 +341,138 @@ func TestRenderWalkForwardMarkdown(t *testing.T) {
 		}
 	}
 }
+
+// regimeStrategy держит позицию ровно один бар: Phase=0 входит на чётных часах и забирает
+// приращение цены до нечётного бара, Phase=1 — наоборот. Обе комбинации торгуют на всей
+// ленте (это важно: иначе «чужая» комбинация даёт 0 OOS-сделок и фолд помечается
+// пропущенным вместо того, чтобы дать сравнимые метрики), различаются они только тем, чьи
+// приращения им достаются.
+type regimeParams struct{ Phase int }
+
+type regimeStrategy struct{ p regimeParams }
+
+func (regimeStrategy) Ticker() string { return "TEST" }
+func (regimeStrategy) Lookback() int  { return 1 }
+func (s regimeStrategy) Decide(md strategy.MarketData) model.Signal {
+	if md.Position != nil {
+		return model.Signal{Kind: model.SignalSell, Reason: "TP"}
+	}
+	// Бары часовые и начинаются с полуночи, поэтому чётность часа = чётность индекса бара.
+	if md.Times[len(md.Times)-1].Hour()%2 == s.p.Phase {
+		return model.Signal{Kind: model.SignalBuy}
+	}
+	return model.Signal{Kind: model.SignalNone}
+}
+
+func regimeBinding() Binding {
+	return Binding{
+		DefaultParams: func() any { return regimeParams{} },
+		Build:         func(p any) strategy.Strategy { return regimeStrategy{p: p.(regimeParams)} },
+		ParseParams:   func([]byte) (any, error) { return regimeParams{}, nil },
+	}
+}
+
+// regimeCandles задаёт приращения цены циклом по 4 бара, разным до и после split:
+//
+//	i%4:       1     2     3     4          чей это бар
+//	до split: +2    +1    −1    −2          нечёт → Phase=0, чёт → Phase=1
+//	после:    +1    +4    −4    −1
+//
+// Отсюда PF по половинам: до split — Phase0 = 2.0, Phase1 = 0.5; после split — Phase0 =
+// 0.25, Phase1 = 4.0. Сумма приращений внутри каждого цикла равна нулю в обеих половинах,
+// поэтому цена не дрейфует и размер позиции при Fraction=1 остаётся постоянным — PF-ы
+// половин складываются без перекоса. На объединённом окне (половина до + половина после)
+// Phase1 выигрывает: 5/3 против 3/5 у Phase0. Именно эта смена победителя и ловит утечку.
+func regimeCandles(from, split, to time.Time) []backtest.Candle {
+	before := [4]float64{-2, +2, +1, -1} // индексом служит i%4, поэтому 0-й элемент — это i%4==0
+	after := [4]float64{-1, +1, +4, -4}
+	var out []backtest.Candle
+	price := 100.0
+	for ts, i := from, 0; ts.Before(to); ts, i = ts.Add(time.Hour), i+1 {
+		if i > 0 {
+			if ts.Before(split) {
+				price += before[i%4]
+			} else {
+				price += after[i%4]
+			}
+		}
+		out = append(out, backtest.Candle{Time: ts, Open: price, High: price + 1, Low: price - 1, Close: price, Volume: 1})
+	}
+	return out
+}
+
+// Калибровка фолда обязана видеть ТОЛЬКО train-окно. Подмена trainTo на testTo (или любой
+// другой способ дотянуть обучение до тестового периода) делает walk-forward бессмысленным:
+// именно этой процедурой в проекте принимается решение о выводе стратегии в прод, и её
+// планка (pooled OOS PF) перестаёт что-либо значить, если параметры подобраны по тем же
+// данным, на которых потом измеряются.
+func TestRunWalkForwardCalibratesOnTrainWindowOnly(t *testing.T) {
+	from, to := date(2025, time.January, 1), date(2025, time.October, 1)
+	split := date(2025, time.April, 1) // = testFrom первого фолда
+	candles := regimeCandles(from, split, to)
+	phases := []Phase{{Grid: Grid{"Phase": {0, 1}}}}
+	// Commission=0: исход должна решать механика ленты, а не комиссия, которая при
+	// Fraction=1 съедает обе комбинации до PF<1 и смазывает разницу между ними.
+	cfg := backtest.Config{InitialCash: 100000, Fraction: 1, Lot: 1}
+
+	s, err := RunWalkForward(regimeBinding(), phases, candles, nil, nil, cfg,
+		"profit_factor", 0, from, to, 3, 3)
+	if err != nil {
+		t.Fatalf("RunWalkForward: %v", err)
+	}
+	// Фолд 1 (train до split, test после) — собственно детектор утечки. Фолд 2 (обучение и
+	// тест целиком после split) обязан выбрать другого победителя: это отсекает реализацию,
+	// которая всегда возвращает первую комбинацию сетки.
+	for _, want := range []struct {
+		fold  int
+		phase int
+	}{{1, 0}, {2, 1}} {
+		f := s.Folds[want.fold-1]
+		if f.Note != "" {
+			t.Fatalf("фолд %d пропущен: %s", want.fold, f.Note)
+		}
+		got, ok := f.WinnerParams.(regimeParams)
+		if !ok {
+			t.Fatalf("фолд %d: WinnerParams = %T, want regimeParams", want.fold, f.WinnerParams)
+		}
+		if got.Phase != want.phase {
+			t.Fatalf("победитель фолда %d = Phase %d, want %d: на train-окне (%s..%s) выигрывает "+
+				"Phase %d, а Phase %d — только если дотянуть обучение до тестового периода",
+				want.fold, got.Phase, want.phase, f.TrainFrom.Format("2006-01-02"),
+				f.TrainTo.Format("2006-01-02"), want.phase, got.Phase)
+		}
+	}
+}
+
+// В OOS-метрики фолда обязаны попасть только сделки, ОТКРЫТЫЕ внутри тестового окна.
+// Прогревочный прогон стартует с trainFrom (индикаторам нужна история), поэтому без фильтра
+// в «out-of-sample» попадают сделки самого train-периода — то есть тех данных, на которых
+// параметры и подбирались.
+func TestRunWalkForwardCountsOnlyTradesOpenedInTheTestWindow(t *testing.T) {
+	from, to := date(2025, time.January, 1), date(2025, time.October, 1)
+	candles := genHourly(from, to)
+	phases := []Phase{{Grid: Grid{"Threshold": {1, 2}}}}
+	cfg := backtest.Config{InitialCash: 100000, Fraction: 1, Commission: 0.0005, Lot: 1}
+
+	s, err := RunWalkForward(fakeBinding(), phases, candles, nil, nil, cfg,
+		"profit_factor", 0, from, to, 3, 3)
+	if err != nil {
+		t.Fatalf("RunWalkForward: %v", err)
+	}
+	for _, f := range s.Folds {
+		// Повторяем прогревочный прогон фолда независимо и считаем эталон сами.
+		warm := sliceByRange(candles, f.TrainFrom, f.TestTo)
+		res := backtest.Run(fakeBinding().Build(f.WinnerParams), warm, nil, nil, cfg)
+		want := len(tradesEnteredFrom(res.Trades, f.TestFrom))
+		if len(res.Trades) <= want {
+			t.Fatalf("фолд %d: прогревочный прогон дал %d сделок, из них в тестовом окне %d — "+
+				"фикстура не содержит ни одной train-сделки, тест ничего не проверяет",
+				f.Index, len(res.Trades), want)
+		}
+		if f.OOSTrades != want {
+			t.Fatalf("фолд %d: OOSTrades = %d, want %d (сделки, открытые с %s); в метрики попали "+
+				"сделки прогревочного train-периода",
+				f.Index, f.OOSTrades, want, f.TestFrom.Format("2006-01-02"))
+		}
+	}
+}
