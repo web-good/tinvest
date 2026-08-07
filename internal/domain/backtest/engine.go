@@ -47,6 +47,64 @@ func visibleDaily(daily []Candle, t time.Time, loc *time.Location) (closes, high
 	return closes, highs, lows, times
 }
 
+// dailyCursor is to visibleDaily what htfCursor is to visibleCompletedHTF: the same four
+// series, but amortized O(1) per bar instead of O(len(daily)) per bar. Run/Trace advance the
+// current bar monotonically, so the completed-day boundary only moves forward and each call
+// resumes where the previous one stopped. Backing arrays are built once; each call returns a
+// prefix of them, so no per-bar allocation either. A nil *dailyCursor is a valid zero-cost
+// no-op for the no-dailies case.
+//
+// Precondition, identical to htfCursor's and for the same reason: visible must be called with
+// a non-decreasing t, and daily must be sorted oldest-first. A rewound t would NOT re-shrink
+// idx, and the wider prefix already confirmed is lookahead.
+type dailyCursor struct {
+	daily               []Candle
+	closes, highs, lows []float64
+	times               []time.Time
+	loc                 *time.Location
+	idx                 int // days confirmed complete so far (monotonic non-decreasing)
+}
+
+// newDailyCursor builds a cursor over daily (oldest-first). Returns nil when daily is empty
+// so callers pay nothing for the no-dailies case.
+func newDailyCursor(daily []Candle, loc *time.Location) *dailyCursor {
+	if len(daily) == 0 {
+		return nil
+	}
+	c := &dailyCursor{
+		daily:  daily,
+		closes: make([]float64, len(daily)),
+		highs:  make([]float64, len(daily)),
+		lows:   make([]float64, len(daily)),
+		times:  make([]time.Time, len(daily)),
+		loc:    loc,
+	}
+	for i, d := range daily {
+		c.closes[i], c.highs[i], c.lows[i], c.times[i] = d.Close, d.High, d.Low, d.Time
+	}
+	return c
+}
+
+// visible returns exactly what visibleDaily(daily, t, loc) would, provided t is
+// non-decreasing across calls. Returns four nils for a nil cursor or an empty prefix,
+// matching visibleDaily.
+func (d *dailyCursor) visible(t time.Time) (closes, highs, lows []float64, times []time.Time) {
+	if d == nil {
+		return nil, nil, nil, nil
+	}
+	bound := startOfDay(t, d.loc)
+	for d.idx < len(d.daily) && d.daily[d.idx].Time.Before(bound) {
+		d.idx++
+	}
+	if d.idx == 0 {
+		return nil, nil, nil, nil
+	}
+	// Full slice expressions for the same reason as in htfCursor.visible: a consumer that
+	// appends to the returned series must reallocate instead of scribbling on the shared
+	// backing arrays that later bars still read.
+	return d.closes[:d.idx:d.idx], d.highs[:d.idx:d.idx], d.lows[:d.idx:d.idx], d.times[:d.idx:d.idx]
+}
+
 // visibleCompletedHTF returns closes/highs/lows of higher-timeframe candles that have
 // FULLY closed by cur. A bar opening at c.Time spanning `interval` is closed once
 // c.Time.Add(interval) <= cur; the current, still-forming HTF bar is never visible
@@ -166,10 +224,11 @@ func Run(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Candl
 	p := newPortfolio(cfg)
 	lastClose := candles[len(candles)-1].Close
 	htf := newHTFCursor(htfCandles, cfg.htfSpan())
+	daily := newDailyCursor(dailyCandles, mskLoc)
 	for i := l - 1; i < len(candles); i++ {
 		p.bar = i
 		md := buildMarketData(candles[i-l+1 : i+1])
-		md.DailyCloses, md.DailyHighs, md.DailyLows, md.DailyTimes = visibleDaily(dailyCandles, candles[i].Time, mskLoc)
+		md.DailyCloses, md.DailyHighs, md.DailyLows, md.DailyTimes = daily.visible(candles[i].Time)
 		md.HTFCloses, md.HTFHighs, md.HTFLows = htf.visible(candles[i].Time)
 		md.TodayHigh, md.TodayLow = todayExtentIn(candles, i, mskLoc)
 		if p.qty != 0 {
@@ -233,10 +292,11 @@ func Trace(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Can
 	}
 	p := newPortfolio(cfg)
 	htf := newHTFCursor(htfCandles, cfg.htfSpan())
+	daily := newDailyCursor(dailyCandles, mskLoc)
 	for i := l - 1; i < len(candles); i++ {
 		p.bar = i
 		md := buildMarketData(candles[i-l+1 : i+1])
-		md.DailyCloses, md.DailyHighs, md.DailyLows, md.DailyTimes = visibleDaily(dailyCandles, candles[i].Time, mskLoc)
+		md.DailyCloses, md.DailyHighs, md.DailyLows, md.DailyTimes = daily.visible(candles[i].Time)
 		md.HTFCloses, md.HTFHighs, md.HTFLows = htf.visible(candles[i].Time)
 		md.TodayHigh, md.TodayLow = todayExtentIn(candles, i, mskLoc)
 		if p.qty != 0 {

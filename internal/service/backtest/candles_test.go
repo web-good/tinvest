@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -312,5 +313,65 @@ func TestLoadTailFetchErrorFails(t *testing.T) {
 	p := NewCandleProvider(m, dir)
 	if _, err := p.Load(context.Background(), "T", "id-T", enum.Hour1, base, base.Add(4*time.Hour), false); err == nil {
 		t.Fatal("Load succeeded despite a failing tail fetch, want an error — unlike a failing head fetch, a failing tail must not be swallowed")
+	}
+}
+
+// Провалившийся head-запрос — не то же самое, что «инструмент столько не торговался».
+// Раньше обе ситуации приводили к одному предупреждению «истории раньше нет», и сбой API
+// молча укорачивал окно прогона: walk-forward калибровался на куске истории, о чём
+// отчёт не сообщал. Ошибка API обязана ронять загрузку, как и на хвосте.
+func TestLoadHeadFetchApiErrorFails(t *testing.T) {
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	cached := []backtest.Candle{
+		{Time: base.Add(2 * time.Hour), Close: 12},
+		{Time: base.Add(3 * time.Hour), Close: 13},
+	}
+	dir := t.TempDir()
+	writeCandleCache(t, dir, "T", enum.Hour1, cached)
+
+	m := mocks.NewMockcandleFetcher(t)
+	m.EXPECT().GetCandles(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(nil, errors.New("boom"))
+
+	p := NewCandleProvider(m, dir)
+	_, err := p.Load(context.Background(), "T", "id-T", enum.Hour1, base, base.Add(3*time.Hour), false)
+	if err == nil {
+		t.Fatal("Load проглотил сбой API на head-запросе — окно молча стало короче запрошенного")
+	}
+	if !strings.Contains(err.Error(), "boom") {
+		t.Fatalf("ошибка = %v, want упоминание настоящей причины (boom), а не «истории нет»", err)
+	}
+}
+
+// Отрицательный результат head-запроса обязан запоминаться. Иначе каждый прогон бэктеста по
+// инструменту с короткой историей заново долбит API за периодом, которого не существует, —
+// а это чанки с паузой fetchPause на каждый.
+func TestLoadRemembersThatHistoryStartsLater(t *testing.T) {
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	cached := []backtest.Candle{
+		{Time: base.Add(2 * time.Hour), Close: 12},
+		{Time: base.Add(3 * time.Hour), Close: 13},
+	}
+	dir := t.TempDir()
+	writeCandleCache(t, dir, "T", enum.Hour1, cached)
+
+	calls := 0
+	m := mocks.NewMockcandleFetcher(t)
+	m.EXPECT().GetCandles(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		RunAndReturn(func(context.Context, *string, int32, *timestamppb.Timestamp, *timestamppb.Timestamp, *int32, bool) ([]*model.CandleItemTechAnalyse, error) {
+			calls++
+			return nil, nil // истории раньше нет, но и сбоя нет
+		})
+
+	p := NewCandleProvider(m, dir)
+	// Окно заканчивается на последней кэшированной свече, поэтому хвост не запрашивается
+	// и все запросы в счётчике — головные.
+	for i := 0; i < 2; i++ {
+		if _, err := p.Load(context.Background(), "T", "id-T", enum.Hour1, base, base.Add(3*time.Hour), false); err != nil {
+			t.Fatalf("Load #%d: %v", i+1, err)
+		}
+	}
+	if calls != 1 {
+		t.Fatalf("head-запросов: %d, want 1 — второй прогон обязан помнить, что истории раньше нет", calls)
 	}
 }

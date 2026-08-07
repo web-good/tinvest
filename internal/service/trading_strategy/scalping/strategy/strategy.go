@@ -62,11 +62,13 @@ type MarketData struct {
 	// computing a daily ATR — must degrade gracefully when it is empty or not
 	// length-aligned with the price slices.
 	DailyTimes []time.Time
-	// HTFCloses are oldest-first closes of COMPLETED higher-timeframe (4H) candles,
-	// aligned so the last element is the most recent 4H bar fully closed at/before the
-	// current bar. Empty if no HTF data is supplied or the filter is disabled.
+	// HTFCloses are oldest-first closes of COMPLETED higher-timeframe candles, aligned so
+	// the last element is the most recent HTF bar fully closed at/before the current bar.
+	// The span is the runner's choice, not a fixed 4H: backtest.Config.HTFInterval selects
+	// it (4H for reversion, 1H for scalping_rsimacd), and the completeness test uses that
+	// same span. Empty if no HTF data is supplied or the filter is disabled.
 	HTFCloses []float64
-	// HTFHighs / HTFLows are oldest-first highs/lows of the same COMPLETED 4H candles
+	// HTFHighs / HTFLows are oldest-first highs/lows of the same COMPLETED HTF candles
 	// as HTFCloses (aligned index-for-index). Empty when no HTF data.
 	HTFHighs []float64
 	HTFLows  []float64

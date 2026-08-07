@@ -1,6 +1,7 @@
-// Package statestore persists per-ticker reversion entry-state (EntryATR,
-// MaxFavorablePrice, etc.) that the broker does not return. The state file is the
-// primary source for the protective/profit exits; reconstruct is the fallback.
+// Package statestore persists per-ticker entry-state (EntryATR, MaxFavorablePrice, etc.)
+// that the broker does not return, for every live runner (reversion, rsi_pullback) — each
+// with its own file. The state file is the primary source for the protective/profit exits;
+// reconstruct is the fallback.
 package statestore
 
 import (

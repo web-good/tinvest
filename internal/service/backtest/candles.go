@@ -6,6 +6,7 @@ package backtest
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -68,6 +69,9 @@ func (p *CandleProvider) Load(ctx context.Context, ticker, instrumentID string,
 	path := p.cachePath(ticker, interval)
 
 	if refresh {
+		// refresh — это «забыть всё, что мы знали», включая вывод о начале истории:
+		// брокер мог добить архив назад, и без сброса мы бы никогда об этом не узнали.
+		_ = os.Remove(metaPath(path))
 		fetched, err := p.fetchRange(ctx, instrumentID, interval, from, to)
 		if err != nil {
 			return nil, err
@@ -95,16 +99,25 @@ func (p *CandleProvider) Load(ctx context.Context, ticker, instrumentID string,
 
 	// The head and the tail are topped up symmetrically. Topping up only the tail let a warm
 	// but SHORT cache return a truncated window with no error: a run asking for 24 months on a
-	// 12-month cache would quietly calibrate on half the history. A missing head is NOT fatal,
-	// though — an instrument may simply not have traded that far back, so we warn and continue
-	// with what exists instead of failing the run.
+	// 12-month cache would quietly calibrate on half the history. A head that comes back EMPTY
+	// is NOT fatal — an instrument may simply not have traded that far back, so we warn,
+	// remember it and continue with what exists. A head that FAILED is fatal, exactly like a
+	// failing tail: treating an API outage as "no history" would silently shorten the run
+	// window, and the report would say nothing about it.
 	dirty := false
-	if first := cached[0].Time; first.After(from) {
+	if first := cached[0].Time; first.After(from) && !p.historyStartsAt(path, first) {
 		head, ferr := p.fetchRange(ctx, instrumentID, interval, from, first)
-		if ferr != nil {
+		switch {
+		case errors.Is(ferr, errNoHistory):
 			logger.Warn(fmt.Sprintf("backtest: %s (%s) has no candles before %s — the window starts where its history does, not at %s",
 				ticker, interval.String(), first, from))
-		} else {
+			// Запоминаем, иначе каждый следующий прогон снова долбит API чанками с
+			// паузой за периодом, которого не существует.
+			p.rememberHistoryStart(path, first)
+		case ferr != nil:
+			return nil, fmt.Errorf("backtest: %s (%s) head fetch [%s, %s]: %w",
+				ticker, interval.String(), from, first, ferr)
+		default:
 			cached = mergeCandles(cached, head)
 			dirty = true
 		}
@@ -130,6 +143,7 @@ func (p *CandleProvider) fetchRange(ctx context.Context, instrumentID string,
 	interval enum.Interval, from, to time.Time,
 ) ([]backtest.Candle, error) {
 	var all []backtest.Candle
+	var failed error
 	id := instrumentID
 	num := interval.ToNumberInvestAPI()
 	chunk := time.Duration(chunkDaysFor(interval)) * 24 * time.Hour
@@ -142,6 +156,9 @@ func (p *CandleProvider) fetchRange(ctx context.Context, instrumentID string,
 			timestamppb.New(winFrom), timestamppb.New(winTo), nil, true)
 		if err != nil {
 			logger.ErrorContext(ctx, fmt.Sprintf("backtest: candle chunk %s-%s failed: %v", winFrom, winTo, err))
+			if failed == nil {
+				failed = err // первая настоящая причина; остальные уже в логе
+			}
 		} else {
 			all = mergeCandles(all, convertCandles(items))
 		}
@@ -149,9 +166,53 @@ func (p *CandleProvider) fetchRange(ctx context.Context, instrumentID string,
 		time.Sleep(fetchPause)
 	}
 	if len(all) == 0 {
-		return nil, fmt.Errorf("backtest: no candles fetched for %s in [%s, %s]", instrumentID, from, to)
+		// Пустой ответ без единого сбоя и пустой ответ из-за упавшего API — разные вещи:
+		// первое означает «инструмент столько не торговался» и допускает деградацию,
+		// второе обязано ронять загрузку. Различает их errNoHistory у вызывающего.
+		if failed != nil {
+			return nil, fmt.Errorf("backtest: no candles fetched for %s in [%s, %s]: %w", instrumentID, from, to, failed)
+		}
+		return nil, fmt.Errorf("backtest: %s has no candles in [%s, %s]: %w", instrumentID, from, to, errNoHistory)
 	}
 	return all, nil
+}
+
+// errNoHistory marks an empty fetch that hit no API errors at all — the exchange simply has
+// nothing for that instrument in that window.
+var errNoHistory = errors.New("no candle history in range")
+
+// historyMeta is the sidecar next to a candle cache file: what a previous run learned about
+// where the instrument's history actually begins.
+type historyMeta struct {
+	// EarliestKnown is the oldest bar the exchange returned anything for. A head top-up
+	// asking for a window that starts before it is known to be pointless.
+	EarliestKnown time.Time `json:"earliestKnown"`
+}
+
+func metaPath(cachePath string) string { return cachePath + ".meta" }
+
+// historyStartsAt reports whether a previous run already established that nothing exists
+// before first, so the head top-up can be skipped entirely.
+func (p *CandleProvider) historyStartsAt(cachePath string, first time.Time) bool {
+	raw, err := os.ReadFile(metaPath(cachePath))
+	if err != nil {
+		return false
+	}
+	var m historyMeta
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return false
+	}
+	return !m.EarliestKnown.IsZero() && !first.After(m.EarliestKnown)
+}
+
+// rememberHistoryStart records that the instrument has nothing before first. Failures are
+// swallowed: the sidecar is an optimisation, and losing it only costs one extra fetch.
+func (p *CandleProvider) rememberHistoryStart(cachePath string, first time.Time) {
+	raw, err := json.Marshal(historyMeta{EarliestKnown: first})
+	if err != nil {
+		return
+	}
+	_ = os.WriteFile(metaPath(cachePath), raw, 0o600)
 }
 
 func (p *CandleProvider) cachePath(ticker string, interval enum.Interval) string {

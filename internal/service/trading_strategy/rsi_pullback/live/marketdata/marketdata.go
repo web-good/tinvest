@@ -123,5 +123,13 @@ func fetchDaily(ctx context.Context, c candles.CandleClient, instrumentID string
 	if err != nil {
 		return nil, fmt.Errorf("rsi_pullback marketdata: daily candles: %w", err)
 	}
-	return candles.ToCandles(raw, true), nil
+	out := candles.ToCandles(raw, true)
+	// Порядок здесь — не косметика: visibleDaily режет серию ПРЕФИКСОМ до полуночи
+	// текущего дня, а ATR Уайлдера — рекурсия по порядку баров. Единственный бар не на
+	// своём месте либо обрежет хвост серии, либо перемешает шаги сглаживания, и дневной
+	// ATR — множитель стопа, цели и обеих границ гейта дня — уедет молча. API отдаёт
+	// oldest-first, поэтому обычно это no-op; сортировка делает инвариант явным, а не
+	// подразумеваемым.
+	sort.Slice(out, func(a, b int) bool { return out[a].Time.Before(out[b].Time) })
+	return out, nil
 }

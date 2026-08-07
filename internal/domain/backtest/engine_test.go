@@ -733,3 +733,71 @@ func TestHTFCursorNilForEmptyHTF(t *testing.T) {
 		t.Fatalf("nil cursor visible() = %v/%v/%v, want nil/nil/nil", c, h, l)
 	}
 }
+
+// dailyCursor обязан отдавать ровно то же, что visibleDaily пересчитывает с нуля, — на всей
+// возрастающей последовательности времён, включая границу MSK-суток (бар текущего дня НЕ
+// виден до его полуночи), пустой префикс и пропущенные календарные дни. Расхождение здесь —
+// это либо lookahead (день виден раньше, чем закрылся), либо потерянный день в дневном ATR,
+// то есть уехавшие стоп, цель и обе границы гейта дня.
+func TestDailyCursorMatchesVisibleDaily(t *testing.T) {
+	msk := time.FixedZone("MSK", 3*60*60)
+	day := func(d int) time.Time { return time.Date(2026, 1, d, 0, 0, 0, 0, msk) }
+	daily := []Candle{
+		{Time: day(5), Close: 10, High: 11, Low: 9},
+		{Time: day(6), Close: 12, High: 13, Low: 11},
+		{Time: day(9), Close: 14, High: 15, Low: 13}, // пропуск 7-8 (выходные)
+		{Time: day(10), Close: 16, High: 17, Low: 15},
+	}
+	ts := []time.Time{
+		day(4).Add(23 * time.Hour), // пустой префикс
+		day(5),                     // ровно полночь своего дня — сам день ещё не виден
+		day(5).Add(12 * time.Hour),
+		day(6),
+		day(6).Add(23*time.Hour + 59*time.Minute),
+		day(7), // выходной: видны 5 и 6
+		day(9).Add(10 * time.Hour),
+		day(10).Add(1 * time.Hour),
+		day(11),
+		day(30), // далеко за концом серии
+	}
+
+	cur := newDailyCursor(daily, msk)
+	for _, at := range ts {
+		gotC, gotH, gotL, gotT := cur.visible(at)
+		wantC, wantH, wantL, wantT := visibleDaily(daily, at, msk)
+		if !reflect.DeepEqual(gotC, wantC) || !reflect.DeepEqual(gotH, wantH) ||
+			!reflect.DeepEqual(gotL, wantL) || !reflect.DeepEqual(gotT, wantT) {
+			t.Fatalf("t=%v: курсор дал (%v %v %v %v), visibleDaily — (%v %v %v %v)",
+				at, gotC, gotH, gotL, gotT, wantC, wantH, wantL, wantT)
+		}
+	}
+}
+
+// Нет дневных — нет курсора: nil обязан быть валидным no-op, как у htfCursor.
+func TestDailyCursorNilForEmptyDailies(t *testing.T) {
+	cur := newDailyCursor(nil, time.UTC)
+	if cur != nil {
+		t.Fatalf("newDailyCursor(nil) = %v, want nil", cur)
+	}
+	if c, h, l, ts := cur.visible(time.Now()); c != nil || h != nil || l != nil || ts != nil {
+		t.Fatalf("nil-курсор вернул (%v %v %v %v), want все nil", c, h, l, ts)
+	}
+}
+
+// Возвращаемые серии — префиксы общих массивов. Потребитель, дописывающий в них
+// (md.DailyCloses = append(...)), обязан получить новый массив, а не затереть данные,
+// которые ещё читают последующие бары.
+func TestDailyCursorPrefixIsAppendSafe(t *testing.T) {
+	msk := time.FixedZone("MSK", 3*60*60)
+	daily := []Candle{
+		{Time: time.Date(2026, 1, 5, 0, 0, 0, 0, msk), Close: 10},
+		{Time: time.Date(2026, 1, 6, 0, 0, 0, 0, msk), Close: 12},
+	}
+	cur := newDailyCursor(daily, msk)
+	closes, _, _, _ := cur.visible(time.Date(2026, 1, 6, 12, 0, 0, 0, msk)) // виден только день 5
+	_ = append(closes, 999)                                                 //nolint:gocritic // намеренно: проверяем, что append не портит общий массив
+	gotC, _, _, _ := cur.visible(time.Date(2026, 1, 7, 12, 0, 0, 0, msk))
+	if len(gotC) != 2 || gotC[1] != 12 {
+		t.Fatalf("closes = %v, want [10 12] — append испортил общий массив", gotC)
+	}
+}

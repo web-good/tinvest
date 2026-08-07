@@ -1,10 +1,11 @@
-// Package ugld supplies the ticker and starting rsi_pullback Params for UGLD (Yuzhuralzoloto / ЮГК).
+// Package ugld supplies the ticker and calibrated rsi_pullback Params for UGLD
+// (Yuzhuralzoloto / ЮГК).
 //
-// Calibration has NOT been run for this ticker: the body returns core.DefaultParams()
-// unchanged rather than copying its fields, so a change to the baseline still reaches every
-// uncalibrated ticker instead of silently drifting away from it. Once -calibrate picks a
-// winning combination for UGLD, replace the body with an explicit literal — from that point
-// the ticker must stop tracking the baseline.
+// ОТКАЛИБРОВАН — это единственный тикер стратегии, прошедший walk-forward (in-sample PF
+// 2.555 на 36 сделках, pooled OOS PF 2.4–3.6 на 12; docs/rsi_pullback/strategy.md §8).
+// Тело — явный литерал, и связь с core.DefaultParams() разорвана осознанно: правка baseline
+// НЕ должна доходить сюда, иначе прод поедет относительно того, что валидировалось.
+// Литерал прибит тестом ugld_test.go.
 package ugld
 
 import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"

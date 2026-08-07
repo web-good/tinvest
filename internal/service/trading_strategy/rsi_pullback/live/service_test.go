@@ -1469,3 +1469,91 @@ func TestNonTradableInstrumentWithAnOpenPositionAlerts(t *testing.T) {
 		t.Fatal("снятие с торгов не должно стирать стейт открытой позиции")
 	}
 }
+
+// failingStore пишет в память, но роняет Save на заданном тикере — переносимой имитации
+// сбоя записи файлом нет: право на запись отбирается правами каталога, а под root они не
+// действуют, и тест молча менял бы смысл в зависимости от того, кем запущен.
+type failingStore struct {
+	data   map[string]statestore.Entry
+	calls  int
+	failOn int // номер вызова Save, который упадёт (1 — первый)
+}
+
+func (f *failingStore) Load() (map[string]statestore.Entry, error) {
+	out := map[string]statestore.Entry{}
+	for k, v := range f.data {
+		out[k] = v
+	}
+	return out, nil
+}
+
+func (f *failingStore) Save(m map[string]statestore.Entry) error {
+	f.calls++
+	if f.calls == f.failOn {
+		return fmt.Errorf("disk full")
+	}
+	f.data = map[string]statestore.Entry{}
+	for k, v := range m {
+		f.data[k] = v
+	}
+	return nil
+}
+
+// Сбой сохранения стейта по ОДНОМУ тикеру не должен обрывать пасс целиком: остальные
+// позиции остались бы без сопровождения — трейл не подтягивается, выходы не проверяются —
+// и так на каждом пассе, пока держится сбой диска. Тикер с ошибкой отдаёт алерт, пасс
+// возвращает ошибку наверх (чтобы планировщик её залогировал), но остальные тикеры
+// обрабатываются.
+func TestStateSaveFailureDoesNotAbortTheWholePass(t *testing.T) {
+	now := time.Date(2026, 3, 10, 12, 1, 0, 0, msk)
+	lastBar := time.Date(2026, 3, 10, 11, 30, 0, 0, msk)
+
+	c := cfgFor("GAZP")
+	c.Tickers = []string{"GAZP", "UGLD"}
+	e := &env{
+		statePath:   filepath.Join(t.TempDir(), "state.json"),
+		instruments: livemocks.NewMockinstrumentsClient(t),
+		market:      candlemocks.NewMockCandleClient(t),
+		ops:         livemocks.NewMockoperationsClient(t),
+		orders:      execmocks.NewMockOrdersClient(t),
+		stops:       stopmocks.NewMockClient(t),
+		tg:          tgmocks.NewMockClient(t),
+	}
+	e.svc = NewService(e.instruments, e.market, e.ops, e.orders, e.stops, e.tg, c)
+	e.svc.now = func() time.Time { return now }
+	// GAZP идёт первым, и его обновление maxFav — это первый Save пасса; он и падает.
+	// UGLD — вторым, и обязан быть обработан несмотря на сбой предыдущего тикера.
+	store := &failingStore{failOn: 1, data: map[string]statestore.Entry{
+		"GAZP": openEntry(""),
+		"UGLD": {Ticker: "UGLD", EntryPrice: 100, EntryATR: 10, MaxFav: 100, TakeProfit: 200,
+			Quantity: 100, EntryTime: time.Date(2026, 3, 9, 11, 30, 0, 0, msk)},
+	}}
+	e.svc.store = store
+
+	e.instruments.EXPECT().Shares(mock.Anything).Return([]*imodel.Share{
+		{ID: "uid-GAZP", Ticker: "GAZP", Lot: 10, Trading: true, MinPriceIncrement: 0.01},
+		{ID: "uid-UGLD", Ticker: "UGLD", Lot: 10, Trading: true, MinPriceIncrement: 0.01},
+	}, nil)
+	// Лента растёт: закрытие выше сохранённого maxFav, значит обновление maxFav и Save
+	// случаются по обоим тикерам.
+	e.expectCandles(flatAt30m(lastBar, 500, 105), dailies(now, 60))
+	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return([]*grpcmodel.Position{
+		{ShareID: "uid-GAZP", InstrumentType: "share", Quantity: 100, PurchasePrice: gq(100)},
+		{ShareID: "uid-UGLD", InstrumentType: "share", Quantity: 100, PurchasePrice: gq(100)},
+	}, nil)
+	e.tg.EXPECT().SendMessage(mock.MatchedBy(func(s string) bool {
+		return strings.Contains(s, "GAZP") && strings.Contains(s, "пасс по тикеру прерван")
+	})).Return(nil).Once()
+	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
+
+	err := e.svc.Run(context.Background(), dto.Run{})
+	if err == nil {
+		t.Fatal("пасс со сбойным тикером обязан вернуть ошибку наверх — иначе о ней никто не узнает")
+	}
+	if store.calls < 2 {
+		t.Fatalf("Save вызван %d раз(а) — фикстура не дошла до второго тикера, тест ничего не проверяет", store.calls)
+	}
+	if got := store.data["UGLD"]; got.MaxFav != 105 {
+		t.Fatalf("UGLD.MaxFav = %v, want 105: тикер после сбойного остался без сопровождения", got.MaxFav)
+	}
+}

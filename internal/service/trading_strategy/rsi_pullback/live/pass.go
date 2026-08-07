@@ -3,6 +3,7 @@ package live
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	imodel "tinvest/internal/model"
@@ -77,6 +78,7 @@ func (s *service) pass(ctx context.Context) error {
 	}
 
 	now := s.now()
+	var failed []string
 	for _, ticker := range s.cfg.Tickers {
 		st, ok := StrategyFor(ticker)
 		if !ok {
@@ -119,15 +121,24 @@ func (s *service) pass(ctx context.Context) error {
 			state: state, store: store, stopByID: stopByID,
 			stopByInstrument: stopByInstrument, listErr: listErr, now: now,
 		}
+		// Ошибка по одному тикеру не обрывает пасс: остальные позиции иначе остались бы
+		// без сопровождения — трейл не подтягивается, выходы не проверяются — и так на
+		// каждом пассе, пока держится причина (сбой записи стейта повторится и завтра).
+		// Наверх ошибка всё равно уходит, чтобы планировщик её залогировал.
+		var perr error
 		if watched {
-			if err := s.manage(ctx, pc, ticker, sh, st, md, pos, isHeld); err != nil {
-				return err
-			}
-			continue
+			perr = s.manage(ctx, pc, ticker, sh, st, md, pos, isHeld)
+		} else {
+			perr = s.buy(ctx, pc, ticker, sh, st, md)
 		}
-		if err := s.buy(ctx, pc, ticker, sh, st, md); err != nil {
-			return err
+		if perr != nil {
+			s.notify(notifier.Alert(alertLabel, ticker, "пасс по тикеру прерван: "+perr.Error()))
+			logger.ErrorContext(ctx, fmt.Sprintf("rsi_pullback: %s pass: %v", ticker, perr))
+			failed = append(failed, ticker)
 		}
+	}
+	if len(failed) > 0 {
+		return fmt.Errorf("rsi_pullback: пасс завершён с ошибками по тикерам: %s", strings.Join(failed, ", "))
 	}
 	return nil
 }

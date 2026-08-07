@@ -62,6 +62,10 @@ type service struct {
 	// свежести бара (maxBarAge) сравнивает время последнего бара именно с ним, поэтому
 	// на фиксированных датах фикстур настенные часы дали бы «протухшие» данные всегда.
 	now func() time.Time
+	// store — подменяемое хранилище стейта. Нужен ровно затем, что сбой записи файлом не
+	// воспроизвести переносимо: право на запись отбирается правами каталога, а под root
+	// они не действуют. nil означает обычный FileStore по statePath.
+	store statestore.Store
 }
 
 // NewService wires the live rsi_pullback service. The orders and stops clients may be nil
@@ -140,7 +144,10 @@ func nowMSK() time.Time {
 	return time.Now().In(loc)
 }
 
-// stateStore returns a FileStore for the configured state path.
-func (s *service) stateStore() *statestore.FileStore {
+// stateStore returns the injected store, or a FileStore for the configured state path.
+func (s *service) stateStore() statestore.Store {
+	if s.store != nil {
+		return s.store
+	}
 	return statestore.New(s.statePath)
 }

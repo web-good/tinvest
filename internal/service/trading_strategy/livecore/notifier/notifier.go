@@ -1,5 +1,5 @@
-// Package notifier renders Telegram messages for the reversion runner. Functions are
-// pure; the caller sends the string only when NotifyEnabled.
+// Package notifier renders Telegram messages for the live strategy runners (reversion,
+// rsi_pullback). Functions are pure; the caller sends the string only when NotifyEnabled.
 package notifier
 
 import "fmt"
