@@ -83,17 +83,34 @@ func (s *service) pass(ctx context.Context) error {
 			s.notify(notifier.Alert(alertLabel, ticker, "тикер не зарегистрирован в rsi_pullback — пропуск"))
 			continue
 		}
+		_, hasState := state[ticker]
+		// Пропуск тикера, за которым мы следим (позиция у брокера или запись в стейте), —
+		// это пропущенное сопровождение: трейл не подтягивается, выходы не проверяются, а
+		// биржевой стоп остаётся на уровне получасовой давности. Строчка в логе контейнера
+		// об этом никому не сообщит, поэтому каждый такой пропуск уходит алертом. По тикеру
+		// без позиции алерта нет: выходной или закрытая сессия — не повод будить владельца.
 		sh, ok := shares[ticker]
 		if !ok || !sh.Trading {
+			if hasState {
+				s.notify(notifier.Alert(alertLabel, ticker, "инструмент недоступен для торгов — сопровождение пропущено"))
+			}
 			logger.ErrorContext(ctx, fmt.Sprintf("rsi_pullback: %s not tradable, skip", ticker))
 			continue
 		}
+		pos, isHeld := held[sh.ID]
+		watched := isHeld || hasState
 		md, err := marketdata.Assemble(ctx, s.market, sh.ID, st.Lookback(), now)
 		if err != nil {
+			if watched {
+				s.notify(notifier.Alert(alertLabel, ticker, "рыночные данные недоступны — сопровождение пропущено: "+err.Error()))
+			}
 			logger.ErrorContext(ctx, fmt.Sprintf("rsi_pullback: %s marketdata: %v", ticker, err))
 			continue
 		}
 		if n := len(md.Times); n == 0 || now.Sub(md.Times[n-1]) > maxBarAge {
+			if watched {
+				s.notify(notifier.Alert(alertLabel, ticker, "последний завершённый бар протух — сопровождение пропущено"))
+			}
 			logger.ErrorContext(ctx, fmt.Sprintf("rsi_pullback: %s stale bar, skip", ticker))
 			continue
 		}
@@ -102,8 +119,7 @@ func (s *service) pass(ctx context.Context) error {
 			state: state, store: store, stopByID: stopByID,
 			stopByInstrument: stopByInstrument, listErr: listErr, now: now,
 		}
-		pos, isHeld := held[sh.ID]
-		if _, hasState := state[ticker]; isHeld || hasState {
+		if watched {
 			if err := s.manage(ctx, pc, ticker, sh, st, md, pos, isHeld); err != nil {
 				return err
 			}
@@ -154,12 +170,20 @@ func (s *service) buy(ctx context.Context, pc *passCtx, ticker string, sh *imode
 	fillPrice := sig.Price
 	filledLots := lots
 	if res.Placed {
+		// Брокер принял ордер, но исполнил ноль лотов (снят биржей после приёма, закрытая
+		// сессия, нет встречной ликвидности). Позиции нет — записать стейт на ЗАПРОШЕННЫЙ
+		// объём значило бы повести несуществующую позицию и тут же выставить SELL-стоп на
+		// бумаги, которых нет. Ничего не пишем: если бумаги всё же появятся, следующий пасс
+		// увидит позицию без стейта и восстановит её через reconstruct.
+		if res.FilledLots == 0 {
+			s.notify(notifier.Alert(alertLabel, ticker, "ордер принят, но не исполнен (0 лотов) — стейт не создан"))
+			logger.ErrorContext(ctx, fmt.Sprintf("rsi_pullback: %s buy accepted with zero fill", ticker))
+			return nil
+		}
 		if res.FillPrice > 0 {
 			fillPrice = res.FillPrice
 		}
-		if res.FilledLots > 0 {
-			filledLots = res.FilledLots
-		}
+		filledLots = res.FilledLots
 	}
 	qty := filledLots * int64(sh.Lot)
 
@@ -356,6 +380,13 @@ func (s *service) manage(ctx context.Context, pc *passCtx, ticker string, sh *im
 	}
 
 	sig := st.Decide(md)
+	if sig.Kind != model.SignalSell && entry.PendingExit != "" {
+		// Выход уже принят стратегией на одном из прошлых баров, но брокер его не
+		// исполнил. Выходы по индикатору — события ОДНОГО бара (крест RSI вверх через
+		// порог), поэтому «повторим на следующем тике» без этой отметки означает не
+		// повтор, а потерю выхода: позиция досидит до стопа или цели.
+		sig = model.Signal{Kind: model.SignalSell, Reason: entry.PendingExit, Price: md.Price}
+	}
 	if sig.Kind == model.SignalSell {
 		return s.sell(ctx, pc, ticker, sh, entry, pos, sig)
 	}
@@ -388,13 +419,21 @@ func (s *service) manage(ctx context.Context, pc *passCtx, ticker string, sh *im
 	case reason == "":
 		// ценовые стопы выключены параметрами — нечего вести
 	case entry.StopOrderID == "":
-		if strayCancelFailed {
+		switch {
+		case pc.listErr != nil:
+			// List не ответил — мы не знаем, не висит ли уже заявка по этому
+			// инструменту (осталась с прошлой жизни раннера, потерялся StopOrderID).
+			// Две живые SELL-заявки на одну позицию хуже получаса без биржевой
+			// защиты: вторая продаст бумаги, которых уже нет, то есть откроет шорт
+			// на марже. Ретрай на следующем получасовом тике.
+			s.notify(notifier.Alert(alertLabel, ticker, "список заявок недоступен — постановка стопа отложена до следующего тика"))
+		case strayCancelFailed:
 			// Stray-заявка не снялась и всё ещё жива на бирже — она продолжает
 			// защищать позицию. НЕ ставим вторую: alert уже ушёл выше, ретрай
 			// снятия на следующем получасовом тике.
-			break
+		default:
+			entry = s.replaceStop(ctx, ticker, sh, entry, level, reason)
 		}
-		entry = s.replaceStop(ctx, ticker, sh, entry, level, reason)
 	case sizeMismatch, desired > current:
 		if err := s.stops.Cancel(ctx, entry.StopOrderID); err != nil {
 			s.notify(notifier.Alert(alertLabel, ticker, "не удалось снять стоп для переноса: "+err.Error()))
@@ -415,8 +454,27 @@ func (s *service) manage(ctx context.Context, pc *passCtx, ticker string, sh *im
 // sell closes the position on any SELL the core emits: the exchange stop comes off first,
 // then the market order. A stop left standing would later sell a NEW position in the same
 // ticker; a sell that goes through without it would double-sell this one.
+//
+// Every path that fails to close the position stamps entry.PendingExit before returning:
+// the core's indicator exits are single-bar events, so a failure that is not remembered is
+// a lost exit, not a retry.
 func (s *service) sell(ctx context.Context, pc *passCtx, ticker string, sh *imodel.Share,
 	entry statestore.Entry, pos *grpcmodel.Position, sig model.Signal) error {
+
+	// Причина не должна быть пустой: "" в PendingExit неотличимо от «выхода не ждём».
+	pending := sig.Reason
+	if pending == "" {
+		pending = "EXIT"
+	}
+	// remember ставит отметку на ТЕКУЩЕЙ записи в стейте (а не на локальной копии entry):
+	// ветки ниже успевают её переписать, и затирать их значением из аргумента нельзя.
+	remember := func() {
+		if e, ok := pc.state[ticker]; ok && e.PendingExit != pending {
+			e.PendingExit = pending
+			pc.state[ticker] = e
+			_ = pc.store.Save(pc.state)
+		}
+	}
 
 	// Guard ДО снятия стопа: без лота продать нельзя, а уже снятая заявка
 	// оставила бы позицию без биржевой защиты навсегда (replaceStop с тем же
@@ -424,6 +482,7 @@ func (s *service) sell(ctx context.Context, pc *passCtx, ticker string, sh *imod
 	if sh.Lot <= 0 {
 		s.notify(notifier.Alert(alertLabel, ticker, "sh.Lot == 0 — невозможно вычислить лоты для продажи, пропуск"))
 		logger.ErrorContext(ctx, fmt.Sprintf("rsi_pullback: %s sh.Lot=%d, skipping sell to avoid divide-by-zero", ticker, sh.Lot))
+		remember()
 		return nil
 	}
 
@@ -432,6 +491,7 @@ func (s *service) sell(ctx context.Context, pc *passCtx, ticker string, sh *imod
 		if err := s.stops.Cancel(ctx, entry.StopOrderID); err != nil {
 			s.notify(notifier.Alert(alertLabel, ticker, "не удалось снять стоп-заявку перед продажей: "+err.Error()))
 			logger.ErrorContext(ctx, fmt.Sprintf("rsi_pullback: %s cancel before sell: %v", ticker, err))
+			remember()
 			return nil // без снятия продавать нельзя — двойная продажа
 		}
 		entry.StopOrderID = ""
@@ -447,15 +507,31 @@ func (s *service) sell(ctx context.Context, pc *passCtx, ticker string, sh *imod
 		// Стоп уже снят, а продажа не прошла — позиция «голая» до следующего
 		// тика. Возвращаем биржевую защиту на прежнем уровне (дубль StopSet
 		// подавит changed-флаг replaceStop: уровень/причина не менялись).
+		entry.PendingExit = pending
 		if hadStop && entry.StopReason != "" {
 			entry = s.replaceStop(ctx, ticker, sh, entry, entry.StopPrice, entry.StopReason)
-			pc.state[ticker] = entry
-			_ = pc.store.Save(pc.state)
 			if entry.StopOrderID != "" {
 				s.notify(notifier.Alert(alertLabel, ticker, "стоп-заявка перевыставлена после отклонённой продажи"))
 			}
 		}
-		return nil // retried next tick
+		pc.state[ticker] = entry
+		_ = pc.store.Save(pc.state)
+		return nil // повтор на следующем тике — по отметке PendingExit, а не по сигналу
+	}
+
+	if res.Placed && res.FilledLots == 0 {
+		// Ордер принят, но не исполнен ни на один лот — позиция всё ещё открыта. Чистка
+		// стейта здесь стёрла бы замороженную цель и ATR входа живой позиции, а выход
+		// остался бы неисполненным и никем не запомненным.
+		s.notify(notifier.Alert(alertLabel, ticker, "ордер на продажу принят, но не исполнен (0 лотов) — выход отложен"))
+		logger.ErrorContext(ctx, fmt.Sprintf("rsi_pullback: %s sell accepted with zero fill", ticker))
+		entry.PendingExit = pending
+		if hadStop && entry.StopReason != "" {
+			entry = s.replaceStop(ctx, ticker, sh, entry, entry.StopPrice, entry.StopReason)
+		}
+		pc.state[ticker] = entry
+		_ = pc.store.Save(pc.state)
+		return nil
 	}
 
 	exitPrice := sig.Price

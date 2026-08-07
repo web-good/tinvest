@@ -30,6 +30,13 @@ type Entry struct {
 	StopOrderID string  `json:"stopOrderId,omitempty"` // активная биржевая стоп-заявка ("" = нет)
 	StopPrice   float64 `json:"stopPrice,omitempty"`   // уровень выставленной заявки
 	StopReason  string  `json:"stopReason,omitempty"`  // компонент уровня: SL | ATRSL | TRAIL
+
+	// PendingExit — причина выхода, который стратегия уже приняла, а брокер не исполнил
+	// (отклонённый SELL, неснимаемый стоп). Выходы по индикатору — события ОДНОГО бара
+	// (крест RSI), поэтому «повторим на следующем тике» без этой отметки означает не
+	// повтор, а потерю сигнала: позиция досидит до стопа или цели. Пустая строка — выхода
+	// не ждём. reversion её не пишет — omitempty оставляет формат файла прежним.
+	PendingExit string `json:"pendingExit,omitempty"`
 }
 
 // Store loads and saves the full per-ticker entry-state map.

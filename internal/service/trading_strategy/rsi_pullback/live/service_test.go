@@ -1244,3 +1244,228 @@ func TestMaxFavNeverDropsOnALowerClose(t *testing.T) {
 		t.Fatalf("MaxFav = %v, want 112 (максимум закрытий не опускается вслед за ценой)", got.MaxFav)
 	}
 }
+
+// Брокер принял ордер, но исполнил ноль лотов (ордер снят биржей после приёма, закрытая
+// сессия, отсутствие встречной ликвидности). Позиции нет — значит нет и стейта: запись с
+// ЗАПРОШЕННЫМ объёмом заставила бы раннер вести несуществующую позицию и, что хуже,
+// немедленно выставить SELL-стоп на бумаги, которых нет.
+func TestZeroFillCreatesNoStateAndNoStop(t *testing.T) {
+	now := time.Date(2026, 3, 10, 12, 1, 0, 0, msk)
+	lastBar := time.Date(2026, 3, 10, 11, 30, 0, 0, msk)
+
+	e := newEnv(t, "GAZP", now, func(c *config.RSIPullbackConfig) { c.TradeEnabled = true })
+	e.instruments.EXPECT().Shares(mock.Anything).Return(shareFor("GAZP"), nil)
+	e.expectCandles(pullback30m(lastBar, 400), dailies(now, 60))
+	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(nil, nil)
+	e.ops.EXPECT().GetPortfolioTotal(mock.Anything, mock.Anything).Return(1_000_000.0, nil)
+	e.ops.EXPECT().GetAvailableCash(mock.Anything, mock.Anything).Return(1_000_000.0, nil)
+	e.stops.EXPECT().GetStopOrders(mock.Anything, mock.Anything).Return(emptyStopList(), nil)
+	e.orders.EXPECT().PostOrder(mock.Anything, mock.Anything).Return(filledOrder(0, 0), nil).Once()
+	// PostStopOrder не заявлен вовсе: строгий мок провалит тест при любом вызове.
+	e.tg.EXPECT().SendMessage(mock.MatchedBy(func(s string) bool {
+		return strings.Contains(s, "исполнен") && strings.Contains(s, "GAZP")
+	})).Return(nil).Once()
+
+	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if st := e.state(t); len(st) != 0 {
+		t.Fatalf("нулевой фил не должен создавать стейт, got %+v", st)
+	}
+}
+
+// Пока список активных заявок недоступен, раннер не знает, висит ли уже стоп по этому
+// инструменту, — и не имеет права ставить новый: две живые SELL-заявки на одну позицию
+// означают, что вторая продаст бумаги, которых уже нет (шорт на марже). Ровно этой логикой
+// живёт strayCancelFailed, и она обязана распространяться на весь случай «List не ответил».
+func TestNoStopIsPlacedWhileTheStopListIsUnavailable(t *testing.T) {
+	now := time.Date(2026, 3, 10, 12, 1, 0, 0, msk)
+	lastBar := time.Date(2026, 3, 10, 11, 30, 0, 0, msk)
+
+	e := newEnv(t, "GAZP", now, func(c *config.RSIPullbackConfig) { c.TradeEnabled = true })
+	e.seed(t, openEntry("")) // заявки в стейте нет — обычный путь «поставить стоп»
+	e.instruments.EXPECT().Shares(mock.Anything).Return(shareFor("GAZP"), nil)
+	e.expectCandles(flat30m(lastBar, 400), dailies(now, 60))
+	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(heldGAZP(100), nil)
+	e.stops.EXPECT().GetStopOrders(mock.Anything, mock.Anything).Return(nil, fmt.Errorf("unavailable"))
+	// PostStopOrder не заявлен: строгий мок провалит тест при попытке поставить заявку.
+	e.tg.EXPECT().SendMessage(mock.MatchedBy(func(s string) bool {
+		return strings.Contains(s, "GetStopOrders недоступен")
+	})).Return(nil).Once()
+	e.tg.EXPECT().SendMessage(mock.MatchedBy(func(s string) bool {
+		return strings.Contains(s, "постановка стопа отложена")
+	})).Return(nil).Once()
+
+	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := e.state(t)["GAZP"]; got.StopOrderID != "" {
+		t.Fatalf("StopOrderID = %q — заявка выставлена вслепую при недоступном List", got.StopOrderID)
+	}
+}
+
+// Выход по RSI — это КРЕСТ, событие ровно одного бара: если продажа сорвалась, на следующем
+// тике сигнала уже не будет, и позиция досидит до стопа или цели. Поэтому отклонённая
+// продажа обязана оставить в стейте признак незакрытого выхода.
+func TestRejectedSellRecordsPendingExit(t *testing.T) {
+	now := time.Date(2026, 3, 10, 12, 1, 0, 0, msk)
+	lastBar := time.Date(2026, 3, 10, 11, 30, 0, 0, msk)
+
+	e := newEnv(t, "GAZP", now, func(c *config.RSIPullbackConfig) { c.TradeEnabled = true })
+	e.seed(t, openEntry("so-1"))
+	e.instruments.EXPECT().Shares(mock.Anything).Return(shareFor("GAZP"), nil)
+	e.expectCandles(rsiExit30m(lastBar, 400), dailies(now, 60))
+	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(heldGAZP(100), nil)
+	e.stops.EXPECT().GetStopOrders(mock.Anything, mock.MatchedBy(statusIs(investapi.StopOrderStatusOption_STOP_ORDER_STATUS_ACTIVE))).
+		Return(activeList("uid-GAZP", "so-1", 95, 10), nil)
+	e.stops.EXPECT().CancelStopOrder(mock.Anything, mock.Anything).
+		Return(&investapi.CancelStopOrderResponse{}, nil).Once()
+	e.orders.EXPECT().PostOrder(mock.Anything, mock.Anything).Return(nil, fmt.Errorf("rejected")).Once()
+	e.stops.EXPECT().PostStopOrder(mock.Anything, mock.Anything).
+		Return(&investapi.PostStopOrderResponse{StopOrderId: "so-2"}, nil).Once()
+	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
+
+	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	got, ok := e.state(t)["GAZP"]
+	if !ok {
+		t.Fatal("отклонённая продажа не должна стирать позицию из стейта")
+	}
+	if got.PendingExit != "RSI" {
+		t.Fatalf("PendingExit = %q, want \"RSI\": сорвавшийся однобарный выход обязан быть запомнен", got.PendingExit)
+	}
+}
+
+// Запомненный выход исполняется на следующем пассе БЕЗ сигнала от ядра: лента ровная, ядро
+// молчит, и единственная причина продать — незакрытый выход из стейта.
+func TestPendingExitSellsOnTheNextPassWithoutASignal(t *testing.T) {
+	now := time.Date(2026, 3, 10, 12, 1, 0, 0, msk)
+	lastBar := time.Date(2026, 3, 10, 11, 30, 0, 0, msk)
+
+	e := newEnv(t, "GAZP", now, func(c *config.RSIPullbackConfig) { c.TradeEnabled = true })
+	entry := openEntry("so-1")
+	entry.PendingExit = "RSI"
+	e.seed(t, entry)
+	e.instruments.EXPECT().Shares(mock.Anything).Return(shareFor("GAZP"), nil)
+	e.expectCandles(flat30m(lastBar, 400), dailies(now, 60))
+	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(heldGAZP(100), nil)
+	e.stops.EXPECT().GetStopOrders(mock.Anything, mock.MatchedBy(statusIs(investapi.StopOrderStatusOption_STOP_ORDER_STATUS_ACTIVE))).
+		Return(activeList("uid-GAZP", "so-1", 95, 10), nil)
+	e.stops.EXPECT().CancelStopOrder(mock.Anything, mock.Anything).
+		Return(&investapi.CancelStopOrderResponse{}, nil).Once()
+	e.orders.EXPECT().PostOrder(mock.Anything, mock.MatchedBy(func(in *investapi.PostOrderRequest) bool {
+		return in.GetDirection() == investapi.OrderDirection_ORDER_DIRECTION_SELL
+	})).Return(filledOrder(10, 100), nil).Once()
+	e.tg.EXPECT().SendMessage(mock.MatchedBy(func(s string) bool {
+		return strings.Contains(s, "Выход") && strings.Contains(s, "RSI")
+	})).Return(nil).Once()
+
+	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if st := e.state(t); len(st) != 0 {
+		t.Fatalf("после исполнения отложенного выхода стейт обязан очиститься, got %+v", st)
+	}
+}
+
+// Сбой данных по тикеру, по которому ОТКРЫТА позиция, — это пропущенное сопровождение:
+// трейл не подтягивается, выходы не проверяются. Молчаливая строчка в логе контейнера этого
+// не сообщит никому, поэтому нужен алерт в Telegram. По тикеру без позиции алерта быть не
+// должно: раз в день закрытая биржа не повод будить владельца.
+func TestDataFailureOnAnOpenPositionAlerts(t *testing.T) {
+	now := time.Date(2026, 3, 10, 12, 1, 0, 0, msk)
+
+	tests := []struct {
+		name    string
+		lastBar time.Time
+		fail    bool
+	}{
+		{name: "недоступны свечи", lastBar: time.Date(2026, 3, 10, 11, 30, 0, 0, msk), fail: true},
+		{name: "протухший бар", lastBar: time.Date(2026, 3, 10, 8, 0, 0, 0, msk)},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newEnv(t, "GAZP", now)
+			e.seed(t, openEntry("so-1"))
+			e.instruments.EXPECT().Shares(mock.Anything).Return(shareFor("GAZP"), nil)
+			if tc.fail {
+				e.market.EXPECT().GetCandles(mock.Anything, mock.Anything, mock.MatchedBy(isM30),
+					mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil, fmt.Errorf("API down"))
+			} else {
+				e.expectCandles(flat30m(tc.lastBar, 400), dailies(now, 60))
+			}
+			e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(heldGAZP(100), nil)
+			e.tg.EXPECT().SendMessage(mock.MatchedBy(func(s string) bool {
+				return strings.Contains(s, "GAZP") && strings.Contains(s, "сопровождение пропущено")
+			})).Return(nil).Once()
+
+			if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
+				t.Fatalf("Run: %v", err)
+			}
+			if _, ok := e.state(t)["GAZP"]; !ok {
+				t.Fatal("сбой данных не должен стирать стейт открытой позиции")
+			}
+		})
+	}
+}
+
+// Зеркало нулевого фила на входе: продажа принята, но не исполнена ни на один лот.
+// Позиция всё ещё открыта — чистка стейта стёрла бы замороженные цель и ATR входа, а
+// выход остался бы неисполненным и никем не запомненным.
+func TestZeroFillOnSellKeepsThePositionAndRemembersTheExit(t *testing.T) {
+	now := time.Date(2026, 3, 10, 12, 1, 0, 0, msk)
+	lastBar := time.Date(2026, 3, 10, 11, 30, 0, 0, msk)
+
+	e := newEnv(t, "GAZP", now, func(c *config.RSIPullbackConfig) { c.TradeEnabled = true })
+	e.seed(t, openEntry("so-1"))
+	e.instruments.EXPECT().Shares(mock.Anything).Return(shareFor("GAZP"), nil)
+	e.expectCandles(rsiExit30m(lastBar, 400), dailies(now, 60))
+	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(heldGAZP(100), nil)
+	e.stops.EXPECT().GetStopOrders(mock.Anything, mock.MatchedBy(statusIs(investapi.StopOrderStatusOption_STOP_ORDER_STATUS_ACTIVE))).
+		Return(activeList("uid-GAZP", "so-1", 95, 10), nil)
+	e.stops.EXPECT().CancelStopOrder(mock.Anything, mock.Anything).
+		Return(&investapi.CancelStopOrderResponse{}, nil).Once()
+	e.orders.EXPECT().PostOrder(mock.Anything, mock.Anything).Return(filledOrder(0, 0), nil).Once()
+	e.stops.EXPECT().PostStopOrder(mock.Anything, mock.Anything).
+		Return(&investapi.PostStopOrderResponse{StopOrderId: "so-2"}, nil).Once()
+	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
+
+	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	got, ok := e.state(t)["GAZP"]
+	if !ok {
+		t.Fatal("неисполненная продажа не должна стирать позицию из стейта")
+	}
+	if got.PendingExit != "RSI" {
+		t.Fatalf("PendingExit = %q, want \"RSI\"", got.PendingExit)
+	}
+	if got.EntryATR != 10 || got.TakeProfit != 107 {
+		t.Fatalf("замороженные величины входа обязаны уцелеть, got %+v", got)
+	}
+}
+
+// Инструмент, снятый с торгов, — тот же пропуск сопровождения, что и сбой данных: позиция
+// открыта, а раннер по ней не делает ничего. Свечи при этом не запрашиваются вовсе
+// (market-мок без ожиданий провалит тест на любом GetCandles).
+func TestNonTradableInstrumentWithAnOpenPositionAlerts(t *testing.T) {
+	now := time.Date(2026, 3, 10, 12, 1, 0, 0, msk)
+
+	e := newEnv(t, "GAZP", now)
+	e.seed(t, openEntry("so-1"))
+	sh := shareFor("GAZP")
+	sh[0].Trading = false
+	e.instruments.EXPECT().Shares(mock.Anything).Return(sh, nil)
+	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(heldGAZP(100), nil)
+	e.tg.EXPECT().SendMessage(mock.MatchedBy(func(s string) bool {
+		return strings.Contains(s, "GAZP") && strings.Contains(s, "сопровождение пропущено")
+	})).Return(nil).Once()
+
+	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if _, ok := e.state(t)["GAZP"]; !ok {
+		t.Fatal("снятие с торгов не должно стирать стейт открытой позиции")
+	}
+}
