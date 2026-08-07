@@ -30,9 +30,12 @@ const maxBarAge = 60 * time.Minute
 // portfolio is NOT taken as a sale. Settlement lags the filled order, so the pass right
 // after an entry can still see an empty portfolio — and reading that as "sold outside the
 // runner" would cancel the live protective stop and wipe the state of a position that is
-// actually open. Two bars (the entry pass plus the next one) leave room for one skipped
-// tick; beyond that a settlement lag is no longer plausible, and staying silent about a
-// vanished position becomes the more dangerous of the two errors.
+// actually open. Two staleness windows (2*maxBarAge = 2 hours, i.e. the entry pass plus
+// room for a skipped tick and a lagging feed) is the grace; beyond that a settlement lag is
+// no longer plausible, and staying silent about a vanished position becomes the more
+// dangerous of the two errors. The cost of the wide window is a delayed notification of a
+// real stop-out in the first two hours — never a missed action: hasState still blocks a
+// second entry, and the exchange stop keeps working.
 const freshEntryGrace = 2 * maxBarAge
 
 // passCtx несёт состояние, общее для всех тикеров одного пасса: снапшот биржевых заявок
