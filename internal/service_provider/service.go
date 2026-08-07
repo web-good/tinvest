@@ -15,25 +15,27 @@ import (
 	"tinvest/internal/service/trading_strategy/bonds"
 	"tinvest/internal/service/trading_strategy/golden_x"
 	"tinvest/internal/service/trading_strategy/reversion/live"
+	rsipullbacklive "tinvest/internal/service/trading_strategy/rsi_pullback/live"
 	"tinvest/pkg/client/rss"
 	"tinvest/pkg/client/telegram"
 )
 
 type service struct {
-	purchaseSharesService purchase_shares.PurchaseShares
-	reversionLiveService  live.Service
-	goldenXTradingService golden_x.GoldenX
-	bondsTradingService   bonds.Bonds
-	emaInstrument         ema.Instrument
-	atrInstrument         atr.Instrument
-	rsiInstrument         rsi.Instrument
-	MACDInstrument        macd.Instrument
-	volatilityInstrument  volatility.Instrument
-	analyze               analyze.Analyze
-	portfolioYield        yield.Yield
-	telegramCommands      *telegram_commands.Listener
-	newsService           *news.Service
-	dividend              *dividendSingleton
+	purchaseSharesService  purchase_shares.PurchaseShares
+	reversionLiveService   live.Service
+	rsiPullbackLiveService rsipullbacklive.Service
+	goldenXTradingService  golden_x.GoldenX
+	bondsTradingService    bonds.Bonds
+	emaInstrument          ema.Instrument
+	atrInstrument          atr.Instrument
+	rsiInstrument          rsi.Instrument
+	MACDInstrument         macd.Instrument
+	volatilityInstrument   volatility.Instrument
+	analyze                analyze.Analyze
+	portfolioYield         yield.Yield
+	telegramCommands       *telegram_commands.Listener
+	newsService            *news.Service
+	dividend               *dividendSingleton
 }
 
 type dividendSingleton struct {
@@ -187,6 +189,28 @@ func (*ServiceProvider) GetReversionLiveService() live.Service {
 	}
 
 	return serviceProvider.service.reversionLiveService
+}
+
+// GetRSIPullbackLiveService wires the live rsi_pullback runner onto its own account: its own
+// gRPC client (RSI_PULLBACK_TOKEN) and its own Telegram topic. Sharing either with reversion
+// would let one strategy see the other's position in the portfolio and manage it as its own —
+// the two overlap on tickers.
+func (*ServiceProvider) GetRSIPullbackLiveService() rsipullbacklive.Service {
+	if serviceProvider.service.rsiPullbackLiveService == nil {
+		grpcClient, _ := serviceProvider.GetRSIPullbackGrpcClient()
+		tgClient, _ := serviceProvider.GetRSIPullbackSender()
+		serviceProvider.service.rsiPullbackLiveService = rsipullbacklive.NewService(
+			grpcClient.InstrumentsServiceClient(),
+			grpcClient.MarketDataServiceClient(),
+			grpcClient.OperationsServiceClient(),
+			grpcClient.OrdersServiceClient(),
+			grpcClient.StopOrdersServiceClient(),
+			tgClient,
+			serviceProvider.appConfig.RSIPullback,
+		)
+	}
+
+	return serviceProvider.service.rsiPullbackLiveService
 }
 
 func (s *ServiceProvider) GetTelegramCommands() (*telegram_commands.Listener, error) {

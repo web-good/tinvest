@@ -9,9 +9,10 @@ import (
 )
 
 type client struct {
-	grpcClient          internalgrpc.GrpcClient
-	reversionGrpcClient internalgrpc.GrpcClient
-	telegramBot         *telegram.Bot
+	grpcClient            internalgrpc.GrpcClient
+	reversionGrpcClient   internalgrpc.GrpcClient
+	rsiPullbackGrpcClient internalgrpc.GrpcClient
+	telegramBot           *telegram.Bot
 }
 
 func (s *ServiceProvider) GetGrpcClient() (internalgrpc.GrpcClient, error) {
@@ -49,6 +50,26 @@ func (s *ServiceProvider) GetReversionGrpcClient() (internalgrpc.GrpcClient, err
 	return serviceProvider.client.reversionGrpcClient, nil
 }
 
+// GetRSIPullbackGrpcClient returns a gRPC client authenticated with the rsi_pullback
+// strategy's dedicated token (RSI_PULLBACK_TOKEN). The runner trades its own account,
+// separate from both the shared T_BANK client and the reversion one: the two strategies
+// overlap on tickers, and a shared account would let one strategy see (and manage) the
+// other's position as its own.
+func (s *ServiceProvider) GetRSIPullbackGrpcClient() (internalgrpc.GrpcClient, error) {
+	if serviceProvider.client.rsiPullbackGrpcClient == nil {
+		var err error
+		serviceProvider.client.rsiPullbackGrpcClient, err = internalgrpc.NewClientGrpc(
+			s.appConfig.GrpcClient.AddressProd,
+			s.appConfig.RSIPullback.Token,
+		)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return serviceProvider.client.rsiPullbackGrpcClient, nil
+}
+
 func (s *ServiceProvider) GetTelegramBot() (*telegram.Bot, error) {
 	if serviceProvider.client.telegramBot != nil {
 		return serviceProvider.client.telegramBot, nil
@@ -76,6 +97,10 @@ func (s *ServiceProvider) GetGoldenXSender() (telegram.Client, error) {
 
 func (s *ServiceProvider) GetReversionSender() (telegram.Client, error) {
 	return s.topicSender(s.appConfig.TelegramClient.TopicReversion, "reversion")
+}
+
+func (s *ServiceProvider) GetRSIPullbackSender() (telegram.Client, error) {
+	return s.topicSender(s.appConfig.TelegramClient.TopicRSIPullback, "rsi_pullback")
 }
 
 func (s *ServiceProvider) GetNewsSender() (telegram.Client, error) {

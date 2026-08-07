@@ -12,6 +12,8 @@ import (
 	"tinvest/internal/service/trading_strategy/golden_x/scheduler"
 	reversiondto "tinvest/internal/service/trading_strategy/reversion/live/dto"
 	reversionscheduler "tinvest/internal/service/trading_strategy/reversion/live/scheduler"
+	rsipullbackdto "tinvest/internal/service/trading_strategy/rsi_pullback/live/dto"
+	rsipullbackscheduler "tinvest/internal/service/trading_strategy/rsi_pullback/live/scheduler"
 	"tinvest/internal/service_provider"
 	"tinvest/pkg/closer"
 	"tinvest/pkg/logger"
@@ -82,7 +84,7 @@ func (a *App) initializationLoop(ctx context.Context) (err error) {
 
 func (a *App) runDev(ctx context.Context) {
 	wg := sync.WaitGroup{}
-	wg.Add(2)
+	wg.Add(3)
 	go func() {
 		defer wg.Done()
 		listener, err := a.sp.GetTelegramCommands()
@@ -105,13 +107,23 @@ func (a *App) runDev(ctx context.Context) {
 			logger.ErrorContext(ctx, "news digest run failed", err.Error())
 		}
 	}()
+	go func() {
+		defer wg.Done()
+		err := rsipullbackscheduler.NewSchedulerService(a.sp.GetRSIPullbackLiveService()).Run(
+			ctx,
+			rsipullbackdto.Run{Scheduler: a.config.RSIPullback.Schedule},
+		)
+		if err != nil {
+			logger.ErrorContext(ctx, "Error in worker RSI Pullback", err.Error())
+		}
+	}()
 
 	wg.Wait()
 }
 
 func (a *App) runProd(ctx context.Context) {
 	wg := sync.WaitGroup{}
-	wg.Add(6)
+	wg.Add(7)
 	go func() {
 		defer wg.Done()
 		listener, err := a.sp.GetTelegramCommands()
@@ -185,6 +197,16 @@ func (a *App) runProd(ctx context.Context) {
 		)
 		if err != nil {
 			logger.ErrorContext(ctx, "Error in worker Reversion manage", err.Error())
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		err := rsipullbackscheduler.NewSchedulerService(a.sp.GetRSIPullbackLiveService()).Run(
+			ctx,
+			rsipullbackdto.Run{Scheduler: a.config.RSIPullback.Schedule},
+		)
+		if err != nil {
+			logger.ErrorContext(ctx, "Error in worker RSI Pullback", err.Error())
 		}
 	}()
 	wg.Wait()

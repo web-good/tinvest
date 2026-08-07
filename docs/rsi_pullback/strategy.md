@@ -2,7 +2,8 @@
 
 Код: `internal/service/trading_strategy/rsi_pullback/strategy/core/core.go`
 Реестр/движок бэктеста: `internal/service/backtest/rsi_pullback_registry.go`
-Backtest-only: стратегия не подключена к `internal/app`, к live-раннерам и к Telegram.
+Живой раннер: `internal/service/trading_strategy/rsi_pullback/live` — [live.md](live.md)
+(отдельный счёт, получасовое расписание, биржевые стоп-заявки, восстановление стейта).
 
 ## 1. Идея
 
