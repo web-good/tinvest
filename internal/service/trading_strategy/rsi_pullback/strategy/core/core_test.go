@@ -586,10 +586,21 @@ func TestEnterStopLossMatchesDesiredStop(t *testing.T) {
 	}
 }
 
+// Три теста ниже гоняются на DefaultParams, поэтому лента у них — shallowPullbackCloses,
+// а НЕ pullbackCloses. Пятибарный шок последней калиброван под RSILower=15: при шиповых
+// 30 RSI(4) уходит под порог ещё на предыдущем баре, свежего креста на последнем не
+// остаётся, и enter() отказывает на гейте 2 — не доходя до гейта, который тест проверяет.
+// Мутационный прогон (2026-08-07 ревью) показал ровно это: удаление dayStateOK, отказа при
+// atr<=0 и отказа при неположительном стопе не роняло ни одного теста. День задаётся
+// «израсходованным» (used >= SpentDayATR*ATR) — при FreshDayATR=0 это единственная ветка
+// гейта, открытая на дефолтах.
+
+// Без дневного ATR вход запрещён: нечем выставить ни стоп, ни цель, а многодневная позиция
+// без стопа — голый лонг через ночи и выходные.
 func TestEnterRefusedWithoutDailyATR(t *testing.T) {
 	s := NewWithParams("TEST", DefaultParams())
-	md := barSeries(pullbackCloses(), entryDailyATRStart) // дневных серий нет вовсе
-	md.TodayHigh, md.TodayLow = 101, 100
+	md := barSeries(shallowPullbackCloses(), entryDailyATRStart) // дневных серий нет вовсе
+	md.TodayHigh, md.TodayLow = 109, 100
 	if sig := s.Decide(md); sig.Kind == model.SignalBuy {
 		t.Fatal("вход без дневного ATR запрещён: нечем выставить стоп и цель")
 	}
@@ -603,17 +614,21 @@ func TestEnterRefusesNonPositiveStop(t *testing.T) {
 	p := DefaultParams()
 	p.StopDailyATR = 1.0 // pinned here, not inherited: the case is about the stop maths, not the default
 	s := NewWithParams("TEST", p)
-	// entryFixture's last close is ~136 (see pullbackCloses); a daily ATR of 200 at
-	// StopDailyATR=1.0 makes the stop distance dwarf the entry price.
-	md := withDay(entryFixture(), 200.0, 101, 100)
+	// Последнее закрытие ленты ~136; дневной ATR 200 при StopDailyATR=1.0 делает дистанцию
+	// стопа больше самой цены входа. День при этом обязан быть «израсходован» по МЕРКАМ
+	// ЭТОГО ATR: used = 200 >= 0.8*200, иначе отказ пришёл бы от гейта дня, а не от стопа.
+	md := withDay(barSeries(shallowPullbackCloses(), entryDailyATRStart), 200.0, 300, 100)
 	if sig := s.Decide(md); sig.Kind == model.SignalBuy {
 		t.Fatalf("вход с неположительным стопом (ATR=200 » цена входа) должен быть запрещён, StopLoss=%.4f", sig.StopLoss)
 	}
 }
 
+// Мёртвая зона гейта дня: день уже прошёл часть диапазона, но ещё не исчерпал его —
+// 0 < used < SpentDayATR*ATR. Ни одна из двух веток гейта не открыта, вход запрещён.
 func TestEnterBlockedInTheDeadBand(t *testing.T) {
 	s := NewWithParams("TEST", DefaultParams())
-	md := withDay(barSeries(pullbackCloses(), entryDailyATRStart), 10.0, 105, 100) // used = 5, мёртвая зона
+	// used = 5: больше FreshDayATR(0)*10 и меньше SpentDayATR(0.8)*10 = 8.
+	md := withDay(barSeries(shallowPullbackCloses(), entryDailyATRStart), 10.0, 105, 100)
 	if sig := s.Decide(md); sig.Kind == model.SignalBuy {
 		t.Fatal("вход в мёртвой зоне гейта запрещён")
 	}

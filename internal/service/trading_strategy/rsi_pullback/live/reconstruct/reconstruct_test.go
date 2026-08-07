@@ -27,36 +27,47 @@ var msk = func() *time.Location {
 
 func q(f float64) imodel.Quotation { return imodel.Quotation{Units: int64(f)} }
 
-// fakeCandles отдаёт серию по запрошенному интервалу, обрезая её окном запроса.
+// fakeCandles отдаёт серию по запрошенному интервалу, обрезая её окном запроса. Бар
+// попадает в ответ, если его ИНТЕРВАЛ пересекает окно, а не только если открытие лежит
+// внутри: свеча 11:30-12:00 приходит и на запрос с from=11:45. Так ведёт себя свечной API —
+// и только так тест способен отличить реализацию, которая честно отбрасывает бары, начатые
+// до входа, от той, что берёт всё присланное.
 type fakeCandles struct {
 	m30, day []*imodel.CandleItemTechAnalyse
 }
 
 func (f *fakeCandles) GetCandles(_ context.Context, _ *string, interval int32,
 	from, to *timestamppb.Timestamp, _ *int32, _ bool) ([]*imodel.CandleItemTechAnalyse, error) {
-	src := f.m30
+	src, span := f.m30, 30*time.Minute
 	if interval == enum.Day1.ToNumberInvestAPI() {
-		src = f.day
+		src, span = f.day, 24*time.Hour
 	}
 	var out []*imodel.CandleItemTechAnalyse
 	for _, c := range src {
-		if !c.Time.Before(from.AsTime()) && !c.Time.After(to.AsTime()) {
+		if c.Time.Add(span).After(from.AsTime()) && !c.Time.After(to.AsTime()) {
 			out = append(out, c)
 		}
 	}
 	return out, nil
 }
 
-// dailiesWithRange строит n дневных баров, у каждого high-low ровно rng и close посередине,
-// последний — в MSK-полночь дня end. Истинный диапазон постоянен, поэтому ATR любой
-// длины равен rng, и тест не зависит от подобранного DailyATRPeriod.
+// dailiesWithRange строит n дневных баров с истинным диапазоном ровно rng и close посередине.
+// ПОСЛЕДНИЙ бар стоит в MSK-полночь дня входа — то есть это бар САМОГО дня входа, ещё не
+// закрывшийся к моменту сделки, и реализация обязана его отбросить. Чтобы это правило было
+// различимо, его диапазон намеренно сделан вдесятеро шире (rng*10): оставленный в расчёте,
+// он утащит ATR далеко вверх, и тест это увидит. Все остальные бары равной ширины, поэтому
+// ATR любой длины равен rng и тест не зависит от подобранного DailyATRPeriod.
 func dailiesWithRange(end time.Time, n int, rng int64) []*imodel.CandleItemTechAnalyse {
 	e := end.In(msk)
 	midnight := time.Date(e.Year(), e.Month(), e.Day(), 0, 0, 0, 0, msk)
-	half := float64(rng) / 2
 	out := make([]*imodel.CandleItemTechAnalyse, n)
 	for i := 0; i < n; i++ {
 		t := midnight.AddDate(0, 0, -(n - 1 - i))
+		w := rng
+		if i == n-1 { // бар дня входа: не закрыт на момент сделки, должен быть отброшен
+			w = rng * 10
+		}
+		half := float64(w) / 2
 		out[i] = &imodel.CandleItemTechAnalyse{
 			Time: t, Open: q(100), High: q(100 + half), Low: q(100 - half), Close: q(100),
 			Volume: 1000, IsComplete: true,
@@ -210,10 +221,16 @@ func TestEntryRebuildsMaxFavFromClosesAfterEntry(t *testing.T) {
 	tc.EXPECT().GetInstrumentTrades(mock.Anything, "acc", "uid-GAZP", mock.Anything, mock.Anything).
 		Return([]grpcmodel.Trade{{IsBuy: true, Date: entryTime}}, nil)
 
-	closes := []float64{100, 105, 120, 115, 112, 110}
+	// Сетка баров сдвинута так, что вход (11:30) попадает ВНУТРЬ бара 11:15, и API отдаёт
+	// этот бар на запрос с from=11:30 — он пересекает окно. Его закрытие (200) намеренно
+	// выше всего, что случилось после входа: бар НАЧАЛСЯ до сделки, позиция его не прожила,
+	// и учитывать его нельзя. Реализация, которая берёт всё присланное, поставит MaxFav=200
+	// и уведёт трейл на уровень, которого позиция никогда не видела.
+	// 9:45=130, 10:15=150, 10:45=140, 11:15=200 (бар входа), затем 105, 120, 115, 112, 110.
+	closes := []float64{130, 150, 140, 200, 105, 120, 115, 112, 110}
 	cc := &fakeCandles{
 		day: dailiesWithRange(entryTime, 60, 10),
-		m30: bars30m(entryTime, closes),
+		m30: bars30m(time.Date(2026, 3, 10, 9, 45, 0, 0, msk), closes),
 	}
 
 	p := gazp.DefaultParams()
@@ -223,6 +240,29 @@ func TestEntryRebuildsMaxFavFromClosesAfterEntry(t *testing.T) {
 	}
 	if got.MaxFav != 120 {
 		t.Fatalf("MaxFav = %v, want 120 (максимум закрытий с момента входа)", got.MaxFav)
+	}
+}
+
+// Дневных свечей меньше, чем нужно для ATR(period+1) — восстановить единицу риска нечем.
+// Это ошибка, а не «стоп с нулевым ATR»: DesiredStop при нулевом ATR отдаёт (0, ""), то есть
+// раннер молча повёл бы многодневную позицию вообще без биржевой защиты, считая, что так и
+// задумано. Отказ оставляет решение человеку — уходит алерт, позиция не трогается.
+func TestEntryFailsWhenDailyATRCannotBeRebuilt(t *testing.T) {
+	entryTime := time.Date(2026, 3, 10, 11, 30, 0, 0, msk)
+	now := entryTime.Add(4 * time.Hour)
+
+	tc := recmocks.NewMockTradesClient(t)
+	tc.EXPECT().GetInstrumentTrades(mock.Anything, "acc", "uid-GAZP", mock.Anything, mock.Anything).
+		Return([]grpcmodel.Trade{{IsBuy: true, Date: entryTime}}, nil)
+
+	p := gazp.DefaultParams() // DailyATRPeriod = 14 -> нужно >= 15 будних баров
+	cc := &fakeCandles{
+		day: dailiesWithRange(entryTime, 6, 10),
+		m30: flat30m(now, 20, 100),
+	}
+
+	if _, err := Entry(context.Background(), tc, cc, "acc", "uid-GAZP", "GAZP", 100, p, now); err == nil {
+		t.Fatal("Entry: want error when the daily ATR cannot be rebuilt, got nil")
 	}
 }
 
