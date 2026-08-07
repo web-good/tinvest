@@ -950,6 +950,60 @@ func TestFiredStopClosesTheTradeInState(t *testing.T) {
 	}
 }
 
+// stopHit30m — ровная лента, у последнего бара которой low проваливает уровень стопа из
+// стейта (94 < 95), а high не достаёт цели (100 < 107): единственный возможный выход —
+// стоповый. Именно так выглядит бар, на котором сработала биржевая стоп-заявка.
+func stopHit30m(end time.Time, n int) []*imodel.CandleItemTechAnalyse {
+	closes := make([]float64, n)
+	for i := range closes {
+		closes[i] = 100
+	}
+	bars := tape30m(end, closes)
+	last := bars[n-1]
+	last.Open, last.High, last.Low, last.Close = qf(100), qf(100), qf(94), qf(96)
+	return bars
+}
+
+// Биржевой стоп сработал внутри бара, а портфель брокера ЕЩЁ показывает позицию (расчёты
+// отстают от исполнения — на этом же лаге построен freshEntryGrace). Уровень заявки и
+// уровень, по которому решает ядро, совпадают по построению: заявка выставлена от того же
+// prevMaxFav, а округление вниз делает биржевой уровень не выше ядрового. Значит всякий
+// раз, когда срабатывает стоп, Decide на этом же баре тоже возвращает SELL — и если
+// исполнение заявки разбирается ПОСЛЕ Decide, раннер идёт продавать рыночным ордером
+// бумаги, которых уже нет (отказ брокера или шорт на марже). Здесь PostOrder не ожидается
+// ни разу: любой вызов провалит мок.
+func TestFiredStopIsSettledBeforeDecideWhenPortfolioLags(t *testing.T) {
+	now := time.Date(2026, 3, 10, 12, 1, 0, 0, msk)
+	lastBar := time.Date(2026, 3, 10, 11, 30, 0, 0, msk)
+
+	e := newEnv(t, "GAZP", now, func(c *config.RSIPullbackConfig) { c.TradeEnabled = true })
+	e.seed(t, openEntry("so-1")) // стоп so-1 на 95, цель 107
+	e.instruments.EXPECT().Shares(mock.Anything).Return(shareFor("GAZP"), nil)
+	e.expectCandles(stopHit30m(lastBar, 400), dailies(now, 60))
+	// Портфель ОТСТАЁТ: позиция всё ещё числится, хотя стоп уже исполнен.
+	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(
+		[]*grpcmodel.Position{{ShareID: "uid-GAZP", InstrumentType: "share", Quantity: 100,
+			PurchasePrice: gq(100)}}, nil)
+	e.stops.EXPECT().GetStopOrders(mock.Anything, mock.MatchedBy(statusIs(investapi.StopOrderStatusOption_STOP_ORDER_STATUS_ACTIVE))).
+		Return(emptyStopList(), nil)
+	e.stops.EXPECT().GetStopOrders(mock.Anything, mock.MatchedBy(statusIs(investapi.StopOrderStatusOption_STOP_ORDER_STATUS_EXECUTED))).
+		Return(executedList("so-1"), nil)
+	e.tg.EXPECT().SendMessage(mock.MatchedBy(func(s string) bool {
+		return strings.Contains(s, "Выход") && strings.Contains(s, "SL")
+	})).Return(nil).Once()
+	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
+
+	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	// Ни рыночной продажи, ни отмены уже исполненной заявки.
+	e.orders.AssertNotCalled(t, "PostOrder", mock.Anything, mock.Anything)
+	e.stops.AssertNotCalled(t, "CancelStopOrder", mock.Anything, mock.Anything)
+	if st := e.state(t); len(st) != 0 {
+		t.Fatalf("после сработавшего стопа стейт обязан очиститься, got %+v", st)
+	}
+}
+
 // Заявка исчезла, а EXECUTED недоступен — репост вслепую запрещён: он продал бы уже
 // проданную позицию при касании уровня.
 func TestVanishedStopWithUnavailableExecutedDefersRepost(t *testing.T) {

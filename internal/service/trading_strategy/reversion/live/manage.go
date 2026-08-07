@@ -137,6 +137,40 @@ func (s *service) managePass(ctx context.Context) error {
 			continue
 		}
 
+		// Судьба биржевой заявки разбирается ДО Decide — иначе сработавший стоп ведёт к
+		// двойной продаже. Уровень заявки и уровень, по которому решает ядро, совпадают по
+		// построению: заявка выставлена от того же prevMaxFav, а округление вниз делает
+		// биржевой уровень не выше ядрового. Значит всякий раз, когда стоп срабатывает
+		// внутри бара, Decide на этом же баре тоже вернёт SELL. Если портфель брокера при
+		// этом ещё не обновился (расчёты отстают от исполнения), мы попадаем сюда с живой
+		// позицией и, решая по Decide, пошли бы продавать рыночным ордером бумаги, которых
+		// уже нет. Проверка идёт независимо от UseIntrabarStop: заявка могла остаться от
+		// прежней модели и сработать, и это точно так же закрывает позицию.
+		if listErr == nil && entry.StopOrderID != "" {
+			if _, alive := stopByID[entry.StopOrderID]; !alive {
+				// Заявки нет в ACTIVE: сработала или снята вне раннера. Различить
+				// обязательно — репост свежего стопа на уже проданную стопом позицию
+				// обернулся бы фантомной продажей/шортом при касании уровня.
+				fired, ferr := s.stops.Executed(ctx, entry.StopOrderID)
+				switch {
+				case ferr != nil:
+					// Не репостим вслепую — ретрай на следующем часовом тике.
+					s.notify(notifier.Alert("Reversion", ticker, "стоп-заявка исчезла из ACTIVE, но EXECUTED недоступен — репост отложен: "+ferr.Error()))
+					continue
+				case fired:
+					s.notify(notifier.Exit(ticker, entry.StopReason, entry.StopPrice, entry.Quantity, false))
+					delete(state, ticker)
+					_ = store.Save(state)
+					continue
+				default:
+					s.notify(notifier.Alert("Reversion", ticker, "стоп-заявка снята вне раннера — перевыставляю"))
+					entry.StopOrderID = ""
+					state[ticker] = entry
+					_ = store.Save(state)
+				}
+			}
+		}
+
 		prevMaxFav := entry.MaxFav // уровень, от которого считалась стоящая на бирже заявка
 		// Raise maxFav from the latest completed close, then persist (monotonic).
 		if md.Price > entry.MaxFav {
@@ -232,32 +266,11 @@ func (s *service) managePass(ctx context.Context) error {
 			continue
 		}
 
-		// Синхронизация стоп-заявки (только при работающем List).
+		// Синхронизация стоп-заявки (только при работающем List). Судьба ИСЧЕЗНУВШЕЙ
+		// заявки разобрана выше, до Decide, поэтому здесь остаётся только чужая заявка.
 		strayCancelFailed := false
 		if listErr == nil {
-			if entry.StopOrderID != "" {
-				if _, alive := stopByID[entry.StopOrderID]; !alive {
-					// Заявки нет в ACTIVE: сработала или снята вне раннера. Различить
-					// обязательно — репост свежего стопа на уже проданную стопом позицию
-					// (портфель может отставать от расчётов) обернулся бы фантомной
-					// продажей/шортом при касании уровня.
-					fired, ferr := s.stops.Executed(ctx, entry.StopOrderID)
-					switch {
-					case ferr != nil:
-						// Не репостим вслепую — ретрай на следующем часовом тике.
-						s.notify(notifier.Alert("Reversion", ticker, "стоп-заявка исчезла из ACTIVE, но EXECUTED недоступен — репост отложен: "+ferr.Error()))
-						continue
-					case fired:
-						s.notify(notifier.Exit(ticker, entry.StopReason, entry.StopPrice, entry.Quantity, false))
-						delete(state, ticker)
-						_ = store.Save(state)
-						continue
-					default:
-						s.notify(notifier.Alert("Reversion", ticker, "стоп-заявка снята вне раннера — перевыставляю"))
-						entry.StopOrderID = ""
-					}
-				}
-			} else if stray, ok := stopByInstrument[sh.ID]; ok {
+			if stray, ok := stopByInstrument[sh.ID]; ok && entry.StopOrderID == "" {
 				// Чужая/устаревшая заявка (например, после reconstruct) — снять.
 				if err := s.stops.Cancel(ctx, stray.StopOrderID); err != nil {
 					s.notify(notifier.Alert("Reversion", ticker, "не удалось снять неизвестную стоп-заявку: "+err.Error()))

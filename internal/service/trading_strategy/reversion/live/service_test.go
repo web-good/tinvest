@@ -836,6 +836,32 @@ func TestManagePass_VanishedStopFiredExitsWithoutRepost(t *testing.T) {
 	}
 }
 
+// 8a. Тот же сценарий, но на баре, который ядро САМО читает как стоп-выход (low 90 ниже
+// уровня 97): именно так выглядит бар, на котором сработала биржевая заявка, — и портфель
+// брокера при этом ещё показывает позицию, потому что расчёты отстают от исполнения.
+// Уровень заявки и уровень ядра совпадают по построению, поэтому сработавший стоп ВСЕГДА
+// сопровождается SELL от Decide; если исполнение заявки разбирать после Decide, раннер
+// пойдёт продавать рыночным ордером бумаги, которых уже нет. Ни PostOrder, ни отмены уже
+// исполненной заявки здесь быть не должно.
+func TestManagePass_FiredStopSettledBeforeDecideOnAStopBar(t *testing.T) {
+	withIntrabarUGLD(t)
+	env := newManageEnv(t, seedEntry("so-1", 97), hourlySeries(400, 90))
+	env.stops.EXPECT().GetStopOrders(mock.Anything, mock.MatchedBy(statusIs(investapi.StopOrderStatusOption_STOP_ORDER_STATUS_ACTIVE))).
+		Return(emptyStopList(), nil)
+	env.stops.EXPECT().GetStopOrders(mock.Anything, mock.MatchedBy(statusIs(investapi.StopOrderStatusOption_STOP_ORDER_STATUS_EXECUTED))).
+		Return(executedList("so-1"), nil)
+
+	if err := env.svc.Run(context.Background(), dto.Run{Mode: dto.ModeManage}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	env.orders.AssertNotCalled(t, "PostOrder", mock.Anything, mock.Anything)
+	env.stops.AssertNotCalled(t, "CancelStopOrder", mock.Anything, mock.Anything)
+	st, _ := statestore.New(env.statePath).Load()
+	if len(st) != 0 {
+		t.Fatalf("state must be cleared after fired stop, got %+v", st)
+	}
+}
+
 // 8b. Finding 3: заявка исчезла из ACTIVE, но в EXECUTED её нет -> отменена вне
 // раннера при живой позиции: перевыставляем (прежнее поведение) — позиция не
 // должна остаться без защиты.

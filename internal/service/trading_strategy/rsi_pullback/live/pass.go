@@ -291,39 +291,22 @@ func (s *service) manage(ctx context.Context, pc *passCtx, ticker string, sh *im
 		s.notify(notifier.Alert(alertLabel, ticker, fmt.Sprintf("позиция уменьшилась частично (стоп или ручная продажа), осталось %d", pos.Quantity)))
 	}
 
-	prevMaxFav := entry.MaxFav // уровень, от которого считалась стоящая на бирже заявка
-	// Raise maxFav from the latest completed close, then persist (monotonic).
-	if md.Price > entry.MaxFav {
-		entry.MaxFav = md.Price
-		pc.state[ticker] = entry
-		if err := pc.store.Save(pc.state); err != nil {
-			return fmt.Errorf("rsi_pullback: save maxFav %s: %w", ticker, err)
-		}
-	}
-
-	md.Position = &strategy.Position{
-		PurchasePrice:         entry.EntryPrice,
-		Quantity:              pos.Quantity,
-		EntryATR:              entry.EntryATR,
-		TakeProfit:            entry.TakeProfit,
-		MaxFavorablePrice:     entry.MaxFav,
-		PrevMaxFavorablePrice: prevMaxFav,
-	}
-
-	sig := st.Decide(md)
-	if sig.Kind == model.SignalSell {
-		return s.sell(ctx, pc, ticker, sh, entry, pos, sig)
-	}
-
-	// Синхронизация стоп-заявки (только при работающем List).
+	// Судьба биржевой заявки разбирается ДО Decide — иначе сработавший стоп ведёт к
+	// двойной продаже. Уровень заявки и уровень, по которому решает ядро, совпадают по
+	// построению: заявка выставлена от того же prevMaxFav, а округление вниз делает
+	// биржевой уровень не выше ядрового. Значит всякий раз, когда стоп срабатывает
+	// внутри бара, Decide на этом же баре тоже вернёт SELL. Если портфель брокера при
+	// этом ещё не обновился (тот же лаг расчётов, ради которого существует
+	// freshEntryGrace), мы попадаем сюда с isHeld=true и, решая по Decide, пошли бы
+	// продавать рыночным ордером бумаги, которых уже нет — отказ брокера в лучшем
+	// случае, шорт на марже в худшем. Синхронизация возможна только при работающем List.
 	strayCancelFailed := false
 	if pc.listErr == nil {
 		if entry.StopOrderID != "" {
 			if _, alive := pc.stopByID[entry.StopOrderID]; !alive {
 				// Заявки нет в ACTIVE: сработала или снята вне раннера. Различить
 				// обязательно — репост свежего стопа на уже проданную стопом позицию
-				// (портфель может отставать от расчётов) обернулся бы фантомной
-				// продажей/шортом при касании уровня.
+				// обернулся бы фантомной продажей/шортом при касании уровня.
 				fired, ferr := s.stops.Executed(ctx, entry.StopOrderID)
 				switch {
 				case ferr != nil:
@@ -351,6 +334,30 @@ func (s *service) manage(ctx context.Context, pc *passCtx, ticker string, sh *im
 				strayCancelFailed = true
 			}
 		}
+	}
+
+	prevMaxFav := entry.MaxFav // уровень, от которого считалась стоящая на бирже заявка
+	// Raise maxFav from the latest completed close, then persist (monotonic).
+	if md.Price > entry.MaxFav {
+		entry.MaxFav = md.Price
+		pc.state[ticker] = entry
+		if err := pc.store.Save(pc.state); err != nil {
+			return fmt.Errorf("rsi_pullback: save maxFav %s: %w", ticker, err)
+		}
+	}
+
+	md.Position = &strategy.Position{
+		PurchasePrice:         entry.EntryPrice,
+		Quantity:              pos.Quantity,
+		EntryATR:              entry.EntryATR,
+		TakeProfit:            entry.TakeProfit,
+		MaxFavorablePrice:     entry.MaxFav,
+		PrevMaxFavorablePrice: prevMaxFav,
+	}
+
+	sig := st.Decide(md)
+	if sig.Kind == model.SignalSell {
+		return s.sell(ctx, pc, ticker, sh, entry, pos, sig)
 	}
 
 	// Желаемый уровень от ОБНОВЛЁННОГО MaxFav — на гранулярности шага цены биржи:
