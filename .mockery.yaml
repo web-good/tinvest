@@ -28,6 +28,9 @@ packages:
       Service:
       instrumentsClient:
       operationsClient:
+  tinvest/internal/service/trading_strategy/rsi_pullback/live/reconstruct:
+    interfaces:
+      TradesClient:
   tinvest/internal/service/trading_strategy/livecore/executor:
     interfaces:
       OrdersClient:

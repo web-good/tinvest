@@ -365,18 +365,24 @@ func TestLotsAreSizedFromConfiguredBuyPct(t *testing.T) {
 
 // Уже открытая позиция у брокера не должна порождать второй вход: GetPortfolio отдаёт
 // позицию по uid-GAZP, PostOrder не должен быть вызван ни разу. Лента — та же, что даёт
-// BUY в тесте входа: проверяется гейт, а не отсутствие сигнала.
+// BUY в тесте входа: проверяется гейт, а не отсутствие сигнала. Стейт засеян с целью 200 —
+// заведомо выше high этой ленты: иначе позиция вышла бы по TP и PostOrder ушёл бы на
+// продажу, то есть тест перестал бы проверять именно повторный вход.
 func TestNoSecondEntryWhenBrokerAlreadyHolds(t *testing.T) {
 	now := time.Date(2026, 3, 10, 12, 1, 0, 0, msk)
 	lastBar := time.Date(2026, 3, 10, 11, 30, 0, 0, msk)
 
 	e := newEnv(t, "GAZP", now, func(c *config.RSIPullbackConfig) { c.TradeEnabled = true })
+	held := openEntry("so-1")
+	held.TakeProfit = 200
+	e.seed(t, held)
 	e.instruments.EXPECT().Shares(mock.Anything).Return(shareFor("GAZP"), nil)
 	e.expectCandles(pullback30m(lastBar, 400), dailies(now, 60))
 	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(
-		[]*grpcmodel.Position{{ShareID: "uid-GAZP", InstrumentType: "share", Quantity: 500,
+		[]*grpcmodel.Position{{ShareID: "uid-GAZP", InstrumentType: "share", Quantity: 100,
 			PurchasePrice: gq(100)}}, nil)
-	e.stops.EXPECT().GetStopOrders(mock.Anything, mock.Anything).Return(emptyStopList(), nil)
+	e.stops.EXPECT().GetStopOrders(mock.Anything, mock.Anything).
+		Return(activeList("uid-GAZP", "so-1", 95, 10), nil)
 	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
 
 	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
@@ -384,6 +390,90 @@ func TestNoSecondEntryWhenBrokerAlreadyHolds(t *testing.T) {
 	}
 	// orders без ожиданий: любой PostOrder провалил бы мок как неожиданный вызов.
 	e.orders.AssertNotCalled(t, "PostOrder", mock.Anything, mock.Anything)
+}
+
+// Позиция у брокера есть, локального стейта нет (переезд контейнера, потерянный том):
+// раннер обязан восстановить вход по API и НЕМЕДЛЕННО вернуть биржевую защиту. Проверяются
+// именно те величины, без которых ядро не работает: дневной ATR входа (10 — истинный
+// диапазон каждой дневной свечи фикстуры), замороженная цель (100 + 0.7×10) и количество
+// от брокера. Стоп 95 = 100 − 0.5×10: восстановленный уровень обязан совпасть с тем, что
+// стратегия задала бы на входе, иначе реконструкция «защищает» позицию не там.
+func TestHeldPositionWithoutStateIsReconstructed(t *testing.T) {
+	now := time.Date(2026, 3, 10, 12, 1, 0, 0, msk)
+	lastBar := time.Date(2026, 3, 10, 11, 30, 0, 0, msk)
+	fill := time.Date(2026, 3, 5, 11, 30, 0, 0, msk)
+
+	e := newEnv(t, "GAZP", now, func(c *config.RSIPullbackConfig) { c.TradeEnabled = true })
+	e.instruments.EXPECT().Shares(mock.Anything).Return(shareFor("GAZP"), nil)
+	e.expectCandles(flat30m(lastBar, 400), dailies(now, 60))
+	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(
+		[]*grpcmodel.Position{{ShareID: "uid-GAZP", InstrumentType: "share", Quantity: 500,
+			PurchasePrice: gq(100)}}, nil)
+	e.ops.EXPECT().GetInstrumentTrades(mock.Anything, "acc", "uid-GAZP", mock.Anything, mock.Anything).
+		Return([]grpcmodel.Trade{{IsBuy: true, Date: fill, Price: 100, Quantity: 500}}, nil)
+	e.stops.EXPECT().GetStopOrders(mock.Anything, mock.Anything).Return(emptyStopList(), nil)
+	e.stops.EXPECT().PostStopOrder(mock.Anything, mock.MatchedBy(func(in *investapi.PostStopOrderRequest) bool {
+		return in.GetQuantity() == 50 && // 500 штук при лоте 10
+			utils.CombinePrice(in.GetStopPrice().GetUnits(), in.GetStopPrice().GetNano()) == 95
+	})).Return(&investapi.PostStopOrderResponse{StopOrderId: "so-rec"}, nil).Once()
+	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
+
+	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	got, ok := e.state(t)["GAZP"]
+	if !ok {
+		t.Fatal("стейт по GAZP не восстановлен")
+	}
+	if !got.EntryTime.Equal(fill) {
+		t.Fatalf("EntryTime = %v, want %v (последняя BUY-сделка у брокера)", got.EntryTime, fill)
+	}
+	if got.EntryPrice != 100 || got.Quantity != 500 {
+		t.Fatalf("EntryPrice/Quantity = %v/%d, want 100/500 (средняя цена и объём от брокера)",
+			got.EntryPrice, got.Quantity)
+	}
+	if got.EntryATR < 9.5 || got.EntryATR > 10.5 {
+		t.Fatalf("EntryATR = %v, want ~10 (дневной ATR фикстуры)", got.EntryATR)
+	}
+	if got.TakeProfit < 106.5 || got.TakeProfit > 107.5 {
+		t.Fatalf("TakeProfit = %v, want ~107 (вход + 0.7×ATR)", got.TakeProfit)
+	}
+	if got.StopOrderID != "so-rec" || got.StopPrice != 95 || got.StopReason != "SL" {
+		t.Fatalf("стоп после реконструкции = %q/%v/%q, want so-rec/95/SL",
+			got.StopOrderID, got.StopPrice, got.StopReason)
+	}
+}
+
+// Реконструкция не удалась (у брокера нет ни одной BUY-сделки по инструменту) — позицию
+// НЕ трогаем: ни ордера, ни стоп-заявки по угаданным величинам, стейт остаётся пустым.
+// Стоп, поставленный от выдуманного ATR, продал бы позицию не там, где задумала стратегия.
+func TestHeldPositionWithFailedReconstructIsLeftAlone(t *testing.T) {
+	now := time.Date(2026, 3, 10, 12, 1, 0, 0, msk)
+	lastBar := time.Date(2026, 3, 10, 11, 30, 0, 0, msk)
+
+	e := newEnv(t, "GAZP", now, func(c *config.RSIPullbackConfig) { c.TradeEnabled = true })
+	e.instruments.EXPECT().Shares(mock.Anything).Return(shareFor("GAZP"), nil)
+	e.expectCandles(flat30m(lastBar, 400), dailies(now, 60))
+	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(
+		[]*grpcmodel.Position{{ShareID: "uid-GAZP", InstrumentType: "share", Quantity: 500,
+			PurchasePrice: gq(100)}}, nil)
+	e.ops.EXPECT().GetInstrumentTrades(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(nil, nil) // сделок нет
+	e.stops.EXPECT().GetStopOrders(mock.Anything, mock.Anything).Return(emptyStopList(), nil)
+	e.tg.EXPECT().SendMessage(mock.MatchedBy(func(s string) bool {
+		return strings.Contains(s, "реконструкция не удалась")
+	})).Return(nil).Once()
+	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
+
+	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	// Ни ордеров, ни стоп-заявок: моки без ожиданий провалили бы любой вызов.
+	e.orders.AssertNotCalled(t, "PostOrder", mock.Anything, mock.Anything)
+	e.stops.AssertNotCalled(t, "PostStopOrder", mock.Anything, mock.Anything)
+	if st := e.state(t); len(st) != 0 {
+		t.Fatalf("стейт = %+v, want пустой (реконструировать нечего)", st)
+	}
 }
 
 // Свежий вход, который портфель брокера ещё не показывает, обязан пережить пасс целиком:

@@ -11,9 +11,11 @@ import (
 	"tinvest/internal/service/trading_strategy/livecore/statestore"
 	"tinvest/internal/service/trading_strategy/livecore/stoporders"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/live/marketdata"
+	"tinvest/internal/service/trading_strategy/rsi_pullback/live/reconstruct"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 	"tinvest/internal/service/trading_strategy/scalping/model"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
+	"tinvest/internal/utils"
 	grpcmodel "tinvest/pkg/client/grpc/model"
 	"tinvest/pkg/logger"
 )
@@ -245,12 +247,31 @@ func (s *service) manage(ctx context.Context, pc *passCtx, ticker string, sh *im
 
 	entry, hasState := pc.state[ticker]
 	if !hasState {
-		// Восстановления стейта по API тут ещё нет: без EntryATR и замороженной цели ядро
-		// не может ни защитить позицию, ни закрыть её, а угаданные величины хуже
-		// отсутствующих — они молча уводят уровень стопа от того, что задала стратегия.
-		s.notify(notifier.Alert(alertLabel, ticker, "позиция без локального стейта — сопровождение невозможно, пропуск"))
-		logger.ErrorContext(ctx, fmt.Sprintf("rsi_pullback: %s held without state, skip", ticker))
-		return nil
+		// Позиция есть у брокера, локального стейта нет (переезд контейнера, потерянный
+		// том). Восстанавливаем по API: без EntryATR и замороженной цели ядро не может ни
+		// защитить позицию, ни закрыть её. Если реконструкция не удалась — пропуск, а не
+		// угаданные величины: они молча увели бы уровень стопа от того, что задала
+		// стратегия. Биржевой стоп при этом НЕ выставляется здесь: восстановленный entry
+		// идёт обычным путём manage ниже, где пустой StopOrderID сначала снимет чужую
+		// заявку по инструменту (если она осталась с прошлой жизни раннера), а затем
+		// поставит свою.
+		rebuilt, rerr := reconstruct.Entry(ctx, s.ops, s.market, s.cfg.AccountID, sh.ID, ticker,
+			utils.CombinePrice(pos.PurchasePrice.Units, pos.PurchasePrice.Nano),
+			mustParams(ticker), pc.now)
+		if rerr != nil {
+			s.notify(notifier.Alert(alertLabel, ticker, "позиция без локального стейта, реконструкция не удалась: "+rerr.Error()))
+			logger.ErrorContext(ctx, fmt.Sprintf("rsi_pullback: reconstruct %s: %v", ticker, rerr))
+			return nil
+		}
+		rebuilt.Quantity = pos.Quantity
+		entry = rebuilt
+		pc.state[ticker] = entry
+		if err := pc.store.Save(pc.state); err != nil {
+			return fmt.Errorf("rsi_pullback: save reconstructed state %s: %w", ticker, err)
+		}
+		s.notify(notifier.Alert(alertLabel, ticker, fmt.Sprintf(
+			"стейт восстановлен по API: вход %.4f от %s, дневной ATR %.4f, цель %.4f",
+			entry.EntryPrice, entry.EntryTime.Format("02.01 15:04"), entry.EntryATR, entry.TakeProfit)))
 	}
 
 	// Позиция усохла (частичный стоп или ручная продажа) — реконсилируем количество
