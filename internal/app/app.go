@@ -117,11 +117,10 @@ func (a *App) runDev(ctx context.Context) {
 			logger.Warn("RSI Pullback worker disabled: RSI_PULLBACK_ACCOUNT_ID/RSI_PULLBACK_TOKEN are not set")
 			return
 		}
-		err := rsipullbackscheduler.NewSchedulerService(a.sp.GetRSIPullbackLiveService()).Run(
-			ctx,
-			rsipullbackdto.Run{Scheduler: a.config.RSIPullback.Schedule},
-		)
-		if err != nil {
+		// Dev: один немедленный пасс, как у дайджеста новостей. Через cron-обёртку первый
+		// прогон пришлось бы ждать до ближайшей :01/:31, а смысл dev-режима именно в том,
+		// чтобы прогнать раннер сейчас и посмотреть, что он решит.
+		if err := a.sp.GetRSIPullbackLiveService().Run(ctx, rsipullbackdto.Run{}); err != nil {
 			logger.ErrorContext(ctx, "Error in worker RSI Pullback", err.Error())
 		}
 	}()

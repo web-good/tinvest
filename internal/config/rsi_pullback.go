@@ -27,6 +27,10 @@ type RSIPullbackConfig struct {
 // успел прийти из API с IsComplete=true. Все семь дней недели — позиция едет через
 // выходные, и бэктест отрабатывает выходы на выходных барах MOEX; входы на выходных
 // закрывает само ядро (tradingDay). Ночью 00:00-06:00 MSK торгов нет.
+//
+// Вселенная по умолчанию — UGLD, T и GAZP. Walk-forward прошёл только UGLD
+// (docs/rsi_pullback/live.md §10, риск 3); T и GAZP торгуются как принятый владельцем риск,
+// а не по недосмотру.
 func NewRSIPullbackConfig() *RSIPullbackConfig {
 	return &RSIPullbackConfig{
 		Tickers:  []string{"UGLD", "T", "GAZP"},
