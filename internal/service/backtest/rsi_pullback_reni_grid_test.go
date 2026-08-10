@@ -8,6 +8,26 @@ func reniGrid(t *testing.T, file string) map[string][]float64 {
 	return rsiPullbackTickerGrid(t, "reni", file)
 }
 
+// sameSet сообщает, содержит ли got ровно значения из want — без учёта порядка, но и без
+// пропусков, дублей и лишних точек. Проверка длины одна такую подмену не ловит: набор
+// [1,2] или [1,1] пройдёт len(got) == 2, хотя обе точки посторонние.
+func sameSet(got []float64, want ...float64) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	remaining := make(map[float64]int, len(want))
+	for _, w := range want {
+		remaining[w]++
+	}
+	for _, g := range got {
+		if remaining[g] == 0 {
+			return false
+		}
+		remaining[g]--
+	}
+	return true
+}
+
 // TestRENISignalGridsPinTheirMeasuredAxes сторожит оси, обоснованные замерами инструмента, а не
 // вкусом. Каталог reni/ заводится копированием структуры ugld/, и типовая ошибка такой копии —
 // притащить чужие оси целиком. По ширине RENI действительно сосед UGLD (дневной ATR 3.36% против
@@ -16,8 +36,8 @@ func reniGrid(t *testing.T, file string) map[string][]float64 {
 func TestRENISignalGridsPinTheirMeasuredAxes(t *testing.T) {
 	screen := reniGrid(t, "cal_screen.json")
 	for _, field := range []string{"UseDayATRGate", "UseVolume"} {
-		if got := screen[field]; len(got) != 2 {
-			t.Errorf("cal_screen.json: %s = %v, want обе точки [0,1] — тема меряет цену каждого гейта в сделках", field, got)
+		if got := screen[field]; !sameSet(got, 0, 1) {
+			t.Errorf("cal_screen.json: %s = %v, want ровно {0,1} — тема меряет цену каждого гейта в сделках, а любая другая пара не даёт сравнить гейт с его отсутствием", field, got)
 		}
 	}
 
@@ -148,16 +168,16 @@ func TestRENIRiskGridsPinTheirMeasuredAxes(t *testing.T) {
 
 	exit := reniGrid(t, "cal_exit.json")
 	// Это единственное место, где меряется полоса выхода: cal_entry.json её намеренно не свипует.
-	if len(exit["RSIUpper"]) < 5 {
-		t.Errorf("cal_exit.json: RSIUpper = %v, want полную ось 55..80 — cal_entry.json полосу выхода не свипует", exit["RSIUpper"])
+	if got := exit["RSIUpper"]; !sameSet(got, 55, 60, 65, 70, 75, 80) {
+		t.Errorf("cal_exit.json: RSIUpper = %v, want ровно {55,60,65,70,75,80} — cal_entry.json полосу выхода не свипует, а любая точка вне шкалы RSI или пропуск внутри неё сужает единственное место, где эта полоса измеряется", got)
 	}
 
 	trail := reniGrid(t, "cal_trail.json")
 	if got := trail["UseTrail"]; len(got) != 1 || got[0] != 1 {
 		t.Errorf("cal_trail.json: UseTrail = %v, want ровно [1] — тема меряет форму трейла, а не факт включения", got)
 	}
-	if len(trail["UseRSIExit"]) != 2 {
-		t.Errorf("cal_trail.json: UseRSIExit = %v, want обе точки [0,1] — трейл и RSI-выход конкурируют за одну сделку", trail["UseRSIExit"])
+	if got := trail["UseRSIExit"]; !sameSet(got, 0, 1) {
+		t.Errorf("cal_trail.json: UseRSIExit = %v, want ровно {0,1} — трейл и RSI-выход конкурируют за одну сделку, и посторонняя точка не даёт замерить оба режима", got)
 	}
 	// Правый край 0.8, а не 0.6 как у ugld/: там потолок задавала цель TPDailyATR=0.6, выше
 	// которой трейл не успевал взвестись; здесь ось цели поднята до 2.5, и трейлу нужно
