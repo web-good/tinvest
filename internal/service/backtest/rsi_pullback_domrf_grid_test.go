@@ -1,25 +1,12 @@
 package backtest
 
-import (
-	"path/filepath"
-	"testing"
-)
+import "testing"
 
-// domrfGrid читает файл сеток DOMRF и сливает оси всех его фаз в одну карту. Файлы каталога
-// однотемные, поэтому слияние не теряет информации, а тестам не приходится знать имя фазы.
+// domrfGrid читает файл сеток DOMRF. Общий хелпер живёт в rsi_pullback_grid_test.go: у него
+// появился второй потребитель (reni/), и копия разъехалась бы при первой же правке.
 func domrfGrid(t *testing.T, file string) map[string][]float64 {
 	t.Helper()
-	path := filepath.Join(rsiPullbackParamsDir, "domrf", file)
-	out := make(map[string][]float64)
-	for _, ph := range rsiPullbackPhases(t, path) {
-		for field, values := range ph.Grid {
-			out[field] = append(out[field], values...)
-		}
-	}
-	if len(out) == 0 {
-		t.Fatalf("%s: сетка пуста", file)
-	}
-	return out
+	return rsiPullbackTickerGrid(t, "domrf", file)
 }
 
 // TestDOMRFSignalGridsPinTheirMeasuredAxes сторожит решения, которые обоснованы замерами
