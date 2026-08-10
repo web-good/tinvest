@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/domrf"
 )
 
 // TestRSIPullbackBindingBuildsForTicker checks the wiring on a ticker whose package still
@@ -192,12 +193,13 @@ func TestRSIPullbackTBankKeepsItsOwnCalibratedLiteral(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackDOMRFIsRegisteredAndTracksBaseline пинует ДВА разных факта, которые
+// TestRSIPullbackDOMRFIsRegisteredAndCalibrated пинует ДВА разных факта, которые
 // RSIPullbackLookupOrGeneric снаружи неотличимы: DOMRF присутствует в карте (а не проваливается
-// в generic-ветку) И при этом возвращает baseline, а не литерал. Второе — это статус «калибровка
-// не проводилась» из docs/rsi_pullback/strategy.md §8.0.1: истории у DOMRF 8.4 месяца с IPO
-// 2025-11-20, и любой литерал здесь означал бы, что тикер откалиброван, чего нет.
-func TestRSIPullbackDOMRFIsRegisteredAndTracksBaseline(t *testing.T) {
+// в generic-ветку) И возвращает свой литерал, а не baseline. С 2026-08-10 тикер откалиброван и
+// принят владельцем в прод, поэтому бэктест обязан гонять ровно те параметры, что стоят в живом
+// раннере: иначе любая перепроверка отчёта DOMRF мерила бы не то, чем торгуют. Снимок самого
+// литерала живёт рядом с ним, в strategy/domrf/domrf_test.go.
+func TestRSIPullbackDOMRFIsRegisteredAndCalibrated(t *testing.T) {
 	b, ok := rsiPullbackRegistry["DOMRF"]
 	if !ok {
 		t.Fatal("DOMRF отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
@@ -206,8 +208,11 @@ func TestRSIPullbackDOMRFIsRegisteredAndTracksBaseline(t *testing.T) {
 	if !pok {
 		t.Fatalf("DefaultParams() вернул %T, want core.Params", b.DefaultParams())
 	}
-	if p != core.DefaultParams() {
-		t.Fatalf("DOMRF params = %+v, want baseline %+v — литерал означал бы «откалиброван»", p, core.DefaultParams())
+	if p == core.DefaultParams() {
+		t.Fatal("DOMRF вернул baseline: откалиброванный тикер обязан иметь собственный литерал")
+	}
+	if want := domrf.DefaultParams(); p != want {
+		t.Fatalf("DOMRF params = %+v, want литерал живого раннера %+v", p, want)
 	}
 	if got := b.Build(p).Ticker(); got != "DOMRF" {
 		t.Fatalf("Ticker() = %q, want DOMRF", got)

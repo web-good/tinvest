@@ -11,8 +11,8 @@ import (
 
 // paramsByTicker maps every rsi_pullback ticker the runner knows to its params. The
 // configured universe (RSI_PULLBACK_TICKERS) selects which of these actually trade;
-// NVTK and DOMRF are registered for completeness but have no calibrated literal yet and
-// must not be put into the universe.
+// NVTK is registered for completeness but has no calibrated literal yet and must not be put
+// into the universe.
 var paramsByTicker = map[string]core.Params{
 	ugld.Ticker:  ugld.DefaultParams(),
 	tbank.Ticker: tbank.DefaultParams(),
