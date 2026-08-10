@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"tinvest/internal/config"
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 )
 
 // Каждый тикер дефолтной вселенной обязан находиться в реестре, иначе раннер молча
@@ -12,6 +13,24 @@ func TestEveryDefaultTickerIsRegistered(t *testing.T) {
 	for _, ticker := range config.NewRSIPullbackConfig().Tickers {
 		if _, ok := ParamsFor(ticker); !ok {
 			t.Fatalf("ticker %s from the default universe is missing from the registry", ticker)
+		}
+	}
+}
+
+// Обратная сторона предыдущего теста: быть в реестре — не то же самое, что быть готовым к
+// торговле. NVTK и RENI зарегистрированы, но возвращают baseline, то есть параметры, которые
+// никогда не проверялись на этих инструментах. Попадание такого тикера в дефолтную вселенную
+// означало бы живые сделки по неоткалиброванной конфигурации, и заметить это по коду трудно:
+// внешне запись в карте выглядит так же, как у откалиброванного соседа.
+func TestBaselineTrackingTickersStayOutOfTheDefaultUniverse(t *testing.T) {
+	baseline := core.DefaultParams()
+	for _, ticker := range config.NewRSIPullbackConfig().Tickers {
+		p, ok := ParamsFor(ticker)
+		if !ok {
+			continue // отсутствие в реестре ловит тест выше
+		}
+		if p == baseline {
+			t.Errorf("%s стоит в дефолтной вселенной, но возвращает baseline: торговля пошла бы по неоткалиброванным параметрам", ticker)
 		}
 	}
 }
