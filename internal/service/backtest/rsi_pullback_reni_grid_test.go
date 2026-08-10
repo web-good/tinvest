@@ -1,6 +1,9 @@
 package backtest
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 // reniGrid читает файл сеток RENI через общий хелпер.
 func reniGrid(t *testing.T, file string) map[string][]float64 {
@@ -49,6 +52,14 @@ func TestRENISignalGridsPinTheirMeasuredAxes(t *testing.T) {
 			t.Errorf("cal_entry.json свипует RSILower=%v: выше 25 порог перестаёт отбирать откат (1765 кроссов под 30)", v)
 		}
 	}
+	// Ниже 10 сигналов не остаётся уже на самом мелком из свипуемых периодов: у RSI(6) на
+	// уровне 10 всего 51 будний кросс за 35.9 месяца, а более глубокий порог эту и без того
+	// тонкую выборку истончает дальше.
+	for _, v := range entry["RSILower"] {
+		if v < 10 {
+			t.Errorf("cal_entry.json свипует RSILower=%v: ниже 10 сигналов почти не остаётся (у RSI(6)@10 их всего 51)", v)
+		}
+	}
 	// Уровень 10 обязан остаться. Скринер выбрал для RENI лучшей конфигурацией RSI 6/10, и
 	// 51 будний кросс RSI(6)@10 эту точку выдерживает. На DOMRF таких кроссов было 18, и там
 	// уровень 10 вырезали — при копировании оттуда сужение легко притащить по ошибке.
@@ -60,6 +71,13 @@ func TestRENISignalGridsPinTheirMeasuredAxes(t *testing.T) {
 	}
 	if !hasDeep {
 		t.Errorf("cal_entry.json: RSILower = %v, не содержит 10 — основную гипотезу скринера", entry["RSILower"])
+	}
+	// RSIPeriod короче 4 покупает шум, а не откат — тот же порог и то же обоснование, что у
+	// DOMRF: RSI(3) реагирует на любое дрожание цены, а не на настоящий откат в тренде.
+	for _, v := range entry["RSIPeriod"] {
+		if v < 4 {
+			t.Errorf("cal_entry.json свипует RSIPeriod=%v: короче 4 это шум, а не откат (то же обоснование, что у DOMRF)", v)
+		}
 	}
 	// RSIUpper здесь не свипуется: 4x4x5 = 80 комбинаций на выборке около 36 сделок —
 	// переобучение по построению. Полоса выхода меряется отдельно, файлом cal_exit.json.
@@ -76,10 +94,20 @@ func TestRENISignalGridsPinTheirMeasuredAxes(t *testing.T) {
 		}
 	}
 	// Быстрая EMA обязана быть быстрее самой быстрой из медленных, иначе строка сетки означает
-	// фильтр, который никогда не пропускает вход.
-	for _, v := range trend["EMAFast"] {
-		if v >= 50 {
-			t.Errorf("cal_trend.json свипует EMAFast=%v: минимум оси EMASlow равен 50, такая пара мертва", v)
+	// фильтр, который никогда не пропускает вход. Порог берётся из фактического минимума оси
+	// EMASlow, а не зашивается константой: понижение оси EMASlow (например, до 20) иначе
+	// тихо перестало бы совпадать с тем, что здесь проверяется.
+	minSlow := math.Inf(1)
+	for _, v := range trend["EMASlow"] {
+		if v < minSlow {
+			minSlow = v
+		}
+	}
+	if !math.IsInf(minSlow, 1) {
+		for _, v := range trend["EMAFast"] {
+			if v >= minSlow {
+				t.Errorf("cal_trend.json свипует EMAFast=%v: минимум оси EMASlow сейчас %.0f, такая пара мертва", v, minSlow)
+			}
 		}
 	}
 }
@@ -105,6 +133,27 @@ func TestRENIRiskGridsPinTheirMeasuredAxes(t *testing.T) {
 		if v < 0.8 {
 			t.Errorf("cal_day.json свипует SpentDayATR=%v: порог достижим для 79%% дней, это не гейт", v)
 		}
+	}
+	// Соотношение двух веток гейта: положительный максимум FreshDayATR обязан быть строго
+	// меньше минимума SpentDayATR. dayStateOK пропускает бар, когда день ещё не раскрылся
+	// (used <= fresh*ATR) ИЛИ когда он уже исчерпан (used >= spent*ATR); если верх ветки
+	// «свежий» дотягивается до низа ветки «исчерпан» (или выше), обе полосы дают true почти
+	// на каждом баре, и UseDayATRGate=1 в лидерборде продолжит формально числиться включённым,
+	// хотя фактически не отсекает ничего.
+	maxFresh := 0.0
+	for _, v := range day["FreshDayATR"] {
+		if v > maxFresh {
+			maxFresh = v
+		}
+	}
+	minSpent := math.Inf(1)
+	for _, v := range day["SpentDayATR"] {
+		if v < minSpent {
+			minSpent = v
+		}
+	}
+	if maxFresh > 0 && !math.IsInf(minSpent, 1) && maxFresh >= minSpent {
+		t.Errorf("cal_day.json: max(FreshDayATR)=%.2f >= min(SpentDayATR)=%.2f — ветки «день начался» и «день исчерпан» перекрываются, dayStateOK почти всегда true, и гейт перестаёт что-либо отсекать несмотря на UseDayATRGate=1", maxFresh, minSpent)
 	}
 	// RSILower в этой фазе не свипуется: у ugld/ он раздувает тему до 60 прогонов, а глубина
 	// отката принадлежит cal_entry.json. Тема обязана остаться однотемной.
@@ -158,7 +207,16 @@ func TestRENIRiskGridsPinTheirMeasuredAxes(t *testing.T) {
 	if !hasTightStop {
 		t.Errorf("cal_risk.json: StopDailyATR = %v, не содержит 0.3 (издержки 0.030 ATR за круг эту строку лицензируют)", risk["StopDailyATR"])
 	}
-	// Верх оси 1.3: медианный день покрывает 0.88 ATR, такой стоп переживает целиком 87% дней.
+	// Нижняя граница оси: тот же круг издержек (0.030 ATR), который лицензирует строку 0.3
+	// (10% риска), запрещает идти уже. На 0.2 доля выросла бы до 15%, на 0.15 — до 20%: это
+	// ровно та черта, по которой DOMRF отверг свою строку 0.3 при 17%. «Попробуем стоп потуже»
+	// не должно суметь добавить 0.2 или 0.15 молча.
+	for _, v := range risk["StopDailyATR"] {
+		if v > 0 && v < 0.3 {
+			t.Errorf("cal_risk.json свипует StopDailyATR=%v: издержки съели бы %.0f%% риска (круг 0.030 ATR) — выше черты в 17%%, по которой DOMRF отверг ту же строку 0.3", v, 0.030/v*100)
+		}
+	}
+	// Верх оси 1.3: медианный день покрывает 0.88 ATR, такой стоп переживает целиком 80.2% дней.
 	// Шире — это уже не стоп, а отсутствие стопа, оплаченное размером позиции.
 	for _, v := range risk["StopDailyATR"] {
 		if v > 1.3 {
