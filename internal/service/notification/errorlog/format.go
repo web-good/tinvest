@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html"
 	"log/slog"
+	"sort"
 	"strings"
 	"time"
 
@@ -97,6 +98,28 @@ func formatSummary(classes []classCount, dropped int) string {
 	}
 
 	return truncateEscaped(b.String(), maxMessageLen)
+}
+
+// sortedClasses раскладывает счётчики подавленного по убыванию; при равенстве
+// счётчиков порядок задаётся ключом, чтобы сводка была воспроизводимой.
+func sortedClasses(m map[string]int) []classCount {
+	if len(m) == 0 {
+		return nil
+	}
+
+	out := make([]classCount, 0, len(m))
+	for key, count := range m {
+		out = append(out, classCount{key: key, count: count})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].count != out[j].count {
+			return out[i].count > out[j].count
+		}
+
+		return out[i].key < out[j].key
+	})
+
+	return out
 }
 
 // truncateEscaped обрезает уже экранированную строку до limit рун. Хвост

@@ -22,6 +22,13 @@ const (
 	eventBufferSize = 256
 	// summaryPeriod — период отправки сводки подавленного.
 	summaryPeriod = time.Minute
+	// dedupWindow — сколько молчим о повторе того же класса ошибки.
+	dedupWindow = 5 * time.Minute
+	// limitWindow и maxPerWindow — потолок отправок за окно. Telegram режет
+	// группу на ~20 сообщениях в минуту, а туда же пишут стратегии, новости и
+	// отчёты портфеля: половина лимита остаётся им.
+	limitWindow  = time.Minute
+	maxPerWindow = 10
 )
 
 // Sink принимает ERROR-записи логгера и доставляет их в Telegram.
@@ -38,6 +45,13 @@ type Sink struct {
 
 	ticker      *time.Ticker
 	summaryTick <-chan time.Time
+
+	// Состояние тротлинга. Живёт целиком внутри Run — единственной горутины,
+	// которая его трогает.
+	lastSent     map[string]time.Time
+	suppressed   map[string]int
+	windowStart  time.Time
+	sentInWindow int
 }
 
 // New собирает sink поверх готового Client, уже привязанного к нужному чату и теме.
@@ -58,6 +72,8 @@ func New(tg telegram.Client, appEnv string) *Sink {
 		events:      make(chan logger.ErrorEvent, eventBufferSize),
 		ticker:      ticker,
 		summaryTick: ticker.C,
+		lastSent:    make(map[string]time.Time),
+		suppressed:  make(map[string]int),
 	}
 }
 
@@ -89,15 +105,47 @@ func (s *Sink) Run(ctx context.Context) {
 	}
 }
 
-// handle решает судьбу одного события.
+// handle решает судьбу одного события: дедуп по классу, затем общий лимит.
+// Ключ дедупа — только текст сообщения: в ретрай-цикле атрибуты меняются
+// (тикер, id заявки, текст gRPC-ошибки), и ключ с ними не поймал бы дубли.
 func (s *Sink) handle(event logger.ErrorEvent) {
+	now := s.now()
+	s.rollWindow(now)
+
+	key := event.Message
+	if last, ok := s.lastSent[key]; ok && now.Sub(last) < dedupWindow {
+		s.suppressed[key]++
+
+		return
+	}
+	if s.sentInWindow >= maxPerWindow {
+		s.suppressed[key]++
+
+		return
+	}
+
+	s.lastSent[key] = now
+	s.sentInWindow++
 	s.send(formatEvent(event, s.appEnv, s.loc))
 }
 
-// flushSummary отправляет сводку подавленного за период.
+// rollWindow сбрасывает счётчик отправок при переходе в новое окно.
+func (s *Sink) rollWindow(now time.Time) {
+	if s.windowStart.IsZero() || now.Sub(s.windowStart) >= limitWindow {
+		s.windowStart = now
+		s.sentInWindow = 0
+	}
+}
+
+// flushSummary отправляет сводку подавленного и обнуляет счётчики. Сводка не
+// расходует лимит окна: она одна за период и обязана дойти — иначе тишина в
+// чате означала бы «ошибок нет» там, где они просто подавлены.
 func (s *Sink) flushSummary() {
 	dropped := int(s.dropped.Swap(0))
-	if msg := formatSummary(nil, dropped); msg != "" {
+	classes := sortedClasses(s.suppressed)
+	s.suppressed = make(map[string]int)
+
+	if msg := formatSummary(classes, dropped); msg != "" {
 		s.send(msg)
 	}
 }
