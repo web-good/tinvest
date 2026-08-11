@@ -1,4 +1,4 @@
-dd// Package core implements a long-only multi-day RSI pullback strategy. When flat it buys the dip
+// Package core implements a long-only multi-day RSI pullback strategy. When flat it buys the dip
 // inside an uptrend: the fast EMA must sit above the slow one and a short RSI must cross DOWN
 // through its lower band on the current bar. The stop and target are sized off the daily ATR at
 // entry and frozen on the position; the trade is closed on the first of: the protective stop
