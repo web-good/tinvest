@@ -106,13 +106,14 @@ func (s *Sink) Run(ctx context.Context) {
 }
 
 // handle решает судьбу одного события: дедуп по классу, затем общий лимит.
-// Ключ дедупа — только текст сообщения: в ретрай-цикле атрибуты меняются
-// (тикер, id заявки, текст gRPC-ошибки), и ключ с ними не поймал бы дубли.
+// Ключ дедупа считает dedupKey: в этом репозитории тикер, id заявки и текст
+// gRPC-ошибки зашиты в сам Message, а не в атрибуты, поэтому ключ нормализуется
+// до имени подсистемы — иначе дедуп не ловил бы ретрай-шторм вообще.
 func (s *Sink) handle(event logger.ErrorEvent) {
 	now := s.now()
 	s.rollWindow(now)
 
-	key := event.Message
+	key := dedupKey(event.Message)
 	if last, ok := s.lastSent[key]; ok && now.Sub(last) < dedupWindow {
 		s.suppressed[key]++
 
@@ -140,7 +141,19 @@ func (s *Sink) rollWindow(now time.Time) {
 // flushSummary отправляет сводку подавленного и обнуляет счётчики. Сводка не
 // расходует лимит окна: она одна за период и обязана дойти — иначе тишина в
 // чате означала бы «ошибок нет» там, где они просто подавлены.
+//
+// Заодно чистит lastSent от записей старше dedupWindow: они уже не могут
+// повлиять ни на одно решение дедупа, а без чистки карта росла бы без
+// ограничений — в процессе, работающем сутками, это медленная утечка памяти,
+// причём тем быстрее, чем больше в системе разных классов ошибок.
 func (s *Sink) flushSummary() {
+	now := s.now()
+	for key, ts := range s.lastSent {
+		if now.Sub(ts) >= dedupWindow {
+			delete(s.lastSent, key)
+		}
+	}
+
 	dropped := int(s.dropped.Swap(0))
 	classes := sortedClasses(s.suppressed)
 	s.suppressed = make(map[string]int)

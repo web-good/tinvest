@@ -153,6 +153,72 @@ func TestSummarySilentWhenNothingSuppressed(t *testing.T) {
 	}
 }
 
+func TestDedupNormalizesKeyBySubsystemPrefix(t *testing.T) {
+	sender := newFakeSender()
+	clock := newFakeClock(time.Date(2026, 8, 11, 11, 0, 0, 0, time.UTC))
+	sink, _ := newTestSink(t, sender, clock.Now)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go sink.Run(ctx)
+
+	sink.Publish(logger.ErrorEvent{Time: clock.Now(), Message: "rsi_pullback: UGLD marketdata: rpc error A"})
+	sender.waitSent(t, 1)
+
+	// Другой тикер и другой хвост, но та же подсистема — тот же класс дедупа.
+	sink.Publish(logger.ErrorEvent{Time: clock.Now(), Message: "rsi_pullback: NVTK candles: rpc error B"})
+	time.Sleep(200 * time.Millisecond)
+
+	if got := len(sender.snapshot()); got != 1 {
+		t.Fatalf("отправок %d, ожидалась 1: разные хвосты одной подсистемы — один класс дедупа", got)
+	}
+}
+
+func TestDedupDoesNotMergeDifferentSubsystems(t *testing.T) {
+	sender := newFakeSender()
+	clock := newFakeClock(time.Date(2026, 8, 11, 11, 0, 0, 0, time.UTC))
+	sink, _ := newTestSink(t, sender, clock.Now)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go sink.Run(ctx)
+
+	sink.Publish(logger.ErrorEvent{Time: clock.Now(), Message: "rsi_pullback: UGLD marketdata: rpc error A"})
+	sink.Publish(logger.ErrorEvent{Time: clock.Now(), Message: "backtest: candle chunk failed: boom"})
+
+	sender.waitSent(t, 2)
+
+	if got := len(sender.snapshot()); got != 2 {
+		t.Fatalf("отправок %d, ожидалось 2: разные подсистемы не должны склеиваться дедупом", got)
+	}
+}
+
+func TestFlushSummaryEvictsExpiredLastSent(t *testing.T) {
+	sender := newFakeSender()
+	clock := newFakeClock(time.Date(2026, 8, 11, 11, 0, 0, 0, time.UTC))
+	sink, tick := newTestSink(t, sender, clock.Now)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go sink.Run(ctx)
+
+	event := logger.ErrorEvent{Time: clock.Now(), Message: "не удалось получить свечи"}
+	sink.Publish(event)
+	sender.waitSent(t, 1)
+
+	clock.advance(dedupWindow + time.Second)
+	// Форсируем непустую сводку: сама по себе чистка lastSent сообщения не
+	// порождает, а без отправки нечем синхронизироваться с завершением
+	// flushSummary перед чтением состояния sink из тестовой горутины.
+	sink.dropped.Store(1)
+	tick <- clock.Now()
+	sender.waitSent(t, 1)
+
+	if got := len(sink.lastSent); got != 0 {
+		t.Errorf("lastSent не очищен после dedupWindow: %d записей осталось", got)
+	}
+}
+
 func TestSummaryResetsCountersBetweenPeriods(t *testing.T) {
 	sender := newFakeSender()
 	clock := newFakeClock(time.Date(2026, 8, 11, 11, 0, 0, 0, time.UTC))

@@ -162,6 +162,32 @@ func TestFormatSummaryEmpty(t *testing.T) {
 	}
 }
 
+func TestDedupKeyTakesPrefixBeforeColon(t *testing.T) {
+	tests := []struct {
+		name string
+		msg  string
+		want string
+	}{
+		{
+			name: "с двоеточием — берём подсистему",
+			msg:  "rsi_pullback: UGLD marketdata: rpc error A",
+			want: "rsi_pullback",
+		},
+		{
+			name: "без двоеточия — весь текст как есть",
+			msg:  "не удалось получить свечи",
+			want: "не удалось получить свечи",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := dedupKey(tt.msg); got != tt.want {
+				t.Errorf("dedupKey(%q) = %q, want %q", tt.msg, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestFormatSummaryEscapesClassNames(t *testing.T) {
 	got := formatSummary([]classCount{{key: "сбой <nil>", count: 2}}, 0)
 
