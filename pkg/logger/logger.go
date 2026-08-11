@@ -15,7 +15,8 @@ type any = interface{}
 var logger *slog.Logger
 
 func Init() {
-	logger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	base := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})
+	logger = slog.New(&teeHandler{base: base})
 }
 
 func Info(msg string, fields ...any) {
