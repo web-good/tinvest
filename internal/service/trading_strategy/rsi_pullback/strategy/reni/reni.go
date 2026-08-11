@@ -38,5 +38,24 @@ const Ticker = "RENI"
 
 // DefaultParams returns RENI's starting rsi_pullback parameters (pre-calibration).
 func DefaultParams() core.Params {
-	return core.DefaultParams()
+	return core.Params{
+		RSIPeriod:       4,
+		RSILower:        20,
+		RSIUpper:        70,
+		EMAFast:         10,
+		EMASlow:         100,
+		DailyATRPeriod:  14,
+		UseDayATRGate:   1,
+		FreshDayATR:     0,
+		SpentDayATR:     0.8,
+		StopDailyATR:    0.5,
+		TPDailyATR:      1.5,
+		UseVolume:       0,
+		VolBaseDays:     14,
+		VolLookbackBars: 3,
+		VolMult:         1.2,
+		UseRSIExit:      1,
+		UseTrail:        0,
+		TrailDailyATR:   0,
+	}
 }
