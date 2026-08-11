@@ -34,6 +34,24 @@ func rsiPullbackPhases(t *testing.T, path string) []Phase {
 	return phases
 }
 
+// rsiPullbackTickerGrid читает один файл сеток тикера и сливает оси всех его фаз в одну карту
+// «поле → значения». Файлы каталога однотемные, поэтому слияние не теряет информации, а
+// сторожевым тестам не приходится знать имя фазы.
+func rsiPullbackTickerGrid(t *testing.T, ticker, file string) map[string][]float64 {
+	t.Helper()
+	path := filepath.Join(rsiPullbackParamsDir, ticker, file)
+	out := make(map[string][]float64)
+	for _, ph := range rsiPullbackPhases(t, path) {
+		for field, values := range ph.Grid {
+			out[field] = append(out[field], values...)
+		}
+	}
+	if len(out) == 0 {
+		t.Fatalf("%s/%s: сетка пуста", ticker, file)
+	}
+	return out
+}
+
 // rsiPullbackGridFiles lists every grid file shipped for the strategy. They all live in
 // per-ticker subdirectories (gazp/, t/, ugld/), so the walk must be recursive: a flat glob
 // would match nothing at all and silently exempt the whole set from the checks below.

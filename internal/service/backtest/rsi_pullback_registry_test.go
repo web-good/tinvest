@@ -193,6 +193,30 @@ func TestRSIPullbackTBankKeepsItsOwnCalibratedLiteral(t *testing.T) {
 	}
 }
 
+// TestRSIPullbackRENITracksBaseline пинует состояние «калибровка не проводилась» из
+// docs/rsi_pullback/strategy.md §8.0.1. Пакет strategy/reni заведён 2026-08-10 по решению
+// владельца ДО калибровки — как место под будущий литерал и носитель замеров инструмента, — и
+// ровно поэтому его тело обязано оставаться `return core.DefaultParams()`. Появление здесь
+// литерала означало бы «тикер откалиброван», чего нет: по RENI не прогонялась ни одна из девяти
+// тем каталога data/params/rsi_pullback/reni/. Когда прогонятся и появится победитель, этот тест
+// заменяется снимком литерала — как это сделано для DOMRF ниже.
+func TestRSIPullbackRENITracksBaseline(t *testing.T) {
+	b, ok := rsiPullbackRegistry["RENI"]
+	if !ok {
+		t.Fatal("RENI отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
+	}
+	p, pok := b.DefaultParams().(core.Params)
+	if !pok {
+		t.Fatalf("DefaultParams() вернул %T, want core.Params", b.DefaultParams())
+	}
+	if p != core.DefaultParams() {
+		t.Fatalf("RENI params = %+v, want baseline %+v — литерал означал бы «откалиброван»", p, core.DefaultParams())
+	}
+	if got := b.Build(p).Ticker(); got != "RENI" {
+		t.Fatalf("Ticker() = %q, want RENI", got)
+	}
+}
+
 // TestRSIPullbackDOMRFIsRegisteredAndCalibrated пинует ДВА разных факта, которые
 // RSIPullbackLookupOrGeneric снаружи неотличимы: DOMRF присутствует в карте (а не проваливается
 // в generic-ветку) И возвращает свой литерал, а не baseline. С 2026-08-10 тикер откалиброван и
