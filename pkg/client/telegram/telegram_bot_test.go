@@ -5,13 +5,16 @@ package telegram
 // напрямую поверх tgbot.New с WithServerURL/WithSkipGetMe.
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	tgbot "github.com/go-telegram/bot"
+	"github.com/go-telegram/bot/models"
 )
 
 // sentRequest — распарсенное тело одного запроса sendMessage.
@@ -145,6 +148,70 @@ func TestBotSendMessageToTopicFallbackAlsoFails(t *testing.T) {
 
 	if got := len(fake.sent()); got != 2 {
 		t.Fatalf("expected 2 requests, got %d", got)
+	}
+}
+
+// TestPollingSurvivesHangingLongPoll: Telegram держит getUpdates открытым почти
+// весь pollTimeout, поэтому HTTP-клиенту нужен запас сверху. Если его нет,
+// клиент рвёт соединение раньше ответа и апдейты не доходят вообще.
+func TestPollingSurvivesHangingLongPoll(t *testing.T) {
+	const (
+		poll        = 200 * time.Millisecond
+		httpTimeout = 3 * time.Second
+		serverDelay = 600 * time.Millisecond // дольше poll: сервер «висит» на long poll
+	)
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/getUpdates") {
+			http.Error(w, `{"ok":false,"error_code":404,"description":"unexpected method"}`, http.StatusNotFound)
+			return
+		}
+		select {
+		case <-time.After(serverDelay):
+		case <-r.Context().Done():
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true,"result":[{"update_id":1,"message":{"message_id":1,"date":1,` +
+			`"chat":{"id":1,"type":"private"},"text":"/ping"}}]}`))
+	}))
+	t.Cleanup(ts.Close)
+
+	opts := append(pollingOptions(poll, httpTimeout), tgbot.WithServerURL(ts.URL), tgbot.WithSkipGetMe())
+	api, err := tgbot.New("test-token", opts...)
+	if err != nil {
+		t.Fatalf("tgbot.New: %v", err)
+	}
+
+	delivered := make(chan string, 1)
+	api.RegisterHandlerMatchFunc(
+		func(u *models.Update) bool { return u.Message != nil },
+		func(_ context.Context, _ *tgbot.Bot, u *models.Update) {
+			select {
+			case delivered <- u.Message.Text:
+			default:
+			}
+		},
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go api.Start(ctx)
+
+	select {
+	case got := <-delivered:
+		if got != "/ping" {
+			t.Errorf("delivered text = %q, want %q", got, "/ping")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("апдейт не доставлен: HTTP-клиент обрывает long poll раньше, чем сервер отвечает")
+	}
+}
+
+func TestPollingTimeoutsHaveHeadroom(t *testing.T) {
+	if headroom := pollHTTPTimeout - pollTimeout; headroom < 10*time.Second {
+		t.Errorf("запас HTTP-таймаута над pollTimeout = %v, want >= 10s: %v против %v",
+			headroom, pollHTTPTimeout, pollTimeout)
 	}
 }
 

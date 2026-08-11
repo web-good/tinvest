@@ -3,6 +3,7 @@ package telegram
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strconv"
 	"time"
 
@@ -18,7 +19,27 @@ type Client interface {
 	SendMessageToTopic(chatID int64, threadID int, msg string) error
 }
 
-const sendTimeout = 30 * time.Second
+const (
+	sendTimeout = 30 * time.Second
+
+	// pollTimeout — сколько Telegram держит открытым getUpdates;
+	// pollHTTPTimeout — потолок ожидания у HTTP-клиента. Второй заведомо
+	// больше первого: у библиотеки они по умолчанию равны (минута против
+	// минуты), и любая сетевая задержка выше секунды роняет каждый long poll
+	// в «Client.Timeout exceeded while awaiting headers».
+	pollTimeout     = 30 * time.Second
+	pollHTTPTimeout = 60 * time.Second
+)
+
+// pollingOptions собирает опции long-polling.
+func pollingOptions(poll, httpTimeout time.Duration) []tgbot.Option {
+	return []tgbot.Option{
+		// No-op default handler: иначе библиотека дампит в лог каждый update,
+		// не пойманный зарегистрированными хендлерами.
+		tgbot.WithDefaultHandler(func(_ context.Context, _ *tgbot.Bot, _ *models.Update) {}),
+		tgbot.WithHTTPClient(poll, &http.Client{Timeout: httpTimeout}),
+	}
+}
 
 // Bot — клиент поверх go-telegram/bot. Реализует Client с destination по
 // умолчанию (defaultChatID, General).
@@ -69,11 +90,7 @@ func (b *Bot) SendMessageToTopic(chatID int64, threadID int, msg string) error {
 }
 
 func InitTelegramBot(token string, defaultChatID int64) (*Bot, error) {
-	// No-op default handler: иначе библиотека дампит в лог каждый update,
-	// не пойманный зарегистрированными хендлерами.
-	api, err := tgbot.New(token, tgbot.WithDefaultHandler(
-		func(_ context.Context, _ *tgbot.Bot, _ *models.Update) {},
-	))
+	api, err := tgbot.New(token, pollingOptions(pollTimeout, pollHTTPTimeout)...)
 	if err != nil {
 		return nil, err
 	}
