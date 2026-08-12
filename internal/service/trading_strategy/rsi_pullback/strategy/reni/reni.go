@@ -1,14 +1,26 @@
-// Package reni supplies the ticker and starting rsi_pullback Params for RENI
+// Package reni supplies the ticker and calibrated rsi_pullback Params for RENI
 // (Ренессанс Страхование).
 //
-// Calibration has NOT been run for this ticker: the body returns core.DefaultParams()
-// unchanged rather than copying its fields, so a change to the baseline still reaches every
-// uncalibrated ticker instead of silently drifting away from it. Once -calibrate picks a
-// winning combination for RENI, replace the body with an explicit literal — from that point
-// the ticker must stop tracking the baseline, and the literal must be pinned by a snapshot
-// test the way ugld and domrf pin theirs.
+// Тикер откалиброван 2026-08-12: литерал ниже — параметры отчёта
+// reports/RENI/RENI_rsi_pullback_Minutes30_20260812_005046.md (74 сделки, in-sample PF 1.885 за
+// 24 месяца). Связь с baseline разорвана осознанно, литерал прибит снимком в reni_test.go.
 //
-// Что известно об инструменте до калибровки (замеры 2026-08-10, спека
+// Walk-forward того же дня (RENI_rsi_pullback_Minutes30_20260812_003547_walkforward.md) дал
+// pooled OOS PF 2.060 на 78 сделках при 4 фолдах, и это лучший результат среди тикеров после
+// ugld. Две оговорки, которые обязаны ехать вместе с этим числом:
+//
+//   - Фолд 3 (OOS 2025-08-12—2026-02-12) провален: PF 0.337 на 7 сделках. Пул вытянут фолдами
+//     1, 2 и 4 — то есть режим, в котором стратегия не работает, в окне существует.
+//   - Стабильным во всех четырёх фолдах walk-forward назвал TPDailyATR=0.6, а в литерале стоит
+//     1.5. Это единственное поле, где принятый конфиг расходится с победителем walk-forward, и
+//     его OOS-подтверждение относится к 0.6, а не к 1.5.
+//
+// Из-за второй оговорки решение о боевой вселенной RSI_PULLBACK_TICKERS остаётся за владельцем:
+// наличие литерала снимает техническую блокировку (TestBaselineTrackingTickersStayOutOfTheDefaultUniverse
+// больше не валит сборку на RENI), но не заменяет подтверждение именно тех параметров, которыми
+// пойдёт торговля.
+//
+// Что известно об инструменте (замеры 2026-08-10, спека
 // docs/superpowers/specs/2026-08-10-reni-rsi-pullback-prep-design.md):
 //
 //   - Истории достаточно: 31 658 30-минутных баров (23 071 будний) за 35.9 месяца с
@@ -24,11 +36,10 @@
 //   - Оборот 91 млн ₽/день — вчетверо ниже domrf. Калибровку это не ограничивает, но станет
 //     ограничением на размер позиции, если тикер дойдёт до живой вселенной.
 //
-// Пакет заведён до калибровки по решению владельца — как место, куда ляжет литерал, и как
-// носитель замеров выше. Пока тела нет, он не несёт ни одного значения параметра: тот же
-// baseline вернула бы generic-ветка RSIPullbackLookupOrGeneric для незарегистрированного
-// имени. Из этого следует главное ограничение: RENI не должен попадать в боевую вселенную
-// RSI_PULLBACK_TICKERS, пока literal не появился.
+// Пакет был заведён 2026-08-10 до калибровки — как место, куда ляжет литерал, и как носитель
+// замеров выше. С появлением литерала 2026-08-12 исключение закрыто: пакет несёт собственные
+// значения параметров, а не тот же baseline, что вернула бы generic-ветка
+// RSIPullbackLookupOrGeneric для незарегистрированного имени.
 package reni
 
 import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
@@ -36,7 +47,7 @@ import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 // Ticker is the instrument this package configures.
 const Ticker = "RENI"
 
-// DefaultParams returns RENI's starting rsi_pullback parameters (pre-calibration).
+// DefaultParams returns RENI's calibrated rsi_pullback parameters.
 func DefaultParams() core.Params {
 	return core.Params{
 		RSIPeriod:       4,

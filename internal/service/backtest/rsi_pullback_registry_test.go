@@ -5,6 +5,7 @@ import (
 
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/domrf"
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/reni"
 )
 
 // TestRSIPullbackBindingBuildsForTicker checks the wiring on a ticker whose package still
@@ -193,14 +194,13 @@ func TestRSIPullbackTBankKeepsItsOwnCalibratedLiteral(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackRENITracksBaseline пинует состояние «калибровка не проводилась» из
-// docs/rsi_pullback/strategy.md §8.0.1. Пакет strategy/reni заведён 2026-08-10 по решению
-// владельца ДО калибровки — как место под будущий литерал и носитель замеров инструмента, — и
-// ровно поэтому его тело обязано оставаться `return core.DefaultParams()`. Появление здесь
-// литерала означало бы «тикер откалиброван», чего нет: по RENI не прогонялась ни одна из девяти
-// тем каталога data/params/rsi_pullback/reni/. Когда прогонятся и появится победитель, этот тест
-// заменяется снимком литерала — как это сделано для DOMRF ниже.
-func TestRSIPullbackRENITracksBaseline(t *testing.T) {
+// TestRSIPullbackRENIIsRegisteredAndCalibrated пинует два неотличимых снаружи факта: RENI есть
+// в карте (а не проваливается в generic-ветку) И возвращает собственный литерал, а не baseline.
+// Пакет strategy/reni заведён 2026-08-10 ДО калибровки и до 2026-08-12 обязан был возвращать
+// core.DefaultParams(); калибровка прогналась, литерал появился — и теперь бэктест обязан гонять
+// ровно его, иначе перепроверка отчёта RENI мерила бы не то, что стоит в коде. Снимок самого
+// литерала живёт рядом с ним, в strategy/reni/reni_test.go.
+func TestRSIPullbackRENIIsRegisteredAndCalibrated(t *testing.T) {
 	b, ok := rsiPullbackRegistry["RENI"]
 	if !ok {
 		t.Fatal("RENI отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
@@ -209,8 +209,11 @@ func TestRSIPullbackRENITracksBaseline(t *testing.T) {
 	if !pok {
 		t.Fatalf("DefaultParams() вернул %T, want core.Params", b.DefaultParams())
 	}
-	if p != core.DefaultParams() {
-		t.Fatalf("RENI params = %+v, want baseline %+v — литерал означал бы «откалиброван»", p, core.DefaultParams())
+	if p == core.DefaultParams() {
+		t.Fatal("RENI вернул baseline: откалиброванный тикер обязан иметь собственный литерал")
+	}
+	if want := reni.DefaultParams(); p != want {
+		t.Fatalf("RENI params = %+v, want литерал пакета %+v", p, want)
 	}
 	if got := b.Build(p).Ticker(); got != "RENI" {
 		t.Fatalf("Ticker() = %q, want RENI", got)
