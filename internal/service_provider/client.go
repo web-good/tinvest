@@ -107,6 +107,18 @@ func (s *ServiceProvider) GetNewsSender() (telegram.Client, error) {
 	return s.topicSender(s.appConfig.TelegramClient.TopicNews, "news")
 }
 
+// GetErrorLogSender строит Client для темы General (threadID 0) — туда
+// дублируются ERROR-логи. Отдельный метод, а не topicSender: у General нет
+// собственного id темы, и предупреждение «topic id is not set» здесь ложное.
+func (s *ServiceProvider) GetErrorLogSender() (telegram.Client, error) {
+	base, err := s.GetTelegramBot()
+	if err != nil {
+		return nil, err
+	}
+
+	return telegram.NewTopicSender(base, s.appConfig.TelegramClient.GroupChatID, 0), nil
+}
+
 // topicSender строит Client, привязанный к теме форума; при незаданном ID
 // темы сообщения уходят в General (threadID 0), о чём предупреждаем в логе.
 func (s *ServiceProvider) topicSender(threadID int, name string) (telegram.Client, error) {

@@ -53,7 +53,7 @@
 - Consumes: ничего (первая задача).
 - Produces: `logger.ErrorEvent{Time time.Time; Message string; Attrs []slog.Attr}`, `logger.ErrorSink` с методом `Publish(ErrorEvent)`, функция `logger.SetErrorSink(s ErrorSink)`. На них опираются Task 2, 3, 4, 5.
 
-- [ ] **Step 1: Написать падающие тесты**
+- [x] **Step 1: Написать падающие тесты**
 
 Создать `pkg/logger/sink_test.go`:
 
@@ -165,12 +165,12 @@ func TestErrorWithoutSinkDoesNotPanic(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Убедиться, что тесты не компилируются/падают**
+- [x] **Step 2: Убедиться, что тесты не компилируются/падают**
 
 Run: `go test ./pkg/logger/ -run TestError -v`
 Expected: FAIL — `undefined: ErrorEvent`, `undefined: teeHandler`, `undefined: SetErrorSink`.
 
-- [ ] **Step 3: Реализовать sink.go**
+- [x] **Step 3: Реализовать sink.go**
 
 Создать `pkg/logger/sink.go`:
 
@@ -254,7 +254,7 @@ func eventFromRecord(record slog.Record) ErrorEvent {
 }
 ```
 
-- [ ] **Step 4: Подключить teeHandler в Init**
+- [x] **Step 4: Подключить teeHandler в Init**
 
 В `pkg/logger/logger.go` заменить тело `Init`:
 
@@ -265,12 +265,12 @@ func Init() {
 }
 ```
 
-- [ ] **Step 5: Прогнать тесты**
+- [x] **Step 5: Прогнать тесты**
 
 Run: `go test ./pkg/logger/ -race -v`
 Expected: PASS, все четыре теста.
 
-- [ ] **Step 6: Коммит**
+- [x] **Step 6: Коммит**
 
 ```bash
 git add pkg/logger/sink.go pkg/logger/sink_test.go pkg/logger/logger.go
@@ -296,7 +296,7 @@ git commit -m "feat(logger): хук ErrorSink на записи уровня ERR
 
   На них опираются Task 3 и Task 4.
 
-- [ ] **Step 1: Написать падающие тесты**
+- [x] **Step 1: Написать падающие тесты**
 
 Создать `internal/service/notification/errorlog/format_test.go`:
 
@@ -474,12 +474,12 @@ func TestFormatSummaryEscapesClassNames(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Убедиться, что тесты падают**
+- [x] **Step 2: Убедиться, что тесты падают**
 
 Run: `go test ./internal/service/notification/errorlog/ -v`
 Expected: FAIL — `undefined: formatEvent`, `undefined: formatSummary`, `undefined: classCount`.
 
-- [ ] **Step 3: Реализовать format.go**
+- [x] **Step 3: Реализовать format.go**
 
 Создать `internal/service/notification/errorlog/format.go`:
 
@@ -603,12 +603,12 @@ func truncateEscaped(s string, limit int) string {
 }
 ```
 
-- [ ] **Step 4: Прогнать тесты**
+- [x] **Step 4: Прогнать тесты**
 
 Run: `go test ./internal/service/notification/errorlog/ -race -v`
 Expected: PASS, все девять тестов.
 
-- [ ] **Step 5: Коммит**
+- [x] **Step 5: Коммит**
 
 ```bash
 git add internal/service/notification/errorlog/format.go internal/service/notification/errorlog/format_test.go
@@ -637,7 +637,7 @@ git commit -m "feat(errorlog): формат сообщений об ошибка
 
   На них опирается Task 4 (правит `handle`/`flushSummary`) и Task 5 (зовёт `New`/`Run`).
 
-- [ ] **Step 1: Написать падающие тесты**
+- [x] **Step 1: Написать падающие тесты**
 
 Создать `internal/service/notification/errorlog/errorlog_test.go`:
 
@@ -817,12 +817,12 @@ var errFakeSend = errors.New("telegram недоступен")
 
 (и импорт `"errors"`).
 
-- [ ] **Step 2: Убедиться, что тесты падают**
+- [x] **Step 2: Убедиться, что тесты падают**
 
 Run: `go test ./internal/service/notification/errorlog/ -run TestSink -v`
 Expected: FAIL — `undefined: New`, `undefined: Sink`, `undefined: eventBufferSize`.
 
-- [ ] **Step 3: Реализовать errorlog.go**
+- [x] **Step 3: Реализовать errorlog.go**
 
 Создать `internal/service/notification/errorlog/errorlog.go`:
 
@@ -939,12 +939,12 @@ func (s *Sink) send(msg string) {
 }
 ```
 
-- [ ] **Step 4: Прогнать тесты пакета**
+- [x] **Step 4: Прогнать тесты пакета**
 
 Run: `go test ./internal/service/notification/errorlog/ -race -v`
 Expected: PASS — тесты формата из Task 2 и четыре новых.
 
-- [ ] **Step 5: Коммит**
+- [x] **Step 5: Коммит**
 
 ```bash
 git add internal/service/notification/errorlog/errorlog.go internal/service/notification/errorlog/errorlog_test.go
@@ -963,7 +963,7 @@ git commit -m "feat(errorlog): доставка ERROR-записей в telegram
 - Consumes: `Sink`, `New`, `Publish`, `Run`, `send` (Task 3); `formatSummary`, `classCount` (Task 2); тестовые хелперы `fakeSender`, `newTestSink` из `errorlog_test.go` (Task 3) — они в том же пакете.
 - Produces: новые поля `Sink`: `lastSent map[string]time.Time`, `suppressed map[string]int`, `windowStart time.Time`, `sentInWindow int`; функция `sortedClasses(m map[string]int) []classCount`; константы `dedupWindow = 5 * time.Minute`, `maxPerWindow = 10`, `limitWindow = time.Minute`.
 
-- [ ] **Step 1: Написать падающие тесты**
+- [x] **Step 1: Написать падающие тесты**
 
 Создать `internal/service/notification/errorlog/throttle_test.go`:
 
@@ -1146,12 +1146,12 @@ func TestSummaryResetsCountersBetweenPeriods(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Убедиться, что тесты падают**
+- [x] **Step 2: Убедиться, что тесты падают**
 
 Run: `go test ./internal/service/notification/errorlog/ -run 'TestDuplicate|TestPerWindow|TestSummary' -v`
 Expected: FAIL — `undefined: dedupWindow`, `undefined: maxPerWindow`, `undefined: limitWindow`; тесты дедупа падают, потому что `handle` пока шлёт всё подряд.
 
-- [ ] **Step 3: Добавить константы и поля состояния**
+- [x] **Step 3: Добавить константы и поля состояния**
 
 В `internal/service/notification/errorlog/errorlog.go` дополнить блок констант:
 
@@ -1190,7 +1190,7 @@ const (
 		suppressed:  make(map[string]int),
 ```
 
-- [ ] **Step 4: Реализовать дедуп и лимит в handle**
+- [x] **Step 4: Реализовать дедуп и лимит в handle**
 
 Заменить `handle` и `flushSummary` в `errorlog.go`:
 
@@ -1241,7 +1241,7 @@ func (s *Sink) flushSummary() {
 }
 ```
 
-- [ ] **Step 5: Реализовать sortedClasses**
+- [x] **Step 5: Реализовать sortedClasses**
 
 Добавить в `internal/service/notification/errorlog/format.go`:
 
@@ -1271,12 +1271,12 @@ func sortedClasses(m map[string]int) []classCount {
 
 Добавить импорт `"sort"` в `format.go`.
 
-- [ ] **Step 6: Прогнать весь пакет**
+- [x] **Step 6: Прогнать весь пакет**
 
 Run: `go test ./internal/service/notification/errorlog/ -race -v`
 Expected: PASS — тесты формата, доставки и все пять новых тестов тротлинга.
 
-- [ ] **Step 7: Коммит**
+- [x] **Step 7: Коммит**
 
 ```bash
 git add internal/service/notification/errorlog/errorlog.go internal/service/notification/errorlog/format.go internal/service/notification/errorlog/throttle_test.go
@@ -1299,7 +1299,7 @@ git commit -m "feat(errorlog): дедуп, лимит частоты и мину
 
 Автотестов у пакетов `internal/app` и `internal/service_provider` в репозитории нет — это чистый wiring; приёмка задачи опирается на компиляцию, `./bin/mage ci` и ручной прогон из Step 6.
 
-- [ ] **Step 1: Добавить GetErrorLogSender**
+- [x] **Step 1: Добавить GetErrorLogSender**
 
 В `internal/service_provider/client.go` после `GetNewsSender` добавить:
 
@@ -1317,7 +1317,7 @@ func (s *ServiceProvider) GetErrorLogSender() (telegram.Client, error) {
 }
 ```
 
-- [ ] **Step 2: Написать шаг инициализации**
+- [x] **Step 2: Написать шаг инициализации**
 
 Создать `internal/app/init_error_log_sink.go`:
 
@@ -1362,7 +1362,7 @@ func (a *App) initErrorLogSink(ctx context.Context) error {
 }
 ```
 
-- [ ] **Step 3: Включить шаг в список инициализации**
+- [x] **Step 3: Включить шаг в список инициализации**
 
 В `internal/app/app.go`, в `initializationLoop`, дополнить срез `inits`:
 
@@ -1377,12 +1377,12 @@ func (a *App) initErrorLogSink(ctx context.Context) error {
 	}
 ```
 
-- [ ] **Step 4: Проверить сборку и весь тестовый набор**
+- [x] **Step 4: Проверить сборку и весь тестовый набор**
 
 Run: `go build ./internal/... ./pkg/... ./cmd/... && go test ./... -race`
 Expected: сборка без ошибок, тесты PASS.
 
-- [ ] **Step 5: Прогнать приёмочный гейт**
+- [x] **Step 5: Прогнать приёмочный гейт**
 
 Run: `./bin/mage ci`
 Expected: lint без замечаний, `go test -race ./...` PASS, проверка дрейфа моков PASS.
@@ -1395,7 +1395,7 @@ Run: `APP_ENV=dev go run ./cmd/main`
 
 Если за прогон ошибок не случилось, форсировать проверку так: временно испортить `RSI_PULLBACK_TOKEN` в `env/local.env` (например, дописать символ) — воркер залогирует ошибку обращения к API, и она должна прийти в General. Портить `TELEGRAM`/`TELEGRAM_GROUP_CHAT_ID` для этой цели нельзя: они ломают сам канал доставки. После проверки вернуть токен обратно и убедиться, что ошибки прекратились.
 
-- [ ] **Step 7: Обновить CLAUDE.md**
+- [x] **Step 7: Обновить CLAUDE.md**
 
 В `CLAUDE.md`, в разделе `## Development Notes`, после абзаца про Telegram-темы добавить:
 
@@ -1403,7 +1403,7 @@ Run: `APP_ENV=dev go run ./cmd/main`
 - Все записи уровня ERROR дублируются сообщением в тему «General» Telegram-группы (`internal/service/notification/errorlog`, подключается шагом `initErrorLogSink` в `internal/app`). В stdout поток логов не меняется; в Telegram действуют дедуп по тексту сообщения (5 минут), лимит 10 сообщений в минуту и минутная сводка подавленного. Спека: `docs/superpowers/specs/2026-08-11-error-log-telegram-design.md`.
 ```
 
-- [ ] **Step 8: Коммит**
+- [x] **Step 8: Коммит**
 
 ```bash
 git add internal/service_provider/client.go internal/app/init_error_log_sink.go internal/app/app.go CLAUDE.md

@@ -66,6 +66,7 @@ func (a *App) initializationLoop(ctx context.Context) (err error) {
 		a.initServiceProvider,
 		a.initGrpcClient,
 		a.initTelegramBotClient,
+		a.initErrorLogSink,
 	}
 	err = nil
 
