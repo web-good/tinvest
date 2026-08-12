@@ -5,6 +5,7 @@ import (
 
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/domrf"
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/fesh"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/reni"
 )
 
@@ -243,5 +244,33 @@ func TestRSIPullbackDOMRFIsRegisteredAndCalibrated(t *testing.T) {
 	}
 	if got := b.Build(p).Ticker(); got != "DOMRF" {
 		t.Fatalf("Ticker() = %q, want DOMRF", got)
+	}
+}
+
+// TestRSIPullbackFESHTracksBaseline пинует состояние «калибровка не проводилась»: FESH обязан
+// быть в карте (а не проваливаться в generic-ветку) И обязан возвращать РОВНО baseline. Оба
+// факта снаружи неотличимы от откалиброванного соседа, и оба могут молча сломаться:
+// пропавшая запись в карте даёт generic-биндинг с теми же значениями, а «улучшение» литерала
+// без прогона даёт параметры, которые никогда не проверялись на этом инструменте.
+// Когда калибровка FESH пройдёт и литерал появится, этот тест заменяется снимком литерала —
+// по образцу TestRSIPullbackRENIIsRegisteredAndCalibrated.
+func TestRSIPullbackFESHTracksBaseline(t *testing.T) {
+	b, ok := rsiPullbackRegistry["FESH"]
+	if !ok {
+		t.Fatal("FESH отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
+	}
+	raw := b.DefaultParams()
+	p, ok := raw.(core.Params)
+	if !ok {
+		t.Fatalf("FESH: DefaultParams() вернул %T, want core.Params", raw)
+	}
+	if p != core.DefaultParams() {
+		t.Fatalf("FESH params = %+v, want baseline %+v — калибровка не проводилась, литерала быть не должно", p, core.DefaultParams())
+	}
+	if want := fesh.DefaultParams(); p != want {
+		t.Fatalf("FESH params = %+v, want литерал пакета %+v", p, want)
+	}
+	if got := b.Build(p).Ticker(); got != "FESH" {
+		t.Fatalf("Ticker() = %q, want FESH", got)
 	}
 }

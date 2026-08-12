@@ -3,6 +3,7 @@ package live
 import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/domrf"
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/fesh"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/gazp"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/nvtk"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/reni"
@@ -12,7 +13,7 @@ import (
 
 // paramsByTicker maps every rsi_pullback ticker the runner knows to its params. The
 // configured universe (RSI_PULLBACK_TICKERS) selects which of these actually trade;
-// NVTK and RENI are registered for completeness but have no calibrated literal yet — both
+// NVTK and FESH are registered for completeness but have no calibrated literal yet — both
 // return the baseline — and must not be put into the universe.
 var paramsByTicker = map[string]core.Params{
 	ugld.Ticker:  ugld.DefaultParams(),
@@ -21,6 +22,7 @@ var paramsByTicker = map[string]core.Params{
 	nvtk.Ticker:  nvtk.DefaultParams(),
 	domrf.Ticker: domrf.DefaultParams(),
 	reni.Ticker:  reni.DefaultParams(),
+	fesh.Ticker:  fesh.DefaultParams(),
 }
 
 // ParamsFor returns the params for a known ticker, ok=false otherwise.
