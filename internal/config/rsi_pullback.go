@@ -28,14 +28,17 @@ type RSIPullbackConfig struct {
 // выходные, и бэктест отрабатывает выходы на выходных барах MOEX; входы на выходных
 // закрывает само ядро (tradingDay). Ночью 00:00-06:00 MSK торгов нет.
 //
-// Вселенная по умолчанию — UGLD, T, GAZP и DOMRF. Walk-forward прошёл только UGLD
-// (docs/rsi_pullback/live.md §10, риск 3); T, GAZP и DOMRF торгуются как принятый владельцем
+// Вселенная по умолчанию — UGLD, T, GAZP, DOMRF и FESH. Walk-forward прошёл только UGLD
+// (docs/rsi_pullback/live.md §10, риск 3); остальные четыре торгуются как принятый владельцем
 // риск, а не по недосмотру. У DOMRF риск самый крупный: 8.6 месяца истории, вся она — один
 // пост-IPO аптренд, out-of-sample по существу один фолд на 8 сделках (подробности и замеры —
-// в доке пакета strategy/domrf).
+// в доке пакета strategy/domrf). FESH заведён 2026-08-13 (риск 7): истории у него как раз
+// достаточно, но штатный протокол его НЕ подтверждает — тематические сетки на четырёх фолдах
+// дают pooled OOS PF 1.029 по входу и 0.953 по тренду, а хорошие 2.366 принадлежат
+// конфигурации, выбранной человеком, видевшим всю историю (док пакета strategy/fesh).
 func NewRSIPullbackConfig() *RSIPullbackConfig {
 	return &RSIPullbackConfig{
-		Tickers:  []string{"UGLD", "T", "GAZP", "DOMRF"},
+		Tickers:  []string{"UGLD", "T", "GAZP", "DOMRF", "FESH"},
 		BuyPct:   5,
 		Schedule: "1,31 6-23 * * *",
 	}
