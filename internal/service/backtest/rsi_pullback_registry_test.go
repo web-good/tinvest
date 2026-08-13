@@ -247,25 +247,29 @@ func TestRSIPullbackDOMRFIsRegisteredAndCalibrated(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackFESHTracksBaseline пинует состояние «калибровка не проводилась»: FESH обязан
-// быть в карте (а не проваливаться в generic-ветку) И обязан возвращать РОВНО baseline. Оба
-// факта снаружи неотличимы от откалиброванного соседа, и оба могут молча сломаться:
-// пропавшая запись в карте даёт generic-биндинг с теми же значениями, а «улучшение» литерала
-// без прогона даёт параметры, которые никогда не проверялись на этом инструменте.
-// Когда калибровка FESH пройдёт и литерал появится, этот тест заменяется снимком литерала —
-// по образцу TestRSIPullbackRENIIsRegisteredAndCalibrated.
-func TestRSIPullbackFESHTracksBaseline(t *testing.T) {
+// TestRSIPullbackFESHIsRegisteredAndCalibrated пинует два неотличимых снаружи факта: FESH есть
+// в карте (а не проваливается в generic-ветку) И возвращает собственный литерал, а не baseline.
+// Пакет strategy/fesh заведён 2026-08-12 ДО калибровки и до 2026-08-13 обязан был возвращать
+// core.DefaultParams(); калибровка прогналась, литерал появился — и теперь бэктест обязан гонять
+// ровно его, иначе перепроверка замеров FESH мерила бы не то, что стоит в коде. Снимок самого
+// литерала живёт рядом с ним, в strategy/fesh/fesh_test.go, вместе с обоснованием двух полей,
+// которые чаще всего «улучшают» на глаз (SpentDayATR и FreshDayATR).
+//
+// Отдельно от снимка: штатный протокол §8 этот тикер НЕ подтверждает (тематические сетки на
+// 4 фолдах дают pooled OOS PF 1.029 по входу и 0.953 по тренду), поэтому наличие литерала здесь
+// означает лишь снятую техническую блокировку, а не право ставить FESH в боевую вселенную —
+// это решение владельца, как было с RENI и DOMRF.
+func TestRSIPullbackFESHIsRegisteredAndCalibrated(t *testing.T) {
 	b, ok := rsiPullbackRegistry["FESH"]
 	if !ok {
 		t.Fatal("FESH отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
 	}
-	raw := b.DefaultParams()
-	p, ok := raw.(core.Params)
-	if !ok {
-		t.Fatalf("FESH: DefaultParams() вернул %T, want core.Params", raw)
+	p, pok := b.DefaultParams().(core.Params)
+	if !pok {
+		t.Fatalf("FESH: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
 	}
-	if p != core.DefaultParams() {
-		t.Fatalf("FESH params = %+v, want baseline %+v — калибровка не проводилась, литерала быть не должно", p, core.DefaultParams())
+	if p == core.DefaultParams() {
+		t.Fatal("FESH вернул baseline: откалиброванный тикер обязан иметь собственный литерал")
 	}
 	if want := fesh.DefaultParams(); p != want {
 		t.Fatalf("FESH params = %+v, want литерал пакета %+v", p, want)

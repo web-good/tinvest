@@ -1,10 +1,48 @@
-// Package fesh supplies the ticker and starting rsi_pullback Params for FESH (ДВМП).
+// Package fesh supplies the ticker and calibrated rsi_pullback Params for FESH (ДВМП).
 //
-// Calibration has NOT been run for this ticker: the body returns core.DefaultParams()
-// unchanged rather than copying its fields, so a change to the baseline still reaches this
-// ticker instead of silently drifting away from it. Once -calibrate picks a winning
-// combination for FESH, replace the body with an explicit literal — from that point the
-// ticker must stop tracking the baseline.
+// Тикер откалиброван 2026-08-13: литерал ниже выбран владельцем по гридам и уточнён разбором
+// того же дня (замеры и таблицы — reports/FESH_calib_scan/STATE.md; каталог reports/ локальный,
+// в репозиторий не попадает, поэтому все числа, на которые опирается литерал, продублированы
+// здесь). Связь с baseline разорвана осознанно, литерал прибит снимком в fesh_test.go.
+//
+// Мера, по которой литерал принят: rolling walk-forward -months 36 -train-months 12
+// -test-months 6 (4 фолда, объединение тестовых окон 2024-08-13—2026-08-13) на сетке ИЗ ОДНОЙ
+// ТОЧКИ — калибратор ничего не выбирает, поэтому profit factor принадлежит самой конфигурации,
+// а не процедуре переоптимизации. Литерал даёт pooled PF 2.366 на 44 сделках, win rate 75.0%,
+// compounded +24.75%, худший фолд 1.60, ни одного вырожденного фолда.
+//
+// ТРИ оговорки, которые обязаны ехать вместе с этим числом:
+//
+//   - Это НЕ out-of-sample. Конфигурация выбрана человеком, видевшим всю историю, поэтому
+//     pooled PF здесь — in-sample по объединению тестовых окон. Планка репо (pooled OOS PF ≥ 1.5)
+//     к нему неприложима в том смысле, в каком она выполнена для ugld.
+//   - Штатный протокол §8 тикер НЕ подтверждает. Прогон девяти тематических сеток
+//     data/params/rsi_pullback/fesh/ на тех же 4 фолдах, где калибратор выбирает пофолдово сам,
+//     дал pooled OOS PF: entry 1.029 (RSILower гулял 15/25/10/15), trend 0.953 (EMASlow
+//     100/50/150/100), exit 1.494, day_spent 1.458, trail 1.365, volume 1.648, screen 1.760,
+//     risk 2.415 и day 3.088 (последние два — с вырожденными фолдами). Ни одна свипуемая ось не
+//     имеет устойчивого оптимума: во всех девяти темах выбранное значение гуляет от фолда к
+//     фолду. Хорошие числа литерала — свойство выбора, а не инструмента.
+//   - RSILower=17 и RSIUpper=62 лежат ВНЕ закоммиченных сеток (там [10,15,20,25] и
+//     [55,60,65,70,75,80]). Обе точки перемерены отдельно: RSIUpper 62 стоит в гладкой полосе
+//     61–64 (2.286 / 2.366 / 2.482 / 2.193), обрыв только за 65 — риск подгонки снят; RSILower
+//     17 — пик по устойчивости (худший фолд 1.60 против 1.34 у 18, 0.93 у 16, 0.74 у 20), и
+//     грид-значения 15 и 20 оба хуже, то есть заменять его на грид-значение не на что.
+//
+// Как устроена прибыль (прогон на всей истории, 36 месяцев, 60 сделок): RSI-выход даёт 82%
+// выходов и всю прибыль, SL — 15% выходов, ноль выигрышных и половину брутто-прибыли, а TP
+// сработал 2 раза из 60. Цель в 1.0 дневного ATR практически недостижима раньше RSI-выхода —
+// отсюда полная инертность оси TPDailyATR (1.0 = 1.5 = 2.0 = 2.5 дают одни и те же сделки), и
+// TPDailyATR=1.0 в литерале стоит на плато, а не выбран. Медиана удержания 11 баров, максимум
+// 50. Ветка гейта «день только начался» (FreshDayATR) даёт 6 сделок за три года, все
+// прибыльные, — её вклад в PF не доказан выборкой, но она не вредит; при этом порог 0.2 и ниже
+// тождественен 0.15 (проваливается под минимум дневного размаха) и обваливает результат до
+// 2.114/42, поэтому 0.25 — левый край плато 0.25–0.30, а не произвольное число.
+//
+// Из-за первых двух оговорок решение о боевой вселенной RSI_PULLBACK_TICKERS остаётся за
+// владельцем — так же, как с reni и domrf: литерал снимает техническую блокировку
+// (TestBaselineTrackingTickersStayOutOfTheDefaultUniverse больше не валит сборку на FESH), но
+// не заменяет подтверждение штатным протоколом, которого у этого тикера нет.
 //
 // Что известно об инструменте (замеры 2026-08-12, спека
 // docs/superpowers/specs/2026-08-12-fesh-rsi-pullback-prep-design.md):
@@ -25,9 +63,10 @@
 //     сидит внутри обычного внутридневного шума.
 //   - Оборот 287 млн ₽/день при лоте 10 — втрое выше reni. На размер позиции не давит.
 //
-// Пакет заведён 2026-08-12 ДО калибровки — как место, куда ляжет литерал, и как носитель
-// замеров выше. Попадание такого тикера в боевую вселенную ловит
-// TestBaselineTrackingTickersStayOutOfTheDefaultUniverse в live/registry_test.go.
+// Пакет был заведён 2026-08-12 ДО калибровки — как место, куда ляжет литерал, и как носитель
+// замеров выше. С появлением литерала 2026-08-13 исключение закрыто: пакет несёт собственные
+// значения параметров, а не тот же baseline, что вернула бы generic-ветка
+// RSIPullbackLookupOrGeneric для незарегистрированного имени.
 package fesh
 
 import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
@@ -35,7 +74,26 @@ import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 // Ticker is the instrument this package configures.
 const Ticker = "FESH"
 
-// DefaultParams returns FESH's starting rsi_pullback parameters (pre-calibration).
+// DefaultParams returns FESH's calibrated rsi_pullback parameters.
 func DefaultParams() core.Params {
-	return core.DefaultParams()
+	return core.Params{
+		RSIPeriod:       5,
+		RSILower:        17,
+		RSIUpper:        62,
+		EMAFast:         10,
+		EMASlow:         150,
+		DailyATRPeriod:  14,
+		UseDayATRGate:   1,
+		FreshDayATR:     0.25,
+		SpentDayATR:     0.8,
+		StopDailyATR:    0.5,
+		TPDailyATR:      1.0,
+		UseVolume:       0,
+		VolBaseDays:     14,
+		VolLookbackBars: 3,
+		VolMult:         1.2,
+		UseRSIExit:      1,
+		UseTrail:        0,
+		TrailDailyATR:   0.5,
+	}
 }

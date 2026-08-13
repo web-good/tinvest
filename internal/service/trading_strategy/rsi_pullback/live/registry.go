@@ -13,8 +13,10 @@ import (
 
 // paramsByTicker maps every rsi_pullback ticker the runner knows to its params. The
 // configured universe (RSI_PULLBACK_TICKERS) selects which of these actually trade;
-// NVTK and FESH are registered for completeness but have no calibrated literal yet — both
-// return the baseline — and must not be put into the universe.
+// NVTK is registered for completeness but has no calibrated literal yet — it returns the
+// baseline — and must not be put into the universe. FESH got its literal 2026-08-13, which
+// only lifts that mechanical block: the standard §8 protocol does not confirm the ticker
+// (see the package doc), so putting it into the universe stays the owner's call.
 var paramsByTicker = map[string]core.Params{
 	ugld.Ticker:  ugld.DefaultParams(),
 	tbank.Ticker: tbank.DefaultParams(),
