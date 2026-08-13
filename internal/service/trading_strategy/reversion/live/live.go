@@ -16,6 +16,7 @@ import (
 	"tinvest/internal/service/trading_strategy/reversion/live/dto"
 	grpcmodel "tinvest/pkg/client/grpc/model"
 	"tinvest/pkg/client/telegram"
+	"tinvest/pkg/logger"
 )
 
 type instrumentsClient interface {
@@ -92,9 +93,20 @@ func (s *service) Run(ctx context.Context, in dto.Run) error {
 }
 
 // notify sends a Telegram message only when NotifyEnabled.
+//
+// Сбой доставки логируется уровнем ERROR, а не отбрасывается: иначе выкинутый из группы
+// бот или отозванный токен оставляют раннер внешне работающим, а тему — пустой, и
+// отличить это от «событий не было» нечем. ERROR подхватывает errorlog-sink и дублирует
+// в тему General — по каналу, который в этот момент ещё может быть жив.
 func (s *service) notify(msg string) {
-	if s.cfg.NotifyEnabled {
-		_ = s.tg.SendMessage(msg)
+	if !s.cfg.NotifyEnabled {
+		return
+	}
+	if err := s.tg.SendMessage(msg); err != nil {
+		// Контекст пасса сюда намеренно не протянут: notify зовут из многих мест, а
+		// хендлер логгера ctx всё равно не использует.
+		logger.ErrorContext(context.Background(),
+			fmt.Sprintf("reversion: уведомление не доставлено: %v", err))
 	}
 }
 

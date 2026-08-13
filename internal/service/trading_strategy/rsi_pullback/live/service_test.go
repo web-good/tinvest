@@ -2,10 +2,12 @@ package live
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1555,5 +1557,89 @@ func TestStateSaveFailureDoesNotAbortTheWholePass(t *testing.T) {
 	}
 	if got := store.data["UGLD"]; got.MaxFav != 105 {
 		t.Fatalf("UGLD.MaxFav = %v, want 105: тикер после сбойного остался без сопровождения", got.MaxFav)
+	}
+}
+
+// Раннер обязан объявлять о себе при подъёме воркера. Все прочие сообщения он шлёт по
+// событиям (вход/выход/стоп/алерт), а событий может не быть неделями — и тогда тишина в
+// теме одинаково выглядит и для живого раннера, и для того, который не поднялся вовсе
+// (пустой RSI_PULLBACK_TOKEN). Стартовое сообщение — единственное, что их различает,
+// поэтому оно несёт вселенную и режим торговли.
+func TestAnnounceReportsUniverseAndPaperMode(t *testing.T) {
+	e := newEnv(t, "GAZP", time.Date(2026, 3, 10, 12, 1, 0, 0, msk))
+	e.tg.EXPECT().SendMessage(mock.MatchedBy(func(s string) bool {
+		return strings.Contains(s, "RSI Pullback") && strings.Contains(s, "GAZP") &&
+			strings.Contains(s, "бумажный")
+	})).Return(nil).Once()
+
+	e.svc.Announce()
+}
+
+// Боевой режим обязан быть виден в стартовом сообщении: раннер, выставляющий реальные
+// ордера, не должен выглядеть как бумажный.
+func TestAnnounceFlagsLiveTradingMode(t *testing.T) {
+	e := newEnv(t, "GAZP", time.Date(2026, 3, 10, 12, 1, 0, 0, msk),
+		func(c *config.RSIPullbackConfig) { c.TradeEnabled = true })
+	e.tg.EXPECT().SendMessage(mock.MatchedBy(func(s string) bool {
+		return strings.Contains(s, "боевой") && !strings.Contains(s, "бумажный")
+	})).Return(nil).Once()
+
+	e.svc.Announce()
+}
+
+// Выключенные уведомления глушат и стартовое сообщение: RSI_PULLBACK_NOTIFY_ENABLED —
+// один рубильник на всю телеграм-ветку раннера, и объявление не должно его обходить.
+func TestAnnounceStaysSilentWhenNotifyDisabled(t *testing.T) {
+	e := newEnv(t, "GAZP", time.Date(2026, 3, 10, 12, 1, 0, 0, msk),
+		func(c *config.RSIPullbackConfig) { c.NotifyEnabled = false })
+	// Ожиданий на tg нет: mockery провалит тест на любом вызове SendMessage.
+	e.svc.Announce()
+}
+
+// captureSink собирает ERROR-записи логгера — так проверяется, что сбой доставки
+// действительно доходит до общего sink'а (а из него — в тему General Telegram).
+type captureSink struct {
+	mu     sync.Mutex
+	events []logger.ErrorEvent
+}
+
+func (c *captureSink) Publish(e logger.ErrorEvent) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.events = append(c.events, e)
+}
+
+func (c *captureSink) messages() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make([]string, 0, len(c.events))
+	for _, e := range c.events {
+		out = append(out, e.Message)
+	}
+	return out
+}
+
+// Отброшенная ошибка отправки — это молчание о молчании: если Telegram отказывает
+// (бот выкинут из группы, отозван токен, лимит), раннер выглядит работающим, а
+// уведомления не доходят, и узнать об этом неоткуда. Ошибка обязана уходить в лог
+// уровнем ERROR — оттуда её подхватывает errorlog-sink и дублирует в тему General.
+func TestNotifyLogsTelegramDeliveryFailure(t *testing.T) {
+	e := newEnv(t, "GAZP", time.Date(2026, 3, 10, 12, 1, 0, 0, msk))
+	e.tg.EXPECT().SendMessage(mock.Anything).Return(errors.New("forbidden: bot was kicked")).Once()
+
+	sink := &captureSink{}
+	logger.SetErrorSink(sink)
+	defer logger.SetErrorSink(nil)
+
+	e.svc.Announce()
+
+	var found bool
+	for _, msg := range sink.messages() {
+		if strings.Contains(msg, "forbidden: bot was kicked") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("сбой доставки не попал в ERROR-лог, записи: %v", sink.messages())
 	}
 }

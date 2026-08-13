@@ -22,6 +22,38 @@ func (_m *MockService) EXPECT() *MockService_Expecter {
 	return &MockService_Expecter{mock: &_m.Mock}
 }
 
+// Announce provides a mock function with no fields
+func (_m *MockService) Announce() {
+	_m.Called()
+}
+
+// MockService_Announce_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Announce'
+type MockService_Announce_Call struct {
+	*mock.Call
+}
+
+// Announce is a helper method to define mock.On call
+func (_e *MockService_Expecter) Announce() *MockService_Announce_Call {
+	return &MockService_Announce_Call{Call: _e.mock.On("Announce")}
+}
+
+func (_c *MockService_Announce_Call) Run(run func()) *MockService_Announce_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockService_Announce_Call) Return() *MockService_Announce_Call {
+	_c.Call.Return()
+	return _c
+}
+
+func (_c *MockService_Announce_Call) RunAndReturn(run func()) *MockService_Announce_Call {
+	_c.Run(run)
+	return _c
+}
+
 // Run provides a mock function with given fields: ctx, in
 func (_m *MockService) Run(ctx context.Context, in dto.Run) error {
 	ret := _m.Called(ctx, in)

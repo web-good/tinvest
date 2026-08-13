@@ -24,6 +24,10 @@ func NewSchedulerService(service live.Service) live.Service {
 	}
 }
 
+// Announce проходит насквозь: приложение держит раннер через эту обёртку, а стартовое
+// сообщение обязано уйти из той же точки, где решается, поднимать ли воркер.
+func (s *schedulerService) Announce() { s.service.Announce() }
+
 func (s *schedulerService) Run(ctx context.Context, in dto.Run) error {
 	jobTicker := time.NewTicker(time.Hour)
 	defer jobTicker.Stop()

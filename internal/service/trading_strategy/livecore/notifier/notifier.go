@@ -2,7 +2,10 @@
 // rsi_pullback). Functions are pure; the caller sends the string only when NotifyEnabled.
 package notifier
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 func paperTag(paper bool) string {
 	if paper {
@@ -33,6 +36,25 @@ func Skip(ticker, reason string) string {
 // сообщению должно быть видно, чей раннер его прислал.
 func Alert(strategy, ticker, message string) string {
 	return fmt.Sprintf("⚠️ <b>%s %s</b>\n  %s", strategy, ticker, message)
+}
+
+// Startup renders the message a runner sends once, when its worker comes up. The runners
+// speak only on events (entry/exit/stop/alert), and a strategy can go weeks without one —
+// so silence in the topic reads the same whether the worker is alive or never started. This
+// message is what tells the two apart; it carries the universe (proof the config arrived)
+// and the trading mode (paper vs real orders).
+func Startup(strategy string, tickers []string, paper bool) string {
+	universe := strings.Join(tickers, ", ")
+	if universe == "" {
+		universe = "вселенная пуста"
+	}
+	mode := "боевой — ордера выставляются"
+	if paper {
+		mode = "бумажный — ордера не выставляются"
+	}
+
+	return fmt.Sprintf("🚀 <b>%s: раннер поднят</b>\n  Вселенная: %s\n  Режим: %s",
+		strategy, universe, mode)
 }
 
 // StopSet reports a protective stop order (re)placed at price for reason.

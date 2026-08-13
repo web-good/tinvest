@@ -17,11 +17,13 @@ import (
 	imodel "tinvest/internal/model"
 	"tinvest/internal/service/trading_strategy/livecore/candles"
 	"tinvest/internal/service/trading_strategy/livecore/executor"
+	"tinvest/internal/service/trading_strategy/livecore/notifier"
 	"tinvest/internal/service/trading_strategy/livecore/statestore"
 	"tinvest/internal/service/trading_strategy/livecore/stoporders"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/live/dto"
 	grpcmodel "tinvest/pkg/client/grpc/model"
 	"tinvest/pkg/client/telegram"
+	"tinvest/pkg/logger"
 )
 
 // alertLabel — заголовок операционных уведомлений; пакет notifier общий, и по сообщению
@@ -42,6 +44,10 @@ type operationsClient interface {
 // Service runs one scheduled rsi_pullback pass.
 type Service interface {
 	Run(ctx context.Context, in dto.Run) error
+	// Announce сообщает в Telegram, что воркер поднялся. Метод интерфейса, а не
+	// внутренняя деталь пасса: зовёт его приложение при старте, сразу после проверки
+	// Ready, — то есть ровно в той точке, где ещё известно, поднялся раннер или нет.
+	Announce()
 }
 
 type service struct {
@@ -102,10 +108,30 @@ func (s *service) Run(ctx context.Context, _ dto.Run) error {
 }
 
 // notify sends a Telegram message only when NotifyEnabled.
+//
+// Сбой доставки логируется уровнем ERROR, а не отбрасывается: отброшенная ошибка — это
+// молчание о молчании. Бот, выкинутый из группы, отозванный токен или упёртый лимит
+// оставляют раннер внешне работающим, а тему — пустой, и отличить это от «событий не
+// было» становится нечем. Уровень ERROR выбран потому, что его подхватывает
+// errorlog-sink и дублирует в тему General — то есть сообщение о недоставке уходит по
+// каналу, который в этот момент ещё может быть жив.
 func (s *service) notify(msg string) {
-	if s.cfg.NotifyEnabled {
-		_ = s.tg.SendMessage(msg)
+	if !s.cfg.NotifyEnabled {
+		return
 	}
+	if err := s.tg.SendMessage(msg); err != nil {
+		// Контекст пасса сюда намеренно не протянут: notify зовут три десятка мест, а
+		// хендлер логгера ctx всё равно не использует — сигнатура подорожала бы зря.
+		logger.ErrorContext(context.Background(),
+			fmt.Sprintf("rsi_pullback: уведомление не доставлено: %v", err))
+	}
+}
+
+// Announce объявляет о подъёме воркера. Единственное сообщение раннера, не привязанное
+// к событию: все остальные шлются на входе, выходе, постановке стопа или сбое, а их может
+// не быть неделями — и тогда молчание темы неотличимо от раннера, который не поднялся.
+func (s *service) Announce() {
+	s.notify(notifier.Startup(alertLabel, s.cfg.Tickers, !s.cfg.TradeEnabled))
 }
 
 // sharesByTicker indexes tradable shares for the configured universe.

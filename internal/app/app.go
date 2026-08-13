@@ -115,13 +115,15 @@ func (a *App) runDev(ctx context.Context) {
 		// приложение, ни поднимать раннер с пустым токеном: рядом работают воркеры
 		// reversion, ведущие реальные позиции.
 		if !a.config.RSIPullback.Ready() {
-			logger.Warn("RSI Pullback worker disabled: RSI_PULLBACK_ACCOUNT_ID/RSI_PULLBACK_TOKEN are not set")
+			logger.ErrorContext(ctx, "RSI Pullback worker disabled: RSI_PULLBACK_ACCOUNT_ID/RSI_PULLBACK_TOKEN are not set")
 			return
 		}
+		svc := a.sp.GetRSIPullbackLiveService()
+		svc.Announce()
 		// Dev: один немедленный пасс, как у дайджеста новостей. Через cron-обёртку первый
 		// прогон пришлось бы ждать до ближайшей :01/:31, а смысл dev-режима именно в том,
 		// чтобы прогнать раннер сейчас и посмотреть, что он решит.
-		if err := a.sp.GetRSIPullbackLiveService().Run(ctx, rsipullbackdto.Run{}); err != nil {
+		if err := svc.Run(ctx, rsipullbackdto.Run{}); err != nil {
 			logger.ErrorContext(ctx, "Error in worker RSI Pullback", err.Error())
 		}
 	}()
@@ -213,11 +215,20 @@ func (a *App) runProd(ctx context.Context) {
 		// штатное состояние (счёт заводится отдельно), и оно не должно ни ронять
 		// приложение, ни поднимать раннер с пустым токеном: рядом работают воркеры
 		// reversion, ведущие реальные позиции.
+		// Уровень ERROR, а не Warn: только ERROR-записи дублируются в тему General
+		// Telegram (internal/service/notification/errorlog). Раннер, не поднявшийся
+		// из-за пустого токена, снаружи выглядит ровно как поднявшийся, но не нашедший
+		// сигналов, — и предупреждение, осевшее в stdout контейнера, эту разницу
+		// никому не показывает.
 		if !a.config.RSIPullback.Ready() {
-			logger.Warn("RSI Pullback worker disabled: RSI_PULLBACK_ACCOUNT_ID/RSI_PULLBACK_TOKEN are not set")
+			logger.ErrorContext(ctx, "RSI Pullback worker disabled: RSI_PULLBACK_ACCOUNT_ID/RSI_PULLBACK_TOKEN are not set")
 			return
 		}
-		err := rsipullbackscheduler.NewSchedulerService(a.sp.GetRSIPullbackLiveService()).Run(
+		runner := rsipullbackscheduler.NewSchedulerService(a.sp.GetRSIPullbackLiveService())
+		// Одно сообщение при подъёме воркера: все прочие уведомления раннера привязаны к
+		// событиям, а их может не быть неделями.
+		runner.Announce()
+		err := runner.Run(
 			ctx,
 			rsipullbackdto.Run{Scheduler: a.config.RSIPullback.Schedule},
 		)

@@ -2,10 +2,12 @@ package live
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -953,5 +955,57 @@ func TestManagePass_NoChurnWhenRoundedLevelUnchanged(t *testing.T) {
 	st, _ := statestore.New(env.statePath).Load()
 	if st["UGLD"].StopOrderID != "so-1" {
 		t.Fatalf("stop must be kept when rounded level is unchanged, got %+v", st["UGLD"])
+	}
+}
+
+// captureSink собирает ERROR-записи логгера: так проверяется, что сбой доставки в
+// Telegram доходит до общего sink'а (а из него — в тему General).
+type captureSink struct {
+	mu     sync.Mutex
+	events []logger.ErrorEvent
+}
+
+func (c *captureSink) Publish(e logger.ErrorEvent) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.events = append(c.events, e)
+}
+
+func (c *captureSink) messages() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make([]string, 0, len(c.events))
+	for _, e := range c.events {
+		out = append(out, e.Message)
+	}
+	return out
+}
+
+// Отброшенная ошибка отправки — это молчание о молчании: если Telegram отказывает (бот
+// выкинут из группы, отозван токен, упёрт лимит), раннер выглядит работающим, а
+// уведомления о входах и выходах не доходят, и узнать об этом неоткуда. Ошибка обязана
+// уходить в лог уровнем ERROR — оттуда её подхватывает errorlog-sink и дублирует в
+// General.
+func TestNotifyLogsTelegramDeliveryFailure(t *testing.T) {
+	c := &config.ReversionConfig{AccountID: "acc", Tickers: []string{"UGLD"}, NotifyEnabled: true}
+	tg := tgmocks.NewMockClient(t)
+	tg.EXPECT().SendMessage(mock.Anything).Return(errors.New("forbidden: bot was kicked")).Once()
+	svc := NewService(livemocks.NewMockinstrumentsClient(t), mdmocks.NewMockCandleClient(t),
+		livemocks.NewMockoperationsClient(t), nil, nil, tg, c)
+
+	sink := &captureSink{}
+	logger.SetErrorSink(sink)
+	defer logger.SetErrorSink(nil)
+
+	svc.notify("любое уведомление")
+
+	var found bool
+	for _, msg := range sink.messages() {
+		if strings.Contains(msg, "forbidden: bot was kicked") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("сбой доставки не попал в ERROR-лог, записи: %v", sink.messages())
 	}
 }

@@ -46,3 +46,14 @@ func TestSchedulerServiceFailsOnBadCronExpression(t *testing.T) {
 		t.Fatal("Run: want error on a malformed cron expression, got nil")
 	}
 }
+
+// Приложение держит раннер через эту обёртку, а не напрямую, поэтому Announce обязан
+// проходить сквозь неё. Проглоченный вызов означал бы отсутствие стартового сообщения
+// ровно в prod — там, где оно и нужно: событий у стратегии может не быть неделями, и
+// тишина в теме неотличима от невзлетевшего воркера.
+func TestSchedulerServiceDelegatesAnnounce(t *testing.T) {
+	inner := mocks.NewMockService(t)
+	inner.EXPECT().Announce().Once()
+
+	NewSchedulerService(inner).Announce()
+}

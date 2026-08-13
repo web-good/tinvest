@@ -50,3 +50,38 @@ func TestStopSet(t *testing.T) {
 		t.Fatal("non-paper StopSet must not be flagged as БУМАЖНАЯ")
 	}
 }
+
+// Стартовое сообщение — единственный способ снаружи отличить поднятый раннер от
+// невзлетевшего: событий у стратегии может не быть неделями, и молчание в теме
+// одинаково выглядит в обоих случаях. Поэтому оно обязано нести и вселенную (по ней
+// видно, что конфиг доехал), и режим (бумажный он или боевой).
+func TestStartupNamesStrategyUniverseAndPaperMode(t *testing.T) {
+	msg := Startup("RSI Pullback", []string{"UGLD", "GAZP"}, true)
+	for _, want := range []string{"RSI Pullback", "UGLD", "GAZP", "бумажный"} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("Startup msg %q missing %q", msg, want)
+		}
+	}
+}
+
+// Боевой режим обязан отличаться от бумажного в тексте: перепутать их — значит не
+// заметить, что раннер выставляет реальные ордера.
+func TestStartupFlagsLiveTradingMode(t *testing.T) {
+	msg := Startup("RSI Pullback", []string{"UGLD"}, false)
+	if strings.Contains(msg, "бумажный") {
+		t.Fatalf("Startup msg %q must not call live trading бумажный", msg)
+	}
+	if !strings.Contains(msg, "боевой") {
+		t.Fatalf("Startup msg %q must name the боевой mode", msg)
+	}
+}
+
+// Пустая вселенная — рабочее состояние конфига (RSI_PULLBACK_TICKERS не задан и
+// дефолт затёрт пустой строкой), и оно обязано быть видно в сообщении: раннер,
+// который поднялся без единого тикера, снаружи неотличим от работающего.
+func TestStartupSpellsOutEmptyUniverse(t *testing.T) {
+	msg := Startup("RSI Pullback", nil, true)
+	if !strings.Contains(msg, "вселенная пуста") {
+		t.Fatalf("Startup msg %q must spell out the empty universe", msg)
+	}
+}
