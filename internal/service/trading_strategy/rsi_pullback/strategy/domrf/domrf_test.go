@@ -6,28 +6,29 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 )
 
-// DOMRF торгуется в проде по решению владельца, принятому на конкретном отчёте:
-// reports/DOMRF/DOMRF_rsi_pullback_Minutes30_20260810_131435.md. Снимок держит литерал равным
-// параметрам ИМЕННО того отчёта — любая правка любого числа здесь делает прод не тем, что
-// смотрели, а отчёт-основание недействительным. Особенно легко ошибиться на UseTrail: победитель
-// walk-forward-прогона того же дня брал UseTrail=1, и подмена выглядела бы улучшением.
+// DOMRF торгуется в проде, поэтому его литерал прибит снимком: любая правка любого числа здесь
+// меняет прод. Снимок держит конфигурацию перекалибровки 2026-08-14 (замеры — в доке пакета),
+// заменившую литерал от 2026-08-10. Особенно легко ошибиться на StopDailyATR и SpentDayATR:
+// по profit factor лучше выглядят широкий стоп 1.3 и порог дня 1.25, но первый переживается
+// целиком в 83.7% дней, а второй срезает выборку до 28 сделок — оба выбора сделаны против
+// лидерборда осознанно.
 func TestCalibratedLiteralIsPinned(t *testing.T) {
 	want := core.Params{
 		RSIPeriod:       4,
-		RSILower:        25,
+		RSILower:        35,
 		RSIUpper:        70,
-		EMAFast:         5,
-		EMASlow:         150,
+		EMAFast:         20,
+		EMASlow:         100,
 		DailyATRPeriod:  14,
 		UseDayATRGate:   1,
-		FreshDayATR:     0,
-		SpentDayATR:     1,
-		StopDailyATR:    1,
-		TPDailyATR:      1.5,
+		FreshDayATR:     0.3,
+		SpentDayATR:     1.0,
+		StopDailyATR:    0.7,
+		TPDailyATR:      1.0,
 		UseVolume:       0,
-		VolBaseDays:     7,
-		VolLookbackBars: 2,
-		VolMult:         1,
+		VolBaseDays:     14,
+		VolLookbackBars: 3,
+		VolMult:         1.2,
 		UseRSIExit:      1,
 		UseTrail:        0,
 		TrailDailyATR:   0,
@@ -46,10 +47,24 @@ func TestParamsDoNotTrackTheBaseline(t *testing.T) {
 	}
 }
 
-// Стоп — единственное, что ограничивает убыток: RSI-выход закрывает и в плюс, и в минус, а TP на
-// выборке из 29 сделок не сработал ни разу. Нулевой StopDailyATR оставил бы позицию без уровня.
+// Стоп — единственное, что ограничивает убыток: RSI-выход закрывает и в плюс, и в минус, а цель
+// на выборке из 65 сделок сработала дважды. Нулевой StopDailyATR оставил бы позицию без уровня.
 func TestStopIsArmed(t *testing.T) {
 	if p := DefaultParams(); p.StopDailyATR <= 0 {
 		t.Fatalf("StopDailyATR = %v, want > 0", p.StopDailyATR)
+	}
+}
+
+// Ветка «день только начался» включена перекалибровкой 2026-08-14 впервые и держит 24 OOS-сделки
+// из 42: без неё третий фолд протокола схлопывается до одной сделки. Гейт дня защищён условием
+// fresh > 0, поэтому ровно ноль выключает ветку целиком — это и стережёт тест.
+func TestFreshDayBranchIsArmed(t *testing.T) {
+	p := DefaultParams()
+	if p.UseDayATRGate != 1 {
+		t.Fatalf("UseDayATRGate = %d, want 1", p.UseDayATRGate)
+	}
+	if p.FreshDayATR <= 0 || p.FreshDayATR >= p.SpentDayATR {
+		t.Fatalf("FreshDayATR = %v при SpentDayATR = %v: ветка «день только начался» выключена или перекрыта",
+			p.FreshDayATR, p.SpentDayATR)
 	}
 }
