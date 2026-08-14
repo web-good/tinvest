@@ -16,8 +16,13 @@ import (
 
 // paramsByTicker maps every rsi_pullback ticker the runner knows to its params. The
 // configured universe (RSI_PULLBACK_TICKERS) selects which of these actually trade;
-// NVTK and LSNGP are registered for completeness but have no calibrated literal yet — both
-// return the baseline — and must not be put into the universe. FESH (2026-08-13), WUSH and LENT
+// NVTK is registered for completeness but has no calibrated literal yet — it returns the
+// baseline — and must not be put into the universe. LSNGP was added and calibrated 2026-08-14: it
+// has a literal but is NOT in the universe, because its themes missed the bar declared before the
+// runs — every one of the nine cleared 1.5 pooled OOS PF, a first for this catalogue, but the
+// leading axis was stable in only 2 folds of 4 on both key themes. Read its package doc before
+// putting it in, starting with the regime note: BOTH protocol windows rise (+46.7% / +11.2%), so
+// nothing about that ticker has been tested against a falling market. FESH (2026-08-13), WUSH and LENT
 // (both 2026-08-14) do have literals and the owner did put all three into the universe, in each
 // case as a risk taken with eyes open rather than as a confirmation: for none of them does the
 // standard §8 protocol confirm the instrument. WUSH missed the bar declared before its runs

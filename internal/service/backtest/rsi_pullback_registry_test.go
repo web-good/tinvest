@@ -7,6 +7,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/domrf"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/fesh"
 	rsipullbacklent "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/lent"
+	rsipullbacklsngp "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/lsngp"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/reni"
 	rsipullbackwush "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/wush"
 )
@@ -349,13 +350,23 @@ func TestRSIPullbackWUSHIsRegisteredAndCalibrated(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackLSNGPTracksBaseline держит состояние «калибровка не проводилась». Пакет
-// strategy/lsngp заведён 2026-08-14 ДО прогонов, и до появления собственного литерала он обязан
-// отслеживать core.DefaultParams(): калибратор засевает несвипуемые поля именно из этого
-// вызова, поэтому расхождение здесь тихо сместило бы точку отсчёта всех девяти тем каталога
-// lsngp/. Тест становится красным ровно тогда, когда литерал поставлен — и тогда его надо
-// заменить снимком, как это сделано для LENT и WUSH.
-func TestRSIPullbackLSNGPTracksBaseline(t *testing.T) {
+// TestRSIPullbackLSNGPIsRegisteredAndCalibrated пинует два неотличимых снаружи факта: LSNGP есть
+// в карте (а не проваливается в generic-ветку) И возвращает собственный литерал, а не baseline.
+// Пакет strategy/lsngp заведён 2026-08-14 ДО калибровки, и в тот же день сторожевой тест
+// TestRSIPullbackLSNGPTracksBaseline, державший это состояние, заменён этим снимком.
+//
+// Отдельно от снимка: тикер НЕ подтверждён штатным протоколом §8. Все девять тем дали pooled OOS
+// PF выше 1.5 на пулах 98–174 сделок — такого не было ни у одного предыдущего тикера, — но
+// объявленную заранее планку заваливает УСТОЙЧИВОСТЬ: ведущая ось выбрана двумя разными
+// значениями из четырёх на обеих ключевых темах (RSILower 45/20/20/15, EMASlow 170/70/150/70)
+// при требуемых трёх совпадениях. Литерал собран по лидербордам и перепроверен точечным
+// walk-forward (pooled PF 3.006 на 274 сделках, все четыре фолда выше 2), но для фиксированной
+// точки это не out-of-sample: конфигурацию выбрал человек, видевший всю историю. У LSNGP это
+// весит больше обычного — растут ОБА окна протокола, падающего рынка в истории нет вовсе.
+// Наличие литерала здесь означает снятую техническую блокировку, а не право ставить LSNGP в
+// боевую вселенную. Снимок литерала и обоснование пяти уязвимых полей живут рядом с ним, в
+// strategy/lsngp/lsngp_test.go.
+func TestRSIPullbackLSNGPIsRegisteredAndCalibrated(t *testing.T) {
 	b, ok := rsiPullbackRegistry["LSNGP"]
 	if !ok {
 		t.Fatal("LSNGP отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
@@ -364,8 +375,11 @@ func TestRSIPullbackLSNGPTracksBaseline(t *testing.T) {
 	if !pok {
 		t.Fatalf("LSNGP: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
 	}
-	if want := core.DefaultParams(); p != want {
-		t.Fatalf("LSNGP params = %+v, want baseline ядра %+v.\nЕсли тикер откалиброван — заменить этот тест снимком литерала", p, want)
+	if p == core.DefaultParams() {
+		t.Fatal("LSNGP вернул baseline: откалиброванный тикер обязан иметь собственный литерал")
+	}
+	if want := rsipullbacklsngp.DefaultParams(); p != want {
+		t.Fatalf("LSNGP params = %+v, want литерал пакета %+v", p, want)
 	}
 	if got := b.Build(p).Ticker(); got != "LSNGP" {
 		t.Fatalf("Ticker() = %q, want LSNGP", got)
