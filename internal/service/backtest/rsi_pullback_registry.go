@@ -12,6 +12,7 @@ import (
 	rsipullbackreni "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/reni"
 	rsipullbacktbank "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/tbank"
 	rsipullbackugld "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ugld"
+	rsipullbackwush "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/wush"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 )
 
@@ -46,6 +47,7 @@ var rsiPullbackRegistry = map[string]Binding{
 	rsipullbackreni.Ticker:  rsiPullbackBindingFor(rsipullbackreni.Ticker, rsipullbackreni.DefaultParams),
 	rsipullbacktbank.Ticker: rsiPullbackBindingFor(rsipullbacktbank.Ticker, rsipullbacktbank.DefaultParams),
 	rsipullbackugld.Ticker:  rsiPullbackBindingFor(rsipullbackugld.Ticker, rsipullbackugld.DefaultParams),
+	rsipullbackwush.Ticker:  rsiPullbackBindingFor(rsipullbackwush.Ticker, rsipullbackwush.DefaultParams),
 }
 
 // RSIPullbackLookupOrGeneric returns the registered rsi_pullback binding for a ticker, or a

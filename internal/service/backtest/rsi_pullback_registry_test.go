@@ -7,6 +7,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/domrf"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/fesh"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/reni"
+	rsipullbackwush "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/wush"
 )
 
 // TestRSIPullbackBindingBuildsForTicker checks the wiring on a ticker whose package still
@@ -276,5 +277,33 @@ func TestRSIPullbackFESHIsRegisteredAndCalibrated(t *testing.T) {
 	}
 	if got := b.Build(p).Ticker(); got != "FESH" {
 		t.Fatalf("Ticker() = %q, want FESH", got)
+	}
+}
+
+// TestRSIPullbackWUSHTracksBaseline держит состояние «калибровка не проводилась». Пакет
+// strategy/wush заведён 2026-08-13 ДО первого прогона — как место под будущий литерал и
+// носитель замеров инструмента (спека docs/superpowers/specs/2026-08-13-wush-rsi-pullback-prep-design.md),
+// и цена такого исключения в том, что по карте реестра неотличимо, настроен тикер или нет:
+// запись WUSH выглядит ровно так же, как запись откалиброванного соседа. Поэтому состояние
+// держит тест. Когда калибровка пройдёт объявленную планку и литерал появится, этот тест
+// ЗАМЕНЯЕТСЯ на снимок литерала (как TestRSIPullbackFESHIsRegisteredAndCalibrated) — правка
+// одного лишь пакета обязана валить сборку здесь.
+func TestRSIPullbackWUSHTracksBaseline(t *testing.T) {
+	b, ok := rsiPullbackRegistry["WUSH"]
+	if !ok {
+		t.Fatal("WUSH отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
+	}
+	p, ok := b.DefaultParams().(core.Params)
+	if !ok {
+		t.Fatalf("WUSH: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
+	}
+	if p != core.DefaultParams() {
+		t.Fatalf("WUSH params = %+v, want baseline %+v — калибровка не проводилась, литерала быть не должно; если он появился, замените этот тест на снимок литерала", p, core.DefaultParams())
+	}
+	if p != rsipullbackwush.DefaultParams() {
+		t.Fatalf("реестр вернул %+v, а пакет — %+v: реестр обязан отдавать параметры своего пакета", p, rsipullbackwush.DefaultParams())
+	}
+	if got := b.Build(p).Ticker(); got != "WUSH" {
+		t.Fatalf("Ticker() = %q, want WUSH", got)
 	}
 }
