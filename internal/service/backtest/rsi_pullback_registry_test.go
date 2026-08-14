@@ -280,28 +280,34 @@ func TestRSIPullbackFESHIsRegisteredAndCalibrated(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackWUSHTracksBaseline держит состояние «калибровка не проводилась». Пакет
-// strategy/wush заведён 2026-08-13 ДО первого прогона — как место под будущий литерал и
-// носитель замеров инструмента (спека docs/superpowers/specs/2026-08-13-wush-rsi-pullback-prep-design.md),
-// и цена такого исключения в том, что по карте реестра неотличимо, настроен тикер или нет:
-// запись WUSH выглядит ровно так же, как запись откалиброванного соседа. Поэтому состояние
-// держит тест. Когда калибровка пройдёт объявленную планку и литерал появится, этот тест
-// ЗАМЕНЯЕТСЯ на снимок литерала (как TestRSIPullbackFESHIsRegisteredAndCalibrated) — правка
-// одного лишь пакета обязана валить сборку здесь.
-func TestRSIPullbackWUSHTracksBaseline(t *testing.T) {
+// TestRSIPullbackWUSHIsRegisteredAndCalibrated пинует два неотличимых снаружи факта: WUSH есть
+// в карте (а не проваливается в generic-ветку) И возвращает собственный литерал, а не baseline.
+// Пакет strategy/wush заведён 2026-08-13 ДО калибровки и до 2026-08-14 обязан был возвращать
+// core.DefaultParams(); сторожевой тест TestRSIPullbackWUSHTracksBaseline держал это состояние и
+// заменён этим снимком, когда владелец распорядился поставить литерал.
+//
+// Отдельно от снимка: тикер НЕ подтверждён штатным протоколом §8 — тематические прогоны дали
+// pooled OOS PF 2.000 по входу и 1.317 по тренду при объявленной заранее планке 1.5 на обеих
+// темах. Литерал отобран отдельным сканом с порогом частоты и перепроверен точечным
+// walk-forward (pooled PF 2.999 на 81 сделке), но для фиксированной точки это не out-of-sample:
+// конфигурацию выбрал скан, видевший всю историю. Наличие литерала здесь означает снятую
+// техническую блокировку, а не право ставить WUSH в боевую вселенную — это решение владельца,
+// как было с RENI, DOMRF и FESH. Снимок самого литерала и обоснование трёх уязвимых полей живут
+// рядом с ним, в strategy/wush/wush_test.go.
+func TestRSIPullbackWUSHIsRegisteredAndCalibrated(t *testing.T) {
 	b, ok := rsiPullbackRegistry["WUSH"]
 	if !ok {
 		t.Fatal("WUSH отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
 	}
-	p, ok := b.DefaultParams().(core.Params)
-	if !ok {
+	p, pok := b.DefaultParams().(core.Params)
+	if !pok {
 		t.Fatalf("WUSH: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
 	}
-	if p != core.DefaultParams() {
-		t.Fatalf("WUSH params = %+v, want baseline %+v — калибровка не проводилась, литерала быть не должно; если он появился, замените этот тест на снимок литерала", p, core.DefaultParams())
+	if p == core.DefaultParams() {
+		t.Fatal("WUSH вернул baseline: откалиброванный тикер обязан иметь собственный литерал")
 	}
-	if p != rsipullbackwush.DefaultParams() {
-		t.Fatalf("реестр вернул %+v, а пакет — %+v: реестр обязан отдавать параметры своего пакета", p, rsipullbackwush.DefaultParams())
+	if want := rsipullbackwush.DefaultParams(); p != want {
+		t.Fatalf("WUSH params = %+v, want литерал пакета %+v", p, want)
 	}
 	if got := b.Build(p).Ticker(); got != "WUSH" {
 		t.Fatalf("Ticker() = %q, want WUSH", got)

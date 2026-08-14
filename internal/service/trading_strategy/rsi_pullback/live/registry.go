@@ -14,13 +14,12 @@ import (
 
 // paramsByTicker maps every rsi_pullback ticker the runner knows to its params. The
 // configured universe (RSI_PULLBACK_TICKERS) selects which of these actually trade;
-// NVTK and WUSH are registered for completeness but have no calibrated literal yet — they
-// return the baseline — and must not be put into the universe. WUSH was added 2026-08-13 as
-// the place its literal will land if the calibration runs clear the bar declared in
-// docs/superpowers/specs/2026-08-13-wush-rsi-pullback-prep-design.md. FESH got its literal
-// 2026-08-13, which only lifts that mechanical block: the standard §8 protocol does not
-// confirm the ticker (see the package doc), so putting it into the universe stays the owner's
-// call.
+// NVTK is registered for completeness but has no calibrated literal yet — it returns the
+// baseline — and must not be put into the universe. FESH got its literal 2026-08-13 and WUSH
+// 2026-08-14, which only lifts that mechanical block: for neither ticker does the standard §8
+// protocol confirm the instrument (see the package docs — WUSH missed the bar declared before
+// its runs, and its literal was picked by a scan that had seen the whole history), so putting
+// either into the universe stays the owner's call.
 var paramsByTicker = map[string]core.Params{
 	ugld.Ticker:  ugld.DefaultParams(),
 	tbank.Ticker: tbank.DefaultParams(),

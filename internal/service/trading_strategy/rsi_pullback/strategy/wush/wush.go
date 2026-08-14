@@ -1,15 +1,10 @@
-// Package wush supplies the ticker and starting rsi_pullback Params for WUSH (Whoosh).
-//
-// Calibration has NOT been run for this ticker: the body returns core.DefaultParams()
-// unchanged rather than copying its fields, so a change to the baseline still reaches this
-// ticker instead of silently drifting away from it. Once the calibration runs clear the bar
-// declared in the spec, replace the body with an explicit literal — from that point the ticker
-// must stop tracking the baseline, and TestRSIPullbackWUSHTracksBaseline must be replaced with
-// a literal snapshot.
+// Package wush supplies the ticker and calibrated rsi_pullback Params for WUSH (Whoosh).
 //
 // Пакет заведён 2026-08-13 ДО калибровки — как место, куда ляжет литерал, и как носитель
 // замеров инструмента. Спека: docs/superpowers/specs/2026-08-13-wush-rsi-pullback-prep-design.md,
-// сетки: data/params/rsi_pullback/wush/.
+// сетки: data/params/rsi_pullback/wush/. Литерал поставлен 2026-08-14 решением владельца, уже
+// ПОСЛЕ того, как тикер не взял объявленную планку (см. ниже) — связь с baseline разорвана,
+// снимок литерала держит wush_test.go.
 //
 // Что известно об инструменте (замеры по кэшу WUSH_Minutes30.json и WUSH_Day1.json,
 // правилами ядра: будние дни MSK как weekdayDaily, сглаживание Уайлдера как в pkg/indicators):
@@ -54,8 +49,8 @@
 // устойчивость ведущей оси в 3 фолдах из 4. Устойчивость есть на обеих темах — RSILower выбран
 // 20/20/20/25, EMASlow 50/100/50/50, — и по этому критерию WUSH заметно лучше fesh, у которого
 // оси гуляли 15/25/10/15 и 100/50/150/100. Но trend даёт pooled OOS PF 1.317 при пороге 1.5, то
-// есть первое условие выполнено только на одной теме из двух. Планка составная — не взята,
-// литерала нет.
+// есть первое условие выполнено только на одной теме из двух. Планка составная — НЕ ВЗЯТА; всё,
+// что стоит ниже в этом комментарии, живёт под этим фактом.
 //
 // Тему risk с её pooled PF 1.911 засчитывать нельзя: фолд 1 дал OOS PF 11.439, а в фолде 2
 // in-sample PF 17.296 схлопнулся до OOS 1.107 — широкий стоп 1.3 ATR почти не оставляет убыточных
@@ -70,6 +65,47 @@
 // Восемь тем из девяти дали pooled OOS PF выше 1.0 на пулах 59–106 сделок, то есть инструмент не
 // пустой — он не дотянул до объявленного порога. Разбор: reports/WUSH_calib/VERDICT.md (каталог
 // reports/ в .gitignore, поэтому числа продублированы здесь).
+//
+// # Литерал, принятый 2026-08-14 решением владельца
+//
+// Владелец распорядился поставить лучшие параметры несмотря на непройденную планку — то же
+// решение, что раньше принималось по domrf и fesh, и с той же природой: это принятый риск, а не
+// подтверждение тикера. Отбор шёл в два шага, потому что первый дал артефакт:
+//
+//   - Скан 288 комбинаций, ранжирование по profit_factor БЕЗ порога частоты, дал лидеров с
+//     in-sample PF 11.58 при win rate 89% на 28 сделках. Точечная перепроверка топ-10 показала,
+//     что это выжимка редких сетапов: 21–34 сделки за три года OOS, отдельные фолды по ДВЕ
+//     сделки при PF 1181. Ни один такой кандидат не годится в литерал.
+//   - Скан 972 комбинаций при пороге -min-trades 100 (baseline даёт 139 сделок за 36 месяцев)
+//     оставил конфигурации с PF 2.3–2.7 на 100–127 сделках. Топ-10 этого лидерборда перепроверен
+//     точечным walk-forward — каждая конфигурация сеткой из одной точки, где калибратор ничего
+//     не выбирает, — и выиграла точка ниже.
+//
+// Что она дала: pooled PF 2.999 на 81 сделке, win rate 76.5%, все четыре фолда прибыльные
+// (7.783 на 24 сделках / 4.362 на 21 / 1.377 на 18 / 3.063 на 18), худший maxDD по фолду 6.12%,
+// вырожденных фолдов нет. Проверка на плато соседями по шести осям: 2.016–3.123, то есть точка
+// лежит на пологом плато, а не на одиночном пике — при Plateau 58% в отчёте скринера это была
+// главная опасность.
+//
+// ГРАНИЦА ПРИЁМА: для фиксированной точки это НЕ out-of-sample. Конфигурацию выбрал скан,
+// видевший всю историю, включая тестовые окна, поэтому 2.999 нельзя сравнивать с планкой 1.5 и
+// объявлять её взятой задним числом. Штатный протокол §8 этот тикер НЕ подтверждает: его вердикт
+// — тематические прогоны выше, и они дали 2.000 по входу и 1.317 по тренду. Наличие литерала
+// снимает только техническую блокировку; ввод WUSH в RSI_PULLBACK_TICKERS остаётся отдельным
+// решением владельца.
+//
+// Структура выходов НА ЭТОМ ЛИТЕРАЛЕ за 36 месяцев (отчёт reports/WUSH_final, 116 сделок,
+// in-sample PF 2.589): RSI-выход 92 сделки (79.3%), цель 19 (16.4%), СТОП 5 (4.3%), медиана
+// удержания 6 баров. Для сравнения, на baseline это было 61.2% / 13.7% / 25.2% при медиане 9.
+//
+// Из этого следует главное ограничение конфигурации, которое нельзя потерять: стоп 1.0 ATR
+// срабатывает раз в двадцать три сделки, то есть он здесь НЕ рабочий выход, а страховка от
+// гэпа. Именно поэтому pooled PF растёт с шириной стопа (0.7 → 2.016, 1.0 → 2.999, 1.3 → 3.123):
+// расширение стопа не улучшает логику, оно убирает из статистики те немногие сделки, которые
+// закрывались в минус, и переносит их в RSI-выход. Дальше по этой оси идти нельзя — 1.3 уже даёт
+// стоп, который дневной размах не достаёт в 81.9% дней, а цена такого решения проявится одним
+// разрывом на открытии, которого в 36 месяцах истории может просто не оказаться. Тикер живёт в
+// режиме, где падают оба окна протокола, так что проверить эту цену историей нечем.
 package wush
 
 import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
@@ -77,7 +113,26 @@ import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 // Ticker is the instrument this package configures.
 const Ticker = "WUSH"
 
-// DefaultParams returns WUSH's starting rsi_pullback parameters (pre-calibration).
+// DefaultParams returns WUSH's calibrated rsi_pullback parameters.
 func DefaultParams() core.Params {
-	return core.DefaultParams()
+	return core.Params{
+		RSIPeriod:       4,
+		RSILower:        30,
+		RSIUpper:        60,
+		EMAFast:         5,
+		EMASlow:         50,
+		DailyATRPeriod:  14,
+		UseDayATRGate:   1,
+		FreshDayATR:     0,
+		SpentDayATR:     0.8,
+		StopDailyATR:    1.0,
+		TPDailyATR:      0.5,
+		UseVolume:       0,
+		VolBaseDays:     14,
+		VolLookbackBars: 3,
+		VolMult:         1.2,
+		UseRSIExit:      1,
+		UseTrail:        0,
+		TrailDailyATR:   0,
+	}
 }
