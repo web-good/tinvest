@@ -1,0 +1,28 @@
+{
+  "_comment": "ПРИНЯТАЯ ТОЧКА LENT — та самая, что стоит литералом в strategy/lent. Сетка из одного значения на каждое из 18 полей означает, что калибратор не выбирает НИЧЕГО: profit factor принадлежит конфигурации, а не процедуре отбора. Замер: pooled PF 2.487 на 120 сделках, фолды 2.515 / 2.406 / 1.498 / 3.949, худший maxDD по фолду 7.90%. Это НЕ out-of-sample: точку собрал человек, видевший всю историю, поэтому сравнивать 2.487 с планкой 1.5 нельзя. Запуск: go run ./cmd/backtest -ticker LENT -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/lent/plateau_point.json -out ./reports/LENT_plateau -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor. Отдельно про стоп: файла plateau_stop10.json тут НЕТ, и его отсутствие — не забывчивость. Сосед со стопом 1.0 при цели 1.0 даёт формально лучший pooled PF 2.537 против 2.487, но профиль у него хуже (фолд 1 — OOS PF 15.347 при просадке 1.5%, фолд 3 — 0.987, худший maxDD по фолду 19.39% против 7.90%), а сам файл не проходит TestRSIPullbackGridControlPoints: цель перестаёт превышать стоп, то есть конфигурация требует win rate выше 50% просто чтобы выйти в ноль. Это ровно та асимметрия, которую общий тест и сторожит, и она же — довод против расширения стопа. Числа соседа записаны в доке пакета strategy/lent и в lent_test.go.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [4],
+        "RSILower": [25],
+        "RSIUpper": [75],
+        "EMAFast": [20],
+        "EMASlow": [100],
+        "DailyATRPeriod": [14],
+        "UseDayATRGate": [1],
+        "FreshDayATR": [0],
+        "SpentDayATR": [0.8],
+        "StopDailyATR": [0.7],
+        "TPDailyATR": [1.0],
+        "UseVolume": [0],
+        "VolBaseDays": [14],
+        "VolLookbackBars": [3],
+        "VolMult": [1.2],
+        "UseRSIExit": [1],
+        "UseTrail": [0],
+        "TrailDailyATR": [0]
+      }
+    }
+  ]
+}

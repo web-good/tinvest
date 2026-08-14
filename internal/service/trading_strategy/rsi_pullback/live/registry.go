@@ -15,10 +15,12 @@ import (
 
 // paramsByTicker maps every rsi_pullback ticker the runner knows to its params. The
 // configured universe (RSI_PULLBACK_TICKERS) selects which of these actually trade;
-// NVTK and LENT are registered for completeness but have no calibrated literal yet — both return
-// the baseline — and must not be put into the universe. LENT was added 2026-08-14 as the place its
-// literal will go once its themes are run; its measurements and the bar declared before those runs
-// live in the package doc. FESH (2026-08-13) and WUSH (2026-08-14) do
+// NVTK is registered for completeness but has no calibrated literal yet — it returns the
+// baseline — and must not be put into the universe. LENT was added 2026-08-14 and calibrated the
+// same day; it has a literal but is NOT in the universe, because its themes missed the bar
+// declared before the runs (entry 1.355, trend 1.777 with an unstable leading axis) and putting
+// it in is a separate decision — read the package doc first, starting with the liquidity note:
+// 38 mln RUB of median daily turnover is the thinnest of every ticker here. FESH (2026-08-13) and WUSH (2026-08-14) do
 // have literals and the owner did put both into the universe, in each case as a risk taken with
 // eyes open rather than as a confirmation: for neither ticker does the standard §8 protocol
 // confirm the instrument. WUSH missed the bar declared before its runs twice, and its literal

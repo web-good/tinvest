@@ -1,0 +1,28 @@
+{
+  "_comment": "СОСЕД: порог входа 30 (значение baseline) вместо принятых 25. Самое слабое направление всего плато и потому единственный сосед, который стоит держать файлом: pooled PF падает до 1.569, а худшая просадка по фолду вырастает до 20.48% против 7.90%; фолд 4 уходит в 0.656. Порог 25 держится не на вкусе — это устойчивый выбор узкой редакции cal_entry.json (25/25/20/25 по фолдам). Запуск: go run ./cmd/backtest -ticker LENT -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/lent/plateau_rsilower30.json -out ./reports/LENT_plateau -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [4],
+        "RSILower": [30],
+        "RSIUpper": [75],
+        "EMAFast": [20],
+        "EMASlow": [100],
+        "DailyATRPeriod": [14],
+        "UseDayATRGate": [1],
+        "FreshDayATR": [0],
+        "SpentDayATR": [0.8],
+        "StopDailyATR": [0.7],
+        "TPDailyATR": [1.0],
+        "UseVolume": [0],
+        "VolBaseDays": [14],
+        "VolLookbackBars": [3],
+        "VolMult": [1.2],
+        "UseRSIExit": [1],
+        "UseTrail": [0],
+        "TrailDailyATR": [0]
+      }
+    }
+  ]
+}
