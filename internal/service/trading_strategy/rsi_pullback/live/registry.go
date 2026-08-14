@@ -6,6 +6,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/fesh"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/gazp"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/lent"
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/lsngp"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/nvtk"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/reni"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/tbank"
@@ -15,21 +16,21 @@ import (
 
 // paramsByTicker maps every rsi_pullback ticker the runner knows to its params. The
 // configured universe (RSI_PULLBACK_TICKERS) selects which of these actually trade;
-// NVTK is registered for completeness but has no calibrated literal yet — it returns the
-// baseline — and must not be put into the universe. LENT was added 2026-08-14 and calibrated the
-// same day; it has a literal but is NOT in the universe, because its themes missed the bar
-// declared before the runs (entry 1.355, trend 1.777 with an unstable leading axis) and putting
-// it in is a separate decision — read the package doc first, starting with the liquidity note:
-// 38 mln RUB of median daily turnover is the thinnest of every ticker here. FESH (2026-08-13) and WUSH (2026-08-14) do
-// have literals and the owner did put both into the universe, in each case as a risk taken with
-// eyes open rather than as a confirmation: for neither ticker does the standard §8 protocol
-// confirm the instrument. WUSH missed the bar declared before its runs twice, and its literal
-// was hand-picked over the whole history — see the package docs before touching either.
+// NVTK and LSNGP are registered for completeness but have no calibrated literal yet — both
+// return the baseline — and must not be put into the universe. FESH (2026-08-13), WUSH and LENT
+// (both 2026-08-14) do have literals and the owner did put all three into the universe, in each
+// case as a risk taken with eyes open rather than as a confirmation: for none of them does the
+// standard §8 protocol confirm the instrument. WUSH missed the bar declared before its runs
+// twice; LENT missed it too (entry 1.355, trend 1.777 with an unstable leading axis) and carries
+// a second risk of a different nature — 38 mln RUB of median daily turnover, the thinnest of
+// every ticker here. Every one of those literals was hand-picked over the whole history, which is
+// not out-of-sample — see the package docs before touching any of them.
 var paramsByTicker = map[string]core.Params{
 	ugld.Ticker:  ugld.DefaultParams(),
 	tbank.Ticker: tbank.DefaultParams(),
 	gazp.Ticker:  gazp.DefaultParams(),
 	lent.Ticker:  lent.DefaultParams(),
+	lsngp.Ticker: lsngp.DefaultParams(),
 	nvtk.Ticker:  nvtk.DefaultParams(),
 	domrf.Ticker: domrf.DefaultParams(),
 	reni.Ticker:  reni.DefaultParams(),

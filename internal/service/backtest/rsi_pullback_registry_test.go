@@ -348,3 +348,26 @@ func TestRSIPullbackWUSHIsRegisteredAndCalibrated(t *testing.T) {
 		t.Fatalf("Ticker() = %q, want WUSH", got)
 	}
 }
+
+// TestRSIPullbackLSNGPTracksBaseline держит состояние «калибровка не проводилась». Пакет
+// strategy/lsngp заведён 2026-08-14 ДО прогонов, и до появления собственного литерала он обязан
+// отслеживать core.DefaultParams(): калибратор засевает несвипуемые поля именно из этого
+// вызова, поэтому расхождение здесь тихо сместило бы точку отсчёта всех девяти тем каталога
+// lsngp/. Тест становится красным ровно тогда, когда литерал поставлен — и тогда его надо
+// заменить снимком, как это сделано для LENT и WUSH.
+func TestRSIPullbackLSNGPTracksBaseline(t *testing.T) {
+	b, ok := rsiPullbackRegistry["LSNGP"]
+	if !ok {
+		t.Fatal("LSNGP отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
+	}
+	p, pok := b.DefaultParams().(core.Params)
+	if !pok {
+		t.Fatalf("LSNGP: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
+	}
+	if want := core.DefaultParams(); p != want {
+		t.Fatalf("LSNGP params = %+v, want baseline ядра %+v.\nЕсли тикер откалиброван — заменить этот тест снимком литерала", p, want)
+	}
+	if got := b.Build(p).Ticker(); got != "LSNGP" {
+		t.Fatalf("Ticker() = %q, want LSNGP", got)
+	}
+}
