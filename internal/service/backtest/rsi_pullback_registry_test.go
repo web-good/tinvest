@@ -6,6 +6,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/domrf"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/fesh"
+	rsipullbacklent "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/lent"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/reni"
 	rsipullbackwush "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/wush"
 )
@@ -277,6 +278,36 @@ func TestRSIPullbackFESHIsRegisteredAndCalibrated(t *testing.T) {
 	}
 	if got := b.Build(p).Ticker(); got != "FESH" {
 		t.Fatalf("Ticker() = %q, want FESH", got)
+	}
+}
+
+// TestRSIPullbackLENTTracksBaseline держит состояние «калибровка не проводилась» ВИДИМЫМ. Пакет
+// strategy/lent заведён 2026-08-14 до прогонов — как место, куда ляжет литерал, и как носитель
+// замеров, — и до тех пор обязан возвращать ровно core.DefaultParams(). Без этого теста разница
+// между «тикер откалиброван» и «тикер просто зарегистрирован» снаружи неразличима: и то и другое
+// выглядит как строка в реестре, а отчёт несёт имя инструмента в обоих случаях.
+//
+// Тест умрёт в тот день, когда планка из доки пакета будет взята и появится литерал — тогда его
+// место занимает снимок вида TestRSIPullback<Ticker>IsRegisteredAndCalibrated, как это уже
+// произошло с RENI, FESH и WUSH. Красный тест здесь означает ровно одно: кто-то поставил LENT
+// параметры, не пройдя этот шаг.
+func TestRSIPullbackLENTTracksBaseline(t *testing.T) {
+	b, ok := rsiPullbackRegistry["LENT"]
+	if !ok {
+		t.Fatal("LENT отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
+	}
+	p, pok := b.DefaultParams().(core.Params)
+	if !pok {
+		t.Fatalf("LENT: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
+	}
+	if p != core.DefaultParams() {
+		t.Fatalf("LENT params = %+v, want baseline %+v — калибровка не проводилась, литерала быть не должно", p, core.DefaultParams())
+	}
+	if want := rsipullbacklent.DefaultParams(); p != want {
+		t.Fatalf("LENT params = %+v, want литерал пакета %+v", p, want)
+	}
+	if got := b.Build(p).Ticker(); got != "LENT" {
+		t.Fatalf("Ticker() = %q, want LENT", got)
 	}
 }
 
