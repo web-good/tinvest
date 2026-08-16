@@ -8,6 +8,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/fesh"
 	rsipullbacklent "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/lent"
 	rsipullbacklsngp "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/lsngp"
+	rsipullbacknvtk "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/nvtk"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/reni"
 	rsipullbackwush "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/wush"
 )
@@ -383,5 +384,41 @@ func TestRSIPullbackLSNGPIsRegisteredAndCalibrated(t *testing.T) {
 	}
 	if got := b.Build(p).Ticker(); got != "LSNGP" {
 		t.Fatalf("Ticker() = %q, want LSNGP", got)
+	}
+}
+
+// TestRSIPullbackNVTKIsRegisteredAndCalibrated пинует два неотличимых снаружи факта: NVTK есть в
+// карте (а не проваливается в generic-ветку) И возвращает собственный литерал, а не baseline.
+// До 2026-08-16 пакет strategy/nvtk был единственным в реестре, кто отслеживал baseline: он
+// возвращал core.DefaultParams(), и живой раннер прямо запрещал ставить тикер в боевую вселенную.
+// Калибровка 2026-08-16 это состояние сняла.
+//
+// Отдельно от снимка: тикер НЕ подтверждён штатным протоколом §8, причём слабее всех
+// предшественников — выше объявленной планки 1.5 поднялась ОДНА тема из девяти (volume
+// 1.674/53), ключевые дали entry 1.218/120 и trend 1.044/71, а четыре темы легли на единицу или
+// ниже. Литерал собран не по лидербордам тем (они меряют каждую ось поверх дефолтов, а дефолты
+// на NVTK стоят там, где стратегии нет), а точечными прогонами, и перепроверен фиксированной
+// точкой: pooled PF 2.823 на 93 сделках, все четыре фолда выше 1.89. Для фиксированной точки это
+// НЕ out-of-sample — конфигурацию выбрал человек, видевший всю историю. Наличие литерала
+// означает снятую техническую блокировку, а не право ставить NVTK в боевую вселенную: это
+// решение владельца, как было с domrf, fesh, wush и lent. Снимок литерала и обоснование
+// уязвимых полей живут рядом с ним, в strategy/nvtk/nvtk_test.go.
+func TestRSIPullbackNVTKIsRegisteredAndCalibrated(t *testing.T) {
+	b, ok := rsiPullbackRegistry["NVTK"]
+	if !ok {
+		t.Fatal("NVTK отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
+	}
+	p, pok := b.DefaultParams().(core.Params)
+	if !pok {
+		t.Fatalf("NVTK: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
+	}
+	if p == core.DefaultParams() {
+		t.Fatal("NVTK вернул baseline: откалиброванный тикер обязан иметь собственный литерал")
+	}
+	if want := rsipullbacknvtk.DefaultParams(); p != want {
+		t.Fatalf("NVTK params = %+v, want литерал пакета %+v", p, want)
+	}
+	if got := b.Build(p).Ticker(); got != "NVTK" {
+		t.Fatalf("Ticker() = %q, want NVTK", got)
 	}
 }

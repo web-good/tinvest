@@ -1,0 +1,28 @@
+{
+  "_comment": "СОСЕД: порог входа 40 вместо принятых 50 — проверка того, что на NVTK решает именно ГЛУБИНА отката. Замер: pooled PF 2.361 на 62 сделках против 2.823 на 93 у принятой точки. Сосед не провальный, и это важнее его проигрыша: ось глубины на этом инструменте монотонная и пологая сверху (при прочих принятых полях 30 — 1.229 на 36 сделках, 35 — 1.819 на 41, 40 — 2.361 на 62, 45 — 2.485 на 80, 50 — 2.823 на 93), то есть чем МЕЛЬЧЕ откат, тем лучше результат, и обрыв стоит на глубокой стороне, а не на мелкой. Это переворачивает обычную для каталога картину, где вход искали на 20-25 (LENT, WUSH, UGLD), и объясняется режимом: NVTK падает всю историю окна, глубокий провал RSI здесь чаще продолжение падения, чем откат внутри тренда. Файл держится в каталоге как единственный содержательный сосед по этой оси. Запуск: go run ./cmd/backtest -ticker NVTK -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/nvtk/plateau_rsilower40.json -out ./reports/NVTK_plateau -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [5],
+        "RSILower": [40],
+        "RSIUpper": [75],
+        "EMAFast": [10],
+        "EMASlow": [50],
+        "DailyATRPeriod": [14],
+        "UseDayATRGate": [1],
+        "FreshDayATR": [0],
+        "SpentDayATR": [0.9],
+        "StopDailyATR": [0.5],
+        "TPDailyATR": [1.0],
+        "UseVolume": [0],
+        "VolBaseDays": [14],
+        "VolLookbackBars": [3],
+        "VolMult": [1.2],
+        "UseRSIExit": [1],
+        "UseTrail": [0],
+        "TrailDailyATR": [0]
+      }
+    }
+  ]
+}

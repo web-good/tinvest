@@ -1,0 +1,28 @@
+{
+  "_comment": "ПРИНЯТАЯ ТОЧКА NVTK — та самая, что стоит литералом в strategy/nvtk. Сетка из одного значения на каждое из 18 полей означает, что калибратор не выбирает НИЧЕГО: profit factor принадлежит конфигурации, а не процедуре отбора. Замер: pooled PF 2.823 на 93 сделках, фолды 3.493 / 2.935 / 1.893 / 3.414 — все четыре выше 1.5, вырожденных нет. Это НЕ out-of-sample: точку собрал человек, видевший всю историю, поэтому сравнивать 2.823 с планкой 1.5 нельзя. Штатные тематические прогоны, которые к истории окна не подглядывали, дали куда меньше: лучшей темой оказалась volume (1.674 на 53 сделках), entry — 1.218, trend — 1.044, risk — 0.949. Запуск: go run ./cmd/backtest -ticker NVTK -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/nvtk/plateau_point.json -out ./reports/NVTK_plateau -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [5],
+        "RSILower": [50],
+        "RSIUpper": [75],
+        "EMAFast": [10],
+        "EMASlow": [50],
+        "DailyATRPeriod": [14],
+        "UseDayATRGate": [1],
+        "FreshDayATR": [0],
+        "SpentDayATR": [0.9],
+        "StopDailyATR": [0.5],
+        "TPDailyATR": [1.0],
+        "UseVolume": [0],
+        "VolBaseDays": [14],
+        "VolLookbackBars": [3],
+        "VolMult": [1.2],
+        "UseRSIExit": [1],
+        "UseTrail": [0],
+        "TrailDailyATR": [0]
+      }
+    }
+  ]
+}

@@ -15,9 +15,14 @@ import (
 )
 
 // paramsByTicker maps every rsi_pullback ticker the runner knows to its params. The
-// configured universe (RSI_PULLBACK_TICKERS) selects which of these actually trade;
-// NVTK is registered for completeness but has no calibrated literal yet — it returns the
-// baseline — and must not be put into the universe. LSNGP was added and calibrated 2026-08-14: it
+// configured universe (RSI_PULLBACK_TICKERS) selects which of these actually trade; every entry
+// here now carries a calibrated literal, and none of the map tracks the baseline any more. NVTK
+// was the last one that did: it was calibrated 2026-08-16 and is NOT in the universe, because its
+// nine themes missed the declared bar by the widest margin in this catalogue — one theme of nine
+// above 1.5 pooled OOS PF (volume 1.674), entry 1.218 and trend 1.044. Its accepted point does
+// measure 2.823 pooled on 93 trades with all four folds above 1.89, but that point was assembled
+// by hand over the whole history and is not out-of-sample; read the package doc, starting with
+// what the day gate does there, before putting the ticker in. LSNGP was added and calibrated 2026-08-14: it
 // has a literal but is NOT in the universe, because its themes missed the bar declared before the
 // runs — every one of the nine cleared 1.5 pooled OOS PF, a first for this catalogue, but the
 // leading axis was stable in only 2 folds of 4 on both key themes. Read its package doc before
