@@ -34,7 +34,11 @@ import (
 // traded live since 2026-08-05 on a literal that had no walk-forward at all; the protocol does
 // not confirm it either (entry 0.864, trend 1.536 stable in 2 folds of 4), and the recalibration
 // changed exactly two fields — the ATR trail is now armed at 0.5 daily ATR, which can only close
-// a position EARLIER than the previous literal would, never later. WUSH missed the bar declared before its runs
+// a position EARLIER than the previous literal would, never later. RENI was recalibrated the same
+// day and is still NOT in the universe, but its two known caveats are now closed: the target that
+// disagreed with the walk-forward winner is accepted at 0.6 (1.5 never fired once in 36 months),
+// and the fold that used to collapse to 0.336 now measures 1.351, because the trend filter was
+// slowed to EMA 200 — read its package doc before putting it in. WUSH missed the bar declared before its runs
 // twice; LENT missed it too (entry 1.355, trend 1.777 with an unstable leading axis) and carries
 // a second risk of a different nature — 38 mln RUB of median daily turnover, the thinnest of
 // every ticker here. Every one of those literals was hand-picked over the whole history, which is
