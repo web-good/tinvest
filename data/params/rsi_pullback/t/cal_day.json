@@ -1,15 +1,12 @@
 {
-  "_comment": "DAY-STATE gate, spent branch only, calibrated specifically for T (T-Bank) — this grid is wider than the root data/params/rsi_pullback/cal_day.json. Forces UseDayATRGate=1 and freezes FreshDayATR=0, which permanently disables the 'day barely started' branch (dayStateOK requires fresh > 0), then sweeps SpentDayATR together with the entry shape (RSILower, RSIPeriod) and the exit band RSIUpper (1680 evaluations — about 4x the cost of a full grid.json run (409), because this grid crosses SpentDayATR x RSILower x RSIPeriod x RSIUpper instead of one narrower phase): entry is allowed once the day's range is already over SpentDayATR*dailyATR (the day is spent). Lowering SpentDayATR widens the late-entry window. Beware: the day-state gate covers two DIFFERENT strategies sharing one code path (early trend entry vs mean-reversion after a sell-off), and this file measures only the second one — isolating the first would take a separate config with SpentDayATR pushed far out of reach (e.g. 99) instead of FreshDayATR frozen at zero. The UseDayATRGate=0 control point lives in cal_screen.json. Run: go run ./cmd/backtest -ticker T -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/t/cal_day.json -out ./reports/T_day -months 24 -min-trades 20 -test-months 6 -metric profit_factor.",
+  "_comment": "DAY-STATE, обе ветки гейта дня: UseDayATRGate=1 x FreshDayATR x SpentDayATR, 24 прогона. Гейт покрывает ДВЕ разные стратегии в одном коде: «день только начался» (весь ход впереди) и «день исчерпан» (распродажа уже случилась). FreshDayATR=0 — это выключатель первой ветки, а не малое значение: dayStateOK охраняет её условием `fresh > 0 &&`, поэтому ровно 0 убирает ветку целиком, тогда как 0.01 её оставляет и пропускает день, чей диапазон едва открылся. Ось свежей ветки взята из замера формы дня, а не из общих соображений: медианный дневной размах на T равен 0.85 ATR предыдущего дня, поэтому FreshDayATR 0.3 отбирает примерно первую треть типичного дня, 0.5 — почти его половину; и то, и другое на этом инструменте осмысленно, поскольку день закрывается в медиане на 0.41 своего диапазона (ниже середины) — то есть утренний рост чаще сдают к вечеру, чем удерживают. Ось исчерпанной ветки идёт до 1.5: доля дней, чей полный размах НЕ достаёт до X*ATR предыдущего дня, равна 12.9% при 0.5, 34.2% при 0.7, 44.5% при 0.8, 61.3% при 1.0 и 78.7% при 1.3 — то есть порог 1.25-1.5 оставляет вход возможным лишь в четверти-пятой части дней, и такие строки надо читать по счёту сделок, а не по profit factor. Действующий боевой литерал T стоит на SpentDayATR 0.9 при выключенной свежей ветке, и обе величины в оси есть — без этого тема не смогла бы сравнить кандидата с тем, что торгует сейчас. Ловушка гейта, общая для всех тикеров: при отсутствии TodayHigh/TodayLow он ПРОПУСКАЕТ вход, то есть дыра в данных читается как «разрешено», а не как «день исчерпан». Точка отключения гейта (UseDayATRGate=0) живёт в cal_screen.json. Запуск: go run ./cmd/backtest -ticker T -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/t/cal_day.json -out ./reports/T_day -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor.",
   "phases": [
     {
       "name": "day",
       "grid": {
         "UseDayATRGate": [1],
-        "FreshDayATR": [0, 0.1, 0.2, 0.3],
-        "SpentDayATR": [0.6, 0.7, 0.8, 0.9, 1.0,1.2, 1.3],
-        "RSILower": [15, 20, 25],
-        "RSIPeriod": [3, 4, 5, 6],
-        "RSIUpper": [60, 65, 70, 75, 80]
+        "FreshDayATR": [0, 0.3, 0.4, 0.5],
+        "SpentDayATR": [0.8, 0.9, 1.0, 1.25, 1.3, 1.5]
       }
     }
   ]

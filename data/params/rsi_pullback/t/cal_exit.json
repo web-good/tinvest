@@ -1,10 +1,10 @@
 {
-  "_comment": "EXIT band, calibrated specifically for T (T-Bank) — same grid as the root data/params/rsi_pullback/cal_exit.json: the RSI level whose UPWARD cross closes the trade (6 evaluations). 55 fixes profit early, making trades shorter and smaller; 80 holds for outright overbought, which more often lets the stop or the target fire first. This is the third-priority exit behind SL and TP, so its effect is entangled with cal_risk.json — calibrate risk first, then sweep this over the surviving stop/target pair rather than over DefaultParams. Everything else inherits DefaultParams. Run: go run ./cmd/backtest -ticker T -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/t/cal_exit.json -out ./reports/T_exit -months 24 -min-trades 20 -test-months 6 -metric profit_factor.",
+  "_comment": "EXIT, полоса выхода: RSIUpper, 7 прогонов. Уровень, восходящий кросс которого закрывает сделку третьим приоритетом — после стопа и цели. Ось расширена до 85 по образцу gazp/ и пересажена на замер T: восходящих кроссов RSI через уровень (будние бары, вся история) у RSI(5) — 2202/2056/1743/1407/1129/805/528 на 55/60/65/70/75/80/85, у RSI(4) — 2565/2397/2108/1762/1443/1082/751, у RSI(7) — 1777/1589/1325/1026/778/508/284. Мёртвых точек нет даже в верхнем углу, поэтому обрезать ось нечем. Смысл краёв: 55 фиксирует прибыль рано, укорачивая сделку и превращая многодневную по замыслу стратегию во внутридневную (на LSNGP именно это и вышло — медиана удержания упала до 4 баров); 85 держит до настоящей перекупленности, и тогда чаще успевает сработать стоп или цель. Действующий боевой уровень T — 65. Тема связана с cal_risk.json и осмысленна ТОЛЬКО поверх зафиксированной пары стоп/цель, а не поверх дефолтов: свипуемая тут полоса конкурирует за один и тот же выход с TP. Порядок поэтому такой — сначала риск, потом эта тема поверх выжившей пары. Запуск: go run ./cmd/backtest -ticker T -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/t/cal_exit.json -out ./reports/T_exit -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor.",
   "phases": [
     {
       "name": "exit",
       "grid": {
-        "RSIUpper": [55, 60, 65, 70, 75, 80]
+        "RSIUpper": [55, 60, 65, 70, 75, 80, 85]
       }
     }
   ]

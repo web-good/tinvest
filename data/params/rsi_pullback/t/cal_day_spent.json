@@ -1,12 +1,12 @@
 {
-  "_comment": "DAY-STATE gate, SPENT branch only, calibrated specifically for T (T-Bank). FreshDayATR=0 is the off switch for the early-entry branch: dayStateOK guards it with `fresh > 0 &&`, so exactly 0 removes it entirely — a small positive value like 0.01 does NOT, it still admits a day whose range has barely opened. What is left is one strategy instead of two: buy the RSI pullback only after the day has already spent at least SpentDayATR of its daily ATR, i.e. the sell-off has happened. 7 evaluations. Compare its profit factor against cal_day.json (both branches) and against a fresh-only run (SpentDayATR far above any reachable range, e.g. 99) — a two-branch profit factor averages two different trades together and can hide that one branch pays for the other. Caveat: the gate lets the entry through when TodayHigh/TodayLow are missing, so a data hole reads as 'allowed', not as 'spent'. Run: go run ./cmd/backtest -ticker T -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/t/cal_day_spent.json -out ./reports/T_day_spent -months 24 -min-trades 20 -test-months 6 -metric profit_factor.",
+  "_comment": "DAY-STATE, только ветка «день исчерпан»: FreshDayATR=0 + свип SpentDayATR, 7 прогонов. Отдельный файл от cal_day.json нужен потому, что двухветочный profit factor усредняет ДВЕ разные сделки и умеет прятать, что одна ветка платит за другую; здесь остаётся ровно одна стратегия — покупать откат по RSI только после того, как день уже прошёл не меньше SpentDayATR своего дневного ATR. Ось пересажена на замер выживаемости дня по T: доля будних дней, чей полный размах НЕ достаёт до X*ATR предыдущего дня, равна 12.9% при 0.5, 34.2% при 0.7, 44.5% при 0.8, 61.3% при 1.0, 78.7% при 1.3 — то есть на пороге 0.6 вход возможен почти в любой день, а на 1.75 остаётся меньше пятой части дней, и строка живёт уже на выборке, а не на логике. Нижняя точка 0.6 сохранена как ближайшая к «гейт почти не режет» без его отключения (полное отключение меряет cal_screen.json), верхняя 1.75 — как заведомо голодная граница, по которой видно, где ломается счёт сделок. На NVTK именно эта ось оказалась ВСЕЙ стратегией (0.8 — 1.868, 0.9 — 2.823, 1.0 — 3.053 pooled), поэтому её сравнение с cal_day.json обязательно, а не факультативно: если обе темы сходятся к одному порогу, свежая ветка на инструменте бесполезна. Действующий боевой порог T — 0.9. Ловушка та же: при отсутствии TodayHigh/TodayLow гейт пропускает вход. Запуск: go run ./cmd/backtest -ticker T -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/t/cal_day_spent.json -out ./reports/T_day_spent -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor.",
   "phases": [
     {
       "name": "day_spent",
       "grid": {
         "UseDayATRGate": [1],
         "FreshDayATR": [0],
-        "SpentDayATR": [0.6,0.7, 0.8, 0.9, 1.0, 1.3, 1.6]
+        "SpentDayATR": [0.6, 0.8, 0.9, 1.0, 1.25, 1.5, 1.75]
       }
     }
   ]

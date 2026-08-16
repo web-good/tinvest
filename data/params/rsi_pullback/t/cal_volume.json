@@ -1,12 +1,12 @@
 {
-  "_comment": "VOLUME background gate, calibrated specifically for T (T-Bank) — same grid as the root data/params/rsi_pullback/cal_volume.json. Forces UseVolume=1 and sweeps how much busier than usual the tape must be (24 evaluations). VolMult is the ratio against the bar's OWN half-hour slot averaged over the last VolBaseDays completed weekday days: 1.1 means 'barely above normal', 2.0 demands a clear burst. VolBaseDays trades adaptivity for stability — 3 days follow a regime change quickly, 14 days (matching the strategy's own default) shrug off one freak session but push Lookback to 1008 bars, making this the slowest file to run. VolLookbackBars stays fixed at 3 by strategy definition. This gate is the single largest cut on trade count, so read cal_screen.json's numbers before trusting any ranking here. Run: go run ./cmd/backtest -ticker T -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/t/cal_volume.json -out ./reports/T_volume -months 24 -min-trades 20 -test-months 6 -metric profit_factor.",
+  "_comment": "VOLUME, фон объёмов: UseVolume=1 x VolMult x VolBaseDays, 12 прогонов. VolMult — отношение объёма бара к среднему по ЕГО СОБСТВЕННОМУ получасовому слоту за последние VolBaseDays завершённых будних дней: 1.2 значит «чуть оживлённее обычного», 2.5 требует явного всплеска. VolBaseDays меняет адаптивность на устойчивость: 5 дней идут за сменой режима быстро, 10 не замечают одну аномальную сессию, но растягивают Lookback. VolLookbackBars по определению стратегии равен 3 и не свипуется. Гейт — самый крупный резчик числа сделок, поэтому читать эту тему можно только после cal_screen.json. На T у него есть своя причина оказаться пустым: инструмент торгует 4961 млн ₽ медианой будних дней (среднее 6828) — рекорд каталога, — то есть тонкой ленты, которую гейт призван отсекать, тут не бывает вовсе, и «оживление» на таком обороте означает уже случившееся новостное движение. Отдельная ловушка, дважды пойманная на соседях: тема screen может выбрать UseVolume=1 во всех фолдах не потому, что гейт полезен, а потому, что он вырождает какой-нибудь фолд до 5-8 сделок с profit factor 12-17, и калибратор, ранжирующий по PF, предпочитает эту строку честной. На GAZP и NVTK объёмный гейт по этой причине в литерал НЕ вошёл, несмотря на выбор темой screen. Проверять надо счёт сделок по фолдам, а не pooled PF. Запуск: go run ./cmd/backtest -ticker T -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/t/cal_volume.json -out ./reports/T_volume -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor.",
   "phases": [
     {
       "name": "volume",
       "grid": {
         "UseVolume": [1],
-        "VolMult": [1.1, 1.2, 1.5, 1.75, 2.0, 2.5],
-        "VolBaseDays": [3, 5, 10, 14]
+        "VolMult": [1.2, 1.5, 2.0, 2.5],
+        "VolBaseDays": [5, 10]
       }
     }
   ]

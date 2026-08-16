@@ -1,11 +1,11 @@
 {
-  "_comment": "TREND filter, calibrated specifically for T (T-Bank) — same grid as the root data/params/rsi_pullback/cal_trend.json: inside what uptrend the pullback is bought. Sweeps the EMA pair whose EMAFast > EMASlow condition is entry gate 3 (36 evaluations). 5/50 is a near-local trend that flips often; 20/200 is a weekly-scale trend with few but sturdier entries. EMASlow is also the most expensive parameter for warm-up — it sets the 2*need+20 floor of Lookback — so a 200-bar slow line needs a longer candle window than the volume baseline does. Everything else inherits DefaultParams. Run: go run ./cmd/backtest -ticker T -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/t/cal_trend.json -out ./reports/T_trend -months 24 -min-trades 20 -test-months 6 -metric profit_factor.",
+  "_comment": "TREND, фильтр направления: EMAFast x EMASlow, 35 прогонов. Ось расширена по образцу gazp/ (EMAFast получил 30 и 40, EMASlow — 70, 120 и 170 между прежними узлами). Резать её нечем, и замер говорит, что тема на этом инструменте почти наверняка окажется шумом: доля 30-минутных баров с EMAFast > EMASlow на T равна 47-48% ВО ВСЕХ ТРИДЦАТИ ПЯТИ парах — разброс между самой быстрой (5/50, 48%) и самой медленной (40/200, 47%) составляет ОДИН процентный пункт. Это самая плоская трендовая ось каталога: у GAZP разброс был четыре пункта (42-46%), у NVTK четыре (43-47%), у LENT два (52-53%). Практический вывод, который надо держать при чтении лидерборда: разница в profit factor между парами здесь будет разницей в выборке, а не в фильтре, и ценность темы — исключительно в устойчивости выбора EMASlow по фолдам. Ровно на этой устойчивости планку не взяли wush, lent, fesh, gazp и lsngp. Фильтр при этом закрыт больше половины истории, что для лонговой стратегии на падающем −26.5% за окно инструменте нормально и означает: дефицит сделок пойдёт от тренда, а не от дневного гейта. EMASlow=200 исполнима: Lookback при ней равен 2*200+20 = 420 баров против 25 031 будних в кэше — окно прогрева занимает 1.7% истории. Быстрая EMA всюду быстрее самой медленной, вырожденных пар в сетке нет. Запуск: go run ./cmd/backtest -ticker T -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/t/cal_trend.json -out ./reports/T_trend -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor.",
   "phases": [
     {
       "name": "trend",
       "grid": {
-        "EMAFast": [5, 10, 20, 25, 30, 50],
-        "EMASlow": [50, 100, 70, 120, 150, 200]
+        "EMAFast": [5, 10, 20, 30, 40],
+        "EMASlow": [50, 70, 100, 120, 150, 170, 200]
       }
     }
   ]

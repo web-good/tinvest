@@ -30,7 +30,11 @@ import (
 // nothing about that ticker has been tested against a falling market. FESH (2026-08-13), WUSH and LENT
 // (both 2026-08-14) do have literals and the owner did put all three into the universe, in each
 // case as a risk taken with eyes open rather than as a confirmation: for none of them does the
-// standard §8 protocol confirm the instrument. WUSH missed the bar declared before its runs
+// standard §8 protocol confirm the instrument. T was calibrated in full on 2026-08-16, having
+// traded live since 2026-08-05 on a literal that had no walk-forward at all; the protocol does
+// not confirm it either (entry 0.864, trend 1.536 stable in 2 folds of 4), and the recalibration
+// changed exactly two fields — the ATR trail is now armed at 0.5 daily ATR, which can only close
+// a position EARLIER than the previous literal would, never later. WUSH missed the bar declared before its runs
 // twice; LENT missed it too (entry 1.355, trend 1.777 with an unstable leading axis) and carries
 // a second risk of a different nature — 38 mln RUB of median daily turnover, the thinnest of
 // every ticker here. Every one of those literals was hand-picked over the whole history, which is

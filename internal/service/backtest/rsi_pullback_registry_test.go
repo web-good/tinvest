@@ -157,11 +157,16 @@ func TestRSIPullbackParseParamsRejectsGarbage(t *testing.T) {
 
 // TestRSIPullbackTBankKeepsItsOwnCalibratedLiteral used to pin a DELIBERATE hypothesis — T
 // starting from GAZP's post-grid literal, to test whether parameters transfer between liquid
-// names. That hypothesis is now retired: T has been calibrated on its own data (report
-// reports/T/T_rsi_pullback_Minutes30_20260731_134407.md, 67 trades, in-sample PF 1.312), and its
-// literal no longer equals GAZP's. This test pins T's own values instead, the same shape as
-// TestRSIPullbackCalibratedBindingKeepsItsOwnLiteral: catch a silent collapse back to
-// core.DefaultParams(), and catch T's literal drifting away from what its report was run on.
+// names. That hypothesis is retired, and so is the single in-sample run that replaced it: on
+// 2026-08-16 T went through its first FULL calibration (nine themes plus a point assembly,
+// data/params/rsi_pullback/t/plateau_point.json, pooled OOS PF 3.412 on 35 trades with no
+// degenerate fold). The snapshot below is that point. Exactly two fields moved against the
+// previous literal — UseTrail 0 -> 1 and TrailDailyATR 0 -> 0.5 — and the pairing matters:
+// DesiredStop takes the GREATEST active level, so a trail equal to the fixed stop starts the
+// position exactly where the old literal did and only tightens after favourable closes. Пин
+// живёт здесь, потому что этот тест ловит другое, чем снимок в strategy/tbank: он проверяет
+// путь ЧЕРЕЗ РЕЕСТР бэктеста, то есть что калибратор и живой раннер видят один и тот же
+// литерал.
 func TestRSIPullbackTBankKeepsItsOwnCalibratedLiteral(t *testing.T) {
 	want := core.Params{
 		RSIPeriod:       5,
@@ -180,8 +185,8 @@ func TestRSIPullbackTBankKeepsItsOwnCalibratedLiteral(t *testing.T) {
 		VolLookbackBars: 3,
 		VolMult:         1.2,
 		UseRSIExit:      1,
-		UseTrail:        0,
-		TrailDailyATR:   0,
+		UseTrail:        1,
+		TrailDailyATR:   0.5,
 	}
 	tbRaw := RSIPullbackLookupOrGeneric("T").DefaultParams()
 	tb, ok := tbRaw.(core.Params)
