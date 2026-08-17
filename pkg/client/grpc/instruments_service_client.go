@@ -15,6 +15,17 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+const (
+	// requestTimeout bounds single-instrument lookups: one round trip, a response of a few
+	// kilobytes.
+	requestTimeout = 10 * time.Second
+	// listTimeout bounds the bulk listings Shares and Bonds. Their responses are megabytes
+	// (the share list alone is ~3 MB), and on a slow link the call needs upwards of 20 s just
+	// to arrive — with requestTimeout those two methods failed with DeadlineExceeded while the
+	// connection was still coming up.
+	listTimeout = 60 * time.Second
+)
+
 type InstrumentsServiceClient interface {
 	Shares(ctx context.Context) ([]*model.Share, error)
 	ShareByID(ctx context.Context, id string) (*share.Share, error)
@@ -37,7 +48,7 @@ func NewInstrumentsServiceClient(conn grpc.ClientConnInterface, token string) In
 }
 
 func (c *instrumentsServiceClient) Bonds(ctx context.Context) ([]*pkgmodel.Bond, error) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, listTimeout)
 	defer cancel()
 	resp, err := c.instrumentsAPI.Bonds(ctx, &investapi.InstrumentsRequest{
 		InstrumentStatus:   investapi.InstrumentStatus_INSTRUMENT_STATUS_BASE.Enum(),
@@ -52,7 +63,7 @@ func (c *instrumentsServiceClient) Bonds(ctx context.Context) ([]*pkgmodel.Bond,
 }
 
 func (c *instrumentsServiceClient) GetBondCoupons(instrumentID string, from time.Time, to time.Time) ([]*pkgmodel.BondCoupon, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
 	resp, err := c.instrumentsAPI.GetBondCoupons(
 		ctx,
@@ -71,7 +82,7 @@ func (c *instrumentsServiceClient) GetBondCoupons(instrumentID string, from time
 }
 
 func (c *instrumentsServiceClient) Shares(ctx context.Context) ([]*model.Share, error) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, listTimeout)
 	defer cancel()
 	resp, err := c.instrumentsAPI.Shares(ctx, &investapi.InstrumentsRequest{
 		InstrumentStatus:   investapi.InstrumentStatus_INSTRUMENT_STATUS_BASE.Enum(),
@@ -86,7 +97,7 @@ func (c *instrumentsServiceClient) Shares(ctx context.Context) ([]*model.Share, 
 }
 
 func (c *instrumentsServiceClient) ShareByID(ctx context.Context, id string) (*share.Share, error) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 	resp, err := c.instrumentsAPI.ShareBy(ctx, &investapi.InstrumentRequest{
 		IdType: investapi.InstrumentIdType_INSTRUMENT_ID_TYPE_UID,
@@ -101,7 +112,7 @@ func (c *instrumentsServiceClient) ShareByID(ctx context.Context, id string) (*s
 }
 
 func (c *instrumentsServiceClient) BondByID(ctx context.Context, id string) (*pkgmodel.Bond, error) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 	resp, err := c.instrumentsAPI.BondBy(ctx, &investapi.InstrumentRequest{
 		IdType: investapi.InstrumentIdType_INSTRUMENT_ID_TYPE_UID,
@@ -123,7 +134,7 @@ func (c *instrumentsServiceClient) GetAssetFundamentals(ctx context.Context, ass
 		if end > len(assetUIDs) {
 			end = len(assetUIDs)
 		}
-		reqCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		reqCtx, cancel := context.WithTimeout(ctx, requestTimeout)
 		resp, err := c.instrumentsAPI.GetAssetFundamentals(
 			reqCtx,
 			&investapi.GetAssetFundamentalsRequest{Assets: assetUIDs[start:end]},

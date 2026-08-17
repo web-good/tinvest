@@ -1,0 +1,28 @@
+{
+  "_comment": "СОСЕД ПРИНЯТОЙ ТОЧКИ: всё то же, но полоса выхода оставлена прежней (RSIUpper 60). Файл лежит в каталоге не для полноты, а потому что это единственная альтернатива, сохраняющая ХАРАКТЕР сделки: медиана удержания 11 баров и 41% сделок длиннее одного дня против 8 баров и 29% у принятой точки. Замер на тех же четырёх фолдах: pooled OOS PF 3.249 на 23 сделках, фолды 4.196 / 1.140 / 7.162 / 0.669; in-sample за 32.8 месяца 34 сделки, PF 3.038, просадка 4.44%, CAGR 11.45%. Против принятой точки эта конфигурация лучше в первом и четвёртом фолдах и ХУЖЕ во втором — 1.140 против 2.194, — а второй фолд (OOS 2025-02—2025-08) единственный содержательно слабый в наборе и приходится на падение бумаги на 21.8%. Именно поэтому в литерал ушла полоса 55, а этот файл остаётся тем, к чему возвращаться, если сдвиг к внутридневному характеру окажется неприемлемым в живой торговле (условие пересмотра — docs/rsi_pullback/live.md). Запуск: go run ./cmd/backtest -ticker UGLD -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/ugld/plateau_upper60.json -out ./reports/UGLD_plateau_upper60 -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [6],
+        "RSILower": [15],
+        "RSIUpper": [60],
+        "EMAFast": [20],
+        "EMASlow": [150],
+        "DailyATRPeriod": [14],
+        "UseDayATRGate": [1],
+        "FreshDayATR": [0],
+        "SpentDayATR": [0.8],
+        "StopDailyATR": [0.5],
+        "TPDailyATR": [1.5],
+        "UseVolume": [1],
+        "VolBaseDays": [5],
+        "VolLookbackBars": [3],
+        "VolMult": [1.2],
+        "UseRSIExit": [1],
+        "UseTrail": [1],
+        "TrailDailyATR": [0.5]
+      }
+    }
+  ]
+}

@@ -39,7 +39,8 @@ func TestBaselineTrackingTickersStayOutOfTheDefaultUniverse(t *testing.T) {
 }
 
 // Ловушка нулевого значения: тикерные пакеты задают core.Params литералом, и забытое
-// поле молча даёт UseRSIExit=0 — то есть выключенный основной выход (61% выходов UGLD).
+// поле молча даёт UseRSIExit=0 — то есть выключенный основной выход (67.6% выходов UGLD после
+// перекалибровки 2026-08-17; с UseRSIExit=0 та же точка даёт pooled OOS PF 0.973 вместо 3.627).
 func TestRegisteredTickersKeepTheRSIExitArmed(t *testing.T) {
 	for ticker := range paramsByTicker {
 		p, _ := ParamsFor(ticker)
