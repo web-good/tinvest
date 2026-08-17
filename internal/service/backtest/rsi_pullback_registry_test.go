@@ -427,3 +427,28 @@ func TestRSIPullbackNVTKIsRegisteredAndCalibrated(t *testing.T) {
 		t.Fatalf("Ticker() = %q, want NVTK", got)
 	}
 }
+
+// TestRSIPullbackIVATTracksBaseline держит состояние «калибровка не проводилась»: пакет
+// strategy/ivat заведён 2026-08-17 под будущий литерал, и до конца калибровки обязан возвращать
+// core.DefaultParams(). Тест заменяется снимком литерала в тот день, когда литерал появится, —
+// ровно так это было с reni, fesh, wush, lent, lsngp и nvtk.
+//
+// Пока тест зелёный, тикер НЕ имеет права стоять в боевой вселенной: там его подхватил бы
+// TestBaselineTrackingTickersStayOutOfTheDefaultUniverse в пакете live, но заметить пару
+// «baseline + вселенная» дешевле здесь, у самого источника.
+func TestRSIPullbackIVATTracksBaseline(t *testing.T) {
+	b, ok := rsiPullbackRegistry["IVAT"]
+	if !ok {
+		t.Fatal("IVAT отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
+	}
+	p, pok := b.DefaultParams().(core.Params)
+	if !pok {
+		t.Fatalf("IVAT: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
+	}
+	if p != core.DefaultParams() {
+		t.Fatalf("IVAT отклонился от baseline до калибровки: %+v", p)
+	}
+	if got := b.Build(p).Ticker(); got != "IVAT" {
+		t.Fatalf("Ticker() = %q, want IVAT", got)
+	}
+}
