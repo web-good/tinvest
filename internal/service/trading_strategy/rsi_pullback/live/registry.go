@@ -5,6 +5,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/domrf"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/fesh"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/gazp"
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ivat"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/lent"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/lsngp"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/nvtk"
@@ -58,6 +59,27 @@ import (
 // 1.580), and StopDailyATR is inert while the trail is armed — 0.5, 0.7, 1.0 and 1.3 measure
 // byte-identical, because the 0.5-ATR trail binds from the first bar. It is also no longer the
 // only prod ticker with the day gate's early branch on: that branch is now off everywhere.
+// IVAT was added and calibrated 2026-08-18 and it is the weakest evidence in this map, on three
+// counts that stack. First, the RUNS ARE NOT THE STANDARD PROTOCOL: the instrument IPO'd in June
+// 2024 and has 26.0 months of history, so §8 (-months 36 -train-months 12 -test-months 6) cannot
+// produce four folds at all; the owner adapted the scheme to -months 25 -train-months 9
+// -test-months 4, which makes IVAT's numbers incomparable line by line with everything above.
+// Second, BOTH key themes miss the bar declared before the runs, and entry misses it by the
+// widest margin this catalogue has seen — pooled OOS PF 0.979 on 47 trades, the first time a
+// ticker's entry theme has gone below one; trend measures 1.282 with its leading axis stable in
+// 2 folds of 4 and reversing mid-history (EMASlow 200/170/50/50). Third, the accepted point does
+// measure pooled 1.988 on 55 trades, but 85% of that comes from ONE WEEK: the four largest trades
+// of the entire history are 21-27 July 2026, and on the OOS of the first three folds — a full
+// year, 42 trades — the same configuration measures 1.209. Two properties are worth knowing
+// before touching its numbers. The regime is the mirror image of LSNGP: not one rising half-year
+// in the whole history (train −45.6%, holdout −58.8%, peak-to-trough −87.6%), so nothing here has
+// been tested against a RISING market, and the trend filter is the most closed in the catalogue
+// (open 29.4-36.0% of bars against 54-60% on LSNGP). And liquidity stacks an execution risk on
+// top of the statistical one: 43 mln RUB of median daily turnover with a p10 of 7 mln puts half
+// of all days below the screener's own 50 mln gate — LENT territory. The literal itself departs
+// from the theme leaderboards on two fields on purpose (EMASlow 70 where trend gave no answer,
+// StopDailyATR 0.7 where the theme picked the widest edge of the axis); the package doc measures
+// both.
 var paramsByTicker = map[string]core.Params{
 	ugld.Ticker:  ugld.DefaultParams(),
 	tbank.Ticker: tbank.DefaultParams(),
@@ -69,6 +91,7 @@ var paramsByTicker = map[string]core.Params{
 	reni.Ticker:  reni.DefaultParams(),
 	fesh.Ticker:  fesh.DefaultParams(),
 	wush.Ticker:  wush.DefaultParams(),
+	ivat.Ticker:  ivat.DefaultParams(),
 }
 
 // ParamsFor returns the params for a known ticker, ok=false otherwise.
