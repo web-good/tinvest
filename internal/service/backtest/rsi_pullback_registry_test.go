@@ -464,3 +464,24 @@ func TestRSIPullbackIVATIsRegisteredAndCalibrated(t *testing.T) {
 		t.Fatalf("Ticker() = %q, want IVAT", got)
 	}
 }
+
+// TestRSIPullbackSVAVTracksBaseline держит состояние «калибровка не проводилась»: пакет
+// strategy/svav заведён 2026-08-18 под будущий литерал, и до конца калибровки обязан возвращать
+// core.DefaultParams(). Тест заменяется снимком литерала в тот день, когда литерал появится, —
+// ровно так это было с reni, fesh, wush, lent, lsngp, nvtk и ivat.
+func TestRSIPullbackSVAVTracksBaseline(t *testing.T) {
+	b, ok := rsiPullbackRegistry["SVAV"]
+	if !ok {
+		t.Fatal("SVAV отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
+	}
+	p, pok := b.DefaultParams().(core.Params)
+	if !pok {
+		t.Fatalf("SVAV: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
+	}
+	if p != core.DefaultParams() {
+		t.Fatalf("SVAV отклонился от baseline до калибровки: %+v", p)
+	}
+	if got := b.Build(p).Ticker(); got != "SVAV" {
+		t.Fatalf("Ticker() = %q, want SVAV", got)
+	}
+}
