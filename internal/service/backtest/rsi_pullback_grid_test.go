@@ -136,6 +136,14 @@ func TestRSIPullbackCalFilesValid(t *testing.T) {
 // checked WITHIN each file: a target must clear the widest stop the same file sweeps. Comparing
 // across files would be meaningless, since a stop of 1.0 daily ATR buys a different amount of
 // room on T than it does on UGLD.
+//
+// Файлы plateau_ из проверки асимметрии исключены: они не свипуют НИЧЕГО (это сторожит
+// TestRSIPullbackPlateauFilesArePoints), а несут одну принятую конфигурацию, где соотношение
+// цели и стопа — уже вынесенное решение, а не непроверенная область сетки. Каталог такие
+// решения знает: WUSH и LSNGP торгуют целью 0.5 при стопе 0.7, FESH — 0.5 при 0.5, IVAT —
+// 0.6 при 0.7, и в каждом случае замер показывал обвал profit factor за целью шире стопа.
+// Требовать от файла-точки лишнюю строку цели значило бы требовать свипа от того, что по
+// определению не свипуется.
 func TestRSIPullbackGridControlPoints(t *testing.T) {
 	var sawDayOff, sawVolumeOff, sawStop bool
 	for _, path := range rsiPullbackGridFiles(t) {
@@ -160,6 +168,9 @@ func TestRSIPullbackGridControlPoints(t *testing.T) {
 		}
 		if maxStop == 0 {
 			continue // this file does not sweep the stop, so it cannot state an asymmetry
+		}
+		if strings.HasPrefix(filepath.Base(path), "plateau_") {
+			continue // a fixed point states no untested area; see the doc comment
 		}
 		var sawTP, sawTPAboveStop bool
 		for _, ph := range rsiPullbackPhases(t, path) {
