@@ -6,6 +6,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/domrf"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/fesh"
+	rsipullbackivat "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ivat"
 	rsipullbacklent "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/lent"
 	rsipullbacklsngp "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/lsngp"
 	rsipullbacknvtk "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/nvtk"
@@ -428,15 +429,23 @@ func TestRSIPullbackNVTKIsRegisteredAndCalibrated(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackIVATTracksBaseline держит состояние «калибровка не проводилась»: пакет
-// strategy/ivat заведён 2026-08-17 под будущий литерал, и до конца калибровки обязан возвращать
-// core.DefaultParams(). Тест заменяется снимком литерала в тот день, когда литерал появится, —
-// ровно так это было с reni, fesh, wush, lent, lsngp и nvtk.
+// TestRSIPullbackIVATIsRegisteredAndCalibrated пинует два неотличимых снаружи факта: IVAT есть в
+// карте (а не проваливается в generic-ветку) И возвращает собственный литерал, а не baseline.
+// Пакет strategy/ivat заведён 2026-08-17 ДО калибровки, и 2026-08-18 сторожевой тест
+// TestRSIPullbackIVATTracksBaseline, державший это состояние, заменён этим снимком.
 //
-// Пока тест зелёный, тикер НЕ имеет права стоять в боевой вселенной: там его подхватил бы
-// TestBaselineTrackingTickersStayOutOfTheDefaultUniverse в пакете live, но заметить пару
-// «baseline + вселенная» дешевле здесь, у самого источника.
-func TestRSIPullbackIVATTracksBaseline(t *testing.T) {
+// Отдельно от снимка: тикер НЕ подтверждён протоколом, причём дважды. Во-первых, у IVAT 26.0
+// месяца истории, поэтому штатная схема §8 неисполнима и прогоны шли по адаптированной
+// (-months 25 -train-months 9 -test-months 4) — числа не сопоставимы построчно с каталогом.
+// Во-вторых, объявленную заранее планку заваливают ОБЕ ключевые темы: entry дала pooled OOS PF
+// 0.979 (первый тикер каталога, у которого тема входа ушла ниже единицы), trend — 1.282 при
+// устойчивости EMASlow 2 из 4, с разворотом выбора на середине истории. Литерал собран
+// точечными прогонами и перепроверен walk-forward принятой точки (pooled 1.988 на 55 сделках),
+// но 85% этого результата делает одна неделя июля 2026: на OOS первых трёх фолдов остаётся
+// 1.209. Наличие литерала здесь означает снятую техническую блокировку и решение владельца
+// «литерал ставится и при непройденной планке», а не подтверждённый протоколом edge. Снимок
+// литерала и обоснование каждого поля живут рядом с ним, в strategy/ivat/ivat_test.go.
+func TestRSIPullbackIVATIsRegisteredAndCalibrated(t *testing.T) {
 	b, ok := rsiPullbackRegistry["IVAT"]
 	if !ok {
 		t.Fatal("IVAT отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
@@ -445,8 +454,11 @@ func TestRSIPullbackIVATTracksBaseline(t *testing.T) {
 	if !pok {
 		t.Fatalf("IVAT: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
 	}
-	if p != core.DefaultParams() {
-		t.Fatalf("IVAT отклонился от baseline до калибровки: %+v", p)
+	if p == core.DefaultParams() {
+		t.Fatal("IVAT вернул baseline: откалиброванный тикер обязан иметь собственный литерал")
+	}
+	if want := rsipullbackivat.DefaultParams(); p != want {
+		t.Fatalf("IVAT params = %+v, want литерал пакета %+v", p, want)
 	}
 	if got := b.Build(p).Ticker(); got != "IVAT" {
 		t.Fatalf("Ticker() = %q, want IVAT", got)
