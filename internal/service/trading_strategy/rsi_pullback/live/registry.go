@@ -10,6 +10,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/lsngp"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/nvtk"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/reni"
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/svav"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/tbank"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ugld"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/wush"
@@ -80,6 +81,20 @@ import (
 // from the theme leaderboards on two fields on purpose (EMASlow 70 where trend gave no answer,
 // StopDailyATR 0.7 where the theme picked the widest edge of the axis); the package doc measures
 // both.
+// SVAV was added and calibrated 2026-08-21 on the standard protocol (-months 36 -train-months 12
+// -test-months 6): unlike IVAT and DOMRF, its history is exactly 36.0 months, so its numbers are
+// comparable line by line with the rest of the catalogue rather than adapted to a shorter window.
+// It is the FIRST ticker in this catalogue to take the declared bar whole: entry pooled OOS PF
+// 2.139 on 47 trades with the leading axis RSILower stable in 3 folds of 4, and trend pooled OOS
+// PF 2.343 on 104 trades with the leading axis EMASlow stable in 3 folds of 4 — both key themes
+// clear 1.5 with the required axis stability, a first for this map. The regime it was tested
+// against is hostile: both protocol windows fall, the whole history is -58.9%, peak-to-trough
+// -83.4%, and only one of six half-years rises, by +0.8% — the long result here is not flattered
+// by the market. Daily ATR(14) medians 4.38% of price, the second-highest in the catalogue after
+// FESH, so a 0.5 ATR stop moves 2.2% of price at Fraction=1. Median daily turnover is 68 mln RUB,
+// ahead of IVAT, LENT and LSNGP. The package doc carries two further caveats worth reading before
+// touching the numbers: the entry theme's fold 3 is a thin-sample overfit (in-sample 7.893 vs OOS
+// 0.568 on 4 trades), and the volume theme never reaches 3-of-4 axis stability at all.
 var paramsByTicker = map[string]core.Params{
 	ugld.Ticker:  ugld.DefaultParams(),
 	tbank.Ticker: tbank.DefaultParams(),
@@ -92,6 +107,7 @@ var paramsByTicker = map[string]core.Params{
 	fesh.Ticker:  fesh.DefaultParams(),
 	wush.Ticker:  wush.DefaultParams(),
 	ivat.Ticker:  ivat.DefaultParams(),
+	svav.Ticker:  svav.DefaultParams(),
 }
 
 // ParamsFor returns the params for a known ticker, ok=false otherwise.
