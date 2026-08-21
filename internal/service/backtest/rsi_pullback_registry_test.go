@@ -535,3 +535,24 @@ func TestRSIPullbackSIBNIsRegisteredAndCalibrated(t *testing.T) {
 		t.Fatalf("Ticker() = %q, want SIBN", got)
 	}
 }
+
+// TestRSIPullbackELFVTracksBaseline держит состояние «калибровка не проводилась»: пакет
+// strategy/elfv заведён 2026-08-21 под будущий литерал, и до конца калибровки обязан возвращать
+// core.DefaultParams(). Тест заменяется снимком литерала в тот день, когда литерал появится, —
+// ровно так это было с reni, fesh, wush, lsngp, nvtk, ivat, svav и sibn.
+func TestRSIPullbackELFVTracksBaseline(t *testing.T) {
+	b, ok := rsiPullbackRegistry["ELFV"]
+	if !ok {
+		t.Fatal("ELFV отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
+	}
+	p, pok := b.DefaultParams().(core.Params)
+	if !pok {
+		t.Fatalf("ELFV: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
+	}
+	if p != core.DefaultParams() {
+		t.Fatalf("ELFV отклонился от baseline до калибровки: %+v", p)
+	}
+	if got := b.Build(p).Ticker(); got != "ELFV" {
+		t.Fatalf("Ticker() = %q, want ELFV", got)
+	}
+}

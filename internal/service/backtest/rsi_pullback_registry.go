@@ -6,6 +6,7 @@ import (
 
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 	rsipullbackdomrf "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/domrf"
+	rsipullbackelfv "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/elfv"
 	rsipullbackfesh "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/fesh"
 	rsipullbackgazp "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/gazp"
 	rsipullbackivat "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ivat"
@@ -46,6 +47,7 @@ func rsiPullbackBindingFor(ticker string, defaults func() core.Params) Binding {
 // hypothesis, not a claim of being tuned — see docs/rsi_pullback/strategy.md §8.0.1.
 var rsiPullbackRegistry = map[string]Binding{
 	rsipullbackdomrf.Ticker: rsiPullbackBindingFor(rsipullbackdomrf.Ticker, rsipullbackdomrf.DefaultParams),
+	rsipullbackelfv.Ticker:  rsiPullbackBindingFor(rsipullbackelfv.Ticker, rsipullbackelfv.DefaultParams),
 	rsipullbackfesh.Ticker:  rsiPullbackBindingFor(rsipullbackfesh.Ticker, rsipullbackfesh.DefaultParams),
 	rsipullbackgazp.Ticker:  rsiPullbackBindingFor(rsipullbackgazp.Ticker, rsipullbackgazp.DefaultParams),
 	rsipullbackivat.Ticker:  rsiPullbackBindingFor(rsipullbackivat.Ticker, rsipullbackivat.DefaultParams),
