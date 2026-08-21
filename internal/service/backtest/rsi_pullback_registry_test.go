@@ -11,6 +11,7 @@ import (
 	rsipullbacklsngp "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/lsngp"
 	rsipullbacknvtk "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/nvtk"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/reni"
+	rsipullbacksibn "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sibn"
 	rsipullbacksvav "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/svav"
 	rsipullbackwush "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/wush"
 )
@@ -500,11 +501,22 @@ func TestRSIPullbackSVAVIsRegisteredAndCalibrated(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackSIBNTracksBaseline держит состояние «калибровка не проводилась»: пакет
-// strategy/sibn заведён 2026-08-21 под будущий литерал, и до конца калибровки обязан возвращать
-// core.DefaultParams(). Тест заменяется снимком литерала в тот день, когда литерал появится, —
-// ровно так это было с reni, fesh, wush, lsngp, nvtk, ivat и svav.
-func TestRSIPullbackSIBNTracksBaseline(t *testing.T) {
+// TestRSIPullbackSIBNIsRegisteredAndCalibrated пинует два неотличимых снаружи факта: SIBN есть в
+// карте (а не проваливается в generic-ветку) И возвращает собственный литерал, а не baseline.
+// Пакет strategy/sibn заведён 2026-08-21 ДО калибровки, и в тот же день сторожевой тест
+// TestRSIPullbackSIBNTracksBaseline, державший это состояние, заменён этим снимком.
+//
+// ВЕРДИКТ ПО ПЛАНКЕ: НЕ ВЗЯТА, обеими половинами и на обеих ключевых темах. entry дала pooled OOS
+// PF 1.378 на 50 сделках при устойчивости ведущей оси RSILower 1 из 4 (по фолдам 35/30/15/20 —
+// все четыре значения разные); trend дала pooled OOS PF 0.847 на 94 сделках при устойчивости
+// EMASlow 0 из 4 (100/120/50/200) — ни одна другая тема каталога не давала нулевой устойчивости.
+// Ни одна из девяти тем SIBN не достала 1.5, три из девяти убыточны. Литерал собран точечными
+// свипами поверх принятой зоны риска и перепроверен walk-forward принятой точки (pooled 2.258 на
+// 89 сделках, вырожденных фолдов нет, результат размазан по 47 неделям), но наличие литерала
+// здесь означает решение владельца «литерал ставится и при непройденной планке», а не
+// подтверждённый протоколом edge — ровно как у IVAT. Снимок литерала и обоснование каждого поля
+// живут рядом с ним, в strategy/sibn/sibn_test.go и в доке пакета.
+func TestRSIPullbackSIBNIsRegisteredAndCalibrated(t *testing.T) {
 	b, ok := rsiPullbackRegistry["SIBN"]
 	if !ok {
 		t.Fatal("SIBN отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
@@ -513,8 +525,11 @@ func TestRSIPullbackSIBNTracksBaseline(t *testing.T) {
 	if !pok {
 		t.Fatalf("SIBN: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
 	}
-	if p != core.DefaultParams() {
-		t.Fatalf("SIBN отклонился от baseline до калибровки: %+v", p)
+	if p == core.DefaultParams() {
+		t.Fatal("SIBN вернул baseline: откалиброванный тикер обязан иметь собственный литерал")
+	}
+	if want := rsipullbacksibn.DefaultParams(); p != want {
+		t.Fatalf("SIBN params = %+v, want литерал пакета %+v", p, want)
 	}
 	if got := b.Build(p).Ticker(); got != "SIBN" {
 		t.Fatalf("Ticker() = %q, want SIBN", got)
