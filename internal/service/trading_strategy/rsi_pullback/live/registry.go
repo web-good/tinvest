@@ -10,6 +10,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/lsngp"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/nvtk"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/reni"
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sibn"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/svav"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/tbank"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ugld"
@@ -95,6 +96,31 @@ import (
 // ahead of IVAT, LENT and LSNGP. The package doc carries two further caveats worth reading before
 // touching the numbers: the entry theme's fold 3 is a thin-sample overfit (in-sample 7.893 vs OOS
 // 0.568 on 4 trades), and the volume theme never reaches 3-of-4 axis stability at all.
+// SIBN was added and calibrated 2026-08-21 on the standard protocol, right after SVAV, and it is
+// the exact opposite case: SVAV took the declared bar whole, SIBN misses BOTH halves on BOTH key
+// themes and by the widest margin here. entry measures pooled OOS PF 1.378 on 50 trades with its
+// leading axis RSILower stable in 1 fold of 4 (35/30/15/20 — four different values), trend
+// measures 0.847 on 94 trades with EMASlow stable in 0 folds of 4 (100/120/50/200), the first
+// zero-stability leading axis in this catalogue. Not one of the nine themes reaches 1.5 and three
+// of them are outright unprofitable. The prior said as much before the runs and was written down
+// then: the screener's PFmed HO column reads 0.20 on 9 trades, the worst of the rating's first
+// nine, and the control baseline run over 36 months measures PF 1.027 on 129 trades — the
+// instrument trades flat on core defaults. What changed the picture is that those defaults sit
+// outside the zone where the strategy works here (the NVTK precedent): the accepted point, built
+// by point runs over that zone, measures pooled OOS PF 2.258 on 89 trades with three folds above
+// 3.0, no degenerate fold, and a result spread over 47 weeks rather than concentrated in one (the
+// IVAT failure mode was checked for explicitly and is absent — best week 17.9%, all five
+// half-years positive). That point is still hand-picked over the whole history and is NOT
+// out-of-sample. Two properties are worth knowing before touching its numbers. Daily ATR(14)
+// medians 2.52% of price — the LOWEST in this catalogue — so the 0.7 ATR stop moves 1.76% of price
+// at Fraction=1, and a round of costs eats 5.7% of the risk instead of the 2-3% typical higher up
+// this map. Against that, liquidity is the BEST here by a wide margin: 519 mln RUB of median daily
+// turnover with a p10 of 206 mln, four times the screener's own 50 mln gate even on its tenth
+// percentile, so execution risk does not stack on top of the statistical one — unlike IVAT and
+// LENT. The risk that the runs cannot close is dividend gaps: SIBN pays regularly, the strategy
+// holds overnight, and five gaps in the window opened worse than -3% (the deepest -8.49%, or -4.69
+// daily ATR). On such a morning the stop is a wish, not a floor, and there is no parameter in the
+// strategy against it.
 var paramsByTicker = map[string]core.Params{
 	ugld.Ticker:  ugld.DefaultParams(),
 	tbank.Ticker: tbank.DefaultParams(),
@@ -108,6 +134,7 @@ var paramsByTicker = map[string]core.Params{
 	wush.Ticker:  wush.DefaultParams(),
 	ivat.Ticker:  ivat.DefaultParams(),
 	svav.Ticker:  svav.DefaultParams(),
+	sibn.Ticker:  sibn.DefaultParams(),
 }
 
 // ParamsFor returns the params for a known ticker, ok=false otherwise.
