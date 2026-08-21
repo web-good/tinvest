@@ -11,6 +11,7 @@ import (
 	rsipullbacklsngp "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/lsngp"
 	rsipullbacknvtk "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/nvtk"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/reni"
+	rsipullbacksvav "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/svav"
 	rsipullbackwush "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/wush"
 )
 
@@ -465,11 +466,21 @@ func TestRSIPullbackIVATIsRegisteredAndCalibrated(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackSVAVTracksBaseline держит состояние «калибровка не проводилась»: пакет
-// strategy/svav заведён 2026-08-18 под будущий литерал, и до конца калибровки обязан возвращать
-// core.DefaultParams(). Тест заменяется снимком литерала в тот день, когда литерал появится, —
-// ровно так это было с reni, fesh, wush, lent, lsngp, nvtk и ivat.
-func TestRSIPullbackSVAVTracksBaseline(t *testing.T) {
+// TestRSIPullbackSVAVIsRegisteredAndCalibrated пинует два неотличимых снаружи факта: SVAV есть в
+// карте (а не проваливается в generic-ветку) И возвращает собственный литерал, а не baseline.
+// Пакет strategy/svav заведён 2026-08-18 ДО калибровки, и 2026-08-21 сторожевой тест
+// TestRSIPullbackSVAVTracksBaseline, державший это состояние, заменён этим снимком.
+//
+// Отдельно от снимка: SVAV — ПЕРВЫЙ тикер каталога, взявший объявленную заранее планку
+// целиком, обеими ключевыми темами. entry дала pooled OOS PF 2.139 на 47 сделках (фолды
+// 4.659/6.771/0.568/1.409 при 22/10/4/11), ведущая ось RSILower устойчива 3 из 4 (25/20/20/20);
+// оговорка — фолд 3 переобучен (in-sample 7.893 против OOS 0.568, ×13.9), но условие «≥5 сделок
+// в фолде» план снял сознательно, поэтому планку это не рушит. trend дала pooled OOS PF 2.343
+// на 104 сделках (фолды 2.369/2.666/2.751/1.930 при 33/31/21/19), ведущая ось EMASlow устойчива
+// 3 из 4 (170/100/100/100), без переобучения. У девяти предыдущих тикеров каталога (GAZP, NVTK,
+// UGLD, FESH, WUSH, LENT, RENI, LSNGP, IVAT) планка не бралась целиком ни разу. Снимок литерала
+// и обоснование каждого поля живут рядом с ним, в strategy/svav/svav_test.go и в доке пакета.
+func TestRSIPullbackSVAVIsRegisteredAndCalibrated(t *testing.T) {
 	b, ok := rsiPullbackRegistry["SVAV"]
 	if !ok {
 		t.Fatal("SVAV отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
@@ -478,8 +489,11 @@ func TestRSIPullbackSVAVTracksBaseline(t *testing.T) {
 	if !pok {
 		t.Fatalf("SVAV: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
 	}
-	if p != core.DefaultParams() {
-		t.Fatalf("SVAV отклонился от baseline до калибровки: %+v", p)
+	if p == core.DefaultParams() {
+		t.Fatal("SVAV вернул baseline: откалиброванный тикер обязан иметь собственный литерал")
+	}
+	if want := rsipullbacksvav.DefaultParams(); p != want {
+		t.Fatalf("SVAV params = %+v, want литерал пакета %+v", p, want)
 	}
 	if got := b.Build(p).Ticker(); got != "SVAV" {
 		t.Fatalf("Ticker() = %q, want SVAV", got)
