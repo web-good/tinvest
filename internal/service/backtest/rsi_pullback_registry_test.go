@@ -499,3 +499,24 @@ func TestRSIPullbackSVAVIsRegisteredAndCalibrated(t *testing.T) {
 		t.Fatalf("Ticker() = %q, want SVAV", got)
 	}
 }
+
+// TestRSIPullbackSIBNTracksBaseline держит состояние «калибровка не проводилась»: пакет
+// strategy/sibn заведён 2026-08-21 под будущий литерал, и до конца калибровки обязан возвращать
+// core.DefaultParams(). Тест заменяется снимком литерала в тот день, когда литерал появится, —
+// ровно так это было с reni, fesh, wush, lsngp, nvtk, ivat и svav.
+func TestRSIPullbackSIBNTracksBaseline(t *testing.T) {
+	b, ok := rsiPullbackRegistry["SIBN"]
+	if !ok {
+		t.Fatal("SIBN отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
+	}
+	p, pok := b.DefaultParams().(core.Params)
+	if !pok {
+		t.Fatalf("SIBN: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
+	}
+	if p != core.DefaultParams() {
+		t.Fatalf("SIBN отклонился от baseline до калибровки: %+v", p)
+	}
+	if got := b.Build(p).Ticker(); got != "SIBN" {
+		t.Fatalf("Ticker() = %q, want SIBN", got)
+	}
+}
