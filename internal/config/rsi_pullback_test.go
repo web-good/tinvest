@@ -51,7 +51,7 @@ func TestRSIPullbackConfigReadyNeedsAccountAndToken(t *testing.T) {
 
 func TestNewRSIPullbackConfig_Defaults(t *testing.T) {
 	c := NewRSIPullbackConfig()
-	want := []string{"UGLD", "T", "GAZP", "DOMRF", "FESH", "WUSH", "LENT", "RENI", "NVTK", "LSNGP", "IVAT", "SVAV"}
+	want := []string{"UGLD", "T", "GAZP", "DOMRF", "FESH", "WUSH", "LENT", "RENI", "NVTK", "LSNGP", "IVAT", "SVAV", "SIBN"}
 	if len(c.Tickers) != len(want) {
 		t.Fatalf("default Tickers = %v, want %v", c.Tickers, want)
 	}
