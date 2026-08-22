@@ -3,6 +3,7 @@ package live
 import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/domrf"
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/elfv"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/fesh"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/gazp"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ivat"
@@ -121,6 +122,42 @@ import (
 // holds overnight, and five gaps in the window opened worse than -3% (the deepest -8.49%, or -4.69
 // daily ATR). On such a morning the stop is a wish, not a floor, and there is no parameter in the
 // strategy against it.
+//
+// ELFV was calibrated 2026-08-22 on the standard schedule and is the fourteenth entry here. It
+// misses the declared bar, but in a shape this catalogue had not seen: BOTH key themes clear 1.5
+// on profit factor and BOTH fail the stability half. entry measures pooled OOS PF 1.575 on 106
+// trades with RSILower stable in 1 fold of 4 (30/20/25/35); trend measures 1.545 on 147 trades
+// with EMASlow stable in 0 folds of 4 (200/120/150/50). All ten themes land above 1.38 and none is
+// unprofitable — the flattest theme table here — yet no axis is stable in more than 2 folds of 4.
+// This ticker also settles the question left open after SIBN. It carried the STRONGEST prior of
+// every candidate, written down before the runs: the screener's PFmed HO reads 1.26 and the
+// control baseline over 36 months measures PF 1.546 on 181 trades. The prior neither softened the
+// bar nor predicted the outcome — the protocol failed exactly as it failed on tickers with a weak
+// prior. Read that together with SIBN (baseline 1.027, same verdict): the screener columns and the
+// baseline run predict the protocol NEITHER from below NOR from above. The accepted point measures
+// pooled OOS PF 2.863 on 68 trades with ALL FOUR folds profitable — including the fourth, declared
+// hard in advance because it covers a half-year down 30.5% — and no degenerate fold; best week
+// 28.3% of the result, all five half-years positive. That point is still hand-picked over the
+// whole history and is NOT out-of-sample.
+//
+// The risk on ELFV is EXECUTION, not the prior. Its price step is 0.0002 RUB — 0.039% of the
+// 0.5134 median price — and the backtest fills at bar close without modelling the spread, so the
+// real round of costs sits closer to 0.2% than to the 0.1% modelled. The sensitivity is measured:
+// the accepted point drops from pooled OOS PF 2.863 to 2.346 when the round doubles, and its
+// fourth fold falls below 1.0 (1.250 -> 0.944); on the earlier VolMult 2.0 probe the same doubling
+// reads 2.003 -> 1.668 -> 1.381 at rounds of 0.1% / 0.2% / 0.3%. Live results will land between
+// those two numbers, nearer the lower one on thin days. Liquidity is the WORST in this map: median
+// daily turnover 25.1 mln RUB with a p10 of 6.4 mln, so on one weekday in ten the whole book turns
+// less than seven million — size the live position against p10, not the median. The regime is the
+// harshest here as well: the window is down 49.5% end to end, the holdout half-year down 32.5%,
+// and only two of six half-years rose at all, so nothing about this ticker was flattered by a
+// rising market. Bar coverage is ragged — 18.9% of weekdays carry fewer than twenty bars and 3.4%
+// of bars have zero range — which is why VolLookbackBars was swept for the first time in this
+// catalogue (theme cal_vol_window.json) and why its default of 3 was kept: the axis is alive but
+// its maximum sits exactly on the default. The one risk this ticker does NOT carry is dividend
+// gaps: EL5-Energo has not paid since 2020, and over 36 months exactly one gap opened worse than
+// -3% (-0.95 daily ATR) against five on SIBN. It is the only name in the universe where holding
+// overnight carries no ex-dividend risk.
 var paramsByTicker = map[string]core.Params{
 	ugld.Ticker:  ugld.DefaultParams(),
 	tbank.Ticker: tbank.DefaultParams(),
@@ -135,6 +172,7 @@ var paramsByTicker = map[string]core.Params{
 	ivat.Ticker:  ivat.DefaultParams(),
 	svav.Ticker:  svav.DefaultParams(),
 	sibn.Ticker:  sibn.DefaultParams(),
+	elfv.Ticker:  elfv.DefaultParams(),
 }
 
 // ParamsFor returns the params for a known ticker, ok=false otherwise.
