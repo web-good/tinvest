@@ -573,3 +573,24 @@ func TestRSIPullbackELFVIsRegisteredAndCalibrated(t *testing.T) {
 		t.Fatalf("Ticker() = %q, want ELFV", got)
 	}
 }
+
+// TestRSIPullbackDIASTracksBaseline держит состояние «калибровка не проводилась»: пакет
+// strategy/dias заведён 2026-08-22 под будущий литерал, и до конца калибровки обязан возвращать
+// core.DefaultParams(). Тест заменяется снимком литерала в тот день, когда литерал появится, —
+// ровно так это было с reni, fesh, wush, lsngp, nvtk, ivat, svav, sibn и elfv.
+func TestRSIPullbackDIASTracksBaseline(t *testing.T) {
+	b, ok := rsiPullbackRegistry["DIAS"]
+	if !ok {
+		t.Fatal("DIAS отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
+	}
+	p, pok := b.DefaultParams().(core.Params)
+	if !pok {
+		t.Fatalf("DIAS: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
+	}
+	if p != core.DefaultParams() {
+		t.Fatalf("DIAS отклонился от baseline до калибровки: %+v", p)
+	}
+	if got := b.Build(p).Ticker(); got != "DIAS" {
+		t.Fatalf("Ticker() = %q, want DIAS", got)
+	}
+}
