@@ -142,6 +142,11 @@ func TestDIASGridsPinTheirMeasuredAxes(t *testing.T) {
 	if !containsValue(volume["VolMult"], 1.5) {
 		t.Errorf("cal_volume.json: VolMult = %v, не содержит 1.5 — это максимум оси (102 сделки, PF 1.894)", volume["VolMult"])
 	}
+	// Верхний край 2.5 обязан остаться: это СУЖЕННЫЙ край оси (у ELFV она доходила до 3.0), и его
+	// исчезновение означало бы, что ось молча сузилась ещё сильнее, чем решено замером.
+	if !containsValue(volume["VolMult"], 2.5) {
+		t.Errorf("cal_volume.json: VolMult = %v, не содержит 2.5 — это верхний край суженной оси (78 сделок, PF 1.410)", volume["VolMult"])
+	}
 
 	// Вторая в каталоге тема этой оси (первая — ELFV) и первая, где ось уходит далеко за дефолт
 	// ядра: PF растёт монотонно от 1.294 при окне 1 до 1.915 при окне 12, дефолт 3 даёт 1.689.
@@ -164,6 +169,11 @@ func TestDIASGridsPinTheirMeasuredAxes(t *testing.T) {
 		if !containsValue(volWindow["VolLookbackBars"], want) {
 			t.Errorf("cal_vol_window.json: VolLookbackBars = %v, не содержит %v (дефолт ядра 3 — опорная точка, 12 — максимум замера PF 1.915)", volWindow["VolLookbackBars"], want)
 		}
+	}
+	// Край 16 обязан остаться: он нужен, чтобы разворот кривой PF (максимум 1.915 на окне 12,
+	// затем 1.810 на 16) попал ВНУТРЬ сетки, а не остался на её границе.
+	if !containsValue(volWindow["VolLookbackBars"], 16) {
+		t.Errorf("cal_vol_window.json: VolLookbackBars = %v, не содержит 16 — край нужен, чтобы разворот кривой (1.915 -> 1.810) попал внутрь сетки, а не на границу", volWindow["VolLookbackBars"])
 	}
 
 	exit := diasGrid(t, "cal_exit.json")
