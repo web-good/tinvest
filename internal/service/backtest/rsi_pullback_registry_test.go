@@ -5,6 +5,7 @@ import (
 
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/domrf"
+	rsipullbackelfv "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/elfv"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/fesh"
 	rsipullbackivat "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ivat"
 	rsipullbacklent "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/lent"
@@ -536,11 +537,24 @@ func TestRSIPullbackSIBNIsRegisteredAndCalibrated(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackELFVTracksBaseline держит состояние «калибровка не проводилась»: пакет
-// strategy/elfv заведён 2026-08-21 под будущий литерал, и до конца калибровки обязан возвращать
-// core.DefaultParams(). Тест заменяется снимком литерала в тот день, когда литерал появится, —
-// ровно так это было с reni, fesh, wush, lsngp, nvtk, ivat, svav и sibn.
-func TestRSIPullbackELFVTracksBaseline(t *testing.T) {
+// TestRSIPullbackELFVIsRegisteredAndCalibrated сторожит, что ELFV живёт в rsiPullbackRegistry
+// собственной записью (а не проваливается в generic-ветку) И возвращает собственный литерал, а не
+// baseline. Пакет strategy/elfv заведён 2026-08-21 ДО калибровки, и 2026-08-22 сторожевой тест
+// TestRSIPullbackELFVTracksBaseline, державший это состояние, заменён этим снимком.
+//
+// ВЕРДИКТ ПО ПЛАНКЕ: НЕ ВЗЯТА — обе ключевые темы прошли по profit factor и обе провалились по
+// устойчивости. entry дала pooled OOS PF 1.575 на 106 сделках при устойчивости ведущей оси
+// RSILower 1 из 4 (по фолдам 30/20/25/35); trend — pooled OOS PF 1.545 на 147 сделках при
+// устойчивости EMASlow 0 из 4 (200/120/150/50). Это первый тикер каталога, где обе ключевые темы
+// взяли порог 1.5 по качеству и обе не взяли его по устойчивости: у SIBN обе проваливали и то, и
+// другое, у SVAV — брали и то, и другое. Все десять тем ELFV дали pooled выше 1.38, ни одна не
+// убыточна, но ни одна ось не устойчива больше чем на 2 фолда из 4. Литерал собран точечными
+// свипами поверх принятой зоны риска и перепроверен walk-forward принятой точки (pooled 2.863 на
+// 68 сделках, все четыре фолда прибыльные, вырожденных нет, лучшая неделя даёт 28.3% результата),
+// но наличие литерала здесь означает решение владельца «литерал ставится и при непройденной
+// планке», а не подтверждённый протоколом edge — ровно как у IVAT и SIBN. Снимок литерала и
+// обоснование каждого поля живут рядом с ним, в strategy/elfv/elfv_test.go и в доке пакета.
+func TestRSIPullbackELFVIsRegisteredAndCalibrated(t *testing.T) {
 	b, ok := rsiPullbackRegistry["ELFV"]
 	if !ok {
 		t.Fatal("ELFV отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
@@ -549,8 +563,11 @@ func TestRSIPullbackELFVTracksBaseline(t *testing.T) {
 	if !pok {
 		t.Fatalf("ELFV: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
 	}
-	if p != core.DefaultParams() {
-		t.Fatalf("ELFV отклонился от baseline до калибровки: %+v", p)
+	if p == core.DefaultParams() {
+		t.Fatal("ELFV вернул baseline: откалиброванный тикер обязан иметь собственный литерал")
+	}
+	if want := rsipullbackelfv.DefaultParams(); p != want {
+		t.Fatalf("ELFV params = %+v, want литерал пакета %+v", p, want)
 	}
 	if got := b.Build(p).Ticker(); got != "ELFV" {
 		t.Fatalf("Ticker() = %q, want ELFV", got)
