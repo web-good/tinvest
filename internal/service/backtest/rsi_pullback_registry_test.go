@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
+	rsipullbackdias "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/dias"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/domrf"
 	rsipullbackelfv "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/elfv"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/fesh"
@@ -574,11 +575,27 @@ func TestRSIPullbackELFVIsRegisteredAndCalibrated(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackDIASTracksBaseline держит состояние «калибровка не проводилась»: пакет
-// strategy/dias заведён 2026-08-22 под будущий литерал, и до конца калибровки обязан возвращать
-// core.DefaultParams(). Тест заменяется снимком литерала в тот день, когда литерал появится, —
-// ровно так это было с reni, fesh, wush, lsngp, nvtk, ivat, svav, sibn и elfv.
-func TestRSIPullbackDIASTracksBaseline(t *testing.T) {
+// TestRSIPullbackDIASIsRegisteredAndCalibrated сторожит, что DIAS живёт в rsiPullbackRegistry
+// собственной записью (а не проваливается в generic-ветку) И возвращает собственный литерал, а не
+// baseline. Пакет strategy/dias заведён 2026-08-22 ДО калибровки, и 2026-08-23 сторожевой тест
+// TestRSIPullbackDIASTracksBaseline, державший это состояние, заменён этим снимком.
+//
+// ВЕРДИКТ ПО ПЛАНКЕ: НЕ ВЗЯТА. Схема прогонов АДАПТИРОВАНА: физическая история DIAS 30.3 месяца
+// (IPO 2024-02-13), штатный протокол §8 docs/rsi_pullback/strategy.md (36/12/6) неисполним;
+// использована схема -months 30 -train-months 10 -test-months 5 (четыре фолда train 10 + OOS 5,
+// прецедент IVAT 25/9/4) — числа DIAS сопоставимы с IVAT, но НЕ построчно с остальным каталогом.
+// Тема entry провалила ОБА критерия планки: pooled OOS PF 1.213 на 73 сделках при пороге 1.5, и
+// устойчивость ведущей оси RSILower 2 из 4 (по фолдам 25/25/40/40, порог >= 3 из 4). Тема trend
+// взяла только критерий PF: pooled OOS PF 1.848 на 116 сделках, но устойчивость ведущей оси
+// EMASlow тоже 2 из 4 (150/100/50/50). Обе ключевые темы не набрали устойчивость выбора — планка
+// целиком не взята. Литерал собран точечными прогонами поверх принятой зоны риска и перепроверен
+// walk-forward принятой точки (pooled OOS PF 2.361 на 98 сделках, все четыре фолда прибыльные,
+// вырожденных нет — этого не добилась ни одна из десяти тем), но наличие литерала здесь означает
+// решение владельца от 2026-08-22 «литерал ставится и при непройденной планке, если принятая точка
+// не упирается в стоп-условие плана», а не подтверждённый протоколом edge — ровно как у IVAT, SIBN
+// и ELFV. Снимок литерала и обоснование каждого поля живут рядом с ним, в
+// strategy/dias/dias_test.go и в доке пакета.
+func TestRSIPullbackDIASIsRegisteredAndCalibrated(t *testing.T) {
 	b, ok := rsiPullbackRegistry["DIAS"]
 	if !ok {
 		t.Fatal("DIAS отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
@@ -587,8 +604,11 @@ func TestRSIPullbackDIASTracksBaseline(t *testing.T) {
 	if !pok {
 		t.Fatalf("DIAS: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
 	}
-	if p != core.DefaultParams() {
-		t.Fatalf("DIAS отклонился от baseline до калибровки: %+v", p)
+	if p == core.DefaultParams() {
+		t.Fatal("DIAS вернул baseline: откалиброванный тикер обязан иметь собственный литерал")
+	}
+	if want := rsipullbackdias.DefaultParams(); p != want {
+		t.Fatalf("DIAS params = %+v, want литерал пакета %+v", p, want)
 	}
 	if got := b.Build(p).Ticker(); got != "DIAS" {
 		t.Fatalf("Ticker() = %q, want DIAS", got)
