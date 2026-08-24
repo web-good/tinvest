@@ -99,3 +99,88 @@ func TestBSPBEarlyGridsPinTheirMeasuredAxes(t *testing.T) {
 		t.Errorf("cal_trend.json: max(EMAFast) = %v >= min(EMASlow) = %v — сетка порождает пары, где фильтр вырожден (EMAFast == EMASlow даёт 0.0%% допуска) или инвертирован", maxFast, minSlow)
 	}
 }
+
+// TestBSPBLateGridsPinTheirAxesAndAnchor сторожит семь ПОЗДНИХ тем — тех, что идут поверх якоря,
+// выбранного темами entry и trend. Гибридная процедура объявлена в спеке 2026-08-24 и вызвана
+// тем, что дефолты ядра на BSPB стоят почти в мёртвой зоне (baseline PF 1.114, слабейший в
+// каталоге): тема свипует только свои оси, а остальные поля берёт из дефолтов, поэтому восемь тем
+// из десяти мерили бы шум. Ось объёмного гейта это показала прямо — вся она лежит в полосе
+// 1.04–1.13 вокруг baseline.
+//
+// Тест прибивает два свойства. Первое: каждая поздняя тема ДЕЙСТВИТЕЛЬНО несёт якорь — все пять
+// якорных полей присутствуют и однозначны (список из одного значения не свипует, а фиксирует).
+// Второе: якорь ОДИН И ТОТ ЖЕ во всех семи файлах — иначе темы меряют свои оси из разных точек и
+// их лидерборды несравнимы между собой.
+func TestBSPBLateGridsPinTheirAxesAndAnchor(t *testing.T) {
+	late := []string{
+		"cal_day.json", "cal_day_spent.json", "cal_volume.json",
+		"cal_vol_window.json", "cal_risk.json", "cal_exit.json", "cal_trail.json",
+	}
+	// cal_exit свипует RSIUpper — это его тема, поэтому якорным полем он его не считает.
+	anchorFields := map[string][]string{
+		"cal_exit.json": {"RSIPeriod", "RSILower", "EMAFast", "EMASlow"},
+	}
+	defaultFields := []string{"RSIPeriod", "RSILower", "RSIUpper", "EMAFast", "EMASlow"}
+
+	anchor := map[string]float64{}
+	for _, file := range late {
+		g := bspbGrid(t, file)
+		fields := defaultFields
+		if custom, ok := anchorFields[file]; ok {
+			fields = custom
+		}
+		for _, f := range fields {
+			values := g[f]
+			if len(values) != 1 {
+				t.Errorf("%s: %s = %v, want ровно одно значение — якорь фиксируется, а не свипуется", file, f, values)
+				continue
+			}
+			if seen, ok := anchor[f]; ok && seen != values[0] {
+				t.Errorf("%s: %s = %v, а другая поздняя тема несёт %v — якорь обязан быть один и тот же во всех семи файлах", file, f, values[0], seen)
+				continue
+			}
+			anchor[f] = values[0]
+		}
+	}
+
+	// Ось объёмного гейта сужена до 2.5: при 2.5 остаётся 56 сделок = 19 на двенадцатимесячное
+	// обучающее окно при -min-trades 20, и PF там 0.839 — ниже baseline 1.114.
+	volume := bspbGrid(t, "cal_volume.json")
+	for _, v := range volume["VolMult"] {
+		if v > 2.5 {
+			t.Errorf("cal_volume.json свипует VolMult=%v: на BSPB это меньше 56 сделок за 36 месяцев (19 на обучающее окно) при PF ниже baseline", v)
+		}
+	}
+
+	// Окно объёмного гейта: максимум замера на 5, край 12 нужен, чтобы плато было видно внутри.
+	window := bspbGrid(t, "cal_vol_window.json")
+	if !containsValue(window["VolLookbackBars"], 5) {
+		t.Errorf("cal_vol_window.json: VolLookbackBars = %v, не содержит 5 — это замеренный максимум оси (PF 1.170 против 1.059 у дефолта ядра)", window["VolLookbackBars"])
+	}
+
+	// Стоп: строка 0.3 возвращена, верхний край 1.3 сохранён.
+	risk := bspbGrid(t, "cal_risk.json")
+	if !containsValue(risk["StopDailyATR"], 0.3) {
+		t.Errorf("cal_risk.json: StopDailyATR = %v, не содержит 0.3 — на BSPB круг издержек съедает там 14.0%% риска, под чертой 17%%", risk["StopDailyATR"])
+	}
+	for _, v := range risk["StopDailyATR"] {
+		if v > 1.3 {
+			t.Errorf("cal_risk.json свипует StopDailyATR=%v: такой стоп достаёт меньше 17%% дней и вытесняет убыток в RSI-выход", v)
+		}
+	}
+	// Цель: 0.4 добавлена, всё выше 1.5 убрано как недостижимое.
+	if !containsValue(risk["TPDailyATR"], 0.4) {
+		t.Errorf("cal_risk.json: TPDailyATR = %v, не содержит 0.4 — весь edge BSPB живёт в коротких целях", risk["TPDailyATR"])
+	}
+	for _, v := range risk["TPDailyATR"] {
+		if v > 1.5 {
+			t.Errorf("cal_risk.json свипует TPDailyATR=%v: цель шире дневного ATR на BSPB недостижима — колонки 1.0 и 1.5 совпадают побайтово", v)
+		}
+	}
+
+	// Полоса выхода расширена до 85, чтобы разворот (максимум на 75) стоял внутри оси.
+	exit := bspbGrid(t, "cal_exit.json")
+	if !containsValue(exit["RSIUpper"], 85) {
+		t.Errorf("cal_exit.json: RSIUpper = %v, не содержит 85 — без него максимум полосы (75) стоит у края", exit["RSIUpper"])
+	}
+}
