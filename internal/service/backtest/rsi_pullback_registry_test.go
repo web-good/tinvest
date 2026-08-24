@@ -3,6 +3,7 @@ package backtest
 import (
 	"testing"
 
+	rsipullbackbspb "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/bspb"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 	rsipullbackdias "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/dias"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/domrf"
@@ -612,5 +613,26 @@ func TestRSIPullbackDIASIsRegisteredAndCalibrated(t *testing.T) {
 	}
 	if got := b.Build(p).Ticker(); got != "DIAS" {
 		t.Fatalf("Ticker() = %q, want DIAS", got)
+	}
+}
+
+// TestRSIPullbackBSPBTracksBaseline сторожит ЧЕСТНОЕ состояние BSPB до конца калибровки: тикер
+// зарегистрирован (иначе прогоны пошли бы в generic-ветку и молча считали бы не тот инструмент),
+// но параметры равны baseline ядра. Тест заменяется снимком литерала в Task 13; пока он стоит,
+// «почти откалиброванные» значения не могут просочиться в прод незамеченными.
+func TestRSIPullbackBSPBTracksBaseline(t *testing.T) {
+	b, ok := rsiPullbackRegistry["BSPB"]
+	if !ok {
+		t.Fatal("BSPB отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
+	}
+	got, ok := b.DefaultParams().(core.Params)
+	if !ok {
+		t.Fatalf("BSPB: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
+	}
+	if want := rsipullbackbspb.DefaultParams(); got != want {
+		t.Fatalf("BSPB: реестр отдаёт не то, что пакет:\n got: %+v\nwant: %+v", got, want)
+	}
+	if got != core.DefaultParams() {
+		t.Fatal("BSPB больше не отслеживает baseline — если калибровка закончена, замените этот тест снимком литерала")
 	}
 }
