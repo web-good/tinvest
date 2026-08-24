@@ -2,6 +2,7 @@ package live
 
 import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/dias"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/domrf"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/elfv"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/fesh"
@@ -158,6 +159,34 @@ import (
 // gaps: EL5-Energo has not paid since 2020, and over 36 months exactly one gap opened worse than
 // -3% (-0.95 daily ATR) against five on SIBN. It is the only name in the universe where holding
 // overnight carries no ex-dividend risk.
+//
+// DIAS was calibrated 2026-08-22 on an ADAPTED schedule: the instrument IPO'd 2024-02-13 and has
+// 30.3 months of history, so the standard §8 protocol (-months 36 -train-months 12 -test-months 6)
+// cannot produce four folds; the runs use -months 30 -train-months 10 -test-months 5 instead — four
+// folds of train 10 + OOS 5 months back to back (10 + 4x5 = 30), the same kind of adaptation as
+// IVAT (25/9/4). DIAS's numbers are comparable to IVAT's but NOT line by line with the rest of the
+// catalogue, which runs the full 36/12/6. It MISSES the declared bar, in a shape between ELFV and
+// SIBN: entry fails BOTH criteria, like SIBN — pooled OOS PF 1.213, below the 1.5 bar, with its
+// leading axis RSILower stable in 2 folds of 4, below the required 3 — while trend clears only
+// profit factor (pooled OOS PF 1.848) with EMASlow stable in 2 folds of 4, the same partial failure
+// both ELFV themes showed. It carried the SECOND-STRONGEST prior in this catalogue, written down
+// before the runs, and the prior did not save the bar here either, same as ELFV: the screener's
+// PFmed reads 1.62 and PFmed HO 3.35, and the control baseline over 30 months measures
+// core.DefaultParams() at 153 trades, PF 1.822. The ticker is added anyway under the owner's rule
+// announced BEFORE the runs, and the plan's stop condition (pooled OOS PF below 1.0, or under 20
+// trades over the adapted 30-month window) did not fire: the accepted point measures pooled OOS PF
+// 2.361 on 98 trades with all FOUR folds profitable. The regime is the sharpest caveat here, and it
+// cuts the opposite way from the usual worry: ALL SIX half-years of the window fall (-6.7% / -26.7%
+// / -18.5% / -38.2% / -4.2% / -29.4%), the whole window -79.0%, peak-to-trough -85.7% — the point is
+// profitable in every one of the six, but the configuration has not been tested against a rising
+// market AT ALL, the mirror image of LSNGP's risk. Liquidity is thin: median daily turnover 42.6
+// mln RUB with a p10 of 13.6 mln, in IVAT/LENT territory. The one execution property that IS better
+// than ELFV here is the price step: 0.5 RUB is 0.0165% of the 3033.5 median price, against ELFV's
+// 0.039% — 2.4x cheaper. A procedural note for the catalogue: the daily cache was silently broken —
+// DIAS_Day1.json held only 600 candles with a full missing half-year, 2024-06-24…2024-12-23 (143
+// weekdays present in the 30-minute series but absent from the daily one) — fixed by a full
+// -refresh before the first measurement, which brought the daily series to 745 candles. Lesson for
+// future tickers: check BOTH series for continuity, not just history depth.
 var paramsByTicker = map[string]core.Params{
 	ugld.Ticker:  ugld.DefaultParams(),
 	tbank.Ticker: tbank.DefaultParams(),
@@ -173,6 +202,7 @@ var paramsByTicker = map[string]core.Params{
 	svav.Ticker:  svav.DefaultParams(),
 	sibn.Ticker:  sibn.DefaultParams(),
 	elfv.Ticker:  elfv.DefaultParams(),
+	dias.Ticker:  dias.DefaultParams(),
 }
 
 // ParamsFor returns the params for a known ticker, ok=false otherwise.
