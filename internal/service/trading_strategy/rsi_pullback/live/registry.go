@@ -215,9 +215,10 @@ import (
 // months, the worst -8.44%, on a regular May/October cycle — unlike the rest of the catalogue the
 // dates are known in advance, so the risk is manageable by schedule rather than by a parameter.
 // Liquidity is the BEST of any candidate measured so far: median daily turnover 333 mln RUB, tick
-// size 0.01 RUB is 0.0029% of the median price — the cheapest step in the catalogue, real round
-// cost ≈0.106% against the 0.1% modelled — and daily ATR(14) medians 2.53% of price, the lowest
-// in the catalogue.
+// size 0.01 RUB is 0.0029% of the median price — the cheapest step among those measured (DIAS
+// 0.0165%, ELFV 0.039%; the rest of the catalogue is unmeasured), real round cost ≈0.106% against
+// the 0.1% modelled — and daily ATR(14) medians 2.53% of price, narrow but not the narrowest:
+// SIBN (2.52%) and DOMRF (2.02%) sit below it.
 var paramsByTicker = map[string]core.Params{
 	ugld.Ticker:  ugld.DefaultParams(),
 	tbank.Ticker: tbank.DefaultParams(),
