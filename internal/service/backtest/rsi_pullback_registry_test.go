@@ -616,23 +616,43 @@ func TestRSIPullbackDIASIsRegisteredAndCalibrated(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackBSPBTracksBaseline сторожит ЧЕСТНОЕ состояние BSPB до конца калибровки: тикер
-// зарегистрирован (иначе прогоны пошли бы в generic-ветку и молча считали бы не тот инструмент),
-// но параметры равны baseline ядра. Тест заменяется снимком литерала в Task 13; пока он стоит,
-// «почти откалиброванные» значения не могут просочиться в прод незамеченными.
-func TestRSIPullbackBSPBTracksBaseline(t *testing.T) {
+// TestRSIPullbackBSPBIsRegisteredAndCalibrated сторожит, что BSPB живёт в rsiPullbackRegistry
+// собственной записью (а не проваливается в generic-ветку) И возвращает собственный литерал, а не
+// baseline. Пакет strategy/bspb заведён 2026-08-24 ДО калибровки, и в тот же день сторожевой тест
+// TestRSIPullbackBSPBTracksBaseline, державший это состояние, заменён этим снимком.
+//
+// ВЕРДИКТ ПО ПЛАНКЕ: НЕ ВЗЯТА. Схема прогонов ШТАТНАЯ (36/12/6, история ровно 36 месяцев), поэтому
+// числа BSPB сопоставимы построчно со всем каталогом, кроме IVAT и DIAS. Тема entry провалила ОБА
+// критерия планки: pooled OOS PF 0.726 на 69 сделках при пороге 1.5, и устойчивость ведущей оси
+// RSILower 2 из 4 (по фолдам 15/35/25/15, порог >= 3 из 4). Тема trend взяла только критерий
+// устойчивости: ведущая ось EMASlow по фолдам 30/50/30/30 — 3 из 4, но pooled OOS PF 0.980 на 95
+// сделках, порог 1.5 НЕ взят. Три критерия из четырёх провалены, и форма провала редкая: обе
+// ключевые темы ушли ниже ЕДИНИЦЫ, ранняя тема screen тоже (0.670). Литерал собран гибридной
+// процедурой — три ранние темы поверх дефолтов ядра, семь поздних поверх якоря Task 6, выбранного
+// на полной истории, — и перепроверен собственным walk-forward принятой точки (pooled OOS PF 2.336
+// на 47 сделках, все четыре фолда прибыльные, вырожденных нет; под удвоенными издержками 1.829).
+// Четырёх прибыльных фолдов добились и четыре темы BSPB, ближайшая cal_exit даёт 2.261/47 — на 3.3%
+// ниже точки, так что разрыва между точкой и лучшей из поздних тем нет. Наличие литерала здесь
+// означает решение владельца «литерал ставится и при непройденной планке, если принятая точка не
+// упирается в стоп-условие плана» (не сработало ни по одному из трёх пунктов), а не подтверждённый
+// протоколом edge — ровно как у IVAT, SIBN, ELFV и DIAS. Снимок литерала и обоснование каждого поля
+// живут рядом с ним, в strategy/bspb/bspb_test.go и в доке пакета.
+func TestRSIPullbackBSPBIsRegisteredAndCalibrated(t *testing.T) {
 	b, ok := rsiPullbackRegistry["BSPB"]
 	if !ok {
 		t.Fatal("BSPB отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
 	}
-	got, ok := b.DefaultParams().(core.Params)
-	if !ok {
+	p, pok := b.DefaultParams().(core.Params)
+	if !pok {
 		t.Fatalf("BSPB: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
 	}
-	if want := rsipullbackbspb.DefaultParams(); got != want {
-		t.Fatalf("BSPB: реестр отдаёт не то, что пакет:\n got: %+v\nwant: %+v", got, want)
+	if p == core.DefaultParams() {
+		t.Fatal("BSPB вернул baseline: откалиброванный тикер обязан иметь собственный литерал")
 	}
-	if got != core.DefaultParams() {
-		t.Fatal("BSPB больше не отслеживает baseline — если калибровка закончена, замените этот тест снимком литерала")
+	if want := rsipullbackbspb.DefaultParams(); p != want {
+		t.Fatalf("BSPB params = %+v, want литерал пакета %+v", p, want)
+	}
+	if got := b.Build(p).Ticker(); got != "BSPB" {
+		t.Fatalf("Ticker() = %q, want BSPB", got)
 	}
 }
