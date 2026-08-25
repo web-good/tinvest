@@ -168,13 +168,13 @@ func TestBSPBLateGridsPinTheirAxesAndAnchor(t *testing.T) {
 			t.Errorf("cal_risk.json свипует StopDailyATR=%v: такой стоп достаёт меньше 17%% дней и вытесняет убыток в RSI-выход", v)
 		}
 	}
-	// Цель: 0.4 добавлена, всё выше 1.5 убрано как недостижимое.
+	// Цель: 0.4 добавлена, всё выше 1.5 убрано как почти не срабатывающее.
 	if !containsValue(risk["TPDailyATR"], 0.4) {
 		t.Errorf("cal_risk.json: TPDailyATR = %v, не содержит 0.4 — весь edge BSPB живёт в коротких целях", risk["TPDailyATR"])
 	}
 	for _, v := range risk["TPDailyATR"] {
 		if v > 1.5 {
-			t.Errorf("cal_risk.json свипует TPDailyATR=%v: цель шире дневного ATR на BSPB недостижима — колонки 1.0 и 1.5 совпадают побайтово", v)
+			t.Errorf("cal_risk.json свипует TPDailyATR=%v: цель шире дневного ATR на BSPB почти не срабатывает — под настоящим якорем (STEP 4 темы risk) колонки целей 1.0 и 1.5 расходятся всего на 0.013-0.016 PF при одинаковых 60 сделках, а диапазона между ними достигают 2 сделки из 60 (3.3%%)", v)
 		}
 	}
 
