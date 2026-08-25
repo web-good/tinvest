@@ -1,6 +1,7 @@
 package live
 
 import (
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/bspb"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/dias"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/domrf"
@@ -187,6 +188,31 @@ import (
 // weekdays present in the 30-minute series but absent from the daily one) — fixed by a full
 // -refresh before the first measurement, which brought the daily series to 745 candles. Lesson for
 // future tickers: check BOTH series for continuity, not just history depth.
+//
+// BSPB was calibrated 2026-08-24 on the STANDARD schedule (36/12/6, like SVAV, SIBN and ELFV;
+// adapted schedules were only needed for IVAT and DIAS, whose history is too short) and is the
+// sixteenth entry here. History margin is ZERO, the same as SVAV: the 30-minute series starts
+// exactly 36 months before the right edge of the window. It MISSES the declared bar, and by the
+// widest margin this catalogue has seen — both key themes land below ONE, not just below 1.5:
+// entry measures pooled OOS PF 0.726 on 69 trades with RSILower stable in 2 folds of 4, trend
+// measures 0.980 on 95 trades with EMASlow stable in 3 folds of 4 (the one criterion this ticker
+// does clear). The accepted point measures pooled OOS PF 2.336 on 47 trades with all FOUR folds
+// profitable (3.562/11, 2.241/14, 1.585/15, 3.177/7), but that four-for-four record is not unique
+// to the point — four of BSPB's ten themes achieve it too, and the nearest, cal_exit, measures
+// 2.261 on the same 47 trades, only 3.3% below the point. Under doubled costs (-commission 0.001)
+// the point measures PF 1.829, a 21.7% loss, the largest in the catalogue so far. The theme
+// procedure here is HYBRID and its cost is recorded plainly: the anchor for BSPB's seven late
+// themes was assembled by probing whole winning fold tuples over the FULL history, i.e. with
+// lookahead, so those seven themes' leaderboards are conditional on top of the usual point
+// caveat and are not comparable line by line with the rest of the catalogue. The main live risk
+// is EX-DIVIDEND GAPS, and it is operational rather than statistical or execution-shaped like its
+// neighbours (DIAS's regime risk, ELFV's execution risk): seven gaps worse than -3% over 36
+// months, the worst -8.44%, on a regular May/October cycle — unlike the rest of the catalogue the
+// dates are known in advance, so the risk is manageable by schedule rather than by a parameter.
+// Liquidity is the BEST of any candidate measured so far: median daily turnover 333 mln RUB, tick
+// size 0.01 RUB is 0.0029% of the median price — the cheapest step in the catalogue, real round
+// cost ≈0.106% against the 0.1% modelled — and daily ATR(14) medians 2.53% of price, the lowest
+// in the catalogue.
 var paramsByTicker = map[string]core.Params{
 	ugld.Ticker:  ugld.DefaultParams(),
 	tbank.Ticker: tbank.DefaultParams(),
@@ -203,6 +229,7 @@ var paramsByTicker = map[string]core.Params{
 	sibn.Ticker:  sibn.DefaultParams(),
 	elfv.Ticker:  elfv.DefaultParams(),
 	dias.Ticker:  dias.DefaultParams(),
+	bspb.Ticker:  bspb.DefaultParams(),
 }
 
 // ParamsFor returns the params for a known ticker, ok=false otherwise.
