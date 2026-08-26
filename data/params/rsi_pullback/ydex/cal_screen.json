@@ -1,0 +1,12 @@
+{
+  "_comment": "data/params/rsi_pullback/ydex/cal_screen.json — тема screen для YDEX (МКПАО «Яндекс»), 4 прогона (UseDayATRGate x UseVolume). Тема меряет ЦЕНУ каждого из двух опциональных гейтов в сделках и в PF относительно дефолтов ядра. Точечные замеры на полной истории расчётного окна: день включён + объём выключен (дефолт) — 108 сделок, PF 1.778; день ВЫКЛЮЧЕН — 396 сделок, PF 0.960, то есть дневной гейт вырезает три четверти сигналов и разворачивает знак edge; объём включён при дефолтном VolMult 1.2 — 82 сделки, PF 1.656. Ось канонична и не расширяется: у обоих полей ровно два состояния. Команда: go run ./cmd/backtest -ticker YDEX -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/ydex/cal_screen.json -out ./reports/YDEX_screen -months 25 -train-months 9 -test-months 4 -min-trades 1 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-08-25:",
+  "phases": [
+    {
+      "name": "screen",
+      "grid": {
+        "UseDayATRGate": [0, 1],
+        "UseVolume": [0, 1]
+      }
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "_comment": "data/params/rsi_pullback/ydex/cal_volume.json — тема volume для YDEX, 20 прогонов (VolMult 5 x VolBaseDays 4). Тема меряет объёмный гейт поверх дефолтов ядра при дефолтном окне VolLookbackBars 3. Точечные прогоны: гейт выключен — 108 сделок/1.778; VolMult 1.0 -> 91/1.581, 1.2 -> 82/1.656, 1.5 -> 68/1.508, 2.0 -> 53/1.987, 2.5 -> 39/1.587, 3.0 -> 27/0.981, 4.0 -> 17/1.312. ОСЬ СУЖЕНА ДО 2.5: при 3.0 остаётся 27 сделок = 10 на девятимесячное обучающее окно (вдвое ниже порога -min-trades 20) и PF уходит под единицу; то же решение, что на DIAS и BSPB. Край 2.5 сохранён как последний, где видно, где ломается кривая (39 сделок = 14 на обучающее окно). База при VolMult 1.5: 3 дня -> 68 сделок/2.012, 5 -> 68/1.848, 10 -> 71/2.256, 14 -> 68/1.508 — разброс 0.75 PF при почти неизменном числе сделок, то есть шум базы, а не рельеф. Команда: go run ./cmd/backtest -ticker YDEX -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/ydex/cal_volume.json -out ./reports/YDEX_volume -months 25 -train-months 9 -test-months 4 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-08-25:",
+  "phases": [
+    {
+      "name": "volume",
+      "grid": {
+        "UseVolume": [1],
+        "VolMult": [1.0, 1.2, 1.5, 2.0, 2.5],
+        "VolBaseDays": [3, 5, 10, 14]
+      }
+    }
+  ]
+}

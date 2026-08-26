@@ -1,0 +1,13 @@
+{
+  "_comment": "data/params/rsi_pullback/ydex/cal_trail.json — тема trail для YDEX, 12 прогонов (UseRSIExit 2 x TrailDailyATR 6). Тема меряет ATR-трейл и его сочетание с RSI-выходом поверх дефолтов ядра. Ось каноническая. Точечные прогоны с включённым трейлом: 0.3 -> 116 сделок/1.484, 0.5 -> 111/1.783, 0.7 -> 109/1.678, 1.0 -> 108/1.778, 1.3 -> 108/1.778 — при 1.0 и выше трейл не срабатывает ни разу (числа совпадают с baseline), а узкий трейл режет прибыль. Тема прогоняется целиком, несмотря на отрицательное ожидание: она стоит 12 прогонов, а её отрицательный результат — часть протокола и основание не включать трейл в точку. Команда: go run ./cmd/backtest -ticker YDEX -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/ydex/cal_trail.json -out ./reports/YDEX_trail -months 25 -train-months 9 -test-months 4 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-08-25:",
+  "phases": [
+    {
+      "name": "trail",
+      "grid": {
+        "UseRSIExit": [0, 1],
+        "UseTrail": [1],
+        "TrailDailyATR": [0, 0.3, 0.5, 0.7, 1.0, 1.3]
+      }
+    }
+  ]
+}
