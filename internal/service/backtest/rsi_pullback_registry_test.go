@@ -17,6 +17,7 @@ import (
 	rsipullbacksibn "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sibn"
 	rsipullbacksvav "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/svav"
 	rsipullbackwush "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/wush"
+	rsipullbackydex "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ydex"
 )
 
 // TestRSIPullbackBindingBuildsForTicker checks the wiring on a ticker whose package still
@@ -654,5 +655,25 @@ func TestRSIPullbackBSPBIsRegisteredAndCalibrated(t *testing.T) {
 	}
 	if got := b.Build(p).Ticker(); got != "BSPB" {
 		t.Fatalf("Ticker() = %q, want BSPB", got)
+	}
+}
+
+// TestRSIPullbackYDEXTracksBaseline сторожит ЧЕСТНОЕ состояние: YDEX заведён в реестр 2026-08-25
+// ДО калибровки и обязан отдавать ровно core.DefaultParams(). Тест заменяется снимком литерала в
+// Task 12 плана 2026-08-25-ydex-rsi-pullback-prep.md.
+func TestRSIPullbackYDEXTracksBaseline(t *testing.T) {
+	b, ok := rsiPullbackRegistry[rsipullbackydex.Ticker]
+	if !ok {
+		t.Fatal("YDEX отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
+	}
+	p, pok := b.DefaultParams().(core.Params)
+	if !pok {
+		t.Fatalf("YDEX: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
+	}
+	if want := core.DefaultParams(); p != want {
+		t.Fatalf("YDEX ещё не откалиброван:\n got: %+v\nwant: %+v", p, want)
+	}
+	if got := b.Build(p).Ticker(); got != "YDEX" {
+		t.Fatalf("Ticker() = %q, want YDEX", got)
 	}
 }
