@@ -234,8 +234,9 @@ import (
 // and BOTH fail only the stability half. entry measures pooled OOS PF 1.916 on 52 trades with its
 // leading axis RSILower stable in 2 folds of 4 (10/25/35/25); trend measures pooled OOS PF 1.642
 // on 71 trades with EMASlow stable in 2 folds of 4 (200/50/200/70). The control baseline on the
-// same 25-month window is the strongest in the catalogue by a wide margin: core.DefaultParams()
-// measures 108 trades, PF 1.778 (next best IVAT 1.432, BSPB 1.114). The accepted point measures
+// same 25-month window is the second strongest recorded in the catalogue, after DIAS (153 trades,
+// PF 1.822): core.DefaultParams() measures 108 trades, PF 1.778 (next best IVAT 1.432, BSPB
+// 1.114). The accepted point measures
 // pooled OOS PF 3.014 on 77 trades with all FOUR folds profitable (2.915/17, 1.849/20, 4.920/26,
 // 2.765/14); under doubled costs (-commission 0.001) it still measures PF 2.167, four-for-four
 // above one. Liquidity removes the execution risk carried by ELFV, DIAS and LENT entirely: median
