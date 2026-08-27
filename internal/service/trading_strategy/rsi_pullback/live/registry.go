@@ -31,9 +31,9 @@ import (
 // catalogue — one theme of nine above 1.5 pooled OOS PF (volume 1.674), entry 1.218 and trend
 // 1.044. Its accepted point does measure 2.823 pooled on 93 trades with all four folds above 1.89,
 // but that point was assembled by hand over the whole history and is not out-of-sample; read the
-// package doc, starting with what the day gate does there. In exchange NVTK is the most liquid
-// name here, the only one of the three added where execution risk does not stack on top of the
-// statistical one. LSNGP was added and calibrated 2026-08-14: its themes missed the bar declared
+// package doc, starting with what the day gate does there. In exchange NVTK is the most liquid of
+// the three added that day (RENI and LSNGP trade far thinner), the only one of the three where
+// execution risk does not stack on top of the statistical one. LSNGP was added and calibrated 2026-08-14: its themes missed the bar declared
 // before the runs — every one of the nine cleared 1.5 pooled OOS PF, a first for this catalogue,
 // but the leading axis was stable in only 2 folds of 4 on both key themes. Read its package doc,
 // starting with the regime note: BOTH protocol windows rise (+46.7% / +11.2%), so nothing about
@@ -118,10 +118,11 @@ import (
 // out-of-sample. Two properties are worth knowing before touching its numbers. Daily ATR(14)
 // medians 2.52% of price — the LOWEST in this catalogue — so the 0.7 ATR stop moves 1.76% of price
 // at Fraction=1, and a round of costs eats 5.7% of the risk instead of the 2-3% typical higher up
-// this map. Against that, liquidity is the BEST here by a wide margin: 519 mln RUB of median daily
-// turnover with a p10 of 206 mln, four times the screener's own 50 mln gate even on its tenth
-// percentile, so execution risk does not stack on top of the statistical one — unlike IVAT and
-// LENT. The risk that the runs cannot close is dividend gaps: SIBN pays regularly, the strategy
+// this map. Against that, liquidity is not a risk factor either: 519 mln RUB of median daily
+// turnover with a p10 of 206 mln — below T (4961), YDEX (2826), NVTK (2475) and GAZP (587) in this
+// universe, but still four times the screener's own 50 mln gate even on its tenth percentile — so
+// execution risk does not stack on top of the statistical one, unlike IVAT and LENT. The risk that
+// the runs cannot close is dividend gaps: SIBN pays regularly, the strategy
 // holds overnight, and five gaps in the window opened worse than -3% (the deepest -8.49%, or -4.69
 // daily ATR). On such a morning the stop is a wish, not a floor, and there is no parameter in the
 // strategy against it.
