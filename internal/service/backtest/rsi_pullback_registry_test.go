@@ -697,10 +697,22 @@ func TestRSIPullbackYDEXIsRegisteredAndCalibrated(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackBANEPTracksBaseline сторожит ЧЕСТНОЕ состояние: BANEP заведён в реестр 2026-08-28
-// ДО калибровки и обязан отдавать ровно core.DefaultParams(). Тест заменяется снимком литерала в
-// задаче с литералом плана 2026-08-28-banep-rsi-pullback-prep.md.
-func TestRSIPullbackBANEPTracksBaseline(t *testing.T) {
+// TestRSIPullbackBANEPIsRegisteredAndCalibrated сторожит, что BANEP живёт в rsiPullbackRegistry
+// собственной записью (а не проваливается в generic-ветку) И возвращает собственный литерал, а не
+// baseline. Пакет strategy/banep заведён 2026-08-28 до калибровки, и в тот же день сторожевой тест
+// TestRSIPullbackBANEPTracksBaseline, державший это состояние, заменён этим снимком.
+//
+// ВЕРДИКТ ПО ПЛАНКЕ: НЕ ВЗЯТА, обеими ключевыми темами и по обоим критериям — форма провала тяжелее,
+// чем у ELFV и YDEX. Тема entry: pooled OOS PF 1.004 на 74 сделках (требуется 1.5), ведущая ось
+// RSILower выбрана как 45/25/30/25 — два фолда из четырёх. Тема trend: 1.258 на 81 сделке, ведущая
+// ось EMASlow — 50/40/50/70, тоже два из четырёх. Вырожденных фолдов нет. Принятая точка при этом
+// перепроверена собственным walk-forward (pooled OOS PF 1.799 на 67 сделках, три фолда из четырёх
+// прибыльны, под удвоенными издержками 1.317) и не упирается ни в один из трёх пунктов
+// стоп-условия. Литерал стоит по решению владельца «литерал ставится и при непройденной планке,
+// если принятая точка не упирается в стоп-условие» — ровно как у IVAT, SIBN, ELFV, DIAS, BSPB и
+// YDEX. Сетки этого тикера по отдельному решению владельца держатся МАКСИМАЛЬНО ШИРОКИМИ; что это
+// изменило (ровно одну ось — риск), разобрано в доке пакета strategy/banep.
+func TestRSIPullbackBANEPIsRegisteredAndCalibrated(t *testing.T) {
 	b, ok := rsiPullbackRegistry[rsipullbackbanep.Ticker]
 	if !ok {
 		t.Fatal("BANEP отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
@@ -709,8 +721,11 @@ func TestRSIPullbackBANEPTracksBaseline(t *testing.T) {
 	if !pok {
 		t.Fatalf("BANEP: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
 	}
-	if want := core.DefaultParams(); p != want {
-		t.Fatalf("BANEP ещё не откалиброван:\n got: %+v\nwant: %+v", p, want)
+	if p == core.DefaultParams() {
+		t.Fatal("BANEP вернул baseline: откалиброванный тикер обязан иметь собственный литерал")
+	}
+	if want := rsipullbackbanep.DefaultParams(); p != want {
+		t.Fatalf("BANEP params = %+v, want литерал пакета %+v", p, want)
 	}
 	if got := b.Build(p).Ticker(); got != "BANEP" {
 		t.Fatalf("Ticker() = %q, want BANEP", got)

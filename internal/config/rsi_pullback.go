@@ -230,7 +230,7 @@ type RSIPullbackConfig struct {
 // планки ни снизу, ни сверху. Подробности — в доке пакета strategy/ydex.
 func NewRSIPullbackConfig() *RSIPullbackConfig {
 	return &RSIPullbackConfig{
-		Tickers:  []string{"UGLD", "T", "GAZP", "DOMRF", "FESH", "WUSH", "LENT", "RENI", "NVTK", "LSNGP", "IVAT", "SVAV", "SIBN", "ELFV", "DIAS", "BSPB", "YDEX"},
+		Tickers:  []string{"UGLD", "T", "GAZP", "DOMRF", "FESH", "WUSH", "LENT", "RENI", "NVTK", "LSNGP", "IVAT", "SVAV", "SIBN", "ELFV", "DIAS", "BSPB", "YDEX", "BANEP"},
 		BuyPct:   5,
 		Schedule: "1,31 6-23 * * *",
 	}
