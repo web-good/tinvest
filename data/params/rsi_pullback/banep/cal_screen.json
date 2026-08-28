@@ -1,0 +1,12 @@
+{
+  "_comment": "data/params/rsi_pullback/banep/cal_screen.json — тема screen для BANEP (Башнефть, привилегированные акции, лот 1), 4 прогона (UseDayATRGate x UseVolume). Тема меряет ЦЕНУ каждого из двух опциональных гейтов в сделках и в PF относительно дефолтов ядра. Точечные замеры на полной истории расчётного окна 2023-08-28 … 2026-08-28: день включён + объём выключен (дефолт) — 134 сделки, PF 1.336; день ВЫКЛЮЧЕН — 485 сделок, PF 0.973, то есть дневной гейт вырезает 72% сигналов и разворачивает знак edge; объём включён при дефолтном VolMult 1.2 — 103 сделки, PF 1.300; оба гейта в противоположных положениях (день выключен, объём включён) — 286 сделок, PF 0.879. Ось канонична и не расширяется: у обоих полей ровно два состояния. Команда: go run ./cmd/backtest -ticker BANEP -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/banep/cal_screen.json -out ./reports/BANEP_screen -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-08-28:",
+  "phases": [
+    {
+      "name": "screen",
+      "grid": {
+        "UseDayATRGate": [0, 1],
+        "UseVolume": [0, 1]
+      }
+    }
+  ]
+}
