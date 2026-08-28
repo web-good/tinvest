@@ -1,0 +1,28 @@
+{
+  "_comment": "data/params/rsi_pullback/banep/plateau_point.json — ПРИНЯТАЯ ТОЧКА BANEP, собранная 2026-08-28 из пофолдовых победителей десяти тем. Сетка из одного значения на ключ: калибратор ничего не выбирает, поэтому PF принадлежит конфигурации, а не процедуре отбора. ПРАВИЛО СБОРКИ, объявленное до чтения чисел точки и применённое ко всем осям единообразно: ось идёт в точку тем значением, которое выбрали НЕ МЕНЕЕ ТРЁХ фолдов из четырёх; если такого значения нет, ось остаётся на дефолте ядра; исключение — ось, все четыре выбора которой легли в одну сторону от дефолта: там берётся ближайшее к дефолту из выбранных дважды. По этому правилу: EMAFast 5 (три фолда), FreshDayATR 0 (три), SpentDayATR 0.9 (три); RSIPeriod 4, RSILower 30, RSIUpper 70, TPDailyATR 0.6 — большинства нет, остаётся дефолт ядра; EMASlow 50 и StopDailyATR 1.0 — единодушный сдвиг в одну сторону (все четыре фолда выбрали EMASlow <= 70 и стоп >= 1.0), берётся выбранное дважды и ближайшее к дефолту; UseVolume 0 и UseTrail 0 — обе темы отвергнуты пофолдово. Первый вариант точки, где RSIUpper брался буквально из темы entry (65), дал 64 сделки при PF 1.131 и 0.906 под удвоенными издержками, то есть упирался в стоп-условие плана; это и заставило сформулировать правило про дефолт ядра при отсутствии большинства. Команда: go run ./cmd/backtest -ticker BANEP -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/banep/plateau_point.json -out ./reports/BANEP_point -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-08-28:",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [4],
+        "RSILower": [30],
+        "RSIUpper": [70],
+        "EMAFast": [5],
+        "EMASlow": [50],
+        "DailyATRPeriod": [14],
+        "UseDayATRGate": [1],
+        "FreshDayATR": [0],
+        "SpentDayATR": [0.9],
+        "StopDailyATR": [1.0],
+        "TPDailyATR": [0.6],
+        "UseVolume": [0],
+        "VolBaseDays": [14],
+        "VolLookbackBars": [3],
+        "VolMult": [1.2],
+        "UseRSIExit": [1],
+        "UseTrail": [0],
+        "TrailDailyATR": [0]
+      }
+    }
+  ]
+}

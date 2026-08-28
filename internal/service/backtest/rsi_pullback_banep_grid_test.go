@@ -8,28 +8,23 @@ func banepGrid(t *testing.T, file string) map[string][]float64 {
 	return rsiPullbackTickerGrid(t, "banep", file)
 }
 
-// TestBANEPGridsPinTheirMeasuredAxes сторожит оси всех десяти тем каталога banep/. Каталог собран
-// 2026-08-28 по замерам самого BANEP на расчётном окне 2023-08-28 … 2026-08-28 (34 069 получасовых
-// баров, из них 24 039 будних; дневная серия 1129 свечей, в окне 764 будних).
+// TestBANEPGridsStayWide сторожит оси всех десяти тем каталога banep/. Каталог собран 2026-08-28 по
+// замерам самого BANEP на расчётном окне 2023-08-28 … 2026-08-28 (34 069 получасовых баров, из них
+// 24 039 будних; дневная серия 1129 свечей, в окне 764 будних).
 //
-// Четыре решения отличают этот каталог от каталожной формы, и каждое опирается на точечный замер
-// сделками поверх дефолтов ядра (baseline: 134 сделки, PF 1.336):
+// РЕШЕНИЕ ВЛАДЕЛЬЦА 2026-08-28: сетки этого тикера держатся МАКСИМАЛЬНО ШИРОКИМИ. Поэтому тест
+// сторожит оси с ДРУГОЙ стороны, чем у остальных тикеров каталога: он проверяет, что край оси не
+// урезали, а не что его не расширили. Замеры, которыми обосновывались обрезки первого варианта
+// каталога, живут в _comment каждой сетки как предупреждения о том, чего ждать на краях.
 //
-//   - RSIPeriod РАСШИРЕН ВНИЗ ДО 3 — третий случай после BSPB и YDEX. Кроссов у тройки вдвое
-//     больше, чем у четвёрки (533 против 264 на уровне 10), то есть правило каталога формально
-//     применимо; но RSI(3)@30 даёт 212 сделок при PF 1.448 против 134 при 1.336 у RSI(4)@30.
-//   - RSIPeriod ОБОРВАН НА 6: RSI(6)@30 — PF 0.706, RSI(6)@10 — пять сделок за 36 месяцев,
-//     RSI(7)@30 — 0.776. Медленный RSI на BANEP не оставляет ни выборки, ни знака.
-//   - ОСЬ EMASlow СДВИНУТА ВНИЗ до {30…120}: максимум замера стоит на 10/40 (PF 1.444) и 5/30
-//     (1.443), то есть НИЖЕ каталожного минимума 50, а верх оси мёртв (10/150 -> 1.152,
-//     20/150 -> 1.118, 40/200 -> 1.129). Прецедент — BSPB.
-//   - СТРОКА StopDailyATR 0.3 ВЫРЕЗАНА: стоп 0.3 ATR это 0.86% цены, а реальный круг издержек
-//     0.187% (моделируемые 0.1% плюс два тика по 0.0436% при шаге 0.5 ₽ и медианной цене 1148 ₽)
-//     съедает 21.8% риска — выше черты 17%, по которой строку вырезали из domrf/ и elfv/. Прогон
-//     подтверждает: 0.3 даёт PF 1.052 против 1.336 на дефолтном 0.5.
-//   - VolLookbackBars ДОВЕДЁН ДО 16: кривая растёт монотонно к верхнему краю (1 -> 1.222,
-//     3 -> 1.288, 12 -> 1.329, 16 -> 1.343), и обрезав край, каталог обрезал бы максимум.
-func TestBANEPGridsPinTheirMeasuredAxes(t *testing.T) {
+// Инвариантов, которые остаются жёсткими, всего три, и все три — про смысл, а не про диапазон:
+//
+//   - RSILower не может быть выше 50: 50 — средняя линия осциллятора, выше неё отката нет по
+//     определению, там кросс вниз означает уже не откат, а начало движения.
+//   - RSIPeriod не может быть короче 3: двойка — это не откат, а тик.
+//   - Ось тренда не может порождать пары EMAFast >= EMASlow: при равенстве фильтр вырождается
+//     (допуск 0.0%), при инверсии становится другим фильтром («медленная над быстрой»).
+func TestBANEPGridsStayWide(t *testing.T) {
 	screen := banepGrid(t, "cal_screen.json")
 	for _, field := range []string{"UseDayATRGate", "UseVolume"} {
 		if got := screen[field]; !sameSet(got, 0, 1) {
@@ -38,50 +33,42 @@ func TestBANEPGridsPinTheirMeasuredAxes(t *testing.T) {
 	}
 
 	entry := banepGrid(t, "cal_entry.json")
-	// Выше 50 отката нет по определению: 50 — средняя линия осциллятора.
 	for _, v := range entry["RSILower"] {
 		if v > 50 {
 			t.Errorf("cal_entry.json свипует RSILower=%v: выше 50 отката нет по определению", v)
 		}
 	}
-	// Тройка — сознательное отступление от правила каталога, держится замером сделками.
-	if !containsValue(entry["RSIPeriod"], 3) {
-		t.Errorf("cal_entry.json: RSIPeriod = %v, не содержит 3 — на BANEP тройка бьёт четвёрку и по сделкам (212 против 134), и по PF (1.448 против 1.336)", entry["RSIPeriod"])
-	}
 	for _, v := range entry["RSIPeriod"] {
-		if v > 6 {
-			t.Errorf("cal_entry.json свипует RSIPeriod=%v: на BANEP медленный RSI мёртв — RSI(6)@30 даёт PF 0.706, RSI(7)@30 — 0.776", v)
-		}
 		if v < 3 {
 			t.Errorf("cal_entry.json свипует RSIPeriod=%v: короче тройки — уже не откат, а тик", v)
 		}
 	}
-	// Оба края уровня живые: 10 даёт у четвёрки максимум строки (PF 1.643), 40 — второй максимум.
-	if !containsValue(entry["RSILower"], 10) {
-		t.Errorf("cal_entry.json: RSILower = %v, не содержит 10 — на BANEP это максимум строки RSI(4) (PF 1.643)", entry["RSILower"])
+	// Ось входа держится широкой по обеим границам: тройка (212 сделок при PF 1.448 на полной
+	// истории) и восьмёрка (52 сделки при 0.940) обе обязаны остаться в сетке.
+	for _, v := range []float64{3, 8} {
+		if !containsValue(entry["RSIPeriod"], v) {
+			t.Errorf("cal_entry.json: RSIPeriod = %v, не содержит %v — ось входа держится широкой по решению владельца", entry["RSIPeriod"], v)
+		}
 	}
-	if !containsValue(entry["RSILower"], 40) {
-		t.Errorf("cal_entry.json: RSILower = %v, не содержит 40 — там второй максимум строки RSI(4) (203 сделки, PF 1.423)", entry["RSILower"])
+	for _, v := range []float64{10, 50} {
+		if !containsValue(entry["RSILower"], v) {
+			t.Errorf("cal_entry.json: RSILower = %v, не содержит %v — оба края оси обязаны остаться", entry["RSILower"], v)
+		}
 	}
-	// Полоса выхода не расширяется выше 80: там PF 0.864 против 1.336 на дефолте 70.
-	for _, v := range entry["RSIUpper"] {
-		if v > 80 {
-			t.Errorf("cal_entry.json свипует RSIUpper=%v: на BANEP полоса выше 75 мертва (80 даёт 0.864, 85 — 0.927)", v)
+	for _, v := range []float64{55, 85} {
+		if !containsValue(entry["RSIUpper"], v) {
+			t.Errorf("cal_entry.json: RSIUpper = %v, не содержит %v — полоса выхода меряется целиком", entry["RSIUpper"], v)
 		}
 	}
 
 	trend := banepGrid(t, "cal_trend.json")
-	// Ось СДВИНУТА ВНИЗ: максимум замера стоит ниже каталожного минимума 50.
-	if !containsValue(trend["EMASlow"], 30) || !containsValue(trend["EMASlow"], 40) {
-		t.Errorf("cal_trend.json: EMASlow = %v, не содержит 30 и 40 — там максимум замера (10/40 -> 1.444, 5/30 -> 1.443)", trend["EMASlow"])
-	}
-	for _, v := range trend["EMASlow"] {
-		if v > 120 {
-			t.Errorf("cal_trend.json свипует EMASlow=%v: верх оси на BANEP мёртв (10/150 -> 1.152, 20/150 -> 1.118, 40/200 -> 1.129)", v)
+	// Ось тренда держится целиком: и низ, где стоит точечный максимум (10/40 -> 1.444, 5/30 ->
+	// 1.443), и верх, который на полной истории слаб (10/150 -> 1.152, 40/200 -> 1.129).
+	for _, v := range []float64{30, 200} {
+		if !containsValue(trend["EMASlow"], v) {
+			t.Errorf("cal_trend.json: EMASlow = %v, не содержит %v — ось тренда меряется целиком", trend["EMASlow"], v)
 		}
 	}
-	// Пара с EMAFast >= EMASlow либо вырождена (допуск 0.0%), либо инвертирована («медленная над
-	// быстрой» — другой фильтр). При этой оси таких пар нет по построению; тест страхует правки.
 	for _, f := range trend["EMAFast"] {
 		for _, s := range trend["EMASlow"] {
 			if f >= s {
@@ -91,74 +78,70 @@ func TestBANEPGridsPinTheirMeasuredAxes(t *testing.T) {
 	}
 
 	day := banepGrid(t, "cal_day.json")
-	// Ноль в ветке «свежий день» обязателен: на всех прод-тикерах каталога победил именно он, а на
-	// BANEP свежая ветка замерена разбавляющей (0.3 -> PF 1.290 против 1.336 без неё).
+	// Ноль в свежей ветке обязателен: на всех прод-тикерах каталога победил именно он.
 	if !containsValue(day["FreshDayATR"], 0) {
 		t.Errorf("cal_day.json: FreshDayATR = %v, не содержит 0 — на всех прод-тикерах каталога победил ноль", day["FreshDayATR"])
 	}
 	for _, name := range []string{"cal_day.json", "cal_day_spent.json"} {
 		spent := banepGrid(t, name)["SpentDayATR"]
-		for _, v := range spent {
-			if v > 1.3 {
-				t.Errorf("%s свипует SpentDayATR=%v: при 1.5 остаётся 6.4%% баров и 16 сделок за 36 месяцев = 5 на обучающее окно при пороге 20", name, v)
+		// Обе стороны оси дня: 0.6 (57.8% баров) и 1.5 (6.4%) — край, о цене которого предупреждает
+		// _comment, но который по решению владельца в сетке остаётся.
+		for _, v := range []float64{0.6, 1.5} {
+			if !containsValue(spent, v) {
+				t.Errorf("%s: SpentDayATR = %v, не содержит %v — ось дня меряется целиком", name, spent, v)
 			}
-		}
-		if !containsValue(spent, 1.0) {
-			t.Errorf("%s: SpentDayATR = %v, не содержит 1.0 — там максимум замера (78 сделок, PF 1.554)", name, spent)
-		}
-	}
-	// Ось «дня исчерпанного» уплотнена живыми уровнями 0.9 (29.0% баров) и 1.1 (18.5%): между ними
-	// лежит максимум кривой.
-	spentOnly := banepGrid(t, "cal_day_spent.json")["SpentDayATR"]
-	for _, v := range []float64{0.9, 1.1} {
-		if !containsValue(spentOnly, v) {
-			t.Errorf("cal_day_spent.json: SpentDayATR = %v, не содержит %v — уровень живой и максимум кривой лежит рядом", spentOnly, v)
 		}
 	}
 
 	volume := banepGrid(t, "cal_volume.json")
-	for _, v := range volume["VolMult"] {
-		if v > 2.5 {
-			t.Errorf("cal_volume.json свипует VolMult=%v: при 3.0 остаётся 64 сделки (21 на обучающее окно) при PF 1.155 — ниже выключенного гейта", v)
+	// Верх оси множителя остаётся: 3.0 (64 сделки, PF 1.155) и 4.0 (51, 1.012) — предупреждение, а
+	// не основание вырезать край.
+	for _, v := range []float64{1.0, 4.0} {
+		if !containsValue(volume["VolMult"], v) {
+			t.Errorf("cal_volume.json: VolMult = %v, не содержит %v — ось объёма меряется целиком", volume["VolMult"], v)
 		}
-	}
-	// 1.5 обязан остаться: там максимум оси (97 сделок, PF 1.400 против 1.336 у выключенного гейта).
-	if !containsValue(volume["VolMult"], 1.5) {
-		t.Errorf("cal_volume.json: VolMult = %v, не содержит 1.5 — там максимум замера (97 сделок, PF 1.400)", volume["VolMult"])
 	}
 
 	window := banepGrid(t, "cal_vol_window.json")
-	// Верхний край 16 обязателен: кривая растёт монотонно к нему, максимум стоял бы вне сетки.
-	if !containsValue(window["VolLookbackBars"], 16) {
-		t.Errorf("cal_vol_window.json: VolLookbackBars = %v, не содержит 16 — кривая растёт к верхнему краю (12 -> 1.329, 16 -> 1.343)", window["VolLookbackBars"])
-	}
-	if !containsValue(window["VolLookbackBars"], 1) {
-		t.Errorf("cal_vol_window.json: VolLookbackBars = %v, не содержит 1 — нижний край нужен, чтобы кривая была видна целиком", window["VolLookbackBars"])
+	// Кривая окна растёт монотонно к верхнему краю (1 -> 1.222, 12 -> 1.329, 16 -> 1.343), поэтому
+	// верх доведён до 24; нижний край 1 нужен, чтобы кривая была видна целиком.
+	for _, v := range []float64{1, 24} {
+		if !containsValue(window["VolLookbackBars"], v) {
+			t.Errorf("cal_vol_window.json: VolLookbackBars = %v, не содержит %v — ось окна меряется целиком", window["VolLookbackBars"], v)
+		}
 	}
 
 	risk := banepGrid(t, "cal_risk.json")
-	// Строка 0.3 ВЫРЕЗАНА: реальный круг издержек съедает там 21.8% риска (черта 17%).
+	// Строка 0.3 ОСТАВЛЕНА, хотя круг издержек съедает там 21.8% риска: решение владельца держать
+	// сетку широкой сильнее каталожной черты 17%, а предупреждение живёт в _comment.
+	if !containsValue(risk["StopDailyATR"], 0.3) {
+		t.Errorf("cal_risk.json: StopDailyATR = %v, не содержит 0.3 — узкий край оси риска остаётся в сетке по решению владельца", risk["StopDailyATR"])
+	}
+	if !containsValue(risk["StopDailyATR"], 1.5) {
+		t.Errorf("cal_risk.json: StopDailyATR = %v, не содержит 1.5 — широкий край оси риска остаётся в сетке", risk["StopDailyATR"])
+	}
 	for _, v := range risk["StopDailyATR"] {
-		if v < 0.5 {
-			t.Errorf("cal_risk.json свипует StopDailyATR=%v: круг издержек 0.187%% съедает там 21.8%% риска — выше черты 17%%, по которой строку вырезали из domrf/ и elfv/", v)
-		}
-		if v > 1.3 {
-			t.Errorf("cal_risk.json свипует StopDailyATR=%v: при 1.5 стоп достаёт лишь 11.6%% дней и вытесняет убыток в RSI-выход", v)
+		if v <= 0 {
+			t.Errorf("cal_risk.json свипует StopDailyATR=%v: сделка без стопа запрещена ядром", v)
 		}
 	}
-	if !containsValue(risk["TPDailyATR"], 0.6) {
-		t.Errorf("cal_risk.json: TPDailyATR = %v, не содержит 0.6 — там максимум каждой строки", risk["TPDailyATR"])
-	}
-	for _, v := range risk["TPDailyATR"] {
-		if v > 1.5 {
-			t.Errorf("cal_risk.json свипует TPDailyATR=%v: колонки 1.5, 2.0 и 2.5 совпадают побайтово — цель шире 1.5 ATR на BANEP недостижима", v)
-		}
+	// Цель обязана накрывать самый широкий стоп, иначе контрольная точка каталога не выполняется.
+	if !containsValue(risk["TPDailyATR"], 2.5) {
+		t.Errorf("cal_risk.json: TPDailyATR = %v, не содержит 2.5 — цель меряется целиком и обязана быть шире самого широкого стопа", risk["TPDailyATR"])
 	}
 
 	exit := banepGrid(t, "cal_exit.json")
-	for _, v := range exit["RSIUpper"] {
-		if v > 80 {
-			t.Errorf("cal_exit.json свипует RSIUpper=%v: разворот полосы стоит внутри оси (70 -> 1.336, 75 -> 1.234, 80 -> 0.864)", v)
+	for _, v := range []float64{55, 85} {
+		if !containsValue(exit["RSIUpper"], v) {
+			t.Errorf("cal_exit.json: RSIUpper = %v, не содержит %v — полоса выхода меряется целиком", exit["RSIUpper"], v)
 		}
+	}
+
+	trail := banepGrid(t, "cal_trail.json")
+	if !containsValue(trail["TrailDailyATR"], 1.5) {
+		t.Errorf("cal_trail.json: TrailDailyATR = %v, не содержит 1.5 — ось трейла меряется целиком", trail["TrailDailyATR"])
+	}
+	if got := trail["UseRSIExit"]; !sameSet(got, 0, 1) {
+		t.Errorf("cal_trail.json: UseRSIExit = %v, want {0,1} — тема меряет, способен ли трейл заменить RSI-выход", got)
 	}
 }
