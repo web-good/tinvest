@@ -17,6 +17,7 @@ import (
 	rsipullbacksibn "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sibn"
 	rsipullbacksvav "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/svav"
 	rsipullbackwush "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/wush"
+	rsipullbackydex "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ydex"
 )
 
 // TestRSIPullbackBindingBuildsForTicker checks the wiring on a ticker whose package still
@@ -654,5 +655,43 @@ func TestRSIPullbackBSPBIsRegisteredAndCalibrated(t *testing.T) {
 	}
 	if got := b.Build(p).Ticker(); got != "BSPB" {
 		t.Fatalf("Ticker() = %q, want BSPB", got)
+	}
+}
+
+// TestRSIPullbackYDEXIsRegisteredAndCalibrated сторожит, что YDEX живёт в rsiPullbackRegistry
+// собственной записью (а не проваливается в generic-ветку) И возвращает собственный литерал, а не
+// baseline. Пакет strategy/ydex заведён 2026-08-25 ДО калибровки, и в тот же день сторожевой тест
+// TestRSIPullbackYDEXTracksBaseline, державший это состояние, заменён этим снимком.
+//
+// ВЕРДИКТ ПО ПЛАНКЕ: НЕ ВЗЯТА. Схема прогонов АДАПТИРОВАНА (окно укорочено из-за редомициляции
+// YNDX->YDEX: -months 25 -train-months 9 -test-months 4). Тема entry взяла критерий PF (pooled
+// OOS PF 1.916 на 52 сделках) при устойчивости ведущей оси RSILower 2 из 4 (по фолдам
+// 10/25/35/25); тема trend взяла критерий PF (pooled OOS PF 1.642 на 71 сделке) при устойчивости
+// ведущей оси EMASlow тоже 2 из 4 (200/50/200/70). ФОРМА ПРОВАЛА ПОВТОРЯЕТ ELFV — это второй такой
+// случай в каталоге: обе ключевые темы взяли PF и обе провалили устойчивость. Литерал собран
+// точечными прогонами поверх принятой зоны риска и перепроверен собственным walk-forward точки
+// (pooled OOS PF 3.014 на 77 сделках, все четыре фолда прибыльные, вырожденных нет; под
+// удвоенными издержками 2.167), но наличие литерала здесь означает решение владельца «литерал
+// ставится и при непройденной планке, если принятая точка не упирается в стоп-условие плана» (не
+// сработало ни по одному из трёх пунктов), а не подтверждённый протоколом edge — ровно как у
+// IVAT, SIBN, ELFV, DIAS и BSPB. Снимок литерала и обоснование каждого поля живут рядом с ним, в
+// strategy/ydex/ydex_test.go и в доке пакета.
+func TestRSIPullbackYDEXIsRegisteredAndCalibrated(t *testing.T) {
+	b, ok := rsiPullbackRegistry[rsipullbackydex.Ticker]
+	if !ok {
+		t.Fatal("YDEX отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
+	}
+	p, pok := b.DefaultParams().(core.Params)
+	if !pok {
+		t.Fatalf("YDEX: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
+	}
+	if p == core.DefaultParams() {
+		t.Fatal("YDEX вернул baseline: откалиброванный тикер обязан иметь собственный литерал")
+	}
+	if want := rsipullbackydex.DefaultParams(); p != want {
+		t.Fatalf("YDEX params = %+v, want литерал пакета %+v", p, want)
+	}
+	if got := b.Build(p).Ticker(); got != "YDEX" {
+		t.Fatalf("Ticker() = %q, want YDEX", got)
 	}
 }

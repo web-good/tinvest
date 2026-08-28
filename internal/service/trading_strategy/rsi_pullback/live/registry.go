@@ -18,6 +18,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/tbank"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ugld"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/wush"
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ydex"
 )
 
 // paramsByTicker maps every rsi_pullback ticker the runner knows to its params. The
@@ -30,9 +31,9 @@ import (
 // catalogue — one theme of nine above 1.5 pooled OOS PF (volume 1.674), entry 1.218 and trend
 // 1.044. Its accepted point does measure 2.823 pooled on 93 trades with all four folds above 1.89,
 // but that point was assembled by hand over the whole history and is not out-of-sample; read the
-// package doc, starting with what the day gate does there. In exchange NVTK is the most liquid
-// name here, the only one of the three added where execution risk does not stack on top of the
-// statistical one. LSNGP was added and calibrated 2026-08-14: its themes missed the bar declared
+// package doc, starting with what the day gate does there. In exchange NVTK is the most liquid of
+// the three added that day (RENI and LSNGP trade far thinner), the only one of the three where
+// execution risk does not stack on top of the statistical one. LSNGP was added and calibrated 2026-08-14: its themes missed the bar declared
 // before the runs — every one of the nine cleared 1.5 pooled OOS PF, a first for this catalogue,
 // but the leading axis was stable in only 2 folds of 4 on both key themes. Read its package doc,
 // starting with the regime note: BOTH protocol windows rise (+46.7% / +11.2%), so nothing about
@@ -117,10 +118,11 @@ import (
 // out-of-sample. Two properties are worth knowing before touching its numbers. Daily ATR(14)
 // medians 2.52% of price — the LOWEST in this catalogue — so the 0.7 ATR stop moves 1.76% of price
 // at Fraction=1, and a round of costs eats 5.7% of the risk instead of the 2-3% typical higher up
-// this map. Against that, liquidity is the BEST here by a wide margin: 519 mln RUB of median daily
-// turnover with a p10 of 206 mln, four times the screener's own 50 mln gate even on its tenth
-// percentile, so execution risk does not stack on top of the statistical one — unlike IVAT and
-// LENT. The risk that the runs cannot close is dividend gaps: SIBN pays regularly, the strategy
+// this map. Against that, liquidity is not a risk factor either: 519 mln RUB of median daily
+// turnover with a p10 of 206 mln — below T (4961), YDEX (2826), NVTK (2475) and GAZP (587) in this
+// universe, but still four times the screener's own 50 mln gate even on its tenth percentile — so
+// execution risk does not stack on top of the statistical one, unlike IVAT and LENT. The risk that
+// the runs cannot close is dividend gaps: SIBN pays regularly, the strategy
 // holds overnight, and five gaps in the window opened worse than -3% (the deepest -8.49%, or -4.69
 // daily ATR). On such a morning the stop is a wish, not a floor, and there is no parameter in the
 // strategy against it.
@@ -219,6 +221,30 @@ import (
 // 0.0165%, ELFV 0.039%; the rest of the catalogue is unmeasured), real round cost ≈0.106% against
 // the 0.1% modelled — and daily ATR(14) medians 2.53% of price, narrow but not the narrowest:
 // SIBN (2.52%) and DOMRF (2.02%) sit below it.
+//
+// YDEX was calibrated 2026-08-26 on an ADAPTED schedule, the same shape as IVAT (25/9/4), and is
+// the seventeenth entry here. The adaptation is forced by a corporate event, not by short IPO
+// history: YNDX (Yandex N.V.) trading was halted 2024-06-14 and the redomiciled YDEX (МКПАО
+// «Яндекс») started trading only 2024-07-24 — a 40-day hole in the 30-minute series with a price
+// jump 4007 -> 4542 — so the calculation window covers only the life of the current security,
+// 2024-07-25 … 2026-08-25 (25.0 months), and the half of the old window that belonged to the
+// foreign-domiciled paper is dropped whole rather than reweighted. The theme procedure was
+// CANONICAL: core defaults sat inside the working zone, so all ten themes ran over them with no
+// anchor, unlike BSPB. It MISSES the declared bar — say plainly: NOT TAKEN — in the same shape
+// ELFV showed and the second time this catalogue has seen it: BOTH key themes clear profit factor
+// and BOTH fail only the stability half. entry measures pooled OOS PF 1.916 on 52 trades with its
+// leading axis RSILower stable in 2 folds of 4 (10/25/35/25); trend measures pooled OOS PF 1.642
+// on 71 trades with EMASlow stable in 2 folds of 4 (200/50/200/70). The control baseline on the
+// same 25-month window is the second strongest of the TEN recorded in the catalogue, after DIAS
+// (153 trades, PF 1.822): core.DefaultParams() measures 108 trades, PF 1.778, ahead of LSNGP
+// 1.554, ELFV 1.546, IVAT 1.432, LENT 1.417, SVAV 1.368, BSPB 1.114, SIBN 1.027 and NVTK 0.984.
+// The accepted point measures
+// pooled OOS PF 3.014 on 77 trades with all FOUR folds profitable (2.915/17, 1.849/20, 4.920/26,
+// 2.765/14); under doubled costs (-commission 0.001) it still measures PF 2.167, four-for-four
+// above one. Liquidity removes the execution risk carried by ELFV, DIAS and LENT entirely: median
+// daily turnover is 2826 mln RUB with only 0.2% of days shorter than 20 bars. What remains instead
+// is a history risk new in shape rather than degree: the security has traded under this ticker for
+// under two years, and its record holds almost no corporate events to test against.
 var paramsByTicker = map[string]core.Params{
 	ugld.Ticker:  ugld.DefaultParams(),
 	tbank.Ticker: tbank.DefaultParams(),
@@ -236,6 +262,7 @@ var paramsByTicker = map[string]core.Params{
 	elfv.Ticker:  elfv.DefaultParams(),
 	dias.Ticker:  dias.DefaultParams(),
 	bspb.Ticker:  bspb.DefaultParams(),
+	ydex.Ticker:  ydex.DefaultParams(),
 }
 
 // ParamsFor returns the params for a known ticker, ok=false otherwise.

@@ -48,6 +48,11 @@ Go-based trading/investment application built around the Tinkoff Invest gRPC API
 - Notifications go to forum topics of a Telegram supergroup (`TELEGRAM_GROUP_CHAT_ID`, `TELEGRAM_TOPIC_*`); portfolio reports are pulled on demand via bot commands (`/bonds_portfolio`, `/yield`, `/bonds_screener`, `/dividend_screener`); push-дайджест новостей рынка приходит в тему «Новости» раз в час (`TELEGRAM_TOPIC_NEWS`, источник `NEWS_FEED_URL`, дефолт — RSS smart-lab); см. `docs/superpowers/specs/2026-07-15-news-digest-design.md` — see `docs/superpowers/specs/2026-07-13-telegram-topic-routing-design.md`.
 - Все записи уровня ERROR дублируются сообщением в тему «General» Telegram-группы (`internal/service/notification/errorlog`, подключается шагом `initErrorLogSink` в `internal/app`). В stdout поток логов не меняется; в Telegram действуют дедуп по тексту сообщения (5 минут), лимит 10 сообщений в минуту и минутная сводка подавленного. Спека: `docs/superpowers/specs/2026-08-11-error-log-telegram-design.md`.
 
+## Documentation rules
+- `docs/rsi_pullback/` (`strategy.md`, `live.md`, `screener.md`) describes **mechanics only**: strategy logic, tunable parameters, the calibration procedure as a procedure, the live runner and its configuration, and how the screener works. It must NOT contain per-ticker calibration write-ups, run results, profit factors, onboarding dates, or per-ticker risk registers.
+- Calibrating a new ticker does not mean rewriting these docs. The per-ticker write-up belongs in the doc comment of `internal/service/trading_strategy/rsi_pullback/strategy/<ticker>/` and in the `_comment` fields of `data/params/rsi_pullback/<ticker>/`.
+- A measurement on a specific ticker is acceptable in these docs only as a one-line illustration of a mechanism, never as a record of a calibration run.
+
 ## Configuration
 Loaded via `heetch/confita` from environment variables and/or files. See `internal/config/config.go` for the full schema.
 
