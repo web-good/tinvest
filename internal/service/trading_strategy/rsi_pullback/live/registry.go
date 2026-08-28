@@ -1,6 +1,7 @@
 package live
 
 import (
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/banep"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/bspb"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/dias"
@@ -263,6 +264,7 @@ var paramsByTicker = map[string]core.Params{
 	dias.Ticker:  dias.DefaultParams(),
 	bspb.Ticker:  bspb.DefaultParams(),
 	ydex.Ticker:  ydex.DefaultParams(),
+	banep.Ticker: banep.DefaultParams(),
 }
 
 // ParamsFor returns the params for a known ticker, ok=false otherwise.
