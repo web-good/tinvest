@@ -1,0 +1,11 @@
+{
+  "_comment": "data/params/rsi_pullback/astr/cal_exit.json — тема exit для ASTR, 7 прогонов (RSIUpper 7). Тема меряет уровень RSI-выхода отдельной осью: cal_entry.json свипует его тоже, но там он третья ось при 378 комбинациях и его собственный рельеф не читается. ТОЧЕЧНЫЙ РЯД: 55 -> 182 сделки/PF 1.006, 60 -> 175/1.242, 65 -> 165/1.098, 70 (дефолт) -> 158/1.093, 75 -> 155/1.086, 80 -> 153/1.177, 85 -> 149/1.088; ВЫКЛЮЧЕН -> 147/1.003. Кривая ДВУГОРБАЯ без внятного максимума — ось шумит; при этом сам выход несёт работу: без него PF падает до 1.003. Ось меряется целиком с обоих краёв, мёртвой зоны на ASTR нет (в отличие от BANEP, где всё выше 75 давало ниже единицы). Команда: go run ./cmd/backtest -ticker ASTR -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/astr/cal_exit.json -out ./reports/ASTR_exit -months 34 -train-months 10 -test-months 6 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-08-30: ",
+  "phases": [
+    {
+      "name": "exit",
+      "grid": {
+        "RSIUpper": [55, 60, 65, 70, 75, 80, 85]
+      }
+    }
+  ]
+}

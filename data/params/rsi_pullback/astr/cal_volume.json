@@ -1,0 +1,13 @@
+{
+  "_comment": "data/params/rsi_pullback/astr/cal_volume.json — тема volume для ASTR, 35 прогонов (VolMult 7 x VolBaseDays 5 при UseVolume 1). Тема меряет слот-базовый объёмный гейт. ГЕЙТ ПЛАТНЫЙ ПО ВСЕЙ ОСИ МНОЖИТЕЛЯ (VolBaseDays 14, VolLookbackBars 3): выключен -> 158 сделок/PF 1.093, 1.0 -> 129/0.919, 1.2 -> 123/0.941, 1.5 -> 110/0.982, 2.0 -> 99/1.058, 2.5 -> 88/0.963, 3.0 -> 77/0.913, 4.0 -> 62/0.830. НО ОСЬ БАЗЫ НА ASTR ЗНАЧИМА, и это редкость в каталоге: при VolMult 1.5 база 3 дня -> 124 сделки/1.343, 5 -> 118/1.263, 10 -> 117/1.132, 14 -> 110/0.982. Разброс 0.36 PF по базе — это уже рельеф, а не шум (на BANEP разброс базы был 0.17 и признан шумом). Поэтому оба края базы обязательны: 3 (максимум замера) и 20 (проверка, продолжается ли падение). ВНИМАНИЕ НА ДЛИТЕЛЬНОСТЬ: с включённым гейтом окно прогрева растёт до 403 баров при VolBaseDays 5 и до 739 при 10 — эта тема идёт примерно вдвое медленнее прочих. Команда: go run ./cmd/backtest -ticker ASTR -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/astr/cal_volume.json -out ./reports/ASTR_volume -months 34 -train-months 10 -test-months 6 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-08-30: ",
+  "phases": [
+    {
+      "name": "volume",
+      "grid": {
+        "UseVolume": [1],
+        "VolMult": [1.0, 1.2, 1.5, 2.0, 2.5, 3.0, 4.0],
+        "VolBaseDays": [3, 5, 10, 14, 20]
+      }
+    }
+  ]
+}

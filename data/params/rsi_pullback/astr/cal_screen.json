@@ -1,0 +1,12 @@
+{
+  "_comment": "data/params/rsi_pullback/astr/cal_screen.json — тема screen для ASTR, 4 прогона (UseDayATRGate 2 x UseVolume 2). Тема меряет цену каждого из двух опциональных гейтов в сделках и в PF поверх дефолтов ядра. Единственная тема каталога, которая запускается с -min-trades 1: при штатных 20 отфильтруются ровно те строки, которые она меряет. ЗАМЕРЫ ПОЛНОЙ ИСТОРИИ (34 месяца, без walk-forward): день включён + объём выключен (дефолт) — 158 сделок/PF 1.093; день ВЫКЛЮЧЕН — 440 сделок/0.944, то есть дневной гейт вырезает 64% сигналов и разворачивает знак edge; обе гейта выключены (день off, объём on) — 258/0.930. Дневной гейт на ASTR несёт весь edge. Команда: go run ./cmd/backtest -ticker ASTR -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/astr/cal_screen.json -out ./reports/ASTR_screen -months 34 -train-months 10 -test-months 6 -min-trades 1 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-08-30: ",
+  "phases": [
+    {
+      "name": "screen",
+      "grid": {
+        "UseDayATRGate": [0, 1],
+        "UseVolume": [0, 1]
+      }
+    }
+  ]
+}
