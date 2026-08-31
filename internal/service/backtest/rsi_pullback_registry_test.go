@@ -3,6 +3,7 @@ package backtest
 import (
 	"testing"
 
+	rsipullbackastr "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/astr"
 	rsipullbackbanep "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/banep"
 	rsipullbackbspb "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/bspb"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
@@ -729,5 +730,25 @@ func TestRSIPullbackBANEPIsRegisteredAndCalibrated(t *testing.T) {
 	}
 	if got := b.Build(p).Ticker(); got != "BANEP" {
 		t.Fatalf("Ticker() = %q, want BANEP", got)
+	}
+}
+
+// TestRSIPullbackASTRTracksBaseline сторожит ЧЕСТНОЕ состояние: ASTR заведён в реестр 2026-08-30
+// ДО калибровки и обязан отдавать ровно core.DefaultParams(). Тест заменяется снимком литерала в
+// Task 12 плана 2026-08-30-astr-rsi-pullback-prep.md.
+func TestRSIPullbackASTRTracksBaseline(t *testing.T) {
+	b, ok := rsiPullbackRegistry[rsipullbackastr.Ticker]
+	if !ok {
+		t.Fatal("ASTR отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
+	}
+	p, pok := b.DefaultParams().(core.Params)
+	if !pok {
+		t.Fatalf("ASTR: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
+	}
+	if want := core.DefaultParams(); p != want {
+		t.Fatalf("ASTR ещё не откалиброван:\n got: %+v\nwant: %+v", p, want)
+	}
+	if got := b.Build(p).Ticker(); got != "ASTR" {
+		t.Fatalf("Ticker() = %q, want ASTR", got)
 	}
 }
