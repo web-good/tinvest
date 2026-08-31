@@ -733,10 +733,22 @@ func TestRSIPullbackBANEPIsRegisteredAndCalibrated(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackASTRTracksBaseline сторожит ЧЕСТНОЕ состояние: ASTR заведён в реестр 2026-08-30
-// ДО калибровки и обязан отдавать ровно core.DefaultParams(). Тест заменяется снимком литерала в
-// Task 12 плана 2026-08-30-astr-rsi-pullback-prep.md.
-func TestRSIPullbackASTRTracksBaseline(t *testing.T) {
+// TestRSIPullbackASTRIsRegisteredAndCalibrated сторожит, что ASTR живёт в rsiPullbackRegistry
+// собственной записью (а не проваливается в generic-ветку) И возвращает собственный литерал, а не
+// baseline. Пакет strategy/astr заведён 2026-08-30 до калибровки, и 2026-08-31 сторожевой тест
+// TestRSIPullbackASTRTracksBaseline, державший это состояние, заменён этим снимком.
+//
+// ВЕРДИКТ ПО ПЛАНКЕ: НЕ ВЗЯТА, обеими ключевыми темами. Тема entry: pooled OOS PF 1.231 на
+// 70 сделках (требуется 1.5), ведущая ось RSILower выбрана как 25/25/30/10 — два фолда из четырёх,
+// критерий устойчивости тоже не взят. Тема trend: 1.141 на 93 сделках — критерий PF провален, но
+// критерий устойчивости ВЗЯТ (EMASlow/EMAFast — 30/5 в трёх фолдах из четырёх). Принятая точка при
+// этом перепроверена собственным walk-forward (pooled OOS PF 2.740 на 91 сделке, все четыре фолда
+// прибыльны, под удвоенными издержками 2.095) и не упирается ни в один из трёх пунктов
+// стоп-условия. Литерал стоит по решению владельца «литерал ставится и при непройденной планке,
+// если принятая точка не упирается в стоп-условие» — ровно как у IVAT, SIBN, ELFV, DIAS, BSPB,
+// YDEX и BANEP. Сетки этого тикера по отдельному решению владельца держатся МАКСИМАЛЬНО ШИРОКИМИ;
+// разбор точки и капкана широкого стопа — в доке пакета strategy/astr.
+func TestRSIPullbackASTRIsRegisteredAndCalibrated(t *testing.T) {
 	b, ok := rsiPullbackRegistry[rsipullbackastr.Ticker]
 	if !ok {
 		t.Fatal("ASTR отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
@@ -745,8 +757,11 @@ func TestRSIPullbackASTRTracksBaseline(t *testing.T) {
 	if !pok {
 		t.Fatalf("ASTR: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
 	}
-	if want := core.DefaultParams(); p != want {
-		t.Fatalf("ASTR ещё не откалиброван:\n got: %+v\nwant: %+v", p, want)
+	if p == core.DefaultParams() {
+		t.Fatal("ASTR вернул baseline: откалиброванный тикер обязан иметь собственный литерал")
+	}
+	if want := rsipullbackastr.DefaultParams(); p != want {
+		t.Fatalf("ASTR params = %+v, want литерал пакета %+v", p, want)
 	}
 	if got := b.Build(p).Ticker(); got != "ASTR" {
 		t.Fatalf("Ticker() = %q, want ASTR", got)
