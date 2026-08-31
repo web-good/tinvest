@@ -1,6 +1,7 @@
 package live
 
 import (
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/astr"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/banep"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/bspb"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
@@ -246,6 +247,32 @@ import (
 // daily turnover is 2826 mln RUB with only 0.2% of days shorter than 20 bars. What remains instead
 // is a history risk new in shape rather than degree: the security has traded under this ticker for
 // under two years, and its record holds almost no corporate events to test against.
+//
+// ASTR was calibrated 2026-08-31 on a schedule adapted twice. The instrument IPO'd 2023-10-13 and
+// has only 34.5 months of history, so the standard §8 protocol (36/12/6) cannot produce four
+// folds; the first attempt, -months 34 -train-months 10 -test-months 6, was itself broken by
+// month-end overflow in cmd/backtest's AddDate arithmetic and a live run on the 31st collapsed it
+// to THREE folds, degenerating the plan's stability rule. The corrected schedule is -months 34
+// -train-months 9 -test-months 6 — four folds with a month of slack, no longer date-dependent. The
+// owner kept ASTR's grids maximally wide, the same decision as BANEP, at a declared price: a wider
+// axis raises the overfitting risk on the shortened nine-month training window, so per-fold
+// stability is read more strictly. It MISSES the declared bar: entry measures pooled OOS PF 1.231
+// on 70 trades, failing both PF and stability (leading axis RSILower stable in only 2 folds of 4);
+// trend measures 1.141 on 93 trades, failing PF but clearing stability (EMASlow/EMAFast stable in
+// 3 folds of 4). The ticker enters production anyway under the standing rule, the bar failure
+// recorded plainly rather than softened. The accepted point measures pooled OOS PF 2.740 on 91
+// trades, inflated by a disclosed fold-3 outlier (18.197 on 18 trades, below the 20-trade
+// threshold); it departs from core defaults on exactly three fields — EMAFast 5, EMASlow 30,
+// StopDailyATR 1.3 — the only ones three folds of four agreed on. The control baseline (34 months,
+// core defaults) measures PF 1.093, second-to-last in the catalogue ahead of only SIBN and NVTK;
+// all ten themes ran canonically, with no anchor. Liquidity removes execution risk (turnover p10 85
+// mln RUB against the universe's 50 mln gate; only 1.5% of days shorter than 20 bars) and dividend
+// risk is effectively absent — exactly one gap worse than -3% in 34 months, and it was a
+// market-wide drop, not an ex-date, so unlike BANEP no ex-date calendar is needed. What remains is
+// the heaviest regime in this catalogue (window -57.7%, max drawdown -82.9%, one growing half-year
+// of six) and a wide-stop trap: at StopDailyATR 1.3 the SL-exit share is 1.4% (2 of 146) against
+// 27.2% (43 of 158) at the default 0.5, trade count almost unchanged — most of the stop's PF gain
+// is the loss escaping into the RSI exit, not real protection.
 var paramsByTicker = map[string]core.Params{
 	ugld.Ticker:  ugld.DefaultParams(),
 	tbank.Ticker: tbank.DefaultParams(),
@@ -265,6 +292,7 @@ var paramsByTicker = map[string]core.Params{
 	bspb.Ticker:  bspb.DefaultParams(),
 	ydex.Ticker:  ydex.DefaultParams(),
 	banep.Ticker: banep.DefaultParams(),
+	astr.Ticker:  astr.DefaultParams(),
 }
 
 // ParamsFor returns the params for a known ticker, ok=false otherwise.
