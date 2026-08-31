@@ -9,7 +9,8 @@
 **Architecture:** Процедура тем **каноническая**: все десять тем идут поверх дефолтов ядра,
 поэтому каталог сеток создаётся целиком одной задачей, якоря нет, поздних файлов нет. Два
 отступления, и оба в данных, а не в процедуре: расчётное окно — 34 месяца с IPO бумаги, схема
-прогонов адаптированная **34/10/6**; сетки держатся **максимально широкими** по решению владельца,
+прогонов адаптированная **34/9/6** (исправлена 2026-08-31 с изначальной 34/10/6, см. Global
+Constraints); сетки держатся **максимально широкими** по решению владельца,
 поэтому сторожевой тест осей запрещает урезать ось, а не расширять её.
 
 **Tech Stack:** Go 1.25, `cmd/backtest` (rolling walk-forward), `cmd/pullparity` (сверка живой
@@ -19,10 +20,24 @@
 
 ## Global Constraints
 
-- **Схема прогонов — адаптированная:** `-months 34 -train-months 10 -test-months 6 -min-trades 20
-  -metric profit_factor`, четыре фолда встык (10 + 6×4 = 34). У темы `screen` — `-min-trades 1`.
-  Пропуск любого из трёх флагов окна даёт другую схему и несравнимые числа. Расчётное окно —
-  **2023-10-29 … 2026-08-29**.
+- **Схема прогонов — адаптированная:** `-months 34 -train-months 9 -test-months 6 -min-trades 20
+  -metric profit_factor`, четыре фолда встык (9 + 6×4 = 33, запас месяц). У темы `screen` —
+  `-min-trades 1`. Пропуск любого из трёх флагов окна даёт другую схему и несравнимые числа.
+  Расчётное окно — **2023-10-29 … 2026-08-29**.
+- **ПОПРАВКА 2026-08-31:** изначальная схема была `-train-months 10` (34/10/6, встык без запаса:
+  10 + 6×4 = 34). Живой прогон темы `screen` на дате 31-го числа дал ТРИ фолда вместо четырёх —
+  `cmd/backtest/main.go` считает `from := time.Now().AddDate(0, -months, 0)`, а
+  `internal/service/backtest/walkforward.go` строит фолды через `AddDate` и отбрасывает фолд, чей
+  правый край выходит за `to`; переполнение конца месяца (31 апреля → 1 мая, 31 февраля → 3 марта)
+  сдвинуло правый край четвёртого фолда за `to`, и он выпал (отчёт `ASTR_screen/..._walkforward.md`,
+  «Фолдов: 3»). Три фолда вырождают и критерий устойчивости «≥3 фолда из 4», и правило сборки точки
+  «≥3 фолда из 4» в «3 из 3» — именно то вырождение, из-за которого спека отвергла канон 36/12/6.
+  Схема жертвует ДЛИНОЙ обучающего окна, а не числом фолдов (это приоритет самого плана): обучающее
+  окно укорочено на месяц до 34/9/6, тестовое и общее окно не менялись. Под 34/9/6 умещается ровно
+  четыре фолда с запасом в месяц независимо от даты запуска. Отвергнутые альтернативы: `-months 35`
+  съедает 16-дневный запас на прогрев дневного ATR; `-test-months 5` выкидывает последние четыре
+  месяца окна из OOS; принять три фолда значило бы пересмотреть планку после начала прогонов, что
+  план запрещает явно.
 - **`-refresh` НЕ запускать ни на одном шаге.** Кэш перезалит 2026-08-29 до первого замера:
   `ASTR_Minutes30.json` — 34 551 бар (2023-10-13 … 2026-08-28), в окне 34 353, из них 24 287
   будних; `ASTR_Day1.json` — 848 свечей (2023-10-13 … 2026-08-27), в окне 837, из них 719 будних.
@@ -695,7 +710,7 @@ git commit -m "feat(rsi_pullback): пакет и реестр ASTR в состо
 ```bash
 go run ./cmd/backtest -ticker ASTR -strategy rsi_pullback -interval Minutes30 \
   -calibrate data/params/rsi_pullback/astr/cal_screen.json -out ./reports/ASTR_screen \
-  -months 34 -train-months 10 -test-months 6 -min-trades 1 -metric profit_factor
+  -months 34 -train-months 9 -test-months 6 -min-trades 1 -metric profit_factor
 ```
 
 - [ ] **Step 2: Прочитать отчёт**
@@ -736,7 +751,7 @@ git commit -m "feat(rsi_pullback): ASTR, тема screen прогнана"
 ```bash
 go run ./cmd/backtest -ticker ASTR -strategy rsi_pullback -interval Minutes30 \
   -calibrate data/params/rsi_pullback/astr/cal_entry.json -out ./reports/ASTR_entry \
-  -months 34 -train-months 10 -test-months 6 -min-trades 20 -metric profit_factor
+  -months 34 -train-months 9 -test-months 6 -min-trades 20 -metric profit_factor
 ```
 
 - [ ] **Step 2: Выписать числа планки**
@@ -805,7 +820,7 @@ git commit -m "feat(rsi_pullback): ASTR, тема entry прогнана"
 ```bash
 go run ./cmd/backtest -ticker ASTR -strategy rsi_pullback -interval Minutes30 \
   -calibrate data/params/rsi_pullback/astr/cal_trend.json -out ./reports/ASTR_trend \
-  -months 34 -train-months 10 -test-months 6 -min-trades 20 -metric profit_factor
+  -months 34 -train-months 9 -test-months 6 -min-trades 20 -metric profit_factor
 ```
 
 - [ ] **Step 2: Выписать числа планки**
@@ -852,11 +867,11 @@ git commit -m "feat(rsi_pullback): ASTR, тема trend прогнана"
 ```bash
 go run ./cmd/backtest -ticker ASTR -strategy rsi_pullback -interval Minutes30 \
   -calibrate data/params/rsi_pullback/astr/cal_day.json -out ./reports/ASTR_day \
-  -months 34 -train-months 10 -test-months 6 -min-trades 20 -metric profit_factor
+  -months 34 -train-months 9 -test-months 6 -min-trades 20 -metric profit_factor
 
 go run ./cmd/backtest -ticker ASTR -strategy rsi_pullback -interval Minutes30 \
   -calibrate data/params/rsi_pullback/astr/cal_day_spent.json -out ./reports/ASTR_day_spent \
-  -months 34 -train-months 10 -test-months 6 -min-trades 20 -metric profit_factor
+  -months 34 -train-months 9 -test-months 6 -min-trades 20 -metric profit_factor
 ```
 
 - [ ] **Step 2: Выписать числа обеих тем**
@@ -906,7 +921,7 @@ git commit -m "feat(rsi_pullback): ASTR, темы day и day_spent прогна�
 ```bash
 go run ./cmd/backtest -ticker ASTR -strategy rsi_pullback -interval Minutes30 \
   -calibrate data/params/rsi_pullback/astr/cal_volume.json -out ./reports/ASTR_volume \
-  -months 34 -train-months 10 -test-months 6 -min-trades 20 -metric profit_factor
+  -months 34 -train-months 9 -test-months 6 -min-trades 20 -metric profit_factor
 ```
 
 Тема идёт примерно вдвое дольше прочих: с включённым гейтом окно прогрева растёт до 403 баров при
@@ -958,7 +973,7 @@ git commit -m "feat(rsi_pullback): ASTR, тема volume прогнана"
 ```bash
 go run ./cmd/backtest -ticker ASTR -strategy rsi_pullback -interval Minutes30 \
   -calibrate data/params/rsi_pullback/astr/cal_vol_window.json -out ./reports/ASTR_vol_window \
-  -months 34 -train-months 10 -test-months 6 -min-trades 20 -metric profit_factor
+  -months 34 -train-months 9 -test-months 6 -min-trades 20 -metric profit_factor
 ```
 
 - [ ] **Step 2: Выписать числа**
@@ -1006,7 +1021,7 @@ git commit -m "feat(rsi_pullback): ASTR, тема vol_window прогнана"
 ```bash
 go run ./cmd/backtest -ticker ASTR -strategy rsi_pullback -interval Minutes30 \
   -calibrate data/params/rsi_pullback/astr/cal_risk.json -out ./reports/ASTR_risk \
-  -months 34 -train-months 10 -test-months 6 -min-trades 20 -metric profit_factor
+  -months 34 -train-months 9 -test-months 6 -min-trades 20 -metric profit_factor
 ```
 
 - [ ] **Step 2: Выписать числа**
@@ -1071,11 +1086,11 @@ git commit -m "feat(rsi_pullback): ASTR, тема risk прогнана и пр�
 ```bash
 go run ./cmd/backtest -ticker ASTR -strategy rsi_pullback -interval Minutes30 \
   -calibrate data/params/rsi_pullback/astr/cal_exit.json -out ./reports/ASTR_exit \
-  -months 34 -train-months 10 -test-months 6 -min-trades 20 -metric profit_factor
+  -months 34 -train-months 9 -test-months 6 -min-trades 20 -metric profit_factor
 
 go run ./cmd/backtest -ticker ASTR -strategy rsi_pullback -interval Minutes30 \
   -calibrate data/params/rsi_pullback/astr/cal_trail.json -out ./reports/ASTR_trail \
-  -months 34 -train-months 10 -test-months 6 -min-trades 20 -metric profit_factor
+  -months 34 -train-months 9 -test-months 6 -min-trades 20 -metric profit_factor
 ```
 
 - [ ] **Step 2: Выписать числа обеих тем**
@@ -1139,14 +1154,14 @@ git commit -m "feat(rsi_pullback): ASTR, темы exit и trail прогнаны
 образцу `data/params/rsi_pullback/banep/plateau_point.json`: собственный путь файла; откуда взято
 каждое поле и сколько фолдов за него высказались; оговорка, что точка собрана человеком, видевшим
 всю историю, и потому её числа нельзя сравнивать с pooled OOS тем; вердикт по планке пункт за
-пунктом; замеры Steps 3–7; полная команда запуска со схемой 34/10/6.
+пунктом; замеры Steps 3–7; полная команда запуска со схемой 34/9/6.
 
 - [ ] **Step 3: Прогнать точку тем же walk-forward**
 
 ```bash
 go run ./cmd/backtest -ticker ASTR -strategy rsi_pullback -interval Minutes30 \
   -calibrate data/params/rsi_pullback/astr/plateau_point.json -out ./reports/ASTR_point_oos \
-  -months 34 -train-months 10 -test-months 6 -min-trades 20 -metric profit_factor
+  -months 34 -train-months 9 -test-months 6 -min-trades 20 -metric profit_factor
 ```
 
 Выписать pooled OOS PF, сделки пула, PF и сделки каждого из четырёх фолдов.
@@ -1163,7 +1178,7 @@ go run ./cmd/backtest -ticker ASTR -strategy rsi_pullback -interval Minutes30 \
 ```bash
 go run ./cmd/backtest -ticker ASTR -strategy rsi_pullback -interval Minutes30 \
   -calibrate data/params/rsi_pullback/astr/plateau_point.json -out ./reports/ASTR_point_comm \
-  -months 34 -train-months 10 -test-months 6 -min-trades 20 -metric profit_factor -commission 0.001
+  -months 34 -train-months 9 -test-months 6 -min-trades 20 -metric profit_factor -commission 0.001
 ```
 
 PF < 1.0 → **СТОП**. Записать процент потери PF. Для ASTR это рабочий фильтр, а не формальность:
