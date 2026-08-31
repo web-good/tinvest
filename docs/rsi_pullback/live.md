@@ -203,7 +203,7 @@ go run ./cmd/pullparity -tickers XXXX,YYYY -months 24
 |---|---|---|
 | `RSI_PULLBACK_ACCOUNT_ID` | — | брокерский счёт раннера; пусто = воркер не поднимается |
 | `RSI_PULLBACK_TOKEN` | — | токен этого счёта; отдельный gRPC-клиент; пусто = воркер не поднимается |
-| `RSI_PULLBACK_TICKERS` | `UGLD,T,GAZP,DOMRF,FESH,WUSH,LENT,RENI,NVTK,LSNGP,IVAT,SVAV,SIBN,ELFV,DIAS,BSPB,YDEX` | вселенная; тикер вне реестра даёт алерт и пропуск |
+| `RSI_PULLBACK_TICKERS` | `UGLD,T,GAZP,DOMRF,FESH,WUSH,LENT,RENI,NVTK,LSNGP,IVAT,SVAV,SIBN,ELFV,DIAS,BSPB,YDEX,BANEP,ASTR` | вселенная; тикер вне реестра даёт алерт и пропуск |
 | `RSI_PULLBACK_BUY_PCT` | `5` | доля **полной стоимости счёта** (кэш + позиции) на сделку, затем ограничение доступным кэшем |
 | `RSI_PULLBACK_TRADE_ENABLED` | `false` | выключен — ордера и стоп-заявки не уходят на биржу (dry-run) |
 | `RSI_PULLBACK_NOTIFY_ENABLED` | `false` | уведомления в Telegram |
