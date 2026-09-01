@@ -638,7 +638,7 @@ Expected: PASS оба теста.
 	rsipullbacksngsp "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sngsp"
 ```
 
-и строку в карту реестра, следующей за `rsipullbackastr`:
+и строку в карту реестра на алфавитную позицию, между `rsipullbacksibn` и `rsipullbacksvav`:
 
 ```go
 	rsipullbacksngsp.Ticker: rsiPullbackBindingFor(rsipullbacksngsp.Ticker, rsipullbacksngsp.DefaultParams),
