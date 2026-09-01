@@ -16,6 +16,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/nvtk"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/reni"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sibn"
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sngsp"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/svav"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/tbank"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ugld"
@@ -273,6 +274,26 @@ import (
 // of six) and a wide-stop trap: at StopDailyATR 1.3 the SL-exit share is 1.4% (2 of 146) against
 // 27.2% (43 of 158) at the default 0.5, trade count almost unchanged — most of the stop's PF gain
 // is the loss escaping into the RSI exit, not real protection.
+//
+// SNGSP was calibrated 2026-09-01 on the canonical 36/12/6 schedule — the first of the last six
+// tickers that needed no adaptation, and the owner kept its grids maximally wide anyway, the same
+// decision as BANEP and ASTR. All ten themes ran canonically, no anchor. Both key themes MISS the
+// declared bar: entry measures pooled OOS PF 1.216 on 69 trades, failing both PF and stability
+// (leading axis RSILower stable at only 20/30/30/25 across folds); trend measures 1.415 on 151
+// trades, failing PF but clearing stability (EMASlow stable at 50 in 3 folds of 4). The ticker
+// enters production anyway under the standing rule. The accepted point measures pooled OOS PF 1.363
+// on 69 trades (win rate 75.36%): folds 1.718/17, 2.870/11 and 2.095/23 are profitable, but fold 4 —
+// the most recent — is not (0.597/18). Under doubled costs the point measures PF 1.007 on the same
+// 69 trades: a 0.7% margin above break-even, the thinnest in the catalogue. The control baseline
+// (core defaults, 183 trades) measures PF 1.535, fourth in the catalogue after YDEX 1.778, LSNGP
+// 1.554 and ELFV 1.546. Liquidity and execution risk are both removed: SNGSP has the best turnover
+// in the catalogue (median 1299 mln RUB, only 0.8% of days shorter than 20 bars) and the cheapest
+// price-step share (0.0096% of price). What remains is a dividend risk, not a regime risk — the
+// regime is the softest in the catalogue and all six half-years of the baseline are profitable — but
+// the July ex-date gap runs to -14.06% (2025) and -9.86% (2024), about 5.4 daily ATR, wider than any
+// stop or trail the point carries; and a wide-stop trap that the point escapes only because its
+// trail (0.5 daily ATR) already sits at the stop level from entry, making StopDailyATR inert at any
+// value at or above 0.5.
 var paramsByTicker = map[string]core.Params{
 	ugld.Ticker:  ugld.DefaultParams(),
 	tbank.Ticker: tbank.DefaultParams(),
@@ -293,6 +314,7 @@ var paramsByTicker = map[string]core.Params{
 	ydex.Ticker:  ydex.DefaultParams(),
 	banep.Ticker: banep.DefaultParams(),
 	astr.Ticker:  astr.DefaultParams(),
+	sngsp.Ticker: sngsp.DefaultParams(),
 }
 
 // ParamsFor returns the params for a known ticker, ok=false otherwise.
