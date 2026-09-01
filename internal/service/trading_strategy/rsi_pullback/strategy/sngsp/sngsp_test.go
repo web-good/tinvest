@@ -6,13 +6,40 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 )
 
-// TestParamsTrackTheBaselineUntilCalibrated фиксирует ЧЕСТНОЕ состояние: калибровка SNGSP ещё не
-// проводилась, поэтому пакет обязан возвращать ровно baseline ядра. Тест держит это состояние до
-// Task 12, где его заменяет снимок литерала. Пока он стоит, ни одна правка не может тихо
-// подсунуть в прод «почти откалиброванные» параметры.
-func TestParamsTrackTheBaselineUntilCalibrated(t *testing.T) {
-	if got, want := DefaultParams(), core.DefaultParams(); got != want {
-		t.Fatalf("SNGSP ещё не откалиброван, параметры обязаны совпадать с baseline:\n got: %+v\nwant: %+v", got, want)
+// TestParamsAreTheCalibratedSnapshot прибивает принятый 2026-09-01 литерал. Тест падает и на
+// молчаливом дрейфе полей, и на откате к core.DefaultParams(): связь с baseline разорвана
+// осознанно, и любое её восстановление обязано быть видимым в диффе.
+func TestParamsAreTheCalibratedSnapshot(t *testing.T) {
+	want := core.Params{
+		RSIPeriod:       4,
+		RSILower:        30,
+		RSIUpper:        70,
+		EMAFast:         20,
+		EMASlow:         50,
+		DailyATRPeriod:  14,
+		UseDayATRGate:   1,
+		FreshDayATR:     0.2,
+		SpentDayATR:     0.7,
+		StopDailyATR:    0.5,
+		TPDailyATR:      0.3,
+		UseVolume:       1,
+		VolBaseDays:     14,
+		VolLookbackBars: 3,
+		VolMult:         2.5,
+		UseRSIExit:      1,
+		UseTrail:        1,
+		TrailDailyATR:   0.5,
+	}
+	if got := DefaultParams(); got != want {
+		t.Fatalf("литерал SNGSP разошёлся со снимком:\n got: %+v\nwant: %+v", got, want)
+	}
+}
+
+// TestParamsDifferFromTheCoreBaseline сторожит сам факт калибровки: если литерал вернулся к
+// дефолтам ядра, значит правка откатила работу целиком, и это не должно проходить молча.
+func TestParamsDifferFromTheCoreBaseline(t *testing.T) {
+	if DefaultParams() == core.DefaultParams() {
+		t.Fatal("SNGSP откалиброван — DefaultParams() не может совпадать с core.DefaultParams()")
 	}
 }
 

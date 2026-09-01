@@ -76,7 +76,27 @@ import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 // Ticker is the instrument this package parameterises.
 const Ticker = "SNGSP"
 
-// DefaultParams returns the core baseline: SNGSP is not calibrated yet.
+// DefaultParams returns the calibrated literal accepted on 2026-09-01. Каждое отличие от
+// core.DefaultParams() объяснено в доке пакета выше; снимок литерала держит sngsp_test.go.
 func DefaultParams() core.Params {
-	return core.DefaultParams()
+	return core.Params{
+		RSIPeriod:       4,
+		RSILower:        30,
+		RSIUpper:        70,
+		EMAFast:         20,
+		EMASlow:         50,
+		DailyATRPeriod:  14,
+		UseDayATRGate:   1,
+		FreshDayATR:     0.2,
+		SpentDayATR:     0.7,
+		StopDailyATR:    0.5,
+		TPDailyATR:      0.3,
+		UseVolume:       1,
+		VolBaseDays:     14,
+		VolLookbackBars: 3,
+		VolMult:         2.5,
+		UseRSIExit:      1,
+		UseTrail:        1,
+		TrailDailyATR:   0.5,
+	}
 }

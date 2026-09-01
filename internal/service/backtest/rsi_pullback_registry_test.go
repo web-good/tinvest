@@ -769,10 +769,10 @@ func TestRSIPullbackASTRIsRegisteredAndCalibrated(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackSNGSPTracksBaseline сторожит ЧЕСТНОЕ состояние: SNGSP заведён в реестр до
-// калибровки, чтобы прогоны шли через реестр, а не через generic-ветку, и обязан возвращать ровно
-// baseline ядра. Тест заменяется снимком литерала в Task 12.
-func TestRSIPullbackSNGSPTracksBaseline(t *testing.T) {
+// TestRSIPullbackSNGSPIsRegisteredAndCalibrated сторожит, что SNGSP живёт в rsiPullbackRegistry и
+// несёт СВОЙ литерал, а не baseline ядра. TestRSIPullbackSNGSPTracksBaseline, державший прежнее
+// состояние, заменён этим снимком 2026-09-01.
+func TestRSIPullbackSNGSPIsRegisteredAndCalibrated(t *testing.T) {
 	b, ok := rsiPullbackRegistry[rsipullbacksngsp.Ticker]
 	if !ok {
 		t.Fatal("SNGSP отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
@@ -781,8 +781,11 @@ func TestRSIPullbackSNGSPTracksBaseline(t *testing.T) {
 	if !pok {
 		t.Fatalf("SNGSP: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
 	}
-	if p != core.DefaultParams() {
-		t.Fatalf("SNGSP ещё не откалиброван, params обязаны совпадать с baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
+	if p == core.DefaultParams() {
+		t.Fatal("SNGSP вернул baseline: откалиброванный тикер обязан иметь собственный литерал")
+	}
+	if want := rsipullbacksngsp.DefaultParams(); p != want {
+		t.Fatalf("SNGSP params = %+v, want литерал пакета %+v", p, want)
 	}
 	if got := b.Build(p).Ticker(); got != "SNGSP" {
 		t.Fatalf("Ticker() = %q, want SNGSP", got)
