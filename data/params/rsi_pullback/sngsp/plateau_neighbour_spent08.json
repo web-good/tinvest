@@ -1,0 +1,64 @@
+{
+  "_comment": "data/params/rsi_pullback/sngsp/plateau_neighbour_spent08.json — СОСЕД ПЛАТО принятой точки SNGSP (Task 11 Step 6). Копия plateau_point.json, где ОДНО поле сдвинуто на соседний шаг сетки соответствующей темы: SpentDayATR 0.7 -> 0.8. SpentDayATR: сосед принятого значения 0.7 со стороны более мягкого дневного гейта; 0.8 — дефолт ядра. Остальные семнадцать полей — точка без изменений. Файл существует только ради вердикта «плато / склон / пик» по этой оси; это НЕ кандидат в боевую конфигурацию и НЕ результат процедуры отбора. ЗАПУСК: go run ./cmd/backtest -ticker SNGSP -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/sngsp/plateau_neighbour_spent08.json -out ./reports/SNGSP_neighbour_spent08 -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor. Числа прогона — в docs/superpowers/plans/task-11-report-sngsp.md. РЕЗУЛЬТАТ 2026-09-01 (reports/SNGSP_neighbour_spent08/SNGSP_rsi_pullback_Minutes30_20260901_153759_walkforward.md): pooled OOS PF 1.398 на 61 сделке, compounded 6.77%, фолды 1.714/2.869/4.105/0.411 (17/11/18/15). Строже гейт — выше PF (+0.035) при потере 8 сделок; фолд 4 хуже точки. ВЕРДИКТ ОСИ: обычный СКЛОН, пика нет.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          20
+        ],
+        "EMASlow": [
+          50
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0.2
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.5
+        ],
+        "TPDailyATR": [
+          0.3
+        ],
+        "UseVolume": [
+          1
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          2.5
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          1
+        ],
+        "TrailDailyATR": [
+          0.5
+        ]
+      }
+    }
+  ]
+}

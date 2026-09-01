@@ -1,0 +1,64 @@
+{
+  "_comment": "data/params/rsi_pullback/sngsp/plateau_neighbour_rsilower35.json — СОСЕД ПЛАТО принятой точки SNGSP (Task 11 Step 6). Копия plateau_point.json, где ОДНО поле сдвинуто на соседний шаг сетки соответствующей темы: RSILower 30 -> 35. RSILower: сосед точки (30) со стороны более мелкого отката (больше сделок, ниже точечный PF). Остальные семнадцать полей — точка без изменений. Файл существует только ради вердикта «плато / склон / пик» по этой оси; это НЕ кандидат в боевую конфигурацию и НЕ результат процедуры отбора. ЗАПУСК: go run ./cmd/backtest -ticker SNGSP -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/sngsp/plateau_neighbour_rsilower35.json -out ./reports/SNGSP_neighbour_rsilower35 -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor. Числа прогона — в docs/superpowers/plans/task-11-report-sngsp.md. РЕЗУЛЬТАТ 2026-09-01 (reports/SNGSP_neighbour_rsilower35/SNGSP_rsi_pullback_Minutes30_20260901_153741_walkforward.md): pooled OOS PF 1.676 на 78 сделках, compounded 14.76%, фолды 3.250/2.152/2.152/0.930 (20/9/23/26). ЛУЧШЕ ТОЧКИ И ПО PF, И ПО ВЫБОРКЕ — прямое доминирование, точка стоит на склоне ниже соседа. Двигать поле сюда НЕЛЬЗЯ: ни один из четырёх фолдов темы entry не выбрал 35 (победители 20, 30, 30, 25), это была бы подгонка под полную историю. ВЕРДИКТ ОСИ: СКЛОН, зафиксирован как риск неоптимальности, а не как повод сменить значение.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          35
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          20
+        ],
+        "EMASlow": [
+          50
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0.2
+        ],
+        "SpentDayATR": [
+          0.7
+        ],
+        "StopDailyATR": [
+          0.5
+        ],
+        "TPDailyATR": [
+          0.3
+        ],
+        "UseVolume": [
+          1
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          2.5
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          1
+        ],
+        "TrailDailyATR": [
+          0.5
+        ]
+      }
+    }
+  ]
+}
