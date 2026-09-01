@@ -1,0 +1,14 @@
+{
+  "_comment": "data/params/rsi_pullback/sngsp/cal_day_spent.json — тема day_spent для SNGSP, 10 прогонов, поверх дефолтов ядра. Тема меряет ТОЛЬКО ветку «день исчерпан» на уплотнённой оси при FreshDayATR = 0; прямое сравнение с cal_day.json показывает, сколько стоит открытая ветка свежего дня. Уровни 0.4 и 1.1 добавлены к канону — приём, сработавший на SIBN, ELFV, DIAS и BSPB. Замер (36 месяцев, дефолты ядра): 0.4 -> 1.037/408, 0.5 -> 1.017/353, 0.6 -> 1.078/288, 0.7 -> 1.533/229, 0.8 -> 1.535/183, 0.9 -> 1.373/135, 1.0 -> 1.236/97, 1.1 -> 1.240/76, 1.25 -> 1.007/39, 1.5 -> 0.864/17. Ступенька между 0.6 и 0.7 — самая резкая на оси (0.455 PF за один шаг), и именно её тема обязана проверить пофолдово: одиночный замер не отличает настоящий порог от артефакта конкретной истории. ЗАПУСК: go run ./cmd/backtest -ticker SNGSP -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/sngsp/cal_day_spent.json -out ./reports/SNGSP_day_spent -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-09-01: ",
+  "phases": [
+    {
+      "name": "day_spent",
+      "grid": {
+        "UseDayATRGate": [1],
+        "FreshDayATR": [0],
+        "SpentDayATR": [0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5]
+      },
+      "keepTop": 5
+    }
+  ]
+}
