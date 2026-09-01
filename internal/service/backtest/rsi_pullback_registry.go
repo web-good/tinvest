@@ -19,6 +19,7 @@ import (
 	rsipullbacknvtk "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/nvtk"
 	rsipullbackreni "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/reni"
 	rsipullbacksibn "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sibn"
+	rsipullbacksngsp "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sngsp"
 	rsipullbacksvav "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/svav"
 	rsipullbacktbank "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/tbank"
 	rsipullbackugld "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ugld"
@@ -52,6 +53,7 @@ func rsiPullbackBindingFor(ticker string, defaults func() core.Params) Binding {
 // hypothesis, not a claim of being tuned — see docs/rsi_pullback/strategy.md §8.0.1.
 var rsiPullbackRegistry = map[string]Binding{
 	rsipullbackastr.Ticker:  rsiPullbackBindingFor(rsipullbackastr.Ticker, rsipullbackastr.DefaultParams),
+	rsipullbacksngsp.Ticker: rsiPullbackBindingFor(rsipullbacksngsp.Ticker, rsipullbacksngsp.DefaultParams),
 	rsipullbackbanep.Ticker: rsiPullbackBindingFor(rsipullbackbanep.Ticker, rsipullbackbanep.DefaultParams),
 	rsipullbackbspb.Ticker:  rsiPullbackBindingFor(rsipullbackbspb.Ticker, rsipullbackbspb.DefaultParams),
 	rsipullbackdias.Ticker:  rsiPullbackBindingFor(rsipullbackdias.Ticker, rsipullbackdias.DefaultParams),
