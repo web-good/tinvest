@@ -11,6 +11,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/domrf"
 	rsipullbackelfv "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/elfv"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/fesh"
+	rsipullbackhead "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/head"
 	rsipullbackivat "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ivat"
 	rsipullbacklent "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/lent"
 	rsipullbacklsngp "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/lsngp"
@@ -789,5 +790,25 @@ func TestRSIPullbackSNGSPIsRegisteredAndCalibrated(t *testing.T) {
 	}
 	if got := b.Build(p).Ticker(); got != "SNGSP" {
 		t.Fatalf("Ticker() = %q, want SNGSP", got)
+	}
+}
+
+// TestRSIPullbackHEADTracksBaseline сторожит ЧЕСТНОЕ состояние: HEAD заведён в реестр до
+// калибровки, чтобы прогоны шли через реестр, а не через generic-ветку, и обязан возвращать ровно
+// baseline ядра. Тест заменяется снимком литерала в Task 12.
+func TestRSIPullbackHEADTracksBaseline(t *testing.T) {
+	b, ok := rsiPullbackRegistry[rsipullbackhead.Ticker]
+	if !ok {
+		t.Fatal("HEAD отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
+	}
+	p, pok := b.DefaultParams().(core.Params)
+	if !pok {
+		t.Fatalf("HEAD: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
+	}
+	if p != core.DefaultParams() {
+		t.Fatalf("HEAD ещё не откалиброван, params обязаны совпадать с baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
+	}
+	if got := b.Build(p).Ticker(); got != "HEAD" {
+		t.Fatalf("Ticker() = %q, want HEAD", got)
 	}
 }
