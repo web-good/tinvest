@@ -15,6 +15,7 @@ import (
 	rsipullbackivat "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ivat"
 	rsipullbacklent "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/lent"
 	rsipullbacklsngp "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/lsngp"
+	rsipullbacknkhp "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/nkhp"
 	rsipullbacknvtk "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/nvtk"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/reni"
 	rsipullbacksibn "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sibn"
@@ -810,5 +811,25 @@ func TestRSIPullbackHEADTracksBaseline(t *testing.T) {
 	}
 	if got := b.Build(p).Ticker(); got != "HEAD" {
 		t.Fatalf("Ticker() = %q, want HEAD", got)
+	}
+}
+
+// TestRSIPullbackNKHPTracksBaseline сторожит ЧЕСТНОЕ состояние: NKHP заведён в реестр до
+// калибровки, чтобы прогоны шли через реестр, а не через generic-ветку, и обязан возвращать ровно
+// baseline ядра. Тест заменяется снимком литерала в Task 12.
+func TestRSIPullbackNKHPTracksBaseline(t *testing.T) {
+	b, ok := rsiPullbackRegistry[rsipullbacknkhp.Ticker]
+	if !ok {
+		t.Fatal("NKHP отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
+	}
+	p, pok := b.DefaultParams().(core.Params)
+	if !pok {
+		t.Fatalf("NKHP: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
+	}
+	if p != core.DefaultParams() {
+		t.Fatalf("NKHP ещё не откалиброван, params обязаны совпадать с baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
+	}
+	if got := b.Build(p).Ticker(); got != "NKHP" {
+		t.Fatalf("Ticker() = %q, want NKHP", got)
 	}
 }
