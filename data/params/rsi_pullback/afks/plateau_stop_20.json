@@ -1,0 +1,28 @@
+{
+  "_comment": "data/params/rsi_pullback/afks/plateau_stop_20.json — ЗОНД РИСК-ГЕЙТА (Task 9 Step 3, 2026-09-02): точка на дефолтах ядра со StopDailyATR = 2.0 — значение, ВЫБРАННОЕ темой risk (три фолда из четырёх), но ОТВЕРГНУТОЕ риск-гейтом: выживаемость уровня 2.0 — 2.8% будних дней, ниже потолка 30% на порядок. Прогон нужен, чтобы снять анатомию (доля SL-выходов, удержание, ночёвки, выходы в выходную сессию) отвергнутой точки и сравнить с принятой (plateau_stop_10.json) и с baseline. TPDailyATR держится на дефолте 0.6 (тема цели без большинства). ЗАПУСК: go run ./cmd/backtest -ticker AFKS -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/afks/plateau_stop_20.json -out ./reports/AFKS_risk_probe_stop20 -months 36. РЕЗУЛЬТАТ ПРОГОНА 2026-09-02: ",
+  "phases": [
+    {
+      "name": "plateau",
+      "grid": {
+        "RSIPeriod": [4],
+        "RSILower": [30],
+        "RSIUpper": [70],
+        "EMAFast": [10],
+        "EMASlow": [100],
+        "DailyATRPeriod": [14],
+        "UseDayATRGate": [1],
+        "FreshDayATR": [0],
+        "SpentDayATR": [0.8],
+        "StopDailyATR": [2.0],
+        "TPDailyATR": [0.6],
+        "UseVolume": [0],
+        "VolBaseDays": [14],
+        "VolLookbackBars": [3],
+        "VolMult": [1.2],
+        "UseRSIExit": [1],
+        "UseTrail": [0],
+        "TrailDailyATR": [0]
+      }
+    }
+  ]
+}
