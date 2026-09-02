@@ -1,0 +1,14 @@
+{
+  "_comment": "data/params/rsi_pullback/afks/cal_vol_window.json — тема vol_window для AFKS, 24 прогона, поверх дефолтов ядра. Тема мерит окно объёмного гейта (VolLookbackBars) на трёх уровнях множителя. ЗАМЕР 2026-09-02 (36 мес, in-sample) при VolMult 1.2: окно 1 -> 1.100/85, 2 -> 1.227/95 (МАКСИМУМ), 3 -> 1.194/103 (дефолт), 5 -> 1.168/113, 8 -> 1.151/117, 12 -> 1.117/121, 16 -> 1.091/123, 24 -> 1.105/125 — максимум на коротком крае 2, рядом с дефолтом 3; широкий край монотонно ХУЖЕ узкого. ОБЪЯСНЕНИЕ СВОЙСТВА: AFKS — самая толстая бумага вселенной (медиана оборота будних дней 1226 млн ₽), и узкое окно ближе улавливает свежий всплеск участия, чем растянутое. ЗАПУСК: go run ./cmd/backtest -ticker AFKS -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/afks/cal_vol_window.json -out ./reports/AFKS_vol_window -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-09-02: ",
+  "phases": [
+    {
+      "name": "vol_window",
+      "grid": {
+        "UseVolume": [1],
+        "VolLookbackBars": [1, 2, 3, 5, 8, 12, 16, 24],
+        "VolMult": [1.2, 2.5, 4.0]
+      },
+      "keepTop": 5
+    }
+  ]
+}
