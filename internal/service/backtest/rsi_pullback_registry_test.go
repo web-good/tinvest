@@ -3,6 +3,7 @@ package backtest
 import (
 	"testing"
 
+	rsipullbackafks "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/afks"
 	rsipullbackastr "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/astr"
 	rsipullbackbanep "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/banep"
 	rsipullbackbspb "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/bspb"
@@ -811,6 +812,26 @@ func TestRSIPullbackHEADTracksBaseline(t *testing.T) {
 	}
 	if got := b.Build(p).Ticker(); got != "HEAD" {
 		t.Fatalf("Ticker() = %q, want HEAD", got)
+	}
+}
+
+// TestRSIPullbackAFKSTracksBaseline сторожит ЧЕСТНОЕ состояние: AFKS заведён в реестр до
+// калибровки, чтобы прогоны шли через реестр, а не через generic-ветку, и обязан возвращать ровно
+// baseline ядра. Тест заменяется снимком литерала в Task 12.
+func TestRSIPullbackAFKSTracksBaseline(t *testing.T) {
+	b, ok := rsiPullbackRegistry[rsipullbackafks.Ticker]
+	if !ok {
+		t.Fatal("AFKS отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
+	}
+	p, pok := b.DefaultParams().(core.Params)
+	if !pok {
+		t.Fatalf("AFKS: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
+	}
+	if p != core.DefaultParams() {
+		t.Fatalf("AFKS ещё не откалиброван, params обязаны совпадать с baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
+	}
+	if got := b.Build(p).Ticker(); got != "AFKS" {
+		t.Fatalf("Ticker() = %q, want AFKS", got)
 	}
 }
 
