@@ -13,6 +13,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ivat"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/lent"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/lsngp"
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/nkhp"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/nvtk"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/reni"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sibn"
@@ -294,6 +295,40 @@ import (
 // stop or trail the point carries; and a wide-stop trap that the point escapes only because its
 // trail (0.5 daily ATR) already sits at the stop level from entry, making StopDailyATR inert at any
 // value at or above 0.5.
+//
+// NKHP was calibrated 2026-09-02 on the canonical 36/12/6 schedule, all ten themes canonical with no
+// anchor, and the owner kept its grids maximally wide, the same decision as BANEP, ASTR, SNGSP and
+// HEAD. The point is verified TWICE: the canonical run plus a mandatory control run on 24/12/3,
+// because two structural boundaries sit inside the window — the session widened on 2024-09-26 (19
+// half-hour weekday bars became 34) and liquidity fell by an order of magnitude (median daily
+// turnover 153.0 mln RUB in 2023 against 14.4 mln in 2026). Both key themes MISS the declared bar:
+// entry measures pooled OOS PF 1.612 on 112 trades, clearing PF but failing stability (leading axis
+// RSILower at 50/30/25/25, at most two folds agreeing); trend measures 1.318 on 102 trades, failing
+// both, its leading axis EMASlow returning four different values in four folds. The ticker enters
+// production anyway under the standing rule. The accepted point departs from core defaults on
+// exactly two fields — UseVolume 1 and StopDailyATR 1.0 — and measures pooled OOS PF 2.678 on 93
+// trades with all four folds profitable and none degenerate, the cleanest fold table in the
+// catalogue; the control 24/12/3 run holds at 1.642 on 46 trades, so the result is not an artefact
+// of the paper's first, 19-bar regime. NKHP is the FIRST AND ONLY ticker whose volume gate wins a
+// free choice in all four folds (+0.32 PF in both screen rows): on the thinnest paper of the
+// universe a volume spike separates real participation from a single order. The control baseline
+// (core defaults, 150 trades) measures PF 1.697, second in the catalogue behind YDEX 1.778, and all
+// six of its half-years are profitable — the only such regime in the catalogue despite the
+// instrument losing 84.0% over the window. Gap exposure is zero: the point held no position through
+// any of the four large overnight drops and entered on none of those days. What remains is the
+// heaviest set of execution risks in the live universe: the THINNEST LIQUIDITY of all — median
+// weekday turnover 14.4 mln RUB in 2026 against the universe's 50 mln gate, and a fresh single-ticker
+// screener run reports 46 mln, below that gate, because the 36-month average is inflated by 2023; a
+// ROUND-TRIP COST OF 0.20-0.26% against the 0.1% the engine models (price step 0.5 RUB at a price of
+// 391 RUB), so the cost model here is optimistic rather than conservative, which is why the point is
+// also scored under tripled costs (PF 2.083); 13.8% of the point's exits land in the WEEKEND SESSION,
+// whose median turnover is 1.09 mln RUB and whose slippage the engine does not model at all; and a
+// wide-stop trap the point does NOT escape — the stop axis is live (the trail is off, so nothing
+// overlaps it) but rises monotonically 2.446 -> 2.678 -> 2.927 across stops 0.7/1.0/1.3 at an
+// unchanged 93 trades, and on the full history the SL-exit share falls from the baseline's 20.7% to
+// 6.9% while overnight holds rise from 51.3% to 56.0% and weekend exits from 10.0% to 13.8%: 14 of
+// the 22 losing trades close on the RSI exit, so the loss moved rather than shrank and the risk is
+// amplified, not reduced.
 var paramsByTicker = map[string]core.Params{
 	ugld.Ticker:  ugld.DefaultParams(),
 	tbank.Ticker: tbank.DefaultParams(),
@@ -315,6 +350,7 @@ var paramsByTicker = map[string]core.Params{
 	banep.Ticker: banep.DefaultParams(),
 	astr.Ticker:  astr.DefaultParams(),
 	sngsp.Ticker: sngsp.DefaultParams(),
+	nkhp.Ticker:  nkhp.DefaultParams(),
 }
 
 // ParamsFor returns the params for a known ticker, ok=false otherwise.
