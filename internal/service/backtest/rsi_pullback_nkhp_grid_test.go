@@ -17,6 +17,8 @@ import "testing"
 //   - VolMult вверх до 4.0: объёмный гейт на NKHP впервые в каталоге несёт сигнал (весь массив
 //     оси выше baseline без гейта 1.732, максимум 2.5 -> 2.562/65), и край нужен, чтобы отличить
 //     «максимум внутри» от «максимум на краю».
+//   - EMASlow в cal_trend вниз до 20 при EMAFast, обрезанной до 10: та же причина — жёсткий
+//     инвариант EMAFast < EMASlow не разрешает держать обе оси широкими одновременно.
 func TestNKHPGridsStayWide(t *testing.T) {
 	type want struct {
 		file   string
@@ -29,7 +31,7 @@ func TestNKHPGridsStayWide(t *testing.T) {
 		{"cal_entry.json", "RSILower", []float64{10, 15, 20, 25, 30, 35, 40, 45, 50}},
 		{"cal_entry.json", "RSIPeriod", []float64{2, 3, 4, 5, 6, 7, 8}},
 		{"cal_entry.json", "RSIUpper", []float64{55, 60, 65, 70, 75, 80, 85}},
-		{"cal_trend.json", "EMAFast", []float64{3, 5, 10, 20, 30, 40}},
+		{"cal_trend.json", "EMAFast", []float64{3, 5, 10}},
 		{"cal_trend.json", "EMASlow", []float64{20, 30, 50, 70, 100, 150, 200, 250}},
 		{"cal_day.json", "FreshDayATR", []float64{0, 0.2, 0.3, 0.4, 0.5, 0.6}},
 		{"cal_day.json", "SpentDayATR", []float64{0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5}},
@@ -82,5 +84,29 @@ func TestNKHPEntryGridKeepsRSIUpperAboveRSILower(t *testing.T) {
 	}
 	if minUpper <= maxLower {
 		t.Fatalf("nkhp/cal_entry.json: min(RSIUpper)=%v <= max(RSILower)=%v — сетка порождает пары, где выход не выше входа", minUpper, maxLower)
+	}
+}
+
+// TestNKHPTrendGridKeepsFastBelowSlow пинит жёсткий инвариант оси тренда: сетка не должна
+// порождать пар, где период «быстрой» EMA не меньше периода «медленной». На таких парах условие
+// fast > slow означает не восходящий тренд, а перевёрнутый фильтр, и на падающем инструменте он
+// способен выиграть тему in-sample. Инвариант держится конструкцией осей (EMAFast <= 10 <
+// EMASlow >= 20), и тест ловит его нарушение при любой правке файла.
+func TestNKHPTrendGridKeepsFastBelowSlow(t *testing.T) {
+	grid := rsiPullbackTickerGrid(t, "nkhp", "cal_trend.json")
+	var maxFast, minSlow float64
+	minSlow = 1e9
+	for _, v := range grid["EMAFast"] {
+		if v > maxFast {
+			maxFast = v
+		}
+	}
+	for _, v := range grid["EMASlow"] {
+		if v < minSlow {
+			minSlow = v
+		}
+	}
+	if maxFast >= minSlow {
+		t.Fatalf("nkhp/cal_trend.json: max(EMAFast)=%v >= min(EMASlow)=%v — сетка порождает пары с перевёрнутым трендовым фильтром", maxFast, minSlow)
 	}
 }
