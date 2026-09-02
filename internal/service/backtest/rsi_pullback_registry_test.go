@@ -814,10 +814,10 @@ func TestRSIPullbackHEADTracksBaseline(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackNKHPTracksBaseline сторожит ЧЕСТНОЕ состояние: NKHP заведён в реестр до
-// калибровки, чтобы прогоны шли через реестр, а не через generic-ветку, и обязан возвращать ровно
-// baseline ядра. Тест заменяется снимком литерала в Task 12.
-func TestRSIPullbackNKHPTracksBaseline(t *testing.T) {
+// TestRSIPullbackNKHPServesTheCalibratedPoint сторожит, что реестр бэктеста отдаёт ровно тот
+// литерал, который пинит снимок в пакете: расхождение означало бы, что бэктест и живой раннер
+// торгуют разными параметрами.
+func TestRSIPullbackNKHPServesTheCalibratedPoint(t *testing.T) {
 	b, ok := rsiPullbackRegistry[rsipullbacknkhp.Ticker]
 	if !ok {
 		t.Fatal("NKHP отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
@@ -826,8 +826,8 @@ func TestRSIPullbackNKHPTracksBaseline(t *testing.T) {
 	if !pok {
 		t.Fatalf("NKHP: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
 	}
-	if p != core.DefaultParams() {
-		t.Fatalf("NKHP ещё не откалиброван, params обязаны совпадать с baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
+	if p != rsipullbacknkhp.DefaultParams() {
+		t.Fatalf("реестр отдаёт не литерал пакета:\n got: %+v\nwant: %+v", p, rsipullbacknkhp.DefaultParams())
 	}
 	if got := b.Build(p).Ticker(); got != "NKHP" {
 		t.Fatalf("Ticker() = %q, want NKHP", got)

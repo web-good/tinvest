@@ -1,10 +1,12 @@
 // Package nkhp supplies the ticker and rsi_pullback Params for NKHP (ПАО «Новороссийский комбинат
 // хлебопродуктов», обыкновенные акции, лот 10).
 //
-// СОСТОЯНИЕ: КАЛИБРОВКА НЕ ПРОВОДИЛАСЬ. Пакет возвращает core.DefaultParams() — baseline ядра, не
-// подобранный под этот инструмент. Так и должно быть до конца калибровки: пакет заведён заранее,
-// чтобы прогоны шли через тот же реестр, что и у остальных двадцати тикеров, а не через
-// generic-ветку. Состояние держит nkhp_test.go.
+// СОСТОЯНИЕ: ОТКАЛИБРОВАН 2026-09-02, ТОЧКА ПРИНЯТА, СТОП-УСЛОВИЕ НЕ СРАБОТАЛО НИ ОДНИМ ИЗ ПЯТИ
+// ПУНКТОВ. Принятая точка отличается от дефолтов ядра РОВНО ДВУМЯ ПОЛЯМИ: UseVolume 0 -> 1
+// (единогласный выбор всех четырёх фолдов темы screen) и StopDailyATR 0.5 -> 1.0 (три фолда из
+// четырёх темы risk). Остальные шестнадцать полей упали на дефолты ядра или совпали с ними
+// настоящим большинством. Литерал пинит снимок в nkhp_test.go; полный разбор калибровки — ниже,
+// выкладки Task 11 — docs/superpowers/plans/task-11-report-nkhp.md.
 //
 // ОКНО И СХЕМА КАНОНИЧЕСКИЕ. Расчётное окно — 2023-09-02 … 2026-09-02 (36 месяцев); в окне 27 546
 // получасовых баров, из них 21 663 будних. Схема прогонов -months 36 -train-months 12
@@ -91,7 +93,26 @@ import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 // Ticker is the instrument this package parameterises.
 const Ticker = "NKHP"
 
-// DefaultParams returns the core baseline: NKHP is not calibrated yet.
+// DefaultParams returns the calibrated point for NKHP.
 func DefaultParams() core.Params {
-	return core.DefaultParams()
+	return core.Params{
+		RSIPeriod:       4,
+		RSILower:        30,
+		RSIUpper:        70,
+		EMAFast:         10,
+		EMASlow:         100,
+		DailyATRPeriod:  14,
+		UseDayATRGate:   1,
+		FreshDayATR:     0,
+		SpentDayATR:     0.8,
+		StopDailyATR:    1.0,
+		TPDailyATR:      0.6,
+		UseVolume:       1,
+		VolBaseDays:     14,
+		VolLookbackBars: 3,
+		VolMult:         1.2,
+		UseRSIExit:      1,
+		UseTrail:        0,
+		TrailDailyATR:   0,
+	}
 }
