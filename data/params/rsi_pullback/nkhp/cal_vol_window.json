@@ -1,0 +1,14 @@
+{
+  "_comment": "data/params/rsi_pullback/nkhp/cal_vol_window.json — тема vol_window для NKHP, 24 прогона, поверх дефолтов ядра. Тема мерит окно объёмного гейта (VolLookbackBars) на трёх уровнях множителя. ЗАМЕР 2026-09-02 при VolMult 1.2: окно 1 -> 2.211/75, 2 -> 2.112/85, 3 -> 2.064/88 (дефолт), 5 -> 2.194/96, 8 -> 1.777/100, 12 -> 1.784/105, 16 -> 1.781/106, 24 -> 1.666/107 — МАКСИМУМ НА УЗКОМ КРАЕ, широкий край монотонно хуже. Это ЗЕРКАЛО HEAD, где победил край 12-24, и десятая проверка гипотезы каталога «чем ликвиднее бумага, тем ближе оптимум окна к дефолту»: NKHP — самая ТОНКАЯ бумага каталога, и её оптимум стоит на самом узком окне. ПРЕДУПРЕЖДЕНИЕ О КРАЕ: узкое окно при множителе 4.0 оставит менее 50 сделок за окно — на обучающем окне это грань -min-trades 20. ЗАПУСК: go run ./cmd/backtest -ticker NKHP -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/nkhp/cal_vol_window.json -out ./reports/NKHP_vol_window -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-09-02: ",
+  "phases": [
+    {
+      "name": "vol_window",
+      "grid": {
+        "UseVolume": [1],
+        "VolLookbackBars": [1, 2, 3, 5, 8, 12, 16, 24],
+        "VolMult": [1.2, 2.5, 4.0]
+      },
+      "keepTop": 5
+    }
+  ]
+}
