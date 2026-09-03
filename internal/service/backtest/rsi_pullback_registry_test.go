@@ -836,6 +836,9 @@ func TestRSIPullbackAFKSTracksBaseline(t *testing.T) {
 	}
 }
 
+// TestRSIPullbackSOFLServesTheCalibratedPoint сторожит, что реестр бэктеста отдаёт ровно тот
+// литерал, который пинит снимок в пакете: расхождение означало бы, что бэктест и живой раннер
+// торгуют разными параметрами.
 func TestRSIPullbackSOFLServesTheCalibratedPoint(t *testing.T) {
 	b, ok := rsiPullbackRegistry[rsipullbacksofl.Ticker]
 	if !ok {

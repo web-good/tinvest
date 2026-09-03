@@ -39,6 +39,17 @@ func TestSOFLGridsStayWide(t *testing.T) {
 		{"cal_entry.json", "RSIUpper", []float64{55, 60, 65, 70, 75, 80, 85}},
 		{"cal_trend.json", "EMAFast", []float64{3, 5, 10, 20, 30, 40}},
 		{"cal_trend.json", "EMASlow", []float64{50, 70, 100, 150, 200, 250}},
+		// Второй круг (2026-09-03) прогонял ранние темы screen/entry/trend на окне B со схемой
+		// 24/12/3 через отдельные файлы cal_w24_*.json (сетки у них идентичны cal_screen/cal_entry/
+		// cal_trend — второй круг менял окно и схему флагами, а не оси сетки), см. sofl.go. Те же
+		// case, чтобы оси второго круга были защищены от сужения так же, как и у первого.
+		{"cal_w24_screen.json", "UseDayATRGate", []float64{0, 1}},
+		{"cal_w24_screen.json", "UseVolume", []float64{0, 1}},
+		{"cal_w24_entry.json", "RSILower", []float64{10, 15, 20, 25, 30, 35, 40, 45, 50}},
+		{"cal_w24_entry.json", "RSIPeriod", []float64{2, 3, 4, 5, 6, 7, 8, 10}},
+		{"cal_w24_entry.json", "RSIUpper", []float64{55, 60, 65, 70, 75, 80, 85}},
+		{"cal_w24_trend.json", "EMAFast", []float64{3, 5, 10, 20, 30, 40}},
+		{"cal_w24_trend.json", "EMASlow", []float64{50, 70, 100, 150, 200, 250}},
 		{"cal_day.json", "SpentDayATR", []float64{0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.25, 1.5}},
 		{"cal_day.json", "FreshDayATR", []float64{0, 0.2, 0.3, 0.4, 0.5, 0.6}},
 		{"cal_volume.json", "VolMult", []float64{1.0, 1.2, 1.5, 2.0, 2.5, 3.0, 4.0}},
@@ -71,36 +82,42 @@ func TestSOFLGridsStayWide(t *testing.T) {
 
 // TestSOFLEntryGridKeepsRSIUpperAboveRSILower пинит жёсткий инвариант связки входа и выхода: в
 // теме entry обе оси свипуются вместе, и пара, где уровень выхода не выше уровня входа, описывает
-// сделку, которая закрывается в момент открытия.
+// сделку, которая закрывается в момент открытия. Проверяется и первый круг (cal_entry.json), и
+// второй (cal_w24_entry.json) — их сетки идентичны, но второй файл не был защищён отдельно.
 func TestSOFLEntryGridKeepsRSIUpperAboveRSILower(t *testing.T) {
-	grid := rsiPullbackTickerGrid(t, "sofl", "cal_entry.json")
-	var maxLower float64
-	minUpper := 1e9
-	for _, v := range grid["RSILower"] {
-		if v > maxLower {
-			maxLower = v
+	for _, file := range []string{"cal_entry.json", "cal_w24_entry.json"} {
+		grid := rsiPullbackTickerGrid(t, "sofl", file)
+		var maxLower float64
+		minUpper := 1e9
+		for _, v := range grid["RSILower"] {
+			if v > maxLower {
+				maxLower = v
+			}
 		}
-	}
-	for _, v := range grid["RSIUpper"] {
-		if v < minUpper {
-			minUpper = v
+		for _, v := range grid["RSIUpper"] {
+			if v < minUpper {
+				minUpper = v
+			}
 		}
-	}
-	if minUpper <= maxLower {
-		t.Fatalf("cal_entry.json порождает пару RSIUpper=%v <= RSILower=%v: такая сделка закрывается в момент открытия", minUpper, maxLower)
+		if minUpper <= maxLower {
+			t.Fatalf("%s порождает пару RSIUpper=%v <= RSILower=%v: такая сделка закрывается в момент открытия", file, minUpper, maxLower)
+		}
 	}
 }
 
 // TestSOFLTrendGridKeepsFastBelowSlow пинит вторую половину решения об осях тренда: EMASlow
 // начинается с 50 ИМЕННО ПОТОМУ, что EMAFast держится широкой до 40. Любая пара, где быстрая EMA
 // не быстрее медленной, превращает трендовый фильтр в перевёрнутый и на падающем инструменте
-// способна выиграть тему in-sample.
+// способна выиграть тему in-sample. Проверяется и первый круг (cal_trend.json), и второй
+// (cal_w24_trend.json) — их сетки идентичны, но второй файл не был защищён отдельно.
 func TestSOFLTrendGridKeepsFastBelowSlow(t *testing.T) {
-	grid := rsiPullbackTickerGrid(t, "sofl", "cal_trend.json")
-	for _, fast := range grid["EMAFast"] {
-		for _, slow := range grid["EMASlow"] {
-			if fast >= slow {
-				t.Fatalf("cal_trend.json порождает пару EMAFast=%v >= EMASlow=%v: перевёрнутый трендовый фильтр", fast, slow)
+	for _, file := range []string{"cal_trend.json", "cal_w24_trend.json"} {
+		grid := rsiPullbackTickerGrid(t, "sofl", file)
+		for _, fast := range grid["EMAFast"] {
+			for _, slow := range grid["EMASlow"] {
+				if fast >= slow {
+					t.Fatalf("%s порождает пару EMAFast=%v >= EMASlow=%v: перевёрнутый трендовый фильтр", file, fast, slow)
+				}
 			}
 		}
 	}

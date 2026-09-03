@@ -337,8 +337,9 @@ import (
 // as the control) rather than accept the point. The procedure is HYBRID WITH AN ANCHOR, the reason
 // stated up front rather than discovered after the fact: core defaults sit in a dead zone on SOFL
 // (PF 0.987, a loss), so the early screen/entry/trend themes still run over core defaults for a
-// bar-comparable verdict, while the seven late themes run over the entry/trend winners instead —
-// their numbers are conditional and not comparable line by line with the rest of the catalogue.
+// bar-comparable verdict, while the five late themes run over the entry theme's winner and the
+// trend theme's core defaults instead (trend never reached a majority) — their numbers are
+// conditional and not comparable line by line with the rest of the catalogue.
 // Both key themes MISS the declared bar on the second round: entry measures pooled OOS PF 0.416 on
 // 27 trades, every one of its four folds unprofitable; trend measures 1.229 on 52 trades, its
 // leading axis EMASlow returning two different values across folds. The ticker enters production
