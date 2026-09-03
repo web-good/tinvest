@@ -1,0 +1,13 @@
+{
+  "_comment": "data/params/rsi_pullback/sofl/cal_screen.json — РАННЯЯ тема screen для SOFL, 4 прогона, поверх ДЕФОЛТОВ ЯДРА (core.DefaultParams(): UseDayATRGate=1, UseVolume=0). Тема мерит цену двух опциональных гейтов. ЗАМЕР 2026-09-03 (36 мес, in-sample): UseDayATRGate 0 -> 0.946/428 (net -11 777), 1 -> 0.987/166 — гейт режет 62% сделок и поднимает PF на 0.041, но ОБЕ строки убыточны: на SOFL дневной гейт не создаёт прибыль, он ограничивает убыток (отличие и от AFKS, где гейт носитель edge, и от NKHP, где без гейта остаётся 1.440). UseVolume в дефолтной форме (VolMult 1.2, VolBaseDays 14, VolLookbackBars 3) даёт 1.009/127 против 0.987/166 — плюс 0.022 PF. ЗАПУСК: go run ./cmd/backtest -ticker SOFL -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/sofl/cal_screen.json -out ./reports/SOFL_screen -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-09-03: <заполняется в Task 3>.",
+  "phases": [
+    {
+      "name": "screen",
+      "grid": {
+        "UseDayATRGate": [0, 1],
+        "UseVolume": [0, 1]
+      },
+      "keepTop": 4
+    }
+  ]
+}
