@@ -1,0 +1,65 @@
+{
+  "_comment": "data/params/rsi_pullback/tgka/plateau_stop_20_w24.json — зонд цены риск-гейта A: точка второго круга со стопом 2.0 (единогласный выбор темы risk окна B, выживаемость 7.6% будних дней — отвергнут гейтом)",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          3
+        ],
+        "RSILower": [
+          10
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          3
+        ],
+        "EMASlow": [
+          30
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          1.25
+        ],
+        "StopDailyATR": [
+          2.0
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      },
+      "keepTop": 1
+    }
+  ]
+}

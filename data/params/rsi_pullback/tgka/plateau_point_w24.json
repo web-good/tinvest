@@ -1,0 +1,65 @@
+{
+  "_comment": "data/params/rsi_pullback/tgka/plateau_point_w24.json — ПРИНЯТАЯ ТОЧКА ВТОРОГО КРУГА TGKA (окно B 2024-09-03..2026-09-03, расчётная схема 24/12/3, контроль 36/12/6). Собрана правилом большинства >= 3 фолдов из 4 по одиннадцати темам окна B. Принято темами: RSIPeriod 3 (4/4, entry), RSILower 10 (3/4, entry), EMAFast 3 (4/4, trend и trend_low), EMASlow 30 (4/4 trend_low при pooled OOS 2.951 против 1.950 у канонической trend), UseDayATRGate 1 (4/4, screen), FreshDayATR 0 (3/4, day), SpentDayATR 1.25 (3/4, day — ПРОТИВ дефолта 0.8; контрольная тема day_spent большинства не дала, 1.25/0.9/0.8/1.25, и это записано прямым текстом как взаимодействие ветвей), UseVolume 0 (4/4, screen), UseRSIExit 1 (3/4, trail). РИСК-ГЕЙТ A СРАБОТАЛ: тема risk окна B ЕДИНОГЛАСНО (4/4) требует StopDailyATR 2.0 — уровень достижим лишь в 7.6% будних дней; гейт заменил его на 1.0 (43.6%), цена решения замерена отдельно зондом plateau_stop_20_w24.json. Упали на дефолты ядра: RSIUpper (exit: 75/85/80/85, максимум 2/4), TPDailyATR (risk: 0.3/0.3/0.8/0.8, ничья), VolBaseDays/VolLookbackBars/VolMult (темы volume и vol_window без большинства и в расхождении между собой; поля инертны при UseVolume=0), UseTrail и TrailDailyATR (тема trail дала 3/4 за дистанцию 1.0, на которой трейл не срабатывает вовсе — применено правило упрощения, прецедент ASTR).",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          3
+        ],
+        "RSILower": [
+          10
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          3
+        ],
+        "EMASlow": [
+          30
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          1.25
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      },
+      "keepTop": 1
+    }
+  ]
+}
