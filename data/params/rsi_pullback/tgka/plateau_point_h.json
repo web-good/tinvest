@@ -1,0 +1,65 @@
+{
+  "_comment": "data/params/rsi_pullback/tgka/plateau_point_h.json — ТОЧКА ТРЕТЬЕГО КРУГА TGKA, собранная голосами фолдов 1-3 тем первого круга (схема 36/12/6); фолд 4 этих же тем отдан под holdout 2026-03-03..2026-09-03 и в выборе полей не участвовал. Правило большинства масштабировано до >= 2 фолдов из 3, при трёх разных значениях поле остаётся дефолтом ядра. Принято темами: RSIPeriod 3 (2/3, entry), RSIUpper 60 (2/3, exit — против дефолта 70), EMAFast 3 (3/3, trend и trend_low), EMASlow 30 (3/3, trend_low, её фолды 1-3 сильнее канонической trend), UseDayATRGate 1 (2/3), FreshDayATR 0.2 (2/3 — против дефолта 0), SpentDayATR 1.0 (2/3 в обеих дневных темах — против дефолта 0.8), TPDailyATR 0.3 (2/3 — против дефолта 0.6), UseVolume 0 (2/3), UseRSIExit 1 (3/3). Дефолтами остались RSILower (три разных значения), StopDailyATR (три разных значения; риск-гейт A применять не пришлось, эффективная защита 0.5 ATR держит 90.9% будних дней), объёмные поля (инертны при выключенном гейте), UseTrail и TrailDailyATR (три разных значения). УСЛОВИЯ ВЕРДИКТА, объявленные до прогона holdout: PF >= 1.0, >= 10 сделок, неотрицательный net, оба риск-гейта. Прогон holdout ровно один; чинить точку по его числам запрещено.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          3
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          60
+        ],
+        "EMAFast": [
+          3
+        ],
+        "EMASlow": [
+          30
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0.2
+        ],
+        "SpentDayATR": [
+          1.0
+        ],
+        "StopDailyATR": [
+          0.5
+        ],
+        "TPDailyATR": [
+          0.3
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      },
+      "keepTop": 1
+    }
+  ]
+}
