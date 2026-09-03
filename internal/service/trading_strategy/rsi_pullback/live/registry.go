@@ -21,6 +21,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sofl"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/svav"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/tbank"
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/tgka"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ugld"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/wush"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ydex"
@@ -356,6 +357,31 @@ import (
 // against decline; the first rising half-year triggers an out-of-cycle recalibration. Third, the
 // weekend session carries a median turnover of just 6 mln RUB, and the engine models none of the
 // slippage that implies for trades that exit there.
+// TGKA joins twenty-third on 2026-09-03 as the universe's ONLY ticker trading the core defaults, and
+// that is a decision made on numbers rather than a forgotten literal. Its calibration ran three
+// times and lost to those same defaults every time: the first round's point measured 1.789 on 156
+// trades on its own 36/12/6 scheme but collapsed to 0.899 on the 24/12/3 control, where the plain
+// defaults hold 2.518; the second round, recalculated on the homogeneous window B, assembled a point
+// so narrow it took six trades in three years and left ONE trade in the OOS pool; the third round
+// kept the last six months as a blind holdout, voted only on folds 1-3, and its point returned
+// PF 0.815 with net -1 070 there against 3.709 and +20 223 for the defaults. The mechanism is worth
+// naming because it is new to the catalogue: every theme finds, in isolation, a value that beats the
+// default on its training window, yet the chosen values COMPOSE into a configuration that loses out
+// of sample — a defect of the majority rule, not a property of the instrument. There is nothing to
+// improve here because the defaults already sit at the maximum of three separate axes on TGKA
+// (RSILower 30, FreshDayATR 0, the day gate armed), and they deliver the catalogue's best baseline:
+// PF 1.967 over 167 trades in 36 months, 2.518 over 131 in 24 months, 3.709 on the blind holdout.
+// Overfitting is impossible by construction — the defaults were chosen across the whole catalogue,
+// never against this ticker — and the named exception to the universe guard lives in
+// registry_test.go (baselineByDesignTickers). The accepted risk is execution, and it is heavy:
+// median weekday turnover has fallen 106.8 -> 44.1 -> 27.7 -> 26.0 mln RUB by 2026, leaving 22.4 mln
+// over the last twelve months against the universe's own 50 mln gate, which the screener cleared
+// only on a 36-month MEAN inflated by 2023; the weekend session adds 254 days at a 1.9 mln median
+// the engine models no slippage for. Costs are not the problem: a 0.000002 RUB tick on a 0.006036
+// RUB price is a 0.066% round trip against the 0.1% modelled, and the baseline stays profitable even
+// at four times that. Review trigger: median turnover below 15 mln RUB removes the ticker from the
+// universe out of cycle; a rise above 50 mln, or the instrument's first sustained rising half-year,
+// calls for a fresh calibration.
 var paramsByTicker = map[string]core.Params{
 	ugld.Ticker:  ugld.DefaultParams(),
 	tbank.Ticker: tbank.DefaultParams(),
@@ -379,6 +405,7 @@ var paramsByTicker = map[string]core.Params{
 	sngsp.Ticker: sngsp.DefaultParams(),
 	nkhp.Ticker:  nkhp.DefaultParams(),
 	sofl.Ticker:  sofl.DefaultParams(),
+	tgka.Ticker:  tgka.DefaultParams(),
 }
 
 // ParamsFor returns the params for a known ticker, ok=false otherwise.

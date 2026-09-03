@@ -874,10 +874,13 @@ func TestRSIPullbackNKHPServesTheCalibratedPoint(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackTGKATracksBaseline держит честное состояние реестра: пока калибровка TGKA не
-// проведена, реестр обязан отдавать ровно baseline ядра. Тест заменяется в Task 12 на проверку
-// литерала.
-func TestRSIPullbackTGKATracksBaseline(t *testing.T) {
+// TestRSIPullbackTGKAServesTheCoreBaselineByDesign сторожит, что бэктест и живой раннер торгуют на
+// TGKA одно и то же — дефолты ядра. Это не промежуточное состояние «литерала ещё нет», а решение
+// владельца 2026-09-03: калибровка проведена, провалена трижды и на слепом holdout проиграла
+// дефолтам (0.815 против 3.709), поэтому тикер заведён в боевую вселенную именно на baseline.
+// Именное исключение из сторожевого теста вселенной — baselineByDesignTickers в
+// rsi_pullback/live/registry_test.go.
+func TestRSIPullbackTGKAServesTheCoreBaselineByDesign(t *testing.T) {
 	b, ok := rsiPullbackRegistry[rsipullbacktgka.Ticker]
 	if !ok {
 		t.Fatal("TGKA нет в реестре rsi_pullback")
