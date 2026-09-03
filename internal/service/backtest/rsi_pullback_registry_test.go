@@ -23,6 +23,7 @@ import (
 	rsipullbacksngsp "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sngsp"
 	rsipullbacksofl "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sofl"
 	rsipullbacksvav "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/svav"
+	rsipullbacktgka "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/tgka"
 	rsipullbackwush "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/wush"
 	rsipullbackydex "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ydex"
 )
@@ -870,5 +871,22 @@ func TestRSIPullbackNKHPServesTheCalibratedPoint(t *testing.T) {
 	}
 	if got := b.Build(p).Ticker(); got != "NKHP" {
 		t.Fatalf("Ticker() = %q, want NKHP", got)
+	}
+}
+
+// TestRSIPullbackTGKATracksBaseline держит честное состояние реестра: пока калибровка TGKA не
+// проведена, реестр обязан отдавать ровно baseline ядра. Тест заменяется в Task 12 на проверку
+// литерала.
+func TestRSIPullbackTGKATracksBaseline(t *testing.T) {
+	b, ok := rsiPullbackRegistry[rsipullbacktgka.Ticker]
+	if !ok {
+		t.Fatal("TGKA нет в реестре rsi_pullback")
+	}
+	p, err := b.ParseParams([]byte(`{}`))
+	if err != nil {
+		t.Fatalf("ParseParams: %v", err)
+	}
+	if p != core.DefaultParams() {
+		t.Fatalf("реестр отдаёт не baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
 	}
 }
