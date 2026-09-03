@@ -1,0 +1,65 @@
+{
+  "_comment": "data/params/rsi_pullback/tgka/plateau_point.json — ПРИНЯТАЯ ТОЧКА TGKA (Task 11): собрана правилом большинства >= 3 фолдов из 4 по одиннадцати темам 2026-09-03. Живых отличий от дефолтов ядра ровно три: RSIPeriod 4 -> 3 (тема entry, 3/4), EMAFast 10 -> 3 (темы trend и trend_low, 4/4), EMASlow 100 -> 30 (тема trend_low, 4/4 при pooled OOS 3.653 против 2.572 у канонической trend). Остальные поля упали на дефолты ядра: RSILower (фолды 40/45/10/10, максимум 2/4), RSIUpper (тема exit: 60/60/75/80, максимум 2/4), FreshDayATR (0.2/0.2/0/0, ничья), SpentDayATR (1/1/1.25/0.8 в обеих дневных темах, максимум 2/4), StopDailyATR (0.3/1.5/2/2, максимум 2/4 — риск-гейт A применять не пришлось), TPDailyATR (0.8/0.3/0.3/0.8, ничья), VolLookbackBars и VolMult (тема vol_window без большинства), VolBaseDays (тема volume дала 10 при 3/4, но её замер условен от UseVolume=1, а точка держит гейт выключенным — поле инертно и остаётся дефолтом), UseTrail и TrailDailyATR (тема trail без большинства: 0.3/0.5/1/0.7). Приняты темами: UseDayATRGate 1 (3/4), UseVolume 0 (3/4), UseRSIExit 1 (4/4) — все три совпали с дефолтами ядра. РИСК-ГЕЙТ A: эффективная защита = стоп 0.5 ATR (трейла нет), выживаемость 90.9% при пороге 30% — потолок 1.0 не задет, цены решения нет.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          3
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          3
+        ],
+        "EMASlow": [
+          30
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.5
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      },
+      "keepTop": 1
+    }
+  ]
+}
