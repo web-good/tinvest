@@ -1,11 +1,17 @@
 {
-  "_comment": "data/params/rsi_pullback/sofl/cal_screen.json — РАННЯЯ тема screen для SOFL, 4 прогона, поверх ДЕФОЛТОВ ЯДРА (core.DefaultParams(): UseDayATRGate=1, UseVolume=0). Тема мерит цену двух опциональных гейтов. ЗАМЕР 2026-09-03 (36 мес, in-sample): UseDayATRGate 0 -> 0.946/428 (net -11 777), 1 -> 0.987/166 — гейт режет 62% сделок и поднимает PF на 0.041, но ОБЕ строки убыточны: на SOFL дневной гейт не создаёт прибыль, он ограничивает убыток (отличие и от AFKS, где гейт носитель edge, и от NKHP, где без гейта остаётся 1.440). UseVolume в дефолтной форме (VolMult 1.2, VolBaseDays 14, VolLookbackBars 3) даёт 1.009/127 против 0.987/166 — плюс 0.022 PF. ЗАПУСК: go run ./cmd/backtest -ticker SOFL -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/sofl/cal_screen.json -out ./reports/SOFL_screen -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-09-03: pooled OOS PF 0.845 на 195 сделках, фолдов 4, отчёт reports/SOFL_screen/SOFL_rsi_pullback_Minutes30_20260903_121230_walkforward.md. Пофолдово: UseDayATRGate 1,0,0,1; UseVolume 1,0,1,0 — согласия нет ни по одной оси (3 из 4 не набирает ни гейт, ни фильтр объёма). OOS по фолдам: in-sample PF -> OOS PF/сделок/NetPnL%/MaxDD%: 1.179->1.008/29/0.17%/6.06%; 1.412->0.662/87/-15.37%/19.58%; 1.127->0.673/53/-9.79%/10.06%; 0.775->1.695/26/8.16%/4.90%. Вырожденных фолдов нет (в каждом есть и прибыльные, и убыточные сделки). ВЫВОД: тема не даёт устойчивого сигнала по обоим гейтам — UseDayATRGate и UseVolume уходят в дефолт ядра (UseDayATRGate=1, UseVolume=0), решение по ним принимается не темой screen, а темами risk/vol_window ниже по плану.",
+  "_comment": "data/params/rsi_pullback/sofl/cal_screen.json — РАННЯЯ тема screen для SOFL, 4 прогона, поверх ДЕФОЛТОВ ЯДРА (core.DefaultParams(): UseDayATRGate=1, UseVolume=0). Тема мерит цену двух опциональных гейтов. ЗАМЕР 2026-09-03 (36 мес, in-sample): UseDayATRGate 0 -> 0.946/428 (net -11 777), 1 -> 0.987/166 — гейт режет 62% сделок и поднимает PF на 0.041, но ОБЕ строки убыточны: на SOFL дневной гейт не создаёт прибыль, он ограничивает убыток (отличие и от AFKS, где гейт носитель edge, и от NKHP, где без гейта остаётся 1.440). UseVolume в дефолтной форме (VolMult 1.2, VolBaseDays 14, VolLookbackBars 3) даёт 1.009/127 против 0.987/166 — плюс 0.022 PF. ЗАПУСК: go run ./cmd/backtest -ticker SOFL -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/sofl/cal_screen.json -out ./reports/SOFL_screen -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-09-03: pooled OOS PF 0.845 на 195 сделках, фолдов 4, отчёт reports/SOFL_screen/SOFL_rsi_pullback_Minutes30_20260903_121230_walkforward.md. Пофолдово: UseDayATRGate 1,0,0,1; UseVolume 1,0,1,0 — согласия нет ни по одной оси (на каждой из двух бинарных осей голоса разошлись 2 на 2, а ничья большинством не считается). OOS по фолдам: in-sample PF -> OOS PF/сделок/NetPnL%/MaxDD%: 1.179->1.008/29/0.17%/6.06%; 1.412->0.662/87/-15.37%/19.58%; 1.127->0.673/53/-9.79%/10.06%; 0.775->1.695/26/8.16%/4.90%. Вырожденных фолдов нет (в каждом есть и прибыльные, и убыточные сделки). ВЫВОД: тема не даёт устойчивого сигнала по обоим гейтам — UseDayATRGate и UseVolume уходят в дефолт ядра (UseDayATRGate=1, UseVolume=0), решение по ним принимается не темой screen, а темами risk/vol_window ниже по плану.",
   "phases": [
     {
       "name": "screen",
       "grid": {
-        "UseDayATRGate": [0, 1],
-        "UseVolume": [0, 1]
+        "UseDayATRGate": [
+          0,
+          1
+        ],
+        "UseVolume": [
+          0,
+          1
+        ]
       },
       "keepTop": 4
     }
