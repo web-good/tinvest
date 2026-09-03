@@ -21,6 +21,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/reni"
 	rsipullbacksibn "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sibn"
 	rsipullbacksngsp "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sngsp"
+	rsipullbacksofl "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sofl"
 	rsipullbacksvav "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/svav"
 	rsipullbackwush "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/wush"
 	rsipullbackydex "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ydex"
@@ -832,6 +833,23 @@ func TestRSIPullbackAFKSTracksBaseline(t *testing.T) {
 	}
 	if got := b.Build(p).Ticker(); got != "AFKS" {
 		t.Fatalf("Ticker() = %q, want AFKS", got)
+	}
+}
+
+// TestRSIPullbackSOFLTracksBaseline держит честное состояние реестра: пока калибровка SOFL не
+// проведена, реестр обязан отдавать ровно baseline ядра. Тест заменяется в Task 13 на проверку
+// литерала.
+func TestRSIPullbackSOFLTracksBaseline(t *testing.T) {
+	b, ok := rsiPullbackRegistry[rsipullbacksofl.Ticker]
+	if !ok {
+		t.Fatal("SOFL нет в реестре rsi_pullback")
+	}
+	p, err := b.ParseParams([]byte(`{}`))
+	if err != nil {
+		t.Fatalf("ParseParams: %v", err)
+	}
+	if p != core.DefaultParams() {
+		t.Fatalf("реестр отдаёт не baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
 	}
 }
 
