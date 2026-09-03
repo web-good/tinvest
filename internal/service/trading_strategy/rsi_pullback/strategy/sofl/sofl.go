@@ -67,6 +67,26 @@ import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 // Ticker is the MOEX ticker this package parameterizes.
 const Ticker = "SOFL"
 
-// DefaultParams returns the rsi_pullback parameters for SOFL. Пока калибровка не проведена, это
-// ровно baseline ядра — см. док-комментарий пакета.
-func DefaultParams() core.Params { return core.DefaultParams() }
+// DefaultParams returns the calibrated point for SOFL.
+func DefaultParams() core.Params {
+	return core.Params{
+		RSIPeriod:       3,
+		RSILower:        10,
+		RSIUpper:        65,
+		EMAFast:         10,
+		EMASlow:         100,
+		DailyATRPeriod:  14,
+		UseDayATRGate:   1,
+		FreshDayATR:     0.2,
+		SpentDayATR:     0.8,
+		StopDailyATR:    0.5,
+		TPDailyATR:      0.3,
+		UseVolume:       0,
+		VolBaseDays:     14,
+		VolLookbackBars: 3,
+		VolMult:         1.2,
+		UseRSIExit:      1,
+		UseTrail:        0,
+		TrailDailyATR:   0,
+	}
+}

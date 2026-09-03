@@ -836,10 +836,7 @@ func TestRSIPullbackAFKSTracksBaseline(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackSOFLTracksBaseline держит честное состояние реестра: пока калибровка SOFL не
-// проведена, реестр обязан отдавать ровно baseline ядра. Тест заменяется в Task 13 на проверку
-// литерала.
-func TestRSIPullbackSOFLTracksBaseline(t *testing.T) {
+func TestRSIPullbackSOFLServesTheCalibratedPoint(t *testing.T) {
 	b, ok := rsiPullbackRegistry[rsipullbacksofl.Ticker]
 	if !ok {
 		t.Fatal("SOFL нет в реестре rsi_pullback")
@@ -848,8 +845,8 @@ func TestRSIPullbackSOFLTracksBaseline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseParams: %v", err)
 	}
-	if p != core.DefaultParams() {
-		t.Fatalf("реестр отдаёт не baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
+	if p != rsipullbacksofl.DefaultParams() {
+		t.Fatalf("реестр отдаёт не литерал пакета:\n got: %+v\nwant: %+v", p, rsipullbacksofl.DefaultParams())
 	}
 }
 
