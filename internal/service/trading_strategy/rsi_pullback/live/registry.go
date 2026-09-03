@@ -18,6 +18,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/reni"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sibn"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sngsp"
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sofl"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/svav"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/tbank"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ugld"
@@ -329,6 +330,31 @@ import (
 // 6.9% while overnight holds rise from 51.3% to 56.0% and weekend exits from 10.0% to 13.8%: 14 of
 // the 22 losing trades close on the RSI exit, so the loss moved rather than shrank and the risk is
 // amplified, not reduced.
+//
+// SOFL was calibrated 2026-09-03 on a SECOND round: the first round's point (canonical 36/12/6)
+// scored pooled OOS PF 1.808 on 54 trades but failed the control 24/12/3 run at 0.848, and the
+// owner ordered a recalibration on a fresh 24-month window (24/12/3 as the primary scheme, 36/12/6
+// as the control) rather than accept the point. The procedure is HYBRID WITH AN ANCHOR, the reason
+// stated up front rather than discovered after the fact: core defaults sit in a dead zone on SOFL
+// (PF 0.987, a loss), so the early screen/entry/trend themes still run over core defaults for a
+// bar-comparable verdict, while the seven late themes run over the entry/trend winners instead —
+// their numbers are conditional and not comparable line by line with the rest of the catalogue.
+// Both key themes MISS the declared bar on the second round: entry measures pooled OOS PF 0.416 on
+// 27 trades, every one of its four folds unprofitable; trend measures 1.229 on 52 trades, its
+// leading axis EMASlow returning two different values across folds. The ticker enters production
+// anyway under the standing rule. The accepted point clears BOTH risk gates the owner declared
+// before the runs — gate A (effective protection min(StopDailyATR, TrailDailyATR) survives at
+// least 30% of weekdays: this point's 0.5 ATR stop survives 91.8%, nowhere near the 1.0 ceiling)
+// and gate B (drawdown at most 1.3x the baseline's on the calibration window: 3.69% against a
+// 18.15% ceiling) — and the pooled numbers back it: 1.453 on 27 trades on the primary 24/12/3
+// scheme, 2.106 on 60 trades with all four folds profitable on the 36/12/6 control. Three risks are
+// accepted with eyes open. First, liquidity has fallen for three straight years — 314 -> 208 -> 124
+// -> 62 mln RUB of median weekday turnover by 2026 — leaving only a 1.2x margin over the
+// universe's own 50 mln gate, an execution risk calibration cannot remove. Second, the instrument's
+// whole window is down 67.1% with NOT ONE rising half-year, so the point has been tested only
+// against decline; the first rising half-year triggers an out-of-cycle recalibration. Third, the
+// weekend session carries a median turnover of just 6 mln RUB, and the engine models none of the
+// slippage that implies for trades that exit there.
 var paramsByTicker = map[string]core.Params{
 	ugld.Ticker:  ugld.DefaultParams(),
 	tbank.Ticker: tbank.DefaultParams(),
@@ -351,6 +377,7 @@ var paramsByTicker = map[string]core.Params{
 	astr.Ticker:  astr.DefaultParams(),
 	sngsp.Ticker: sngsp.DefaultParams(),
 	nkhp.Ticker:  nkhp.DefaultParams(),
+	sofl.Ticker:  sofl.DefaultParams(),
 }
 
 // ParamsFor returns the params for a known ticker, ok=false otherwise.
