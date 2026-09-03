@@ -1,0 +1,19 @@
+{
+  "_comment": "data/params/rsi_pullback/sofl/cal_vol_window.json — ПОЗДНЯЯ тема vol_window для SOFL, 24 прогона (VolLookbackBars 8 x VolMult 3) при ВКЛЮЧЁННОМ гейте (UseVolume=1), поверх ЯКОРЯ, а не дефолтов ядра. Тема мерит окно объёмного гейта на трёх уровнях множителя. ЯКОРЬ (Task 6, зафиксирован владельцем 2026-09-03): RSIPeriod 3, RSILower 10, RSIUpper 65, EMAFast 10, EMASlow 100, DailyATRPeriod 14, UseDayATRGate 1, FreshDayATR 0, SpentDayATR 0.8, StopDailyATR 0.5, TPDailyATR 0.6, UseVolume 0, VolBaseDays 14, VolLookbackBars 3, VolMult 1.2, UseRSIExit 1, UseTrail 0, TrailDailyATR 0. ПРОВЕРКА НА ПОЛНОЙ ИСТОРИИ (Step 1 брифа): точка (RSIPeriod=3, RSILower=10, RSIUpper=65) даёт 69 сделок за 36 месяцев (>= 20), PF 1.880, net +16 545 ₽ против дефолтов ядра 0.987/166 (убыточны). ОБОСНОВАНИЕ ВХОДА: тройка RSIPeriod=3, RSILower=10, RSIUpper=65 — первое место лидерборда темы entry, единственная тройка, победившая больше одного раза (фолды 2 и 3, OOS PF 2.265/17 и 0.883/14). ОБОСНОВАНИЕ ТРЕНДА: EMAFast и EMASlow оставлены НА ДЕФОЛТАХ ЯДРА (10, 100), а НЕ на паре фолда 2 темы trend (EMAFast=3, EMASlow=200): тема trend не дала ни одной повторившейся полной пары по фолдам — (20,200), (3,200), (3,150), (30,70) все четыре различны; pooled OOS PF 1.003 неотличим от baseline; точечный замер обеих осей плоский (размах EMASlow 0.118 PF). Решение владельца-координатора, зафиксировано как Ruling. ОСТАЛЬНЫЕ ПОЛЯ ЯКОРЯ — дефолты ядра, каждое из них предмет своей отдельной поздней темы (эта тема — предмет для VolLookbackBars). ЦЕНА ЯКОРЯ: числа семи поздних тем SOFL сравнимы между собой внутри SOFL и с точкой SOFL, но НЕ построчно с каталогом, где у большинства тикеров все десять тем шли от дефолтов ядра. ЗАМЕР 2026-09-03 (36 мес, in-sample, поверх дефолтов ядра — до фиксации якоря) при VolMult 1.2: VolLookbackBars 1 -> 1.011/106, 2 -> 0.969/117, 3 -> 1.009/127 (дефолт), 5 -> 0.904/137, 8 -> 0.889/143, 12 -> 0.938/154, 16 -> 0.971/163, 24 -> 0.985/164 — МАКСИМУМ У УЗКОГО КРАЯ (1), середина оси (5-8) — худшая часть, широкий край (16-24) частично восстанавливается, но не достигает узкого. ЗАПУСК: go run ./cmd/backtest -ticker SOFL -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/sofl/cal_vol_window.json -out ./reports/SOFL_vol_window -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "vol_window",
+      "grid": {
+        "RSIPeriod": [3],
+        "RSILower": [10],
+        "RSIUpper": [65],
+        "EMAFast": [10],
+        "EMASlow": [100],
+        "UseVolume": [1],
+        "VolLookbackBars": [1, 2, 3, 5, 8, 12, 16, 24],
+        "VolMult": [1.2, 2.5, 4.0]
+      },
+      "keepTop": 5
+    }
+  ]
+}

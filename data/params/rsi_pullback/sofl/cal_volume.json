@@ -1,0 +1,19 @@
+{
+  "_comment": "data/params/rsi_pullback/sofl/cal_volume.json — ПОЗДНЯЯ тема volume для SOFL, 35 прогонов (VolMult 7 x VolBaseDays 5) при ВКЛЮЧЁННОМ гейте (UseVolume=1), поверх ЯКОРЯ, а не дефолтов ядра. Вопрос «нужен ли гейт вообще» мерит тема screen (Task 3, раскол 2/2). ЯКОРЬ (Task 6, зафиксирован владельцем 2026-09-03): RSIPeriod 3, RSILower 10, RSIUpper 65, EMAFast 10, EMASlow 100, DailyATRPeriod 14, UseDayATRGate 1, FreshDayATR 0, SpentDayATR 0.8, StopDailyATR 0.5, TPDailyATR 0.6, UseVolume 0, VolBaseDays 14, VolLookbackBars 3, VolMult 1.2, UseRSIExit 1, UseTrail 0, TrailDailyATR 0. ПРОВЕРКА НА ПОЛНОЙ ИСТОРИИ (Step 1 брифа): точка (RSIPeriod=3, RSILower=10, RSIUpper=65) даёт 69 сделок за 36 месяцев (>= 20), PF 1.880, net +16 545 ₽ против дефолтов ядра 0.987/166 (убыточны). ОБОСНОВАНИЕ ВХОДА: тройка RSIPeriod=3, RSILower=10, RSIUpper=65 — первое место лидерборда темы entry, единственная тройка, победившая больше одного раза (фолды 2 и 3, OOS PF 2.265/17 и 0.883/14). ОБОСНОВАНИЕ ТРЕНДА: EMAFast и EMASlow оставлены НА ДЕФОЛТАХ ЯДРА (10, 100), а НЕ на паре фолда 2 темы trend (EMAFast=3, EMASlow=200): тема trend не дала ни одной повторившейся полной пары по фолдам — (20,200), (3,200), (3,150), (30,70) все четыре различны; pooled OOS PF 1.003 неотличим от baseline; точечный замер обеих осей плоский (размах EMASlow 0.118 PF). Решение владельца-координатора, зафиксировано как Ruling. ОСТАЛЬНЫЕ ПОЛЯ ЯКОРЯ — дефолты ядра, каждое из них предмет своей отдельной поздней темы (эта тема — предмет для VolMult/VolBaseDays). ЦЕНА ЯКОРЯ: числа семи поздних тем SOFL сравнимы между собой внутри SOFL и с точкой SOFL, но НЕ построчно с каталогом, где у большинства тикеров все десять тем шли от дефолтов ядра. ЗАМЕР 2026-09-03 (36 мес, in-sample, поверх дефолтов ядра — до фиксации якоря) VolMult при базе 14: 1.0 -> 0.997/137, 1.2 -> 1.009/127 (дефолтная форма), 1.5 -> 0.971/117, 2.0 -> 1.101/96, 2.5 -> 1.133/82 (МАКСИМУМ), 3.0 -> 1.017/69, 4.0 -> 1.033/57. VolBaseDays при VolMult 1.2: 3 -> 1.144/132 (МАКСИМУМ, узкий край), 5 -> 1.057/131, 10 -> 1.051/133, 14 -> 1.009/127 (дефолт), 20 -> 0.915/129 — ось монотонна, максимум на узком крае. Включение гейта в дефолтной форме даёт +0.022 PF над baseline (0.987 -> 1.009) — скромный эффект: на обороте будних дней 62-134 млн ₽ (см. reports/_analysis/sofl_pullback_prep_measurements.md) всплеск объёма несёт мало информации, ожидаемо между NKHP (гейт несёт сигнал) и AFKS (не несёт). ЗАПУСК: go run ./cmd/backtest -ticker SOFL -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/sofl/cal_volume.json -out ./reports/SOFL_volume -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "volume",
+      "grid": {
+        "RSIPeriod": [3],
+        "RSILower": [10],
+        "RSIUpper": [65],
+        "EMAFast": [10],
+        "EMASlow": [100],
+        "UseVolume": [1],
+        "VolMult": [1.0, 1.2, 1.5, 2.0, 2.5, 3.0, 4.0],
+        "VolBaseDays": [3, 5, 10, 14, 20]
+      },
+      "keepTop": 5
+    }
+  ]
+}
