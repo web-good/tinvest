@@ -1,0 +1,13 @@
+{
+  "_comment": "data/params/rsi_pullback/tgka/cal_trend_low.json — ДОПОЛНИТЕЛЬНАЯ тема trend_low для TGKA, 6 прогонов, поверх ДЕФОЛТОВ ЯДРА. Тема мерит НИЖНИЙ УГОЛ трендовой пары, недоступный канонической cal_trend.json по инварианту EMAFast < EMASlow при быстрой оси до 40. ОСНОВАНИЕ: ЗАМЕР 2026-09-03 ставит максимум медленной оси на её нижний край — EMASlow 20 -> 2.221/150 при EMAFast 10 (против дефолта 100 -> 1.967/167 и канонического низа 50 -> 2.187/163), а 30 -> 2.049/160. Ось быстрой EMA здесь обрезана сверху ДЕСЯТКОЙ вынужденно: при EMASlow 20 любое значение выше даёт перевёрнутый фильтр. ПЛАНКА НА ЭТОЙ ТЕМЕ НЕ СТОИТ и с каталогом её числа не сравнимы: у двадцати двух предшественников нижний угол не мерили вовсе. ПРАВИЛО ПРИНЯТИЯ (объявлено до прогона): поле тренда идёт из этой темы ТОЛЬКО при большинстве >= 3 фолдов из 4 И превосходстве pooled OOS над канонической темой trend; иначе — из trend или из дефолта ядра. ЗАПУСК: go run ./cmd/backtest -ticker TGKA -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/tgka/cal_trend_low.json -out ./reports/TGKA_trend_low -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-09-03: <заполняется в Task 5>.",
+  "phases": [
+    {
+      "name": "trend_low",
+      "grid": {
+        "EMAFast": [3, 5, 10],
+        "EMASlow": [20, 30]
+      },
+      "keepTop": 6
+    }
+  ]
+}
