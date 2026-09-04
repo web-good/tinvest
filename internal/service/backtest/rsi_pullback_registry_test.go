@@ -24,6 +24,7 @@ import (
 	rsipullbacksofl "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sofl"
 	rsipullbacksvav "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/svav"
 	rsipullbacktgka "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/tgka"
+	rsipullbackuwgn "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/uwgn"
 	rsipullbackvsmo "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/vsmo"
 	rsipullbackwush "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/wush"
 	rsipullbackydex "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ydex"
@@ -913,5 +914,25 @@ func TestRSIPullbackVSMOServesTheCalibratedPoint(t *testing.T) {
 	}
 	if p == core.DefaultParams() {
 		t.Fatal("реестр отдаёт baseline ядра: литерал принятой точки VSMO потерян")
+	}
+}
+
+// TestRSIPullbackUWGNTracksBaseline сторожит ЧЕСТНОЕ состояние: UWGN заведён в реестр до
+// калибровки, чтобы прогоны шли через реестр, а не через generic-ветку, и обязан возвращать ровно
+// baseline ядра. Тест заменяется снимком литерала в Task 12.
+func TestRSIPullbackUWGNTracksBaseline(t *testing.T) {
+	b, ok := rsiPullbackRegistry[rsipullbackuwgn.Ticker]
+	if !ok {
+		t.Fatal("UWGN отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
+	}
+	p, pok := b.DefaultParams().(core.Params)
+	if !pok {
+		t.Fatalf("UWGN: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
+	}
+	if p != core.DefaultParams() {
+		t.Fatalf("UWGN ещё не откалиброван, params обязаны совпадать с baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
+	}
+	if got := b.Build(p).Ticker(); got != "UWGN" {
+		t.Fatalf("Ticker() = %q, want UWGN", got)
 	}
 }
