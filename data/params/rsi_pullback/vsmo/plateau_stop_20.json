@@ -1,0 +1,65 @@
+{
+  "_comment": "data/params/rsi_pullback/vsmo/plateau_stop_20.json — ЗОНД КАПКАНА ШИРОКОГО СТОПА (Task 9 Step 3): дефолты ядра плюс поле, принятое темой risk (TPDailyATR 0.3, большинство 3/4), и StopDailyATR 2.0. Зонд нужен, чтобы измерить анатомию решения, которое тема risk предлагала (её голоса 1.5/1.5/1.3/1.3 лежат ВЫШЕ потолка риск-гейта A, равного 1.0), и показать, чем именно куплен рост PF. ЗАПУСК: go run ./cmd/backtest -ticker VSMO -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/vsmo/plateau_stop_20.json -out ./reports/VSMO_nb_plateau_stop_20 -months 36 -min-trades 1 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "probe",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          10
+        ],
+        "EMASlow": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          2.0
+        ],
+        "TPDailyATR": [
+          0.3
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      },
+      "keepTop": 1
+    }
+  ]
+}
