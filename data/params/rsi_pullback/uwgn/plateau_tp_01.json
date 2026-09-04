@@ -1,0 +1,65 @@
+{
+  "_comment": "data/params/rsi_pullback/uwgn/plateau_tp_01.json — СОСЕД ПЛАТО принятой точки UWGN по полю TPDailyATR = 0.1 (Task 11 Step 9), ЗОНД ЗА КРАЕМ СЕТКИ: принятое значение 0.2 стоит на нижнем краю оси темы risk, поэтому спека §5.3 требует зонда за краем, чтобы отделить настоящий край от обрезанной оси. Значения 0.1 НЕТ в сетке темы, ни один фолд за него не голосовал — результат этого файла НЕ МОЖЕТ изменить точку, он только отвечает на вопрос, обрезана ли ось. ЭКОНОМИКА: медиана дневного ATR UWGN 3.80% цены, цель 0.1 ATR ≈ 0.38% цены при настоящем круге издержек 0.187% (шаг цены) — круг съедает половину целевого движения, дальше двигать ось бессмысленно. Точка отличается от этого файла ровно одним полем; совпадение результата побайтово означало бы инертную ось. ЗАПУСК: go run ./cmd/backtest -ticker UWGN -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/uwgn/plateau_tp_01.json -out ./reports/UWGN_nb_plateau_tp_01 -months 30 -min-trades 1 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "neighbour",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          10
+        ],
+        "EMASlow": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.5
+        ],
+        "TPDailyATR": [
+          0.1
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      },
+      "keepTop": 1
+    }
+  ]
+}

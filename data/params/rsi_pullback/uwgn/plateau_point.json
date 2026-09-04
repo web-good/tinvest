@@ -1,0 +1,65 @@
+{
+  "_comment": "data/params/rsi_pullback/uwgn/plateau_point.json — ПРИНЯТАЯ ТОЧКА UWGN (Task 11): собрана правилом большинства >= 3 фолдов из 4 по одиннадцати темам 2026-09-04. Живое отличие от дефолтов ядра РОВНО ОДНО: TPDailyATR 0.6 -> 0.2 (тема risk, ЕДИНОГЛАСНО 4/4). Это самая близкая к baseline точка каталога (одно отличающееся поле из восемнадцати; у VSMO было два). Остальные семнадцать полей упали на дефолты ядра: RSIPeriod (тема entry, фолды 3/7/3/7 — ничья 2:2), RSILower (45/40/15/30 — четыре разных значения), RSIUpper (тема exit: 55/75/45/45 — 2/4), EMAFast (тема trend: 5/3/3/20 — 2/4), EMASlow (75/100/250/250 — 2/4), SpentDayATR (тема day_spent: 1/1/0.5/0.4 — 2/4), VolMult (1.0/1.0/3.0/1.2 — 2/4) и VolBaseDays (20/14/5/20 — 2/4), VolLookbackBars (тема vol_window: 12/1/1/16 — 2/4), UseRSIExit (тема trail: 0/1/1/0 — ничья 2:2), UseTrail и TrailDailyATR (тема trail: 0.3/1.0/0.7/0.7 — 2/4), StopDailyATR (тема risk: 1.3/1.3/2.0/2.0 — РАСКОЛ 2:2, большинства нет), DailyATRPeriod (ни одной темой не меряется). Приняты темами и СОВПАЛИ с дефолтами: UseDayATRGate 1 (тема screen, 3/4), UseVolume 0 (тема screen, 4/4 единогласно), FreshDayATR 0 (тема day, 3/4). РИСК-ГЕЙТ A: эффективная защита = стоп 0.5 дневного ATR (трейла нет, UseTrail 0) — потолок 1.0 не задет, цены решения нет. ВАЖНО: гейт не пришлось применять только потому, что тема risk дала раскол 2:2 и правило большинства само вернуло поле к дефолту 0.5; все четыре фолда тянули стоп в зону, недостижимую в 30% будних дней окна (1.3 -> 24.7%, 2.0 -> 8.7% при потолке 1.0 = 41.4%). Гейт A режет ПРИНЯТОЕ значение, а не подставляет своё вместо отсутствующего — кромсать было нечего. Прямой прецедент — VSMO (2026-09-04): там все четыре фолда голосовали за стоп 1.3-1.5, раскол 2:2 оставил поле на 0.5, и в разборе записано «точку спасло правило большинства, а не гейт». ЗАПУСК: go run ./cmd/backtest -ticker UWGN -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/uwgn/plateau_point.json -out ./reports/UWGN_point_oos -months 30 -train-months 10 -test-months 5 -min-trades 20 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          10
+        ],
+        "EMASlow": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.5
+        ],
+        "TPDailyATR": [
+          0.2
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      },
+      "keepTop": 1
+    }
+  ]
+}
