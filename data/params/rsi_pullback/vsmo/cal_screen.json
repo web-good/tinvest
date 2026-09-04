@@ -1,0 +1,19 @@
+{
+  "_comment": "data/params/rsi_pullback/vsmo/cal_screen.json — тема screen для VSMO, 4 прогона, поверх ДЕФОЛТОВ ЯДРА. Тема мерит цену двух опциональных гейтов: дневного (UseDayATRGate) и объёмного (UseVolume). ЗАМЕР 2026-09-04 (36 мес, in-sample): UseDayATRGate 0 -> 1.320/387, 1 -> 1.658/144 (ДЕФОЛТ) — гейт покупает 0.34 PF ценой двух третей сделок; UseVolume 0 -> 1.658/144 (ДЕФОЛТ), 1 -> 1.704/110 в дефолтной форме гейта (VolMult 1.2, VolBaseDays 14), а в лучшей форме (VolMult 1.2, VolBaseDays 20) — 1.990/107, форму мерит тема volume. ПРЕДУПРЕЖДЕНИЕ О КРАЯХ: краёв у бинарной темы нет, но выбор UseDayATRGate=0 означал бы отказ от носителя edge — он пишется прямым текстом, если случится. Тема прогоняется с -min-trades 1: без гейтов число сделок втрое выше, и порог 20 исказил бы сравнение. ЗАПУСК: go run ./cmd/backtest -ticker VSMO -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/vsmo/cal_screen.json -out ./reports/VSMO_screen -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-09-04: (заполняется после прогона)",
+  "phases": [
+    {
+      "name": "screen",
+      "grid": {
+        "UseDayATRGate": [
+          0,
+          1
+        ],
+        "UseVolume": [
+          0,
+          1
+        ]
+      },
+      "keepTop": 4
+    }
+  ]
+}
