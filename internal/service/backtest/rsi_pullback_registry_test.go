@@ -22,6 +22,7 @@ import (
 	rsipullbacksibn "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sibn"
 	rsipullbacksngsp "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sngsp"
 	rsipullbacksofl "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sofl"
+	rsipullbackspbe "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/spbe"
 	rsipullbacksvav "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/svav"
 	rsipullbacktgka "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/tgka"
 	rsipullbackuwgn "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/uwgn"
@@ -934,5 +935,25 @@ func TestRSIPullbackUWGNTracksBaseline(t *testing.T) {
 	}
 	if got := b.Build(p).Ticker(); got != "UWGN" {
 		t.Fatalf("Ticker() = %q, want UWGN", got)
+	}
+}
+
+// TestRSIPullbackSPBETracksBaseline сторожит ЧЕСТНОЕ состояние: SPBE заведён в реестр до
+// калибровки, чтобы прогоны шли через реестр, а не через generic-ветку, и обязан возвращать ровно
+// baseline ядра. Тест заменяется снимком литерала в Task 12.
+func TestRSIPullbackSPBETracksBaseline(t *testing.T) {
+	b, ok := rsiPullbackRegistry[rsipullbackspbe.Ticker]
+	if !ok {
+		t.Fatal("SPBE отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
+	}
+	p, pok := b.DefaultParams().(core.Params)
+	if !pok {
+		t.Fatalf("SPBE: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
+	}
+	if p != core.DefaultParams() {
+		t.Fatalf("SPBE ещё не откалиброван, params обязаны совпадать с baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
+	}
+	if got := b.Build(p).Ticker(); got != "SPBE" {
+		t.Fatalf("Ticker() = %q, want SPBE", got)
 	}
 }
