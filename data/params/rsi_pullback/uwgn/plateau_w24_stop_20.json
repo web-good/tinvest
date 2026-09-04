@@ -1,0 +1,65 @@
+{
+ "_comment": "data/params/rsi_pullback/uwgn/plateau_w24_stop_20.json — ЗОНД ЦЕНЫ РИСК-ГЕЙТА A ВТОРОГО КРУГА (Task R6, план docs/superpowers/plans/2026-09-04-uwgn-rescue-round.md): дефолты ядра плюс TPDailyATR 0.2 (единогласное решение темы risk обоих кругов) плюс StopDailyATR 2.0. Пара зондов нужна ровно для одного: тема risk второго круга дала StopDailyATR большинством 3/4 за 2.0, риск-гейт A с потолком 1.0 (выживаемость 42.1% будних дней окна против 7.9% на 2.0) отвергает победителя и ставит в точку 1.0 — цена этого решения меряется здесь, на полном 24-месячном окне. ЗАПУСК: go run ./cmd/backtest -ticker UWGN -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/uwgn/plateau_w24_stop_20.json -out ./reports/UWGN_w24_nb_stop_20 -months 24 -min-trades 1 -metric profit_factor.",
+ "phases": [
+  {
+   "name": "probe",
+   "grid": {
+    "RSIPeriod": [
+     4
+    ],
+    "RSILower": [
+     30
+    ],
+    "RSIUpper": [
+     70
+    ],
+    "EMAFast": [
+     10
+    ],
+    "EMASlow": [
+     100
+    ],
+    "DailyATRPeriod": [
+     14
+    ],
+    "UseDayATRGate": [
+     1
+    ],
+    "FreshDayATR": [
+     0
+    ],
+    "SpentDayATR": [
+     0.8
+    ],
+    "StopDailyATR": [
+     2.0
+    ],
+    "TPDailyATR": [
+     0.2
+    ],
+    "UseVolume": [
+     0
+    ],
+    "VolBaseDays": [
+     14
+    ],
+    "VolLookbackBars": [
+     3
+    ],
+    "VolMult": [
+     1.2
+    ],
+    "UseRSIExit": [
+     1
+    ],
+    "UseTrail": [
+     0
+    ],
+    "TrailDailyATR": [
+     0
+    ]
+   },
+   "keepTop": 1
+  }
+ ]
+}
