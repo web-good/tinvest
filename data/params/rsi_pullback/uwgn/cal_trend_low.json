@@ -1,0 +1,22 @@
+{
+  "_comment": "data/params/rsi_pullback/uwgn/cal_trend_low.json — тема trend_low для UWGN, 12 пар, поверх ДЕФОЛТОВ ЯДРА. Тема мерит НИЖНИЙ УГОЛ трендового фильтра, недоступный канонической сетке при EMAFast до 40 из-за инварианта EMAFast < EMASlow. ЗАМЕР 2026-09-04 (30 мес, окно 2024-03-05..2026-09-04, Minutes30, in-sample): EMASlow 20 -> 0.923/108, 30 -> 0.999/113 при EMAFast 10 — обе НИЖЕ дефолта (1.055/123). EMAFast 3 -> 1.080/108, 8 -> 1.068/120 при EMASlow 100 — обе не превышают узел EMAFast 10 (1.055). ПРЕДУПРЕЖДЕНИЕ О КРАЯХ: ось так же пологая, как каноническая cal_trend.json (разброс 0.17-0.21 PF при почти неизменном числе сделок) — тренд на UWGN не фильтрует ни в одной из двух сеток, и любая победа узла в фолде — шум, а не оптимум. Планка по этой теме не проверяется. ЗАПУСК: go run ./cmd/backtest -ticker UWGN -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/uwgn/cal_trend_low.json -out ./reports/UWGN_trend_low -months 30 -train-months 10 -test-months 5 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-09-04: <заполняется после прогона>",
+  "phases": [
+    {
+      "name": "trend_low",
+      "grid": {
+        "EMAFast": [
+          3,
+          5,
+          8,
+          10
+        ],
+        "EMASlow": [
+          20,
+          30,
+          40
+        ]
+      },
+      "keepTop": 6
+    }
+  ]
+}

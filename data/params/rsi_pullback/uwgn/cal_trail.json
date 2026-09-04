@@ -1,0 +1,25 @@
+{
+  "_comment": "data/params/rsi_pullback/uwgn/cal_trail.json — тема trail для UWGN, 10 прогонов, поверх ДЕФОЛТОВ ЯДРА при принудительно включённом трейле (UseTrail 1). Тема мерит трейлинг-стоп и одновременно право отключить RSI-выход. ЗАМЕР 2026-09-04 (30 мес, окно 2024-03-05..2026-09-04, Minutes30, in-sample): ТРЕЙЛ С ДИСТАНЦИЕЙ 1.0 ПОБАЙТОВО РАВЕН ЕГО ОТСУТСТВИЮ — он стоит дальше стопа и не срабатывает никогда, поэтому дистанция 1.0 и выше означает УПРОЩЕНИЕ: UseTrail 0, TrailDailyATR 0. ПРЕДУПРЕЖДЕНИЕ О КРАЯХ: победа дистанции 1.0 или 1.5 должна читаться как «трейл выключен», а не как содержательный оптимум — прямым текстом, если случится; дистанция НИЖЕ принятого стопа делает трейл эффективной защитой, и тогда к ней применяется риск-гейт A, а не к стопу. ЗАПУСК: go run ./cmd/backtest -ticker UWGN -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/uwgn/cal_trail.json -out ./reports/UWGN_trail -months 30 -train-months 10 -test-months 5 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-09-04: <заполняется после прогона>",
+  "phases": [
+    {
+      "name": "trail",
+      "grid": {
+        "UseRSIExit": [
+          0,
+          1
+        ],
+        "UseTrail": [
+          1
+        ],
+        "TrailDailyATR": [
+          0.3,
+          0.5,
+          0.7,
+          1.0,
+          1.5
+        ]
+      },
+      "keepTop": 10
+    }
+  ]
+}
