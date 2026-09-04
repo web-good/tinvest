@@ -895,11 +895,11 @@ func TestRSIPullbackTGKAServesTheCoreBaselineByDesign(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackVSMOTracksBaseline сторожит ПРОМЕЖУТОЧНОЕ состояние двадцать третьего кандидата:
-// пакет strategy/vsmo заведён 2026-09-04 под калибровку, литерала у него ещё нет, и реестр обязан
-// отдавать ровно дефолты ядра. Тест заменяется на проверку принятой точки в задаче постановки
-// литерала; до тех пор он ловит забытый или преждевременно поставленный литерал.
-func TestRSIPullbackVSMOTracksBaseline(t *testing.T) {
+// TestRSIPullbackVSMOServesTheCalibratedPoint сторожит, что бэктест и живой раннер торгуют на VSMO
+// одну и ту же принятую точку: реестр обязан отдавать литерал пакета, а не дефолты ядра. Точка
+// отличается от baseline двумя полями (EMAFast 5, TPDailyATR 0.3), и подмена литерала дефолтами
+// была бы молчаливой потерей калибровки.
+func TestRSIPullbackVSMOServesTheCalibratedPoint(t *testing.T) {
 	b, ok := rsiPullbackRegistry[rsipullbackvsmo.Ticker]
 	if !ok {
 		t.Fatal("VSMO нет в реестре rsi_pullback")
@@ -909,9 +909,9 @@ func TestRSIPullbackVSMOTracksBaseline(t *testing.T) {
 		t.Fatalf("ParseParams: %v", err)
 	}
 	if p != rsipullbackvsmo.DefaultParams() {
-		t.Fatalf("реестр отдаёт не параметры пакета:\n got: %+v\nwant: %+v", p, rsipullbackvsmo.DefaultParams())
+		t.Fatalf("реестр отдаёт не литерал пакета:\n got: %+v\nwant: %+v", p, rsipullbackvsmo.DefaultParams())
 	}
-	if p != core.DefaultParams() {
-		t.Fatalf("до калибровки VSMO обязан отдавать baseline ядра:\n got: %+v\nwant: %+v", p, core.DefaultParams())
+	if p == core.DefaultParams() {
+		t.Fatal("реестр отдаёт baseline ядра: литерал принятой точки VSMO потерян")
 	}
 }

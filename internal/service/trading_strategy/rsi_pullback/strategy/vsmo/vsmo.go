@@ -72,6 +72,26 @@ import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 // Ticker is the instrument this package parameterises.
 const Ticker = "VSMO"
 
-// DefaultParams returns the rsi_pullback parameters for VSMO. Калибровка ещё не проведена, поэтому
-// пакет отдаёт ровно baseline ядра; менять это значение можно только вместе с принятой точкой.
-func DefaultParams() core.Params { return core.DefaultParams() }
+// DefaultParams returns the calibrated point for VSMO.
+func DefaultParams() core.Params {
+	return core.Params{
+		RSIPeriod:       4,
+		RSILower:        30,
+		RSIUpper:        70,
+		EMAFast:         5,
+		EMASlow:         100,
+		DailyATRPeriod:  14,
+		UseDayATRGate:   1,
+		FreshDayATR:     0,
+		SpentDayATR:     0.8,
+		StopDailyATR:    0.5,
+		TPDailyATR:      0.3,
+		UseVolume:       0,
+		VolBaseDays:     14,
+		VolLookbackBars: 3,
+		VolMult:         1.2,
+		UseRSIExit:      1,
+		UseTrail:        0,
+		TrailDailyATR:   0,
+	}
+}
