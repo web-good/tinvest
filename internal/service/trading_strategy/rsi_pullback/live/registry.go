@@ -23,6 +23,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/tbank"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/tgka"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ugld"
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/vsmo"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/wush"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ydex"
 )
@@ -382,6 +383,30 @@ import (
 // at four times that. Review trigger: median turnover below 15 mln RUB removes the ticker from the
 // universe out of cycle; a rise above 50 mln, or the instrument's first sustained rising half-year,
 // calls for a fresh calibration.
+//
+// VSMO (VSMPA-AVISMA) joined on 2026-09-04 as the twenty-third ticker, and its accepted point is the
+// closest to the core baseline in the whole catalogue: only two of eighteen fields differ, EMAFast
+// 10 -> 5 (theme trend_low, three folds of four) and TPDailyATR 0.6 -> 0.3 (theme risk, three folds
+// of four). The bar was missed for the twelfth time running — entry pooled OOS 1.133 with the
+// leading axis split 10/15/15/30, trend took the PF criterion (1.684 over 115 trades) but split its
+// leading axis across four different values in four folds. What the point does have is an unusually
+// clean risk profile: pooled OOS 1.814 over 116 trades with all four folds profitable, 3.558 on the
+// 24/12/3 control, and a full-window max drawdown of 4.92% — BELOW the 5.49% baseline rather than
+// merely under the 7.14% gate B ceiling. Every one of the five third-contour numbers improved
+// (SL exits 22.2% -> 18.1%, holding median 8 -> 6 bars, overnights 46.5% -> 39.6%, weekend-session
+// exits 6.2% -> 5.4%).
+//
+// Two things about VSMO are worth knowing before touching its params. First, COSTS ARE THE ONE PLACE
+// WHERE THE MODEL IS OPTIMISTIC rather than conservative: a 20 RUB tick on a 22-24k RUB price is a
+// 0.13-0.18% round trip against the 0.1% modelled, which is why the stop condition carried a fourth
+// clause for this ticker — the point had to stay above 1.0 at a doubled round trip, and it does with
+// room (1.563). Second, RISK GATE A WAS NOT APPLIED ONLY BECAUSE THE RISK THEME TIED: all four folds
+// voted for a stop of 1.3-1.5 ATR, levels reachable in 21.2% and 13.0% of weekdays against the 30%
+// floor, and the 2/2 split is what left the stop at the default 0.5 (85.1%). Accepted risks:
+// liquidity median 27.2 mln RUB over twelve months against the screener's 50 mln universe gate
+// (review trigger: below 15 mln removes the ticker out of cycle), a weekend session with a 1.97 mln
+// RUB median turnover the engine models no slippage for, and a regime of -53.0% over the window with
+// a single rising half-year out of six — recalibrate out of cycle at the first sustained rising one.
 var paramsByTicker = map[string]core.Params{
 	ugld.Ticker:  ugld.DefaultParams(),
 	tbank.Ticker: tbank.DefaultParams(),
@@ -406,6 +431,7 @@ var paramsByTicker = map[string]core.Params{
 	nkhp.Ticker:  nkhp.DefaultParams(),
 	sofl.Ticker:  sofl.DefaultParams(),
 	tgka.Ticker:  tgka.DefaultParams(),
+	vsmo.Ticker:  vsmo.DefaultParams(),
 }
 
 // ParamsFor returns the params for a known ticker, ok=false otherwise.
