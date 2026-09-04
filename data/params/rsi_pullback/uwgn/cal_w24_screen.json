@@ -1,0 +1,19 @@
+{
+  "_comment": "data/params/rsi_pullback/uwgn/cal_w24_screen.json — тема screen ВТОРОГО КРУГА для UWGN (план docs/superpowers/plans/2026-09-04-uwgn-rescue-round.md), 4 прогона, поверх ДЕФОЛТОВ ЯДРА. Тема мерит цену двух опциональных гейтов: дневного (UseDayATRGate) и объёмного (UseVolume). ЗАМЕР ПЕРВОГО КРУГА (снят на 30-месячном окне 2024-03-05..2026-09-04, Minutes30, in-sample; тема второго круга считается на 24-месячном окне 2024-09-04..2026-09-04, поэтому замер — ориентир, а не предсказание): UseDayATRGate 0 -> 0.945/383, 1 -> 1.055/123 (ДЕФОЛТ) — гейт носитель всего, что есть на 30-месячном окне: без него дефолты убыточны (PF ниже единицы). UseVolume 0 -> 1.055/123 (ДЕФОЛТ), 1 -> 0.980/108 в дефолтной форме гейта. РЕЗУЛЬТАТ ПЕРВОГО КРУГА 2026-09-04: pooled OOS PF 1.058 на 133 сделках, фолдов 4, win rate 63.91%, compounded +2.47% — на этом ориентир для сравнения. Тема прогоняется с -min-trades 1: без гейтов число сделок втрое выше, и порог 20 исказил бы сравнение. ЗАПУСК: go run ./cmd/backtest -ticker UWGN -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/uwgn/cal_w24_screen.json -out ./reports/UWGN_w24_screen -months 24 -train-months 12 -test-months 3 -min-trades 1 -metric profit_factor. РЕЗУЛЬТАТ ВТОРОГО КРУГА 2026-09-04: <заполняется после прогона>",
+  "phases": [
+    {
+      "name": "screen",
+      "grid": {
+        "UseDayATRGate": [
+          0,
+          1
+        ],
+        "UseVolume": [
+          0,
+          1
+        ]
+      },
+      "keepTop": 4
+    }
+  ]
+}
