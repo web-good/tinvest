@@ -1,0 +1,100 @@
+package backtest
+
+import "testing"
+
+// TestSPBEGridsStayWide держит НИЖНЮЮ границу ширины сеток SPBE. Владелец потребовал максимально
+// широкие оси, поэтому тест запрещает УРЕЗАТЬ ось, а не расширять её: он проверяет наличие
+// обязательных значений и не запрещает лишних. Три отступления от канона (спека
+// docs/superpowers/specs/2026-09-04-spbe-rsi-pullback-prep-design.md) посажены на замеры полного
+// окна 2026-09-04 (36 мес, in-sample) и пиньятся здесь, чтобы редактор сеток не «починил» их
+// обратно к канону:
+//
+//   - EMASlow (cal_trend_low.json) РАСШИРЕНА ВНИЗ ДО 15 (канон [20,30,40]). Точечный замер:
+//     20 -> 1.461/122, 30 -> 1.496/128 — максимум оси EMASlow стоит в нижнем углу канонической
+//     сетки, и без узла 15 этот максимум совпал бы с краем сетки, а не с внутренней точкой.
+//   - TPDailyATR (cal_risk.json) РАСШИРЕНА ВНИЗ ДО 0.2 (канон начинается с 0.3). Точечный замер:
+//     максимум 0.3 -> 1.492/168 стоит рядом с нижним краем канонической оси, узел 0.2 (1.311/176)
+//     служит зондом за краем, чтобы отделить «максимум внутри оси» от «максимум на краю».
+//   - StopDailyATR (cal_risk.json) ОСТАВЛЕНА ШИРОКОЙ ДО 2.0 НЕСМОТРЯ НА КАПКАН ШИРОКОГО СТОПА:
+//     1.3 -> 1.752/140, 1.5 -> 1.969/140, 2.0 -> 1.930/139 — пул сделок практически не меняется
+//     (140 -> 139), то есть рост PF куплен отодвинутым убытком, а не отбором входов. Верхнюю
+//     границу здесь режет риск-гейт A (потолок 1.0 при выживаемости 44.7%), а не сетка, поэтому
+//     узлы 1.3, 1.5 и 2.0 остаются в файле — тема обязана показать цену капкана, а не скрыть её
+//     обрезкой оси.
+func TestSPBEGridsStayWide(t *testing.T) {
+	cases := []struct {
+		file   string
+		field  string
+		values []float64
+	}{
+		{"cal_screen.json", "UseDayATRGate", []float64{0, 1}},
+		{"cal_screen.json", "UseVolume", []float64{0, 1}},
+		{"cal_entry.json", "RSIPeriod", []float64{2, 3, 4, 5, 6, 7, 8, 10}},
+		{"cal_entry.json", "RSILower", []float64{10, 15, 20, 25, 30, 35, 40, 45, 50}},
+		{"cal_entry.json", "RSIUpper", []float64{55, 60, 65, 70, 75, 80, 85}},
+		{"cal_trend.json", "EMAFast", []float64{3, 5, 8, 10, 15, 20, 30, 40}},
+		{"cal_trend.json", "EMASlow", []float64{50, 75, 100, 150, 200, 250}},
+		{"cal_trend_low.json", "EMAFast", []float64{3, 5, 8, 10}},
+		{"cal_trend_low.json", "EMASlow", []float64{15, 20, 30, 40}},
+		{"cal_day.json", "FreshDayATR", []float64{0, 0.1, 0.2, 0.3, 0.4, 0.5}},
+		{"cal_day.json", "SpentDayATR", []float64{0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.25, 1.5}},
+		{"cal_day_spent.json", "SpentDayATR", []float64{0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.25, 1.5, 2.0}},
+		{"cal_volume.json", "VolMult", []float64{1.0, 1.2, 1.5, 2.0, 2.5, 3.0}},
+		{"cal_volume.json", "VolBaseDays", []float64{3, 5, 10, 14, 20}},
+		{"cal_vol_window.json", "VolLookbackBars", []float64{1, 2, 3, 5, 8, 12, 16, 24, 32}},
+		{"cal_vol_window.json", "VolMult", []float64{1.0, 1.2, 2.0}},
+		{"cal_risk.json", "StopDailyATR", []float64{0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 1.0, 1.3, 1.5, 2.0}},
+		{"cal_risk.json", "TPDailyATR", []float64{0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1.0, 1.5}},
+		{"cal_exit.json", "RSIUpper", []float64{35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90}},
+		{"cal_trail.json", "TrailDailyATR", []float64{0.3, 0.5, 0.7, 1.0, 1.5}},
+		{"cal_trail.json", "UseRSIExit", []float64{0, 1}},
+	}
+	for _, c := range cases {
+		grid := rsiPullbackTickerGrid(t, "spbe", c.file)
+		got := grid[c.field]
+		for _, v := range c.values {
+			var found bool
+			for _, g := range got {
+				if g == v {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("spbe/%s: ось %s потеряла значение %v (есть %v) — ось УРЕЗАНА, а владелец требовал максимально широкую", c.file, c.field, v, got)
+			}
+		}
+	}
+}
+
+// TestSPBEEntryGridKeepsRSIUpperAboveRSILower сторожит инвариант, который расширение осей входа
+// может нарушить незаметно: одна лишняя точка в любой из осей даёт пару, где выход стоит НИЖЕ
+// входа. Такая пара не ошибка запуска — ядро её честно посчитает и вернёт мусорную конфигурацию,
+// которая войдёт в ранжирование темы.
+func TestSPBEEntryGridKeepsRSIUpperAboveRSILower(t *testing.T) {
+	grid := rsiPullbackTickerGrid(t, "spbe", "cal_entry.json")
+	for _, lower := range grid["RSILower"] {
+		for _, upper := range grid["RSIUpper"] {
+			if upper <= lower {
+				t.Errorf("spbe/cal_entry.json: пара RSILower=%v, RSIUpper=%v нарушает RSIUpper > RSILower", lower, upper)
+			}
+		}
+	}
+}
+
+// TestSPBETrendGridsKeepFastBelowSlow проверяет ОБА файла тренда (cal_trend.json,
+// cal_trend_low.json). Разложение темы на каноническую сетку и нижний угол существует ровно
+// потому, что инвариант EMAFast < EMASlow не позволяет мерить EMASlow 15..40 в одной сетке с
+// EMAFast до 40; если кто-нибудь сольёт файлы обратно, тест это поймает.
+func TestSPBETrendGridsKeepFastBelowSlow(t *testing.T) {
+	for _, file := range []string{"cal_trend.json", "cal_trend_low.json"} {
+		grid := rsiPullbackTickerGrid(t, "spbe", file)
+		for _, fast := range grid["EMAFast"] {
+			for _, slow := range grid["EMASlow"] {
+				if fast >= slow {
+					t.Errorf("spbe/%s: пара EMAFast=%v, EMASlow=%v нарушает EMAFast < EMASlow", file, fast, slow)
+				}
+			}
+		}
+	}
+}
