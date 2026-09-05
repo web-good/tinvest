@@ -1,0 +1,25 @@
+{
+  "_comment": "data/params/rsi_pullback/rtkmp/cal_trail.json — тема trail для RTKMP, 10 прогонов, поверх ДЕФОЛТОВ ЯДРА при UseTrail = 1. Тема мерит трейлинг-стоп и его взаимодействие с RSI-выходом. ЗАМЕР 2026-09-05 (36 мес, in-sample). TrailDailyATR: 0.3 -> 1.104/158 при max DD 8 646 руб, 0.5 -> 1.327/145 при 15 260, 0.7 -> 1.285/142 при 15 899, 1.0 -> 1.313/142 и 1.5 -> 1.313/142 — ПОБАЙТОВО равны отсутствию трейла (правило упрощения: дистанция >= 1.0 означает UseTrail 0, TrailDailyATR 0). UseRSIExit: 0 -> 1.018/131, 1 -> 1.313/142 — выход по RSI обязателен, отказ от него стоит 0.30 PF. ПРЕДУПРЕЖДЕНИЕ О КРАЯХ: узел 0.3 снижает просадку почти вдвое (8 646 против 16 170 у дефолта), но платит за это 0.21 PF — это материал для ПРАВИЛА РАЗРЕШЕНИЯ НИЧЬИХ (при разнице pooled OOS < 0.05 в точку идёт вариант с меньшей просадкой), а не самостоятельный победитель. ВАЖНО (урок AFKS): если трейл сядет БЛИЖЕ принятого стопа, эффективной защитой становится он, и риск-гейт A применяется к min(StopDailyATR, TrailDailyATR). ЗАПУСК: go run ./cmd/backtest -ticker RTKMP -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/rtkmp/cal_trail.json -out ./reports/RTKMP_trail -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-09-05: <заполняется после прогона>",
+  "phases": [
+    {
+      "name": "trail",
+      "grid": {
+        "UseRSIExit": [
+          0,
+          1
+        ],
+        "UseTrail": [
+          1
+        ],
+        "TrailDailyATR": [
+          0.3,
+          0.5,
+          0.7,
+          1.0,
+          1.5
+        ]
+      },
+      "keepTop": 6
+    }
+  ]
+}
