@@ -19,6 +19,7 @@ import (
 	rsipullbacknkhp "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/nkhp"
 	rsipullbacknvtk "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/nvtk"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/reni"
+	rsipullbackrtkmp "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/rtkmp"
 	rsipullbacksibn "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sibn"
 	rsipullbacksngsp "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sngsp"
 	rsipullbacksofl "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sofl"
@@ -955,5 +956,25 @@ func TestRSIPullbackSPBEServesTheCalibratedPoint(t *testing.T) {
 	}
 	if got := b.Build(p).Ticker(); got != "SPBE" {
 		t.Fatalf("Ticker() = %q, want SPBE", got)
+	}
+}
+
+// TestRSIPullbackRTKMPTracksBaseline пинит промежуточное состояние тикера: пакет заведён под
+// калибровку 2026-09-05, литерала ещё нет, и реестр обязан отдавать ровно дефолты ядра. Тест
+// заменяется на снимок принятой точки вместе с постановкой литерала.
+func TestRSIPullbackRTKMPTracksBaseline(t *testing.T) {
+	b, ok := rsiPullbackRegistry[rsipullbackrtkmp.Ticker]
+	if !ok {
+		t.Fatal("RTKMP отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
+	}
+	p, pok := b.DefaultParams().(core.Params)
+	if !pok {
+		t.Fatalf("RTKMP: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
+	}
+	if p != core.DefaultParams() {
+		t.Fatalf("RTKMP ещё не откалиброван, params обязаны совпадать с baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
+	}
+	if got := b.Build(p).Ticker(); got != "RTKMP" {
+		t.Fatalf("Ticker() = %q, want RTKMP", got)
 	}
 }

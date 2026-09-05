@@ -21,6 +21,7 @@ import (
 	rsipullbacknkhp "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/nkhp"
 	rsipullbacknvtk "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/nvtk"
 	rsipullbackreni "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/reni"
+	rsipullbackrtkmp "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/rtkmp"
 	rsipullbacksibn "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sibn"
 	rsipullbacksngsp "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sngsp"
 	rsipullbacksofl "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sofl"
@@ -76,6 +77,7 @@ var rsiPullbackRegistry = map[string]Binding{
 	rsipullbacknkhp.Ticker:  rsiPullbackBindingFor(rsipullbacknkhp.Ticker, rsipullbacknkhp.DefaultParams),
 	rsipullbacknvtk.Ticker:  rsiPullbackBindingFor(rsipullbacknvtk.Ticker, rsipullbacknvtk.DefaultParams),
 	rsipullbackreni.Ticker:  rsiPullbackBindingFor(rsipullbackreni.Ticker, rsipullbackreni.DefaultParams),
+	rsipullbackrtkmp.Ticker: rsiPullbackBindingFor(rsipullbackrtkmp.Ticker, rsipullbackrtkmp.DefaultParams),
 	rsipullbacksibn.Ticker:  rsiPullbackBindingFor(rsipullbacksibn.Ticker, rsipullbacksibn.DefaultParams),
 	rsipullbacksngsp.Ticker: rsiPullbackBindingFor(rsipullbacksngsp.Ticker, rsipullbacksngsp.DefaultParams),
 	rsipullbacksofl.Ticker:  rsiPullbackBindingFor(rsipullbacksofl.Ticker, rsipullbacksofl.DefaultParams),
