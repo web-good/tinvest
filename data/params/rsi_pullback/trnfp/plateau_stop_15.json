@@ -1,0 +1,28 @@
+{
+  "_comment": "data/params/rsi_pullback/trnfp/plateau_stop_15.json — ЗОНД КАПКАНА ШИРОКОГО СТОПА для TRNFP (Task 9, тема risk). Меряет одну точку StopDailyATR=1.5 (за потолком риск-гейта A, выживаемость всего 13.8% будних дней) при остальных полях НА ДЕФОЛТАХ ЯДРА, одиночным прогоном на ПОЛНОМ ОКНЕ (без -train-months/-test-months, in-sample). Точечный замер темы risk уже показал 1.5 -> 1.756/151 против 2.0 -> 1.757/151 (МАКСИМУМ ОСИ) — обе близкие к максимуму оси и обе выше потолка гейта A. Задача зонда — сравнить с plateau_stop_10.json (стоп на потолке гейта, 1.0) по max DD, составу выходов, удержанию и ночёвкам: если max DD у стопа 1.5 не выше (или ниже), чем у стопа 1.0, это подпись капкана широкого стопа — риск-гейт B (потолок просадки) структурно бессилен против этой патологии и капкан режет только гейт A (случай RTKMP и SPBE). ЗАПУСК: go run ./cmd/backtest -ticker TRNFP -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/trnfp/plateau_stop_15.json -out ./reports/TRNFP_plateau_stop_15 -months 36 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-09-05: 151 сделка (108 выигрышных / 43 проигрышных), PF 1.756, net PnL +26 115.59 руб (+26.12%), win rate 71.52%, max DD 10 522.43 руб (9.83%), exposure 5.73%, expectancy 172.95; отчёт reports/TRNFP_plateau_stop_15/TRNFP_rsi_pullback_Minutes30_20260905_231814_best.md. Состав выходов: RSI 139 (92.1%) / TP 9 (6.0%) / SL 3 (2.0%) — доля SL против baseline 21.9% упала более чем в десять раз. Удержание: медиана 12, среднее 13.75, МАКСИМУМ 71 бар (против 45 у baseline и у зонда 1.0 — сделки досиживают заметно дольше). Ночёвок 58.9% против baseline 52.3%. Выходов в выходную сессию 11.9% против baseline 11.0%. Max DD ВЫШЕ baseline (7.30%), но НИЖЕ зонда со стопом 1.0 (11.15%) — просадка не растёт монотонно между 1.0 и 1.5, однако ОСТАЁТСЯ ВЫШЕ потолка риск-гейта B (9.49%, превышение на 0.34 п.п.) даже у более широкого стопа. ВЫВОД: капкан на TRNFP режется ОБОИМИ гейтами независимо — это отличает TRNFP от RTKMP и SPBE, где гейт B капкан не ловил.",
+  "phases": [
+    {
+      "name": "plateau_stop_15",
+      "grid": {
+        "RSIPeriod": [4],
+        "RSILower": [30],
+        "RSIUpper": [70],
+        "EMAFast": [10],
+        "EMASlow": [100],
+        "DailyATRPeriod": [14],
+        "UseDayATRGate": [1],
+        "FreshDayATR": [0],
+        "SpentDayATR": [0.8],
+        "StopDailyATR": [1.5],
+        "TPDailyATR": [0.6],
+        "UseVolume": [0],
+        "VolBaseDays": [14],
+        "VolLookbackBars": [3],
+        "VolMult": [1.2],
+        "UseRSIExit": [1],
+        "UseTrail": [0],
+        "TrailDailyATR": [0]
+      }
+    }
+  ]
+}
