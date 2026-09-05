@@ -44,4 +44,25 @@ import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 const Ticker = "SPBE"
 
 // DefaultParams returns the rsi_pullback parameters for SPBE.
-func DefaultParams() core.Params { return core.DefaultParams() }
+func DefaultParams() core.Params {
+	return core.Params{
+		RSIPeriod:       4,
+		RSILower:        30,
+		RSIUpper:        70,
+		EMAFast:         10,
+		EMASlow:         50,
+		DailyATRPeriod:  14,
+		UseDayATRGate:   1,
+		FreshDayATR:     0,
+		SpentDayATR:     0.8,
+		StopDailyATR:    0.5,
+		TPDailyATR:      0.6,
+		UseVolume:       1,
+		VolBaseDays:     14,
+		VolLookbackBars: 3,
+		VolMult:         1.2,
+		UseRSIExit:      1,
+		UseTrail:        1,
+		TrailDailyATR:   0.7,
+	}
+}

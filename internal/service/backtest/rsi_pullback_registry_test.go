@@ -938,10 +938,10 @@ func TestRSIPullbackUWGNTracksBaseline(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackSPBETracksBaseline сторожит ЧЕСТНОЕ состояние: SPBE заведён в реестр до
-// калибровки, чтобы прогоны шли через реестр, а не через generic-ветку, и обязан возвращать ровно
-// baseline ядра. Тест заменяется снимком литерала в Task 12.
-func TestRSIPullbackSPBETracksBaseline(t *testing.T) {
+// TestRSIPullbackSPBEServesTheCalibratedPoint сторожит, что реестр бэктеста отдаёт ровно тот
+// литерал, который пинит снимок в пакете: расхождение означало бы, что бэктест и живой раннер
+// торгуют разными параметрами.
+func TestRSIPullbackSPBEServesTheCalibratedPoint(t *testing.T) {
 	b, ok := rsiPullbackRegistry[rsipullbackspbe.Ticker]
 	if !ok {
 		t.Fatal("SPBE отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
@@ -950,8 +950,8 @@ func TestRSIPullbackSPBETracksBaseline(t *testing.T) {
 	if !pok {
 		t.Fatalf("SPBE: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
 	}
-	if p != core.DefaultParams() {
-		t.Fatalf("SPBE ещё не откалиброван, params обязаны совпадать с baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
+	if p != rsipullbackspbe.DefaultParams() {
+		t.Fatalf("реестр отдаёт не литерал пакета:\n got: %+v\nwant: %+v", p, rsipullbackspbe.DefaultParams())
 	}
 	if got := b.Build(p).Ticker(); got != "SPBE" {
 		t.Fatalf("Ticker() = %q, want SPBE", got)
