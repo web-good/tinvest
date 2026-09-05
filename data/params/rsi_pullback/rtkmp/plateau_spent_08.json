@@ -1,0 +1,65 @@
+{
+  "_comment": "data/params/rsi_pullback/rtkmp/plateau_spent_08.json — СОСЕД ПЛАТО по единственному принятому полю: SpentDayATR 0.8 (дефолт ядра, нижний сосед принятого 0.9) при остальных полях принятой точки. Нужен, чтобы отличить настоящее плато от одиночного узла: разница pooled OOS менее 0.05 читается как отсутствие сигнала, и тогда по правилу разрешения ничьих в точку идёт вариант с меньшей просадкой. ЗАПУСК: go run ./cmd/backtest -ticker RTKMP -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/rtkmp/plateau_spent_08.json -out ./reports/RTKMP_nb_spent_08 -months 36 -min-trades 1. РЕЗУЛЬТАТ ПРОГОНА 2026-09-05: полное окно 142 сделки, PF 1.313, max DD 11.70%; walk-forward 36/12/6 -> pooled OOS 1.354 на 95 сделках. Нижний сосед ХУЖЕ принятого узла по обеим схемам и вдвое хуже по просадке.",
+  "phases": [
+    {
+      "name": "plateau_spent_08",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          10
+        ],
+        "EMASlow": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.5
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      },
+      "keepTop": 1
+    }
+  ]
+}

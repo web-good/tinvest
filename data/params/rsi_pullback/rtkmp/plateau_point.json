@@ -1,0 +1,65 @@
+{
+  "_comment": "data/params/rsi_pullback/rtkmp/plateau_point.json — ПРИНЯТАЯ ТОЧКА RTKMP (одноточечная сетка, все восемнадцать полей зафиксированы). Собрана правилом большинства >= 3 фолдов из 4 по одиннадцати темам 2026-09-05. От дефолтов ядра точка отличается РОВНО ОДНИМ полем: SpentDayATR 0.9 вместо 0.8 (тема day и тема day_spent обе дали 0.7/0.9/0.9/0.9 — большинство 3/4). Все остальные семнадцать полей остались на дефолтах ядра, потому что большинства 3/4 не сложилось ни по одному из них: RSILower 25/10/35/20, RSIPeriod 4/3/6/3, EMASlow 75/75/50/50 (ничья), EMAFast 40/5/3/3, RSIUpper 50/45/50/65, StopDailyATR 2.0/2.0/1.3/1.0, TPDailyATR 0.2/0.5/0.15/0.2, TrailDailyATR 0.3/0.5/1.0/0.7, UseVolume 0/1/1/0 (ничья). РИСК-ГЕЙТ A пройден: эффективная защита равна стопу 0.5 ATR (трейла нет), выживаемость 90.8% будних дней при пороге 30%. ЗАПУСК: go run ./cmd/backtest -ticker RTKMP -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/rtkmp/plateau_point.json -out ./reports/RTKMP_nb_point -months 36 -min-trades 1. РЕЗУЛЬТАТ ПРОГОНА 2026-09-05: полное окно 111 сделок, PF 1.598, net +28 904.17 руб (+28.90%), win rate 69.37%, max DD 8 510.42 руб (6.19%) — вдвое лучше baseline (11.70%), риск-гейт B (потолок 15.21%) пройден с запасом. Walk-forward: 36/12/6 -> pooled OOS PF 1.744 на 71 сделке (baseline 1.354/95); КОНТРОЛЬ 24/12/3 -> pooled OOS PF 0.662 на 23 сделках (baseline 0.530) — ПУНКТ 3 СТОП-УСЛОВИЯ ПРОВАЛЕН, работа первого круга остановлена. Издержки: 0.2% -> 1.422, 0.24% -> 1.307, 0.3% -> 1.145 — пункты 4 и 5 пройдены с запасом. Разбор в docs/superpowers/plans/task-11-report-rtkmp.md.",
+  "phases": [
+    {
+      "name": "plateau_point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          10
+        ],
+        "EMASlow": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.9
+        ],
+        "StopDailyATR": [
+          0.5
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      },
+      "keepTop": 1
+    }
+  ]
+}

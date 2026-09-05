@@ -1,0 +1,65 @@
+{
+  "_comment": "data/params/rsi_pullback/rtkmp/plateau_stop_20.json — ЗОНД КАПКАНА ШИРОКОГО СТОПА, верхний край оси: принятая точка со стопом 2.0 ATR (выживаемость 5.6% будних дней — фикция защиты, отвергается риск-гейтом A независимо от PF). Зонд существует ровно для того, чтобы цена капкана была видна в отчёте. ЗАПУСК: go run ./cmd/backtest -ticker RTKMP -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/rtkmp/plateau_stop_20.json -out ./reports/RTKMP_nb_stop_20 -months 36 -min-trades 1. РЕЗУЛЬТАТ ПРОГОНА 2026-09-05: 110 сделок, PF 2.210, net +48 651.45 руб, max DD 12 445.04 руб (7.83%). Пул тот же (110), PF выше точки на 0.61, просадка выше лишь на 1.6 пункта — форма капкана, которую риск-гейт B не ловит; режет её гейт A (выживаемость 5.6% будних дней).",
+  "phases": [
+    {
+      "name": "plateau_stop_20",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          10
+        ],
+        "EMASlow": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.9
+        ],
+        "StopDailyATR": [
+          2.0
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      },
+      "keepTop": 1
+    }
+  ]
+}
