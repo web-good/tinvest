@@ -19,6 +19,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sibn"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sngsp"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sofl"
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/spbe"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/svav"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/tbank"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/tgka"
@@ -407,6 +408,42 @@ import (
 // (review trigger: below 15 mln removes the ticker out of cycle), a weekend session with a 1.97 mln
 // RUB median turnover the engine models no slippage for, and a regime of -53.0% over the window with
 // a single rising half-year out of six — recalibrate out of cycle at the first sustained rising one.
+//
+// SPBE (SPB Exchange) joined on 2026-09-05 as the twenty-fifth ticker. The bar was missed for the
+// fourteenth time running: entry pooled OOS 1.222 over 66 trades with the leading axis split
+// 45/10/20/10 (both wins for the lower edge landed on the thinnest folds, 4 and 10 OOS trades), and
+// canonical trend 1.180 over 83 trades — that theme did take criterion B with EMASlow 50 in three
+// folds of four. The stop condition never fired: pooled OOS 1.777 over 64 trades on 36/12/6 against
+// a 1.176/87 baseline, 1.617 over 30 trades on the 24/12/3 control against 1.156, and 1.593 at a
+// doubled round trip (1.424 at a tripled one). The accepted point differs from the core baseline in
+// three decisions, each carried by three folds of four: EMASlow 100 -> 50 (theme trend), UseVolume
+// 0 -> 1 (theme screen), and a trailing stop switched on at 0.7 daily ATR (theme trail).
+//
+// BOTH RISK GATES PASSED, AND GATE A IS THE ONLY ONE THAT MATTERS HERE. Effective protection is
+// min(stop 0.5, trail 0.7) = 0.5, reachable in 90.5% of the window's weekdays against the 30% floor,
+// and the package test computes that minimum so a later widening of either field cannot slip past
+// the ceiling (the AFKS lesson). Gate B passed on drawdown, 17.11% against a 24.83% baseline ceiling
+// applied WITHOUT the 1.3 multiplier — but on this ticker gate B is blind by construction: probes at
+// the accepted fields show the wide-stop trap raising PF from 1.575 to 3.140 while the trade pool
+// stands still (106 -> 103), SL exits fall to zero, and MAX DRAWDOWN IMPROVES to 11.30%. A drawdown
+// ceiling cannot catch a trap that lowers drawdown; only survivability can. The risk theme voted
+// 1.3/1.5/1.5/1.3 — every fold above the ceiling — and only its 2/2 tie left the stop at 0.5. The
+// price of that refusal is stated plainly: 2.952 pooled OOS for the theme against 1.176 baseline.
+//
+// Accepted risks. Costs: a 0.1 RUB tick is a 0.088% round trip at the twelve-month median price
+// (227.80 RUB) and 0.140% at the current one (142.50 RUB) against the 0.1% modelled — review trigger:
+// a price below 100 RUB pushes the round trip past 0.2% and calls for re-checking the fourth stop
+// clause out of cycle. Liquidity is not a constraint: 164.9 mln RUB median turnover over twelve
+// months, three times the screener's 50 mln universe gate, plus the catalogue's liveliest weekend
+// session at a 27.85 mln RUB median the engine models no slippage for. The regime is the ragged
+// extreme of the catalogue — half-years of -52.2% and +181.5% out of six, a 70.4% instrument
+// drawdown inside the window; review trigger: two consecutive half-years with instrument amplitude
+// under 15% call for a fresh calibration out of cycle. The issuer carries US blocking sanctions from
+// November 2023, so headline moves exceed the daily ATR and the only defence in the core is the
+// spent-day gate; review trigger: ANY change in sanction or listing status means recalibrate or drop
+// the ticker. The screener's prior sat below the direct measurement (26th place, PFmed 1.37, holdout
+// 0.90 on six trades), the same disagreement seen on ELFV. The session widened from 28 to 34
+// half-hour bars inside the window, which is why the 24/12/3 control run is mandatory here.
 var paramsByTicker = map[string]core.Params{
 	ugld.Ticker:  ugld.DefaultParams(),
 	tbank.Ticker: tbank.DefaultParams(),
@@ -432,6 +469,7 @@ var paramsByTicker = map[string]core.Params{
 	sofl.Ticker:  sofl.DefaultParams(),
 	tgka.Ticker:  tgka.DefaultParams(),
 	vsmo.Ticker:  vsmo.DefaultParams(),
+	spbe.Ticker:  spbe.DefaultParams(),
 }
 
 // ParamsFor returns the params for a known ticker, ok=false otherwise.
