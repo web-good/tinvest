@@ -1,0 +1,65 @@
+{
+  "_comment": "data/params/rsi_pullback/spbe/plateau_trail_05.json — СОСЕД ПЛАТО принятой точки SPBE (Task 11 Step 9): plateau_point.json с единственным изменением TrailDailyATR 0.5. сосед плато по TrailDailyATR снизу: 0.5 — предыдущий узел оси темы trail (0.3, 0.5, 0.7, 1.0, 1.5). Замер нужен, чтобы проверить, инертна ли ось (побайтовое совпадение с точкой) и не сработает ли правило разрешения ничьих в пользу риска (расхождение pooled OOS PF менее 0.05 -> побеждает вариант с меньшей просадкой на полном окне). ЗАПУСК: go run ./cmd/backtest -ticker SPBE -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/spbe/plateau_trail_05.json -out ./reports/SPBE_nb_trail_05 -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "neighbor",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          10
+        ],
+        "EMASlow": [
+          50
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.5
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          1
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          1
+        ],
+        "TrailDailyATR": [
+          0.5
+        ]
+      },
+      "keepTop": 1
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "_comment": "data/params/rsi_pullback/spbe/plateau_point.json — ПРИНЯТАЯ ТОЧКА SPBE (Task 11 Step 1), собрана по правилу большинства >= 3 голосов из 4; поля без большинства оставлены на дефолтах ядра. От дефолтов ядра точка отличается ТРЕМЯ решениями: EMASlow 50 вместо 100 (тема trend, голоса 50/50/250/50 = 3/4), UseVolume 1 вместо 0 (тема screen, голоса 0/1/1/1 = 3/4), UseTrail 1 с TrailDailyATR 0.7 вместо выключенного трейла (тема trail, голоса 0.7/0.7/0.7/1.0 = 3/4). Остальные пятнадцать полей — дефолты ядра: RSIPeriod 4, RSILower 30, RSIUpper 70 (exit: 70/65/80/80, большинства нет), EMAFast 10 (trend: 30/5/3/3), DailyATRPeriod 14, UseDayATRGate 1 (screen: 1/1/1/1 — единогласно, совпало с дефолтом), FreshDayATR 0 (day: 0/0.1/0.2/0.2), SpentDayATR 0.8 (day и day_spent, большинства нет ни там, ни там), StopDailyATR 0.5 и TPDailyATR 0.6 (risk: ничьи 2/2, 1.3/1.5/1.5/1.3 и 0.3/0.3/0.2/0.2), VolBaseDays 14 (volume: 10/5/10/14), VolLookbackBars 3 (vol_window: 2/3/3/2), VolMult 1.2 (volume и vol_window расходятся во всех фолдах), UseRSIExit 1 (trail: 1/1/0/1 = 3/4, совпало с дефолтом). РИСК-ГЕЙТ A: эффективная защита min(StopDailyATR 0.5, TrailDailyATR 0.7 при UseTrail 1) = 0.5, выживаемость 90.5% будних дней окна при пороге 30% — гейт пройден с запасом. ЗАПУСК: go run ./cmd/backtest -ticker SPBE -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/spbe/plateau_point.json -out ./reports/SPBE_point_oos -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ 2026-09-05: 36/12/6 -> pooled OOS PF 1.777 на 64 сделках (baseline 1.176/87), пофолдово 3.753/25, 0.703/9, 1.498/15, 1.749/15 — прибыльны три фолда из четырёх; 24/12/3 -> 1.617 на 30 сделках (baseline 1.156), все четыре фолда выше единицы; -commission 0.001 -> 1.593, -commission 0.0015 -> 1.424. Полное окно: PF 1.588, 106 сделок, net +62 936.11 ₽ (+62.94%), max DD 28 285.21 ₽ = 17.11% — РИСК-ГЕЙТ B ПРОЙДЕН (потолок 24.83%). Третий контур против baseline: доля SL 20.8% против 27.0%, удержание 8/18/34 против 9/22/37, ночёвок 34.9% против 41.2%, выходов в выходную сессию 0.0% против 0.7% — падение доли SL идёт ВМЕСТЕ со снижением удержания и ночёвок, то есть подписи капкана нет. НИ ОДИН ИЗ ЧЕТЫРЁХ ПУНКТОВ СТОП-УСЛОВИЯ НЕ СРАБОТАЛ. Разбор соседей плато, применение правила разрешения ничьих и полный отчёт — docs/superpowers/plans/task-11-report-spbe.md.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          10
+        ],
+        "EMASlow": [
+          50
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.5
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          1
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          1
+        ],
+        "TrailDailyATR": [
+          0.7
+        ]
+      },
+      "keepTop": 1
+    }
+  ]
+}
