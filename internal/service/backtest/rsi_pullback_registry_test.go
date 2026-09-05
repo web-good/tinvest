@@ -26,6 +26,7 @@ import (
 	rsipullbackspbe "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/spbe"
 	rsipullbacksvav "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/svav"
 	rsipullbacktgka "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/tgka"
+	rsipullbacktrnfp "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/trnfp"
 	rsipullbackuwgn "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/uwgn"
 	rsipullbackvsmo "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/vsmo"
 	rsipullbackwush "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/wush"
@@ -977,5 +978,26 @@ func TestRSIPullbackRTKMPTracksBaseline(t *testing.T) {
 	}
 	if got := b.Build(p).Ticker(); got != "RTKMP" {
 		t.Fatalf("Ticker() = %q, want RTKMP", got)
+	}
+}
+
+// TestRSIPullbackTRNFPTracksBaseline сторожит ЧЕСТНОЕ состояние: TRNFP заведён в реестр до
+// калибровки, чтобы прогоны шли через реестр, а не через generic-ветку, и обязан возвращать ровно
+// baseline ядра. Тест заменяется снимком литерала (или сторожевым тестом отказа, по прецеденту
+// RTKMP/HEAD/AFKS/UWGN), когда калибровка TRNFP будет проведена.
+func TestRSIPullbackTRNFPTracksBaseline(t *testing.T) {
+	b, ok := rsiPullbackRegistry[rsipullbacktrnfp.Ticker]
+	if !ok {
+		t.Fatal("TRNFP отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
+	}
+	p, pok := b.DefaultParams().(core.Params)
+	if !pok {
+		t.Fatalf("TRNFP: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
+	}
+	if p != core.DefaultParams() {
+		t.Fatalf("TRNFP ещё не откалиброван, params обязаны совпадать с baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
+	}
+	if got := b.Build(p).Ticker(); got != "TRNFP" {
+		t.Fatalf("Ticker() = %q, want TRNFP", got)
 	}
 }
