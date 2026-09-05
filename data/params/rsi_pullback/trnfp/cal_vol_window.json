@@ -1,0 +1,30 @@
+{
+  "_comment": "data/params/rsi_pullback/trnfp/cal_vol_window.json — тема vol_window для TRNFP, 27 прогонов, поверх ДЕФОЛТОВ ЯДРА при UseVolume = 1. Тема мерит ОКНО объёмного гейта (VolLookbackBars) — сколько последних баров сравнивается с базой; форму гейта меряет соседняя тема volume, и расхождение VolMult между темами означает, что форма гейта не откалибрована, тогда VolMult идёт с дефолта ядра. ЗАМЕР 2026-09-05 (36 мес, in-sample, VolMult 1.2): 1 -> 1.103/92, 2 -> 1.247/103 (МАКСИМУМ ОСИ), 3 -> 1.196/107 (ДЕФОЛТ), 5 -> 1.175/122, 8 -> 1.073/131, 12 -> 1.017/142, 16 -> 1.030/144, 24 -> 1.065/146, 32 -> 1.074/149. МАКСИМУМ ОСИ НЕ НА КРАЮ — в отличие от RTKMP и NKHP, предупреждения о крае здесь не требуется: узел 2 стоит внутри оси между 1 и 3. ЗАПУСК: go run ./cmd/backtest -ticker TRNFP -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/trnfp/cal_vol_window.json -out ./reports/TRNFP_vol_window -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-09-05: <заполняется после прогона>",
+  "phases": [
+    {
+      "name": "vol_window",
+      "grid": {
+        "UseVolume": [
+          1
+        ],
+        "VolLookbackBars": [
+          1,
+          2,
+          3,
+          5,
+          8,
+          12,
+          16,
+          24,
+          32
+        ],
+        "VolMult": [
+          1.0,
+          1.2,
+          2.0
+        ]
+      },
+      "keepTop": 6
+    }
+  ]
+}

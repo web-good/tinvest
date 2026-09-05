@@ -1,0 +1,29 @@
+{
+  "_comment": "data/params/rsi_pullback/trnfp/cal_volume.json — тема volume для TRNFP, 30 прогонов, поверх ДЕФОЛТОВ ЯДРА при UseVolume = 1. Тема мерит ФОРМУ объёмного гейта: во сколько раз объём последних VolLookbackBars баров должен превышать базовую норму VolBaseDays дней. ЗАМЕР 2026-09-05 (36 мес, in-sample, VolLookbackBars 3), VolMult/VolBaseDays: 1.0/14 -> 1.220/120, 2.5/14 -> 1.230/61, 1.0/10 -> 1.207/126, 1.2/14 -> 1.196/107 (ДЕФОЛТНАЯ ФОРМА), 1.2/10 -> 1.188/111, 1.0/20 -> 1.162/116, 1.2/20 -> 1.153/111, 1.5/10 -> 1.120/103 … худшая 2.5/20 -> 0.984/61. Выигрыш лучшей формы над дефолтом +0.15 PF ценой почти четверти сделок (107 -> 120 в другую сторону, то есть форма 1.0/14 даёт больше сделок при более высоком PF, чем дефолтная форма 1.2/14). ПРЕДУПРЕЖДЕНИЕ О КРАЯХ: VolBaseDays 3 в замер не входил и добавлен в сетку как зонд за нижним краем (база короче недели); победа края VolMult=3.0 означала бы отбор редких всплесков объёма. ЗАПУСК: go run ./cmd/backtest -ticker TRNFP -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/trnfp/cal_volume.json -out ./reports/TRNFP_volume -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-09-05: <заполняется после прогона>",
+  "phases": [
+    {
+      "name": "volume",
+      "grid": {
+        "UseVolume": [
+          1
+        ],
+        "VolMult": [
+          1.0,
+          1.2,
+          1.5,
+          2.0,
+          2.5,
+          3.0
+        ],
+        "VolBaseDays": [
+          3,
+          5,
+          10,
+          14,
+          20
+        ]
+      },
+      "keepTop": 6
+    }
+  ]
+}
