@@ -1,0 +1,65 @@
+{
+  "_comment": "data/params/rsi_pullback/rtkmp/plateau_w24_point.json — ТОЧКА ВТОРОГО КРУГА (спасательного, docs/superpowers/plans/2026-09-05-rtkmp-rescue-round.md), одноточечная сетка. Собрана правилом большинства >= 3 фолдов из 4 по темам второго круга (окно 2024-09-05 .. 2026-09-05, схема 24/12/3). Голоса: EMAFast 3/3/3/3 — единогласно, ПРИНЯТО (дефолт 10); EMASlow 50/75/50/50 — большинство 3/4, ПРИНЯТО (дефолт 100); TPDailyATR 0.15/0.2/0.2/0.2 — большинство 3/4, ПРИНЯТО (дефолт 0.6); TrailDailyATR 1.0/0.7/0.7/0.7 — большинство 3/4, ПРИНЯТО вместе с UseTrail 1; StopDailyATR 1.3/1.3/1.0/1.3 — большинство 3/4 за 1.3, но РИСК-ГЕЙТ A ЕГО ОТВЕРГ (выживаемость 1.3 равна 25.5% будних дней при пороге 30%), в точку идёт ближайшее значение оси внутри гейта — 1.0 (47.1%). Без большинства и потому с дефолтов ядра: RSIPeriod (6/5/3/2), RSILower (35/30/20/10), RSIUpper (50/50/65/65 — ничья), SpentDayATR (0.9/1.0/0.9/1.0 — ничья), UseVolume (1/0/0/0 — большинство за 0, совпало с дефолтом). ЭФФЕКТИВНАЯ ЗАЩИТА точки — трейл 0.7 ATR (ближе стопа 1.0), выживаемость 73.8% будних дней, риск-гейт A пройден по правилу AFKS. ЗАПУСК: go run ./cmd/backtest -ticker RTKMP -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/rtkmp/plateau_w24_point.json -out ./reports/RTKMP_w24_point -months 24 -train-months 12 -test-months 3 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-09-05: расчётная схема второго круга 24/12/3 -> pooled OOS PF 0.492 на 25 сделках (compounded -8.13%), пофолдово 0.922/5, 14.437/5 (вырожденный), 0.415/9, 0.177/6 — УСЛОВИЕ 1 ВЕРДИКТА ПРОВАЛЕНО. Контроль 36/12/6 -> pooled OOS PF 1.479 на 78 сделках (условие 2 выполнено). Расчётная схема при -commission 0.0012 -> 0.298 (условие 5 провалено). Второй круг закрыт: точка не заводится в прод.",
+  "phases": [
+    {
+      "name": "w24_point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          3
+        ],
+        "EMASlow": [
+          50
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "TPDailyATR": [
+          0.2
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          1
+        ],
+        "TrailDailyATR": [
+          0.7
+        ]
+      },
+      "keepTop": 1
+    }
+  ]
+}

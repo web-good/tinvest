@@ -1,0 +1,29 @@
+{
+  "_comment": "data/params/rsi_pullback/rtkmp/cal_w24_day.json — ВТОРОЙ КРУГ (спасательный, docs/superpowers/plans/2026-09-05-rtkmp-rescue-round.md): расчётное окно 2024-09-05 .. 2026-09-05 (24 месяца, однородная сессия 34-35 баров в буднем дне), схема -months 24 -train-months 12 -test-months 3, контроль 36/12/6. Оси те же, что в первом круге: замеры инструмента не изменились, изменилось окно. Тема day второго круга. ЗАМЕРЫ ОСЕЙ и предупреждения о краях — те же, что в файле первого круга data/params/rsi_pullback/rtkmp/cal_day.json, там же результат первого круга. ЗАПУСК: go run ./cmd/backtest -ticker RTKMP -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/rtkmp/cal_w24_day.json -out ./reports/RTKMP_w24_day -months 24 -train-months 12 -test-months 3 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-09-05 (второй круг, 24/12/3, 4 фолда): pooled OOS PF 0.741 на 21 сделке. Пофолдово OOS: 922.110/1 (вырожденный фолд — ОДНА сделка), 0.875/8, 1.149/9, 0.143/3. FreshDayATR = 0 стабильно. SpentDayATR по фолдам 0.9, 1.0, 0.9, 1.0 — НИЧЬЯ 2/2, поле остаётся на дефолте ядра 0.8. Именно это поле было единственным принятым в первом круге (0.9 большинством 3/4): на однородном окне большинство рассыпалось.",
+  "phases": [
+    {
+      "name": "w24_day",
+      "grid": {
+        "FreshDayATR": [
+          0,
+          0.1,
+          0.2,
+          0.3,
+          0.4,
+          0.5
+        ],
+        "SpentDayATR": [
+          0.5,
+          0.6,
+          0.7,
+          0.8,
+          0.9,
+          1.0,
+          1.25,
+          1.5
+        ]
+      },
+      "keepTop": 6
+    }
+  ]
+}

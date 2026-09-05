@@ -1,0 +1,29 @@
+{
+  "_comment": "data/params/rsi_pullback/rtkmp/cal_w24_trend.json — ВТОРОЙ КРУГ (спасательный, docs/superpowers/plans/2026-09-05-rtkmp-rescue-round.md): расчётное окно 2024-09-05 .. 2026-09-05 (24 месяца, однородная сессия 34-35 баров в буднем дне), схема -months 24 -train-months 12 -test-months 3, контроль 36/12/6. Оси те же, что в первом круге: замеры инструмента не изменились, изменилось окно. Тема trend второго круга. ЗАМЕРЫ ОСЕЙ и предупреждения о краях — те же, что в файле первого круга data/params/rsi_pullback/rtkmp/cal_trend.json, там же результат первого круга. ЗАПУСК: go run ./cmd/backtest -ticker RTKMP -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/rtkmp/cal_w24_trend.json -out ./reports/RTKMP_w24_trend -months 24 -train-months 12 -test-months 3 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-09-05 (второй круг, 24/12/3, 4 фолда): pooled OOS PF 0.612 на 26 сделках. Пофолдово OOS: 1.246/5, 1.437/6, 0.365/9, 0.309/6. EMAFast = 3 стабильно во ВСЕХ ЧЕТЫРЁХ фолдах — ПРИНЯТО (дефолт 10). EMASlow по фолдам 50, 75, 50, 50 — большинство 3/4, ПРИНЯТО (дефолт 100). Оба поля тренда во втором круге откалиброваны, в отличие от первого.",
+  "phases": [
+    {
+      "name": "w24_trend",
+      "grid": {
+        "EMAFast": [
+          3,
+          5,
+          8,
+          10,
+          15,
+          20,
+          30,
+          40
+        ],
+        "EMASlow": [
+          50,
+          75,
+          100,
+          150,
+          200,
+          250
+        ]
+      },
+      "keepTop": 6
+    }
+  ]
+}

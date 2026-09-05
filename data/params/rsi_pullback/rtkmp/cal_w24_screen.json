@@ -1,0 +1,19 @@
+{
+  "_comment": "data/params/rsi_pullback/rtkmp/cal_w24_screen.json — ВТОРОЙ КРУГ (спасательный, docs/superpowers/plans/2026-09-05-rtkmp-rescue-round.md): расчётное окно 2024-09-05 .. 2026-09-05 (24 месяца, однородная сессия 34-35 баров в буднем дне), схема -months 24 -train-months 12 -test-months 3, контроль 36/12/6. Оси те же, что в первом круге: замеры инструмента не изменились, изменилось окно. Тема screen второго круга. ЗАМЕРЫ ОСЕЙ и предупреждения о краях — те же, что в файле первого круга data/params/rsi_pullback/rtkmp/cal_screen.json, там же результат первого круга. ЗАПУСК: go run ./cmd/backtest -ticker RTKMP -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/rtkmp/cal_w24_screen.json -out ./reports/RTKMP_w24_screen -months 24 -train-months 12 -test-months 3 -min-trades 1 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-09-05 (второй круг, 24/12/3, 4 фолда): pooled OOS PF 0.487 на 34 сделках. Пофолдово OOS: 0.804/5, 1.108/9, 0.685/13, 0.100/7. UseDayATRGate = 1 стабильно во всех фолдах. UseVolume по фолдам 1, 0, 0, 0 — большинство 3/4 за 0, совпало с дефолтом ядра; по правилу спасательного круга темы volume и vol_window во втором круге НЕ ПРОГОНЯЛИСЬ.",
+  "phases": [
+    {
+      "name": "w24_screen",
+      "grid": {
+        "UseDayATRGate": [
+          0,
+          1
+        ],
+        "UseVolume": [
+          0,
+          1
+        ]
+      },
+      "keepTop": 4
+    }
+  ]
+}

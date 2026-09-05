@@ -1,0 +1,25 @@
+{
+  "_comment": "data/params/rsi_pullback/rtkmp/cal_w24_trail.json — ВТОРОЙ КРУГ (спасательный, docs/superpowers/plans/2026-09-05-rtkmp-rescue-round.md): расчётное окно 2024-09-05 .. 2026-09-05 (24 месяца, однородная сессия 34-35 баров в буднем дне), схема -months 24 -train-months 12 -test-months 3, контроль 36/12/6. Оси те же, что в первом круге: замеры инструмента не изменились, изменилось окно. Тема trail второго круга. ЗАМЕРЫ ОСЕЙ и предупреждения о краях — те же, что в файле первого круга data/params/rsi_pullback/rtkmp/cal_trail.json, там же результат первого круга. ЗАПУСК: go run ./cmd/backtest -ticker RTKMP -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/rtkmp/cal_w24_trail.json -out ./reports/RTKMP_w24_trail -months 24 -train-months 12 -test-months 3 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-09-05 (второй круг, 24/12/3, 4 фолда): pooled OOS PF 0.531 на 35 сделках. TrailDailyATR по фолдам 1.0, 0.7, 0.7, 0.7 — БОЛЬШИНСТВО 3/4 за 0.7, ПРИНЯТО вместе с UseTrail 1 (в первом круге большинства не было и трейл в точку не вошёл). UseRSIExit = 1 стабильно. ВНИМАНИЕ (урок AFKS): трейл 0.7 СЕЛ БЛИЖЕ принятого стопа 1.0, поэтому эффективной защитой точки второго круга становится он, и риск-гейт A применяется к 0.7 (выживаемость 73.8% будних дней) — гейт пройден.",
+  "phases": [
+    {
+      "name": "w24_trail",
+      "grid": {
+        "UseRSIExit": [
+          0,
+          1
+        ],
+        "UseTrail": [
+          1
+        ],
+        "TrailDailyATR": [
+          0.3,
+          0.5,
+          0.7,
+          1.0,
+          1.5
+        ]
+      },
+      "keepTop": 6
+    }
+  ]
+}

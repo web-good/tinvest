@@ -1,0 +1,26 @@
+{
+  "_comment": "data/params/rsi_pullback/rtkmp/cal_w24_day_spent.json — ВТОРОЙ КРУГ (спасательный, docs/superpowers/plans/2026-09-05-rtkmp-rescue-round.md): расчётное окно 2024-09-05 .. 2026-09-05 (24 месяца, однородная сессия 34-35 баров в буднем дне), схема -months 24 -train-months 12 -test-months 3, контроль 36/12/6. Оси те же, что в первом круге: замеры инструмента не изменились, изменилось окно. Тема day_spent второго круга. ЗАМЕРЫ ОСЕЙ и предупреждения о краях — те же, что в файле первого круга data/params/rsi_pullback/rtkmp/cal_day_spent.json, там же результат первого круга. ЗАПУСК: go run ./cmd/backtest -ticker RTKMP -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/rtkmp/cal_w24_day_spent.json -out ./reports/RTKMP_w24_day_spent -months 24 -train-months 12 -test-months 3 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-09-05 (второй круг, 24/12/3, 4 фолда): pooled OOS PF 0.741 на 21 сделке — ПОБАЙТОВО как тема day, включая все фолды и голоса (SpentDayATR 0.9, 1.0, 0.9, 1.0, ничья 2/2). Сверка тем расхождений не дала и во втором круге.",
+  "phases": [
+    {
+      "name": "w24_day_spent",
+      "grid": {
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.4,
+          0.5,
+          0.6,
+          0.7,
+          0.8,
+          0.9,
+          1.0,
+          1.25,
+          1.5,
+          2.0
+        ]
+      },
+      "keepTop": 6
+    }
+  ]
+}

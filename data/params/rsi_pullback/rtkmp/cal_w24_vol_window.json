@@ -1,0 +1,30 @@
+{
+  "_comment": "data/params/rsi_pullback/rtkmp/cal_w24_vol_window.json — ВТОРОЙ КРУГ (спасательный, docs/superpowers/plans/2026-09-05-rtkmp-rescue-round.md): расчётное окно 2024-09-05 .. 2026-09-05 (24 месяца, однородная сессия 34-35 баров в буднем дне), схема -months 24 -train-months 12 -test-months 3, контроль 36/12/6. Оси те же, что в первом круге: замеры инструмента не изменились, изменилось окно. Тема vol_window второго круга. ЗАМЕРЫ ОСЕЙ и предупреждения о краях — те же, что в файле первого круга data/params/rsi_pullback/rtkmp/cal_vol_window.json, там же результат первого круга. ЗАПУСК: go run ./cmd/backtest -ticker RTKMP -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/rtkmp/cal_w24_vol_window.json -out ./reports/RTKMP_w24_vol_window -months 24 -train-months 12 -test-months 3 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-09-05: <заполняется после прогона>",
+  "phases": [
+    {
+      "name": "w24_vol_window",
+      "grid": {
+        "UseVolume": [
+          1
+        ],
+        "VolLookbackBars": [
+          1,
+          2,
+          3,
+          5,
+          8,
+          12,
+          16,
+          24,
+          32
+        ],
+        "VolMult": [
+          1.0,
+          1.2,
+          2.0
+        ]
+      },
+      "keepTop": 6
+    }
+  ]
+}

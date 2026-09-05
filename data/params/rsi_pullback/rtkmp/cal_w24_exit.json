@@ -1,0 +1,25 @@
+{
+  "_comment": "data/params/rsi_pullback/rtkmp/cal_w24_exit.json — ВТОРОЙ КРУГ (спасательный, docs/superpowers/plans/2026-09-05-rtkmp-rescue-round.md): расчётное окно 2024-09-05 .. 2026-09-05 (24 месяца, однородная сессия 34-35 баров в буднем дне), схема -months 24 -train-months 12 -test-months 3, контроль 36/12/6. Оси те же, что в первом круге: замеры инструмента не изменились, изменилось окно. Тема exit второго круга. ЗАМЕРЫ ОСЕЙ и предупреждения о краях — те же, что в файле первого круга data/params/rsi_pullback/rtkmp/cal_exit.json, там же результат первого круга. ЗАПУСК: go run ./cmd/backtest -ticker RTKMP -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/rtkmp/cal_w24_exit.json -out ./reports/RTKMP_w24_exit -months 24 -train-months 12 -test-months 3 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-09-05 (второй круг, 24/12/3, 4 фолда): pooled OOS PF 0.437 на 37 сделках — худшая тема второго круга. Пофолдово OOS: 4.693/6, 0.752/11, 0.578/13, 0.100/7. RSIUpper по фолдам 50, 50, 65, 65 — НИЧЬЯ 2/2, поле остаётся на дефолте ядра 70 второй раз подряд, хотя точечный максимум оси стоит на 45 (1.760/177 против 1.313/142).",
+  "phases": [
+    {
+      "name": "w24_exit",
+      "grid": {
+        "RSIUpper": [
+          35,
+          40,
+          45,
+          50,
+          55,
+          60,
+          65,
+          70,
+          75,
+          80,
+          85,
+          90
+        ]
+      },
+      "keepTop": 6
+    }
+  ]
+}

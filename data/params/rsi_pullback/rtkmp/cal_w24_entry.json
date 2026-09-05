@@ -1,0 +1,41 @@
+{
+  "_comment": "data/params/rsi_pullback/rtkmp/cal_w24_entry.json — ВТОРОЙ КРУГ (спасательный, docs/superpowers/plans/2026-09-05-rtkmp-rescue-round.md): расчётное окно 2024-09-05 .. 2026-09-05 (24 месяца, однородная сессия 34-35 баров в буднем дне), схема -months 24 -train-months 12 -test-months 3, контроль 36/12/6. Оси те же, что в первом круге: замеры инструмента не изменились, изменилось окно. Тема entry второго круга. ЗАМЕРЫ ОСЕЙ и предупреждения о краях — те же, что в файле первого круга data/params/rsi_pullback/rtkmp/cal_entry.json, там же результат первого круга. ЗАПУСК: go run ./cmd/backtest -ticker RTKMP -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/rtkmp/cal_w24_entry.json -out ./reports/RTKMP_w24_entry -months 24 -train-months 12 -test-months 3 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-09-05 (второй круг, 24/12/3, 4 фолда): pooled OOS PF 1.128 на 35 сделках — ЕДИНСТВЕННАЯ тема второго круга выше единицы. Пофолдово in-sample -> OOS: 5.421 -> 6.781/3, 5.992 -> 1.474/8, 3.123 -> 0.557/15, 2.540 -> 0.873/9. RSILower по фолдам 35, 30, 20, 10 — все четыре разные; RSIPeriod 6, 5, 3, 2 — все четыре разные. Большинства нет ни по одному полю, оба остаются на дефолтах ядра. Разброс голосов ШИРЕ, чем в первом круге: однородное окно не сделало ось входа устойчивее.",
+  "phases": [
+    {
+      "name": "w24_entry",
+      "grid": {
+        "RSIPeriod": [
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          10
+        ],
+        "RSILower": [
+          10,
+          15,
+          20,
+          25,
+          30,
+          35,
+          40,
+          45,
+          50
+        ],
+        "RSIUpper": [
+          55,
+          60,
+          65,
+          70,
+          75,
+          80,
+          85
+        ]
+      },
+      "keepTop": 8
+    }
+  ]
+}
