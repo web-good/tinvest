@@ -1,0 +1,64 @@
+{
+  "_comment": "Сосед плато TRNFP: EMAFast 3 -> 5 (точка на нижнем крае оси trend_low [3,5,8,10], соседа снизу нет), остальные 17 полей точки без изменений. Walk-forward 36/12/6.",
+  "phases": [
+    {
+      "name": "neighbor_EMAFast_5",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          65
+        ],
+        "EMAFast": [
+          5
+        ],
+        "EMASlow": [
+          20
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          1.0
+        ],
+        "StopDailyATR": [
+          0.5
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          1
+        ],
+        "VolBaseDays": [
+          3
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      }
+    }
+  ]
+}
