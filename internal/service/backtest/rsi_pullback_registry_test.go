@@ -959,9 +959,10 @@ func TestRSIPullbackSPBEServesTheCalibratedPoint(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackRTKMPTracksBaseline пинит промежуточное состояние тикера: пакет заведён под
-// калибровку 2026-09-05, литерала ещё нет, и реестр обязан отдавать ровно дефолты ядра. Тест
-// заменяется на снимок принятой точки вместе с постановкой литерала.
+// TestRSIPullbackRTKMPTracksBaseline пинит окончательное состояние тикера: калибровка закрыта
+// 2026-09-05 отказом обоих кругов, RTKMP в боевую вселенную не заводится, и реестр бэктеста обязан
+// отдавать ровно дефолты ядра. Литерала не будет: точка, провалившая стоп-условие, не имеет права
+// приехать в живой раннер через реестр.
 func TestRSIPullbackRTKMPTracksBaseline(t *testing.T) {
 	b, ok := rsiPullbackRegistry[rsipullbackrtkmp.Ticker]
 	if !ok {
