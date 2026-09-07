@@ -16,6 +16,7 @@ import (
 	rsipullbackivat "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ivat"
 	rsipullbacklent "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/lent"
 	rsipullbacklsngp "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/lsngp"
+	rsipullbackmvid "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/mvid"
 	rsipullbacknkhp "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/nkhp"
 	rsipullbacknvtk "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/nvtk"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/reni"
@@ -999,5 +1000,26 @@ func TestRSIPullbackTRNFPTracksBaseline(t *testing.T) {
 	}
 	if got := b.Build(p).Ticker(); got != "TRNFP" {
 		t.Fatalf("Ticker() = %q, want TRNFP", got)
+	}
+}
+
+// TestRSIPullbackMVIDTracksBaseline сторожит ЧЕСТНОЕ состояние: MVID заведён в реестр до
+// калибровки, чтобы прогоны шли через реестр, а не через generic-ветку, и обязан возвращать ровно
+// baseline ядра. Тест заменяется снимком литерала (или сторожевым тестом отказа, по прецеденту
+// RTKMP/HEAD/AFKS/UWGN/TRNFP), когда калибровка MVID будет проведена.
+func TestRSIPullbackMVIDTracksBaseline(t *testing.T) {
+	b, ok := rsiPullbackRegistry[rsipullbackmvid.Ticker]
+	if !ok {
+		t.Fatal("MVID отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
+	}
+	p, pok := b.DefaultParams().(core.Params)
+	if !pok {
+		t.Fatalf("MVID: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
+	}
+	if p != core.DefaultParams() {
+		t.Fatalf("MVID ещё не откалиброван, params обязаны совпадать с baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
+	}
+	if got := b.Build(p).Ticker(); got != "MVID" {
+		t.Fatalf("Ticker() = %q, want MVID", got)
 	}
 }
