@@ -1003,11 +1003,11 @@ func TestRSIPullbackTRNFPTracksBaseline(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackMVIDTracksBaseline сторожит ЧЕСТНОЕ состояние: MVID заведён в реестр до
-// калибровки, чтобы прогоны шли через реестр, а не через generic-ветку, и обязан возвращать ровно
-// baseline ядра. Тест заменяется снимком литерала (или сторожевым тестом отказа, по прецеденту
-// RTKMP/HEAD/AFKS/UWGN/TRNFP), когда калибровка MVID будет проведена.
-func TestRSIPullbackMVIDTracksBaseline(t *testing.T) {
+// TestRSIPullbackMVIDServesTheCalibratedPoint сторожит, что реестр бэктеста отдаёт ровно тот
+// литерал, который пинит снимок в пакете: расхождение означало бы, что бэктест и живой раннер
+// торгуют разными параметрами. MVID заведён в прод при сработавшем пункте 2 стоп-условия решением
+// владельца 2026-09-07 (§5.8.1 спеки, коммит 9e0fecc) — параметры точки решением не менялись.
+func TestRSIPullbackMVIDServesTheCalibratedPoint(t *testing.T) {
 	b, ok := rsiPullbackRegistry[rsipullbackmvid.Ticker]
 	if !ok {
 		t.Fatal("MVID отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
@@ -1016,8 +1016,11 @@ func TestRSIPullbackMVIDTracksBaseline(t *testing.T) {
 	if !pok {
 		t.Fatalf("MVID: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
 	}
-	if p != core.DefaultParams() {
-		t.Fatalf("MVID ещё не откалиброван, params обязаны совпадать с baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
+	if p != rsipullbackmvid.DefaultParams() {
+		t.Fatalf("реестр отдаёт не литерал пакета:\n got: %+v\nwant: %+v", p, rsipullbackmvid.DefaultParams())
+	}
+	if p == core.DefaultParams() {
+		t.Fatal("реестр отдаёт baseline ядра: литерал принятой точки MVID потерян")
 	}
 	if got := b.Build(p).Ticker(); got != "MVID" {
 		t.Fatalf("Ticker() = %q, want MVID", got)
