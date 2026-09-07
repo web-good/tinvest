@@ -1,0 +1,28 @@
+{
+  "_comment": "data/params/rsi_pullback/mvid/plateau_stop_07.json — ЗОНД КАПКАНА ШИРОКОГО СТОПА для MVID (Task 9, тема risk). Меряет одну точку StopDailyATR=0.7 (первый узел плато капкана, ещё внутри риск-гейта A: выживаемость 65.4% будних дней) при остальных полях НА ДЕФОЛТАХ ЯДРА, одиночным прогоном на ПОЛНОМ ОКНЕ (без -train-months/-test-months, in-sample). Задача: показать анатомию узла, где пул сделок начинает застывать, а PF ещё резко растёт — против baseline (StopDailyATR=0.5, дефолт: 149 сделок, PF 1.179, max DD 11.10%, выходы RSI 84 (56.4%) / SL 42 (28.2%) / TP 23 (15.4%), удержание медиана 9 / p90 20 / максимум 56 баров, ночёвок 40.3%) и против зонда с ещё более широким стопом 1.0 (plateau_stop_10.json), которым проверяется, продолжает ли пул стоять на месте при дальнейшем расширении. ЗАПУСК: go run ./cmd/backtest -ticker MVID -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/mvid/plateau_stop_07.json -out ./reports/MVID_stop07 -months 36 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-09-07: 142 сделки (96 выигрышных / 46 проигрышных), PF 1.608, net PnL +51362.41 руб (+51.36%), win rate 67.61%, max DD 17296.38 руб (14.48%), exposure 4.96%, expectancy 361.71; отчёт reports/MVID_stop07/MVID_rsi_pullback_Minutes30_20260907_122414_best.md. Состав выходов: RSI 102 (71.8%) / TP 22 (15.5%) / SL 18 (12.7%) — доля SL против baseline 28.2% упала более чем вдвое. Удержание: медиана 11, p90 26, максимум 56 баров (равен baseline). Ночёвок 47.2% против baseline 40.3%. Выходов в выходную сессию 8.5% против baseline 6.7%. Max DD 14.48% ВЫШЕ baseline (11.10%) и ВЫШЕ потолка риск-гейта B (§5.5, жёсткий вариант — не более 11.10%) — узел уже внутри плато капкана нарушает гейт B при формально разрешающем гейте A (потолок 1.0); см. вывод в cal_risk.json.",
+  "phases": [
+    {
+      "name": "plateau_stop_07",
+      "grid": {
+        "RSIPeriod": [4],
+        "RSILower": [30],
+        "RSIUpper": [70],
+        "EMAFast": [10],
+        "EMASlow": [100],
+        "DailyATRPeriod": [14],
+        "UseDayATRGate": [1],
+        "FreshDayATR": [0],
+        "SpentDayATR": [0.8],
+        "StopDailyATR": [0.7],
+        "TPDailyATR": [0.6],
+        "UseVolume": [0],
+        "VolBaseDays": [14],
+        "VolLookbackBars": [3],
+        "VolMult": [1.2],
+        "UseRSIExit": [1],
+        "UseTrail": [0],
+        "TrailDailyATR": [0]
+      }
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "_comment": "data/params/rsi_pullback/mvid/plateau_tp_02.json — ЗОНД ЦЕНЫ ЦЕЛИ 0.2 ATR для MVID (Task 9, тема risk). Меряет одну точку TPDailyATR=0.2 (максимум измеренной оси цели, 1.364/173) при остальных полях НА ДЕФОЛТАХ ЯДРА (включая StopDailyATR=0.5), одиночным прогоном на ПОЛНОМ ОКНЕ (без -train-months/-test-months, in-sample). TPDailyATR=0.2 на MVID ≈ 0.7% цены — это ВТРОЕ реальный круг издержек тикера (0.217% при шаге цены 0.05 ₽ и цене 46.25 ₽, §1 спеки docs/superpowers/specs/2026-09-07-mvid-rsi-pullback-prep-design.md), поэтому победа этого узла в пофолдовом голосовании темы risk допустима в точке только при прохождении пятого пункта стоп-условия (pooled OOS PF >= 1.0 при -commission 0.0011). Задача: зафиксировать анатомию этого узла (сделки, состав выходов, удержание, ночёвки, max DD) против baseline (TPDailyATR=0.6, дефолт: 149 сделок, PF 1.179, max DD 11.10%, выходы RSI 84 (56.4%) / SL 42 (28.2%) / TP 23 (15.4%), удержание медиана 9 / p90 20 / максимум 56 баров, ночёвок 40.3%). ЗАПУСК: go run ./cmd/backtest -ticker MVID -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/mvid/plateau_tp_02.json -out ./reports/MVID_tp02 -months 36 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-09-07: 173 сделки (132 выигрышных / 41 проигрышная), PF 1.364, net PnL +28948.80 руб (+28.95%), win rate 76.30%, max DD 11729.70 руб (9.64%), exposure 3.16%, expectancy 167.33; отчёт reports/MVID_tp02/MVID_rsi_pullback_Minutes30_20260907_122650_best.md. Состав выходов: TP 111 (64.2%) / SL 29 (16.8%) / RSI 33 (19.1%) — цель стала доминирующей причиной выхода вместо RSI на baseline. Удержание: медиана 5, p90 15, максимум 38 баров — заметно короче baseline (9/20/56), цель достигается быстро. Ночёвок 28.9% против baseline 40.3%; выходов в выходную сессию 4.6% против baseline 6.7% — оба ниже baseline. Max DD 9.64% НИЖЕ baseline (11.10%) — узел формально проходит жёсткий риск-гейт B (§5.5). Но цель 0.2 ATR ≈ 0.7% цены — втрое реальный круг издержек MVID 0.217% (§1 спеки); победа этого узла в точке допустима только после проверки пункта 5 стоп-условия (pooled OOS PF >= 1.0 при -commission 0.0011, §4.7) — эта проверка не выполнялась в рамках темы risk, см. вывод в cal_risk.json.",
+  "phases": [
+    {
+      "name": "plateau_tp_02",
+      "grid": {
+        "RSIPeriod": [4],
+        "RSILower": [30],
+        "RSIUpper": [70],
+        "EMAFast": [10],
+        "EMASlow": [100],
+        "DailyATRPeriod": [14],
+        "UseDayATRGate": [1],
+        "FreshDayATR": [0],
+        "SpentDayATR": [0.8],
+        "StopDailyATR": [0.5],
+        "TPDailyATR": [0.2],
+        "UseVolume": [0],
+        "VolBaseDays": [14],
+        "VolLookbackBars": [3],
+        "VolMult": [1.2],
+        "UseRSIExit": [1],
+        "UseTrail": [0],
+        "TrailDailyATR": [0]
+      }
+    }
+  ]
+}

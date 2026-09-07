@@ -1,0 +1,28 @@
+{
+  "_comment": "data/params/rsi_pullback/mvid/plateau_stop_10.json — ЗОНД РИСК-ГЕЙТА A и КАПКАНА ШИРОКОГО СТОПА для MVID (Task 9, тема risk). Меряет одну точку StopDailyATR=1.0 (потолок гейта A, выживаемость 36.0% будних дней) при остальных полях НА ДЕФОЛТАХ ЯДРА, одиночным прогоном на ПОЛНОМ ОКНЕ (без -train-months/-test-months, in-sample). Задача: показать цену решения гейта A и капкана в PF, сделках, max DD, составе выходов, удержании и ночёвках — против опорного baseline (StopDailyATR=0.5, дефолт: 149 сделок, PF 1.179, max DD 11.10%, выходы RSI 84 (56.4%) / SL 42 (28.2%) / TP 23 (15.4%), удержание медиана 9 / p90 20 / максимум 56 баров, ночёвок 40.3%) и против зонда plateau_stop_07.json, которым проверяется форма капкана широкого стопа (застыл ли пул сделок ещё до потолка гейта A). ЗАПУСК: go run ./cmd/backtest -ticker MVID -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/mvid/plateau_stop_10.json -out ./reports/MVID_stop10 -months 36 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-09-07: 141 сделка (95 выигрышных / 46 проигрышных), PF 1.599, net PnL +51905.89 руб (+51.91%), win rate 67.38%, max DD 16749.86 руб (13.56%), exposure 5.25%, expectancy 368.13; отчёт reports/MVID_stop10/MVID_rsi_pullback_Minutes30_20260907_122617_best.md. Состав выходов: RSI 109 (77.3%) / TP 22 (15.6%) / SL 10 (7.1%) — доля SL против baseline 28.2% упала почти вчетверо, ещё ниже узла 0.7 (12.7%). Удержание: медиана 12, p90 27, максимум 56 баров (равен baseline и узлу 0.7). Ночёвок 48.9% против baseline 40.3%. Выходов в выходную сессию 8.5% против baseline 6.7% (как у узла 0.7). Пул сделок (141) почти не отличается от узла 0.7 (142) при том же максимуме удержания — классическая подпись капкана: стоп перестал участвовать в отборе входов. Max DD 13.56% ВЫШЕ baseline (11.10%) — узел на самом потолке риск-гейта A (выживаемость 36.0% будних дней, §5.4) нарушает жёсткий риск-гейт B (§5.5, не более 11.10%); см. вывод в cal_risk.json о том, что на MVID гейт A не единственный фильтр стопа.",
+  "phases": [
+    {
+      "name": "plateau_stop_10",
+      "grid": {
+        "RSIPeriod": [4],
+        "RSILower": [30],
+        "RSIUpper": [70],
+        "EMAFast": [10],
+        "EMASlow": [100],
+        "DailyATRPeriod": [14],
+        "UseDayATRGate": [1],
+        "FreshDayATR": [0],
+        "SpentDayATR": [0.8],
+        "StopDailyATR": [1.0],
+        "TPDailyATR": [0.6],
+        "UseVolume": [0],
+        "VolBaseDays": [14],
+        "VolLookbackBars": [3],
+        "VolMult": [1.2],
+        "UseRSIExit": [1],
+        "UseTrail": [0],
+        "TrailDailyATR": [0]
+      }
+    }
+  ]
+}
