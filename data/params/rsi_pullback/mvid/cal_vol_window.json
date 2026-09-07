@@ -1,0 +1,29 @@
+{
+  "_comment": "data/params/rsi_pullback/mvid/cal_vol_window.json — тема vol_window для MVID, 18 прогонов, поверх ДЕФОЛТОВ ЯДРА при UseVolume=1. Тема мерит ОКНО объёмного гейта (VolLookbackBars) — сколько последних баров сравнивается с базой; форму гейта (VolMult, VolBaseDays) меряет соседняя тема volume, и расхождение VolMult между темами означает, что форма гейта не откалибрована, тогда VolMult идёт с дефолта ядра. Замер §4.4 спеки (docs/superpowers/specs/2026-09-07-mvid-rsi-pullback-prep-design.md) варьировал VolMult и VolBaseDays при дефолтном VolLookbackBars ядра, но НЕ варьировал само окно изолированно — числа этой темы будут первым прямым измерением VolLookbackBars на MVID, аналогично тому, как это было устроено в каталожном прецеденте TRNFP. Ожидание из §4.4: весь массив объёмной темы лежит выше baseline 1.179/149 (объём — носитель сигнала, а не только фильтр), поэтому окно ожидаемо тоже несёт часть эффекта, но какая его форма выигрывает — заранее не измерено. ПРЕДУПРЕЖДЕНИЕ О КРАЯХ: оба края оси (VolLookbackBars=1 и VolLookbackBars=32) не проверены точечно заранее — победа любого из них большинством фолдов требует зонда за краем при сборке точки, поскольку насыщение рельефа неизвестно. VolMult сужен до двух узлов [1.2, 2.0] — дефолт ядра и точечный максимум замера §4.4 (2.0x20дн -> 1.497/96) — чтобы расхождение с формой, которую выберет тема volume, было видно однозначно, а не растворялось в третьей оси. ЗАПУСК: go run ./cmd/backtest -ticker MVID -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/mvid/cal_vol_window.json -out ./reports/MVID_vol_window -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-09-07: …",
+  "phases": [
+    {
+      "name": "vol_window",
+      "grid": {
+        "UseVolume": [
+          1
+        ],
+        "VolLookbackBars": [
+          1,
+          2,
+          3,
+          5,
+          8,
+          12,
+          16,
+          24,
+          32
+        ],
+        "VolMult": [
+          1.2,
+          2.0
+        ]
+      },
+      "keepTop": 6
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "_comment": "data/params/rsi_pullback/mvid/cal_volume.json — тема volume для MVID, 36 прогонов, поверх ДЕФОЛТОВ ЯДРА при UseVolume=1. Тема мерит ФОРМУ объёмного гейта: во сколько раз объём последних VolLookbackBars баров должен превышать базовую норму VolBaseDays дней. ЗАМЕР (§4.4 спеки docs/superpowers/specs/2026-09-07-mvid-rsi-pullback-prep-design.md, VolLookbackBars на дефолте ядра): весь массив темы лежит ВЫШЕ baseline 1.179/149 — 2.0x20дн -> 1.497/96 (МАКСИМУМ ЗАМЕРА), 1.5x14 -> 1.456/116, 2.0x14 -> 1.434/99, 1.5x20 -> 1.405/110, 2.5x20 -> 1.384/83, 1.5x10 -> 1.342/115, худший узел темы 1.0x5 -> 1.240/131 — даже худший узел выше baseline без гейта. Признак из §8.1 доки стратегии («весь массив оси выше baseline без гейта») ВЫПОЛНЕН — прецедент NKHP, объёмный гейт на MVID носитель сигнала, а не только фильтр. ПРЕДУПРЕЖДЕНИЕ О КРАЯХ: максимум по VolBaseDays стоял на ВЕРХНЕМ КАНОНИЧЕСКОМ КРАЕ 20 (канон [3,5,10,14,20]) — отличие 4 каталога от канона (§5.1): ось РАСШИРЕНА ВВЕРХ ДО 30, край, взявший максимум, обязан быть проверен зондом за ним; узел 30 в замер §4.4 не входил и снимается впервые именно этой сеткой. ЗАПУСК: go run ./cmd/backtest -ticker MVID -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/mvid/cal_volume.json -out ./reports/MVID_volume -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-09-07: …",
+  "phases": [
+    {
+      "name": "volume",
+      "grid": {
+        "UseVolume": [
+          1
+        ],
+        "VolMult": [
+          1.0,
+          1.2,
+          1.5,
+          2.0,
+          2.5,
+          3.0
+        ],
+        "VolBaseDays": [
+          3,
+          5,
+          10,
+          14,
+          20,
+          30
+        ]
+      },
+      "keepTop": 6
+    }
+  ]
+}
