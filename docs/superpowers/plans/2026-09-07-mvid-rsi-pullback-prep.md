@@ -597,7 +597,7 @@ go run ./cmd/backtest -ticker MVID -strategy rsi_pullback -interval Minutes30 \
 **Покрытие спеки:** §1 (инструмент, шаг цены, ликвидность, волатильность, отсутствие дивидендов) →
 Global Constraints и Task 2 Step 3; §2 (окно и число фолдов) → Global Constraints и Task 3 Step 2;
 §3 (baseline и маршрут TGKA) → Global Constraints и Task 11 Steps 3–5; §4 (рельеф осей) →
-`_comment` в Task 1 Step 3 и ожидания Tasks 3–10; §5.1 (тринадцать тем и шесть отличий сеток) →
+`_comment` в Task 1 Step 3 и ожидания Tasks 3–10; §5.1 (тринадцать тем и пять отличий сеток) →
 Task 1 и Tasks 3–10; жёсткие инварианты → Task 1 Step 1; §5.2 (правило сборки) → Task 11 Step 1 и
 правила в Tasks 4, 5, 10; §5.3 (соседи плато) → Task 11 Step 9; §5.4 (гейт A) → Task 9 Step 2,
 Task 10 Step 4, Task 11 Step 2; §5.5 (гейт B жёсткий и правило ничьих) → Task 11 Steps 7 и 9;
