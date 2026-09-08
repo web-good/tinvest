@@ -36,9 +36,10 @@ func TestParamsAreTheAcceptedPoint(t *testing.T) {
 }
 
 // TestPointDiffersFromTheCoreBaseline сторожит семь полей, которыми принятая точка отличается от
-// дефолтов ядра (RSIPeriod, RSILower, EMAFast, EMASlow, TPDailyATR, UseTrail, TrailDailyATR). Если
-// литерал когда-нибудь схлопнется обратно в baseline, это будет означать потерю калибровки, а не
-// упрощение.
+// дефолтов ядра (RSIPeriod, RSILower, EMAFast, EMASlow, TPDailyATR, UseTrail, TrailDailyATR), и —
+// таблицей ниже — что остальные одиннадцать полей РАВНЫ дефолтам ядра: без этой второй половины
+// проверки "ровно семь" не была бы гарантией, только нижней границей. Если литерал когда-нибудь
+// схлопнется обратно в baseline, это будет означать потерю калибровки, а не упрощение.
 func TestPointDiffersFromTheCoreBaseline(t *testing.T) {
 	got, base := DefaultParams(), core.DefaultParams()
 	if got == base {
@@ -64,6 +65,26 @@ func TestPointDiffersFromTheCoreBaseline(t *testing.T) {
 	}
 	if got.TrailDailyATR != 0.5 || base.TrailDailyATR != 0 {
 		t.Fatalf("дистанция трейла: got.TrailDailyATR = %v, base.TrailDailyATR = %v, want 0.5 и 0", got.TrailDailyATR, base.TrailDailyATR)
+	}
+	for _, c := range []struct {
+		name      string
+		got, base float64
+	}{
+		{"RSIUpper", got.RSIUpper, base.RSIUpper},
+		{"DailyATRPeriod", float64(got.DailyATRPeriod), float64(base.DailyATRPeriod)},
+		{"UseDayATRGate", float64(got.UseDayATRGate), float64(base.UseDayATRGate)},
+		{"FreshDayATR", got.FreshDayATR, base.FreshDayATR},
+		{"SpentDayATR", got.SpentDayATR, base.SpentDayATR},
+		{"StopDailyATR", got.StopDailyATR, base.StopDailyATR},
+		{"UseVolume", float64(got.UseVolume), float64(base.UseVolume)},
+		{"VolBaseDays", float64(got.VolBaseDays), float64(base.VolBaseDays)},
+		{"VolLookbackBars", float64(got.VolLookbackBars), float64(base.VolLookbackBars)},
+		{"VolMult", got.VolMult, base.VolMult},
+		{"UseRSIExit", float64(got.UseRSIExit), float64(base.UseRSIExit)},
+	} {
+		if c.got != c.base {
+			t.Errorf("%s: got = %v, base = %v — это поле не входит в семь изменённых калибровкой, но разошлось с baseline", c.name, c.got, c.base)
+		}
 	}
 }
 

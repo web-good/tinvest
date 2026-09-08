@@ -2,14 +2,21 @@ package backtest
 
 import "testing"
 
-// TestMVIDGridsStayWide держит НИЖНЮЮ границу ширины сеток MVID и все инварианты каталога,
-// перечисленные в §5.1 спеки (docs/superpowers/specs/2026-09-07-mvid-rsi-pullback-prep-design.md):
-// RSILower <= 50, RSIPeriod >= 2, RSIUpper > RSILower на всех парах entry_deep и exit_low,
-// EMAFast < EMASlow на обеих трендовых темах, StopDailyATR нигде не равен нулю, узел RSILower=5 в
-// cal_entry.json, узел RSIUpper=20 на оси exit_low, узел VolBaseDays=30 в cal_volume.json, узлы
-// горба 25/30/35/40/45 на оси EMASlow в cal_trend_hump.json и узел EMASlow=250 в cal_trend.json.
-// Владелец потребовал максимально широкие оси, поэтому тест запрещает УРЕЗАТЬ ось, а не расширять
-// её: он проверяет наличие обязательных значений и не запрещает лишних.
+// TestMVIDGridsStayWide держит НИЖНЮЮ границу ширины сеток MVID: для каждой перечисленной пары
+// (файл, поле) проверяет, что обязательные узлы из §5.1 спеки
+// (docs/superpowers/specs/2026-09-07-mvid-rsi-pullback-prep-design.md) присутствуют в сетке —
+// узел RSILower=5 в cal_entry.json, узел RSIUpper=20 на оси exit_low, узел VolBaseDays=30 в
+// cal_volume.json, узлы горба 25/30/35/40/45 на оси EMASlow в cal_trend_hump.json, узел
+// EMASlow=250 в cal_trend.json и т.д. Владелец потребовал максимально широкие оси, поэтому тест
+// запрещает УРЕЗАТЬ ось, а не расширять её: он проверяет наличие обязательных значений и не
+// запрещает лишних.
+//
+// Остальные инварианты каталога из §5.1 держат соседние тесты этого файла и файла
+// rsi_pullback_grid_test.go: RSILower <= 50 — TestMVIDRSILowerStaysBelow50, RSIPeriod >= 2 —
+// TestMVIDRSIPeriodStaysAtLeastTwo, RSIUpper > RSILower на entry_deep/exit_low —
+// TestMVIDEntryGridsKeepRSIUpperAboveRSILower, EMAFast < EMASlow на обеих трендовых темах —
+// TestMVIDTrendGridsKeepFastBelowSlow, StopDailyATR нигде не равен нулю —
+// rsi_pullback_grid_test.go:106 (общий тест каталога, а не тест, специфичный для MVID).
 func TestMVIDGridsStayWide(t *testing.T) {
 	cases := []struct {
 		file   string
@@ -88,28 +95,19 @@ func TestMVIDRSIPeriodStaysAtLeastTwo(t *testing.T) {
 	}
 }
 
-// TestMVIDDeepEntryGridKeepsRSIUpperAboveRSILower сторожит cal_entry_deep.json: одна лишняя точка
-// в любой из осей может дать пару, где выход стоит НИЖЕ входа. Такая пара не ошибка запуска — ядро
-// её честно посчитает и вернёт мусорную конфигурацию, которая войдёт в ранжирование темы.
-func TestMVIDDeepEntryGridKeepsRSIUpperAboveRSILower(t *testing.T) {
-	grid := rsiPullbackTickerGrid(t, "mvid", "cal_entry_deep.json")
-	for _, lower := range grid["RSILower"] {
-		for _, upper := range grid["RSIUpper"] {
-			if upper <= lower {
-				t.Errorf("mvid/cal_entry_deep.json: пара RSILower=%v, RSIUpper=%v нарушает RSIUpper > RSILower", lower, upper)
-			}
-		}
-	}
-}
-
-// TestMVIDExitLowGridKeepsRSIUpperAboveRSILower сторожит тот же инвариант в cal_exit_low.json,
-// где RSILower пинован на 15 (ведущий кандидат оси входа, §4.1 спеки).
-func TestMVIDExitLowGridKeepsRSIUpperAboveRSILower(t *testing.T) {
-	grid := rsiPullbackTickerGrid(t, "mvid", "cal_exit_low.json")
-	for _, lower := range grid["RSILower"] {
-		for _, upper := range grid["RSIUpper"] {
-			if upper <= lower {
-				t.Errorf("mvid/cal_exit_low.json: пара RSILower=%v, RSIUpper=%v нарушает RSIUpper > RSILower", lower, upper)
+// TestMVIDEntryGridsKeepRSIUpperAboveRSILower проверяет оба файла, где RSIUpper и RSILower
+// меряются в одной сетке (cal_entry_deep.json и cal_exit_low.json — в последнем RSILower пинован
+// на 15, ведущий кандидат оси входа, §4.1 спеки): одна лишняя точка в любой из осей может дать
+// пару, где выход стоит НИЖЕ входа. Такая пара не ошибка запуска — ядро её честно посчитает и
+// вернёт мусорную конфигурацию, которая войдёт в ранжирование темы.
+func TestMVIDEntryGridsKeepRSIUpperAboveRSILower(t *testing.T) {
+	for _, file := range []string{"cal_entry_deep.json", "cal_exit_low.json"} {
+		grid := rsiPullbackTickerGrid(t, "mvid", file)
+		for _, lower := range grid["RSILower"] {
+			for _, upper := range grid["RSIUpper"] {
+				if upper <= lower {
+					t.Errorf("mvid/%s: пара RSILower=%v, RSIUpper=%v нарушает RSIUpper > RSILower", file, lower, upper)
+				}
 			}
 		}
 	}

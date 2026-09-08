@@ -508,6 +508,9 @@ go run ./cmd/backtest -ticker MVID -strategy rsi_pullback -interval Minutes30 \
 **Задача выполняется только если не сработал ни один из пяти пунктов стоп-условия и pooled OOS
 точки ≥ 1.326.**
 
+Пункт 2 сработал (15 сделок < 20); задачи выполняются по решению владельца §5.8.1 спеки, коммит
+9e0fecc.
+
 **Files:** Modify `internal/service/trading_strategy/rsi_pullback/strategy/mvid/mvid.go`,
 `mvid_test.go`, `internal/service/backtest/rsi_pullback_registry_test.go`
 
@@ -545,8 +548,9 @@ go run ./cmd/backtest -ticker MVID -strategy rsi_pullback -interval Minutes30 \
 **Files:** Modify `internal/config/rsi_pullback.go`, `internal/config/rsi_pullback_test.go`,
 `env/prod.env`, `env/prod.env.example`, `env/local.env.example`, `docs/rsi_pullback/live.md`
 
-- [ ] **Step 1:** перечитать числа Task 11 — ни один из пяти пунктов не сработал, дополнительное
-  условие (≥ 1.326) выполнено, оба гейта пройдены.
+- [ ] **Step 1:** перечитать числа Task 11 — пункт 2 сработал (15 сделок < 20); задачи выполняются
+  по решению владельца §5.8.1 спеки, коммит 9e0fecc. Дополнительное условие (≥ 1.326) выполнено,
+  оба гейта пройдены.
 - [ ] **Step 2:** добавить `"MVID"` в `want` теста конфига двадцать шестым.
 - [ ] **Step 3:** Run: `go test ./internal/config/ -run RSIPullback` → FAIL
 - [ ] **Step 4:** дописать `"MVID"` в `Tickers` + комментарий-абзац; дописать `,MVID` в
