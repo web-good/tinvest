@@ -1,0 +1,29 @@
+{
+  "_comment": "data/params/rsi_pullback/cnru/cal_vol_window.json — тема vol_window для CNRU, 18 прогонов, поверх ДЕФОЛТОВ ЯДРА при UseVolume=1. Тема мерит ОКНО объёмного гейта (VolLookbackBars) — сколько последних баров сравнивается с базой; форму гейта (VolMult, VolBaseDays) меряет соседняя тема volume, и расхождение VolMult между темами по правилу §5.2 спеки означает, что форма гейта не откалибрована, тогда оба поля идут с дефолта ядра. ЗАМЕР ДО НАПИСАНИЯ СЕТОК (§4.5 спеки docs/superpowers/specs/2026-09-08-cnru-rsi-pullback-prep-design.md): VolLookbackBars при VolMult=1.2: 1 -> 1.780/102, 2 -> 2.127/120, 3 -> 2.130/126 (ДЕФОЛТ, ПИК ОСИ), 5 -> 1.965/135, 8 -> 1.997/146, 12 -> 2.038/149, 16 -> 1.807/155, 24 -> 1.857/157, 32 -> 1.861/158. ПИК СТОИТ НА ДЕФОЛТЕ, плато 2-3, размах оси 0.35 PF. ПРЕДУПРЕЖДЕНИЕ О КРАЯХ: оба края оси (VolLookbackBars=1 и VolLookbackBars=32) не проверены точечно на других уровнях VolMult заранее — победа любого из них большинством фолдов требует зонда за краем при сборке точки, поскольку насыщение рельефа на VolMult=2.5 неизвестно. VolMult сужен до двух узлов [1.2, 2.5] — дефолт ядра и полоса, которая по §4.5 несёт ВЕРХ темы volume (2.5x14 -> 2.369/81, 2.5x30 -> 2.582/79, 2.5x40 -> 2.785/70, 2.5x50 -> 3.235/68), взята вместо канонических 2.0 именно потому, что она информативнее для сверки: если тема volume и эта тема разойдутся по VolMult даже на этой более сильной полосе, форма гейта точно не откалибрована. ЗАПУСК: go run ./cmd/backtest -ticker CNRU -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/cnru/cal_vol_window.json -out ./reports/CNRU_vol_window -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-09-08: …",
+  "phases": [
+    {
+      "name": "vol_window",
+      "grid": {
+        "UseVolume": [
+          1
+        ],
+        "VolLookbackBars": [
+          1,
+          2,
+          3,
+          5,
+          8,
+          12,
+          16,
+          24,
+          32
+        ],
+        "VolMult": [
+          1.2,
+          2.5
+        ]
+      },
+      "keepTop": 5
+    }
+  ]
+}
