@@ -13,6 +13,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ivat"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/lent"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/lsngp"
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/mvid"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/nkhp"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/nvtk"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/reni"
@@ -444,6 +445,67 @@ import (
 // the ticker. The screener's prior sat below the direct measurement (26th place, PFmed 1.37, holdout
 // 0.90 on six trades), the same disagreement seen on ELFV. The session widened from 28 to 34
 // half-hour bars inside the window, which is why the 24/12/3 control run is mandatory here.
+//
+// MVID (ПАО «М.видео») joined on 2026-09-07 as the twenty-sixth ticker, and it is the second in the
+// catalogue after SVAV to take the declared bar WHOLE: canonical entry measures pooled OOS PF 1.754
+// on 53 trades with RSILower stable at 10 in 3 folds of 4 and RSIPeriod stable at 3 in all 4 of 4,
+// and canonical trend measures 1.543 on 82 trades with EMASlow stable at 50 in 3 of 4. Read that
+// majority with care: on BOTH themes the 3-of-4 verdict rests on the thinner, older folds while the
+// largest and most recent fold dissents on both — the bar is taken, not settled.
+//
+// The accepted point itself hit the catalogue's second stop-condition failure by RARITY, the same
+// shape as UWGN: pooled OOS PF 1.697 on the canonical 36/12/6 schedule against the required 20
+// trades, the pool holds only 15 — two losses, and two of the four folds carry no losing trade at
+// all, so their fold PF is arithmetic on almost nothing, not a measurement. The 24/12/3 control
+// reads 1.484 on 10 trades and is NOT an independent check: its test window is the same
+// 2025-09-07..2026-09-07 stretch as folds 3 and 4 of the canonical run, the same ten trades read
+// twice. The other four clauses did pass, each against its own baseline: clause 1 (canonical
+// 36/12/6) 1.697 against a 1.326/100 baseline; clause 3 (24/12/3 control, the same non-independent
+// 1.484/10 above) against a 1.469/56 baseline; clause 4 (36/12/6 at a doubled round trip,
+// `-commission 0.001`) 1.404 against a 1.176 baseline; clause 5 (36/12/6 at MVID's real 0.217%
+// round trip, `-commission 0.0011`) 1.348 against a 1.148 baseline — the clause this stop condition
+// was written for. MVID trades live BY THE OWNER'S DECISION of 2026-09-07 (design §5.8.1), taken
+// AFTER being shown the fired clause and the UWGN precedent it echoes — not because the stop
+// condition passed whole.
+//
+// Both risk gates passed. Gate A: effective protection min(StopDailyATR 0.5, TrailDailyATR 0.5) =
+// 0.5 daily ATR survives 86.2% of weekdays, nowhere near the 1.0 ceiling (36.0% survivability)
+// reached by no accepted field. Gate B passed with a factor-of-two margin — max drawdown 5.64%
+// against a HARD 11.10% ceiling, the baseline's own max DD with no 1.3x multiplier: MVID's baseline
+// drawdown is among the highest measured for gate B, and the wide-stop trap begins inside the zone
+// gate A allows (0.7 daily ATR), so trading drawdown for return was judged unsafe here, the same
+// reasoning as SPBE's hard ceiling.
+//
+// The fifth clause exists because the cost model is optimistic 2.2x on this ticker: a 0.05 RUB
+// price step is a 0.217% round trip at the last price (46.25 RUB), 0.153% at the twelve-month
+// median (65.55 RUB), 0.104% at the window median (96.1 RUB), against the 0.1% the engine models.
+//
+// Four risks are accepted with eyes open, each carrying the review trigger declared for it. First,
+// the round trip grows as price falls, since it is inversely proportional to price — review
+// trigger: price below 40 RUB, re-check costs and recalibrate if needed. Second, turnover has
+// fallen one-directionally and now sits below the screener's own universe gate: 41.40 mln RUB
+// median over twelve months, 32.64 mln over six, against the screener's 50 mln floor — review
+// trigger: median weekday turnover below 20 mln RUB over six months. Third, the instrument is in a
+// one-directional decline, down 76.8% over the whole window (198.5 -> 46.25 RUB) with only two of
+// six half-years rising; the strategy stays profitable through the decline, but the issuer's own
+// credit risk (leverage, repeat recapitalisations) is not hedged by any parameter here. Fourth, the
+// weekend session is thin — 3.25 mln RUB median turnover, two orders of magnitude below weekdays —
+// and the point's share of exits landing there rose to 11.5% (3 of 26 trades on the full window)
+// against the baseline's 6.7%: fewer such exits in absolute terms (3 against 10) but a larger share
+// of a much smaller pool, a realised slippage risk.
+//
+// On top of those, four risks specific to the stop-condition failure are carried forward from the
+// owner's decision (design §5.8.1). The 15-trade OOS pool spans three years — about one trade per
+// ten weeks — and supports no confirmed statistical claim: two of the four folds have no losing
+// trade at all, so their fold PF is division by near-zero. The passed clauses 1, 3, 4 and 5 inherit
+// that same weakness; clause 5 in particular must NOT be quoted as proof this point survives real
+// costs, only that it did not fail on this thin pool. The rarity itself is created by the
+// COMBINATION RSIPeriod 3 x RSILower 10, not by either field alone: RSIPeriod 2 at the same
+// RSILower gives a 93-trade pool at PF 1.406, and RSILower 15 at the same RSIPeriod gives 47 trades
+// at PF 2.106 — both dominate the accepted point on PF and pool size at once, and both are the
+// natural starting point for a second calibration round on the SOFL precedent (a fresh window, not
+// a denser grid on the same one). Finally, the live runner will see this rarity as months of
+// silence from the ticker — expected behaviour on MVID's accepted point, not a runner fault.
 var paramsByTicker = map[string]core.Params{
 	ugld.Ticker:  ugld.DefaultParams(),
 	tbank.Ticker: tbank.DefaultParams(),
@@ -470,6 +532,7 @@ var paramsByTicker = map[string]core.Params{
 	tgka.Ticker:  tgka.DefaultParams(),
 	vsmo.Ticker:  vsmo.DefaultParams(),
 	spbe.Ticker:  spbe.DefaultParams(),
+	mvid.Ticker:  mvid.DefaultParams(),
 }
 
 // ParamsFor returns the params for a known ticker, ok=false otherwise.
