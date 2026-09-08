@@ -7,6 +7,7 @@ import (
 	rsipullbackastr "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/astr"
 	rsipullbackbanep "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/banep"
 	rsipullbackbspb "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/bspb"
+	rsipullbackcnru "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/cnru"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 	rsipullbackdias "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/dias"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/domrf"
@@ -1024,5 +1025,26 @@ func TestRSIPullbackMVIDServesTheCalibratedPoint(t *testing.T) {
 	}
 	if got := b.Build(p).Ticker(); got != "MVID" {
 		t.Fatalf("Ticker() = %q, want MVID", got)
+	}
+}
+
+// TestRSIPullbackCNRUTracksBaseline сторожит ЧЕСТНОЕ состояние: CNRU заведён в реестр до
+// калибровки, чтобы прогоны шли через реестр, а не через generic-ветку, и обязан возвращать ровно
+// baseline ядра. Тест заменяется снимком литерала (или сторожевым тестом отказа, по прецеденту
+// RTKMP/HEAD/AFKS/UWGN/TRNFP), когда калибровка CNRU будет проведена.
+func TestRSIPullbackCNRUTracksBaseline(t *testing.T) {
+	b, ok := rsiPullbackRegistry[rsipullbackcnru.Ticker]
+	if !ok {
+		t.Fatal("CNRU отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
+	}
+	p, pok := b.DefaultParams().(core.Params)
+	if !pok {
+		t.Fatalf("CNRU: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
+	}
+	if p != core.DefaultParams() {
+		t.Fatalf("CNRU ещё не откалиброван, params обязаны совпадать с baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
+	}
+	if got := b.Build(p).Ticker(); got != "CNRU" {
+		t.Fatalf("Ticker() = %q, want CNRU", got)
 	}
 }
