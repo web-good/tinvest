@@ -1,0 +1,28 @@
+{
+  "_comment": "data/params/rsi_pullback/cnru/plateau_stop_07.json — ЗОНД РИСК-ГЕЙТА A для CNRU (Task 9, тема risk). Меряет одну точку StopDailyATR=0.7 при остальных полях НА ДЕФОЛТАХ ЯДРА (TPDailyATR остаётся 0.6), одиночным прогоном на ПОЛНОМ ОКНЕ (без -train-months/-test-months, in-sample). Замерено заранее в cal_risk.json: 0.7 -> 2.007/164 — пул всё ещё держится на 164, PF растёт дальше внутри капкана. ЗАПУСК: go run ./cmd/backtest -ticker CNRU -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/cnru/plateau_stop_07.json -out ./reports/CNRU_stop07 -months 36 -min-trades 20 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "plateau_stop_07",
+      "grid": {
+        "RSIPeriod": [4],
+        "RSILower": [30],
+        "RSIUpper": [70],
+        "EMAFast": [10],
+        "EMASlow": [100],
+        "DailyATRPeriod": [14],
+        "UseDayATRGate": [1],
+        "FreshDayATR": [0],
+        "SpentDayATR": [0.8],
+        "StopDailyATR": [0.7],
+        "TPDailyATR": [0.6],
+        "UseVolume": [0],
+        "VolBaseDays": [14],
+        "VolLookbackBars": [3],
+        "VolMult": [1.2],
+        "UseRSIExit": [1],
+        "UseTrail": [0],
+        "TrailDailyATR": [0]
+      }
+    }
+  ]
+}

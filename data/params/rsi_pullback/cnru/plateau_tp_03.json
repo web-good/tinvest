@@ -1,0 +1,28 @@
+{
+  "_comment": "data/params/rsi_pullback/cnru/plateau_tp_03.json — ЗОНД ОСИ ЦЕЛИ для CNRU (Task 9, тема risk). Меряет одну точку TPDailyATR=0.3 — ИЗМЕРЕННЫЙ МАКСИМУМ оси цели (при дефолтном стопе 0.5) — при остальных полях НА ДЕФОЛТАХ ЯДРА (StopDailyATR остаётся 0.5), одиночным прогоном на ПОЛНОМ ОКНЕ (без -train-months/-test-months, in-sample). Замерено заранее в cal_risk.json: 0.3 -> 2.039/175 против дефолта 0.6 -> 1.814/164 — цель 0.3 ATR даёт больше сделок и выше PF, чем дефолт ядра. ЗАПУСК: go run ./cmd/backtest -ticker CNRU -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/cnru/plateau_tp_03.json -out ./reports/CNRU_tp03 -months 36 -min-trades 20 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "plateau_tp_03",
+      "grid": {
+        "RSIPeriod": [4],
+        "RSILower": [30],
+        "RSIUpper": [70],
+        "EMAFast": [10],
+        "EMASlow": [100],
+        "DailyATRPeriod": [14],
+        "UseDayATRGate": [1],
+        "FreshDayATR": [0],
+        "SpentDayATR": [0.8],
+        "StopDailyATR": [0.5],
+        "TPDailyATR": [0.3],
+        "UseVolume": [0],
+        "VolBaseDays": [14],
+        "VolLookbackBars": [3],
+        "VolMult": [1.2],
+        "UseRSIExit": [1],
+        "UseTrail": [0],
+        "TrailDailyATR": [0]
+      }
+    }
+  ]
+}
