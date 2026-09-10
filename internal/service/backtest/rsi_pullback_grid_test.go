@@ -77,6 +77,32 @@ func rsiPullbackGridFiles(t *testing.T) []string {
 	return files
 }
 
+// rsiPullbackIsFixedPoint reports whether a file pins ONE configuration instead of sweeping an
+// axis: every key of every phase carries exactly one value. That is a structural property of the
+// file, not a naming convention, so it holds for the plateau_ points of the first round and for
+// the r2_point*/r2_probe_* points of the second alike.
+func rsiPullbackIsFixedPoint(t *testing.T, path string) bool {
+	t.Helper()
+	for _, ph := range rsiPullbackPhases(t, path) {
+		for _, values := range ph.Grid {
+			if len(values) != 1 {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// rsiPullbackPointFileName reports whether a file NAME claims to carry a fixed point. The claim is
+// checked against the file's structure by TestRSIPullbackPointFilesArePoints: a file that says
+// "point" in its name and then sweeps two values would turn a pinned configuration's pooled OOS
+// number into the result of a selection procedure.
+func rsiPullbackPointFileName(name string) bool {
+	return strings.HasPrefix(name, "plateau_") ||
+		strings.HasPrefix(name, "r2_point") ||
+		strings.HasPrefix(name, "r2_probe_")
+}
+
 // TestRSIPullbackCalFilesValid guards the single-concern cal_*.json files with the same rules the
 // full grid gets: every swept field must resolve through applyField, no phase may be empty, and
 // StopDailyATR=0 must not appear anywhere — a stopless multi-day hold is not a configuration any
@@ -137,13 +163,16 @@ func TestRSIPullbackCalFilesValid(t *testing.T) {
 // across files would be meaningless, since a stop of 1.0 daily ATR buys a different amount of
 // room on T than it does on UGLD.
 //
-// Файлы plateau_ из проверки асимметрии исключены: они не свипуют НИЧЕГО (это сторожит
-// TestRSIPullbackPlateauFilesArePoints), а несут одну принятую конфигурацию, где соотношение
+// Файлы-точки из проверки асимметрии исключены: они не свипуют НИЧЕГО (это сторожит
+// TestRSIPullbackPointFilesArePoints), а несут одну принятую конфигурацию, где соотношение
 // цели и стопа — уже вынесенное решение, а не непроверенная область сетки. Каталог такие
 // решения знает: WUSH и LSNGP торгуют целью 0.5 при стопе 0.7, FESH — 0.5 при 0.5, IVAT —
 // 0.6 при 0.7, и в каждом случае замер показывал обвал profit factor за целью шире стопа.
 // Требовать от файла-точки лишнюю строку цели значило бы требовать свипа от того, что по
-// определению не свипуется.
+// определению не свипуется. Признак файла-точки здесь СТРУКТУРНЫЙ (каждый ключ несёт ровно одно
+// значение), а не по имени: точки второго круга приезжают под именами r2_point*/r2_probe_*, и
+// проверка, привязанная к префиксу plateau_, начала бы требовать от них цель шире стопа — при том
+// что свипа в них нет вовсе.
 func TestRSIPullbackGridControlPoints(t *testing.T) {
 	var sawDayOff, sawVolumeOff, sawStop bool
 	for _, path := range rsiPullbackGridFiles(t) {
@@ -169,7 +198,7 @@ func TestRSIPullbackGridControlPoints(t *testing.T) {
 		if maxStop == 0 {
 			continue // this file does not sweep the stop, so it cannot state an asymmetry
 		}
-		if strings.HasPrefix(filepath.Base(path), "plateau_") {
+		if rsiPullbackIsFixedPoint(t, path) {
 			continue // a fixed point states no untested area; see the doc comment
 		}
 		var sawTP, sawTPAboveStop bool
@@ -196,16 +225,18 @@ func TestRSIPullbackGridControlPoints(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackPlateauFilesArePoints pins what makes a plateau check meaningful: every key
-// carries exactly ONE value, so each walk-forward fold has a single combo to rank and the
+// TestRSIPullbackPointFilesArePoints pins what makes a plateau or point check meaningful: every
+// key carries exactly ONE value, so each walk-forward fold has a single combo to rank and the
 // calibrator makes no choice at all. The pooled OOS profit factor then belongs to that fixed
 // configuration. Let any key carry two values and the number silently becomes the result of a
-// selection procedure — which is the very thing a plateau check exists to rule out.
-func TestRSIPullbackPlateauFilesArePoints(t *testing.T) {
+// selection procedure — which is the very thing such a check exists to rule out. The rule covers
+// the plateau_ files of a first round and the r2_point*/r2_probe_* files of a second one: both
+// name themselves points in a report, and both would otherwise be free to sweep.
+func TestRSIPullbackPointFilesArePoints(t *testing.T) {
 	var seen int
 	for _, path := range rsiPullbackGridFiles(t) {
 		name := filepath.Base(path)
-		if !strings.HasPrefix(name, "plateau_") {
+		if !rsiPullbackPointFileName(name) {
 			continue
 		}
 		seen++

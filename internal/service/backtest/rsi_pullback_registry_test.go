@@ -845,12 +845,13 @@ func TestRSIPullbackAFKSTracksBaseline(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackAQUATracksBaseline сторожит ЧЕСТНОЕ состояние: AQUA заведён в реестр до
-// калибровки, чтобы прогоны шли через реестр, а не через generic-ветку, и обязан возвращать ровно
-// baseline ядра. Контрольный прогон дефолтов на расчётном окне убыточен (136 сделок, PF 0.931) —
-// маршрут «завести на дефолтах ядра», открытый прецедентом TGKA и подтверждённый CNRU, здесь
-// закрыт, потому что сами дефолты убыточны. Тест заменяется снимком литерала после калибровки.
-func TestRSIPullbackAQUATracksBaseline(t *testing.T) {
+// TestRSIPullbackAQUAUsesCalibratedParams сторожит, что реестр бэктеста отдаёт ровно тот литерал,
+// который пинит снимок в пакете aqua: расхождение означало бы, что бэктест и живой раннер торгуют
+// разными параметрами. Калибровка проведена 2026-09-10 в два круга; принятая точка второго круга
+// отличается от дефолтов ядра единственным полем RSIUpper=45 — при этом схлопывание литерала
+// обратно в baseline не безобидно: сами дефолты на AQUA убыточны (136 сделок, PF 0.931), маршрут
+// «завести на дефолтах ядра» прецедента TGKA здесь был закрыт именно поэтому.
+func TestRSIPullbackAQUAUsesCalibratedParams(t *testing.T) {
 	b, ok := rsiPullbackRegistry[rsipullbackaqua.Ticker]
 	if !ok {
 		t.Fatal("AQUA отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
@@ -859,8 +860,11 @@ func TestRSIPullbackAQUATracksBaseline(t *testing.T) {
 	if !pok {
 		t.Fatalf("AQUA: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
 	}
-	if p != core.DefaultParams() {
-		t.Fatalf("AQUA ещё не откалиброван, params обязаны совпадать с baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
+	if want := rsipullbackaqua.DefaultParams(); p != want {
+		t.Fatalf("реестр отдаёт не литерал пакета:\n got: %+v\nwant: %+v", p, want)
+	}
+	if p == core.DefaultParams() {
+		t.Fatalf("AQUA схлопнулся в baseline ядра: калибровка потеряна, а дефолты на этой бумаге убыточны:\n got: %+v", p)
 	}
 	if got := b.Build(p).Ticker(); got != "AQUA" {
 		t.Fatalf("Ticker() = %q, want AQUA", got)

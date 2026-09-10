@@ -1,10 +1,8 @@
 // Package aqua supplies the ticker and rsi_pullback Params for AQUA (ПАО «Совкомфлот», обыкновенные
 // акции, лот 10).
 //
-// СОСТОЯНИЕ: КАЛИБРОВКА НЕ ПРОВОДИЛАСЬ. Пакет возвращает core.DefaultParams() — baseline ядра, не
-// подобранный под этот инструмент. Так и должно быть до конца калибровки: пакет заведён заранее,
-// чтобы прогоны шли через тот же реестр бэктеста, что и у остальных тикеров, а не через
-// generic-ветку. Состояние держит aqua_test.go.
+// СОСТОЯНИЕ: КАЛИБРОВКА ПРОВЕДЕНА 2026-09-10 в два круга. Пакет отдаёт литерал принятой точки
+// второго круга — дефолты ядра ровно с одним изменением, RSIUpper=45. Снимок держит aqua_test.go.
 //
 // ОКНО БЕЗ ЗАПАСА ИСТОРИИ. Расчётное окно 2023-09-10 … 2026-09-10 (36 месяцев), интервал
 // Minutes30. Получасовой ряд AQUA начинается 2023-09-11 — на один день ПОЗЖЕ открытия окна, и
@@ -50,6 +48,28 @@ import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 // Ticker is the MOEX ticker this package parameterizes.
 const Ticker = "AQUA"
 
-// DefaultParams returns the rsi_pullback parameters for AQUA. Пока калибровка не проведена, это
-// ровно baseline ядра — см. док-комментарий пакета.
-func DefaultParams() core.Params { return core.DefaultParams() }
+// DefaultParams returns the rsi_pullback parameters for AQUA — принятую точку второго круга
+// калибровки. Все восемнадцать полей выписаны явно, без вызова core.DefaultParams(): правка
+// дефолтов ядра не должна молча сдвинуть боевой тикер. Разбор — док-комментарий пакета.
+func DefaultParams() core.Params {
+	return core.Params{
+		RSIPeriod:       4,
+		RSILower:        30,
+		RSIUpper:        45,
+		EMAFast:         10,
+		EMASlow:         100,
+		DailyATRPeriod:  14,
+		UseDayATRGate:   1,
+		FreshDayATR:     0,
+		SpentDayATR:     0.8,
+		StopDailyATR:    0.5,
+		TPDailyATR:      0.6,
+		UseVolume:       0,
+		VolBaseDays:     14,
+		VolLookbackBars: 3,
+		VolMult:         1.2,
+		UseRSIExit:      1,
+		UseTrail:        0,
+		TrailDailyATR:   0,
+	}
+}
