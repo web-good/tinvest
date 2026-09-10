@@ -1,6 +1,7 @@
 package live
 
 import (
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/aqua"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/astr"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/banep"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/bspb"
@@ -569,6 +570,53 @@ import (
 // catalogue. Price below 200 RUB means re-check costs: the 0.2 RUB price step is a 0.064% round trip
 // at 627 RUB — the cost model is PESSIMISTIC by a factor of 1.6 here, the opposite of MVID — but
 // below 200 RUB the same step would exceed the 0.2% level that clause 4 of the stop condition tests.
+//
+// AQUA (ПАО «Совкомфлот») joined on 2026-09-10 as the twenty-eighth ticker, on a SECOND round, and
+// it carries the SMALLEST literal in this map: one field. Its point is core.DefaultParams() with
+// RSIUpper=45 instead of 70 — an early RSI exit and nothing else. That single field is the whole
+// edge, which is why the parity check of Task 18 mattered more here than anywhere: a live-vs-backtest
+// gap on the exit would not degrade the ticker, it would delete it. The defaults themselves lose on
+// this instrument (136 trades, PF 0.931, three calendar years of four in the red), so the "trade the
+// core defaults" route of TGKA and CNRU was closed from the start.
+//
+// The first round is part of the record because it was WRONG about which field carries the edge. It
+// built a point on a deep entry (RSILower=10, a majority of 3-of-4 folds, accepted mechanically) and
+// failed clause 3 of the stop condition (pooled OOS PF 0.786 on a 15-trade pool over 24/12/3). The
+// second round, run on the homogeneous 24-month window the owner prescribed, put narrow grids around
+// the first round's own fold votes: the deep entry collapsed outright (pooled OOS 0.214 on eight
+// trades, no value drawing a majority) and returned to the default 30, while the RSIUpper=45 ×
+// StopDailyATR pair that the first round had DEFERRED won 45 unanimously across all four folds.
+//
+// Risk gate B did real work here and its verdict must be read exactly. The second round's majority
+// point turned the day gate OFF (4-of-4 folds) and drew 416 trades in two years at PF 1.225 — with a
+// max drawdown of 14.18% against the 10% ceiling. Of seven measured neighbours exactly one clears the
+// ceiling: putting the day gate back (the core default) gives 122 trades, PF 1.433 and 6.30%
+// drawdown. So the accepted point stands on a value its own calibration rejected UNANIMOUSLY; the
+// substitution is allowed by the rule declared before the runs, and the trade it refuses is explicit
+// — the off-gate variant earns more (+19.52% against +11.75%) by buying it with a drawdown half again
+// over the risk ceiling.
+//
+// What the point measures: 122 trades over 24 months (about five a month), PF 1.433, max DD 6.30%,
+// expectancy 96.31 RUB; pooled OOS PF 1.487 on 124 trades over 36/12/6 with FOUR profitable folds of
+// four, 1.619 on the 24/12/3 control, and all three calendar years of the window profitable (+1 315 /
+// +9 997 / +437 RUB). The declared bar was not taken in the first round (entry 1.002, trend 0.773).
+//
+// Four risks are accepted with eyes open. First, clause 4 of the stop condition passes by eight
+// thousandths — pooled OOS PF 1.008 at a doubled round trip, with two folds of four unprofitable and
+// expectancy 1.96 RUB per trade. It survives only because the real round trip is small: the 0.1 RUB
+// price step at ~327 RUB is 0.061%, so the tested 0.2% is over three times the live cost. Second,
+// liquidity is FALLING — median weekday turnover 61.48 / 47.85 / 45.13 mln RUB over 36 / 24 / 12
+// months — and the 24- and 12-month horizons both sit BELOW the screener's own 50 mln universe gate.
+// Third, the instrument's regime is falling: buy&hold -67.46% over the window, one rising half-year
+// out of seven, so the point has never been tested on a rising market in this name. Fourth, the
+// session widened twice inside the 36-month window (19 -> 29 -> 34 half-hour bars), which is why the
+// second round was run on the homogeneous 24-month stretch in the first place.
+//
+// Review triggers. Median weekday turnover below 50 mln RUB over six months means re-check the
+// ticker — it is already below that line on two longer horizons. Price below 165 RUB means re-check
+// costs: at that level the 0.1 RUB step reaches the 0.12% round trip where the thin margin of clause
+// 4 would be gone. And because the whole literal is one exit field, any change to core's RSI exit
+// semantics is a change to this ticker's only mechanism.
 var paramsByTicker = map[string]core.Params{
 	ugld.Ticker:  ugld.DefaultParams(),
 	tbank.Ticker: tbank.DefaultParams(),
@@ -597,6 +645,7 @@ var paramsByTicker = map[string]core.Params{
 	spbe.Ticker:  spbe.DefaultParams(),
 	mvid.Ticker:  mvid.DefaultParams(),
 	cnru.Ticker:  cnru.DefaultParams(),
+	aqua.Ticker:  aqua.DefaultParams(),
 }
 
 // ParamsFor returns the params for a known ticker, ok=false otherwise.

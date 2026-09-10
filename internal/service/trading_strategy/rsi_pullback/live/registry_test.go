@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"tinvest/internal/config"
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/aqua"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 )
 
@@ -134,5 +135,23 @@ func TestStrategyForUsesTickerParams(t *testing.T) {
 	}
 	if _, ok := StrategyFor("НЕТ-ТАКОГО"); ok {
 		t.Fatal("StrategyFor returned ok for an unknown ticker")
+	}
+}
+
+// TestRegistryHasAQUA держит связку «пакет — реестр живого раннера» для AQUA: раннер обязан отдавать
+// ровно тот литерал, который пинит снимок в пакете. Отдельный тест нужен потому, что точка AQUA
+// отличается от дефолтов ядра ЕДИНСТВЕННЫМ полем — ранним RSI-выходом 45 вместо 70, — и потеря
+// этого поля не сделала бы карту заметно другой на глаз, зато отдала бы бумагу дефолтам, которые на
+// ней убыточны (PF 0.931 на расчётном окне).
+func TestRegistryHasAQUA(t *testing.T) {
+	p, ok := ParamsFor(aqua.Ticker)
+	if !ok {
+		t.Fatal("AQUA нет в реестре живого раннера: тикер не будет торговать вовсе")
+	}
+	if want := aqua.DefaultParams(); p != want {
+		t.Fatalf("реестр отдаёт не литерал пакета:\n got: %+v\nwant: %+v", p, want)
+	}
+	if p.RSIUpper != 45 {
+		t.Fatalf("AQUA: RSIUpper = %v, want 45 — единственное поле, которым точка уходит от дефолтов", p.RSIUpper)
 	}
 }
