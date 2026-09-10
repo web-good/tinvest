@@ -1,0 +1,64 @@
+{
+  "_comment": "data/params/rsi_pullback/aqua/r2_probe_baseline.json — ДЕФОЛТЫ ЯДРА на однородном 24-месячном окне 2024-09-10..2026-09-10, выписанные явно. НАЗНАЧЕНИЕ: третий контур принятой точки второго круга (r2_point_gateb.json) требует сравнения шести чисел риск-профиля с baseline НА ТОМ ЖЕ ОКНЕ. Контрольный прогон дефолтов из спеки снят на 36-месячном окне (136 сделок, PF 0.931), и сравнивать с ним 24-месячную точку значило бы приписать разнице окон эффект единственного поля. Отличие этого файла от точки — ровно RSIUpper: 70 против 45. ЗАПУСК: go run ./cmd/backtest -ticker AQUA -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/aqua/r2_probe_baseline.json -out ./reports/AQUA_r2_probe_baseline -months 24 -min-trades 1 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "r2_probe_baseline",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          10
+        ],
+        "EMASlow": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.5
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      }
+    }
+  ]
+}
