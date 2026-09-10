@@ -1,0 +1,28 @@
+{
+  "_comment": "data/params/rsi_pullback/cnru/plateau_volmult_12.json — СОСЕД ПЛАТО по единственному полю принятой точки CNRU, ушедшему от дефолта ядра (Task 11 Step 10). Точка (plateau_point.json) взяла VolMult=2.5 из темы vol_window по правилу приоритета тем (большинство 3/4 И pooled OOS 2.443 выше первичной volume 2.373). Этот зонд повторяет точку поле в поле, кроме VolMult, возвращённого на дефолт ядра 1.2. НАЗНАЧЕНИЕ ЗОНДА — ДОКАЗАТЬ ИНЕРТНОСТЬ ПОЛЯ, а не измерить плато: при UseVolume=0 (объёмный гейт выключен большинством 3/4 темы screen) множитель объёма в расчёт не входит вовсе, поэтому оба узла обязаны дать ПОБАЙТОВО одинаковый результат. Совпадение означает, что принятая точка поведенчески равна core.DefaultParams() и вопрос о величине VolMult в литерале лишён содержания; расхождение означало бы, что поле влияет на расчёт при выключенном гейте, то есть дефект ядра, и требовало бы остановки работы с докладом владельцу. ЗАПУСК: go run ./cmd/backtest -ticker CNRU -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/cnru/plateau_volmult_12.json -out ./reports/CNRU_point_volmult12 -months 36 -min-trades 20 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "plateau_volmult_12",
+      "grid": {
+        "RSIPeriod": [4],
+        "RSILower": [30],
+        "RSIUpper": [70],
+        "EMAFast": [10],
+        "EMASlow": [100],
+        "DailyATRPeriod": [14],
+        "UseDayATRGate": [1],
+        "FreshDayATR": [0],
+        "SpentDayATR": [0.8],
+        "StopDailyATR": [0.5],
+        "TPDailyATR": [0.6],
+        "UseVolume": [0],
+        "VolBaseDays": [14],
+        "VolLookbackBars": [3],
+        "VolMult": [1.2],
+        "UseRSIExit": [1],
+        "UseTrail": [0],
+        "TrailDailyATR": [0]
+      }
+    }
+  ]
+}
