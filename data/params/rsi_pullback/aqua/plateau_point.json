@@ -1,0 +1,28 @@
+{
+  "_comment": "data/params/rsi_pullback/aqua/plateau_point.json — ПРИНЯТАЯ ТОЧКА ПЕРВОГО КРУГА для AQUA (Task 12). Собрана правилом большинства из голосов фолдов одиннадцати тем (Tasks 3–11): из восемнадцати полей ровно два ушли от дефолта ядра — UseDayATRGate=0 (тема screen, голоса 1/0/0/0, большинство ЗА выключение гейта) и RSILower=10 (тема entry, голоса 5/10/10/10, большинство за 10). Все остальные поля не набрали ≥3/4 и остались на дефолтах ядра. RSILower=10 — за-краевой зонд (в теме entry сетка не уходила дальше 10 в одну сторону; четвёртый фолд отдельно голосовал за вырожденный узел 5 с PF 588.8 на одной сделке) — принят МЕХАНИЧЕСКИ по правилу большинства, объявленному до прогонов (ruling R4); его достаточность или недостаточность проверяет пункт 2 стоп-условия (≥20 сделок в пуле OOS), а не решение контроллера постфактум. Пара RSIUpper=45 × StopDailyATR из темы exit_stop (pooled OOS 2.257/127, большинство 3 из 4 по обоим полям) в точку НЕ вошла (ruling R5): все три голосовавших фолда выбрали 45 при стопах 1.0/1.0/0.7, ни один — при дефолтном стопе 0.5, перенос одного поля создал бы конфигурацию, которую не мерил ни один фолд и ни одна тема; при дефолтном стопе ранний RSI-выход измерен темой exit и даёт pooled OOS 0.654. ЗАПУСК (одиночный прогон на полном окне): go run ./cmd/backtest -ticker AQUA -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/aqua/plateau_point.json -out ./reports/AQUA_point -months 36 -min-trades 1 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "plateau_point",
+      "grid": {
+        "RSIPeriod": [4],
+        "RSILower": [10],
+        "RSIUpper": [70],
+        "EMAFast": [10],
+        "EMASlow": [100],
+        "DailyATRPeriod": [14],
+        "UseDayATRGate": [0],
+        "FreshDayATR": [0],
+        "SpentDayATR": [0.8],
+        "StopDailyATR": [0.5],
+        "TPDailyATR": [0.6],
+        "UseVolume": [0],
+        "VolBaseDays": [14],
+        "VolLookbackBars": [3],
+        "VolMult": [1.2],
+        "UseRSIExit": [1],
+        "UseTrail": [0],
+        "TrailDailyATR": [0]
+      }
+    }
+  ]
+}

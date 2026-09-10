@@ -1,0 +1,28 @@
+{
+  "_comment": "data/params/rsi_pullback/aqua/plateau_stop_04.json — ЗОНД ТРЕТЬЕГО КОНТУРА для AQUA (Task 12, Step 6). Не сосед плато поля, ушедшего от дефолта (StopDailyATR у точки НЕ отличается от дефолта ядра — тема risk не набрала большинства), а прямая проверка правила Step 6: анатомия принятой точки (RSILower=10, UseDayATRGate=0, остальное дефолт) показала подпись капкана широкого стопа (доля SL 33.8% → 24.5%, удержание 9/22/51 → 11/29/59, ночёвки 45.6% → 52.8%) НЕСМОТРЯ на то, что сам StopDailyATR у точки равен 0.5 — тот же уровень, что и у baseline. Значит подпись вызвана не расширением стопа, а сменой набора сделок из-за RSILower=10 и отключённого дневного гейта. Этот файл сужает стоп на один шаг вниз (0.5 → 0.4, выживаемость 96.2% против 89.6%) поверх точки, чтобы проверить, снимается ли подпись и какова цена в PF. ЗАПУСК: go run ./cmd/backtest -ticker AQUA -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/aqua/plateau_stop_04.json -out ./reports/AQUA_point_stop04 -months 36 -min-trades 1 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "plateau_stop_04",
+      "grid": {
+        "RSIPeriod": [4],
+        "RSILower": [10],
+        "RSIUpper": [70],
+        "EMAFast": [10],
+        "EMASlow": [100],
+        "DailyATRPeriod": [14],
+        "UseDayATRGate": [0],
+        "FreshDayATR": [0],
+        "SpentDayATR": [0.8],
+        "StopDailyATR": [0.4],
+        "TPDailyATR": [0.6],
+        "UseVolume": [0],
+        "VolBaseDays": [14],
+        "VolLookbackBars": [3],
+        "VolMult": [1.2],
+        "UseRSIExit": [1],
+        "UseTrail": [0],
+        "TrailDailyATR": [0]
+      }
+    }
+  ]
+}
