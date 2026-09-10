@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	rsipullbackafks "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/afks"
+	rsipullbackaqua "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/aqua"
 	rsipullbackastr "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/astr"
 	rsipullbackbanep "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/banep"
 	rsipullbackbspb "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/bspb"
@@ -841,6 +842,28 @@ func TestRSIPullbackAFKSTracksBaseline(t *testing.T) {
 	}
 	if got := b.Build(p).Ticker(); got != "AFKS" {
 		t.Fatalf("Ticker() = %q, want AFKS", got)
+	}
+}
+
+// TestRSIPullbackAQUATracksBaseline сторожит ЧЕСТНОЕ состояние: AQUA заведён в реестр до
+// калибровки, чтобы прогоны шли через реестр, а не через generic-ветку, и обязан возвращать ровно
+// baseline ядра. Контрольный прогон дефолтов на расчётном окне убыточен (136 сделок, PF 0.931) —
+// маршрут «завести на дефолтах ядра», открытый прецедентом TGKA и подтверждённый CNRU, здесь
+// закрыт, потому что сами дефолты убыточны. Тест заменяется снимком литерала после калибровки.
+func TestRSIPullbackAQUATracksBaseline(t *testing.T) {
+	b, ok := rsiPullbackRegistry[rsipullbackaqua.Ticker]
+	if !ok {
+		t.Fatal("AQUA отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
+	}
+	p, pok := b.DefaultParams().(core.Params)
+	if !pok {
+		t.Fatalf("AQUA: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
+	}
+	if p != core.DefaultParams() {
+		t.Fatalf("AQUA ещё не откалиброван, params обязаны совпадать с baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
+	}
+	if got := b.Build(p).Ticker(); got != "AQUA" {
+		t.Fatalf("Ticker() = %q, want AQUA", got)
 	}
 }
 
