@@ -1,0 +1,64 @@
+{
+  "_comment": "data/params/rsi_pullback/aqua/r2_probe_rsiupper44.json — ЗОНД ВТОРОГО КРУГА AQUA поверх точки r2_point.json (дефолты ядра + UseDayATRGate=0 + RSIUpper=45), изменено ровно одно поле RSIUpper=44. НАЗНАЧЕНИЕ: сосед по оси раннего RSI-выхода вниз. ЗАПУСК: go run ./cmd/backtest -ticker AQUA -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/aqua/r2_probe_rsiupper44.json -out ./reports/AQUA_r2_probe_rsiupper44 -months 24 -min-trades 1 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "r2_probe_rsiupper44",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          44
+        ],
+        "EMAFast": [
+          10
+        ],
+        "EMASlow": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          0
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.5
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      }
+    }
+  ]
+}

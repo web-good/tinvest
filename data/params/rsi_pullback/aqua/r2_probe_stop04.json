@@ -1,0 +1,64 @@
+{
+  "_comment": "data/params/rsi_pullback/aqua/r2_probe_stop04.json — ЗОНД ВТОРОГО КРУГА AQUA поверх точки r2_point.json (дефолты ядра + UseDayATRGate=0 + RSIUpper=45), изменено ровно одно поле StopDailyATR=0.4. НАЗНАЧЕНИЕ: сужение стопа поверх точки второго круга — кандидат риск-гейта B (max DD точки 14.18% > 10%). ЗАПУСК: go run ./cmd/backtest -ticker AQUA -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/aqua/r2_probe_stop04.json -out ./reports/AQUA_r2_probe_stop04 -months 24 -min-trades 1 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "r2_probe_stop04",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          45
+        ],
+        "EMAFast": [
+          10
+        ],
+        "EMASlow": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          0
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.4
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      }
+    }
+  ]
+}

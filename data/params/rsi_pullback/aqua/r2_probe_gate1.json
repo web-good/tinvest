@@ -1,0 +1,64 @@
+{
+  "_comment": "data/params/rsi_pullback/aqua/r2_probe_gate1.json — ЗОНД ВТОРОГО КРУГА AQUA поверх точки r2_point.json (дефолты ядра + UseDayATRGate=0 + RSIUpper=45), изменено ровно одно поле UseDayATRGate=1. НАЗНАЧЕНИЕ: возврат дневного гейта поверх точки второго круга — кандидат риск-гейта B; в теме r2_gate за 0 голосовали все четыре фолда, зонд измеряет цену обратного решения. ЗАПУСК: go run ./cmd/backtest -ticker AQUA -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/aqua/r2_probe_gate1.json -out ./reports/AQUA_r2_probe_gate1 -months 24 -min-trades 1 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "r2_probe_gate1",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          45
+        ],
+        "EMAFast": [
+          10
+        ],
+        "EMASlow": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.5
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      }
+    }
+  ]
+}

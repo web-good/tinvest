@@ -1,0 +1,64 @@
+{
+  "_comment": "data/params/rsi_pullback/aqua/r2_point_gateb.json — ПРИНЯТАЯ ТОЧКА ВТОРОГО КРУГА AQUA ПОСЛЕ РИСК-ГЕЙТА B (Task 13 Step 5). Точка большинства r2_point.json (дефолты ядра + UseDayATRGate=0 + RSIUpper=45) дала на однородном 24-месячном окне 2024-09-10..2026-09-10 max DD 14.18% при потолке гейта B в 10% и по правилу задачи 12 Step 4 («если выше — точка не принимается, и в неё идёт ближайший вариант плато с меньшей просадкой; замена записывается прямым текстом») ЗАМЕНЕНА на ближайшего соседа с меньшей просадкой. Замерены все шесть соседей точки по обеим ушедшим от дефолта осям и по оси стопа: StopDailyATR 0.65 — DD 12.98%; StopDailyATR 0.4 — DD 13.92%; RSIUpper 44 — DD 13.38%; RSIUpper 46 — DD 14.60%; RSIUpper 70 (дефолт ядра) — DD 30.18% при PF 0.945; UseDayATRGate 1 (дефолт ядра) — DD 6.30% при PF 1.433. Порог 10% берёт РОВНО ОДИН сосед — возврат дневного гейта, и он же даёт лучший PF из всех семи вариантов. ЦЕНА ЗАМЕНЫ ПРЯМЫМ ТЕКСТОМ: выборка падает с 416 сделок до 122 за два года (примерно 17 сделок в месяц против 5), PF растёт с 1.225 до 1.433, чистый PnL падает с +19.52% до +11.75%, expectancy растёт с 46.93 ₽ до 96.31 ₽, просадка падает с 14.18% до 6.30%. ОГОВОРКА, КОТОРУЮ НЕЛЬЗЯ ЗАМАЛЧИВАТЬ: за UseDayATRGate=0 голосовали ВСЕ ЧЕТЫРЕ фолда темы r2_gate (pooled OOS 1.237 на 146 сделках), то есть риск-гейт B здесь перебивает единогласный голос фолдов — это разрешено правилом, объявленным до прогонов, но означает, что принятая точка стоит на значении, которое сама калибровка второго круга отвергла. От дефолтов ядра принятая точка уходит РОВНО ОДНИМ полем: RSIUpper=45. ЗАПУСК: go run ./cmd/backtest -ticker AQUA -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/aqua/r2_point_gateb.json -out ./reports/AQUA_r2_point_gateb -months 24 -min-trades 1 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "r2_point_gateb",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          45
+        ],
+        "EMAFast": [
+          10
+        ],
+        "EMASlow": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.5
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      }
+    }
+  ]
+}
