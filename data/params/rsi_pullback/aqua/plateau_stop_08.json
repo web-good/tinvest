@@ -1,0 +1,28 @@
+{
+  "_comment": "data/params/rsi_pullback/aqua/plateau_stop_08.json — ЗОНД РИСК-ГЕЙТА A для AQUA (Task 9, тема risk). Меряет одну точку StopDailyATR=0.8 при остальных полях НА ДЕФОЛТАХ ЯДРА (TPDailyATR остаётся 0.6), одиночным прогоном на ПОЛНОМ ОКНЕ (без -train-months/-test-months, in-sample). Задача: показать среднюю точку формы капкана широкого стопа AQUA — измерено заранее в cal_risk.json: 0.8 -> 132 сделки, пул почти не двигается против 133 на 0.6, а PF продолжает расти к 1.711 на дальнем краю оси. ЗАПУСК: go run ./cmd/backtest -ticker AQUA -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/aqua/plateau_stop_08.json -out ./reports/AQUA_stop_08 -months 36 -min-trades 1 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "plateau_stop_08",
+      "grid": {
+        "RSIPeriod": [4],
+        "RSILower": [30],
+        "RSIUpper": [70],
+        "EMAFast": [10],
+        "EMASlow": [100],
+        "DailyATRPeriod": [14],
+        "UseDayATRGate": [1],
+        "FreshDayATR": [0],
+        "SpentDayATR": [0.8],
+        "StopDailyATR": [0.8],
+        "TPDailyATR": [0.6],
+        "UseVolume": [0],
+        "VolBaseDays": [14],
+        "VolLookbackBars": [3],
+        "VolMult": [1.2],
+        "UseRSIExit": [1],
+        "UseTrail": [0],
+        "TrailDailyATR": [0]
+      }
+    }
+  ]
+}
