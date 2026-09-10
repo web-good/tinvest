@@ -1,0 +1,32 @@
+{
+  "_comment": "data/params/rsi_pullback/aqua/cal_volume.json — тема volume для AQUA, 48 прогонов, поверх ДЕФОЛТОВ ЯДРА при UseVolume=1. Тема мерит ФОРМУ объёмного гейта: во сколько раз объём последних VolLookbackBars баров должен превышать базовую норму VolBaseDays дней. ЗАМЕР ДО НАПИСАНИЯ СЕТОК (§4.5 спеки docs/superpowers/specs/2026-09-10-aqua-rsi-pullback-prep-design.md, VolLookbackBars на дефолте ядра): признак §8.1 доки стратегии НЕ выполнен — вся ось VolLookbackBars лежит ниже baseline 0.931 (1 → 0.788/98, 3 → 0.873/109, 12 → 0.905/123, 32 → 0.892/132), а в паре screen включённый объёмный гейт даёт 0.873 против 0.931 выключенного; верх темы volume (3.0×5 → 1.093/59, 1.5×5 → 1.083/101) стоит в зоне редкости и не окупает включение гейта. Верх темы, полнее: 3.0×5 → 1.093/59, 1.5×5 → 1.083/101, 2.0×3 → 1.069/91; низ уходит под baseline (1.0×10 → 0.911/112, 1.5×10 → 0.899/99, 3.0×50 → 0.889/57). Ожидание темы: гейт остаётся выключенным, как и в теме screen. ПРЕДУПРЕЖДЕНИЕ О КРАЯХ (ЗОНА РЕДКОСТИ): верхний узел VolMult=3.0 в сочетании с малым VolBaseDays (5) стоит на 59 сделках за три года — заметно тоньше baseline (136); победа краевых узлов VolMult=3.0 или VolBaseDays=50 большинством фолдов пишется предупреждением о зоне редкости, а не принимается молча. Инвариант UseVolume=1 зафиксирован по построению всей темы. ЗАПУСК: go run ./cmd/backtest -ticker AQUA -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/aqua/cal_volume.json -out ./reports/AQUA_volume -months 36 -min-trades 20 -train-months 12 -test-months 6 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА: (заполняется по факту прогона walk-forward задачей сборки темы).",
+  "phases": [
+    {
+      "name": "volume",
+      "grid": {
+        "UseVolume": [
+          1
+        ],
+        "VolMult": [
+          1.0,
+          1.2,
+          1.5,
+          2.0,
+          2.5,
+          3.0
+        ],
+        "VolBaseDays": [
+          3,
+          5,
+          10,
+          14,
+          20,
+          30,
+          40,
+          50
+        ]
+      },
+      "keepTop": 5
+    }
+  ]
+}

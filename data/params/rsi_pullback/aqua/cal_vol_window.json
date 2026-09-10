@@ -1,0 +1,29 @@
+{
+  "_comment": "data/params/rsi_pullback/aqua/cal_vol_window.json — тема vol_window для AQUA, 18 прогонов, поверх ДЕФОЛТОВ ЯДРА при UseVolume=1. Тема мерит ОКНО объёмного гейта (VolLookbackBars) — сколько последних баров сравнивается с базой; форму гейта (VolMult, VolBaseDays) меряет соседняя тема volume, и расхождение VolMult между темами по правилу §5.2 спеки docs/superpowers/specs/2026-09-10-aqua-rsi-pullback-prep-design.md означает, что форма гейта не откалибрована, тогда оба поля идут с дефолта ядра. ЗАМЕР ДО НАПИСАНИЯ СЕТОК (§4.5 спеки): признак §8.1 доки стратегии НЕ выполнен — вся ось VolLookbackBars лежит ниже baseline 0.931 (1 → 0.788/98, 3 → 0.873/109, 12 → 0.905/123, 32 → 0.892/132), а в паре screen включённый объёмный гейт даёт 0.873 против 0.931 выключенного; верх темы volume (3.0×5 → 1.093/59, 1.5×5 → 1.083/101) стоит в зоне редкости и не окупает включение гейта. VolMult сужен до двух узлов [1.2, 2.0] — дефолт ядра и середина полосы темы volume, которая несёт её верх — взята для сверки: если тема volume и эта тема разойдутся по VolMult, форма гейта точно не откалибрована. ПРЕДУПРЕЖДЕНИЕ О КРАЯХ: оба края оси VolLookbackBars=1 и VolLookbackBars=32 не проверены точечно на других уровнях VolMult заранее — победа любого из них большинством фолдов требует зонда за краем при сборке точки, поскольку насыщение рельефа на VolMult=2.0 неизвестно; при этом вся ось VolLookbackBars на дефолтном VolMult=1.2 лежит ниже baseline 0.931, поэтому даже победа внутреннего узла (12 → 0.905/123) не означала бы найденный сигнал без сверки с признаком §8.1. ЗАПУСК: go run ./cmd/backtest -ticker AQUA -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/aqua/cal_vol_window.json -out ./reports/AQUA_vol_window -months 36 -min-trades 20 -train-months 12 -test-months 6 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА: (заполняется по факту прогона walk-forward задачей сборки темы).",
+  "phases": [
+    {
+      "name": "vol_window",
+      "grid": {
+        "UseVolume": [
+          1
+        ],
+        "VolLookbackBars": [
+          1,
+          2,
+          3,
+          5,
+          8,
+          12,
+          16,
+          24,
+          32
+        ],
+        "VolMult": [
+          1.2,
+          2.0
+        ]
+      },
+      "keepTop": 5
+    }
+  ]
+}

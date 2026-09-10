@@ -1,0 +1,19 @@
+{
+  "_comment": "data/params/rsi_pullback/aqua/cal_screen.json — тема screen для AQUA, 4 прогона, поверх ДЕФОЛТОВ ЯДРА. Тема мерит ЦЕНУ ДВУХ ГЕЙТОВ: дневного гейта ATR и объёмного, каждый включён/выключен независимо. ЗАМЕР ДО НАПИСАНИЯ СЕТОК (§4.4 спеки docs/superpowers/specs/2026-09-10-aqua-rsi-pullback-prep-design.md): UseDayATRGate x UseVolume — 0x0 -> 0.899/438, 0x1 -> 0.893/276, 1x0 -> 0.931/136 (BASELINE, дефолт ядра), 1x1 -> 0.873/109. Гейт дня даёт +0.03 PF над узлом 0x0, объёмный гейт даёт МИНУС 0.06 PF поверх дефолта — в отличие от CNRU, где 1x1 давал +0.32 PF над baseline, у AQUA включение объёмного гейта поверх дневного ухудшает результат. Ожидание темы, записанное заранее в спеке: узел 1x0, то есть дефолт ядра, останется победителем. ПРЕДУПРЕЖДЕНИЙ О КРАЯХ НЕТ: ось у обоих полей бинарная, крайних узлов, требующих зонда, не существует. ВАЖНО: baseline самой бумаги убыточен (PF 0.931 на полном окне, pooled OOS walk-forward дефолтов 0.885/102, §3 спеки) — тема screen сравнивает четыре точки МЕЖДУ СОБОЙ, ни одна из них не проходит стоп-условие сама по себе, вопрос темы — не портит ли включение гейтов и без того убыточные дефолты ещё сильнее. ЗАПУСК: go run ./cmd/backtest -ticker AQUA -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/aqua/cal_screen.json -out ./reports/AQUA_screen -months 36 -min-trades 1 -train-months 12 -test-months 6 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА: (заполняется по факту прогона walk-forward задачей сборки темы).",
+  "phases": [
+    {
+      "name": "screen",
+      "grid": {
+        "UseDayATRGate": [
+          0,
+          1
+        ],
+        "UseVolume": [
+          0,
+          1
+        ]
+      },
+      "keepTop": 4
+    }
+  ]
+}
