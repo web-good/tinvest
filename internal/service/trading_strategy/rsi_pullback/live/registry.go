@@ -4,6 +4,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/astr"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/banep"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/bspb"
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/cnru"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/dias"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/domrf"
@@ -506,6 +507,68 @@ import (
 // natural starting point for a second calibration round on the SOFL precedent (a fresh window, not
 // a denser grid on the same one). Finally, the live runner will see this rarity as months of
 // silence from the ticker — expected behaviour on MVID's accepted point, not a runner fault.
+// CNRU (МКПАО «ЦИАН») joined on 2026-09-10 as the twenty-seventh ticker, and it is the SECOND entry
+// in this map that trades the CORE DEFAULTS by design, after TGKA — but for the opposite reason.
+// TGKA's calibration produced points and they lost to the defaults on all three slices. CNRU's
+// calibration produced NO POINT AT ALL that differs from the defaults: of eighteen fields, only
+// five drew a fold majority of 3-of-4, and three of those (UseDayATRGate 4-of-4, UseVolume 3-of-4,
+// UseRSIExit 3-of-4) simply confirmed the default. The fourth, StopDailyATR at 2.0, was rejected by
+// risk gate A (2.8% weekday survivability against a 30% floor), and the gate's own ceiling of 1.0
+// was then rejected by anatomy: it carries the wide-stop trap signature — the SL exit share falls
+// from 21.3% to 7.4% while holding time and overnight share both rise, meaning profit is bought by
+// letting losers sit to the RSI exit instead of stopping out. The fifth, VolMult at 2.5, is INERT,
+// because the volume gate is off (UseVolume 0 won 3-of-4) and the multiplier never enters the
+// calculation: a neighbour probe at VolMult 1.2 reproduced the report byte for byte apart from the
+// parameter line itself. So the accepted point is behaviourally identical to core.DefaultParams(),
+// there is no literal to record, and CNRU is listed by name in baselineByDesignTickers.
+//
+// The numbers the defaults produce here are the reason the ticker is worth trading at all: pooled
+// OOS PF 2.001 on 123 trades over 36/12/6 with FOUR profitable folds out of four and none degenerate
+// (the thinnest holds 21 trades against the 20 floor), 1.739 on the 24/12/3 control, 1.715 at a
+// doubled round trip and 1.455 at a 0.3% one, max drawdown 9.15%, and every calendar year of the
+// window profitable (+2 528 / +22 942 / +45 937 / +12 489 RUB). Both risk gates pass: gate A with a
+// wide margin (effective protection is StopDailyATR 0.5, surviving 88.5% of weekdays, since the
+// trail stays off), gate B exactly at its hard ceiling — the point's max drawdown IS the baseline's,
+// down to the same 12 081.22 RUB episode. The declared bar was NOT taken: both canonical key themes
+// cleared the PF criterion (entry 1.884 on 82 trades, trend 1.771 on 121) and both failed the
+// stability criterion, entry worst of all — RSILower voted 24, 15, 40, 30, four different values
+// across four folds, spread over the full width of the grid. The 22-26 entry plateau measured before
+// the grids were written was confirmed by exactly one fold of four.
+//
+// Read the 24/12/3 control with care rather than as a second confirmation: its pool is 57 trades
+// across four folds of which fold 2 is degenerate to the point of meaninglessness (PF 5039 on eight
+// trades with no losing trade and 0.00% drawdown, which is a metric artefact, not a result) and
+// fold 3 is outright unprofitable (0.755, -2.47%). Three of its four folds sit below the 20-trade
+// floor. The pool clears clause 3 of the stop condition, the fold-level picture does not support it.
+//
+// Five risks are accepted with eyes open. First and without precedent in this catalogue, trading in
+// the instrument was HALTED for 57 days inside the window, 2025-02-05 to 2025-04-03, for the CIAN ->
+// МКПАО «ЦИАН» redomiciliation. There was no split and no exchange ratio, so the series needs no
+// adjustment, but a multi-day strategy with no time stop can be caught holding through such a halt:
+// an exchange stop order does not execute in a suspended instrument and the runner has no exit
+// mechanism at all. Both the baseline and the point measure ZERO exposure through the hole — the
+// last position before it closed on 2025-02-05 itself and the first after it opened on 2025-04-03 —
+// but that is history, not a mechanism, and the redomiciliation was recent enough that further
+// corporate events are plausible. Review trigger: any announced trading suspension means flatten the
+// ticker by hand before it starts. Second, the window contains the largest dividend gap in the
+// catalogue, -16.18% on 2025-12-12 (a ~104 RUB special dividend at a ~640 RUB price), against 48.5%
+// of the point's trades held overnight; exposure through it is zero, again by luck, and the company
+// began paying only after redomiciliation, so cut-off dates will recur. Third, the wide-stop trap
+// begins at the DEFAULT stop of 0.5 — the trade pool freezes at 164-162 all the way from 0.5 to 2.0
+// while PF climbs 1.814 -> 2.763 — so gate A is structurally powerless against it here and the whole
+// trap lies inside the zone gate A allows; that is why gate B was taken HARD (<= 9.15%, no 1.3x
+// multiplier), and it is what rejected the 0.6 and 0.7 nodes (9.85% and 10.66%). Fourth, the trading
+// session widened from 19 to 34 half-hour bars inside the window (2024H2), which is why the 24/12/3
+// control on the homogeneous later stretch is mandatory here. Fifth, the weekend session is thin —
+// 3.92 mln RUB median turnover — and 6.1% of exits land there, the same share as the baseline, a
+// standing slippage risk rather than a realised one.
+//
+// Two review triggers are recorded explicitly. Median weekday turnover below 50 mln RUB over six
+// months (the screener's own universe gate) means re-check the ticker: it currently reads 102.91 mln
+// over six months and 118.49 over twelve, and liquidity is RISING, the first such case in the
+// catalogue. Price below 200 RUB means re-check costs: the 0.2 RUB price step is a 0.064% round trip
+// at 627 RUB — the cost model is PESSIMISTIC by a factor of 1.6 here, the opposite of MVID — but
+// below 200 RUB the same step would exceed the 0.2% level that clause 4 of the stop condition tests.
 var paramsByTicker = map[string]core.Params{
 	ugld.Ticker:  ugld.DefaultParams(),
 	tbank.Ticker: tbank.DefaultParams(),
@@ -533,6 +596,7 @@ var paramsByTicker = map[string]core.Params{
 	vsmo.Ticker:  vsmo.DefaultParams(),
 	spbe.Ticker:  spbe.DefaultParams(),
 	mvid.Ticker:  mvid.DefaultParams(),
+	cnru.Ticker:  cnru.DefaultParams(),
 }
 
 // ParamsFor returns the params for a known ticker, ok=false otherwise.
