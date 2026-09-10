@@ -1028,21 +1028,27 @@ func TestRSIPullbackMVIDServesTheCalibratedPoint(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackCNRUTracksBaseline сторожит ЧЕСТНОЕ состояние: CNRU заведён в реестр до
-// калибровки, чтобы прогоны шли через реестр, а не через generic-ветку, и обязан возвращать ровно
-// baseline ядра. Тест заменяется снимком литерала (или сторожевым тестом отказа, по прецеденту
-// RTKMP/HEAD/AFKS/UWGN/TRNFP), когда калибровка CNRU будет проведена.
-func TestRSIPullbackCNRUTracksBaseline(t *testing.T) {
+// TestRSIPullbackCNRUServesTheCoreBaselineByDesign сторожит, что бэктест и живой раннер торгуют на
+// CNRU одно и то же — дефолты ядра. Это не промежуточное состояние «литерала ещё нет»: калибровка
+// 2026-09-10 проведена целиком, все одиннадцать тем прогнаны, и точка, собранная правилом
+// большинства, оказалась ПОВЕДЕНЧЕСКИ ТОЖДЕСТВЕННА дефолтам. Единственное поле, набравшее
+// большинство и отличавшееся от дефолта (VolMult 1.2 -> 2.5), инертно при выключенном объёмном
+// гейте (UseVolume=0 выбран большинством 3/4), что доказано зондом-соседом: отчёты совпали
+// побайтово, кроме самой строки параметра. Фолдовое большинство по стопу (2.0) отвергнуто
+// риск-гейтом A, а потолок гейта 1.0 — анатомией капкана широкого стопа. Полный разбор —
+// docs/superpowers/plans/task-11-report-cnru.md. Именное исключение из сторожевого теста вселенной
+// — baselineByDesignTickers в rsi_pullback/live/registry_test.go.
+func TestRSIPullbackCNRUServesTheCoreBaselineByDesign(t *testing.T) {
 	b, ok := rsiPullbackRegistry[rsipullbackcnru.Ticker]
 	if !ok {
-		t.Fatal("CNRU отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
+		t.Fatal("CNRU нет в реестре rsi_pullback")
 	}
-	p, pok := b.DefaultParams().(core.Params)
-	if !pok {
-		t.Fatalf("CNRU: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
+	p, err := b.ParseParams([]byte(`{}`))
+	if err != nil {
+		t.Fatalf("ParseParams: %v", err)
 	}
 	if p != core.DefaultParams() {
-		t.Fatalf("CNRU ещё не откалиброван, params обязаны совпадать с baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
+		t.Fatalf("реестр отдаёт не baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
 	}
 	if got := b.Build(p).Ticker(); got != "CNRU" {
 		t.Fatalf("Ticker() = %q, want CNRU", got)
