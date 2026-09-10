@@ -6,13 +6,16 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 )
 
-// TestParamsTrackTheBaselineUntilCalibrated пинит СОСТОЯНИЕ ДО КАЛИБРОВКИ: пакет strategy/cnru
-// заведён 2026-09-08, чтобы прогоны шли через общий реестр, а не через generic-ветку, и до тех пор,
-// пока калибровка не проведена, обязан отдавать ровно дефолты ядра. Литерала здесь нет и не будет
-// до отдельной задачи калибровки — см. doc-комментарий пакета.
-func TestParamsTrackTheBaselineUntilCalibrated(t *testing.T) {
+// TestParamsAreTheCoreBaselineByDesign пинит РЕШЕНИЕ, А НЕ ПРОМЕЖУТОЧНОЕ СОСТОЯНИЕ: калибровка CNRU
+// проведена целиком 2026-09-10 и не нашла ни одного поля, уходящего от дефолтов ядра, поэтому пакет
+// отдаёт ровно core.DefaultParams() и литерала здесь не появится без новой калибровки. Замена этих
+// параметров литералом «по аналогии с соседями» была бы подгонкой, не подтверждённой ни одной
+// темой: из восемнадцати полей большинство набрали пять, три из них подтвердили дефолт, стоп
+// отвергнут риск-гейтом A и анатомией капкана, а VolMult инертен при выключенном объёмном гейте.
+// Разбор — doc-комментарий пакета и docs/superpowers/plans/task-11-report-cnru.md.
+func TestParamsAreTheCoreBaselineByDesign(t *testing.T) {
 	if got, want := DefaultParams(), core.DefaultParams(); got != want {
-		t.Fatalf("до калибровки CNRU обязан отдавать baseline ядра:\n got: %+v\nwant: %+v", got, want)
+		t.Fatalf("CNRU торгует дефолты ядра по решению 2026-09-10:\n got: %+v\nwant: %+v", got, want)
 	}
 }
 
