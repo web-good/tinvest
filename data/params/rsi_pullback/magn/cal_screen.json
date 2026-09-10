@@ -1,0 +1,19 @@
+{
+  "_comment": "data/params/rsi_pullback/magn/cal_screen.json — тема screen для MAGN, 4 прогона, поверх ДЕФОЛТОВ ЯДРА. Тема мерит ЦЕНУ ДВУХ ГЕЙТОВ: дневного гейта ATR и объёмного, каждый включён/выключен независимо. ЗАМЕР ДО НАПИСАНИЯ СЕТОК (§4.4 спеки docs/superpowers/specs/2026-09-10-magn-rsi-pullback-prep-design.md): UseDayATRGate x UseVolume — 0x0 -> 0.984/452, 0x1 -> 0.917/283, 1x0 -> 1.054/139 (BASELINE, дефолт ядра), 1x1 -> 1.193/110. Дневной гейт даёт +0.07 PF над узлом 0x0, объёмный гейт поверх дневного даёт ещё +0.14 PF (1.193 против 1.054 выключенного) — а БЕЗ дневного гейта объёмный ВРЕДИТ (0.917 против 0.984 у 0x0): оба гейта работают только вместе. Ожидание темы, записанное заранее в спеке: победит узел 1x1, а не дефолт ядра — MAGN здесь противоположность AQUA (у которой узел 1x1 давал минус 0.06 PF поверх дефолта) и большинства каталога, где объёмный гейт либо инертен, либо вредит. ВАЖНО: baseline самой бумаги безубыточен (PF 1.054/139 на полном окне), в отличие от AQUA — тема screen здесь сравнивает четыре точки, три из которых уже прибыльны на полном окне, а не убыточные дефолты, которым некуда падать. ЗАПУСК: go run ./cmd/backtest -ticker MAGN -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/magn/cal_screen.json -out ./reports/MAGN_screen -months 36 -min-trades 1 -train-months 12 -test-months 6 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "screen",
+      "grid": {
+        "UseDayATRGate": [
+          0,
+          1
+        ],
+        "UseVolume": [
+          0,
+          1
+        ]
+      },
+      "keepTop": 4
+    }
+  ]
+}

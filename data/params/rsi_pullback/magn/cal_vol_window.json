@@ -1,0 +1,29 @@
+{
+  "_comment": "data/params/rsi_pullback/magn/cal_vol_window.json — тема vol_window для MAGN, 18 прогонов, поверх ДЕФОЛТОВ ЯДРА при UseVolume=1. Тема мерит ОКНО объёмного гейта (VolLookbackBars) — сколько последних баров сравнивается с базой; форму гейта (VolMult, VolBaseDays) меряет соседняя тема volume, и расхождение VolMult между темами по правилу §5.2 спеки docs/superpowers/specs/2026-09-10-magn-rsi-pullback-prep-design.md означает, что форма гейта не откалибрована, тогда оба поля идут с дефолта ядра. ЗАМЕР ДО НАПИСАНИЯ СЕТОК (§4.3 спеки) — ПРИЗНАК §8.1 ДОКИ СТРАТЕГИИ ВЫПОЛНЕН: UseVolume=1, VolMult при дефолтном VolLookbackBars ядра: 1.0 -> 1.241/120, 1.2 -> 1.193/110, 1.5 -> 1.317/92, 1.8 -> 1.410/80, 2.2 -> 1.420/72 — гейт улучшает дефолт на всех порогах и монотонно растёт к жёстким. VolMult сужен до двух узлов [1.2, 1.8] — дефолт ядра и узел лучшей пары §4.8 (18x1.8 -> 2.284/70 в cal_trend_volume.json) — взяты для сверки: если тема volume и эта тема разойдутся по VolMult, форма гейта не откалибрована и обе оси остаются на дефолте ядра. ПРЕДУПРЕЖДЕНИЕ О КРАЯХ: оба края оси VolLookbackBars=1 и VolLookbackBars=32 не проверены точечно на других уровнях VolMult заранее — победа любого из них большинством фолдов требует зонда за краем при сборке точки, поскольку насыщение рельефа по этой оси неизмерено; при этом, в отличие от AQUA (где вся ось VolLookbackBars лежала ниже baseline даже на измеренных значениях), у MAGN объёмный гейт работает на любом измеренном VolMult (§4.3), так что победа внутреннего узла здесь читалась бы как реальный сигнал, а не как артефакт общей неработоспособности гейта. ЗАПУСК: go run ./cmd/backtest -ticker MAGN -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/magn/cal_vol_window.json -out ./reports/MAGN_vol_window -months 36 -min-trades 20 -train-months 12 -test-months 6 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "vol_window",
+      "grid": {
+        "UseVolume": [
+          1
+        ],
+        "VolLookbackBars": [
+          1,
+          2,
+          3,
+          5,
+          8,
+          12,
+          16,
+          24,
+          32
+        ],
+        "VolMult": [
+          1.2,
+          1.8
+        ]
+      },
+      "keepTop": 5
+    }
+  ]
+}
