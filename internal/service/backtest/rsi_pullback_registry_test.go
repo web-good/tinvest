@@ -18,6 +18,7 @@ import (
 	rsipullbackivat "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ivat"
 	rsipullbacklent "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/lent"
 	rsipullbacklsngp "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/lsngp"
+	rsipullbackmagn "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/magn"
 	rsipullbackmvid "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/mvid"
 	rsipullbacknkhp "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/nkhp"
 	rsipullbacknvtk "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/nvtk"
@@ -1079,5 +1080,28 @@ func TestRSIPullbackCNRUServesTheCoreBaselineByDesign(t *testing.T) {
 	}
 	if got := b.Build(p).Ticker(); got != "CNRU" {
 		t.Fatalf("Ticker() = %q, want CNRU", got)
+	}
+}
+
+// TestRSIPullbackMAGNTracksBaseline сторожит ЧЕСТНОЕ состояние: MAGN заведён в реестр до
+// калибровки, чтобы прогоны шли через реестр, а не через generic-ветку, и обязан возвращать ровно
+// baseline ядра. Walk-forward дефолтов даёт ровный ноль (pooled OOS PF 1.005 на 36/12/6 при двух
+// убыточных фолдах из четырёх), поэтому маршрут «завести на дефолтах ядра» по прецеденту TGKA
+// закрыт — см. doc-комментарий strategy/magn. Тест заменяется снимком литерала (или сторожевым
+// тестом отказа, по прецеденту RTKMP/HEAD/AFKS/UWGN/TRNFP), когда калибровка MAGN будет проведена.
+func TestRSIPullbackMAGNTracksBaseline(t *testing.T) {
+	b, ok := rsiPullbackRegistry[rsipullbackmagn.Ticker]
+	if !ok {
+		t.Fatal("MAGN отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
+	}
+	p, pok := b.DefaultParams().(core.Params)
+	if !pok {
+		t.Fatalf("MAGN: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
+	}
+	if p != core.DefaultParams() {
+		t.Fatalf("MAGN ещё не откалиброван, params обязаны совпадать с baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
+	}
+	if got := b.Build(p).Ticker(); got != "MAGN" {
+		t.Fatalf("Ticker() = %q, want MAGN", got)
 	}
 }
