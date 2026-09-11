@@ -1,0 +1,19 @@
+{
+  "_comment": "data/params/rsi_pullback/irkt/cal_screen.json — тема screen для IRKT, 4 прогона, поверх ДЕФОЛТОВ ЯДРА. Тема мерит ЦЕНУ ДВУХ ГЕЙТОВ: дневного гейта ATR и объёмного, каждый включён/выключен независимо. ЗАМЕР ДО НАПИСАНИЯ СЕТОК НА ОБЕИХ ШКАЛАХ (§6.3 спеки docs/superpowers/specs/2026-09-11-irkt-rsi-pullback-prep-design.md): 36 мес — UseDayATRGate x UseVolume: 0x0 -> 0.981/398, 0x1 -> 0.953/249, 1x0 -> 0.963/128 (BASELINE, дефолт ядра), 1x1 -> 0.942/101 — вся полоса 0.94-0.98, тема на этой шкале не различает ничего. 24 мес — 0x0 -> 1.092/308, 0x1 -> 1.170/190, 1x0 -> 1.907/98 (BASELINE, дефолт ядра), 1x1 -> 1.794/76 — ДНЕВНОЙ ГЕЙТ ДАЁТ +0.8 PF НАД УЗЛОМ 0x0, СИЛЬНЕЙШИЙ ВКЛАД ДНЕВНОГО ГЕЙТА В КАТАЛОГЕ; объёмный гейт поверх дневного вредит на 0.11 PF (1.794 против 1.907). Расхождение шкал прямое: на 36 месяцах дневной гейт почти инертен (0.981 -> 0.963), на 24 — решающий (1.092 -> 1.907). Ожидание, записанное заранее (§6.3 спеки): победит дефолтный узел 1x0. ЗАПУСК: go run ./cmd/backtest -ticker IRKT -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/irkt/cal_screen.json -out ./reports/IRKT_screen -months 36 -min-trades 1 -train-months 12 -test-months 6 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "screen",
+      "grid": {
+        "UseDayATRGate": [
+          0,
+          1
+        ],
+        "UseVolume": [
+          0,
+          1
+        ]
+      },
+      "keepTop": 4
+    }
+  ]
+}
