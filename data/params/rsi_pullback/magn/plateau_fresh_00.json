@@ -1,0 +1,64 @@
+{
+  "_comment": "data/params/rsi_pullback/magn/plateau_fresh_00.json — СОСЕД ПЛАТО принятой точки первого круга MAGN (Task 12 Step 5, §5.3 спеки). Отличается от plateau_point.json ровно одним полем: FreshDayATR = 0 вместо 0.1. Узел выбран так: нижний сосед принятого FreshDayATR=0.1 — РОВНО ДЕФОЛТ ЯДРА: показывает цену поля, взятого большинством 3 из 4 темы day. Одиночный прогон на ПОЛНОМ ОКНЕ (без -train-months/-test-months). Правило чтения: плато шириной меньше 0.05 PF читается как отсутствие сигнала; при разнице меньше 0.05 в точку идёт вариант с меньшей просадкой. ЗАПУСК: go run ./cmd/backtest -ticker MAGN -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/magn/plateau_fresh_00.json -out ./reports/MAGN_fresh_00 -months 36 -min-trades 1 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "plateau_fresh_00",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          10
+        ],
+        "EMASlow": [
+          50
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.7
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          1
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          1
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      }
+    }
+  ]
+}

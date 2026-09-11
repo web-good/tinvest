@@ -1,0 +1,64 @@
+{
+  "_comment": "data/params/rsi_pullback/magn/plateau_point.json — ПРИНЯТАЯ ТОЧКА ПЕРВОГО КРУГА для MAGN (Task 12 плана docs/superpowers/plans/2026-09-10-magn-rsi-pullback-prep.md), собранная правилом большинства >= 3 из 4 фолдов (§5.2 спеки) по двенадцати тематическим walk-forward. Пять полей ушли от дефолтов ядра: EMASlow 100 -> 50 (тема trend, 4 голоса из 4 — единственное поле с единогласием), FreshDayATR 0 -> 0.1 (тема day, 3 из 4), UseVolume 0 -> 1 (тема screen, 3 из 4: фолды 1, 3, 4 выбрали узел 1x1), VolLookbackBars 3 -> 1 (вторичная тема vol_window, 3 из 4 при pooled OOS 1.471 против 1.187 у первичной volume — оба условия §5.2 выполнены), StopDailyATR 0.5 -> 0.7 (НЕ голосом темы: тема risk проголосовала 1.5 большинством 3 из 4, риск-гейт A с потолком 0.7 отсёк этот узел как фикцию защиты, цена решения -0.373 PF на полном окне, см. cal_risk.json и зонды probe_stop_*). Остальные тринадцать полей остались на дефолтах ядра, потому что большинства 3/4 не набралось: RSIPeriod и RSILower (тема entry — планка не взята, 5/3/3/2 и 35/45/10/35), RSIUpper (exit, 70/65/45/45), EMAFast (trend, 10/8/3/3), SpentDayATR (day и day_spent, обе без большинства), VolMult и VolBaseDays (volume без большинства, а vol_window дала большинство ровно на дефолтном 1.2 — формы гейта темы не откалибровали), UseRSIExit/UseTrail/TrailDailyATR (тема trail проиграла целиком), TPDailyATR (risk, большинство ровно на дефолте 0.6), UseDayATRGate (screen, большинство ровно на дефолте 1), DailyATRPeriod (ни одна тема не свипует). Тема trend_volume пару EMASlow x VolMult НЕ забрала: большинства нет ни по одному полю, а её pooled OOS 1.674 ниже trend_hump 1.740. ЗАПУСК: go run ./cmd/backtest -ticker MAGN -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/magn/plateau_point.json -out ./reports/MAGN_point -months 36 -min-trades 1 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "plateau_point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          10
+        ],
+        "EMASlow": [
+          50
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0.1
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.7
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          1
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          1
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      }
+    }
+  ]
+}
