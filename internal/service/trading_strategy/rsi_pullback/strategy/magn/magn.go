@@ -1,9 +1,9 @@
 // Package magn supplies the ticker and rsi_pullback Params for MAGN (ПАО «Магнитогорский
 // металлургический комбинат», обыкновенные акции, лот 10).
 //
-// СОСТОЯНИЕ: КАЛИБРОВКА НЕ ПРОВОДИЛАСЬ. DefaultParams() возвращает ровно дефолты ядра: пакет
-// заведён, чтобы прогоны шли через общий реестр бэктеста, а сторожевой тест держит тикер вне
-// боевой вселенной до появления литерала.
+// СОСТОЯНИЕ: КАЛИБРОВКА ПРОВЕДЕНА 2026-09-11, ТОЧКА ПЕРВОГО КРУГА ПРИНЯТА. DefaultParams()
+// возвращает литерал, а не дефолты ядра; снимок литерала пинит magn_test.go, разбор калибровки —
+// ниже в этом комментарии и в docs/superpowers/plans/task-12-report-magn.md.
 //
 // ОКНО БЕЗ ЗАПАСА ИСТОРИИ. Расчётное окно 2023-09-10 … 2026-09-10 (36 месяцев), интервал
 // Minutes30. Получасовой ряд MAGN начинается 2023-09-11 — на один день ПОЗЖЕ открытия окна, и
@@ -53,5 +53,27 @@ import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 // Ticker is the instrument this package parameterises.
 const Ticker = "MAGN"
 
-// DefaultParams returns the rsi_pullback parameters for MAGN.
-func DefaultParams() core.Params { return core.DefaultParams() }
+// DefaultParams returns the rsi_pullback parameters for MAGN. Every field is spelled out on
+// purpose: a core-default change must never move a live ticker silently.
+func DefaultParams() core.Params {
+	return core.Params{
+		RSIPeriod:       4,
+		RSILower:        30,
+		RSIUpper:        70,
+		EMAFast:         10,
+		EMASlow:         50,
+		DailyATRPeriod:  14,
+		UseDayATRGate:   1,
+		FreshDayATR:     0.1,
+		SpentDayATR:     0.8,
+		StopDailyATR:    0.7,
+		TPDailyATR:      0.6,
+		UseVolume:       1,
+		VolBaseDays:     14,
+		VolLookbackBars: 1,
+		VolMult:         1.2,
+		UseRSIExit:      1,
+		UseTrail:        0,
+		TrailDailyATR:   0,
+	}
+}

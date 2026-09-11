@@ -1083,13 +1083,15 @@ func TestRSIPullbackCNRUServesTheCoreBaselineByDesign(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackMAGNTracksBaseline сторожит ЧЕСТНОЕ состояние: MAGN заведён в реестр до
-// калибровки, чтобы прогоны шли через реестр, а не через generic-ветку, и обязан возвращать ровно
-// baseline ядра. Walk-forward дефолтов даёт ровный ноль (pooled OOS PF 1.005 на 36/12/6 при двух
-// убыточных фолдах из четырёх), поэтому маршрут «завести на дефолтах ядра» по прецеденту TGKA
-// закрыт — см. doc-комментарий strategy/magn. Тест заменяется снимком литерала (или сторожевым
-// тестом отказа, по прецеденту RTKMP/HEAD/AFKS/UWGN/TRNFP), когда калибровка MAGN будет проведена.
-func TestRSIPullbackMAGNTracksBaseline(t *testing.T) {
+// TestRSIPullbackMAGNUsesCalibratedParams сторожит, что реестр бэктеста отдаёт ровно тот литерал,
+// который пинит снимок в пакете magn: расхождение означало бы, что бэктест и живой раннер торгуют
+// разными параметрами. Калибровка проведена 2026-09-11, точка первого круга принята; она отличается
+// от дефолтов ядра пятью полями (EMASlow=50, FreshDayATR=0.1, UseVolume=1, VolLookbackBars=1,
+// StopDailyATR=0.7). Схлопывание литерала обратно в baseline не безобидно: walk-forward дефолтов
+// даёт ровный ноль (pooled OOS PF 1.005 на 36/12/6 при двух убыточных фолдах из четырёх), поэтому
+// маршрут «завести на дефолтах ядра» по прецеденту TGKA здесь был закрыт — см. doc-комментарий
+// strategy/magn и docs/superpowers/plans/task-12-report-magn.md.
+func TestRSIPullbackMAGNUsesCalibratedParams(t *testing.T) {
 	b, ok := rsiPullbackRegistry[rsipullbackmagn.Ticker]
 	if !ok {
 		t.Fatal("MAGN отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
@@ -1098,8 +1100,11 @@ func TestRSIPullbackMAGNTracksBaseline(t *testing.T) {
 	if !pok {
 		t.Fatalf("MAGN: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
 	}
-	if p != core.DefaultParams() {
-		t.Fatalf("MAGN ещё не откалиброван, params обязаны совпадать с baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
+	if want := rsipullbackmagn.DefaultParams(); p != want {
+		t.Fatalf("реестр отдаёт не литерал пакета:\n got: %+v\nwant: %+v", p, want)
+	}
+	if p == core.DefaultParams() {
+		t.Fatalf("MAGN схлопнулся в baseline ядра: калибровка потеряна, а дефолты на этой бумаге дают ровный ноль:\n got: %+v", p)
 	}
 	if got := b.Build(p).Ticker(); got != "MAGN" {
 		t.Fatalf("Ticker() = %q, want MAGN", got)
