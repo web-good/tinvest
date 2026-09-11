@@ -15,6 +15,7 @@ import (
 	rsipullbackelfv "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/elfv"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/fesh"
 	rsipullbackhead "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/head"
+	rsipullbackirkt "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/irkt"
 	rsipullbackivat "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ivat"
 	rsipullbacklent "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/lent"
 	rsipullbacklsngp "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/lsngp"
@@ -843,6 +844,29 @@ func TestRSIPullbackAFKSTracksBaseline(t *testing.T) {
 	}
 	if got := b.Build(p).Ticker(); got != "AFKS" {
 		t.Fatalf("Ticker() = %q, want AFKS", got)
+	}
+}
+
+// TestRSIPullbackIRKTTracksBaseline сторожит ЧЕСТНОЕ состояние: IRKT заведён в реестр до
+// калибровки, чтобы прогоны шли через реестр, а не через generic-ветку, и обязан возвращать ровно
+// baseline ядра. Маршрут «завести на дефолтах ядра» (прецедент TGKA) на IRKT уже закрыт по пункту 6
+// стоп-условия (walk-forward дефолтов на схеме 48/12/6 при круге издержек 0.2% даёт 0.877 против
+// порога 1.2) — см. doc-комментарий пакета strategy/irkt; по априору спеки задачи калибровки этот
+// тест, вероятнее всего, никогда не заменит снимком литерала.
+func TestRSIPullbackIRKTTracksBaseline(t *testing.T) {
+	b, ok := rsiPullbackRegistry[rsipullbackirkt.Ticker]
+	if !ok {
+		t.Fatal("IRKT отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
+	}
+	p, pok := b.DefaultParams().(core.Params)
+	if !pok {
+		t.Fatalf("IRKT: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
+	}
+	if p != core.DefaultParams() {
+		t.Fatalf("IRKT ещё не откалиброван, params обязаны совпадать с baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
+	}
+	if got := b.Build(p).Ticker(); got != "IRKT" {
+		t.Fatalf("Ticker() = %q, want IRKT", got)
 	}
 }
 
