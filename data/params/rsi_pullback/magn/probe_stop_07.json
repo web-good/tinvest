@@ -1,0 +1,64 @@
+{
+  "_comment": "data/params/rsi_pullback/magn/probe_stop_07.json — ЗОНД КАПКАНА ШИРОКОГО СТОПА для MAGN (Task 9 Step 3 плана docs/superpowers/plans/2026-09-10-magn-rsi-pullback-prep.md). Меряет одну точку StopDailyATR=0.7 при остальных семнадцати полях НА ДЕФОЛТАХ ЯДРА, одиночным прогоном на ПОЛНОМ ОКНЕ (без -train-months/-test-months, in-sample). Узел выбран так: ПОТОЛОК риск-гейта A (выживаемость 80.2% будних дней окна, n=763), объявленный решением владельца 2026-09-10 до прогонов. Измерено в §4.5 спеки: 0.7 -> PF 1.314 / 137 сделок на полном окне при max DD 8967 — ЕДИНСТВЕННЫЙ узел оси, где PF растёт при просадке НИЖЕ baseline (12508 на дефолте 0.5). Именно это значение уходит в точку, если тема risk голосует выше потолка. Подпись капкана, объявленная до прогонов (§4.5 спеки): число сделок НЕ МЕНЯЕТСЯ вдоль всего участка 0.7-1.5 (137 сделок) при растущем PF — стоп перестаёт срабатывать вовсе, убыточные сделки досиживают до выхода по RSI, а max DD растёт на 39%. Зонд выписывает по узлу четыре числа: PF, число сделок, max DD и долю SL-выходов в журнале сделок. ЗАПУСК: go run ./cmd/backtest -ticker MAGN -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/magn/probe_stop_07.json -out ./reports/MAGN_stop_07 -months 36 -min-trades 1 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "probe_stop_07",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          10
+        ],
+        "EMASlow": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.7
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      }
+    }
+  ]
+}
