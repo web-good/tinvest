@@ -6,6 +6,7 @@ import (
 	"tinvest/internal/config"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/aqua"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/magn"
 )
 
 // Каждый тикер дефолтной вселенной обязан находиться в реестре, иначе раннер молча
@@ -153,5 +154,27 @@ func TestRegistryHasAQUA(t *testing.T) {
 	}
 	if p.RSIUpper != 45 {
 		t.Fatalf("AQUA: RSIUpper = %v, want 45 — единственное поле, которым точка уходит от дефолтов", p.RSIUpper)
+	}
+}
+
+// TestRegistryHasMAGN держит связку «пакет — реестр живого раннера» для MAGN: раннер обязан отдавать
+// ровно тот литерал, который пинит снимок в пакете. Отдельный тест нужен потому, что MAGN — первый
+// тикер этой карты с ВКЛЮЧЁННЫМ объёмным гейтом и окном гейта на физическом минимуме оси
+// (VolLookbackBars=1), а гейт считает базу по дневным оборотам: потеря UseVolume или окна не
+// ослабила бы бумагу постепенно, она сменила бы набор сделок целиком (145 сделок вместо 89 и PF
+// 1.659 вместо 2.418 на расчётном окне).
+func TestRegistryHasMAGN(t *testing.T) {
+	p, ok := ParamsFor(magn.Ticker)
+	if !ok {
+		t.Fatal("MAGN нет в реестре живого раннера: тикер не будет торговать вовсе")
+	}
+	if want := magn.DefaultParams(); p != want {
+		t.Fatalf("реестр отдаёт не литерал пакета:\n got: %+v\nwant: %+v", p, want)
+	}
+	if p.UseVolume != 1 || p.VolLookbackBars != 1 {
+		t.Fatalf("MAGN: UseVolume = %v, VolLookbackBars = %v, want 1 и 1 — объёмный гейт с окном в один бар", p.UseVolume, p.VolLookbackBars)
+	}
+	if p.EMASlow != 50 || p.StopDailyATR != 0.7 {
+		t.Fatalf("MAGN: EMASlow = %v, StopDailyATR = %v, want 50 и 0.7", p.EMASlow, p.StopDailyATR)
 	}
 }

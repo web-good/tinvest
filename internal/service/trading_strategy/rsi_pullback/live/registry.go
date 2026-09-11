@@ -15,6 +15,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ivat"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/lent"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/lsngp"
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/magn"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/mvid"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/nkhp"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/nvtk"
@@ -617,6 +618,62 @@ import (
 // costs: at that level the 0.1 RUB step reaches the 0.12% round trip where the thin margin of clause
 // 4 would be gone. And because the whole literal is one exit field, any change to core's RSI exit
 // semantics is a change to this ticker's only mechanism.
+//
+// MAGN (ПАО «Магнитогорский металлургический комбинат») joined on 2026-09-11 as the twenty-ninth
+// ticker, on a FIRST round in which not one of the four stop-condition clauses fired — pooled OOS PF
+// 2.275 on 66 trades over 36/12/6 with four profitable folds, 2.927 over the 24/12/3 control, 1.893
+// at a doubled round trip, and ZERO unprofitable calendar years. On the full window the point draws
+// 89 trades at PF 2.418 with a 5.36% max drawdown — against the core defaults' 139 trades, PF 1.054
+// and 11.57%: profit factor up 2.3x while drawdown HALVED, which is the opposite of the wide-stop
+// trap and rare in this map.
+//
+// This is the FIRST ticker here with the volume gate ARMED, and its window sits on the axis minimum:
+// UseVolume=1 with VolLookbackBars=1, one bar compared against its slot baseline. The gate is what
+// buys the edge — switching it off at the point costs 0.76 PF (2.418 -> 1.659) and raises drawdown
+// (5.36% -> 6.80%) while adding 56 trades, i.e. the gate removes losers, not volume. Because the gate
+// computes its baseline from daily turnover, a live-vs-backtest gap there would not degrade the
+// ticker gradually, it would trade a different instrument.
+//
+// Two of the five literal fields deserve naming. EMASlow=50 won UNANIMOUSLY in all four folds of the
+// trend theme — the only unanimous field of this calibration — and the point deliberately does NOT
+// sit on the in-sample peak of that axis (the neighbour 40 measures 2.916 against 2.418), which is
+// read as absence of fitting rather than an assembly error. StopDailyATR=0.7 came from risk gate A,
+// NOT from a vote: the risk theme's majority was 1.5 (fold 1 even 2.0), where the stop stops firing
+// altogether — 137 trades at every node from 0.7 to 2.0 while the SL share falls 13.1% -> 1.5% -> 0%
+// and drawdown grows to 11.83%. The gate cost 0.373 PF on the full window and bought back a third of
+// the drawdown. Worth remembering: the 1.5 node would have PASSED risk gate B (11.19% against the
+// 11.57% ceiling), so only gate A separates this ticker from the trap.
+//
+// What the calibration did NOT find is equally part of the record. The two-lever pair (trend x
+// volume) looked like the best prior in the catalogue for eight tickers — every one of fifteen probed
+// pairs above 1.57 in-sample, the best 18x1.8 at 2.284/70 with half the baseline drawdown — and it
+// did not survive walk-forward: pooled OOS 1.674 on 69 trades, below the trend_hump theme, three
+// folds of four between 1.15 and 1.47, the whole result made by the fourth fold, and the pair's
+// choice wandering across the axis (EMASlow 18/40/40/12, VolMult tied 2-2). The declared bar was
+// therefore not taken: the trend theme took both criteria, the entry theme failed both (pooled OOS
+// 0.973, RSILower 35/45/10/35).
+//
+// Risks accepted with eyes open. First, the volume gate is armed by a 3-of-4 majority from the screen
+// theme whose own pooled OOS is 0.862, and no theme calibrated the gate's SHAPE (VolMult and
+// VolBaseDays both stay at core defaults) — the gate's value rests on the plateau probe and the
+// two-dimensional measurement, not on the walk-forward of the theme that measures it. Second,
+// VolLookbackBars=1 is the physical floor of the axis, so no beyond-the-edge probe exists and the
+// gate is maximally sensitive to a single volume spike. Third, per-fold OOS pools are 15-18 trades
+// (the pool of 66 clears the threshold, the individual folds do not), and on the three-month scheme
+// two folds degenerate to four trades each. Fourth, the instrument's regime is a fall with a reversal
+// at the end: buy&hold -56.42% over the window, three rising half-years of seven, and the strongest
+// of them is the last — the same half-year that carries fold 4. Fifth, the weekend session is thin
+// (2.11 mln RUB median turnover, the thinnest among recent candidates) and seven of the point's 89
+// exits land in it, a slippage risk the cost model does not cover. Sixth, the half-hour series starts
+// 2023-09-11, one day AFTER the window opens: there is no history left to extend backwards, and the
+// session widened once inside the window (29 -> 34 bars at the 2024H2 boundary).
+//
+// Review triggers. Median weekday turnover below 50 mln RUB over six months means re-check the
+// ticker — today it is 128.99 mln and RISING on all four horizons, the healthiest liquidity profile
+// of the recent intake. Any change to core's volume-gate semantics (slot baselines, weekday
+// selection, the lookback window) is a change to this ticker's main mechanism, unlike anywhere else
+// in this map. And if the daily-ATR stop ever reaches 1.0 here by any route, that is the trap, not an
+// improvement — the measurement above says the stop simply stops existing.
 var paramsByTicker = map[string]core.Params{
 	ugld.Ticker:  ugld.DefaultParams(),
 	tbank.Ticker: tbank.DefaultParams(),
@@ -646,6 +703,7 @@ var paramsByTicker = map[string]core.Params{
 	mvid.Ticker:  mvid.DefaultParams(),
 	cnru.Ticker:  cnru.DefaultParams(),
 	aqua.Ticker:  aqua.DefaultParams(),
+	magn.Ticker:  magn.DefaultParams(),
 }
 
 // ParamsFor returns the params for a known ticker, ok=false otherwise.
