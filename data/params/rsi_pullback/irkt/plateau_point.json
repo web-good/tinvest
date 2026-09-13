@@ -1,0 +1,64 @@
+{
+  "_comment": "data/params/rsi_pullback/irkt/plateau_point.json — ПРИНЯТАЯ ТОЧКА ПЕРВОГО КРУГА для IRKT (Task 10 плана docs/superpowers/plans/2026-09-11-irkt-rsi-pullback-prep.md). Восемнадцать полей, по одному значению на каждое: файл ничего не свипует, поэтому pooled OOS любого прогона принадлежит именно этой конфигурации, а не процедуре отбора (сторожит TestRSIPullbackPointFilesArePoints). СБОРКА правилом большинства §5.2 (поле берётся из темы, которая его СВИПУЕТ, и принимается только при ≥3 голосах из 4; ничья 2/2 и расклад 2-1-1 большинством не считаются; иначе дефолт ядра): RSIPeriod 3 — тема entry, единогласно 4/4 (дефолт 4); RSILower 15 — тема entry, 3/4 (дефолт 30); RSIUpper 60 — тема exit, 3/4 (дефолт 70); VolBaseDays 3 — тема volume, 3/4 (дефолт 14) — поле ПРИНЯТО ПО БОЛЬШИНСТВУ, но ИНЕРТНО, потому что UseVolume=0 и объёмный гейт выключен; остальные четырнадцать полей — дефолты ядра, потому что большинства не набрала ни одна ось: UseDayATRGate (screen 2:2), EMAFast и EMASlow (trend, 2-1-1 обе), FreshDayATR и SpentDayATR (day, 2-1-1 обе; day_spent поле не забирает — pooled 1.816 < 1.942), StopDailyATR и TPDailyATR (risk, 2-1-1 обе), VolMult (volume, 2-1-1), UseVolume (screen 3/4 за 0 = дефолт), UseRSIExit (trail 3/4 за 1 = дефолт), VolLookbackBars (первичная тема volume эту ось НЕ свипует — в её сетке оси нет; свипует только vol_window, которая поля объёмного гейта не забирает, pooled 1.548 < 2.045 — значит голосов нет и идёт дефолт 3), DailyATRPeriod (не свипуется ни одной темой — дефолт 14). UseTrail=0 и TrailDailyATR=0 — РЕШЕНИЕ КОНТРОЛЛЕРА 2026-09-12 (ruling 4): ось UseTrail не свипует ни одна тема (в cal_trail.json приколочена [1], в cal_exit.json её нет вовсе), голосов фолдов за неё не существует, и правило «большинства нет → дефолт ядра» даёт 0; большинство 3/4 за TrailDailyATR=0.6 принадлежит оси, которая при UseTrail=0 инертна; тема trail поле не забирает по каталожному образцу (её pooled 1.669 ниже 1.942 у exit); трейл структурно перекрывает стоп и обходит риск-гейт A (прецеденты AFKS и SNGSP), а на IRKT гейт A — единственная защита от капкана широкого стопа (гейт B структурно бессилен, §5.5 спеки). РИСК-ГЕЙТ A: min(StopDailyATR=0.5, трейл выключен) = 0.5 ≤ потолок 0.7 — пройден тривиально, цена 0. ЗАПУСК (три окна, все три обязательны для точки): go run ./cmd/backtest -ticker IRKT -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/irkt/plateau_point.json -out ./reports/IRKT_point -months 48|36|24 -min-trades 1 -metric profit_factor. Результаты прогонов, оба риск-гейта, соседи плато, третий контур, три walk-forward, три уровня издержек, календарные годы, шесть пунктов стоп-условия и вердикт — docs/superpowers/plans/task-10-report-irkt.md.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          3
+        ],
+        "RSILower": [
+          15
+        ],
+        "RSIUpper": [
+          60
+        ],
+        "EMAFast": [
+          10
+        ],
+        "EMASlow": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.5
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          3
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      }
+    }
+  ]
+}

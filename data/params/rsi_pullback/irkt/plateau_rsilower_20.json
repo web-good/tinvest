@@ -1,0 +1,64 @@
+{
+  "_comment": "data/params/rsi_pullback/irkt/plateau_rsilower_20.json — СОСЕД ПЛАТО принятой точки первого круга IRKT (Task 10 Step 5 плана docs/superpowers/plans/2026-09-11-irkt-rsi-pullback-prep.md). Отличается от data/params/rsi_pullback/irkt/plateau_point.json ровно одним полем: RSILower = 20 вместо 15; остальные семнадцать полей повторяют точку. Это сосед точки по оси RSILower СВЕРХУ (ось темы entry; точка 15). Файл ничего не свипует (сторожит TestRSIPullbackPointFilesArePoints), поэтому его метрики принадлежат именно этой конфигурации. ЗАПУСК на ДВУХ окнах — каноническом 36-месячном и однородном 24-месячном: go run ./cmd/backtest -ticker IRKT -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/irkt/plateau_rsilower_20.json -out ./reports/IRKT_plateau -months 36|24 -min-trades 1 -metric profit_factor. Числа и чтение оси — docs/superpowers/plans/task-10-report-irkt.md, Step 5.",
+  "phases": [
+    {
+      "name": "plateau_rsilower_20",
+      "grid": {
+        "RSIPeriod": [
+          3
+        ],
+        "RSILower": [
+          20
+        ],
+        "RSIUpper": [
+          60
+        ],
+        "EMAFast": [
+          10
+        ],
+        "EMASlow": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.5
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          3
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      }
+    }
+  ]
+}
