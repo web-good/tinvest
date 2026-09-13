@@ -39,7 +39,9 @@ var x5GridFiles = []string{
 //   - ось RSIUpper в cal_exit.json содержит оба края 35 и 95;
 //   - ось StopDailyATR в cal_risk.json содержит узлы уплотнения 0.35, 0.45, 0.55, 0.65 и верхний
 //     край 2.0;
-//   - ось TPDailyATR в cal_risk.json содержит верхний край 2.0;
+//   - ось TPDailyATR в cal_risk.json содержит верхний край рабочей области 2.0 и контрольный
+//     узел асимметрии 2.5 (требование TestRSIPullbackGridControlPoints — прецеденты IRKT,
+//     MAGN, AQUA, CNRU, SNGSP, HEAD);
 //   - ось VolLookbackBars в cal_vol_window.json содержит узлы 12, 16, 24 и верхний край 32;
 //   - ось FreshDayATR в cal_day_fresh.json содержит узлы уплотнения 0.05, 0.15, 0.25;
 //   - ось FreshDayATR в cal_day.json содержит края 0 и 0.5;
@@ -143,11 +145,18 @@ func TestX5GridsStayWide(t *testing.T) {
 		}
 	}
 
-	// Верхний край оси TPDailyATR в cal_risk.json: 2.0.
+	// Верхний край рабочей области оси TPDailyATR в cal_risk.json: 2.0. Отдельно — контрольный
+	// узел 2.5 (см. _comment файла): он не кандидат, а строка асимметрии cтоп/цель, которую
+	// требует репозиторный TestRSIPullbackGridControlPoints (файл свипует StopDailyATR до 2.0 —
+	// без узла цели строго выше стоп/цель остаются на равных краях). Проверка наличия 2.5 нужна,
+	// чтобы будущая правка не убрала контрольную строку молча.
 	{
 		grid := rsiPullbackTickerGrid(t, "x5", "cal_risk.json")
 		if !containsFloat(grid["TPDailyATR"], 2.0) {
-			t.Errorf("x5/cal_risk.json: ось TPDailyATR потеряла верхний край 2.0 (есть %v)", grid["TPDailyATR"])
+			t.Errorf("x5/cal_risk.json: ось TPDailyATR потеряла верхний край рабочей области 2.0 (есть %v)", grid["TPDailyATR"])
+		}
+		if !containsFloat(grid["TPDailyATR"], 2.5) {
+			t.Errorf("x5/cal_risk.json: ось TPDailyATR потеряла контрольный узел асимметрии 2.5, требуемый TestRSIPullbackGridControlPoints (есть %v)", grid["TPDailyATR"])
 		}
 	}
 
