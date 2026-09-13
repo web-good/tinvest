@@ -1,0 +1,27 @@
+{
+  "_comment": "data/params/rsi_pullback/x5/cal_trail.json — тема trail для X5, 14 прогонов (2 значения UseRSIExit x UseTrail зафиксирован на 1 x 7 значений TrailDailyATR), поверх ДЕФОЛТОВ ЯДРА при включённом трейлинге. UseTrail=0 (дефолт ядра) — базовая точка сравнения, приведённая в замерах ниже, отдельно этой сеткой не свипуется. ЗАМЕР ДО НАПИСАНИЯ СЕТОК (§6.6 спеки docs/superpowers/specs/2026-09-13-x5-rsi-pullback-prep-design.md), окно 20 месяцев поверх дефолтов ядра: TrailDailyATR при UseTrail=1 — 0.3 -> 1.074/82, 0.4 -> 1.300/80, 0.5 -> 1.370/77, 0.6 -> 1.486/77, 0.7 -> 1.466/76, 1.0 -> 1.374/76, 1.5 -> 1.374/76 (выше 1.0 трейл неактивен — совпадает с дефолтным PF/числом сделок побайтово). UseRSIExit x TrailDailyATR при UseTrail=1 — 0x0.5 -> 1.384/70 (DD 11 794 ₽), 0x0.8 -> 1.203/67 (DD 15 255 ₽), 1x0.5 -> 1.370/77 (DD 10 646 ₽), 1x0.8 -> 1.398/76 (DD 10 646 ₽). ВЫКЛЮЧЕНИЕ RSI-ВЫХОДА УХУДШАЕТ ПРОСАДКУ НА ВСЕХ УЗЛАХ: на X5 RSI-выход является защитным механизмом, а не только механизмом прибыли — сравните 0x0.5/11 794 ₽ против 1x0.5/10 646 ₽ и 0x0.8/15 255 ₽ против 1x0.8/10 646 ₽. ОЖИДАНИЕ, ЗАПИСАННОЕ ЗАРАНЕЕ: побеждает UseRSIExit=1, трейл даёт не больше 0.11 PF над дефолтом (1.486 на узле 0.6 против 1.374 дефолта) и риск-гейт C (§5.6 спеки, ось RSIUpper темы exit) им не улучшается. ЗАПУСК: go run ./cmd/backtest -ticker X5 -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/x5/cal_trail.json -out ./reports/X5_trail -months 20 -min-trades 20 -train-months 8 -test-months 3 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "trail",
+      "grid": {
+        "UseRSIExit": [
+          0,
+          1
+        ],
+        "UseTrail": [
+          1
+        ],
+        "TrailDailyATR": [
+          0.3,
+          0.4,
+          0.5,
+          0.6,
+          0.7,
+          1.0,
+          1.5
+        ]
+      },
+      "keepTop": 5
+    }
+  ]
+}

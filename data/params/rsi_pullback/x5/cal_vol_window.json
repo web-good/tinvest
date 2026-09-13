@@ -1,0 +1,29 @@
+{
+  "_comment": "data/params/rsi_pullback/x5/cal_vol_window.json — тема vol_window для X5, 18 прогонов (UseVolume зафиксирован на 1 x 9 значений VolLookbackBars x 2 значения VolMult), поверх ДЕФОЛТОВ ЯДРА при включённом объёмном гейте. Тема заведена (§5.1, отличие 2) вокруг сильнейшей оси объёмного гейта в каталоге, ось VolLookbackBars расширена до 32 и уплотнена узлами 12, 16, 24. Второй узел оси VolMult взят 1.0, а не 1.8: §6.3 показывает, что на X5 работают только мягкие пороги VolMult. ЗАМЕР ДО НАПИСАНИЯ СЕТОК (§6.3 спеки docs/superpowers/specs/2026-09-13-x5-rsi-pullback-prep-design.md), окно 20 месяцев поверх дефолтов ядра при UseVolume=1: VolLookbackBars — 1 -> 1.484/49, 2 -> 1.472/49, 3 -> 1.494/51 (дефолт гейта), 5 -> 1.828/59, 8 -> 1.932/64, 12 -> 2.073/69 (DD 6231 ₽), 16 -> 2.110/70 (DD 6231 ₽), 24 -> 2.104/71, 32 -> 2.104/71. СИЛЬНЕЙШАЯ ОСЬ ОБЪЁМНОГО ГЕЙТА В КАТАЛОГЕ: монотонный рост до плато 12-32 при РАСТУЩЕМ пуле (51 -> 70/71 сделок) и просадке на 41% ниже дефолта. Поле VolLookbackBars зафиксировано в доке стратегии как несвипуемое в фазовом гриде — отсюда вторичная тема обязательна. ЗАПУСК: go run ./cmd/backtest -ticker X5 -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/x5/cal_vol_window.json -out ./reports/X5_vol_window -months 20 -min-trades 20 -train-months 8 -test-months 3 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "vol_window",
+      "grid": {
+        "UseVolume": [
+          1
+        ],
+        "VolLookbackBars": [
+          1,
+          2,
+          3,
+          5,
+          8,
+          12,
+          16,
+          24,
+          32
+        ],
+        "VolMult": [
+          1.0,
+          1.2
+        ]
+      },
+      "keepTop": 5
+    }
+  ]
+}

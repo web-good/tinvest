@@ -1,0 +1,19 @@
+{
+  "_comment": "data/params/rsi_pullback/x5/cal_screen.json — тема screen для X5, 4 прогона (2 значения UseDayATRGate x 2 значения UseVolume), поверх ДЕФОЛТОВ ЯДРА. Тема мерит цену двух гейтов сразу: дневного гейта ATR и объёмного, каждый включён/выключен независимо. ЗАМЕР ДО НАПИСАНИЯ СЕТОК (§6.3 спеки docs/superpowers/specs/2026-09-13-x5-rsi-pullback-prep-design.md), окно одно — 20 месяцев (у X5, в отличие от IRKT, нет расхождения канонической и однородной шкалы, §3 спеки): UseDayATRGate x UseVolume — 0x0 -> 0.973/298 (DD 28 774 ₽), 0x1 -> 1.090/168 (DD 17 062 ₽), 1x0 -> 1.374/76 (BASELINE, дефолт ядра, DD 10 646 ₽), 1x1 -> 1.494/51 (DD 7341 ₽). Дневной гейт даёт +0.40 PF над узлом 0x0 и режет просадку втрое (28 774 -> 10 646 ₽); объёмный гейт поверх дневного улучшает И PF, И просадку одновременно (1.374/10 646 -> 1.494/7341) — редкость каталога: у IRKT, TRNFP и большинства тикеров объёмный гейт поверх дневного вредит, единственный известный прецедент такого сложения — NKHP. ОЖИДАНИЕ, ЗАПИСАННОЕ ЗАРАНЕЕ (§6.3 спеки): победит узел 1x1, а не дефолтный узел ядра 1x0. ЗАПУСК: go run ./cmd/backtest -ticker X5 -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/x5/cal_screen.json -out ./reports/X5_screen -months 20 -min-trades 1 -train-months 8 -test-months 3 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "screen",
+      "grid": {
+        "UseDayATRGate": [
+          0,
+          1
+        ],
+        "UseVolume": [
+          0,
+          1
+        ]
+      },
+      "keepTop": 4
+    }
+  ]
+}
