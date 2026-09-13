@@ -35,6 +35,7 @@ import (
 	rsipullbackuwgn "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/uwgn"
 	rsipullbackvsmo "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/vsmo"
 	rsipullbackwush "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/wush"
+	rsipullbackx5 "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/x5"
 	rsipullbackydex "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ydex"
 )
 
@@ -1136,5 +1137,28 @@ func TestRSIPullbackMAGNUsesCalibratedParams(t *testing.T) {
 	}
 	if got := b.Build(p).Ticker(); got != "MAGN" {
 		t.Fatalf("Ticker() = %q, want MAGN", got)
+	}
+}
+
+// TestRSIPullbackX5IsRegisteredAndUncalibrated сторожит ЧЕСТНОЕ состояние: X5 заведён в реестр до
+// калибровки, чтобы прогоны шли через реестр, а не через generic-ветку, и обязан возвращать ровно
+// baseline ядра. Литерал появится по §5.13 спеки docs/superpowers/specs/
+// 2026-09-13-x5-rsi-pullback-prep-design.md, отдельной задачей после прогонов — тест заменяется
+// снимком литерала (или сторожевым тестом отказа, по прецеденту RTKMP/TRNFP/HEAD/AFKS/UWGN) тогда
+// же.
+func TestRSIPullbackX5IsRegisteredAndUncalibrated(t *testing.T) {
+	b, ok := rsiPullbackRegistry[rsipullbackx5.Ticker]
+	if !ok {
+		t.Fatal("X5 отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
+	}
+	p, pok := b.DefaultParams().(core.Params)
+	if !pok {
+		t.Fatalf("X5: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
+	}
+	if p != core.DefaultParams() {
+		t.Fatalf("X5 ещё не откалиброван, params обязаны совпадать с baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
+	}
+	if got := b.Build(p).Ticker(); got != "X5" {
+		t.Fatalf("Ticker() = %q, want X5", got)
 	}
 }
