@@ -6,6 +6,7 @@ import (
 	"tinvest/internal/config"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/aqua"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/irkt"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/magn"
 )
 
@@ -176,5 +177,17 @@ func TestRegistryHasMAGN(t *testing.T) {
 	}
 	if p.EMASlow != 50 || p.StopDailyATR != 0.7 {
 		t.Fatalf("MAGN: EMASlow = %v, StopDailyATR = %v, want 50 и 0.7", p.EMASlow, p.StopDailyATR)
+	}
+}
+
+// TestRegistryHasIRKT держит связку «пакет — реестр живого раннера» для IRKT: раннер обязан
+// отдавать ровно тот литерал, который пинит снимок в пакете strategy/irkt.
+func TestRegistryHasIRKT(t *testing.T) {
+	p, ok := ParamsFor(irkt.Ticker)
+	if !ok {
+		t.Fatal("IRKT нет в реестре живого раннера: тикер не будет торговать вовсе")
+	}
+	if want := irkt.DefaultParams(); p != want {
+		t.Fatalf("реестр отдаёт не литерал пакета:\n got: %+v\nwant: %+v", p, want)
 	}
 }

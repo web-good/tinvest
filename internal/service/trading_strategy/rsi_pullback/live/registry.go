@@ -12,6 +12,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/elfv"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/fesh"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/gazp"
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/irkt"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ivat"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/lent"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/lsngp"
@@ -704,6 +705,7 @@ var paramsByTicker = map[string]core.Params{
 	cnru.Ticker:  cnru.DefaultParams(),
 	aqua.Ticker:  aqua.DefaultParams(),
 	magn.Ticker:  magn.DefaultParams(),
+	irkt.Ticker:  irkt.DefaultParams(),
 }
 
 // ParamsFor returns the params for a known ticker, ok=false otherwise.
