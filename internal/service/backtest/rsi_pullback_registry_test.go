@@ -847,13 +847,14 @@ func TestRSIPullbackAFKSTracksBaseline(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackIRKTTracksBaseline сторожит ЧЕСТНОЕ состояние: IRKT заведён в реестр до
-// калибровки, чтобы прогоны шли через реестр, а не через generic-ветку, и обязан возвращать ровно
-// baseline ядра. Маршрут «завести на дефолтах ядра» (прецедент TGKA) на IRKT уже закрыт по пункту 6
-// стоп-условия (walk-forward дефолтов на схеме 48/12/6 при круге издержек 0.2% даёт 0.877 против
-// порога 1.2) — см. doc-комментарий пакета strategy/irkt; по априору спеки задачи калибровки этот
-// тест, вероятнее всего, никогда не заменит снимком литерала.
-func TestRSIPullbackIRKTTracksBaseline(t *testing.T) {
+// TestRSIPullbackIRKTUsesCalibratedParams сторожит, что реестр бэктеста отдаёт ровно тот литерал,
+// который пинит снимок в пакете irkt: расхождение означало бы, что бэктест и живой раннер (когда
+// IRKT будет в него заведён) торгуют разными параметрами. Калибровка проведена 2026-09-11, точка
+// первого круга принята; она отличается от дефолтов ядра четырьмя полями (RSIPeriod=3, RSILower=15,
+// RSIUpper=60, VolBaseDays=3). Схлопывание литерала обратно в baseline не безобидно: маршрут
+// «завести на дефолтах ядра» по прецеденту TGKA на IRKT закрыт по пункту 6 стоп-условия — см.
+// doc-комментарий strategy/irkt и docs/superpowers/plans/task-10-report-irkt.md.
+func TestRSIPullbackIRKTUsesCalibratedParams(t *testing.T) {
 	b, ok := rsiPullbackRegistry[rsipullbackirkt.Ticker]
 	if !ok {
 		t.Fatal("IRKT отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
@@ -862,8 +863,11 @@ func TestRSIPullbackIRKTTracksBaseline(t *testing.T) {
 	if !pok {
 		t.Fatalf("IRKT: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
 	}
-	if p != core.DefaultParams() {
-		t.Fatalf("IRKT ещё не откалиброван, params обязаны совпадать с baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
+	if want := rsipullbackirkt.DefaultParams(); p != want {
+		t.Fatalf("реестр отдаёт не литерал пакета:\n got: %+v\nwant: %+v", p, want)
+	}
+	if p == core.DefaultParams() {
+		t.Fatalf("IRKT схлопнулся в baseline ядра: калибровка потеряна:\n got: %+v", p)
 	}
 	if got := b.Build(p).Ticker(); got != "IRKT" {
 		t.Fatalf("Ticker() = %q, want IRKT", got)

@@ -1,12 +1,11 @@
 // Package irkt supplies the ticker and rsi_pullback Params for IRKT (ПАО «Яковлев», бывшая
 // «Корпорация Иркут», обыкновенные акции, лот 100).
 //
-// СОСТОЯНИЕ: КАЛИБРОВКА НЕ ПРОВОДИЛАСЬ. Пакет возвращает core.DefaultParams() — baseline ядра, не
-// подобранный под этот инструмент. Пакет заведён заранее, чтобы прогоны шли через тот же реестр,
-// что и у остальных двадцати девяти тикеров, а не через generic-ветку. Состояние держит
-// irkt_test.go (TestParamsTrackTheBaselineUntilCalibrated). Уже сейчас известно, что маршрут
-// «завести на дефолтах ядра» (прецедент TGKA) на IRKT ЗАКРЫТ — см. вывод в конце комментария; по
-// априору спеки задачи калибровки (13–17) на этом тикере вероятнее всего не выполнятся вовсе.
+// СОСТОЯНИЕ: КАЛИБРОВКА ПРОВЕДЕНА 2026-09-11, ТОЧКА ПЕРВОГО КРУГА ПРИНЯТА. DefaultParams()
+// возвращает литерал, а не дефолты ядра; снимок литерала пинит irkt_test.go
+// (TestDefaultParamsMatchTheCalibratedPoint), разбор калибровки — docs/superpowers/plans/
+// task-10-report-irkt.md. Маршрут «завести на дефолтах ядра» (прецедент TGKA) на IRKT ЗАКРЫТ — см.
+// вывод в конце комментария.
 //
 // ТРИ РАСЧЁТНЫХ ОКНА, интервал Minutes30, лот 100:
 //   - 36/12/6 — 2023-09-11 … 2026-09-11, 4 фолда, каноническая схема;
@@ -91,8 +90,30 @@ import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 // Ticker is the instrument this package parameterises.
 const Ticker = "IRKT"
 
-// DefaultParams returns the core baseline: IRKT is not calibrated (and, by the stop-condition
-// verdict recorded in the package doc, likely never will be).
+// DefaultParams returns the rsi_pullback parameters for IRKT. Every field is spelled out on
+// purpose: a core-default change must never move a live ticker silently. Four fields differ from
+// the core baseline (RSIPeriod, RSILower, RSIUpper, VolBaseDays); the remaining fourteen equal
+// core.DefaultParams() — see data/params/rsi_pullback/irkt/plateau_point.json and
+// docs/superpowers/plans/task-10-report-irkt.md for the field-by-field source and fold votes.
 func DefaultParams() core.Params {
-	return core.DefaultParams()
+	return core.Params{
+		RSIPeriod:       3,
+		RSILower:        15,
+		RSIUpper:        60,
+		EMAFast:         10,
+		EMASlow:         100,
+		DailyATRPeriod:  14,
+		UseDayATRGate:   1,
+		FreshDayATR:     0,
+		SpentDayATR:     0.8,
+		StopDailyATR:    0.5,
+		TPDailyATR:      0.6,
+		UseVolume:       0,
+		VolBaseDays:     3,
+		VolLookbackBars: 3,
+		VolMult:         1.2,
+		UseRSIExit:      1,
+		UseTrail:        0,
+		TrailDailyATR:   0,
+	}
 }
