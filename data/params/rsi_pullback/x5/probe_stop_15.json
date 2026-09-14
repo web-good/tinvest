@@ -1,0 +1,64 @@
+{
+  "_comment": "data/params/rsi_pullback/x5/probe_stop_15.json — ЗОНД КАПКАНА ШИРОКОГО СТОПА для X5 (Task 8 Step 4 плана docs/superpowers/plans/2026-09-13-x5-rsi-pullback-prep.md). Меряет одну точку StopDailyATR=1.5 при остальных семнадцати полях НА ДЕФОЛТАХ ЯДРА, одиночным прогоном на ПОЛНОМ окне инструмента (20 мес, вся история после редомициляции, без -train-months/-test-months, in-sample). Узел лежит СТРОГО ЗА потолком риск-гейта A (0.7), объявленным до прогонов (§5.4 спеки docs/superpowers/specs/2026-09-13-x5-rsi-pullback-prep-design.md). ОПОРНЫЙ ЗАМЕР §6.6 спеки (то же 20-месячное окно, до написания сеток): 1 SL-выход на 74 сделки (1.4%) при max DD 11 829 ₽; для сравнения дефолт 0.5 -> 12 SL на 76 сделок (15.8%) при DD 10 646 ₽ и 0.7 -> 6 SL на 75 (8.0%) при DD 10 942 ₽. НАЗНАЧЕНИЕ ЗОНДА: документировать, что за потолком гейта A защита перестаёт существовать (число сделок по всей оси меняется на две, а PF растёт вдвое ровно по мере того, как стоп перестаёт срабатывать), и что просадка при этом РАСТЁТ, а не падает — на X5 гейт B против капкана не бессилен, в отличие от SPBE, RTKMP и IRKT, но запас до планки всего 11%, поэтому решает гейт A. Зонд попадает в отчёт независимо от того, куда проголосовала тема risk. ЗАПУСК: go run ./cmd/backtest -ticker X5 -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/x5/probe_stop_15.json -out ./reports/X5_probe -months 20 -min-trades 1 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "probe_stop_15",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          10
+        ],
+        "EMASlow": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          1.5
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      }
+    }
+  ]
+}
