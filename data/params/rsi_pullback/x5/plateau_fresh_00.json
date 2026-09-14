@@ -1,0 +1,64 @@
+{
+  "_comment": "data/params/rsi_pullback/x5/plateau_fresh_00.json — СОСЕД ПЛАТО принятой точки первого круга X5 (Task 10 Step 7 плана docs/superpowers/plans/2026-09-13-x5-rsi-pullback-prep.md). Отличается от plateau_point.json РОВНО ОДНИМ полем: FreshDayATR=0 вместо 0.1. сосед FreshDayATR снизу = ДЕФОЛТ ЯДРА; проверяет, откуда берутся входы в бар 06:30. Одиночный прогон на полном 20-месячном окне; вместе с числами PF/сделок/просадки с него снимаются три числа риск-гейта C скриптом reports/_analysis/x5_exposure.py — на X5 разница между хорошей и плохой точкой чаще проходит не по PF, а по тому, входит и ночует ли позиция в час без ликвидности. ЗАПУСК: go run ./cmd/backtest -ticker X5 -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/x5/plateau_fresh_00.json -out ./reports/X5_plateau_fresh_00 -months 20 -min-trades 1 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "plateau_fresh_00",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          5
+        ],
+        "EMASlow": [
+          50
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.5
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          1
+        ],
+        "VolBaseDays": [
+          3
+        ],
+        "VolLookbackBars": [
+          12
+        ],
+        "VolMult": [
+          1.0
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      }
+    }
+  ]
+}

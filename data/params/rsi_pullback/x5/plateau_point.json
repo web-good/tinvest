@@ -1,0 +1,64 @@
+{
+  "_comment": "data/params/rsi_pullback/x5/plateau_point.json — ПРИНЯТАЯ ТОЧКА ПЕРВОГО КРУГА для X5 (Task 10 плана docs/superpowers/plans/2026-09-13-x5-rsi-pullback-prep.md). Восемнадцать полей, по одному значению на каждое: файл ничего не свипует, поэтому pooled OOS любого прогона принадлежит именно этой конфигурации, а не процедуре отбора (сторожит TestRSIPullbackPointFilesArePoints). СБОРКА правилом большинства §5.2 (поле берётся из темы, которая его СВИПУЕТ, и принимается только при >=3 голосах из 4; ничья 2:2 и расклад 2-1-1 большинством не считаются; иначе дефолт ядра). СЕМЬ ПОЛЕЙ УШЛИ ОТ ДЕФОЛТОВ: EMAFast=5 — тема trend_hump, 3/4 (дефолт 10), взята по правилу приоритета горба над каноном (pooled 1.223 > 1.139 и большинство есть); EMASlow=50 — тема trend, 3/4 (дефолт 100), у горба по этому полю большинства нет (2/4), поэтому приоритет на него не распространяется; FreshDayATR=0.1 — тема day, ЕДИНОГЛАСНО 4/4 (дефолт 0), тема day_fresh поле не забирает (pooled выше, 1.453 > 1.386, но большинства нет — ничья 0.05 против 0.15); UseVolume=1 — темы volume и vol_window, 4/4 обе (дефолт 0); VolBaseDays=3 — тема volume, 4/4 (дефолт 14; в сетке vol_window ось приколочена и голосом не является); VolMult=1.0 — темы volume (4/4) и vol_window (3/4) согласны (дефолт 1.2); VolLookbackBars=12 — тема vol_window, 3/4 (дефолт 3; в сетке volume ось отсутствует), взята по правилу приоритета (pooled 2.609 > 2.278). ОДИННАДЦАТЬ ПОЛЕЙ — ДЕФОЛТЫ ЯДРА, потому что большинства не набрала ни одна ось: RSIPeriod (entry 2/4 за 2) и RSILower (entry 1/4, четыре разных значения); RSIUpper (exit 2/4 за 65); SpentDayATR (day ничья 0.8/0.9); StopDailyATR (risk 2/4 за 1.2 — ВЫШЕ потолка гейта A, обезврежено правилом большинства) и TPDailyATR (risk 1-1-1-1); UseRSIExit (trail ничья 2:2); TrailDailyATR (trail 2/4 за 0.4) и UseTrail (ось в сетке приколочена [1] и голосом НЕ является — каталожное правило, ruling 4 по IRKT; трейл структурно перекрывает стоп и обходит риск-гейт A, прецеденты AFKS и SNGSP); UseDayATRGate (screen 4/4 за 1 = дефолт); DailyATRPeriod (не свипуется ни одной темой). РИСК-ГЕЙТ A: min(StopDailyATR=0.5, трейл выключен) = 0.5 <= потолок 0.7 — пройден тривиально, цена 0 PF. ВНИМАНИЕ: пара EMAFast=5 x EMASlow=50 собрана из ДВУХ РАЗНЫХ ТЕМ и до этого файла не измерялась ни одним прогоном. ЗАПУСК (одиночный прогон и три схемы проверки): go run ./cmd/backtest -ticker X5 -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/x5/plateau_point.json -out ./reports/X5_point -months 20 -min-trades 1 -metric profit_factor [-train-months 8|9|12 -test-months 3|3|2]. Результаты прогонов, три риск-гейта, соседи плато, третий контур, три walk-forward, два уровня издержек, календарные годы, шесть пунктов стоп-условия и вердикт — docs/superpowers/plans/task-10-report-x5.md.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          5
+        ],
+        "EMASlow": [
+          50
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0.1
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.5
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          1
+        ],
+        "VolBaseDays": [
+          3
+        ],
+        "VolLookbackBars": [
+          12
+        ],
+        "VolMult": [
+          1.0
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      }
+    }
+  ]
+}
