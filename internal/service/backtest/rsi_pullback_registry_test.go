@@ -1140,13 +1140,14 @@ func TestRSIPullbackMAGNUsesCalibratedParams(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackX5IsRegisteredAndUncalibrated сторожит ЧЕСТНОЕ состояние: X5 заведён в реестр до
-// калибровки, чтобы прогоны шли через реестр, а не через generic-ветку, и обязан возвращать ровно
-// baseline ядра. Литерал появится по §5.13 спеки docs/superpowers/specs/
-// 2026-09-13-x5-rsi-pullback-prep-design.md, отдельной задачей после прогонов — тест заменяется
-// снимком литерала (или сторожевым тестом отказа, по прецеденту RTKMP/TRNFP/HEAD/AFKS/UWGN) тогда
-// же.
-func TestRSIPullbackX5IsRegisteredAndUncalibrated(t *testing.T) {
+// TestRSIPullbackX5IsRegisteredAndCalibrated пинует два неотличимых снаружи факта: X5 есть в карте
+// (а не проваливается в generic-ветку) И возвращает собственный литерал, а не baseline. Пакет
+// strategy/x5 заведён 2026-09-13 ДО калибровки и до 2026-09-14 обязан был возвращать
+// core.DefaultParams(); калибровка прогналась, точка первого круга принята (шесть полей от
+// дефолтов, все три риск-гейта пройдены, ни один пункт стоп-условия не сработал) — и теперь
+// бэктест обязан гонять ровно литерал, иначе перепроверка отчёта X5 мерила бы не то, что стоит
+// в коде. Снимок самого литерала живёт рядом с ним, в strategy/x5/x5_test.go.
+func TestRSIPullbackX5IsRegisteredAndCalibrated(t *testing.T) {
 	b, ok := rsiPullbackRegistry[rsipullbackx5.Ticker]
 	if !ok {
 		t.Fatal("X5 отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
@@ -1155,8 +1156,11 @@ func TestRSIPullbackX5IsRegisteredAndUncalibrated(t *testing.T) {
 	if !pok {
 		t.Fatalf("X5: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
 	}
-	if p != core.DefaultParams() {
-		t.Fatalf("X5 ещё не откалиброван, params обязаны совпадать с baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
+	if p == core.DefaultParams() {
+		t.Fatal("X5 вернул baseline: откалиброванный тикер обязан иметь собственный литерал")
+	}
+	if want := rsipullbackx5.DefaultParams(); p != want {
+		t.Fatalf("X5 params = %+v, want литерал пакета %+v", p, want)
 	}
 	if got := b.Build(p).Ticker(); got != "X5" {
 		t.Fatalf("Ticker() = %q, want X5", got)

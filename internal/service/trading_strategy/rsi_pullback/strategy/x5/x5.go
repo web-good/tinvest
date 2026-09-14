@@ -60,6 +60,28 @@ import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 // Ticker is the MOEX ticker this package parameterizes.
 const Ticker = "X5"
 
-// DefaultParams returns the rsi_pullback parameters for X5. Пока калибровка не проведена, это
-// ровно baseline ядра — см. doc-комментарий пакета.
-func DefaultParams() core.Params { return core.DefaultParams() }
+// DefaultParams returns the rsi_pullback parameters for X5 — принятую точку первого круга. Все
+// восемнадцать полей выписаны явно, включая совпавшие с дефолтом ядра: пакет обязан читаться без
+// обращения к ядру. Разбор — doc-комментарий пакета; снимок держит x5_test.go.
+func DefaultParams() core.Params {
+	return core.Params{
+		RSIPeriod:       4,
+		RSILower:        30,
+		RSIUpper:        70,
+		EMAFast:         5,
+		EMASlow:         50,
+		DailyATRPeriod:  14,
+		UseDayATRGate:   1,
+		FreshDayATR:     0,
+		SpentDayATR:     0.8,
+		StopDailyATR:    0.5,
+		TPDailyATR:      0.6,
+		UseVolume:       1,
+		VolBaseDays:     3,
+		VolLookbackBars: 12,
+		VolMult:         1.0,
+		UseRSIExit:      1,
+		UseTrail:        0,
+		TrailDailyATR:   0,
+	}
+}
