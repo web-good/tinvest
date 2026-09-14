@@ -51,9 +51,9 @@ func TestRSIPullbackConfigReadyNeedsAccountAndToken(t *testing.T) {
 
 func TestNewRSIPullbackConfig_Defaults(t *testing.T) {
 	c := NewRSIPullbackConfig()
-	want := []string{"UGLD", "T", "GAZP", "DOMRF", "FESH", "WUSH", "LENT", "RENI", "NVTK", "LSNGP", "IVAT", "SVAV", "SIBN", "ELFV", "DIAS", "BSPB", "YDEX", "BANEP", "ASTR", "SNGSP", "NKHP", "SOFL", "TGKA", "VSMO", "SPBE", "MVID", "CNRU", "AQUA", "MAGN", "IRKT"}
-	if len(want) != 30 {
-		t.Fatalf("боевая вселенная = %d тикеров, want 30: IRKT заведён тридцатым 2026-09-13", len(want))
+	want := []string{"UGLD", "T", "GAZP", "DOMRF", "FESH", "WUSH", "LENT", "RENI", "NVTK", "LSNGP", "IVAT", "SVAV", "SIBN", "ELFV", "DIAS", "BSPB", "YDEX", "BANEP", "ASTR", "SNGSP", "NKHP", "SOFL", "TGKA", "VSMO", "SPBE", "MVID", "CNRU", "AQUA", "MAGN", "IRKT", "X5"}
+	if len(want) != 31 {
+		t.Fatalf("боевая вселенная = %d тикеров, want 31: X5 заведён тридцать первым 2026-09-14", len(want))
 	}
 	if len(c.Tickers) != len(want) {
 		t.Fatalf("default Tickers = %v, want %v", c.Tickers, want)
