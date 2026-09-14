@@ -31,6 +31,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ugld"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/vsmo"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/wush"
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/x5"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ydex"
 )
 
@@ -706,6 +707,7 @@ var paramsByTicker = map[string]core.Params{
 	aqua.Ticker:  aqua.DefaultParams(),
 	magn.Ticker:  magn.DefaultParams(),
 	irkt.Ticker:  irkt.DefaultParams(),
+	x5.Ticker:    x5.DefaultParams(),
 }
 
 // ParamsFor returns the params for a known ticker, ok=false otherwise.

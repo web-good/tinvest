@@ -8,6 +8,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/irkt"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/magn"
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/x5"
 )
 
 // Каждый тикер дефолтной вселенной обязан находиться в реестре, иначе раннер молча
@@ -188,6 +189,21 @@ func TestRegistryHasIRKT(t *testing.T) {
 		t.Fatal("IRKT нет в реестре живого раннера: тикер не будет торговать вовсе")
 	}
 	if want := irkt.DefaultParams(); p != want {
+		t.Fatalf("реестр отдаёт не литерал пакета:\n got: %+v\nwant: %+v", p, want)
+	}
+}
+
+// TestRegistryHasX5 держит связку «пакет — реестр живого раннера» для X5: раннер обязан отдавать
+// ровно тот литерал, который пинит снимок в пакете strategy/x5. У X5 цена ошибки выше обычного:
+// UseVolume=1 — единственное поле точки, отсекающее печать 2026-01-02 02:00 (-10 453.45 ₽ на
+// baseline), а FreshDayATR=0 — решение владельца по риск-гейту C, которое держит раннер вне бара
+// 06:30 с медианой объёма 148 лотов.
+func TestRegistryHasX5(t *testing.T) {
+	p, ok := ParamsFor(x5.Ticker)
+	if !ok {
+		t.Fatal("X5 нет в реестре живого раннера: тикер не будет торговать вовсе")
+	}
+	if want := x5.DefaultParams(); p != want {
 		t.Fatalf("реестр отдаёт не литерал пакета:\n got: %+v\nwant: %+v", p, want)
 	}
 }
