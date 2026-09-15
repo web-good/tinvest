@@ -25,6 +25,7 @@ import (
 	rsipullbacknvtk "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/nvtk"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/reni"
 	rsipullbackrtkmp "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/rtkmp"
+	rsipullbacksfin "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sfin"
 	rsipullbacksibn "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sibn"
 	rsipullbacksngsp "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sngsp"
 	rsipullbacksofl "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sofl"
@@ -1164,5 +1165,25 @@ func TestRSIPullbackX5IsRegisteredAndCalibrated(t *testing.T) {
 	}
 	if got := b.Build(p).Ticker(); got != "X5" {
 		t.Fatalf("Ticker() = %q, want X5", got)
+	}
+}
+
+// TestRSIPullbackSFINIsRegisteredAndUncalibrated сторожит ЧЕСТНОЕ состояние: SFIN заведён в реестр
+// до калибровки, чтобы прогоны шли через реестр, а не через generic-ветку, и обязан возвращать
+// ровно baseline ядра. Тест заменяется снимком литерала, когда калибровка SFIN будет проведена.
+func TestRSIPullbackSFINIsRegisteredAndUncalibrated(t *testing.T) {
+	b, ok := rsiPullbackRegistry[rsipullbacksfin.Ticker]
+	if !ok {
+		t.Fatal("SFIN отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
+	}
+	p, pok := b.DefaultParams().(core.Params)
+	if !pok {
+		t.Fatalf("SFIN: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
+	}
+	if p != core.DefaultParams() {
+		t.Fatalf("SFIN ещё не откалиброван, params обязаны совпадать с baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
+	}
+	if got := b.Build(p).Ticker(); got != "SFIN" {
+		t.Fatalf("Ticker() = %q, want SFIN", got)
 	}
 }
