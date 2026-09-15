@@ -1,0 +1,25 @@
+{
+  "_comment": "data/params/rsi_pullback/sfin/cal_trend_volume.json — тема trend_volume для SFIN, 16 прогонов (2 значения EMAFast x 4 значения EMASlow x 2 значения UseVolume), поверх ДЕФОЛТОВ ЯДРА. Тема заведена (§5.1, отличие 2 спеки docs/superpowers/specs/2026-09-15-sfin-rsi-pullback-prep-design.md) ради честного walk-forward по связке горба тренда и объёмного гейта — двух рычагов, которые на SFIN впервые (после MAGN и AQUA) режут просадку ОБА одновременно: тренд с 22 298 до 9-12 тыс ₽ (§6.2, горб EMAFast 5-8 x EMASlow 12-25), объёмный гейт с 22 298 до 13 594 ₽ при росте PF на 0.18 (§6.3, узел 1x1 темы screen). Тема — АРБИТР, А НЕ ИСТОЧНИК ПОЛЕЙ (правило сборки §5.2 спеки): если trend_hump и volume обе голосуют за уход от дефолта, эта тема показывает, складываются рычаги или конкурируют; при конфликте в точку идёт один рычаг — тот, чья тема дала больший pooled OOS, второе поле остаётся на дефолте. ПРЯМОГО ТРЁХМЕРНОГО ЗАМЕРА EMAFast x EMASlow x UseVolume ДО НАПИСАНИЯ СЕТОК НЕ СНИМАЛОСЬ — протокол §6 даёт только раздельные одномерные и двумерные срезы (горб §6.2, гейт §6.3); замер связки придёт из прогона этой темы, как и на MAGN. Оси выбраны по зоне горба с лучшим PF/просадкой (§6.2: EMAFast 5 и 8, EMASlow 12/15/20/25 держат PF 1.27-1.57 при просадке 9-12 тыс ₽); UseVolume свипуется, а не фиксируется на 1, чтобы тема сама разделяла эффект тренда и эффект гейта, а не смешивала их заранее. ЗАПУСК: go run ./cmd/backtest -ticker SFIN -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/sfin/cal_trend_volume.json -out ./reports/SFIN_trend_volume -months 36 -min-trades 20 -train-months 12 -test-months 6 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "trend_volume",
+      "grid": {
+        "EMAFast": [
+          5,
+          8
+        ],
+        "EMASlow": [
+          12,
+          15,
+          20,
+          25
+        ],
+        "UseVolume": [
+          0,
+          1
+        ]
+      },
+      "keepTop": 5
+    }
+  ]
+}

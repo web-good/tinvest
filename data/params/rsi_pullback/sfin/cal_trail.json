@@ -1,0 +1,27 @@
+{
+  "_comment": "data/params/rsi_pullback/sfin/cal_trail.json — тема trail для SFIN, 14 прогонов (2 значения UseRSIExit x UseTrail зафиксирован на 1 x 7 значений TrailDailyATR), поверх ДЕФОЛТОВ ЯДРА при включённом трейлинге. UseTrail=0 (дефолт ядра) — базовая точка сравнения, приведённая в замере ниже, отдельно этой сеткой не свипуется. ЗАМЕР ДО НАПИСАНИЯ СЕТОК (§6.6 спеки docs/superpowers/specs/2026-09-15-sfin-rsi-pullback-prep-design.md), окно 36 месяцев поверх дефолтов ядра: TrailDailyATR при UseTrail=1 — 0.3 -> 1.223/158 (DD 18 574 ₽), 0.4 -> 1.139/147, 0.5 -> 1.138/144, 0.6 -> 1.145/142, 0.7 -> 1.118/142, 1.0 -> 1.116/141, 1.5 -> 1.116/141 (выше 1.0 трейл неактивен — совпадает с дефолтным PF/числом сделок побайтово). ДВУМЕРНОГО ЗАМЕРА UseRSIExit x TrailDailyATR ДО НАПИСАНИЯ СЕТОК НЕ СНИМАЛОСЬ (§6.6 спеки даёт только одномерный срез TrailDailyATR при UseTrail=1) — вклад отключения RSI-выхода придёт из прогона этой темы. ОЖИДАНИЕ, ЗАПИСАННОЕ ЗАРАНЕЕ (§6.6 спеки): ТРЕЙЛ ДАЁТ НЕ БОЛЬШЕ 0.11 PF НАД ДЕФОЛТОМ (максимум трейла на узле 0.3 -> 1.223 против дефолта 1.116, разница 0.107), и поле остаётся на дефолте, если тема не наберёт 3/4 голосов фолдов. ЗАПУСК: go run ./cmd/backtest -ticker SFIN -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/sfin/cal_trail.json -out ./reports/SFIN_trail -months 36 -min-trades 20 -train-months 12 -test-months 6 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "trail",
+      "grid": {
+        "UseRSIExit": [
+          0,
+          1
+        ],
+        "UseTrail": [
+          1
+        ],
+        "TrailDailyATR": [
+          0.3,
+          0.4,
+          0.5,
+          0.6,
+          0.7,
+          1.0,
+          1.5
+        ]
+      },
+      "keepTop": 5
+    }
+  ]
+}

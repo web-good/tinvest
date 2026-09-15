@@ -1,0 +1,19 @@
+{
+  "_comment": "data/params/rsi_pullback/sfin/cal_screen.json — тема screen для SFIN, 4 прогона (2 значения UseDayATRGate x 2 значения UseVolume), поверх ДЕФОЛТОВ ЯДРА. Тема мерит цену двух гейтов сразу: дневного гейта ATR и объёмного, каждый включён/выключен независимо. ЗАМЕР ДО НАПИСАНИЯ СЕТОК (§6.3 спеки docs/superpowers/specs/2026-09-15-sfin-rsi-pullback-prep-design.md), окно одно — 36 месяцев (схема сборки, §4 спеки): UseDayATRGate x UseVolume — 0x0 -> 0.993/431 (DD 44 214 ₽), 0x1 -> 1.056/227 (DD 28 566 ₽), 1x0 -> 1.116/141 (BASELINE, дефолт ядра, DD 22 298 ₽), 1x1 -> 1.300/97 (DD 13 594 ₽, net +22 289 ₽). Дневной гейт даёт +0.12 PF над узлом 0x0 и режет просадку вдвое (44 214 -> 22 298 ₽); объёмный гейт поверх дневного улучшает И PF, И просадку одновременно (1.116/22 298 -> 1.300/13 594) — редкость каталога, прецеденты NKHP и X5; у большинства тикеров каталога объёмный гейт поверх дневного вредит. ОЖИДАНИЕ, ЗАПИСАННОЕ ЗАРАНЕЕ (§6.3 спеки): победит узел 1x1, а не дефолтный узел ядра 1x0 — отличие от всех предыдущих тикеров, кроме NKHP и X5. ЗАПУСК: go run ./cmd/backtest -ticker SFIN -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/sfin/cal_screen.json -out ./reports/SFIN_screen -months 36 -min-trades 1 -train-months 12 -test-months 6 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "screen",
+      "grid": {
+        "UseDayATRGate": [
+          0,
+          1
+        ],
+        "UseVolume": [
+          0,
+          1
+        ]
+      },
+      "keepTop": 4
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "_comment": "data/params/rsi_pullback/sfin/cal_volume.json — тема volume для SFIN, 64 прогона (UseVolume зафиксирован на 1 x 8 значений VolMult x 8 значений VolBaseDays), поверх ДЕФОЛТОВ ЯДРА при включённом объёмном гейте. UseVolume=0 (выключенный гейт) свипуется отдельно темой screen — см. cal_screen.json. ЗАМЕР ДО НАПИСАНИЯ СЕТОК (§6.3 спеки docs/superpowers/specs/2026-09-15-sfin-rsi-pullback-prep-design.md), окно 36 месяцев поверх дефолтов ядра при UseVolume=1: VolMult — 1.0 -> 1.197/107, 1.2 -> 1.300/97 (дефолт гейта), 1.5 -> 1.133/85, 1.8 -> 1.086/81, 2.0 -> 1.044/74, 2.2 -> 0.957/68, 2.5 -> 0.936/66, 3.0 -> 1.058/56. VolBaseDays — 3 -> 1.189/106, 5 -> 1.280/107, 10 -> 1.241/96, 14 -> 1.300/97 (дефолт гейта), 20 -> 1.137/101, 30 -> 1.199/90, 40 -> 1.303/77, 50 -> 1.272/77. ДЕФОЛТНАЯ ФОРМА ГЕЙТА (1.2 / 14 / 3) — ЛУЧШАЯ ИЛИ НА РАВНЫХ ЛУЧШЕЙ ПО ВСЕМ ТРЁМ ОСЯМ (VolBaseDays=40 у верхнего края чуть выше — 1.303 против 1.300 — но на вдвое меньшем пуле, 77 против 97 сделок): в отличие от X5, где объёмный гейт уходил далеко от дефолта (VolMult=1.0, VolBaseDays=3), на SFIN каталожная настройка гейта уже близка к оптимуму одномерных срезов. На SFIN объёмный гейт — работающий (см. cal_screen.json: узел 1x1 улучшает и PF, и просадку против 1x0) — редкость каталога, прецеденты NKHP и X5. ЗАПУСК: go run ./cmd/backtest -ticker SFIN -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/sfin/cal_volume.json -out ./reports/SFIN_volume -months 36 -min-trades 20 -train-months 12 -test-months 6 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "volume",
+      "grid": {
+        "UseVolume": [
+          1
+        ],
+        "VolMult": [
+          1.0,
+          1.2,
+          1.5,
+          1.8,
+          2.0,
+          2.2,
+          2.5,
+          3.0
+        ],
+        "VolBaseDays": [
+          3,
+          5,
+          10,
+          14,
+          20,
+          30,
+          40,
+          50
+        ]
+      },
+      "keepTop": 5
+    }
+  ]
+}
