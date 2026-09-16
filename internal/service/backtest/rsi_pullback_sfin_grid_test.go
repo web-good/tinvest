@@ -64,8 +64,10 @@ func sfinAllGridFiles() []string {
 //     содержит оба края 5 и 50;
 //   - RSIPeriod >= 2 везде, где эта ось встречается;
 //   - StopDailyATR != 0 везде, где эта ось встречается — стопless многодневная сделка запрещена;
-//   - ни cal_trend.json, ни cal_trend_hump.json, ни cal_trend_volume.json не порождают пар
-//     EMAFast >= EMASlow (декартово произведение осей внутри каждого файла);
+//   - ни один файл поимённого каталога обоих кругов не порождает пар EMAFast >= EMASlow
+//     (декартово произведение осей внутри каждого файла; проверка идёт по всему каталогу, а не по
+//     литеральному списку трендовых тем, чтобы будущая трендовая сетка не оказалась освобождённой
+//     от неё молча);
 //   - ось EMASlow в cal_trend_hump.json содержит края горба 12 и 45;
 //   - ось EMASlow в cal_trend.json содержит верхний край 250;
 //   - ось RSIUpper в cal_exit.json содержит оба края 35 и 95;
@@ -135,8 +137,12 @@ func TestSFINGridsStayWide(t *testing.T) {
 		}
 	}
 
-	// EMAFast < EMASlow во всех парах трендовых тем обоих кругов.
-	for _, file := range []string{"cal_trend.json", "cal_trend_hump.json", "cal_trend_volume.json", "cal2_trend_hump.json"} {
+	// EMAFast < EMASlow во всех парах ВЕЗДЕ, где файл свипует обе оси сразу — обход идёт по тому же
+	// склеенному каталогу обоих кругов, что и три инварианта выше, а не по литеральному списку
+	// трендовых тем. Литеральный список освободил бы от проверки будущий файл (например,
+	// cal2_trend.json или вторую узкую трендовую тему) молча: его достаточно было бы дописать в
+	// sfinRound2GridFiles и забыть про эту строку. Файлы, не свипующие обе оси, проходят вырожденно.
+	for _, file := range sfinAllGridFiles() {
 		grid := rsiPullbackTickerGrid(t, "sfin", file)
 		fastValues := grid["EMAFast"]
 		for _, fast := range fastValues {
