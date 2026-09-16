@@ -1,0 +1,64 @@
+{
+  "_comment": "data/params/rsi_pullback/sfin/plateau_emafast_3.json — СОСЕД ПЛАТО для SFIN (Task 11 Step 8 плана docs/superpowers/plans/2026-09-15-sfin-rsi-pullback-prep.md). Файл-точка: все восемнадцать полей приколочены одним значением каждое, отличие от принятой точки первого круга (data/params/rsi_pullback/sfin/plateau_point.json) РОВНО ОДНО — EMAFast = 3 вместо принятого 5 (дефолт ядра 10). Назначение: измерить ширину плато вокруг поля, ушедшего от дефолта ядра, одиночным прогоном на ПОЛНОМ 36-месячном окне. Правило §5.2/Step 8 брифа: плато шириной меньше 0.05 PF записывается как отсутствие сигнала; при разнице pooled OOS < 0.05 в точку идёт вариант с МЕНЬШЕЙ просадкой. Нижний сосед по оси cal_trend_hump.json [3,5,8,10]; значение 3 — НИЖНИЙ КРАЙ этой оси, но не край механизма (каноническая тема trend свипует ту же ось от 3), поэтому зонд за краем здесь не требуется: 3 сам по себе и есть край. ЗАПУСК: go run ./cmd/backtest -ticker SFIN -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/sfin/plateau_emafast_3.json -out ./reports/SFIN_pl_emafast_3 -months 36 -min-trades 1 -metric profit_factor; разбор журнала (годы + гейты C и D): python3 reports/_analysis/sfin_journal.py reports/SFIN_pl_emafast_3/*_best.md. Полный отчёт: docs/superpowers/plans/task-11-report-sfin.md.",
+  "phases": [
+    {
+      "name": "plateau_emafast_3",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          50
+        ],
+        "EMAFast": [
+          3
+        ],
+        "EMASlow": [
+          25
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.5
+        ],
+        "TPDailyATR": [
+          0.3
+        ],
+        "UseVolume": [
+          1
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      }
+    }
+  ]
+}
