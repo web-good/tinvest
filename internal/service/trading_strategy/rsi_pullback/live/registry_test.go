@@ -8,6 +8,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/irkt"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/magn"
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sfin"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/x5"
 )
 
@@ -204,6 +205,18 @@ func TestRegistryHasX5(t *testing.T) {
 		t.Fatal("X5 нет в реестре живого раннера: тикер не будет торговать вовсе")
 	}
 	if want := x5.DefaultParams(); p != want {
+		t.Fatalf("реестр отдаёт не литерал пакета:\n got: %+v\nwant: %+v", p, want)
+	}
+}
+
+// TestRegistryHasSFIN держит связку «пакет — реестр живого раннера» для SFIN: раннер обязан
+// отдавать ровно тот литерал, который пинит снимок в пакете strategy/sfin.
+func TestRegistryHasSFIN(t *testing.T) {
+	p, ok := ParamsFor(sfin.Ticker)
+	if !ok {
+		t.Fatal("SFIN нет в реестре живого раннера: тикер не будет торговать вовсе")
+	}
+	if want := sfin.DefaultParams(); p != want {
 		t.Fatalf("реестр отдаёт не литерал пакета:\n got: %+v\nwant: %+v", p, want)
 	}
 }
