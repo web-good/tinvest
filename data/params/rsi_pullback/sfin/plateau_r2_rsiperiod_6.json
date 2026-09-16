@@ -1,0 +1,64 @@
+{
+  "_comment": "data/params/rsi_pullback/sfin/plateau_r2_rsiperiod_6.json — СОСЕД ПЛАТО точки ВТОРОГО круга (Task 12 плана docs/superpowers/plans/2026-09-15-sfin-rsi-pullback-prep.md, Step 8; правило §5.3 спеки). Файл-точка: каждая ось приколочена одним значением. Отличие от plateau_point2.json — РОВНО ОДНО ПОЛЕ: RSIPeriod = 6 (верхний сосед по оси). Точка второго круга ушла от дефолтов ядра всего в двух полях (RSIPeriod 4 -> 5 по большинству 3/4 темы entry и UseVolume 0 -> 1, перенесённое из темы screen первого круга), поэтому соседей у неё ровно три: два по оси RSIPeriod и один по двоичной оси UseVolume. Ось RSIPeriod целочисленная, узел 5 лежит внутри каталожной оси [2,3,4,5,6,7,8,10,12], поэтому зонд за краем не нужен. Дополнительно для SFIN (§5.3): у каждого соседа снимаются разбивка по календарным годам и числа риск-гейтов C и D — на этой бумаге разница между хорошей и плохой точкой проходит по календарным годам, а не по полнооконному PF. ЗАПУСК: go run ./cmd/backtest -ticker SFIN -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/sfin/plateau_r2_rsiperiod_6.json -out ./reports/SFIN_p2nb_rsiperiod_6 -months 36 -min-trades 1 -metric profit_factor; разбор журнала: python3 reports/_analysis/sfin_journal.py reports/SFIN_p2nb_rsiperiod_6/*_best.md. Полный отчёт: docs/superpowers/plans/task-12-report-sfin.md.",
+  "phases": [
+    {
+      "name": "p2nb_rsiperiod_6",
+      "grid": {
+        "RSIPeriod": [
+          6
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          10
+        ],
+        "EMASlow": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.5
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          1
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      }
+    }
+  ]
+}

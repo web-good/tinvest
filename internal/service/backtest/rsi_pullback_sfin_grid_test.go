@@ -26,6 +26,37 @@ var sfinGridFiles = []string{
 	"cal_trail.json",
 }
 
+// sfinRound2GridFiles перечисляет шесть УЗКИХ сеток второго круга (Task 12 плана, Step 2). Они
+// заводятся только по тем темам, чьё поле участвовало в точке первого круга или соседствует с
+// лучшей зоной: entry, trend_hump, exit, risk, day, volume. Темы screen, trend, trend_volume,
+// vol_window и trail узких сеток не получают по решению контроллера: screen двоичная и решена
+// единогласно, trend проиграла trend_hump, trend_volume — арбитр и уже высказалась, vol_window
+// проиграла volume по pooled OOS (1.000 против 1.195), trail инертна (все четыре голоса различны,
+// ось UseTrail приколочена одним значением).
+//
+// Список поимённый по той же причине, что и sfinGridFiles: в каталог приезжают файлы-точки
+// второго круга (plateau_point2.json, plateau_r2_*.json), которые обходом упали бы на инвариантах
+// осей — точка законно фиксирует ось одним значением.
+var sfinRound2GridFiles = []string{
+	"cal2_entry.json",
+	"cal2_trend_hump.json",
+	"cal2_exit.json",
+	"cal2_risk.json",
+	"cal2_day.json",
+	"cal2_volume.json",
+}
+
+// sfinAllGridFiles — оба круга вместе. Жёсткие инварианты Global Constraints (RSILower <= 50,
+// RSIPeriod >= 2, StopDailyATR != 0, отсутствие пар EMAFast >= EMASlow) узкие сетки второго круга
+// обязаны держать ровно так же, как широкие сетки первого: сужение зоны поиска не отменяет запретов
+// ядра.
+func sfinAllGridFiles() []string {
+	out := make([]string, 0, len(sfinGridFiles)+len(sfinRound2GridFiles))
+	out = append(out, sfinGridFiles...)
+	out = append(out, sfinRound2GridFiles...)
+	return out
+}
+
 // TestSFINGridsStayWide читает поимённый каталог сеток SFIN (data/params/rsi_pullback/sfin) и
 // проверяет все инварианты §5.1 спеки
 // docs/superpowers/specs/2026-09-15-sfin-rsi-pullback-prep-design.md:
@@ -46,6 +77,15 @@ var sfinGridFiles = []string{
 //   - ось FreshDayATR в cal_day.json содержит узлы уплотнения 0.05, 0.15 и оба края 0 и 0.5;
 //   - ось SpentDayATR в cal_day.json содержит верхний край 2.0;
 //   - ось VolLookbackBars в cal_vol_window.json содержит верхний край 32;
+//   - четыре жёстких инварианта (RSILower <= 50, RSIPeriod >= 2, StopDailyATR != 0, отсутствие пар
+//     EMAFast >= EMASlow) держат ОБА круга — и широкие сетки первого, и узкие сетки второго
+//     (sfinRound2GridFiles);
+//   - ось TPDailyATR в cal2_risk.json содержит дефолт ядра 0.6, а ось FreshDayATR в cal2_day.json —
+//     дефолт ядра 0. Оба узла требует постановка второго круга: первый круг вернул на дефолт
+//     ТОЛЬКО UseVolume, связка «точка + TPDailyATR 0.6» не пробовалась ни разу, а любой ненулевой
+//     FreshDayATR — кандидат на провал риск-гейта C, который вторым кругом не смягчается. Без этих
+//     узлов второй круг повторил бы слепое пятно первого, и проверка стоит здесь, чтобы будущая
+//     правка не убрала их молча;
 //   - файлов cal_entry_deep.json и cal_day_spent.json в каталоге SFIN нет — обе темы намеренно не
 //     заводятся (§5.1 спеки: обе оси входа монотонны без провалов между высшими соседями, максимум
 //     SpentDayATR широкий), инвариант проверяется явным os.Stat, а не отсутствием в поимённом
@@ -55,8 +95,8 @@ var sfinGridFiles = []string{
 // запрещает УРЕЗАТЬ ось, а не расширять её: он проверяет наличие обязательных узлов и отсутствие
 // запрещённых пар, но не запрещает лишних значений в сетке.
 func TestSFINGridsStayWide(t *testing.T) {
-	// RSILower <= 50 везде, где ось встречается в поимённом каталоге SFIN.
-	for _, file := range sfinGridFiles {
+	// RSILower <= 50 везде, где ось встречается в поимённом каталоге SFIN (оба круга).
+	for _, file := range sfinAllGridFiles() {
 		grid := rsiPullbackTickerGrid(t, "sfin", file)
 		for _, v := range grid["RSILower"] {
 			if v > 50 {
@@ -75,8 +115,8 @@ func TestSFINGridsStayWide(t *testing.T) {
 		}
 	}
 
-	// RSIPeriod >= 2 везде, где ось встречается в поимённом каталоге SFIN.
-	for _, file := range sfinGridFiles {
+	// RSIPeriod >= 2 везде, где ось встречается в поимённом каталоге SFIN (оба круга).
+	for _, file := range sfinAllGridFiles() {
 		grid := rsiPullbackTickerGrid(t, "sfin", file)
 		for _, v := range grid["RSIPeriod"] {
 			if v < 2 {
@@ -85,8 +125,8 @@ func TestSFINGridsStayWide(t *testing.T) {
 		}
 	}
 
-	// StopDailyATR != 0 везде, где ось встречается в поимённом каталоге SFIN.
-	for _, file := range sfinGridFiles {
+	// StopDailyATR != 0 везде, где ось встречается в поимённом каталоге SFIN (оба круга).
+	for _, file := range sfinAllGridFiles() {
 		grid := rsiPullbackTickerGrid(t, "sfin", file)
 		for _, v := range grid["StopDailyATR"] {
 			if v == 0 {
@@ -95,8 +135,8 @@ func TestSFINGridsStayWide(t *testing.T) {
 		}
 	}
 
-	// EMAFast < EMASlow во всех парах трёх трендовых тем.
-	for _, file := range []string{"cal_trend.json", "cal_trend_hump.json", "cal_trend_volume.json"} {
+	// EMAFast < EMASlow во всех парах трендовых тем обоих кругов.
+	for _, file := range []string{"cal_trend.json", "cal_trend_hump.json", "cal_trend_volume.json", "cal2_trend_hump.json"} {
 		grid := rsiPullbackTickerGrid(t, "sfin", file)
 		fastValues := grid["EMAFast"]
 		for _, fast := range fastValues {
@@ -184,6 +224,26 @@ func TestSFINGridsStayWide(t *testing.T) {
 		grid := rsiPullbackTickerGrid(t, "sfin", "cal_vol_window.json")
 		if !containsFloat(grid["VolLookbackBars"], 32) {
 			t.Errorf("sfin/cal_vol_window.json: ось VolLookbackBars потеряла верхний край 32 (есть %v)", grid["VolLookbackBars"])
+		}
+	}
+
+	// Обязательный дефолтный узел оси цели в узкой сетке риска второго круга: TPDailyATR содержит
+	// 0.6. Первый круг вернул на дефолт ТОЛЬКО UseVolume, поэтому связка «точка + TPDailyATR 0.6»
+	// не пробовалась ни разу; без этого узла второй круг повторил бы слепое пятно первого.
+	{
+		grid := rsiPullbackTickerGrid(t, "sfin", "cal2_risk.json")
+		if !containsFloat(grid["TPDailyATR"], 0.6) {
+			t.Errorf("sfin/cal2_risk.json: ось TPDailyATR потеряла обязательный дефолтный узел 0.6 (есть %v)", grid["TPDailyATR"])
+		}
+	}
+
+	// Обязательный дефолтный узел оси свежести дня во втором круге: FreshDayATR содержит 0. Любое
+	// ненулевое значение — кандидат на провал риск-гейта C (вход на первом баре дня), а гейт вторым
+	// кругом не смягчается.
+	{
+		grid := rsiPullbackTickerGrid(t, "sfin", "cal2_day.json")
+		if !containsFloat(grid["FreshDayATR"], 0) {
+			t.Errorf("sfin/cal2_day.json: ось FreshDayATR потеряла обязательный дефолтный узел 0 (есть %v)", grid["FreshDayATR"])
 		}
 	}
 
