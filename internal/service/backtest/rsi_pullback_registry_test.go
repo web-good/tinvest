@@ -1168,10 +1168,13 @@ func TestRSIPullbackX5IsRegisteredAndCalibrated(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackSFINIsRegisteredAndUncalibrated сторожит ЧЕСТНОЕ состояние: SFIN заведён в реестр
-// до калибровки, чтобы прогоны шли через реестр, а не через generic-ветку, и обязан возвращать
-// ровно baseline ядра. Тест заменяется снимком литерала, когда калибровка SFIN будет проведена.
-func TestRSIPullbackSFINIsRegisteredAndUncalibrated(t *testing.T) {
+// TestRSIPullbackSFINIsRegisteredAndCalibrated пинует два неотличимых снаружи факта: SFIN есть в
+// карте (а не проваливается в generic-ветку) И возвращает собственный литерал, а не baseline.
+// Пакет strategy/sfin заведён 2026-09-15 ДО калибровки и до принятия точки второго круга обязан
+// был возвращать core.DefaultParams(); калибровка прогналась, литерал появился — и теперь бэктест
+// обязан гонять ровно его, иначе перепроверка отчёта SFIN мерила бы не то, что стоит в коде.
+// Снимок самого литерала живёт рядом с ним, в strategy/sfin/sfin_test.go.
+func TestRSIPullbackSFINIsRegisteredAndCalibrated(t *testing.T) {
 	b, ok := rsiPullbackRegistry[rsipullbacksfin.Ticker]
 	if !ok {
 		t.Fatal("SFIN отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
@@ -1180,8 +1183,11 @@ func TestRSIPullbackSFINIsRegisteredAndUncalibrated(t *testing.T) {
 	if !pok {
 		t.Fatalf("SFIN: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
 	}
-	if p != core.DefaultParams() {
-		t.Fatalf("SFIN ещё не откалиброван, params обязаны совпадать с baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
+	if p == core.DefaultParams() {
+		t.Fatal("SFIN вернул baseline: откалиброванный тикер обязан иметь собственный литерал")
+	}
+	if want := rsipullbacksfin.DefaultParams(); p != want {
+		t.Fatalf("SFIN params = %+v, want литерал пакета %+v", p, want)
 	}
 	if got := b.Build(p).Ticker(); got != "SFIN" {
 		t.Fatalf("Ticker() = %q, want SFIN", got)
