@@ -1,0 +1,14 @@
+{
+  "_comment": "data/params/rsi_pullback/svcb/cal_trail.json — тема trail для SVCB, 12 прогонов (2 значения UseRSIExit x UseTrail зафиксирован на 1 x 6 значений TrailDailyATR), поверх ДЕФОЛТОВ ЯДРА при включённом трейлинге. UseTrail=0 (дефолт ядра) — базовая точка сравнения, отдельно этой сеткой не свипуется. ОГОВОРКА: IPO 2023-12-15, train первого фолда схемы сборки 36/12/6 — около девяти месяцев (§4 спеки docs/superpowers/specs/2026-09-25-svcb-rsi-pullback-prep-design.md). ЗАМЕР 2026-09-25 (окно -months 36, фактически 33 мес, in-sample, §6.6 спеки): трейл вреден при UseRSIExit=1 — PF 0.89-0.95 (не выше дефолта 0.951/130); при UseRSIExit=0 лучший узел TrailDailyATR 0.5 даёт 1.046/126, но при просадке 23 351 ₽ — заметно выше рублёвой просадки дефолтов (14 848.91 ₽, §5.5 спеки) и, вероятно, не пройдёт риск-гейт B. Двумерного замера UseRSIExit x TrailDailyATR по всей оси §6 спеки не снимает — только эти два ориентира; полный вклад отключения RSI-выхода придёт из прогона этой темы. ПРЕДУПРЕЖДЕНИЕ О КРАЯХ: узлов нет — сама инертность/вредность трейла при обоих значениях UseRSIExit является предупреждением: поле, скорее всего, останется на дефолтах ядра (UseTrail=0, TrailDailyATR=0). ЗАПУСК: go run ./cmd/backtest -ticker SVCB -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/svcb/cal_trail.json -out ./reports/SVCB_trail -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА: (заполняется задачей плана).",
+  "phases": [
+    {
+      "name": "trail",
+      "grid": {
+        "UseRSIExit": [0, 1],
+        "UseTrail": [1],
+        "TrailDailyATR": [0.3, 0.4, 0.5, 0.7, 1.0, 1.5]
+      },
+      "keepTop": 5
+    }
+  ]
+}
