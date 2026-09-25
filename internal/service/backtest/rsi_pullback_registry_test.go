@@ -1021,9 +1021,10 @@ func TestRSIPullbackSPBEServesTheCalibratedPoint(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackRTKMTracksBaseline сторожит ЧЕСТНОЕ состояние: RTKM заведён в реестр до
-// калибровки, чтобы прогоны шли через реестр, а не через generic-ветку, и обязан возвращать ровно
-// baseline ядра. Заменяется снимком литерала (Task 14 плана) при положительном вердикте.
+// TestRSIPullbackRTKMTracksBaseline пинит окончательное состояние тикера: калибровка закрыта
+// 2026-09-25 отказом обоих кругов (см. doc-comment пакета rtkm), RTKM в боевую вселенную не
+// заводится, и реестр бэктеста обязан отдавать ровно дефолты ядра. Литерала не будет: точка,
+// провалившая стоп-условие, не имеет права приехать в живой раннер через реестр.
 func TestRSIPullbackRTKMTracksBaseline(t *testing.T) {
 	b, ok := rsiPullbackRegistry[rsipullbackrtkm.Ticker]
 	if !ok {
@@ -1034,7 +1035,7 @@ func TestRSIPullbackRTKMTracksBaseline(t *testing.T) {
 		t.Fatalf("RTKM: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
 	}
 	if p != core.DefaultParams() {
-		t.Fatalf("RTKM ещё не откалиброван, params обязаны совпадать с baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
+		t.Fatalf("RTKM отвергнут, но params разошлись с baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
 	}
 	if got := b.Build(p).Ticker(); got != "RTKM" {
 		t.Fatalf("Ticker() = %q, want RTKM", got)

@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 )
 
 // rtkmGridFiles перечисляет сетки RTKM ПОИМЁННО, а не обходом каталога: задачи плана кладут в тот
@@ -43,10 +45,6 @@ func rtkmAllGridFiles() []string {
 	return append(out, rtkmRound2GridFiles...)
 }
 
-// rtkmCoreEMAFast — дефолт ядра core.DefaultParams().EMAFast. Сетка, свипующая EMASlow без
-// EMAFast, живёт на этом значении, и узел EMASlow <= 10 дал бы вырожденную пару.
-const rtkmCoreEMAFast = 10
-
 // TestRTKMGridsStayWide держит инварианты §5.1 спеки
 // docs/superpowers/specs/2026-09-25-rtkm-rsi-pullback-prep-design.md. Владелец требует
 // максимально широкие оси, поэтому тест запрещает УРЕЗАТЬ ось (проверяет обязательные узлы и
@@ -69,9 +67,11 @@ func TestRTKMGridsStayWide(t *testing.T) {
 				t.Errorf("rtkm/%s: StopDailyATR=0 запрещён — стопless многодневная сделка", file)
 			}
 		}
+		// Сетка, свипующая EMASlow без EMAFast, живёт на дефолте ядра — узел EMASlow <= дефолта дал
+		// бы вырожденную пару.
 		fast := grid["EMAFast"]
 		if len(fast) == 0 {
-			fast = []float64{rtkmCoreEMAFast}
+			fast = []float64{float64(core.DefaultParams().EMAFast)}
 		}
 		for _, f := range fast {
 			for _, s := range grid["EMASlow"] {
