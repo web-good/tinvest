@@ -1,5 +1,5 @@
 {
-  "_comment": "data/params/rsi_pullback/svcb/plateau_emaslow_25.json — СОСЕД ПЛАТО точки первого круга SVCB (Task 11, Step 7, §5.3 спеки): сосед EMASlow по оси trend_low: 25 вместо 20 (вверх); остальные семнадцать полей = plateau_point.json (точка = дефолты ядра + EMASlow 20, StopDailyATR 1.0, UseTrail 1, TrailDailyATR 0.5, UseRSIExit 0). Одиночный прогон на полном окне, у соседа снимаются годы и хвосты 6/12 (§5.3). ЗАПУСК: go run ./cmd/backtest -ticker SVCB -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/svcb/plateau_emaslow_25.json -out ./reports/SVCB_point_emaslow_25 -months 36 -min-trades 1 -metric profit_factor; разбор: python3 reports/_analysis/svcb_journal.py reports/SVCB_point_emaslow_25/*_best.md. РЕЗУЛЬТАТ ПРОГОНА 2026-09-25: 101 сделка, PF 1.227, DD 14 465.79 ₽ (13.94%); 2024 −2 234.30, 2025 +24 928.35, 2026 −5 434.83 ₽; хвост 6 10 сделок PF 0.551, хвост 12 PF 1.068; гейт D 1 сделка. Ниже точки на 0.103.",
+  "_comment": "data/params/rsi_pullback/svcb/plateau_emaslow_25.json — СОСЕД ПЛАТО пересобранной точки первого круга SVCB (Task 11R, Steps 7–8, §5.3 спеки): EMASlow 25 вместо 20 (вверх по оси trend_low). Остальные поля = plateau_point.json (дефолты ядра + EMASlow 20 + StopDailyATR 0.7, трейл выключен). ПРОЧТЕНИЕ B (решение контроллера, Task 11R, 2026-09-25): тема trail приколачивала UseTrail=[1], за включение трейла не голосовала ни одна тема, поэтому по §5.2 спеки UseTrail 0, TrailDailyATR 0 и UseRSIExit 1 остаются на дефолтах ядра (голос UseRSIExit 0 снят только при UseTrail 1; прецедент SFIN/SOFL/AQUA). Точка первого круга до третьего контура = дефолты ядра + EMASlow 20 (trend_low 15/20/20/20 = 3/4, pooled 1.195/56 > trend 0.922/72) + StopDailyATR 1.0 (risk 1.5/1.5/1.5/0.8 = 3/4 за 1.5, урезано гейтом A до потолка 1.0). Третий контур (§5.6, Task 11 Step 8) на стопе 1.0 дал подпись капкана (SL 10.2% против 33.1%, удержание 10/22/68 против 8/16/58, ночёвок 50.0% против 38.5%), и точка взяла более узкий стоп в пределах плато: StopDailyATR 0.7. Итог: дефолты ядра + EMASlow 20 + StopDailyATR 0.7. ЗАПУСК: go run ./cmd/backtest -ticker SVCB -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/svcb/plateau_emaslow_25.json -out ./reports/SVCB_11r_emaslow_25 -months 36 -min-trades 1 -metric profit_factor; разбор: python3 reports/_analysis/svcb_journal.py reports/SVCB_11r_emaslow_25/*_best.md. Полный отчёт: docs/superpowers/plans/task-11r-report-svcb.md. РЕЗУЛЬТАТ ПРОГОНА 2026-09-25: 100 сделок, PF 1.471, max DD 8 995.10 ₽ (8.47%); годы +12 700.78 / +4 538.81 / +6 292.00 ₽; хвосты 2.125/10 и 1.471/33; гейт D 0; walk-forward 36/12/6 1.456/76 (фолды 1.670/29, 1.073/14, 1.218/23, 2.129/10). Против точки +0.047 pooled — ничья, решает просадка: точка 6.89% против 8.47% — точка остаётся на 20.",
   "phases": [
     {
       "name": "emaslow_25",
@@ -13,15 +13,15 @@
         "UseDayATRGate": [1],
         "FreshDayATR": [0],
         "SpentDayATR": [0.8],
-        "StopDailyATR": [1.0],
+        "StopDailyATR": [0.7],
         "TPDailyATR": [0.6],
         "UseVolume": [0],
         "VolBaseDays": [14],
         "VolLookbackBars": [3],
         "VolMult": [1.2],
-        "UseRSIExit": [0],
-        "UseTrail": [1],
-        "TrailDailyATR": [0.5]
+        "UseRSIExit": [1],
+        "UseTrail": [0],
+        "TrailDailyATR": [0]
       }
     }
   ]

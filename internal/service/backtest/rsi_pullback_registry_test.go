@@ -1043,9 +1043,11 @@ func TestRSIPullbackRTKMTracksBaseline(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackSVCBTracksBaseline сторожит ЧЕСТНОЕ состояние: SVCB заведён в реестр до
-// калибровки, чтобы прогоны шли через реестр, а не через generic-ветку, и обязан возвращать ровно
-// baseline ядра. Заменяется снимком литерала (Task 14 плана) при положительном вердикте.
+// TestRSIPullbackSVCBTracksBaseline пинит текущее состояние тикера: точка первого круга пересобрана
+// 2026-09-25 задачей 11R (трейл выключен по прочтению B; дефолты ядра + EMASlow 20 + стоп 0.7) и не
+// сработала ни по одному из семи пунктов стоп-условия (docs/superpowers/plans/task-11r-report-svcb.md).
+// Литерал ставит Task 14 плана; до неё реестр бэктеста обязан отдавать ровно дефолты ядра, чтобы
+// непоставленная точка не приехала в живой раннер через реестр. Тест заменяется снимком литерала.
 func TestRSIPullbackSVCBTracksBaseline(t *testing.T) {
 	b, ok := rsiPullbackRegistry[rsipullbacksvcb.Ticker]
 	if !ok {
@@ -1056,7 +1058,7 @@ func TestRSIPullbackSVCBTracksBaseline(t *testing.T) {
 		t.Fatalf("SVCB: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
 	}
 	if p != core.DefaultParams() {
-		t.Fatalf("SVCB ещё не откалиброван, params обязаны совпадать с baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
+		t.Fatalf("литерал SVCB ещё не поставлен (Task 14), params обязаны совпадать с baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
 	}
 	if got := b.Build(p).Ticker(); got != "SVCB" {
 		t.Fatalf("Ticker() = %q, want SVCB", got)
