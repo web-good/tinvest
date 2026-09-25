@@ -1,0 +1,14 @@
+{
+  "_comment": "data/params/rsi_pullback/svcb/probe_stop_15.json — ЗОНД КАПКАНА ШИРОКОГО СТОПА для SVCB (Task 8 Step 4 брифа .superpowers/sdd/2026-09-25-svcb-rsi-pullback-prep/task-8-brief.md). Меряет одну точку StopDailyATR=1.5 поверх ДЕФОЛТОВ ЯДРА (все прочие семнадцать полей не заданы и берутся из core.DefaultParams() — expandGrid стартует именно с них), одиночным прогоном на ПОЛНОМ 36-месячном окне (без -train-months/-test-months, in-sample). Узел лежит СТРОГО ЗА потолком риск-гейта A (1.0, §5.4 спеки docs/superpowers/specs/2026-09-25-svcb-rsi-pullback-prep-design.md) и совпадает с большинством голоса темы risk (3 фолда из 4). ОПОРНЫЙ ЗАМЕР §5.4/§6.5 спеки (то же 36-месячное окно, до написания сеток): 1.5 -> PF 1.621, 1 SL-выход (0.8%), max DD 9 441.97 ₽ (7.78%), все три года в плюс; для сравнения дефолт 0.5 -> 43 SL (33.1%), PF 0.951, DD 14 848.91 ₽ (14.06%), 2024 год -3 986 ₽ и потолок гейта A 1.0 -> 13 SL (10.4%), PF 1.153, DD 14 143.77 ₽ (13.16%), 2024 год всё ещё -2 225 ₽. НАЗНАЧЕНИЕ ЗОНДА: документировать, что все три года в плюс даёт только номинальный стоп ЗА потолком (1.5) — внутри потолка (1.0) капкан 2024 год не лечит. Зонд попадает в отчёт независимо от того, куда проголосовала тема risk. ЗАПУСК: go run ./cmd/backtest -ticker SVCB -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/svcb/probe_stop_15.json -out ./reports/SVCB_probe_stop_15 -months 36 -min-trades 1 -metric profit_factor; разбор журнала: python3 reports/_analysis/svcb_journal.py reports/SVCB_probe_stop_15/*_best.md. ФАКТИЧЕСКИЙ ПРОГОН 2026-09-25 воспроизвёл опорный замер побайтово: PF 1.621, 124 сделки, 1 SL (0.8%), DD 9441.97 ₽ (7.78%), все три года в плюс (2024 +6575.11 ₽, 2025 +13781.32 ₽, 2026 +12252.16 ₽) (см. task-8-report-svcb.md).",
+  "phases": [
+    {
+      "name": "probe",
+      "grid": {
+        "StopDailyATR": [
+          1.5
+        ]
+      },
+      "keepTop": 1
+    }
+  ]
+}
