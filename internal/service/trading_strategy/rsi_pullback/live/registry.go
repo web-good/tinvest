@@ -27,6 +27,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sofl"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/spbe"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/svav"
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/svcb"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/tbank"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/tgka"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ugld"
@@ -710,6 +711,7 @@ var paramsByTicker = map[string]core.Params{
 	irkt.Ticker:  irkt.DefaultParams(),
 	x5.Ticker:    x5.DefaultParams(),
 	sfin.Ticker:  sfin.DefaultParams(),
+	svcb.Ticker:  svcb.DefaultParams(),
 }
 
 // ParamsFor returns the params for a known ticker, ok=false otherwise.
