@@ -1,0 +1,19 @@
+{
+  "_comment": "data/params/rsi_pullback/rtkm/cal_screen.json — тема screen для RTKM, 4 прогона (2 значения UseDayATRGate x 2 значения UseVolume), поверх ДЕФОЛТОВ ЯДРА. Тема мерит цену двух гейтов сразу: дневного гейта ATR и объёмного, каждый включён/выключен независимо. ЗАМЕР 2026-09-25 (36 мес, in-sample, §6.3 спеки docs/superpowers/specs/2026-09-25-rtkm-rsi-pullback-prep-design.md): UseDayATRGate x UseVolume — 0x0 -> 0.935/472, 0x1 -> 0.914/273, 1x0 -> 1.251/137 (BASELINE, дефолт ядра), 1x1 -> 1.123/104. Без дневного гейта дефолты убыточны (0.935 и 0.914 — оба узла 0x* ниже 1.0): дневной гейт обязателен. Объёмный гейт поверх дневного вредит (1.251 -> 1.123) — типичный для каталога расклад, в отличие от NKHP и X5, где объёмный гейт поверх дневного улучшал PF. ПРЕДУПРЕЖДЕНИЕ О КРАЯХ: узлы нет — тема двоичная, все четыре комбинации представительны (104-472 сделки). ЗАПУСК: go run ./cmd/backtest -ticker RTKM -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/rtkm/cal_screen.json -out ./reports/RTKM_screen -months 36 -min-trades 1 -train-months 12 -test-months 6 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА: (заполняется задачей плана).",
+  "phases": [
+    {
+      "name": "screen",
+      "grid": {
+        "UseDayATRGate": [
+          0,
+          1
+        ],
+        "UseVolume": [
+          0,
+          1
+        ]
+      },
+      "keepTop": 4
+    }
+  ]
+}

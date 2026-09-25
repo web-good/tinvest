@@ -1,0 +1,30 @@
+{
+  "_comment": "data/params/rsi_pullback/rtkm/cal_vol_window.json — тема vol_window для RTKM, 27 пар (UseVolume зафиксирован на 1 x 9 значений VolLookbackBars x 3 значения VolMult), поверх ДЕФОЛТОВ ЯДРА при включённом объёмном гейте. Тема заведена по каталожному правилу (поле VolLookbackBars несвипуемо в фазовом гриде ядра, требует вторичной темы), ось расширена до верхнего края 32. ЗАМЕР 2026-09-25 (36 мес, in-sample, §6.3 спеки docs/superpowers/specs/2026-09-25-rtkm-rsi-pullback-prep-design.md): лучшие формы объёмного гейта на окне 16-24 бара дают 1.269-1.274 — в пределах шума дефолта ядра (1.251/137, гейт выключен). Отдельного точечного замера по всей оси VolLookbackBars §6 спеки не снимает — только этот диапазонный ориентир. Значения VolMult (1.0, 1.2, 2.0) взяты по каталожной таблице §5.1 спеки: 1.2 — дефолт гейта, 1.0 и 2.0 — края рабочей области. ПРЕДУПРЕЖДЕНИЕ О КРАЯХ: узлов нет — весь диапазон окна лежит в пределах шума дефолта, вырожденных узлов не ожидается. ОЖИДАНИЕ: тема vol_window даёт результат в пределах шума канонической volume — заметного альтернативного рычага в этом поле не ожидается. ЗАПУСК: go run ./cmd/backtest -ticker RTKM -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/rtkm/cal_vol_window.json -out ./reports/RTKM_vol_window -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА: (заполняется задачей плана).",
+  "phases": [
+    {
+      "name": "vol_window",
+      "grid": {
+        "UseVolume": [
+          1
+        ],
+        "VolLookbackBars": [
+          1,
+          2,
+          3,
+          5,
+          8,
+          12,
+          16,
+          24,
+          32
+        ],
+        "VolMult": [
+          1.0,
+          1.2,
+          2.0
+        ]
+      },
+      "keepTop": 5
+    }
+  ]
+}

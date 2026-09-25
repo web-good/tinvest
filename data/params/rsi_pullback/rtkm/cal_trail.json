@@ -1,0 +1,26 @@
+{
+  "_comment": "data/params/rsi_pullback/rtkm/cal_trail.json — тема trail для RTKM, 12 прогонов (2 значения UseRSIExit x UseTrail зафиксирован на 1 x 6 значений TrailDailyATR), поверх ДЕФОЛТОВ ЯДРА при включённом трейлинге. UseTrail=0 (дефолт ядра) — базовая точка сравнения, отдельно этой сеткой не свипуется. ЗАМЕР 2026-09-25 (36 мес, in-sample, §6.6 спеки docs/superpowers/specs/2026-09-25-rtkm-rsi-pullback-prep-design.md): при UseRSIExit=1 трейл инертен — TrailDailyATR 0.3 -> 1.275, от 0.7 и выше совпадает с дефолтом (0 -> 1.251). При UseRSIExit=0 трейл 1.0 даёт 1.392/121 при DD 14 351 ₽ — хуже дефолта по риску (Max DD дефолтов 9 345 ₽). Двумерного замера UseRSIExit x TrailDailyATR по всей оси §6 спеки не снимает — только эти два ориентира; полный вклад отключения RSI-выхода придёт из прогона этой темы. ПРЕДУПРЕЖДЕНИЕ О КРАЯХ: узлов нет — инертность трейла при UseRSIExit=1 сама по себе предупреждение: поле, скорее всего, останется на дефолте 0. ОЖИДАНИЕ, ЗАПИСАННОЕ ЗАРАНЕЕ: трейл не рычаг при включённом RSI-выходе (разница максимум 0.024 PF на узле 0.3); при выключенном RSI-выходе трейл 1.0 даёт PF выше дефолта, но ценой почти вдвое большей просадки — риск-гейт B, скорее всего, эту связку отсечёт. ЗАПУСК: go run ./cmd/backtest -ticker RTKM -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/rtkm/cal_trail.json -out ./reports/RTKM_trail -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА: (заполняется задачей плана).",
+  "phases": [
+    {
+      "name": "trail",
+      "grid": {
+        "UseRSIExit": [
+          0,
+          1
+        ],
+        "UseTrail": [
+          1
+        ],
+        "TrailDailyATR": [
+          0.3,
+          0.4,
+          0.5,
+          0.7,
+          1.0,
+          1.5
+        ]
+      },
+      "keepTop": 5
+    }
+  ]
+}
