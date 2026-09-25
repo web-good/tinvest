@@ -32,6 +32,7 @@ import (
 	rsipullbacksofl "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sofl"
 	rsipullbackspbe "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/spbe"
 	rsipullbacksvav "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/svav"
+	rsipullbacksvcb "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/svcb"
 	rsipullbacktgka "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/tgka"
 	rsipullbacktrnfp "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/trnfp"
 	rsipullbackuwgn "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/uwgn"
@@ -1039,6 +1040,26 @@ func TestRSIPullbackRTKMTracksBaseline(t *testing.T) {
 	}
 	if got := b.Build(p).Ticker(); got != "RTKM" {
 		t.Fatalf("Ticker() = %q, want RTKM", got)
+	}
+}
+
+// TestRSIPullbackSVCBTracksBaseline сторожит ЧЕСТНОЕ состояние: SVCB заведён в реестр до
+// калибровки, чтобы прогоны шли через реестр, а не через generic-ветку, и обязан возвращать ровно
+// baseline ядра. Заменяется снимком литерала (Task 14 плана) при положительном вердикте.
+func TestRSIPullbackSVCBTracksBaseline(t *testing.T) {
+	b, ok := rsiPullbackRegistry[rsipullbacksvcb.Ticker]
+	if !ok {
+		t.Fatal("SVCB отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
+	}
+	p, pok := b.DefaultParams().(core.Params)
+	if !pok {
+		t.Fatalf("SVCB: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
+	}
+	if p != core.DefaultParams() {
+		t.Fatalf("SVCB ещё не откалиброван, params обязаны совпадать с baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
+	}
+	if got := b.Build(p).Ticker(); got != "SVCB" {
+		t.Fatalf("Ticker() = %q, want SVCB", got)
 	}
 }
 
