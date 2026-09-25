@@ -24,6 +24,7 @@ import (
 	rsipullbacknkhp "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/nkhp"
 	rsipullbacknvtk "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/nvtk"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/reni"
+	rsipullbackrtkm "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/rtkm"
 	rsipullbackrtkmp "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/rtkmp"
 	rsipullbacksfin "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sfin"
 	rsipullbacksibn "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sibn"
@@ -1017,6 +1018,26 @@ func TestRSIPullbackSPBEServesTheCalibratedPoint(t *testing.T) {
 	}
 	if got := b.Build(p).Ticker(); got != "SPBE" {
 		t.Fatalf("Ticker() = %q, want SPBE", got)
+	}
+}
+
+// TestRSIPullbackRTKMTracksBaseline сторожит ЧЕСТНОЕ состояние: RTKM заведён в реестр до
+// калибровки, чтобы прогоны шли через реестр, а не через generic-ветку, и обязан возвращать ровно
+// baseline ядра. Заменяется снимком литерала (Task 14 плана) при положительном вердикте.
+func TestRSIPullbackRTKMTracksBaseline(t *testing.T) {
+	b, ok := rsiPullbackRegistry[rsipullbackrtkm.Ticker]
+	if !ok {
+		t.Fatal("RTKM отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
+	}
+	p, pok := b.DefaultParams().(core.Params)
+	if !pok {
+		t.Fatalf("RTKM: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
+	}
+	if p != core.DefaultParams() {
+		t.Fatalf("RTKM ещё не откалиброван, params обязаны совпадать с baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
+	}
+	if got := b.Build(p).Ticker(); got != "RTKM" {
+		t.Fatalf("Ticker() = %q, want RTKM", got)
 	}
 }
 
