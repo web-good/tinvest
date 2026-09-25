@@ -1,0 +1,64 @@
+{
+  "_comment": "data/params/rsi_pullback/svcb/plateau_r2_stop_07.json — СПРАВОЧНЫЙ СОСЕД, точку не меняет: StopDailyATR 0.7 — модальный узел голосов cal2_day_stop (0.75/0.85/0.7/0.7, 2/4), остальные семнадцать полей = plateau_point2. Все восемнадцать полей приколочены одним значением — точка, не сетка. Собрана правилом §5.2 спеки docs/superpowers/specs/2026-09-25-svcb-rsi-pullback-prep-design.md (≥ 3/4 невырожденных фолдов, иначе дефолт ядра) по четырём узким темам второго круга 2026-09-25: cal2_day_stop SpentDayATR 0.6/0.75/0.75/0.6 (ничья 2/2) и StopDailyATR 0.75/0.85/0.7/0.7 (2/4) — большинства нет, оба поля на дефолтах ядра 0.8 и 0.5; cal2_entry RSILower 17.5/17.5/12.5/12.5 — все четыре фолда ВЫРОЖДЕНЫ (8 сделок без убыточной, 3, 2, 1), голосов ноль, дефолт 30; cal2_exit RSIUpper 55/67.5/90/62.5 — дефолт 70; cal2_target TPDailyATR 0.5/0.25/0.25/0.275 — 2/4, дефолт 0.6. Поля без узких сеток — из точки первого круга по решению контроллера (UseTrail 0, TrailDailyATR 0, UseRSIExit 1 вместо трейлового рычага): EMASlow 20 (trend_low 3/4), остальное — дефолты ядра. СТОП 0.5, А НЕ 1.0: поле свипует cal2_day_stop, она его источник (§5.14), большинства нет → дефолт ядра (прецеденты SFIN и RTKM Task 12); отвергнутое прочтение «оставить 1.0 из точки первого круга» снято справочным соседом plateau_r2_stop_10. ОТ ДЕФОЛТА УШЛО ОДНО ПОЛЕ: EMASlow 100 -> 20. Гейт A: min(StopDailyATR 0.5, трейл выключен) = 0.5 <= 1.0. ЗАПУСК: go run ./cmd/backtest -ticker SVCB -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/svcb/plateau_r2_stop_07.json -out ./reports/SVCB_r2_stop_07 -months 36 -min-trades 1 -metric profit_factor; разбор: python3 reports/_analysis/svcb_journal.py <отчёт>_best.md. Полный отчёт: docs/superpowers/plans/task-12-report-svcb.md. РЕЗУЛЬТАТ ПРОГОНА 2026-09-25 (повтор после rpc EOF), справочно: 98 сделок, PF 1.480, max DD 8 191.62 ₽ (6.89%); SL 16 (16.3%); годы +12 353.11 / +4 932.51 / +6 239.64 ₽; хвосты 2.264/11 и 1.384/33; гейт D 0; walk-forward 36/12/6 1.409/75, 24/12/3 1.379/33, 30/12/6 1.257/47, c001 1.177/75. Узел выбран после просмотра результатов не был, но в точку по правилу §5.2 не идёт (2/4).",
+  "phases": [
+    {
+      "name": "r2_stop_07",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          10
+        ],
+        "EMASlow": [
+          20
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.7
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      }
+    }
+  ]
+}

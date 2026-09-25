@@ -20,6 +20,22 @@ var svcbGridFiles = []string{
 	"cal_day_stop.json",
 }
 
+// svcbRound2GridFiles — узкие сетки второго круга (Task 12, §5.14 спеки). Поимённо по той же
+// причине, что и svcbGridFiles: рядом лежат файлы-точки plateau_r2_*.json.
+var svcbRound2GridFiles = []string{
+	"cal2_day_stop.json",
+	"cal2_entry.json",
+	"cal2_exit.json",
+	"cal2_target.json",
+}
+
+// svcbAllGridFiles склеивает сетки обоих кругов: жёсткие инварианты §5.1 держатся на обоих.
+func svcbAllGridFiles() []string {
+	out := make([]string, 0, len(svcbGridFiles)+len(svcbRound2GridFiles))
+	out = append(out, svcbGridFiles...)
+	return append(out, svcbRound2GridFiles...)
+}
+
 // svcbCoreEMAFast — дефолт ядра core.DefaultParams().EMAFast. Сетка, свипующая EMASlow без
 // EMAFast, живёт на этом значении, и узел EMASlow <= 10 дал бы вырожденную пару.
 const svcbCoreEMAFast = 10
@@ -33,7 +49,7 @@ const svcbStopCeiling = 1.0
 // максимально широкие оси, поэтому тест запрещает УРЕЗАТЬ ось (проверяет обязательные узлы и
 // запрещённые пары), но не запрещает лишних значений.
 func TestSVCBGridsStayWide(t *testing.T) {
-	for _, file := range svcbGridFiles {
+	for _, file := range svcbAllGridFiles() {
 		grid := rsiPullbackTickerGrid(t, "svcb", file)
 		for _, v := range grid["RSILower"] {
 			if v > 50 {
@@ -93,6 +109,32 @@ func TestSVCBGridsStayWide(t *testing.T) {
 			if v > svcbStopCeiling {
 				t.Errorf("svcb/%s: StopDailyATR=%v выше потолка гейта A %v", file, v, svcbStopCeiling)
 			}
+		}
+	}
+
+	// Потолок гейта A во втором круге не двигается (§5.14 спеки).
+	for _, file := range svcbRound2GridFiles {
+		for _, v := range rsiPullbackTickerGrid(t, "svcb", file)["StopDailyATR"] {
+			if v > svcbStopCeiling {
+				t.Errorf("svcb/%s: StopDailyATR=%v выше потолка гейта A %v", file, v, svcbStopCeiling)
+			}
+		}
+	}
+}
+
+// TestSVCBRound2FieldsHaveOneSource держит правило §5.14 спеки: во втором круге каждое поле
+// свипует ровно одна тема, иначе две темы проголосуют за одно поле по-разному.
+func TestSVCBRound2FieldsHaveOneSource(t *testing.T) {
+	owner := map[string]string{}
+	for _, file := range svcbRound2GridFiles {
+		for field, values := range rsiPullbackTickerGrid(t, "svcb", file) {
+			if len(values) < 2 {
+				continue // зафиксированное поле не голосует
+			}
+			if prev, ok := owner[field]; ok {
+				t.Errorf("svcb: поле %s свипуют две темы второго круга: %s и %s", field, prev, file)
+			}
+			owner[field] = file
 		}
 	}
 }
