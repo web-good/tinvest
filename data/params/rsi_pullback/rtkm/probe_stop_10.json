@@ -1,0 +1,14 @@
+{
+  "_comment": "data/params/rsi_pullback/rtkm/probe_stop_10.json — ЗОНД КАПКАНА ШИРОКОГО СТОПА для RTKM (Task 8 Step 4 брифа .superpowers/sdd/2026-09-25-rtkm-rsi-pullback-prep/task-7-8-brief.md). Меряет одну точку StopDailyATR=1.0 поверх ДЕФОЛТОВ ЯДРА (все прочие семнадцать полей не заданы и берутся из core.DefaultParams() — expandGrid стартует именно с них), одиночным прогоном на ПОЛНОМ 36-месячном окне (без -train-months/-test-months, in-sample). Узел лежит СТРОГО ЗА потолком риск-гейта A (0.8, §5.4 спеки docs/superpowers/specs/2026-09-25-rtkm-rsi-pullback-prep-design.md). ОПОРНЫЙ ЗАМЕР §5.4/§6.5 спеки (то же 36-месячное окно, до написания сеток): 1.0 -> PF 1.694, 9 SL-выходов (6.7%), max DD 11 935 ₽ (7.81%), 2026 год -7 285 ₽; для сравнения дефолт 0.5 -> 35 SL (25.5%), PF 1.251, DD 9 345 ₽ (7.41%), 2026 год -5 062 ₽ и потолок гейта A 0.8 -> 14 SL (10.4%), PF 1.660, DD 5 606 ₽ (5.61%). НАЗНАЧЕНИЕ ЗОНДА: документировать на полном окне, что ни один стоп 2026 год не лечит — капкан поднимает PF за счёт 2024-2025, а не за счёт проблемного года. Зонд попадает в отчёт независимо от того, куда проголосовала тема risk. ЗАПУСК: go run ./cmd/backtest -ticker RTKM -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/rtkm/probe_stop_10.json -out ./reports/RTKM_probe_stop_10 -months 36 -min-trades 1 -metric profit_factor; разбор журнала: python3 reports/_analysis/rtkm_journal.py reports/RTKM_probe_stop_10/*_best.md.",
+  "phases": [
+    {
+      "name": "probe",
+      "grid": {
+        "StopDailyATR": [
+          1.0
+        ]
+      },
+      "keepTop": 1
+    }
+  ]
+}
