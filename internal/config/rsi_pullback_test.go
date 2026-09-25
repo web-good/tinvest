@@ -2,6 +2,8 @@ package config
 
 import (
 	"context"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/heetch/confita"
@@ -51,9 +53,9 @@ func TestRSIPullbackConfigReadyNeedsAccountAndToken(t *testing.T) {
 
 func TestNewRSIPullbackConfig_Defaults(t *testing.T) {
 	c := NewRSIPullbackConfig()
-	want := []string{"UGLD", "T", "GAZP", "DOMRF", "FESH", "WUSH", "LENT", "RENI", "NVTK", "LSNGP", "IVAT", "SVAV", "SIBN", "ELFV", "DIAS", "BSPB", "YDEX", "BANEP", "ASTR", "SNGSP", "NKHP", "SOFL", "TGKA", "VSMO", "SPBE", "MVID", "CNRU", "AQUA", "MAGN", "IRKT", "X5", "SFIN"}
-	if len(want) != 32 {
-		t.Fatalf("боевая вселенная = %d тикеров, want 32: SFIN заведён тридцать вторым 2026-09-15", len(want))
+	want := []string{"UGLD", "T", "GAZP", "DOMRF", "FESH", "WUSH", "LENT", "RENI", "NVTK", "LSNGP", "IVAT", "SVAV", "SIBN", "ELFV", "DIAS", "BSPB", "YDEX", "BANEP", "ASTR", "SNGSP", "NKHP", "SOFL", "TGKA", "VSMO", "SPBE", "MVID", "CNRU", "AQUA", "MAGN", "IRKT", "X5", "SFIN", "SVCB"}
+	if len(want) != 33 {
+		t.Fatalf("боевая вселенная = %d тикеров, want 33: SVCB заведён тридцать третьим 2026-09-25", len(want))
 	}
 	if len(c.Tickers) != len(want) {
 		t.Fatalf("default Tickers = %v, want %v", c.Tickers, want)
@@ -68,6 +70,28 @@ func TestNewRSIPullbackConfig_Defaults(t *testing.T) {
 	}
 	if c.Schedule != "1,31 6-23 * * *" {
 		t.Fatalf("default Schedule = %q, want \"1,31 6-23 * * *\"", c.Schedule)
+	}
+}
+
+// TestRSIPullbackTickersMatchEnvFiles сторожит, что боевой env/prod.env и оба образца несут ровно
+// ту же вселенную, что Go-дефолт. Отслеживаемый env/prod.env дважды молча терял тикеры (SMLT,
+// SFIN): правка только *.example оставляла прод без нового тикера.
+func TestRSIPullbackTickersMatchEnvFiles(t *testing.T) {
+	want := strings.Join(NewRSIPullbackConfig().Tickers, ",")
+	for _, path := range []string{"../../env/prod.env", "../../env/prod.env.example", "../../env/local.env.example"} {
+		raw, err := os.ReadFile(path) //nolint:gosec // fixed repository path
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		var got string
+		for _, line := range strings.Split(string(raw), "\n") {
+			if v, ok := strings.CutPrefix(strings.TrimSpace(line), "RSI_PULLBACK_TICKERS="); ok {
+				got = v
+			}
+		}
+		if got != want {
+			t.Errorf("%s: RSI_PULLBACK_TICKERS=%q, want %q (Go-дефолт internal/config/rsi_pullback.go)", path, got, want)
+		}
 	}
 }
 

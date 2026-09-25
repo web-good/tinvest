@@ -602,7 +602,7 @@ type RSIPullbackConfig struct {
 // замер говорит, что стоп при этом просто перестаёт существовать.
 func NewRSIPullbackConfig() *RSIPullbackConfig {
 	return &RSIPullbackConfig{
-		Tickers:  []string{"UGLD", "T", "GAZP", "DOMRF", "FESH", "WUSH", "LENT", "RENI", "NVTK", "LSNGP", "IVAT", "SVAV", "SIBN", "ELFV", "DIAS", "BSPB", "YDEX", "BANEP", "ASTR", "SNGSP", "NKHP", "SOFL", "TGKA", "VSMO", "SPBE", "MVID", "CNRU", "AQUA", "MAGN", "IRKT", "X5", "SFIN"},
+		Tickers:  []string{"UGLD", "T", "GAZP", "DOMRF", "FESH", "WUSH", "LENT", "RENI", "NVTK", "LSNGP", "IVAT", "SVAV", "SIBN", "ELFV", "DIAS", "BSPB", "YDEX", "BANEP", "ASTR", "SNGSP", "NKHP", "SOFL", "TGKA", "VSMO", "SPBE", "MVID", "CNRU", "AQUA", "MAGN", "IRKT", "X5", "SFIN", "SVCB"},
 		BuyPct:   5,
 		Schedule: "1,31 6-23 * * *",
 	}
