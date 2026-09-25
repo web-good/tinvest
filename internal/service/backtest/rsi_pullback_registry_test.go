@@ -1043,12 +1043,13 @@ func TestRSIPullbackRTKMTracksBaseline(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackSVCBTracksBaseline пинит текущее состояние тикера: точка первого круга пересобрана
-// 2026-09-25 задачей 11R (трейл выключен по прочтению B; дефолты ядра + EMASlow 20 + стоп 0.7) и не
-// сработала ни по одному из семи пунктов стоп-условия (docs/superpowers/plans/task-11r-report-svcb.md).
-// Литерал ставит Task 14 плана; до неё реестр бэктеста обязан отдавать ровно дефолты ядра, чтобы
-// непоставленная точка не приехала в живой раннер через реестр. Тест заменяется снимком литерала.
-func TestRSIPullbackSVCBTracksBaseline(t *testing.T) {
+// TestRSIPullbackSVCBIsRegisteredAndCalibrated пинует два неотличимых снаружи факта: SVCB есть в
+// карте (а не проваливается в generic-ветку) И возвращает собственный литерал, а не baseline.
+// Пакет strategy/svcb заведён 2026-09-25 ДО калибровки и до принятия точки первого круга обязан
+// был возвращать core.DefaultParams(); калибровка прогналась (задача 11R), литерал появился — и
+// теперь бэктест обязан гонять ровно его, иначе перепроверка отчёта SVCB мерила бы не то, что
+// стоит в коде. Снимок самого литерала живёт рядом с ним, в strategy/svcb/svcb_test.go.
+func TestRSIPullbackSVCBIsRegisteredAndCalibrated(t *testing.T) {
 	b, ok := rsiPullbackRegistry[rsipullbacksvcb.Ticker]
 	if !ok {
 		t.Fatal("SVCB отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
@@ -1057,8 +1058,11 @@ func TestRSIPullbackSVCBTracksBaseline(t *testing.T) {
 	if !pok {
 		t.Fatalf("SVCB: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
 	}
-	if p != core.DefaultParams() {
-		t.Fatalf("литерал SVCB ещё не поставлен (Task 14), params обязаны совпадать с baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
+	if p == core.DefaultParams() {
+		t.Fatal("SVCB вернул baseline: откалиброванный тикер обязан иметь собственный литерал")
+	}
+	if want := rsipullbacksvcb.DefaultParams(); p != want {
+		t.Fatalf("SVCB params = %+v, want литерал пакета %+v", p, want)
 	}
 	if got := b.Build(p).Ticker(); got != "SVCB" {
 		t.Fatalf("Ticker() = %q, want SVCB", got)
