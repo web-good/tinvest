@@ -1,0 +1,64 @@
+{
+  "_comment": "data/params/rsi_pullback/rtkm/plateau_r2_emafast_8.json — СОСЕД ПЛАТО точки второго круга (Task 12 Step 4 → Task 11 Step 7, §5.3 спеки). Отличие от plateau_point2.json — ровно одно поле: EMAFast = 8 (верхний сосед значения 5 по оси EMAFast первого круга [3,5,8,10]). Файл-точка: каждое из восемнадцати полей приколочено одним значением. Сборка — правило большинства §5.2 спеки docs/superpowers/specs/2026-09-25-rtkm-rsi-pullback-prep-design.md по голосам УЗКИХ тем второго круга (cal2_trend_low, cal2_risk, cal2_trend_stop, cal2_exit, cal2_day); поля тем без узкой сетки перенесены из точки первого круга plateau_point.json как есть (в т.ч. инертный VolBaseDays 3 при UseVolume 0). Голос вырожденного фолда (меньше пяти сделок OOS или ни одной убыточной) в 3/4 не засчитывается (решение контроллера). У соседа снимаются годы и хвосты 6/12 (§5.3). ЗАПУСК: go run ./cmd/backtest -ticker RTKM -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/rtkm/plateau_r2_emafast_8.json -out ./reports/RTKM_p2nb_emafast_8 -months 36 -min-trades 1 -metric profit_factor; разбор: python3 reports/_analysis/rtkm_journal.py reports/RTKM_p2nb_emafast_8/*_best.md. Отчёт: docs/superpowers/plans/task-12-report-rtkm.md.",
+  "phases": [
+    {
+      "name": "r2_emafast_8",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          8
+        ],
+        "EMASlow": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.5
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          3
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      }
+    }
+  ]
+}

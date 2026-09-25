@@ -1,6 +1,12 @@
 package backtest
 
-import "testing"
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
 // rtkmGridFiles перечисляет сетки RTKM ПОИМЁННО, а не обходом каталога: задачи плана кладут в тот
 // же каталог файлы-точки (plateau_*.json, probe_*.json), которые законно фиксируют ось одним
@@ -19,6 +25,24 @@ var rtkmGridFiles = []string{
 	"cal_trend_stop.json",
 }
 
+// rtkmRound2GridFiles — узкие сетки второго круга (Task 12, §5.14 спеки). Список тоже поимённый:
+// рядом лежат plateau_point2.json и plateau_r2_*.json, которые законно фиксируют оси одним
+// значением.
+var rtkmRound2GridFiles = []string{
+	"cal2_trend_low.json",
+	"cal2_risk.json",
+	"cal2_trend_stop.json",
+	"cal2_exit.json",
+	"cal2_day.json",
+}
+
+// rtkmAllGridFiles склеивает сетки обоих кругов: жёсткие инварианты §5.1 действуют на оба.
+func rtkmAllGridFiles() []string {
+	out := make([]string, 0, len(rtkmGridFiles)+len(rtkmRound2GridFiles))
+	out = append(out, rtkmGridFiles...)
+	return append(out, rtkmRound2GridFiles...)
+}
+
 // rtkmCoreEMAFast — дефолт ядра core.DefaultParams().EMAFast. Сетка, свипующая EMASlow без
 // EMAFast, живёт на этом значении, и узел EMASlow <= 10 дал бы вырожденную пару.
 const rtkmCoreEMAFast = 10
@@ -28,7 +52,7 @@ const rtkmCoreEMAFast = 10
 // максимально широкие оси, поэтому тест запрещает УРЕЗАТЬ ось (проверяет обязательные узлы и
 // запрещённые пары), но не запрещает лишних значений.
 func TestRTKMGridsStayWide(t *testing.T) {
-	for _, file := range rtkmGridFiles {
+	for _, file := range rtkmAllGridFiles() {
 		grid := rsiPullbackTickerGrid(t, "rtkm", file)
 		for _, v := range grid["RSILower"] {
 			if v > 50 {
@@ -85,6 +109,40 @@ func TestRTKMGridsStayWide(t *testing.T) {
 	for _, v := range rsiPullbackTickerGrid(t, "rtkm", "cal_trend_stop.json")["StopDailyATR"] {
 		if v > 0.8 {
 			t.Errorf("rtkm/cal_trend_stop.json: StopDailyATR=%v выше потолка гейта A 0.8", v)
+		}
+	}
+
+	// Гейт A (потолок 0.8, §5.4) связывает и второй круг: ни одна узкая сетка, свипующая стоп, не
+	// выходит за потолок. Иначе зона второго круга могла бы тихо вернуть капкан широкого стопа.
+	for _, file := range rtkmRound2GridFiles {
+		for _, v := range rsiPullbackTickerGrid(t, "rtkm", file)["StopDailyATR"] {
+			if v > 0.8 {
+				t.Errorf("rtkm/%s: StopDailyATR=%v выше потолка гейта A 0.8", file, v)
+			}
+		}
+	}
+
+	// Узкая сетка дневного гейта обязана держать FreshDayATR=0: это единственное значение, на
+	// которое уходит точка при провале запрета входов в выходные и в часы 02–06 (§5.6).
+	if !containsFloat(rsiPullbackTickerGrid(t, "rtkm", "cal2_day.json")["FreshDayATR"], 0) {
+		t.Error("rtkm/cal2_day.json: ось FreshDayATR потеряла узел 0 (увод при провале гейта C)")
+	}
+
+	// Префикс cal2_ не попадает под проверку пути в _comment из TestRSIPullbackCalFilesValid
+	// (она смотрит только cal_*), поэтому путь в комментарии сторожится здесь.
+	for _, file := range rtkmRound2GridFiles {
+		raw, err := os.ReadFile(filepath.Join(rsiPullbackParamsDir, "rtkm", file)) //nolint:gosec // fixed test fixture path
+		if err != nil {
+			t.Fatalf("read rtkm/%s: %v", file, err)
+		}
+		var doc struct {
+			Comment string `json:"_comment"`
+		}
+		if err := json.Unmarshal(raw, &doc); err != nil {
+			t.Fatalf("unmarshal rtkm/%s: %v", file, err)
+		}
+		if !strings.Contains(doc.Comment, "rtkm/"+file) {
+			t.Errorf("rtkm/%s: _comment не называет собственный путь rtkm/%s", file, file)
 		}
 	}
 }

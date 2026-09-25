@@ -1,0 +1,26 @@
+{
+  "_comment": "data/params/rsi_pullback/rtkm/cal2_trend_stop.json — УЗКАЯ СЕТКА ВТОРОГО КРУГА, тема-арбитр trend_stop. ЗОНА ПОСТРОЕНА ПО ФАКТИЧЕСКИМ ГОЛОСАМ ФОЛДОВ ПЕРВОГО КРУГА (схема 36/12/6, четыре фолда), а НЕ по in-sample рельефу (Task 12 Step 1, §5.14 спеки docs/superpowers/specs/2026-09-25-rtkm-rsi-pullback-prep-design.md). Шаг — половина шага первого круга; на целочисленных осях (EMAFast, EMASlow) половинный шаг невозможен по типу поля (core.Params хранит их как int), там шаг 1. Голос вырожденного фолда (меньше пяти сделок OOS или ни одной убыточной) в большинство 3/4 НЕ засчитывается (решение контроллера Task 11, действует и во втором круге). Сетка держит гейт A (StopDailyATR ≤ 0.8, §5.4) и не порождает пар EMAFast ≥ EMASlow — оба инварианта сторожит TestRTKMGridsStayWide. Тема меряет свои оси ПОВЕРХ ДЕФОЛТОВ ЯДРА, как и в первом круге. Арбитр, НЕ источник полей (§5.2): применяется только если trend_low и risk обе дают уход от дефолта большинством ≥ 3/4; тогда при конфликте (pooled OOS арбитра ниже любой из двух тем) в точку идёт один рычаг — тема с большим pooled OOS. ГОЛОСА ПЕРВОГО КРУГА (Task 10, cal_trend_stop.json, pooled OOS 2.528/69, вырожденных фолдов нет): EMASlow 20 / 15 / 12 / 12 (максимум 2/4), StopDailyATR 0.8 / 0.8 / 0.7 / 0.7 (ничья 2/2). ЗОНА EMASlow: 12..20 сплошным шагом 1 (каталожная ось 12/15/20 — шаг 3–5). ЗОНА StopDailyATR: 0.7, 0.75, 0.8 (шаг 0.05, половина каталожного 0.1), потолок гейта A 0.8 не превышается. EMAFast не свипуется и стоит на дефолте 10 < 12 — вырожденных пар нет. ЗАПУСК: go run ./cmd/backtest -ticker RTKM -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/rtkm/cal2_trend_stop.json -out ./reports/RTKM_r2_trend_stop -months 36 -min-trades 1 -train-months 12 -test-months 6 -metric profit_factor. -interval Minutes30 обязателен (дефолт CLI Hour1 даёт чужие числа, а не ошибку); -refresh НЕ запускать (кэш дотянут 2026-09-25); -min-trades 1 — во втором круге число сделок не критерий (указание владельца). Отчёт: docs/superpowers/plans/task-12-report-rtkm.md; голоса первого круга: docs/superpowers/plans/task-3-report-rtkm.md … task-11-report-rtkm.md. РЕЗУЛЬТАТ ПРОГОНА 2026-09-25: pooled OOS 2.736/72 (…_104524), фолды 27.768/21, 1.629/22, 1.642/20, 1.720/9; голоса EMASlow 16/14/17/16 (2/4), StopDailyATR 0.8/0.8/0.7/0.7 (2/2). Арбитр не активирован: ни trend_low по EMASlow, ни risk по стопу большинства не дали.",
+  "phases": [
+    {
+      "name": "r2_trend_stop",
+      "grid": {
+        "EMASlow": [
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20
+        ],
+        "StopDailyATR": [
+          0.7,
+          0.75,
+          0.8
+        ]
+      }
+    }
+  ]
+}

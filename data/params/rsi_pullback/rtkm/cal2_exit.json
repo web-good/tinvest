@@ -1,0 +1,22 @@
+{
+  "_comment": "data/params/rsi_pullback/rtkm/cal2_exit.json — УЗКАЯ СЕТКА ВТОРОГО КРУГА, тема exit. ЗОНА ПОСТРОЕНА ПО ФАКТИЧЕСКИМ ГОЛОСАМ ФОЛДОВ ПЕРВОГО КРУГА (схема 36/12/6, четыре фолда), а НЕ по in-sample рельефу (Task 12 Step 1, §5.14 спеки docs/superpowers/specs/2026-09-25-rtkm-rsi-pullback-prep-design.md). Шаг — половина шага первого круга; на целочисленных осях (EMAFast, EMASlow) половинный шаг невозможен по типу поля (core.Params хранит их как int), там шаг 1. Голос вырожденного фолда (меньше пяти сделок OOS или ни одной убыточной) в большинство 3/4 НЕ засчитывается (решение контроллера Task 11, действует и во втором круге). Сетка держит гейт A (StopDailyATR ≤ 0.8, §5.4) и не порождает пар EMAFast ≥ EMASlow — оба инварианта сторожит TestRTKMGridsStayWide. Тема меряет свои оси ПОВЕРХ ДЕФОЛТОВ ЯДРА, как и в первом круге. ГОЛОСА ПЕРВОГО КРУГА (Task 9, cal_exit.json, pooled OOS 1.609/90, вырожденных фолдов нет): RSIUpper 50 / 50 / 95 / 95 — ничья 2/2 между двумя горбами. ЗОНЫ: горб фолдов 1–2 — 45, 47.5, 50, 52.5, 55 (шаг 2.5, половина каталожного 5); горб фолдов 3–4 — 90, 92.5, 95, 97.5 (95 был краем каталожной оси; 97.5 — зонд за краем). Якорь 70 — дефолт ядра (значение точки первого круга). RSIUpper — только из exit (§5.2). ЗАПУСК: go run ./cmd/backtest -ticker RTKM -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/rtkm/cal2_exit.json -out ./reports/RTKM_r2_exit -months 36 -min-trades 1 -train-months 12 -test-months 6 -metric profit_factor. -interval Minutes30 обязателен (дефолт CLI Hour1 даёт чужие числа, а не ошибку); -refresh НЕ запускать (кэш дотянут 2026-09-25); -min-trades 1 — во втором круге число сделок не критерий (указание владельца). Отчёт: docs/superpowers/plans/task-12-report-rtkm.md; голоса первого круга: docs/superpowers/plans/task-3-report-rtkm.md … task-11-report-rtkm.md. РЕЗУЛЬТАТ ПРОГОНА 2026-09-25: pooled OOS 1.523/89 (…_104534), фолды 4.343/27, 0.810/29, 1.752/21, 0.909/12; голоса RSIUpper 52.5/50/92.5/97.5 — все различны, RSIUpper остаётся 70.",
+  "phases": [
+    {
+      "name": "r2_exit",
+      "grid": {
+        "RSIUpper": [
+          45,
+          47.5,
+          50,
+          52.5,
+          55,
+          70,
+          90,
+          92.5,
+          95,
+          97.5
+        ]
+      }
+    }
+  ]
+}

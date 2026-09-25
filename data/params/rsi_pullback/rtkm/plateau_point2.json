@@ -1,0 +1,64 @@
+{
+  "_comment": "data/params/rsi_pullback/rtkm/plateau_point2.json — ТОЧКА ВТОРОГО КРУГА для RTKM (Task 12 плана docs/superpowers/plans/2026-09-25-rtkm-rsi-pullback-prep.md, Step 4). Файл-точка: каждое из восемнадцати полей приколочено одним значением. Сборка — правило большинства §5.2 спеки docs/superpowers/specs/2026-09-25-rtkm-rsi-pullback-prep-design.md по голосам УЗКИХ тем второго круга (cal2_trend_low, cal2_risk, cal2_trend_stop, cal2_exit, cal2_day); поля тем без узкой сетки перенесены из точки первого круга plateau_point.json как есть (в т.ч. инертный VolBaseDays 3 при UseVolume 0). Голос вырожденного фолда (меньше пяти сделок OOS или ни одной убыточной) в 3/4 не засчитывается (решение контроллера). Единственное поле, набравшее большинство: EMAFast 10 → 5 (тема cal2_trend_low, голоса 5 / 5 / 10 / 5, все четыре фолда невырождены, pooled OOS темы 1.612 выше канонической trend первого круга 1.478 — оба условия §5.2 выполнены). EMASlow той же темы — 12 / 12 / 17 / 14, большинства нет → дефолт 100. Остальные оси без большинства: risk Stop 0.8/0.75/0.7/0.7, TP 0.2/0.4/0.4/0.25; exit RSIUpper 52.5/50/92.5/97.5; day Fresh 0.025/0.125/0.15/0.15 и Spent 1.15/1.15/1.25/1.25 (фолд 4 вырожден, 4 сделки). Арбитр trend_stop (EMASlow 16/14/17/16, Stop 0.8/0.8/0.7/0.7) не активирован. Гейт A: min(StopDailyATR 0.5, трейл выключен) = 0.5 ≤ 0.8. ЗАПУСК: go run ./cmd/backtest -ticker RTKM -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/rtkm/plateau_point2.json -out ./reports/RTKM_point2 -months 36 -min-trades 1 -metric profit_factor; разбор: python3 reports/_analysis/rtkm_journal.py reports/RTKM_point2/*_best.md. Walk-forward: каталоги RTKM_point2_wf36 / _wf24 / _wf30 / _c001. Отчёт: docs/superpowers/plans/task-12-report-rtkm.md. РЕЗУЛЬТАТ 2026-09-25: полное окно 1.235/128, DD 10 896.18 ₽ (8.64%); 36/12/6 1.229/80, 24/12/3 0.718, 30/12/6 0.936, c001 1.025; 2026 −6 616.99 ₽; хвосты 0.614/13 и 0.710/37. Соседи EMAFast 3/8 в пределах 0.05 PF (плато без сигнала); правило ничьих §5.5 уводит точку на EMAFast 3 (DD 8 956.37 ₽ / 7.42%), у которой те же пункты 3, 5, 6. ВЕРДИКТ: второй круг провален → Task 13.",
+  "phases": [
+    {
+      "name": "point2",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          5
+        ],
+        "EMASlow": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.5
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          3
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      }
+    }
+  ]
+}
