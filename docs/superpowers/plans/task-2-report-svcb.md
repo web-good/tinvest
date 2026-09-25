@@ -9,9 +9,12 @@
   `TestParamsTrackTheBaselineUntilCalibrated` (снимок держит baseline ядра),
   `TestTickerIsSVCB`.
 - `internal/service/backtest/rsi_pullback_registry.go` — добавлен импорт `rsipullbacksvcb` в
-  алфавитном порядке блока импортов (между `svav` и `tbank`) и запись в
-  `rsiPullbackRegistry` сразу после `rsipullbacksfin` (дословно по брифу), выравнивание карты
-  поправлено `gofmt -w`.
+  алфавитном порядке блока импортов (между `svav` и `tbank`) и запись в `rsiPullbackRegistry`
+  между `rsipullbacksvav` и `rsipullbacktbank` — карта строго алфавитна, как и импорт. (Fix
+  round 1: изначально запись стояла сразу после `rsipullbacksfin`, дословно по формулировке
+  брифа; ревью установило, что это была шаблонная опечатка брифа, и контроллер постановил, что
+  карта `rsiPullbackRegistry` строго алфавитна — запись перенесена на алфавитное место.)
+  Выравнивание карты поправлено `gofmt -w`.
 - `internal/service/backtest/rsi_pullback_registry_test.go` — добавлен импорт `rsipullbacksvcb`
   (алфавитно, между `svav` и `tgka`) и тест `TestRSIPullbackSVCBTracksBaseline` сразу после
   `TestRSIPullbackRTKMTracksBaseline`.
@@ -114,9 +117,9 @@ win rate 61.54%, expectancy −28.18 ₽, выходы RSI 74 (56.9%) / SL 43 (3
 ## Самопроверка
 
 - Пакет `svcb` — точная копия шаблона брифа (Step 3), без отклонений.
-- Реестр: импорт добавлен алфавитно, запись карты — дословно на месте, указанном брифом (сразу
-  после `rsipullbacksfin`), не по общему алфавитному порядку карты — это осознанное следование
-  брифу, а не ошибка. `gofmt -w` выровнял столбцы.
+- Реестр: импорт и запись карты добавлены строго алфавитно (`rsipullbacksvcb` — между `svav` и
+  `tbank` в обоих блоках), согласно постановлению контроллера по итогам ревью (fix round 1).
+  `gofmt -w` выровнял столбцы.
 - Тест реестра размещён строго рядом с `TestRSIPullbackRTKMTracksBaseline`, как указано в брифе.
 - Прогон бэктеста выполнен один раз, последовательно, без `-refresh`, с обязательным
   `-interval Minutes30`.
@@ -129,3 +132,39 @@ win rate 61.54%, expectancy −28.18 ₽, выходы RSI 74 (56.9%) / SL 43 (3
 Нет блокеров. Число сделок в полном окне и в префиксе совпало (130 = 130), потому что запуск
 пришёлся всего на ~53 минуты позже момента фиксации дефолтов (14:09 → 15:02) без пересечения
 получасовой границы, добавляющей новый бар с сигналом.
+
+## Fix round 1 (ревью, Important)
+
+**Находка:** формулировка Step 4 брифа («добавить в карту строку … после строки
+`rsipullbacksfin`») оказалась шаблонной опечаткой — карта `rsiPullbackRegistry` в
+`internal/service/backtest/rsi_pullback_registry.go` строго алфавитна (как и блок импортов), а
+буквальное следование брифу поставило `rsipullbacksvcb` перед `sibn/sngsp/sofl/spbe/svav`, нарушив
+это единообразие. Контроллер постановил: карта обязана оставаться алфавитной.
+
+**Изменение:** запись
+`rsipullbacksvcb.Ticker: rsiPullbackBindingFor(rsipullbacksvcb.Ticker, rsipullbacksvcb.DefaultParams),`
+перенесена с места «сразу после `rsipullbacksfin`» на алфавитное место — между
+`rsipullbacksvav.Ticker: ...` и `rsipullbacktbank.Ticker: ...`, то есть ровно там же, где уже стоял
+импорт. После правки `gofmt -w internal/service/backtest/rsi_pullback_registry.go` подтвердил
+корректное выравнивание столбцов (файл не изменился повторным запуском).
+
+Тест реестра `TestRSIPullbackSVCBTracksBaseline` и его размещение рядом с
+`TestRSIPullbackRTKMTracksBaseline` в `rsi_pullback_registry_test.go` не менялись — эта часть
+брифа (порядок тестов в тестовом файле, не карты) ревью не оспаривала.
+
+**Команда проверки:**
+
+```
+$ go test ./internal/service/backtest/ -run 'SVCB|RSIPullback'
+```
+
+**Вывод:**
+
+```
+ok  	tinvest/internal/service/backtest	0.124s
+```
+
+Полный список подтестов (`-v`) — все PASS, включая `TestRSIPullbackSVCBTracksBaseline` и
+`TestSVCBGridsStayWide`; регресса по остальным 36 тикерам реестра нет.
+
+Коммит фикса: `fix(rsi_pullback): SVCB в реестре бэктеста по алфавиту`.
