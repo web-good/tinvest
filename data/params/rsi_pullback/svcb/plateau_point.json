@@ -1,0 +1,28 @@
+{
+  "_comment": "data/params/rsi_pullback/svcb/plateau_point.json — ТОЧКА ПЕРВОГО КРУГА для SVCB (Task 11 плана docs/superpowers/plans/2026-09-25-svcb-rsi-pullback-prep.md, Step 3). Все восемнадцать полей ядра приколочены одним значением каждое — это точка, не сетка. Собрана правилом большинства §5.2 спеки docs/superpowers/specs/2026-09-25-svcb-rsi-pullback-prep-design.md: поле берётся из темы, которая его меряет, только при НЕ МЕНЕЕ ТРЁХ голосах из четырёх невырожденных фолдов схемы 36/12/6; ничья 2/2 большинством не считается; иначе дефолт ядра. Вырожденных фолдов (меньше пяти сделок OOS или без убыточной) ни в одной из двенадцати тем нет. ОТ ДЕФОЛТА УШЛИ ПЯТЬ ПОЛЕЙ: EMASlow 100 -> 20 (trend_low, голоса 15/20/20/20 = 3/4, pooled OOS 1.195/56 выше канонической trend 0.922/72 — оба условия §5.2 выполнены; фолд 4 trend_low 0.224/5 — не вырожден, PF < 1); StopDailyATR 0.5 -> 1.0 (risk, голоса 1.5/1.5/1.5/0.8 = 3/4 за 1.5, урезано гейтом A до потолка 1.0; цена на зондах полного окна 1.621 -> 1.153); UseTrail 0 -> 1, TrailDailyATR 0 -> 0.5, UseRSIExit 1 -> 0 (trail: TrailDailyATR 0.7/0.5/0.5/0.5 = 3/4, UseRSIExit 1/0/0/0 = 3/4; ось UseTrail в сетке приколочена [1] и голосом не является — РЕШЕНИЕ КОНТРОЛЛЕРА по прецедентам AFKS/HEAD/MVID: большинство TrailDailyATR 0.5 включает трейл, UseRSIExit 0 принят, потому что измерен в том же режиме UseTrail=1). ОСТАЛЬНЫЕ ТРИНАДЦАТЬ ПОЛЕЙ НА ДЕФОЛТАХ ЯДРА: RSIPeriod 4 и RSILower 30 (entry 3/7/10/6 и 15/25/30/45 — 1/4); EMAFast 10 (trend_low 10/8/3/3 — 2/4); RSIUpper 70 (exit 60/65/90/55 — 1/4); DailyATRPeriod 14 (ни одна тема не меряет); UseDayATRGate 1 и UseVolume 0 (screen 1/0/0/1 и 0/1/0/1 — ничьи 2/2); FreshDayATR 0 и SpentDayATR 0.8 (day 0/0.3/0.4/0 и 0.6/1.5/2/0.6 — 2/4); TPDailyATR 0.6 (risk 0.5/0.25/0.25/0.2 — 2/4); VolBaseDays 14, VolLookbackBars 3, VolMult 1.2 (volume без большинства; vol_window 3/4 по VolLookbackBars 3 и VolMult 2, но pooled 0.896 ниже volume 0.947 и UseVolume остаётся 0 — поля инертны). Арбитры entry_stop (1.039/104) и day_stop (1.184/153, SpentDayATR 0.6 и Stop 0.8 по 3/4) — справочные: за уход от дефолта в парах голосует только risk. РИСК-ГЕЙТ A (§5.4): min(StopDailyATR 1.0, TrailDailyATR 0.5 при UseTrail 1) = 0.5 <= 1.0 — ПРОЙДЕН. ЗАПУСК: go run ./cmd/backtest -ticker SVCB -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/svcb/plateau_point.json -out ./reports/SVCB_point -months 36 -min-trades 1 -metric profit_factor; разбор: python3 reports/_analysis/svcb_journal.py reports/SVCB_point/*_best.md. Полный отчёт: docs/superpowers/plans/task-11-report-svcb.md. РЕЗУЛЬТАТ ПРОГОНА 2026-09-25 (20:41–20:47 MSK): полное окно 98 сделок, PF 1.330, net +24 155.70 ₽ (24.16%), max DD 13 340.49 ₽ (9.88%) — гейт B пройден в обеих формах; выходы TRAIL 55 (56.1%) / TP 43 (43.9%), SL 0 (стоп 1.0 инертен: трейл 0.5 стоит от входа); удержание 10/39/116, ночёвок 55.1%, переносов 11; годы 2024 −535.08 ₽ (PF 0.981), 2025 +31 162.28 ₽ (2.182), 2026 −6 471.51 ₽ (0.647); хвост 6 — 11 сделок, −5 441.60 ₽, PF 0.523; хвост 12 — 33, +2 628.61 ₽, PF 1.103; входов в выходные и 02–06 — 0; ГЕЙТ D — 1 сделка через 2024-07-08 (−5 434.42 ₽). Walk-forward: 36/12/6 1.471/75 (фолды 1.821/28, 1.631/14, 1.574/22, 0.522/11), 24/12/3 1.139/33, 30/12/6 1.282/47, 36/12/6 при -commission 0.001 1.279/75. Стоп-условие: сработали пункты 5 (2024 и 2026 убыточны), 6 (хвост 6 PF 0.523) и 7 (гейт D) — первый круг провален, переход к Task 12.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [4],
+        "RSILower": [30],
+        "RSIUpper": [70],
+        "EMAFast": [10],
+        "EMASlow": [20],
+        "DailyATRPeriod": [14],
+        "UseDayATRGate": [1],
+        "FreshDayATR": [0],
+        "SpentDayATR": [0.8],
+        "StopDailyATR": [1.0],
+        "TPDailyATR": [0.6],
+        "UseVolume": [0],
+        "VolBaseDays": [14],
+        "VolLookbackBars": [3],
+        "VolMult": [1.2],
+        "UseRSIExit": [0],
+        "UseTrail": [1],
+        "TrailDailyATR": [0.5]
+      }
+    }
+  ]
+}

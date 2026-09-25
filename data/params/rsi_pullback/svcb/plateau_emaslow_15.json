@@ -1,0 +1,28 @@
+{
+  "_comment": "data/params/rsi_pullback/svcb/plateau_emaslow_15.json — СОСЕД ПЛАТО точки первого круга SVCB (Task 11, Step 7, §5.3 спеки): сосед EMASlow по оси trend_low [12,15,20,25,30,35,40,45]: 15 вместо 20 (вниз); остальные семнадцать полей = plateau_point.json (точка = дефолты ядра + EMASlow 20, StopDailyATR 1.0, UseTrail 1, TrailDailyATR 0.5, UseRSIExit 0). Одиночный прогон на полном окне, у соседа снимаются годы и хвосты 6/12 (§5.3). ЗАПУСК: go run ./cmd/backtest -ticker SVCB -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/svcb/plateau_emaslow_15.json -out ./reports/SVCB_point_emaslow_15 -months 36 -min-trades 1 -metric profit_factor; разбор: python3 reports/_analysis/svcb_journal.py reports/SVCB_point_emaslow_15/*_best.md. РЕЗУЛЬТАТ ПРОГОНА 2026-09-25: 89 сделок, PF 1.332, DD 15 364.40 ₽ (11.38%) — хуже точки по DD и пробивает гейт B в рублях; 2024 +631.85, 2025 +29 453.12, 2026 −7 993.78 ₽; хвост 6 9 сделок PF 0.272, хвост 12 PF 0.955; гейт D 1 сделка. Разница с точкой +0.002 < 0.05 — ничья, решена в пользу меньшей просадки: точка остаётся на 20.",
+  "phases": [
+    {
+      "name": "emaslow_15",
+      "grid": {
+        "RSIPeriod": [4],
+        "RSILower": [30],
+        "RSIUpper": [70],
+        "EMAFast": [10],
+        "EMASlow": [15],
+        "DailyATRPeriod": [14],
+        "UseDayATRGate": [1],
+        "FreshDayATR": [0],
+        "SpentDayATR": [0.8],
+        "StopDailyATR": [1.0],
+        "TPDailyATR": [0.6],
+        "UseVolume": [0],
+        "VolBaseDays": [14],
+        "VolLookbackBars": [3],
+        "VolMult": [1.2],
+        "UseRSIExit": [0],
+        "UseTrail": [1],
+        "TrailDailyATR": [0.5]
+      }
+    }
+  ]
+}

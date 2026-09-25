@@ -1,0 +1,28 @@
+{
+  "_comment": "data/params/rsi_pullback/svcb/plateau_stop_08.json — СОСЕД ПЛАТО точки первого круга SVCB (Task 11, Step 7, §5.3 спеки): сосед StopDailyATR по оси risk [..0.7,0.8,1.0,1.3..]: 0.8 вместо 1.0 — при включённом трейле сосед стопа проверяется в сторону уменьшения (§5.3); ожидание: поле стопа инертно, пока трейл 0.5 уже стоит на 0.5 ATR от входа; остальные семнадцать полей = plateau_point.json (точка = дефолты ядра + EMASlow 20, StopDailyATR 1.0, UseTrail 1, TrailDailyATR 0.5, UseRSIExit 0). Одиночный прогон на полном окне, у соседа снимаются годы и хвосты 6/12 (§5.3). ЗАПУСК: go run ./cmd/backtest -ticker SVCB -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/svcb/plateau_stop_08.json -out ./reports/SVCB_point_stop_08 -months 36 -min-trades 1 -metric profit_factor; разбор: python3 reports/_analysis/svcb_journal.py reports/SVCB_point_stop_08/*_best.md. РЕЗУЛЬТАТ ПРОГОНА 2026-09-25: вывод svcb_journal.py ПОБАЙТОВО совпал с точкой (98 сделок, PF 1.330, DD 13 340.49 ₽) — поле стопа инертно при трейле 0.5, который стоит на −0.5 ATR от входа с первого бара.",
+  "phases": [
+    {
+      "name": "stop_08",
+      "grid": {
+        "RSIPeriod": [4],
+        "RSILower": [30],
+        "RSIUpper": [70],
+        "EMAFast": [10],
+        "EMASlow": [20],
+        "DailyATRPeriod": [14],
+        "UseDayATRGate": [1],
+        "FreshDayATR": [0],
+        "SpentDayATR": [0.8],
+        "StopDailyATR": [0.8],
+        "TPDailyATR": [0.6],
+        "UseVolume": [0],
+        "VolBaseDays": [14],
+        "VolLookbackBars": [3],
+        "VolMult": [1.2],
+        "UseRSIExit": [0],
+        "UseTrail": [1],
+        "TrailDailyATR": [0.5]
+      }
+    }
+  ]
+}

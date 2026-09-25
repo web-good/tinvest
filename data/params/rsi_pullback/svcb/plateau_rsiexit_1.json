@@ -1,0 +1,28 @@
+{
+  "_comment": "data/params/rsi_pullback/svcb/plateau_rsiexit_1.json — СОСЕД ПЛАТО точки первого круга SVCB (Task 11, Step 7, §5.3 спеки): единственный сосед бинарного поля UseRSIExit: 1 (RSI-выход включён) при включённом трейле 0.5; остальные семнадцать полей = plateau_point.json (точка = дефолты ядра + EMASlow 20, StopDailyATR 1.0, UseTrail 1, TrailDailyATR 0.5, UseRSIExit 0). Одиночный прогон на полном окне, у соседа снимаются годы и хвосты 6/12 (§5.3). ЗАПУСК: go run ./cmd/backtest -ticker SVCB -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/svcb/plateau_rsiexit_1.json -out ./reports/SVCB_point_rsiexit_1 -months 36 -min-trades 1 -metric profit_factor; разбор: python3 reports/_analysis/svcb_journal.py reports/SVCB_point_rsiexit_1/*_best.md. РЕЗУЛЬТАТ ПРОГОНА 2026-09-25: 98 сделок, PF 1.227, DD 9 137.11 ₽ (7.78%); 2024 +7 051.20, 2025 +7 624.51, 2026 −3 231.11 ₽; хвост 6 11 сделок PF 0.714, хвост 12 PF 0.899; гейт D 0 сделок; удержание 6/15/30. Ниже точки на 0.103.",
+  "phases": [
+    {
+      "name": "rsiexit_1",
+      "grid": {
+        "RSIPeriod": [4],
+        "RSILower": [30],
+        "RSIUpper": [70],
+        "EMAFast": [10],
+        "EMASlow": [20],
+        "DailyATRPeriod": [14],
+        "UseDayATRGate": [1],
+        "FreshDayATR": [0],
+        "SpentDayATR": [0.8],
+        "StopDailyATR": [1.0],
+        "TPDailyATR": [0.6],
+        "UseVolume": [0],
+        "VolBaseDays": [14],
+        "VolLookbackBars": [3],
+        "VolMult": [1.2],
+        "UseRSIExit": [1],
+        "UseTrail": [1],
+        "TrailDailyATR": [0.5]
+      }
+    }
+  ]
+}

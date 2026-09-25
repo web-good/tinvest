@@ -1,0 +1,28 @@
+{
+  "_comment": "data/params/rsi_pullback/svcb/plateau_trail_off.json — СОСЕД ПЛАТО точки первого круга SVCB (Task 11, Step 7, §5.3 спеки): цена рычага трейла (ср. MVID plateau_trail_off): одно решение темы trail снято целиком — UseTrail 1 -> 0, TrailDailyATR 0.5 -> 0 и UseRSIExit 0 -> 1 (все три поля trail на дефолтах ядра: без трейла выключенный RSI-выход оставил бы позицию без выхода, кроме стопа и цели, — такой режим темой не измерялся); остаются EMASlow 20 и StopDailyATR 1.0; остальные пятнадцать полей = plateau_point.json (точка = дефолты ядра + EMASlow 20, StopDailyATR 1.0, UseTrail 1, TrailDailyATR 0.5, UseRSIExit 0). Одиночный прогон на полном окне, у соседа снимаются годы и хвосты 6/12 (§5.3). ЗАПУСК: go run ./cmd/backtest -ticker SVCB -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/svcb/plateau_trail_off.json -out ./reports/SVCB_point_trail_off -months 36 -min-trades 1 -metric profit_factor; разбор: python3 reports/_analysis/svcb_journal.py reports/SVCB_point_trail_off/*_best.md. РЕЗУЛЬТАТ ПРОГОНА 2026-09-25: 98 сделок, PF 1.389, DD 10 796.49 ₽ (9.22%); ВСЕ ТРИ ГОДА В ПЛЮСЕ: 2024 +11 826.73, 2025 +775.16, 2026 +7 361.15 ₽; хвост 6 11 сделок PF 1.926, хвост 12 33 сделки PF 1.561; гейт D 0 сделок; входов в выходные и 02–06 — 0; выходы RSI 77.6% / TP 12.2% / SL 10.2%. Выше точки на 0.059 — вне шумовой полосы; рычаг трейла стоит точке 0.059 PF на полном окне и ломает 2024/2026. Дополнительный walk-forward 36/12/6 (./reports/SVCB_point_trail_off_wf36): pooled 1.348/75, фолды 1.619/28, 0.773/14, 1.366/22, 1.919/11. Поле определяется голосом темы trail, а не полнооконным PF — точку не меняет; вход для Task 12.",
+  "phases": [
+    {
+      "name": "trail_off",
+      "grid": {
+        "RSIPeriod": [4],
+        "RSILower": [30],
+        "RSIUpper": [70],
+        "EMAFast": [10],
+        "EMASlow": [20],
+        "DailyATRPeriod": [14],
+        "UseDayATRGate": [1],
+        "FreshDayATR": [0],
+        "SpentDayATR": [0.8],
+        "StopDailyATR": [1.0],
+        "TPDailyATR": [0.6],
+        "UseVolume": [0],
+        "VolBaseDays": [14],
+        "VolLookbackBars": [3],
+        "VolMult": [1.2],
+        "UseRSIExit": [1],
+        "UseTrail": [0],
+        "TrailDailyATR": [0]
+      }
+    }
+  ]
+}
