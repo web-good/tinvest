@@ -1,6 +1,9 @@
 package backtest
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // ragrGridFiles перечисляет сетки RAGR ПОИМЁННО, а не обходом каталога: задачи плана кладут в тот
 // же каталог файлы-точки (plateau_*.json, probe_*.json), которые законно фиксируют ось одним
@@ -20,6 +23,21 @@ var ragrGridFiles = []string{
 	"cal_trend_day.json",
 }
 
+// ragrRound2GridFiles перечисляет узкие сетки второго круга RAGR поимённо (Task 12, §5.14 спеки).
+var ragrRound2GridFiles = []string{
+	"cal2_exit_target.json",
+	"cal2_day.json",
+	"cal2_vol.json",
+	"cal2_trail.json",
+}
+
+// ragrAllGridFiles склеивает сетки обоих кругов: жёсткие инварианты §5.1 держатся на обоих.
+func ragrAllGridFiles() []string {
+	out := make([]string, 0, len(ragrGridFiles)+len(ragrRound2GridFiles))
+	out = append(out, ragrGridFiles...)
+	return append(out, ragrRound2GridFiles...)
+}
+
 // ragrCoreEMAFast — дефолт ядра core.DefaultParams().EMAFast. Сетка, свипующая EMASlow без
 // EMAFast (trend_day), живёт на этом значении, и узел EMASlow <= 10 дал бы вырожденную пару.
 const ragrCoreEMAFast = 10
@@ -33,7 +51,7 @@ const ragrStopCeiling = 0.8
 // максимально широкие оси, поэтому тест запрещает УРЕЗАТЬ ось (проверяет обязательные узлы и
 // запрещённые пары), но не запрещает лишних значений.
 func TestRAGRGridsStayWide(t *testing.T) {
-	for _, file := range ragrGridFiles {
+	for _, file := range ragrAllGridFiles() {
 		grid := rsiPullbackTickerGrid(t, "ragr", file)
 		for _, v := range grid["RSILower"] {
 			if v > 50 {
@@ -63,7 +81,7 @@ func TestRAGRGridsStayWide(t *testing.T) {
 		}
 		// Стоп меряет только тема risk (§5.1 спеки): арбитры первого круга RAGR — связки выхода и
 		// тренда, а не связки со стопом.
-		if file != "cal_risk.json" && len(grid["StopDailyATR"]) > 0 {
+		if !strings.HasPrefix(file, "cal2_") && file != "cal_risk.json" && len(grid["StopDailyATR"]) > 0 {
 			t.Errorf("ragr/%s: свипует StopDailyATR %v — стоп меряет только cal_risk.json", file, grid["StopDailyATR"])
 		}
 	}
@@ -91,6 +109,31 @@ func TestRAGRGridsStayWide(t *testing.T) {
 			if !containsFloat(grid[m.axis], w) {
 				t.Errorf("ragr/%s: ось %s потеряла обязательный узел %v (есть %v)", m.file, m.axis, w, grid[m.axis])
 			}
+		}
+	}
+	// Потолок гейта A во втором круге не двигается (§5.14 спеки).
+	for _, file := range ragrRound2GridFiles {
+		for _, v := range rsiPullbackTickerGrid(t, "ragr", file)["StopDailyATR"] {
+			if v > ragrStopCeiling {
+				t.Errorf("ragr/%s: StopDailyATR=%v выше потолка гейта A %v", file, v, ragrStopCeiling)
+			}
+		}
+	}
+}
+
+// TestRAGRRound2FieldsHaveOneSource держит правило §5.14 спеки: во втором круге каждое поле
+// свипует ровно одна тема, иначе две темы проголосуют за одно поле по-разному.
+func TestRAGRRound2FieldsHaveOneSource(t *testing.T) {
+	owner := map[string]string{}
+	for _, file := range ragrRound2GridFiles {
+		for field, values := range rsiPullbackTickerGrid(t, "ragr", file) {
+			if len(values) < 2 {
+				continue // зафиксированное поле не голосует
+			}
+			if prev, ok := owner[field]; ok {
+				t.Errorf("ragr: поле %s свипуют две темы второго круга: %s и %s", field, prev, file)
+			}
+			owner[field] = file
 		}
 	}
 }
