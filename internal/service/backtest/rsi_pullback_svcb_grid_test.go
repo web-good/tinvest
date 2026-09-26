@@ -20,8 +20,11 @@ var svcbGridFiles = []string{
 	"cal_day_stop.json",
 }
 
-// svcbRound2GridFiles — узкие сетки второго круга (Task 12, §5.14 спеки). Поимённо по той же
-// причине, что и svcbGridFiles: рядом лежат файлы-точки plateau_r2_*.json.
+// svcbRound2GridFiles — узкие сетки второго круга (Task 12, §5.14 спеки). Второй круг ЗАМЕНЁН
+// задачей 11R: принятая точка — пересобранная точка первого круга (plateau_point.json, стоп 0.8),
+// сетки cal2_* и точки plateau_r2_* лежат как история. Инварианты §5.1 держатся и на них, чтобы
+// история не разошлась с правилами, по которым её снимали. Поимённо по той же причине, что и
+// svcbGridFiles: рядом лежат файлы-точки plateau_r2_*.json.
 var svcbRound2GridFiles = []string{
 	"cal2_day_stop.json",
 	"cal2_entry.json",

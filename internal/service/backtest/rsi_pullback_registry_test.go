@@ -1043,8 +1043,9 @@ func TestRSIPullbackRTKMTracksBaseline(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackSVCBIsRegisteredAndCalibrated пинует два неотличимых снаружи факта: SVCB есть в
-// карте (а не проваливается в generic-ветку) И возвращает собственный литерал, а не baseline.
+// TestRSIPullbackSVCBIsRegisteredAndCalibrated закрепляет два неотличимых снаружи факта: SVCB
+// есть в карте (а не проваливается в generic-ветку) И возвращает собственный литерал, а не
+// baseline.
 // Пакет strategy/svcb заведён 2026-09-25 ДО калибровки и до принятия точки первого круга обязан
 // был возвращать core.DefaultParams(); калибровка прогналась (задача 11R), литерал появился — и
 // теперь бэктест обязан гонять ровно его, иначе перепроверка отчёта SVCB мерила бы не то, что
