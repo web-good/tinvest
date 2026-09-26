@@ -8,6 +8,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/irkt"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/magn"
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ragr"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sfin"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/svcb"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/x5"
@@ -230,6 +231,18 @@ func TestRegistryHasSVCB(t *testing.T) {
 		t.Fatal("SVCB нет в реестре живого раннера: тикер не будет торговать вовсе")
 	}
 	if want := svcb.DefaultParams(); p != want {
+		t.Fatalf("реестр отдаёт не литерал пакета:\n got: %+v\nwant: %+v", p, want)
+	}
+}
+
+// TestRegistryHasRAGR держит связку «пакет — реестр живого раннера» для RAGR: раннер обязан
+// торговать ровно литерал пакета.
+func TestRegistryHasRAGR(t *testing.T) {
+	p, ok := ParamsFor(ragr.Ticker)
+	if !ok {
+		t.Fatal("RAGR нет в реестре живого раннера: тикер не будет торговать вовсе")
+	}
+	if want := ragr.DefaultParams(); p != want {
 		t.Fatalf("реестр отдаёт не литерал пакета:\n got: %+v\nwant: %+v", p, want)
 	}
 }
