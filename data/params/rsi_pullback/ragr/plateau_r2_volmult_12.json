@@ -1,0 +1,64 @@
+{
+  "_comment": "data/params/rsi_pullback/ragr/plateau_r2_volmult_12.json — СОСЕД ТОЧКИ ВТОРОГО КРУГА RAGR (Task 12, Step 7 Task 11): VolMult 1.2 (дефолт), остальные поля — как в plateau_point2.json. ЗАПУСК: go run ./cmd/backtest -ticker RAGR -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/ragr/plateau_r2_volmult_12.json -out ./reports/RAGR_r2_volmult_12 -months 19 -min-trades 1 -metric profit_factor; разбор: python3 reports/_analysis/ragr_journal.py reports/RAGR_r2_volmult_12/*_best.md; walk-forward 19/7/3 — та же команда с -out ./reports/RAGR_r2_volmult_12_wf73 -train-months 7 -test-months 3. РЕЗУЛЬТАТ ПРОГОНА 2026-09-26 (21:58–22:01 MSK): 64 сделки, PF 1.696, DD 5 162.77 ₽ (4.44%), 2025 +9 551.70 / 2026 +2 133.30 ₽, хвост 6 20/1.257, хвост 12 42/1.048, убыточных полугодий 0, wf 1.047/42, Δ −0.391. Гейт D 0 сделок, входов в выходные и 02–06 — 0. Отчёт: docs/superpowers/plans/task-12-report-ragr.md.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          35
+        ],
+        "EMAFast": [
+          3
+        ],
+        "EMASlow": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.8
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          1
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          1
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          1
+        ],
+        "TrailDailyATR": [
+          0.5
+        ]
+      }
+    }
+  ]
+}

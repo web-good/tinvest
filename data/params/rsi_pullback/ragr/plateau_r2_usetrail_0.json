@@ -1,0 +1,64 @@
+{
+  "_comment": "data/params/rsi_pullback/ragr/plateau_r2_usetrail_0.json — СОСЕД ТОЧКИ ВТОРОГО КРУГА RAGR (Task 12, Step 7 Task 11): UseTrail 0, остальные поля — как в plateau_point2.json. ЗАПУСК: go run ./cmd/backtest -ticker RAGR -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/ragr/plateau_r2_usetrail_0.json -out ./reports/RAGR_r2_usetrail_0 -months 19 -min-trades 1 -metric profit_factor; разбор: python3 reports/_analysis/ragr_journal.py reports/RAGR_r2_usetrail_0/*_best.md; walk-forward 19/7/3 — та же команда с -out ./reports/RAGR_r2_usetrail_0_wf73 -train-months 7 -test-months 3. РЕЗУЛЬТАТ ПРОГОНА 2026-09-26 (21:58–22:01 MSK): 55 сделок, PF 2.257, DD 5 461.02 ₽ (4.55%), 2025 +10 444.05 / 2026 +4 754.11 ₽, хвост 6 17/1.493, хвост 12 34/1.452, убыточных полугодий 1, wf 1.452/34, Δ +0.014 — ничья; просадки различаются на 0.11 п.п. (< 0.5), убыточных полугодий у соседа 1 против 0 у точки -> остаётся UseTrail 1. Гейт D 0 сделок, входов в выходные и 02–06 — 0. Отчёт: docs/superpowers/plans/task-12-report-ragr.md.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          35
+        ],
+        "EMAFast": [
+          3
+        ],
+        "EMASlow": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.8
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          1
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          1
+        ],
+        "VolMult": [
+          1.6
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0.5
+        ]
+      }
+    }
+  ]
+}

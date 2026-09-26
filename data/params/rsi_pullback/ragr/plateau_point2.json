@@ -1,0 +1,64 @@
+{
+  "_comment": "data/params/rsi_pullback/ragr/plateau_point2.json — ТОЧКА ВТОРОГО КРУГА RAGR (Task 12). Одна фаза, все восемнадцать полей одним значением. Сборка (§5.14): поля, которые второй круг свипует, — по большинству ≥3/4 невырожденных фолдов в зоне ±1 шаг второго круга, иначе дефолт ядра: RSIUpper 35 (cal2_exit_target 35/32.5/37.5/40, ничья 35 и 37.5 по 3/4 разрешена pooled OOS 1.438 против 1.423), TPDailyATR 0.6 (0.1/0.15/0.15/0.6 — большинства нет, дефолт), FreshDayATR 0 и SpentDayATR 0.8 (cal2_day — фолды 1, 2 вырождены, большинства нет, дефолты), VolMult 1.6 (cal2_vol 2.4/1.6/1.6/1.6), UseTrail 1 и TrailDailyATR 0.5 (cal2_trail 4/4). Остальные поля — из plateau_point.json: EMAFast 3, UseVolume 1, VolLookbackBars 1, StopDailyATR 0.8, прочие — дефолты ядра. ИТОГ: дефолты ядра + RSIUpper 35 + EMAFast 3 + StopDailyATR 0.8 + UseVolume 1 + VolLookbackBars 1 + VolMult 1.6 + UseTrail 1 + TrailDailyATR 0.5. Гейт A: min(0.8, 0.5) = 0.5 <= 0.8; стоп 0.8 при трейле 0.5 инертен (сосед 0.7 побайтово равен точке, SL-выходов 0). ЗАПУСК (строго последовательно): go run ./cmd/backtest -ticker RAGR -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/ragr/plateau_point2.json -out ./reports/RAGR_point2 -months 19 -min-trades 1 -metric profit_factor; разбор: python3 reports/_analysis/ragr_journal.py reports/RAGR_point2/*_best.md; walk-forward 19/7/3 — та же команда с -out ./reports/RAGR_point2_wf73 -train-months 7 -test-months 3. 19/10/3: -out ./reports/RAGR_point2_wf103 -train-months 10 -test-months 3; удвоенный круг: -out ./reports/RAGR_point2_c001 -train-months 7 -test-months 3 -commission 0.001. РЕЗУЛЬТАТ ПРОГОНА 2026-09-26 (21:57 MSK, окно 2025-02-26 21:57 — 2026-09-26 21:57): 55 сделок, PF 2.234, net +15 065.05 ₽ (15.07%), max DD 5 319.63 ₽ (4.44%) — гейт B пройден; выходы RSI 47 (85.5%) / TP 5 (9.1%) / TRAIL 3 (5.5%) / SL 0; удержание 2/5/11, ночёвок 1 (1.8%), переносов 0; входов в выходные и 02–06 — 0; гейт D 0 сделок; годы 2025 +10 192.42 ₽ (2.870), 2026 +4 872.62 ₽ (1.721); убыточных полугодий 0; хвост 6 17/+3 270.72 ₽/1.524 (крупнейшая #54 2026-08-28 TRAIL −4 167.33 ₽), хвост 12 34/+4 514.15 ₽/1.434. Walk-forward 19/7/3 1.438/34 (1.625/10, 0.990/7, 3.276/10, 1.014/7), 19/10/3 1.382/24 (0.990/7, 3.278/10, 1.014/7), c001 1.057/34. Фолды 3–4 вместе 1.532 — знак совпал с хвостом 6. СТОП-УСЛОВИЕ ВТОРОГО КРУГА: ни один пункт не сработал (пункт 2 снят, пул 34 >= 10) -> Task 14. Отчёт: docs/superpowers/plans/task-12-report-ragr.md.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          35
+        ],
+        "EMAFast": [
+          3
+        ],
+        "EMASlow": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.8
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          1
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          1
+        ],
+        "VolMult": [
+          1.6
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          1
+        ],
+        "TrailDailyATR": [
+          0.5
+        ]
+      }
+    }
+  ]
+}

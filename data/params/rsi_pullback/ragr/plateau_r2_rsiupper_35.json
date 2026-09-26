@@ -1,0 +1,64 @@
+{
+  "_comment": "data/params/rsi_pullback/ragr/plateau_r2_rsiupper_35.json — ТОЧКА-ПРЕТЕНДЕНТ ВТОРОГО КРУГА RAGR (Task 12). ПРЕТЕНДЕНТ RSIUpper 35 при ничьей 35/37.5 (обе по 3/4 в зоне ±1 шаг, по одному собственному голосу); побайтово равен plateau_point2.json. Walk-forward 19/7/3 2026-09-26 21:56:41 MSK: pooled OOS 1.438/34 -> выбран (37.5 дал 1.423/33). Остальные поля — как в plateau_point2.json. ЗАПУСК: go run ./cmd/backtest -ticker RAGR -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/ragr/plateau_r2_rsiupper_35.json -out ./reports/RAGR_r2_rsiupper_35_wf73 -months 19 -train-months 7 -test-months 3 -min-trades 1 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          35
+        ],
+        "EMAFast": [
+          3
+        ],
+        "EMASlow": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.8
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          1
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          1
+        ],
+        "VolMult": [
+          1.6
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          1
+        ],
+        "TrailDailyATR": [
+          0.5
+        ]
+      }
+    }
+  ]
+}

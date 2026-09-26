@@ -1,0 +1,64 @@
+{
+  "_comment": "data/params/rsi_pullback/ragr/plateau_r2_emafast_2.json — СОСЕД ТОЧКИ ВТОРОГО КРУГА RAGR (Task 12, Step 7 Task 11): EMAFast 2 — зонд за краем 3 оси trend (край = минимум ядра 2 у trend_low), остальные поля — как в plateau_point2.json. ЗАПУСК: go run ./cmd/backtest -ticker RAGR -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/ragr/plateau_r2_emafast_2.json -out ./reports/RAGR_r2_emafast_2 -months 19 -min-trades 1 -metric profit_factor; разбор: python3 reports/_analysis/ragr_journal.py reports/RAGR_r2_emafast_2/*_best.md; walk-forward 19/7/3 — та же команда с -out ./reports/RAGR_r2_emafast_2_wf73 -train-months 7 -test-months 3. РЕЗУЛЬТАТ ПРОГОНА 2026-09-26 (21:58–22:01 MSK): 52 сделки, PF 3.185, DD 2 593.47 ₽ (2.36%), 2025 +8 457.48 / 2026 +8 878.94 ₽, хвост 6 16/4.540, хвост 12 33/2.385, убыточных полугодий 0, wf 2.353/33, Δ +0.915 — не ничья; поле назначено голосами первого круга (trend 3/3/3/5), по §5.2 результатом сравнения не переназначается. Гейт D 0 сделок, входов в выходные и 02–06 — 0. Отчёт: docs/superpowers/plans/task-12-report-ragr.md.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          35
+        ],
+        "EMAFast": [
+          2
+        ],
+        "EMASlow": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.8
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          1
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          1
+        ],
+        "VolMult": [
+          1.6
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          1
+        ],
+        "TrailDailyATR": [
+          0.5
+        ]
+      }
+    }
+  ]
+}
