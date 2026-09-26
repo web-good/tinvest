@@ -23,6 +23,7 @@ import (
 	rsipullbackmvid "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/mvid"
 	rsipullbacknkhp "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/nkhp"
 	rsipullbacknvtk "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/nvtk"
+	rsipullbackragr "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ragr"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/reni"
 	rsipullbackrtkm "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/rtkm"
 	rsipullbackrtkmp "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/rtkmp"
@@ -1067,6 +1068,26 @@ func TestRSIPullbackSVCBIsRegisteredAndCalibrated(t *testing.T) {
 	}
 	if got := b.Build(p).Ticker(); got != "SVCB" {
 		t.Fatalf("Ticker() = %q, want SVCB", got)
+	}
+}
+
+// TestRSIPullbackRAGRTracksBaseline сторожит ЧЕСТНОЕ состояние: RAGR заведён в реестр до
+// калибровки, чтобы прогоны шли через реестр, а не через generic-ветку, и обязан возвращать ровно
+// baseline ядра. Заменяется снимком литерала (Task 14 плана) при положительном вердикте.
+func TestRSIPullbackRAGRTracksBaseline(t *testing.T) {
+	b, ok := rsiPullbackRegistry[rsipullbackragr.Ticker]
+	if !ok {
+		t.Fatal("RAGR отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
+	}
+	p, pok := b.DefaultParams().(core.Params)
+	if !pok {
+		t.Fatalf("RAGR: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
+	}
+	if p != core.DefaultParams() {
+		t.Fatalf("RAGR ещё не откалиброван, params обязаны совпадать с baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
+	}
+	if got := b.Build(p).Ticker(); got != "RAGR" {
+		t.Fatalf("Ticker() = %q, want RAGR", got)
 	}
 }
 
