@@ -1071,10 +1071,14 @@ func TestRSIPullbackSVCBIsRegisteredAndCalibrated(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackRAGRTracksBaseline сторожит ЧЕСТНОЕ состояние: RAGR заведён в реестр до
-// калибровки, чтобы прогоны шли через реестр, а не через generic-ветку, и обязан возвращать ровно
-// baseline ядра. Заменяется снимком литерала (Task 14 плана) при положительном вердикте.
-func TestRSIPullbackRAGRTracksBaseline(t *testing.T) {
+// TestRSIPullbackRAGRIsRegisteredAndCalibrated закрепляет два неотличимых снаружи факта: RAGR
+// есть в карте (а не проваливается в generic-ветку) И возвращает собственный литерал, а не
+// baseline.
+// Пакет strategy/ragr заведён 2026-09-26 ДО калибровки и до принятия точки второго круга обязан
+// был возвращать core.DefaultParams(); калибровка прогналась (задача 12), литерал появился — и
+// теперь бэктест обязан гонять ровно его, иначе перепроверка отчёта RAGR мерила бы не то, что
+// стоит в коде. Снимок самого литерала живёт рядом с ним, в strategy/ragr/ragr_test.go.
+func TestRSIPullbackRAGRIsRegisteredAndCalibrated(t *testing.T) {
 	b, ok := rsiPullbackRegistry[rsipullbackragr.Ticker]
 	if !ok {
 		t.Fatal("RAGR отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
@@ -1083,8 +1087,11 @@ func TestRSIPullbackRAGRTracksBaseline(t *testing.T) {
 	if !pok {
 		t.Fatalf("RAGR: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
 	}
-	if p != core.DefaultParams() {
-		t.Fatalf("RAGR ещё не откалиброван, params обязаны совпадать с baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
+	if p == core.DefaultParams() {
+		t.Fatal("RAGR вернул baseline: откалиброванный тикер обязан иметь собственный литерал")
+	}
+	if want := rsipullbackragr.DefaultParams(); p != want {
+		t.Fatalf("RAGR params = %+v, want литерал пакета %+v", p, want)
 	}
 	if got := b.Build(p).Ticker(); got != "RAGR" {
 		t.Fatalf("Ticker() = %q, want RAGR", got)
