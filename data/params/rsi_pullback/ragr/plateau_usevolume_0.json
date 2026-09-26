@@ -1,0 +1,64 @@
+{
+  "_comment": "data/params/rsi_pullback/ragr/plateau_usevolume_0.json — СОСЕД ПЛАТО ТОЧКИ ПЕРВОГО КРУГА (Task 11 Step 7, §5.3) RAGR: UseVolume 0 (единственный сосед бинарной оси; поля объёма инертны; он же — зонд за краем VolLookbackBars 0, ядро при 0 гейт выключает); остальные семнадцать полей = plateau_point.json. ЗАПУСК (строго последовательно): go run ./cmd/backtest -ticker RAGR -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/ragr/plateau_usevolume_0.json -out ./reports/RAGR_usevolume_0 -months 19 -min-trades 1 -metric profit_factor; разбор: python3 reports/_analysis/ragr_journal.py reports/RAGR_usevolume_0/*_best.md; walk-forward 19/7/3 — та же команда с -out ./reports/RAGR_usevolume_0_wf73 -train-months 7 -test-months 3. РЕЗУЛЬТАТ ПРОГОНА 2026-09-26: 79 сделок, PF 1.623, DD 8 377.89 ₽ (7.03%); 2025 +8 488 ₽ (2.209), 2026 +3 413 ₽ (1.283); хвост 6 23/+1 150 ₽/1.118, хвост 12 56/+3 929 ₽/1.225; wf73 1.233/56 (+0.378 к точке; фолды 2.041/15, 0.949/18, 1.582/16, 0.897/7). Сравнения §5.5 назначают ничьи (< 0.05 pooled OOS), поле не переназначают: оно назначено голосами. Отчёт: docs/superpowers/plans/task-11-report-ragr.md.",
+  "phases": [
+    {
+      "name": "usevolume_0",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          3
+        ],
+        "EMASlow": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.8
+        ],
+        "TPDailyATR": [
+          0.15
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          1
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      }
+    }
+  ]
+}
