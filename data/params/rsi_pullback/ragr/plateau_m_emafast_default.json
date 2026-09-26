@@ -1,0 +1,64 @@
+{
+  "_comment": "data/params/rsi_pullback/ragr/plateau_m_emafast_default.json — ПОЛНЫЙ ОТКАТ EMAFast К ДЕФОЛТУ ЯДРА (Task 11 фикс-раунд 1, F1): EMAFast 3 -> 10 (дефолт), а не одношаговое движение (5), как было в первом проходе Step 4. Остальные семнадцать полей = plateau_majority.json (UseDayATRGate 0, UseVolume 1, VolLookbackBars 1, StopDailyATR 0.8, TPDailyATR 0.15). Ставится по правилу контроллера: гейт B при пробое — ближайший вариант плато есть одиночный откат ушедшего поля к дефолту ядра. ЗАПУСК (строго последовательно): go run ./cmd/backtest -ticker RAGR -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/ragr/plateau_m_emafast_default.json -out ./reports/RAGR_m_emafast_default -months 19 -min-trades 1 -metric profit_factor; разбор: python3 reports/_analysis/ragr_journal.py reports/RAGR_m_emafast_default/*_best.md; walk-forward 19/7/3 — та же команда с -out ./reports/RAGR_m_emafast_default_wf73 -train-months 7 -test-months 3. Отчёт: docs/superpowers/plans/task-11-report-ragr.md, раздел «Фикс-раунд 1».",
+  "phases": [
+    {
+      "name": "m_emafast_default",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          10
+        ],
+        "EMASlow": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          0
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.8
+        ],
+        "TPDailyATR": [
+          0.15
+        ],
+        "UseVolume": [
+          1
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          1
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      }
+    }
+  ]
+}
