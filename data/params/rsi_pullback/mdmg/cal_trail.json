@@ -1,0 +1,14 @@
+{
+  "_comment": "data/params/rsi_pullback/mdmg/cal_trail.json — тема trail для MDMG, 14 пар (2 значения UseRSIExit x 1 значение UseTrail x 7 значений TrailDailyATR), поверх ДЕФОЛТОВ ЯДРА (UseTrail=0, TrailDailyATR=0 у дефолтов — тема испытывает включённый трейл против дефолтного выключенного). ОКНО: 24 месяца после редомициляции (-months 24, схема 24/12/3, -min-trades 20), числа несравнимы с 36-месячным каталогом. ЗАМЕР 2026-09-26 (in-sample, §6.6 спеки docs/superpowers/specs/2026-09-26-mdmg-rsi-pullback-prep-design.md): при UseRSIExit=1 — TrailDailyATR 0.2 -> 0.977, 0.3 -> 1.281, 0.4 -> 1.229, 0.5 -> 1.475, 0.7 -> 1.566/137, 1.0 -> 1.509, 1.5 -> равен дефолту (1.546, трейл на этом уровне не срабатывает раньше RSI-выхода). При UseRSIExit=0 — трейл на всех узлах 0.80–1.15, то есть вреден без RSI-выхода как страховки. ПРЕДУПРЕЖДЕНИЕ О КРАЯХ: 1.5 побайтово равен дефолтам (трейл не срабатывает — уровень шире типичного хода сделки); при UseRSIExit=0 трейл вреден на всём диапазоне (0.80–1.15) — единственный узел с потенциальным ростом PF (0.7 -> 1.566/137) требует включённого RSI-выхода как основного механизма закрытия. ЗАПУСК: go run ./cmd/backtest -ticker MDMG -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/mdmg/cal_trail.json -out ./reports/MDMG_trail -months 24 -train-months 12 -test-months 3 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА: (заполняется задачей плана).",
+  "phases": [
+    {
+      "name": "trail",
+      "grid": {
+        "UseRSIExit": [0, 1],
+        "UseTrail": [1],
+        "TrailDailyATR": [0.2, 0.3, 0.4, 0.5, 0.7, 1.0, 1.5]
+      },
+      "keepTop": 5
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "_comment": "data/params/rsi_pullback/mdmg/cal_vol_window.json — тема vol_window для MDMG, 36 троек (1 значение UseVolume x 9 значений VolLookbackBars x 4 значения VolMult), поверх ДЕФОЛТОВ ЯДРА. Тема меряет глубину окна усреднения объёма (VolLookbackBars) в паре с грубой сеткой множителя, при включённом UseVolume=1. ОКНО: 24 месяца после редомициляции (-months 24, схема 24/12/3, -min-trades 20), числа несравнимы с 36-месячным каталогом. ЗАМЕР 2026-09-26 (in-sample, §6.3 спеки docs/superpowers/specs/2026-09-26-mdmg-rsi-pullback-prep-design.md): vol_window in-sample лежит в узком диапазоне 1.37–1.56 — ни одного сильного узла; сильный рычаг объёма у MDMG — строгость множителя (тема volume, VolMult 3.0-4.0 x VolBaseDays 20), а не длина окна усреднения. ПРЕДУПРЕЖДЕНИЕ О КРАЯХ: VolLookbackBars 32 — обязательный узел инварианта (§5.1), отдельно не выделяется замером — тема в целом не даёт сильного узла ни на одном значении этой оси. VolMult здесь свипуется только грубой сеткой [1.0, 1.2, 2.0, 3.0] — точная сетка множителя (шаг 0.5, до 4.0) живёт в cal_volume.json; здесь VolMult нужен лишь чтобы отделить эффект окна усреднения от эффекта строгости порога. ЗАПУСК: go run ./cmd/backtest -ticker MDMG -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/mdmg/cal_vol_window.json -out ./reports/MDMG_vol_window -months 24 -train-months 12 -test-months 3 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА: (заполняется задачей плана).",
+  "phases": [
+    {
+      "name": "vol_window",
+      "grid": {
+        "UseVolume": [1],
+        "VolLookbackBars": [1, 2, 3, 5, 8, 12, 16, 24, 32],
+        "VolMult": [1.0, 1.2, 2.0, 3.0]
+      },
+      "keepTop": 5
+    }
+  ]
+}

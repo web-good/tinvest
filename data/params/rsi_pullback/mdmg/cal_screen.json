@@ -1,0 +1,13 @@
+{
+  "_comment": "data/params/rsi_pullback/mdmg/cal_screen.json — тема screen для MDMG, 4 прогона (2 значения UseDayATRGate x 2 значения UseVolume), поверх ДЕФОЛТОВ ЯДРА. Тема мерит цену двух гейтов сразу: дневного гейта ATR и объёмного, каждый включён/выключен независимо. ОКНО: 24 месяца после редомициляции (-months 24, схема 24/12/3, -min-trades 1 — у screen порог ниже, чем у прочих тем), числа несравнимы с 36-месячным каталогом. ЗАМЕР 2026-09-26 (in-sample, §6.3 спеки docs/superpowers/specs/2026-09-26-mdmg-rsi-pullback-prep-design.md): UseDayATRGate x UseVolume — 0x0 -> 1.298/376 (DD 24 447 ₽), 0x1 -> 1.319/247, 1x0 -> 1.546/134 (дефолт ядра, BASELINE), 1x1 -> 1.349/101. Дневной гейт обязателен: без него DD растёт почти втрое (24 447 ₽ против 9 153.17 ₽ у дефолтов). Объём при дефолтном множителе 1.2 (UseVolume=1, VolMult не свипуется здесь) вредит и в паре с включённым, и в паре с выключенным дневным гейтом — строгий множитель испытывается отдельно темой volume. ПРЕДУПРЕЖДЕНИЕ О КРАЯХ: узлов нет — тема двоичная, все четыре комбинации представительны на 24-месячном окне (101-376 сделок). ЗАПУСК: go run ./cmd/backtest -ticker MDMG -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/mdmg/cal_screen.json -out ./reports/MDMG_screen -months 24 -train-months 12 -test-months 3 -min-trades 1 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА: (заполняется задачей плана).",
+  "phases": [
+    {
+      "name": "screen",
+      "grid": {
+        "UseDayATRGate": [0, 1],
+        "UseVolume": [0, 1]
+      },
+      "keepTop": 4
+    }
+  ]
+}
