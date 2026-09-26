@@ -1,0 +1,13 @@
+{
+  "_comment": "data/params/rsi_pullback/ragr/cal_screen.json — тема screen для RAGR, 4 прогона (2 значения UseDayATRGate x 2 значения UseVolume), поверх ДЕФОЛТОВ ЯДРА. Тема мерит цену двух гейтов сразу: дневного гейта ATR и объёмного, каждый включён/выключен независимо. ОКНО: только после рестарта торгов 2025-02-17 (-months 19, схема 19/7/3, -min-trades 1 — у screen порог ниже, чем у прочих тем), числа несравнимы с 36-месячным каталогом других тикеров. ЗАМЕР 2026-09-26 (in-sample, §6.3 спеки docs/superpowers/specs/2026-09-26-ragr-rsi-pullback-prep-design.md): UseDayATRGate x UseVolume — 0x0 -> 1.129/240, 0x1 -> 1.314/136, 1x0 -> 1.231/77 (дефолт ядра, BASELINE), 1x1 -> 1.203/61. Узел 0x1 даёт 2025 +16 315 ₽, но его просадка 12 937 ₽ выше baseline (9 642.93 ₽) — риск-гейт B отсекает узел заранее, дневной гейт выключать не стоит. ПРЕДУПРЕЖДЕНИЕ О КРАЯХ: узлов нет — тема двоичная, все четыре комбинации представительны на 19-месячном окне (61-240 сделок); узел 0x1 кандидатом не считается из-за просадки, но остаётся в сетке — решение видно в отчёте, а не спрятано в границах. ЗАПУСК: go run ./cmd/backtest -ticker RAGR -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/ragr/cal_screen.json -out ./reports/RAGR_screen -months 19 -train-months 7 -test-months 3 -min-trades 1 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА: (заполняется задачей плана).",
+  "phases": [
+    {
+      "name": "screen",
+      "grid": {
+        "UseDayATRGate": [0, 1],
+        "UseVolume": [0, 1]
+      },
+      "keepTop": 4
+    }
+  ]
+}

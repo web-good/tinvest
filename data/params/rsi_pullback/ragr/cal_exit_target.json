@@ -1,0 +1,13 @@
+{
+  "_comment": "data/params/rsi_pullback/ragr/cal_exit_target.json — тема exit_target для RAGR, 72 пары (9 значений RSIUpper x 8 значений TPDailyATR), поверх ДЕФОЛТОВ ЯДРА. Тема — АРБИТР, а не источник полей (§5.2 спеки docs/superpowers/specs/2026-09-26-ragr-rsi-pullback-prep-design.md): голоса RSIUpper и TPDailyATR из этой темы в сборку точки НЕ идут, поле RSIUpper берётся только из cal_exit.json, поле TPDailyATR — только из cal_risk.json. Тема существует, потому что оба одиночных рычага (RSIUpper 35 и TPDailyATR 0.2/0.15) меняют одни и те же сделки — обе оси решают, когда закрывать позицию раньше срока, и их сумма может оказаться хуже каждого рычага по отдельности (§6.7 п.2 спеки). ОКНО: только после рестарта торгов 2025-02-17 (-months 19, схема 19/7/3, -min-trades 10), числа несравнимы с 36-месячным каталогом других тикеров. ЗАМЕР ИЗ ОДИНОЧНЫХ ОСЕЙ (§6.5, §6.6 спеки, ЗАМЕР 2026-09-26, in-sample, поверх дефолтов ядра по отдельности): RSIUpper 35 (при TPDailyATR=0.6, дефолт) -> 1.729/108; TPDailyATR 0.2 (при RSIUpper=70, дефолт) -> 1.497/90, TPDailyATR 0.15 -> 1.545/95. Своего отдельного точечного замера связки §6 спеки не даёт — эта тема снимает его сама, поэтому оси взяты по каталожной таблице §5.1 спеки: RSIUpper повторяет диапазон cal_exit.json без крайних узлов 75-95 (плоский слабый хвост там роли не играет для арбитража), TPDailyATR повторяет рабочий диапазон cal_risk.json без крайних узлов ниже 0.1 и выше 0.8 (контрольная строка 2.5 в арбитраже не нужна — арбитр не подчиняется TestRSIPullbackGridControlPoints). ПРЕДУПРЕЖДЕНИЕ О КРАЯХ: узлов нет — обе оси лежат внутри рабочего диапазона источников; при конфликте (pooled OOS арбитра ниже, чем у любой из двух тем по отдельности) в точку идёт один рычаг — тот, чья тема (cal_exit.json или cal_risk.json по оси цели) дала больший pooled OOS, а не сумма обоих (§5.2 спеки). ЗАПУСК: go run ./cmd/backtest -ticker RAGR -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/ragr/cal_exit_target.json -out ./reports/RAGR_exit_target -months 19 -train-months 7 -test-months 3 -min-trades 10 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА: (заполняется задачей плана).",
+  "phases": [
+    {
+      "name": "exit_target",
+      "grid": {
+        "RSIUpper": [30, 35, 40, 45, 50, 55, 60, 65, 70],
+        "TPDailyATR": [0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.6, 0.8]
+      },
+      "keepTop": 5
+    }
+  ]
+}
