@@ -20,6 +20,7 @@ import (
 	rsipullbacklent "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/lent"
 	rsipullbacklsngp "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/lsngp"
 	rsipullbackmagn "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/magn"
+	rsipullbackmdmg "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/mdmg"
 	rsipullbackmvid "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/mvid"
 	rsipullbacknkhp "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/nkhp"
 	rsipullbacknvtk "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/nvtk"
@@ -1095,6 +1096,26 @@ func TestRSIPullbackRAGRIsRegisteredAndCalibrated(t *testing.T) {
 	}
 	if got := b.Build(p).Ticker(); got != "RAGR" {
 		t.Fatalf("Ticker() = %q, want RAGR", got)
+	}
+}
+
+// TestRSIPullbackMDMGTracksBaseline сторожит ЧЕСТНОЕ состояние: MDMG заведён в реестр до
+// калибровки, чтобы прогоны шли через реестр, а не через generic-ветку, и обязан возвращать ровно
+// baseline ядра. Заменяется в Task 14 плана снимком литерала или решением «дефолты по выбору».
+func TestRSIPullbackMDMGTracksBaseline(t *testing.T) {
+	b, ok := rsiPullbackRegistry[rsipullbackmdmg.Ticker]
+	if !ok {
+		t.Fatal("MDMG отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
+	}
+	p, pok := b.DefaultParams().(core.Params)
+	if !pok {
+		t.Fatalf("MDMG: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
+	}
+	if p != core.DefaultParams() {
+		t.Fatalf("MDMG ещё не откалиброван, params обязаны совпадать с baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
+	}
+	if got := b.Build(p).Ticker(); got != "MDMG" {
+		t.Fatalf("Ticker() = %q, want MDMG", got)
 	}
 }
 
