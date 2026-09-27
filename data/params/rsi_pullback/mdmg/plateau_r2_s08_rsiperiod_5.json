@@ -1,0 +1,64 @@
+{
+  "_comment": "data/params/rsi_pullback/mdmg/plateau_r2_s08_rsiperiod_5.json — СОСЕД СОБРАННОЙ ТОЧКИ ВТОРОГО КРУГА СО СТОПОМ 0.8 (Task 12 fix round 1, до сужения стопа третьим контуром): дефолты + RSIPeriod 6 + RSILower 25 + StopDailyATR 0.8 с RSIPeriod 5. Запуск: как у plateau_point2.json с -out ./reports/MDMG_r2_s08_rsiperiod_5 (переименован из MDMG_r2_rsiperiod_5 после сужения стопа). РЕЗУЛЬТАТ ПРОГОНА 2026-09-27 (11:00 MSK): 78 сделок, PF 1.781, DD 5.59%, wf 1.838/36. Справочно: точка ушла на стоп 0.6. Отчёт: docs/superpowers/plans/task-12-report-mdmg.md (раздел Fix round 1).",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          5
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          10
+        ],
+        "EMASlow": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.8
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      }
+    }
+  ]
+}

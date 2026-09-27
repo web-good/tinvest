@@ -31,6 +31,7 @@ var mdmgRound2GridFiles = []string{
 	"cal2_exit.json",
 	"cal2_risk.json",
 	"cal2_trail.json",
+	"cal2_entry.json",
 }
 
 // mdmgAllGridFiles склеивает сетки обоих кругов: жёсткие инварианты §5.1 держатся на обоих.

@@ -1,0 +1,64 @@
+{
+  "_comment": "data/params/rsi_pullback/mdmg/plateau_r2_e_stop_10.json — СОСЕД СОБРАННОЙ ТОЧКИ ВТОРОГО КРУГА по стопу, ВЫШЕ ПОТОЛКА ГЕЙТА A (Task 12 fix round 1, снят для цены потолка): дефолты + RSIPeriod 6 + RSILower 25 + StopDailyATR 1.0. Запуск: как у plateau_point2.json с -out ./reports/MDMG_r2_e_stop_10 (и _wf123 с -train-months 12 -test-months 3). РЕЗУЛЬТАТ ПРОГОНА 2026-09-27 (11:01 MSK): 57 сделок, PF 2.739, max DD 4 783.39 ₽ (3.34%); SL 5 (8.8%), удержание 15/39/85, ночёвок 52.6% — та же подпись капкана, сильнее; 2025 +26 827 ₽, 2026 +10 202 ₽; хвост 6 14/1.538, хвост 12 30/3.370; wf 24/12/3 3.501/30. В точку не допускается (гейт A). Отчёт: docs/superpowers/plans/task-12-report-mdmg.md (раздел Fix round 1).",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          6
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          10
+        ],
+        "EMASlow": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      }
+    }
+  ]
+}

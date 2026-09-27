@@ -1,0 +1,64 @@
+{
+  "_comment": "data/params/rsi_pullback/mdmg/plateau_r2_e_stop_08.json — СОБРАННАЯ ТОЧКА ВТОРОГО КРУГА ДО ТРЕТЬЕГО КОНТУРА (Task 12 fix round 1): дефолты + RSIPeriod 6 + RSILower 25 + StopDailyATR 0.8. ЗАПУСК (строго последовательно): go run ./cmd/backtest -ticker MDMG -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/mdmg/plateau_r2_e_stop_08.json -out ./reports/MDMG_r2_e_stop_08 -months 24 -min-trades 1 -metric profit_factor; разбор: python3 reports/_analysis/mdmg_journal.py reports/MDMG_r2_e_stop_08/*_best.md; walk-forward 24/12/3 — та же команда с -out ./reports/MDMG_r2_e_stop_08_wf123 -train-months 12 -test-months 3. РЕЗУЛЬТАТ ПРОГОНА 2026-09-27 (10:59 MSK): 57 сделок, PF 2.144, max DD 5 485.08 ₽ (4.84%); SL 10 (17.5%), удержание 13/33/85, ночёвок 27 (47.4%), переносов 4 — подпись капкана против дефолтов; 2025 +21 444.92 ₽, 2026 +9 518.16 ₽; хвост 6 14/1.518, хвост 12 30/2.568; гейт D 0, входов в 02–06 2. Walk-forward 24/12/3 2.615/30, 24/15/3 2.135/21, c001 2.234/30. Стоп сужен до 0.6 (Task 11 Step 8). Отчёт: docs/superpowers/plans/task-12-report-mdmg.md (раздел Fix round 1).",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          6
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          10
+        ],
+        "EMASlow": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.8
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      }
+    }
+  ]
+}

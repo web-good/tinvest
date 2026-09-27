@@ -1,0 +1,64 @@
+{
+  "_comment": "data/params/rsi_pullback/mdmg/plateau_r2_e_stop_05.json — СОСЕД ТОЧКИ ВТОРОГО КРУГА по стопу (Task 12 fix round 1): дефолты + RSIPeriod 6 + RSILower 25 + StopDailyATR 0.5. ЗАПУСК (строго последовательно): go run ./cmd/backtest -ticker MDMG -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/mdmg/plateau_r2_e_stop_05.json -out ./reports/MDMG_r2_e_stop_05 -months 24 -min-trades 1 -metric profit_factor; разбор: python3 reports/_analysis/mdmg_journal.py reports/MDMG_r2_e_stop_05/*_best.md; walk-forward 24/12/3 — та же команда с -out ./reports/MDMG_r2_e_stop_05_wf123 -train-months 12 -test-months 3. РЕЗУЛЬТАТ ПРОГОНА 2026-09-27 (11:05 MSK): 57 сделок, PF 1.705, max DD 5 715.46 ₽ (5.64%); 2025 +19 420 ₽, 2026 +3 163 ₽; хвост 6 14/−1 473 ₽/0.862 — пункт 6 сработал бы; хвост 12 30/2.021; убыточных полугодий 2; wf 24/12/3 2.050/30. Отчёт: docs/superpowers/plans/task-12-report-mdmg.md (раздел Fix round 1).",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          6
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          10
+        ],
+        "EMASlow": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.5
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      }
+    }
+  ]
+}
