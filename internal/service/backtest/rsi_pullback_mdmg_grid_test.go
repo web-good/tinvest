@@ -1,6 +1,9 @@
 package backtest
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // mdmgGridFiles перечисляет сетки MDMG ПОИМЁННО, а не обходом каталога: задачи плана кладут в тот
 // же каталог файлы-точки (plateau_*.json, probe_*.json), которые законно фиксируют ось одним
@@ -20,6 +23,23 @@ var mdmgGridFiles = []string{
 	"cal_trend_day.json",
 }
 
+// mdmgRound2GridFiles перечисляет узкие сетки второго круга MDMG (Task 12, §5.14 спеки) поимённо, по
+// той же причине, что и mdmgGridFiles.
+var mdmgRound2GridFiles = []string{
+	"cal2_trend_spent.json",
+	"cal2_trend_day.json",
+	"cal2_exit.json",
+	"cal2_risk.json",
+	"cal2_trail.json",
+}
+
+// mdmgAllGridFiles склеивает сетки обоих кругов: жёсткие инварианты §5.1 держатся на обоих.
+func mdmgAllGridFiles() []string {
+	out := make([]string, 0, len(mdmgGridFiles)+len(mdmgRound2GridFiles))
+	out = append(out, mdmgGridFiles...)
+	return append(out, mdmgRound2GridFiles...)
+}
+
 // mdmgCoreEMAFast — дефолт ядра core.DefaultParams().EMAFast. Сетка, свипующая EMASlow без
 // EMAFast (trend_day), живёт на этом значении, и узел EMASlow <= 10 дал бы вырожденную пару.
 const mdmgCoreEMAFast = 10
@@ -37,7 +57,7 @@ const mdmgStopCeiling = 0.8
 // максимально широкие оси, поэтому тест запрещает УРЕЗАТЬ ось (проверяет обязательные узлы и
 // запрещённые пары), но не запрещает лишних значений.
 func TestMDMGGridsStayWide(t *testing.T) {
-	for _, file := range mdmgGridFiles {
+	for _, file := range mdmgAllGridFiles() {
 		grid := rsiPullbackTickerGrid(t, "mdmg", file)
 		for _, v := range grid["RSILower"] {
 			if v > 50 {
@@ -76,7 +96,7 @@ func TestMDMGGridsStayWide(t *testing.T) {
 		}
 		// Стоп меряет только тема risk (§5.1 спеки): арбитры первого круга MDMG — связки тренда и
 		// дневного гейта, а не связки со стопом.
-		if file != "cal_risk.json" && len(grid["StopDailyATR"]) > 0 {
+		if !strings.HasPrefix(file, "cal2_") && file != "cal_risk.json" && len(grid["StopDailyATR"]) > 0 {
 			t.Errorf("mdmg/%s: свипует StopDailyATR %v — стоп меряет только cal_risk.json", file, grid["StopDailyATR"])
 		}
 	}
@@ -105,6 +125,32 @@ func TestMDMGGridsStayWide(t *testing.T) {
 			if !containsFloat(grid[m.axis], w) {
 				t.Errorf("mdmg/%s: ось %s потеряла обязательный узел %v (есть %v)", m.file, m.axis, w, grid[m.axis])
 			}
+		}
+	}
+
+	// Потолок гейта A во втором круге не двигается (§5.14 спеки).
+	for _, file := range mdmgRound2GridFiles {
+		for _, v := range rsiPullbackTickerGrid(t, "mdmg", file)["StopDailyATR"] {
+			if v > mdmgStopCeiling {
+				t.Errorf("mdmg/%s: StopDailyATR=%v выше потолка гейта A %v", file, v, mdmgStopCeiling)
+			}
+		}
+	}
+}
+
+// TestMDMGRound2FieldsHaveOneSource держит правило §5.14 спеки: во втором круге каждое поле
+// свипует ровно одна тема, иначе две темы проголосуют за одно поле по-разному.
+func TestMDMGRound2FieldsHaveOneSource(t *testing.T) {
+	owner := map[string]string{}
+	for _, file := range mdmgRound2GridFiles {
+		for field, values := range rsiPullbackTickerGrid(t, "mdmg", file) {
+			if len(values) < 2 {
+				continue // зафиксированное поле не голосует
+			}
+			if prev, ok := owner[field]; ok {
+				t.Errorf("mdmg: поле %s свипуют две темы второго круга: %s и %s", field, prev, file)
+			}
+			owner[field] = file
 		}
 	}
 }

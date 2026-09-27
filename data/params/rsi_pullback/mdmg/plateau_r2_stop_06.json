@@ -1,0 +1,64 @@
+{
+  "_comment": "data/params/rsi_pullback/mdmg/plateau_r2_stop_06.json — СОСЕД ПО ОСИ СТОПА собранной точки второго круга (Task 12, проверка гейта B): дефолты ядра + StopDailyATR 0.6. ЗАПУСК (строго последовательно): go run ./cmd/backtest -ticker MDMG -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/mdmg/plateau_r2_stop_06.json -out ./reports/MDMG_r2_stop_06 -months 24 -min-trades 1 -metric profit_factor; разбор: python3 reports/_analysis/mdmg_journal.py reports/MDMG_r2_stop_06/*_best.md. РЕЗУЛЬТАТ ПРОГОНА 2026-09-27 (10:45 MSK): 134 сделки, PF 1.618, max DD 11 851.50 ₽ (9.54%) — гейт B пробит; годы 2025 +21 814.61 ₽, 2026 +10 948.76 ₽; хвост 6 22/1.619, хвост 12 52/1.799; гейт D 0. Отчёт: docs/superpowers/plans/task-12-report-mdmg.md.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          10
+        ],
+        "EMASlow": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.6
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      }
+    }
+  ]
+}

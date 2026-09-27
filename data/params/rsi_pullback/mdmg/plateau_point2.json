@@ -1,0 +1,64 @@
+{
+  "_comment": "data/params/rsi_pullback/mdmg/plateau_point2.json — ТОЧКА ВТОРОГО КРУГА MDMG (Task 12, §5.14 спеки docs/superpowers/specs/2026-09-26-mdmg-rsi-pullback-prep-design.md). Одна фаза, все восемнадцать полей одним значением. Сборка: поля, которые второй круг свипует, — по большинству ≥3/4 невырожденных фолдов в зоне ±1 шаг второго круга, иначе дефолт ядра. Ни одно поле большинства не набрало: EMAFast и SpentDayATR (cal2_trend_spent — вырождены фолды 1 и 3, голосуют два фолда), EMASlow (cal2_trend_day 30/18/[20]/20 — максимум 2/4), RSIUpper (cal2_exit 67.5/72.5/77.5/77.5 — максимум 2/4), TPDailyATR (cal2_risk 0.35/0.3/0.6/0.6 — максимум 2/4), TrailDailyATR (cal2_trail 0.7/—/0.45/0.5 — максимум 2/4; UseTrail без дистанции -> 0). Поле, которое второй круг не свипует и которое ушло от дефолта в точке первого круга, — StopDailyATR 0.8. Собранная точка — дефолты ядра + StopDailyATR 0.8 (plateau_r2_stop_08.json): 134 сделки, PF 1.433, max DD 13 301.33 ₽ (10.73%) — ГЕЙТ B ПРОБИТ в обеих формах (порог 9 153.17 ₽ и 7.54%). Ближайшие варианты по оси стопа тоже пробивают: 0.7 -> 12 787.14 ₽ (10.45%), 0.6 -> 11 851.50 ₽ (9.54%). По Task 11 Step 4 стоп возвращён на 0.5. ИТОГ: все восемнадцать полей совпали с дефолтами ядра — точка второго круга тождественна baseline (маршрут CNRU), Steps 4–13 Task 11 пропущены, пункты стоп-условия взяты по числам baseline Task 1. ЗАПУСК (строго последовательно): go run ./cmd/backtest -ticker MDMG -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/mdmg/plateau_point2.json -out ./reports/MDMG_point2 -months 24 -min-trades 1 -metric profit_factor; разбор: python3 reports/_analysis/mdmg_journal.py reports/MDMG_point2/*_best.md. РЕЗУЛЬТАТ ПРОГОНА 2026-09-27 (10:45 MSK, окно 2024-09-27 10:45 — 2026-09-27 10:45): 134 сделки, PF 1.546, net +28 648.01 ₽ (28.65%), max DD 9 153.17 ₽ (7.54%) — побайтово числа baseline Task 1 (2026-09-26); годы 2025 +19 457.38 ₽ (1.627), 2026 +11 538.81 ₽ (1.914), огрызок 2024 −2 348.11 ₽ (0.735); хвост 6 22/+7 894.24 ₽/1.727, хвост 12 52/+13 522.47 ₽/1.663; гейт D 0 сделок; входов в выходные 0, в 02–06 2. Walk-forward по числам Task 1: 24/12/3 1.659/52, 24/15/3 1.903/35, c001 1.324/52; фолды 3–4 вместе 1.729 при хвосте 6 1.727 — знак совпал. СТОП-УСЛОВИЕ ВТОРОГО КРУГА: ни один пункт не сработал (пункт 2 снят, пул 52 >= 10). Кандидат для Task 13 — дефолты ядра (точка второго круга с ними совпадает). Отчёт: docs/superpowers/plans/task-12-report-mdmg.md.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          10
+        ],
+        "EMASlow": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.5
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      }
+    }
+  ]
+}
