@@ -8,6 +8,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/irkt"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/magn"
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/mdmg"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/ragr"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/sfin"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/svcb"
@@ -244,5 +245,17 @@ func TestRegistryHasRAGR(t *testing.T) {
 	}
 	if want := ragr.DefaultParams(); p != want {
 		t.Fatalf("реестр отдаёт не литерал пакета:\n got: %+v\nwant: %+v", p, want)
+	}
+}
+
+// TestRegistryHasMDMG держит связку «пакет — реестр живого раннера» для MDMG: раннер обязан
+// торговать ровно параметры пакета.
+func TestRegistryHasMDMG(t *testing.T) {
+	p, ok := ParamsFor(mdmg.Ticker)
+	if !ok {
+		t.Fatal("MDMG нет в реестре живого раннера: тикер не будет торговать вовсе")
+	}
+	if want := mdmg.DefaultParams(); p != want {
+		t.Fatalf("реестр отдаёт не параметры пакета:\n got: %+v\nwant: %+v", p, want)
 	}
 }
