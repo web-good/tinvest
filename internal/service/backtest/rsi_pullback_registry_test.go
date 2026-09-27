@@ -1099,10 +1099,14 @@ func TestRSIPullbackRAGRIsRegisteredAndCalibrated(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackMDMGTracksBaseline сторожит ЧЕСТНОЕ состояние: MDMG заведён в реестр до
-// калибровки, чтобы прогоны шли через реестр, а не через generic-ветку, и обязан возвращать ровно
-// baseline ядра. Заменяется в Task 14 плана снимком литерала или решением «дефолты по выбору».
-func TestRSIPullbackMDMGTracksBaseline(t *testing.T) {
+// TestRSIPullbackMDMGIsRegisteredAndCalibrated закрепляет два неотличимых снаружи факта: MDMG
+// есть в карте (а не проваливается в generic-ветку) И возвращает собственный литерал, а не
+// baseline.
+// Пакет strategy/mdmg заведён 2026-09-26 ДО калибровки и до принятия точки второго круга обязан
+// был возвращать core.DefaultParams(); калибровка прогналась (задача 13), литерал появился — и
+// теперь бэктест обязан гонять ровно его, иначе перепроверка отчёта MDMG мерила бы не то, что
+// стоит в коде. Снимок самого литерала живёт рядом с ним, в strategy/mdmg/mdmg_test.go.
+func TestRSIPullbackMDMGIsRegisteredAndCalibrated(t *testing.T) {
 	b, ok := rsiPullbackRegistry[rsipullbackmdmg.Ticker]
 	if !ok {
 		t.Fatal("MDMG отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
@@ -1111,8 +1115,11 @@ func TestRSIPullbackMDMGTracksBaseline(t *testing.T) {
 	if !pok {
 		t.Fatalf("MDMG: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
 	}
-	if p != core.DefaultParams() {
-		t.Fatalf("MDMG ещё не откалиброван, params обязаны совпадать с baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
+	if p == core.DefaultParams() {
+		t.Fatal("MDMG вернул baseline: откалиброванный тикер обязан иметь собственный литерал")
+	}
+	if want := rsipullbackmdmg.DefaultParams(); p != want {
+		t.Fatalf("MDMG params = %+v, want литерал пакета %+v", p, want)
 	}
 	if got := b.Build(p).Ticker(); got != "MDMG" {
 		t.Fatalf("Ticker() = %q, want MDMG", got)
