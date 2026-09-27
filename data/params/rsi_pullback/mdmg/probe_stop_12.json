@@ -1,0 +1,14 @@
+{
+  "_comment": "data/params/rsi_pullback/mdmg/probe_stop_12.json — ЗОНД КАПКАНА ШИРОКОГО СТОПА для MDMG (Task 8 Step 4 брифа .superpowers/sdd/2026-09-26-mdmg-rsi-pullback-prep/task-8-brief.md). Меряет одну точку StopDailyATR=1.2 поверх ДЕФОЛТОВ ЯДРА (прочие поля не заданы и берутся из core.DefaultParams()), одиночным прогоном на ПОЛНОМ 24-месячном окне (-months 24, без -train-months/-test-months, in-sample). Узел лежит ЗА ПОТОЛКОМ риск-гейта A (0.8, §5.4 спеки docs/superpowers/specs/2026-09-26-mdmg-rsi-pullback-prep-design.md), дальше зонда 1.0. ОПОРНЫЙ ЗАМЕР §5.4/§6.5 спеки (то же 24-месячное окно, до написания сеток): 1.2 -> PF 2.320/134, 6 SL-выходов (4.5%), DD 7.73%; для сравнения на потолке 0.8 -> PF 1.433/134, 22 SL (16.4%), DD 10.73%, и на зонде 1.0 -> PF 2.009/134, 10 SL (7.5%), DD 8.30%. Пул застывает на 134 сделках уже с 0.5 (капкан широкого стопа, docs/rsi_pullback/strategy.md) — рост PF со стопом дальше потолка не сопровождается ростом пула, только падением доли SL. НАЗНАЧЕНИЕ ЗОНДА: та же цена потолка, что и у probe_stop_10.json, вторая точка за потолком для сверки монотонности капкана. ЗАПУСК: go run ./cmd/backtest -ticker MDMG -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/mdmg/probe_stop_12.json -out ./reports/MDMG_probe_stop_12 -months 24 -min-trades 1 -metric profit_factor; разбор журнала: python3 reports/_analysis/mdmg_journal.py reports/MDMG_probe_stop_12/*_best.md. РЕЗУЛЬТАТ ПРОГОНА: (заполняется задачей плана).",
+  "phases": [
+    {
+      "name": "probe",
+      "grid": {
+        "StopDailyATR": [
+          1.2
+        ]
+      },
+      "keepTop": 1
+    }
+  ]
+}
