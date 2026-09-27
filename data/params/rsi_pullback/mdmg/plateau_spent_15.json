@@ -1,0 +1,64 @@
+{
+  "_comment": "data/params/rsi_pullback/mdmg/plateau_spent_15.json — СОСЕД ПЛАТО ТОЧКИ ПЕРВОГО КРУГА MDMG (Task 11 Step 7, §5.3 спеки): SpentDayATR 1.5 (сосед сверху по оси day); остальные семнадцать полей = plateau_point.json. ЗАПУСК (строго последовательно): go run ./cmd/backtest -ticker MDMG -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/mdmg/plateau_spent_15.json -out ./reports/MDMG_spent_15 -months 24 -min-trades 1 -metric profit_factor; разбор: python3 reports/_analysis/mdmg_journal.py reports/MDMG_spent_15/*_best.md; walk-forward 24/12/3 — та же команда с -out ./reports/MDMG_spent_15_wf123 -train-months 12 -test-months 3. РЕЗУЛЬТАТ ПРОГОНА 2026-09-27: 33 сделки, PF 3.710, DD 5 234.56 ₽ (4.67%); 2025 +5 875.93 ₽ (2.196), 2026 +3 854.38 ₽ (5.695), убыточных полугодий 0; хвост 6 4/+3 991.93 ₽/без убытков (меньше пяти — пункт 6 сработал бы), хвост 12 11/+6 970.18 ₽/9.491; гейты C, D — 0; wf 24/12/3 9.332/11 (−3.077). Пул OOS 11–21 сделок с одной-двумя убыточными — разница pooled OOS не мера; сравнения §5.5 разрешают только ничьи и поле, назначенное голосами, не переназначают. Отчёт: docs/superpowers/plans/task-11-report-mdmg.md.",
+  "phases": [
+    {
+      "name": "spent_15",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          10
+        ],
+        "EMASlow": [
+          50
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          1.5
+        ],
+        "StopDailyATR": [
+          0.8
+        ],
+        "TPDailyATR": [
+          0.3
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      }
+    }
+  ]
+}

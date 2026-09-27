@@ -1,0 +1,64 @@
+{
+  "_comment": "data/params/rsi_pullback/mdmg/plateau_stop_07.json — СОСЕД ПЛАТО ТОЧКИ ПЕРВОГО КРУГА MDMG (Task 11 Step 7, §5.3 спеки): StopDailyATR 0.7 (сосед снизу; трейл выключен, сняты оба соседа); остальные семнадцать полей = plateau_point.json. ЗАПУСК (строго последовательно): go run ./cmd/backtest -ticker MDMG -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/mdmg/plateau_stop_07.json -out ./reports/MDMG_stop_07 -months 24 -min-trades 1 -metric profit_factor; разбор: python3 reports/_analysis/mdmg_journal.py reports/MDMG_stop_07/*_best.md; walk-forward 24/12/3 — та же команда с -out ./reports/MDMG_stop_07_wf123 -train-months 12 -test-months 3. РЕЗУЛЬТАТ ПРОГОНА 2026-09-27: 49 сделок, PF 4.707, DD 6 240.33 ₽ (5.33%); SL 3; 2025 +11 099.28 ₽ (2.881), 2026 +6 009.45 ₽ (7.798), убыточных полугодий 0; хвост 6 5/+5 428.65 ₽/без убытков, хвост 12 15/+10 227.94 ₽/12.569; гейты C, D — 0; wf 24/12/3 12.332/15 (−0.077). Пул OOS 11–21 сделок с одной-двумя убыточными — разница pooled OOS не мера; сравнения §5.5 разрешают только ничьи и поле, назначенное голосами, не переназначают. Отчёт: docs/superpowers/plans/task-11-report-mdmg.md.",
+  "phases": [
+    {
+      "name": "stop_07",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          10
+        ],
+        "EMASlow": [
+          50
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          1.25
+        ],
+        "StopDailyATR": [
+          0.7
+        ],
+        "TPDailyATR": [
+          0.3
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ]
+      }
+    }
+  ]
+}
