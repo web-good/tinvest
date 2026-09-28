@@ -163,6 +163,178 @@ func medianHoldDays(trades []backtest.Trade) float64 {
 	return medianF(days)
 }
 
+// ZoneConfigResult is one grid configuration's trade list on one ticker.
+type ZoneConfigResult struct {
+	Params zonecore.Params
+	Trades []backtest.Trade
+}
+
+// ZoneRow is one ticker's zone-screening result. Medians run across grid configurations.
+type ZoneRow struct {
+	Ticker      string
+	Name        string
+	TurnoverM   float64 // mean daily turnover, millions of RUB
+	DailyATRPct float64 // mean weekday daily ATR, percent of close
+	Bars        int     // 30-minute bars replayed
+	TickPct     float64 // two price ticks as a percentage of the last close
+	TickUnknown bool    // the API gave no tick (or no price): TickPct is 0 and unmeasured
+
+	PFMed       float64 // median raw train profit factor
+	PFMedStress float64 // median train profit factor under stressed costs: the ranking key
+	TradesMed   float64
+	Plateau     float64 // share of configurations with PF >= PlateauPF at >= PlateauTrades trades
+	Capped      int
+	SilentCfg   int
+
+	PFMedHO       float64 // holdout, never a ranking key
+	PFMedStressHO float64
+	TradesMedHO   float64
+
+	HalvesPos float64 // median share of profitable half-years (trading configurations only)
+	TopHalf   float64 // median share of the best half in summed profitable halves; 0 = none profitable
+	SLShare   float64 // median share of stop exits (trading configurations only)
+	HoldDays  float64 // median of per-configuration median holding time, calendar days
+
+	AboveEMA50  float64 // share of train bars with close > EMA(50)
+	AboveEMA200 float64 // share of train bars with close > EMA(200)
+
+	Best       zonecore.Params // configuration with the highest raw train PF (reference only)
+	BestPF     float64
+	BestHalves []HalfResult // half-year breakdown of Best's train trades
+	NoSignals  bool         // no configuration traded in either window
+}
+
+// AggregateZone reduces one ticker's per-configuration results to a report row. tick is
+// the instrument's price increment used by the cost stress (0 = unknown).
+func AggregateZone(ticker, name string, results []ZoneConfigResult, split time.Time, tick float64, opts ScreenOpts) ZoneRow {
+	row := ZoneRow{Ticker: ticker, Name: name, NoSignals: true}
+	n := len(results)
+	pfs, pfsStress, counts := make([]float64, 0, n), make([]float64, 0, n), make([]float64, 0, n)
+	pfsHO, pfsStressHO, countsHO := make([]float64, 0, n), make([]float64, 0, n), make([]float64, 0, n)
+	var halvesPos, topHalf, sl, hold []float64
+	var plateau int
+	var haveBest bool
+	var bestTrain []backtest.Trade
+
+	for _, r := range results {
+		train, holdout := splitTrades(r.Trades, split)
+
+		pf, cnt := profitFactor(train)
+		if cnt > 0 {
+			row.NoSignals = false
+		} else {
+			row.SilentCfg++
+		}
+		// The first configuration claims Best unconditionally, so Best is always a real
+		// grid entry even when every raw PF is 0 (see Aggregate in pullback_screen.go).
+		if !haveBest || pf > row.BestPF {
+			row.BestPF, row.Best, bestTrain = pf, r.Params, train
+			haveBest = true
+		}
+		pf, capped := clampPF(pf, opts.PFCap)
+		if capped {
+			row.Capped++
+		}
+		if pf >= opts.PlateauPF && cnt >= opts.PlateauTrades {
+			plateau++
+		}
+		pfs = append(pfs, pf)
+		counts = append(counts, float64(cnt))
+
+		pfS, _ := profitFactor(stressTrades(train, opts.Commission, tick))
+		pfS, _ = clampPF(pfS, opts.PFCap)
+		pfsStress = append(pfsStress, pfS)
+
+		pfHO, cntHO := profitFactor(holdout)
+		if cntHO > 0 {
+			row.NoSignals = false
+		}
+		pfHO, _ = clampPF(pfHO, opts.PFCap)
+		pfsHO = append(pfsHO, pfHO)
+		countsHO = append(countsHO, float64(cntHO))
+		pfSHO, _ := profitFactor(stressTrades(holdout, opts.Commission, tick))
+		pfSHO, _ = clampPF(pfSHO, opts.PFCap)
+		pfsStressHO = append(pfsStressHO, pfSHO)
+
+		if cnt == 0 {
+			continue // a silent configuration has no halves, exits or holding time to judge
+		}
+		pos, top, hasProfit := halvesStats(halfYearResults(train))
+		halvesPos = append(halvesPos, pos)
+		if hasProfit {
+			topHalf = append(topHalf, top)
+		}
+		sl = append(sl, slShare(train))
+		hold = append(hold, medianHoldDays(train))
+	}
+
+	row.BestPF, _ = clampPF(row.BestPF, opts.PFCap)
+	row.BestHalves = halfYearResults(bestTrain)
+	row.PFMed = medianF(pfs)
+	row.PFMedStress = medianF(pfsStress)
+	row.TradesMed = medianF(counts)
+	row.PFMedHO = medianF(pfsHO)
+	row.PFMedStressHO = medianF(pfsStressHO)
+	row.TradesMedHO = medianF(countsHO)
+	row.HalvesPos = medianF(halvesPos)
+	row.TopHalf = medianF(topHalf)
+	row.SLShare = medianF(sl)
+	row.HoldDays = medianF(hold)
+	if n > 0 {
+		row.Plateau = float64(plateau) / float64(n)
+	}
+	return row
+}
+
+// ZoneTickerInput is everything ScreenZoneTicker needs about one instrument.
+type ZoneTickerInput struct {
+	Ticker            string
+	Name              string
+	Bars              []backtest.Candle // 30-minute bars over the whole window (train + holdout)
+	Daily             []backtest.Candle // daily bars with a warm-up lead-in
+	Lot               int32
+	MinPriceIncrement float64 // 0 when unknown
+}
+
+// ScreenZoneTicker replays every grid configuration over one ticker and reduces the runs
+// to a report row. The strategy is built directly with zonecore.NewWithParams and NOT
+// through RSIZoneLookupOrGeneric: registered tickers carry calibrated literals, and
+// grading them on those would make their rows incomparable with the rest.
+func ScreenZoneTicker(in ZoneTickerInput, cfgs []zonecore.Params, split time.Time, opts ScreenOpts) ZoneRow {
+	cfg := backtest.Config{
+		InitialCash: opts.Cash,
+		Fraction:    opts.Fraction,
+		Commission:  opts.Commission,
+		Lot:         in.Lot,
+	}
+	results := make([]ZoneConfigResult, 0, len(cfgs))
+	for _, p := range cfgs {
+		// rsi_zone needs no higher-timeframe series: htfCandles is nil.
+		res := backtest.Run(zonecore.NewWithParams(in.Ticker, p), in.Bars, in.Daily, nil, cfg)
+		results = append(results, ZoneConfigResult{Params: p, Trades: res.Trades})
+	}
+	row := AggregateZone(in.Ticker, in.Name, results, split, in.MinPriceIncrement, opts)
+	row.Bars = len(in.Bars)
+	row.TurnoverM = backtest.MeanDailyTurnoverM(in.Bars, in.Lot)
+	row.DailyATRPct = MeanDailyATRPct(in.Daily, screenDailyATRPeriod)
+
+	var lastClose float64
+	if len(in.Bars) > 0 {
+		lastClose = in.Bars[len(in.Bars)-1].Close
+	}
+	row.TickPct, row.TickUnknown = tickPct(in.MinPriceIncrement, lastClose)
+
+	var train []backtest.Candle
+	for _, b := range in.Bars {
+		if b.Time.Before(split) {
+			train = append(train, b)
+		}
+	}
+	row.AboveEMA50 = aboveEMAShare(train, 50)
+	row.AboveEMA200 = aboveEMAShare(train, 200)
+	return row
+}
+
 // aboveEMAShare is the fraction of bars whose close sits strictly above EMA(period),
 // computed with the same ema.Compute the strategy core uses. Warm-up bars (EMA == 0)
 // are left out of the denominator.
