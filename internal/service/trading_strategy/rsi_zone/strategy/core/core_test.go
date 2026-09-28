@@ -353,3 +353,164 @@ func TestOpenPositionIsNeverReentered(t *testing.T) {
 		t.Fatal("an open position must never produce another Buy")
 	}
 }
+
+// recoveryCloses is trendCloses(3) (the entry bar at index 402) followed by `upBars` bars of
+// +0.3%. With RSI(4): upBars=3 crosses above 75 exactly on the last bar (69.75 -> 79.37);
+// upBars=4 is already above it on the previous bar (79.37 -> 85.52).
+func recoveryCloses(upBars int) []float64 {
+	out := trendCloses(3)
+	p := out[len(out)-1]
+	for i := 0; i < upBars; i++ {
+		p *= 1.003
+		out = append(out, p)
+	}
+	return out
+}
+
+// openPosition is the long opened on trendCloses(3)'s last bar with the daily ATR frozen at
+// entryATR.
+func openPosition(entryATR float64) *strategy.Position {
+	entry := trendCloses(3)[402]
+	return &strategy.Position{
+		PurchasePrice:         entry,
+		Quantity:              1,
+		StopLoss:              entry - entryATR,
+		EntryATR:              entryATR,
+		MaxFavorablePrice:     entry,
+		PrevMaxFavorablePrice: entry,
+	}
+}
+
+func TestRecoveryFixtureShape(t *testing.T) {
+	for _, c := range []struct {
+		up        int
+		wantCross bool
+	}{{3, true}, {4, false}} {
+		closes := recoveryCloses(c.up)
+		n := len(closes)
+		rsi := indicators.RSISeries(closes, 4)
+		if cross := rsi[n-2] <= 75 && rsi[n-1] > 75; cross != c.wantCross {
+			t.Errorf("recoveryCloses(%d): RSI(4) %.2f -> %.2f, cross above 75 = %v, want %v", c.up, rsi[n-2], rsi[n-1], cross, c.wantCross)
+		}
+	}
+}
+
+func TestExitOnRSICrossUp(t *testing.T) {
+	md := fixture(recoveryCloses(3), mondayNoon)
+	md.Position = openPosition(dailyWidth)
+	sig := NewWithParams("TEST", DefaultParams()).Decide(md)
+	if sig.Kind != model.SignalSell || sig.Reason != "RSI" {
+		t.Fatalf("Kind/Reason = %v/%q, want SignalSell/RSI", sig.Kind, sig.Reason)
+	}
+	if sig.RSI <= 75 {
+		t.Errorf("RSI = %v, want > 75", sig.RSI)
+	}
+	if sig.ExitReason == "" {
+		t.Error("ExitReason must explain the exit")
+	}
+}
+
+func TestNoExitWhileRSIStaysAboveTheBand(t *testing.T) {
+	md := fixture(recoveryCloses(4), mondayNoon)
+	md.Position = openPosition(dailyWidth)
+	if sig := NewWithParams("TEST", DefaultParams()).Decide(md); sig.Kind != model.SignalNone {
+		t.Fatalf("Kind = %v, want SignalNone: RSI already above 75 on the previous bar is not a new cross", sig.Kind)
+	}
+}
+
+func TestExitOnStopLoss(t *testing.T) {
+	md := fixture(recoveryCloses(4), mondayNoon)
+	pos := openPosition(dailyWidth)
+	md.Position = pos
+	level := pos.PurchasePrice - dailyWidth
+	md.Lows[len(md.Lows)-1] = level - 0.01
+	sig := NewWithParams("TEST", DefaultParams()).Decide(md)
+	if sig.Kind != model.SignalSell || sig.Reason != "SL" {
+		t.Fatalf("Kind/Reason = %v/%q, want SignalSell/SL", sig.Kind, sig.Reason)
+	}
+	if math.Abs(sig.StopLoss-level) > 1e-9 {
+		t.Errorf("StopLoss = %v, want %v", sig.StopLoss, level)
+	}
+	if !model.IsStopReason(sig.Reason) {
+		t.Error("SL must be a stop reason so the engine fills it at the stop level")
+	}
+	if sig.ExitReason == "" {
+		t.Error("ExitReason must explain the exit")
+	}
+}
+
+func TestStopWinsOverRSIExitOnTheSameBar(t *testing.T) {
+	md := fixture(recoveryCloses(3), mondayNoon)
+	pos := openPosition(dailyWidth)
+	md.Position = pos
+	md.Lows[len(md.Lows)-1] = pos.PurchasePrice - dailyWidth // touching the level counts
+	if sig := NewWithParams("TEST", DefaultParams()).Decide(md); sig.Reason != "SL" {
+		t.Fatalf("Reason = %q, want SL: the worse outcome wins a same-bar tie", sig.Reason)
+	}
+}
+
+func TestStopUsesEntryATRNotTheCurrentOne(t *testing.T) {
+	// Current daily ATR is 0.5 (level would be entry-0.5), frozen EntryATR is 2 (level entry-2).
+	// A low between the two must NOT stop the trade.
+	md := fixtureWithDaily(recoveryCloses(4), mondayNoon, 0.5)
+	pos := openPosition(dailyWidth)
+	md.Position = pos
+	md.Lows[len(md.Lows)-1] = pos.PurchasePrice - 1.0
+	if sig := NewWithParams("TEST", DefaultParams()).Decide(md); sig.Kind != model.SignalNone {
+		t.Fatalf("Kind/Reason = %v/%q, want SignalNone: the stop is frozen at entry", sig.Kind, sig.Reason)
+	}
+}
+
+func TestNoStopWithoutEntryATR(t *testing.T) {
+	md := fixture(recoveryCloses(4), mondayNoon)
+	md.Position = openPosition(0)
+	md.Lows[len(md.Lows)-1] = 1
+	if sig := NewWithParams("TEST", DefaultParams()).Decide(md); sig.Kind != model.SignalNone {
+		t.Fatalf("Kind/Reason = %v/%q, want SignalNone: no EntryATR means no stop", sig.Kind, sig.Reason)
+	}
+	md = fixture(recoveryCloses(3), mondayNoon)
+	md.Position = openPosition(0)
+	if sig := NewWithParams("TEST", DefaultParams()).Decide(md); sig.Reason != "RSI" {
+		t.Fatalf("Reason = %q, want RSI: the RSI exit still works without a stop", sig.Reason)
+	}
+}
+
+func TestNoStopWhenDisabled(t *testing.T) {
+	p := DefaultParams()
+	p.StopDailyATR = 0
+	md := fixture(recoveryCloses(4), mondayNoon)
+	md.Position = openPosition(dailyWidth)
+	md.Lows[len(md.Lows)-1] = 1
+	if sig := NewWithParams("TEST", p).Decide(md); sig.Kind != model.SignalNone {
+		t.Fatalf("Kind/Reason = %v/%q, want SignalNone", sig.Kind, sig.Reason)
+	}
+}
+
+func TestManageDegrades(t *testing.T) {
+	cases := []struct {
+		name   string
+		md     func() strategy.MarketData
+		params func(p *Params)
+	}{
+		{"misaligned lows", func() strategy.MarketData {
+			md := fixture(recoveryCloses(3), mondayNoon)
+			md.Lows = md.Lows[:len(md.Lows)-1]
+			return md
+		}, nil},
+		{"single bar", func() strategy.MarketData { return fixture(recoveryCloses(3)[:1], mondayNoon) }, nil},
+		{"RSIPeriod 0", func() strategy.MarketData { return fixture(recoveryCloses(3), mondayNoon) }, func(p *Params) { p.RSIPeriod = 0 }},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			p := DefaultParams()
+			if c.params != nil {
+				c.params(&p)
+			}
+			md := c.md()
+			md.Position = openPosition(dailyWidth)
+			if sig := NewWithParams("TEST", p).Decide(md); sig.Kind != model.SignalNone {
+				t.Fatalf("Kind/Reason = %v/%q, want SignalNone", sig.Kind, sig.Reason)
+			}
+		})
+	}
+}

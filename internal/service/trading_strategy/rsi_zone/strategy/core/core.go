@@ -175,7 +175,7 @@ func StopLevel(p Params, entry, entryATR float64) float64 {
 func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 	sig := model.Signal{Ticker: s.ticker, Price: md.Price}
 	if md.Position != nil {
-		return sig
+		return s.manage(md, sig)
 	}
 	return s.enter(md, sig)
 }
@@ -232,4 +232,41 @@ func (s *Strategy) entryReason(rsiNow, emaNow, entry, stop, atr float64) string 
 		"RSI(%d) ушёл под %.0f (%.1f), close %.4f > EMA(%d) %.4f, дневной ATR %.4f; вход %.4f, %s",
 		s.p.RSIPeriod, s.p.RSILower, rsiNow, entry, s.p.EMAPeriod, emaNow, atr, entry, stopHow,
 	)
+}
+
+// manage handles an open long. It exits on one of two signals, evaluated in precedence order
+// SL → RSI. The stop triggers INTRABAR (the bar's low touching the level), because a real stop
+// order fills as soon as price trades through it; the engine prices that fill via
+// model.IsStopReason. It wins a same-bar tie with the RSI exit: the intrabar order is unknowable
+// from OHLC, and assuming the worse outcome is the honest choice. The stop level is rebuilt from
+// the entry price and the daily ATR frozen at entry, never from the current ATR. The RSI exit
+// fills at the bar close. There is no time stop and no end-of-day close.
+func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal {
+	pos := md.Position
+	n := len(md.Closes)
+	if pos == nil || n < 2 || len(md.Lows) != n {
+		return sig
+	}
+	i := n - 1
+	low, closeP := md.Lows[i], md.Closes[i]
+
+	// 1. protective stop, frozen at entry.
+	if level := StopLevel(s.p, pos.PurchasePrice, pos.EntryATR); level > 0 && low <= level {
+		sig.Kind, sig.Reason = model.SignalSell, "SL"
+		sig.StopLoss = level
+		sig.ExitReason = fmt.Sprintf("SL: low %.4f ≤ стоп %.4f (вход %.4f)", low, level, pos.PurchasePrice)
+		return sig
+	}
+	// 2. RSI crosses UP through the upper band — the bounce reached the upper critical zone.
+	if s.p.RSIPeriod <= 0 {
+		return sig
+	}
+	rsi := indicators.RSISeries(md.Closes, s.p.RSIPeriod)
+	if len(rsi) == n && crossedUp(rsi, i, s.p.RSIUpper) {
+		sig.Kind, sig.Reason = model.SignalSell, "RSI"
+		sig.RSI = rsi[i]
+		sig.ExitReason = fmt.Sprintf("RSI: RSI(%d) пересёк %.0f снизу вверх (%.1f), выход по %.4f (вход %.4f)",
+			s.p.RSIPeriod, s.p.RSIUpper, rsi[i], closeP, pos.PurchasePrice)
+	}
+	return sig
 }
