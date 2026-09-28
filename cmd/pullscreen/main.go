@@ -13,23 +13,16 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/joho/godotenv"
-
 	"tinvest/internal/enum"
 	svc "tinvest/internal/service/backtest"
+	"tinvest/internal/service/backtest/screenrun"
 	grpcclient "tinvest/pkg/client/grpc"
 	"tinvest/pkg/logger"
 	"tinvest/pkg/semaphore"
-)
-
-const (
-	apiAddress = "invest-public-api.tinkoff.ru:443"
-	cacheDir   = "data/candles"
 )
 
 func main() {
@@ -61,7 +54,7 @@ func main() {
 	if err := run(context.Background(), runCfg{
 		months: *months, holdoutMonths: *holdoutMonths, topN: *topN, workers: *workers,
 		minTurnoverM: *minTurnoverM, minATRPct: *minATRPct,
-		tickers: splitCSV(*tickersCSV), outDir: *outDir, refresh: *refresh, pause: *pause, opts: opts,
+		tickers: screenrun.SplitCSV(*tickersCSV), outDir: *outDir, refresh: *refresh, pause: *pause, opts: opts,
 	}); err != nil {
 		log.Fatalf("pullscreen: %v", err)
 	}
@@ -77,50 +70,6 @@ type runCfg struct {
 	opts                                 svc.ScreenOpts
 }
 
-// pauseAfterTicker idles a worker between tickers so a full-universe run does not
-// pin every core for 20+ minutes. It reports whether the pause completed: a
-// cancelled context abandons the sleep immediately, so Ctrl+C unwinds the pool at
-// once instead of once per outstanding pause.
-func pauseAfterTicker(ctx context.Context, d time.Duration) bool {
-	if d <= 0 {
-		return ctx.Err() == nil
-	}
-	timer := time.NewTimer(d)
-	defer timer.Stop()
-	select {
-	case <-timer.C:
-		return true
-	case <-ctx.Done():
-		return false
-	}
-}
-
-// shareInfo is the per-ticker metadata the worker pool needs.
-type shareInfo struct {
-	Ticker string
-	Name   string
-	ID     string
-	Lot    int32
-}
-
-// refreshWorkerCap is the most concurrent tickers -refresh may run with. The candle
-// provider (internal/service/backtest/candles.go) logs a failed chunk and keeps going on
-// error, and Load(refresh=true) then writes whatever it managed to fetch back over the
-// existing cache file — so a slow-down from rate limiting is not the risk, a partially
-// overwritten 540MB local cache is. 8 workers sit around 26 req/s against market-data,
-// well above what the API tolerates before chunks start failing.
-const refreshWorkerCap = 2
-
-// effectiveWorkers returns the worker count run() should actually use, and whether it
-// clamped the caller's request. Pure so the -refresh safety rule is unit-testable without
-// standing up a gRPC client.
-func effectiveWorkers(requested int, refresh bool) (workers int, capped bool) {
-	if refresh && requested > refreshWorkerCap {
-		return refreshWorkerCap, true
-	}
-	return requested, false
-}
-
 func run(ctx context.Context, cfg runCfg) error {
 	if cfg.holdoutMonths >= cfg.months {
 		return fmt.Errorf("-holdout-months (%d) must be smaller than -months (%d)", cfg.holdoutMonths, cfg.months)
@@ -128,21 +77,21 @@ func run(ctx context.Context, cfg runCfg) error {
 	if cfg.workers < 1 {
 		return fmt.Errorf("-workers must be at least 1")
 	}
-	if workers, capped := effectiveWorkers(cfg.workers, cfg.refresh); capped {
-		fmt.Printf("pullscreen: -refresh forces -workers %d -> %d to avoid punching holes in the local candle cache (see refreshWorkerCap)\n",
+	if workers, capped := screenrun.EffectiveWorkers(cfg.workers, cfg.refresh); capped {
+		fmt.Printf("pullscreen: -refresh forces -workers %d -> %d to avoid punching holes in the local candle cache (see screenrun.RefreshWorkerCap)\n",
 			cfg.workers, workers)
 		cfg.workers = workers
 	}
-	token, err := loadToken()
+	token, err := screenrun.LoadToken()
 	if err != nil {
 		return err
 	}
-	client, err := grpcclient.NewClientGrpc(apiAddress, token)
+	client, err := grpcclient.NewClientGrpc(screenrun.APIAddress, token)
 	if err != nil {
 		return fmt.Errorf("grpc client: %w", err)
 	}
 
-	universe, err := loadUniverse(ctx, client, cfg.tickers)
+	universe, err := screenrun.LoadUniverse(ctx, client, cfg.tickers)
 	if err != nil {
 		return err
 	}
@@ -153,7 +102,7 @@ func run(ctx context.Context, cfg runCfg) error {
 	dailyFrom := from.AddDate(-1, 0, 0)
 	split := to.AddDate(0, -cfg.holdoutMonths, 0)
 
-	provider := svc.NewCandleProvider(client.MarketDataServiceClient(), cacheDir)
+	provider := svc.NewCandleProvider(client.MarketDataServiceClient(), screenrun.CacheDir)
 	grid := svc.PullbackGrid()
 
 	sem := semaphore.New(cfg.workers)
@@ -165,7 +114,7 @@ func run(ctx context.Context, cfg runCfg) error {
 	for _, u := range universe {
 		wg.Add(1)
 		sem.Acquire()
-		go func(u shareInfo) {
+		go func(u screenrun.ShareInfo) {
 			defer wg.Done()
 			defer sem.Release()
 
@@ -194,7 +143,7 @@ func run(ctx context.Context, cfg runCfg) error {
 			// Held inside the semaphore slot on purpose: releasing first would let the
 			// next ticker start while this one idles, and the pool would stay just as
 			// hot as before.
-			pauseAfterTicker(ctx, cfg.pause)
+			screenrun.PauseAfterTicker(ctx, cfg.pause)
 		}(u)
 	}
 	wg.Wait()
@@ -216,55 +165,4 @@ func run(ctx context.Context, cfg runCfg) error {
 	fmt.Printf("pullscreen report: %s (scanned=%d ranked=%d no-signal=%d rejected=%d skipped=%d)\n",
 		path, len(universe), len(ranked), len(noSignals), len(rejected), skipped)
 	return nil
-}
-
-// loadUniverse returns the tradable RUB share universe, or just the requested tickers.
-func loadUniverse(ctx context.Context, client grpcclient.GrpcClient, only []string) ([]shareInfo, error) {
-	shares, err := client.InstrumentsServiceClient().Shares(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("load shares: %w", err)
-	}
-	want := make(map[string]bool, len(only))
-	for _, t := range only {
-		want[strings.ToUpper(t)] = true
-	}
-	var universe []shareInfo
-	for _, s := range shares {
-		if len(want) > 0 {
-			if !want[strings.ToUpper(s.Ticker)] {
-				continue
-			}
-		} else if !strings.EqualFold(s.Currency, "rub") || !s.Trading {
-			continue
-		}
-		universe = append(universe, shareInfo{Ticker: s.Ticker, Name: s.Name, ID: s.ID, Lot: s.Lot})
-	}
-	if len(universe) == 0 {
-		return nil, fmt.Errorf("no matching shares found")
-	}
-	return universe, nil
-}
-
-func splitCSV(s string) []string {
-	if strings.TrimSpace(s) == "" {
-		return nil
-	}
-	parts := strings.Split(s, ",")
-	out := make([]string, 0, len(parts))
-	for _, p := range parts {
-		if p = strings.TrimSpace(p); p != "" {
-			out = append(out, p)
-		}
-	}
-	return out
-}
-
-func loadToken() (string, error) {
-	_ = godotenv.Load("./env/local.env")
-	_ = godotenv.Load("./env/token.env")
-	token := os.Getenv("T_BANK")
-	if token == "" {
-		return "", fmt.Errorf("T_BANK is not set (checked env + ./env/local.env, ./env/token.env)")
-	}
-	return token, nil
 }
