@@ -171,31 +171,38 @@ func TestCrossHelpersBoundaries(t *testing.T) {
 	cases := []struct {
 		name     string
 		series   []float64
+		period   int // RSI length series was built with; series[i-1] is warm-up iff i-1 < period
 		level    float64
 		wantDown bool
 		wantUp   bool
 	}{
-		{"down through", []float64{30, 20}, 25, true, false},
-		{"from exactly on the level down", []float64{25, 20}, 25, true, false},
-		{"landing exactly on the level is not a cross", []float64{30, 25}, 25, false, false},
-		{"already below", []float64{20, 15}, 25, false, false},
-		{"warm-up zero is not a cross", []float64{0, 20}, 25, false, false},
-		{"up through", []float64{70, 80}, 75, false, true},
-		{"from exactly on the level up", []float64{75, 80}, 75, false, true},
-		{"already above", []float64{80, 85}, 75, false, false},
-		{"warm-up zero never crosses up", []float64{0, 80}, 75, false, false},
+		{"down through", []float64{30, 20}, 0, 25, true, false},
+		{"from exactly on the level down", []float64{25, 20}, 0, 25, true, false},
+		{"landing exactly on the level is not a cross", []float64{30, 25}, 0, 25, false, false},
+		{"already below", []float64{20, 15}, 0, 25, false, false},
+		{"warm-up zero is not a cross", []float64{0, 20}, 2, 25, false, false},
+		{"up through", []float64{70, 80}, 0, 75, false, true},
+		{"from exactly on the level up", []float64{75, 80}, 0, 75, false, true},
+		{"already above", []float64{80, 85}, 0, 75, false, false},
+		{"warm-up zero never crosses up", []float64{0, 80}, 2, 75, false, false},
+		// A genuine RSI of exactly 0.00 past warm-up (i-1 >= period) is a real prior reading, not
+		// an unset slot: it must still count as "at or below/above the level" for both helpers.
+		// Regression for the bug where the guard rejected series[i-1] == 0 by VALUE regardless of
+		// whether it was actually computed.
+		{"genuine post-warm-up zero counts as a valid prior value (down)", []float64{0, -10}, 0, -5, true, false},
+		{"genuine post-warm-up zero counts as a valid prior value (up)", []float64{0, 80}, 0, 75, false, true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := crossedDown(c.series, 1, c.level); got != c.wantDown {
+			if got := crossedDown(c.series, 1, c.period, c.level); got != c.wantDown {
 				t.Errorf("crossedDown = %v, want %v", got, c.wantDown)
 			}
-			if got := crossedUp(c.series, 1, c.level); got != c.wantUp {
+			if got := crossedUp(c.series, 1, c.period, c.level); got != c.wantUp {
 				t.Errorf("crossedUp = %v, want %v", got, c.wantUp)
 			}
 		})
 	}
-	if crossedDown([]float64{30}, 0, 25) || crossedUp([]float64{70}, 0, 75) {
+	if crossedDown([]float64{30}, 0, 0, 25) || crossedUp([]float64{70}, 0, 0, 75) {
 		t.Fatal("index 0 has no previous bar and must never be a cross")
 	}
 }
@@ -483,6 +490,46 @@ func TestNoStopWhenDisabled(t *testing.T) {
 	md.Lows[len(md.Lows)-1] = 1
 	if sig := NewWithParams("TEST", p).Decide(md); sig.Kind != model.SignalNone {
 		t.Fatalf("Kind/Reason = %v/%q, want SignalNone", sig.Kind, sig.Reason)
+	}
+}
+
+// zeroRSICloses is built for RSIPeriod=4: a long pure downtrend (constant -1 per bar) makes
+// Wilder's avgGain seed at exactly zero and stay there, since every subsequent bar is also a
+// loss (0*(p-1)/p + 0/p == 0) — the RSI reads exactly 0.00 for many consecutive bars, a genuine
+// computed value, not warm-up. The final bar is a single large jump up, producing a real cross
+// above 75 straight out of that zero: exactly the case crossedUp's old value-based guard
+// misclassified as "still unset" (see TestExitOnRSICrossUpFromGenuineZero).
+func zeroRSICloses() []float64 {
+	closes := []float64{100}
+	p := 100.0
+	for i := 0; i < 30; i++ {
+		p -= 1.0
+		closes = append(closes, p)
+	}
+	closes = append(closes, p+15)
+	return closes
+}
+
+func TestExitOnRSICrossUpFromGenuineZero(t *testing.T) {
+	closes := zeroRSICloses()
+	n := len(closes)
+	rsi := indicators.RSISeries(closes, 4)
+	if rsi[n-2] != 0 {
+		t.Fatalf("fixture drift: rsi[n-2] = %v, want exactly 0 (a genuine post-warm-up reading)", rsi[n-2])
+	}
+	if rsi[n-1] <= 75 {
+		t.Fatalf("fixture drift: rsi[n-1] = %v, want > 75 (a real cross above the upper band)", rsi[n-1])
+	}
+
+	md := fixture(closes, mondayNoon)
+	// EntryATR: 0 disables the stop entirely (StopLevel returns 0 whenever entryATR <= 0), which
+	// isolates the RSI branch from the SL branch regardless of how the fixture's lows are shaped.
+	md.Position = &strategy.Position{PurchasePrice: closes[n-2], Quantity: 1, EntryATR: 0}
+	sig := NewWithParams("TEST", DefaultParams()).Decide(md)
+	if sig.Kind != model.SignalSell || sig.Reason != "RSI" {
+		t.Fatalf("Kind/Reason = %v/%q, want SignalSell/RSI: a genuine RSI of exactly 0 after warm-up "+
+			"is a real prior reading, and the next bar's cross above the upper band must fire the RSI exit",
+			sig.Kind, sig.Reason)
 	}
 }
 

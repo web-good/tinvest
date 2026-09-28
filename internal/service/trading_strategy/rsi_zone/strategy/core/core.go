@@ -138,17 +138,22 @@ func (s *Strategy) barTime(md strategy.MarketData) time.Time {
 }
 
 // crossedDown reports whether series crossed down through level between i-1 and i: it sat at or
-// above the level and is now strictly below. The series[i-1] > 0 guard rejects RSISeries warm-up
-// zeros reading as "below the level".
-func crossedDown(series []float64, i int, level float64) bool {
-	return i >= 1 && i < len(series) && series[i-1] > 0 && series[i-1] >= level && series[i] < level
+// above the level and is now strictly below. period is the RSI length used to build series:
+// RSISeries (pkg/indicators/rsi.go) leaves indices below period as an unset zero rather than a
+// genuine reading, so validity is gated on the INDEX (i-1 >= period), not on the VALUE. Gating
+// on the value would reject a genuine RSI of exactly 0.00 — which Wilder's formula produces
+// whenever avgGain is 0, i.e. after a long enough run of falling bars — as if it were still
+// warm-up, silently eating a real cross on the very next bar.
+func crossedDown(series []float64, i, period int, level float64) bool {
+	return i >= 1 && i < len(series) && i-1 >= period && series[i-1] >= level && series[i] < level
 }
 
 // crossedUp reports whether series crossed up through level between i-1 and i: it sat at or
-// below the level and is now strictly above. The series[i-1] > 0 guard keeps an RSISeries
-// warm-up zero from manufacturing an exit out of nothing.
-func crossedUp(series []float64, i int, level float64) bool {
-	return i >= 1 && i < len(series) && series[i-1] > 0 && series[i-1] <= level && series[i] > level
+// below the level and is now strictly above. See crossedDown for why validity is gated on the
+// index rather than the value: a genuine post-warm-up RSI of exactly 0.00 must still count as a
+// real prior reading, so a sharp bounce past the upper band on the next bar is not missed.
+func crossedUp(series []float64, i, period int, level float64) bool {
+	return i >= 1 && i < len(series) && i-1 >= period && series[i-1] <= level && series[i] > level
 }
 
 // trendUp reports whether the close sits strictly above a warmed EMA. ema.Compute zero-fills
@@ -195,7 +200,7 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	i := n - 1
 	// 2. RSI crosses down through the lower band on the current bar.
 	rsi := indicators.RSISeries(md.Closes, s.p.RSIPeriod)
-	if len(rsi) != n || !crossedDown(rsi, i, s.p.RSILower) {
+	if len(rsi) != n || !crossedDown(rsi, i, s.p.RSIPeriod, s.p.RSILower) {
 		return sig
 	}
 	// 3. trend: close above a warmed EMA.
@@ -262,7 +267,7 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 		return sig
 	}
 	rsi := indicators.RSISeries(md.Closes, s.p.RSIPeriod)
-	if len(rsi) == n && crossedUp(rsi, i, s.p.RSIUpper) {
+	if len(rsi) == n && crossedUp(rsi, i, s.p.RSIPeriod, s.p.RSIUpper) {
 		sig.Kind, sig.Reason = model.SignalSell, "RSI"
 		sig.RSI = rsi[i]
 		sig.ExitReason = fmt.Sprintf("RSI: RSI(%d) пересёк %.0f снизу вверх (%.1f), выход по %.4f (вход %.4f)",
