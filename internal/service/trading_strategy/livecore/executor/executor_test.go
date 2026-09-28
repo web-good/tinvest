@@ -2,10 +2,14 @@ package executor
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 
 	investapi "tinvest/internal/pb/v1"
 	"tinvest/internal/service/trading_strategy/livecore/executor/mocks"
@@ -14,7 +18,7 @@ import (
 func TestBuy_PlacesMarketOrder(t *testing.T) {
 	var last *investapi.PostOrderRequest
 	m := mocks.NewMockOrdersClient(t)
-	m.EXPECT().PostOrder(mock.Anything, mock.Anything).
+	m.EXPECT().PostOrder(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Run(func(_ context.Context, in *investapi.PostOrderRequest, _ ...grpc.CallOption) {
 			last = in
 		}).
@@ -48,7 +52,7 @@ func TestBuy_PlacesMarketOrder(t *testing.T) {
 func TestSell_Direction(t *testing.T) {
 	var last *investapi.PostOrderRequest
 	m := mocks.NewMockOrdersClient(t)
-	m.EXPECT().PostOrder(mock.Anything, mock.Anything).
+	m.EXPECT().PostOrder(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Run(func(_ context.Context, in *investapi.PostOrderRequest, _ ...grpc.CallOption) {
 			last = in
 		}).
@@ -59,6 +63,68 @@ func TestSell_Direction(t *testing.T) {
 	}
 	if last.Direction != investapi.OrderDirection_ORDER_DIRECTION_SELL {
 		t.Fatalf("direction = %v, want SELL", last.Direction)
+	}
+}
+
+// setMD fills the header/trailer call options the way grpc-go does after a call.
+func setMD(opts []grpc.CallOption, header, trailer metadata.MD) {
+	for _, o := range opts {
+		switch v := o.(type) {
+		case grpc.HeaderCallOption:
+			*v.HeaderAddr = header
+		case grpc.TrailerCallOption:
+			*v.TrailerAddr = trailer
+		}
+	}
+}
+
+func TestBuy_RejectCarriesBrokerMessage(t *testing.T) {
+	tests := []struct {
+		name    string
+		header  metadata.MD
+		trailer metadata.MD
+	}{
+		{"in header", metadata.Pairs("message", "Instrument is not available for trading", "x-tracking-id", "trk-42"), nil},
+		{"in trailer", nil, metadata.Pairs("message", "Instrument is not available for trading", "x-tracking-id", "trk-42")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rpcErr := status.Error(codes.InvalidArgument, "30049")
+			m := mocks.NewMockOrdersClient(t)
+			m.EXPECT().PostOrder(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+				Run(func(_ context.Context, _ *investapi.PostOrderRequest, opts ...grpc.CallOption) {
+					setMD(opts, tt.header, tt.trailer)
+				}).
+				Return(nil, rpcErr)
+			e := New(m, "acc-1", true)
+
+			_, err := e.Buy(context.Background(), "uid-1", 1)
+			if err == nil {
+				t.Fatal("Buy: want error")
+			}
+			msg := err.Error()
+			if !strings.Contains(msg, "30049") ||
+				!strings.Contains(msg, "Instrument is not available for trading") ||
+				!strings.Contains(msg, "trk-42") {
+				t.Fatalf("error %q must carry code, broker message and tracking id", msg)
+			}
+			if status.Code(err) != codes.InvalidArgument {
+				t.Fatalf("status code lost: %v", status.Code(err))
+			}
+		})
+	}
+}
+
+func TestBuy_RejectWithoutMetadataKeepsError(t *testing.T) {
+	rpcErr := status.Error(codes.InvalidArgument, "30049")
+	m := mocks.NewMockOrdersClient(t)
+	m.EXPECT().PostOrder(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(nil, rpcErr)
+	e := New(m, "acc-1", true)
+
+	_, err := e.Buy(context.Background(), "uid-1", 1)
+	if err == nil || err.Error() != rpcErr.Error() {
+		t.Fatalf("err = %v, want unchanged %v", err, rpcErr)
 	}
 }
 

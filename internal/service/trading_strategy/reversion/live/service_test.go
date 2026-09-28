@@ -720,7 +720,7 @@ func TestManagePass_SellRejectedRepostsStop(t *testing.T) {
 	env.stops.EXPECT().CancelStopOrder(mock.Anything, mock.MatchedBy(func(in *investapi.CancelStopOrderRequest) bool {
 		return in.GetStopOrderId() == "so-1"
 	})).Return(&investapi.CancelStopOrderResponse{}, nil).Once()
-	env.orders.EXPECT().PostOrder(mock.Anything, mock.Anything).
+	env.orders.EXPECT().PostOrder(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(nil, fmt.Errorf("rejected")).Once()
 	// Fallback-репост на прежнем уровне 97 и прежнем объёме.
 	env.stops.EXPECT().PostStopOrder(mock.Anything, mock.MatchedBy(func(in *investapi.PostStopOrderRequest) bool {

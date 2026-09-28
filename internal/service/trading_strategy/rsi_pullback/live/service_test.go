@@ -314,7 +314,7 @@ func TestLiveBuyPlacesRealOrderAndStopFromTheFill(t *testing.T) {
 	e.orders.EXPECT().PostOrder(mock.Anything, mock.MatchedBy(func(in *investapi.PostOrderRequest) bool {
 		return in.GetQuantity() == 50 && // 5% от 1 000 000 при цене 100 и лоте 10
 			in.GetDirection() == investapi.OrderDirection_ORDER_DIRECTION_BUY
-	})).Return(filledOrder(40, 101), nil).Once()
+	}), mock.Anything, mock.Anything).Return(filledOrder(40, 101), nil).Once()
 	e.stops.EXPECT().PostStopOrder(mock.Anything, mock.MatchedBy(func(in *investapi.PostStopOrderRequest) bool {
 		return in.GetQuantity() == 40 &&
 			utils.CombinePrice(in.GetStopPrice().GetUnits(), in.GetStopPrice().GetNano()) == gazpStopFromFill
@@ -539,7 +539,7 @@ func TestRejectedBuyLeavesStateUntouched(t *testing.T) {
 	e.ops.EXPECT().GetPortfolioTotal(mock.Anything, mock.Anything).Return(1_000_000.0, nil)
 	e.ops.EXPECT().GetAvailableCash(mock.Anything, mock.Anything).Return(1_000_000.0, nil)
 	e.stops.EXPECT().GetStopOrders(mock.Anything, mock.Anything).Return(emptyStopList(), nil)
-	e.orders.EXPECT().PostOrder(mock.Anything, mock.Anything).Return(nil, fmt.Errorf("rejected")).Once()
+	e.orders.EXPECT().PostOrder(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil, fmt.Errorf("rejected")).Once()
 	// Строгое (не Maybe()) ожидание: тест не должен проходить вакуумно, если сигнала не было.
 	e.tg.EXPECT().SendMessage(mock.MatchedBy(func(s string) bool {
 		return strings.Contains(s, "ордер на покупку отклонён")
@@ -725,7 +725,7 @@ func TestRSIExitCancelsStopBeforeSelling(t *testing.T) {
 	})).Run(func(_ context.Context, _ *investapi.CancelStopOrderRequest, _ ...grpc.CallOption) {
 		seq = append(seq, "cancel")
 	}).Return(&investapi.CancelStopOrderResponse{}, nil).Once()
-	e.orders.EXPECT().PostOrder(mock.Anything, mock.Anything).
+	e.orders.EXPECT().PostOrder(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Run(func(_ context.Context, _ *investapi.PostOrderRequest, _ ...grpc.CallOption) {
 			seq = append(seq, "sell")
 		}).Return(filledOrder(10, 106), nil).Once()
@@ -762,7 +762,7 @@ func TestTakeProfitExitFiresOnBarHigh(t *testing.T) {
 	e.orders.EXPECT().PostOrder(mock.Anything, mock.MatchedBy(func(in *investapi.PostOrderRequest) bool {
 		return in.GetQuantity() == 10 &&
 			in.GetDirection() == investapi.OrderDirection_ORDER_DIRECTION_SELL
-	})).Return(filledOrder(10, 107), nil).Once()
+	}), mock.Anything, mock.Anything).Return(filledOrder(10, 107), nil).Once()
 	e.tg.EXPECT().SendMessage(mock.MatchedBy(func(s string) bool {
 		return strings.Contains(s, "Выход") && strings.Contains(s, "TP")
 	})).Return(nil).Once()
@@ -789,7 +789,7 @@ func TestRejectedSellRestoresTheStop(t *testing.T) {
 		Return(activeList("uid-GAZP", "so-1", gazpStopFromSignal, 10), nil)
 	e.stops.EXPECT().CancelStopOrder(mock.Anything, mock.Anything).
 		Return(&investapi.CancelStopOrderResponse{}, nil).Once()
-	e.orders.EXPECT().PostOrder(mock.Anything, mock.Anything).Return(nil, fmt.Errorf("rejected")).Once()
+	e.orders.EXPECT().PostOrder(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil, fmt.Errorf("rejected")).Once()
 	// Защита возвращается на прежнем уровне и в прежнем объёме.
 	e.stops.EXPECT().PostStopOrder(mock.Anything, mock.MatchedBy(func(in *investapi.PostStopOrderRequest) bool {
 		return in.GetQuantity() == 10 &&
@@ -1276,7 +1276,7 @@ func TestZeroFillCreatesNoStateAndNoStop(t *testing.T) {
 	e.ops.EXPECT().GetPortfolioTotal(mock.Anything, mock.Anything).Return(1_000_000.0, nil)
 	e.ops.EXPECT().GetAvailableCash(mock.Anything, mock.Anything).Return(1_000_000.0, nil)
 	e.stops.EXPECT().GetStopOrders(mock.Anything, mock.Anything).Return(emptyStopList(), nil)
-	e.orders.EXPECT().PostOrder(mock.Anything, mock.Anything).Return(filledOrder(0, 0), nil).Once()
+	e.orders.EXPECT().PostOrder(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(filledOrder(0, 0), nil).Once()
 	// PostStopOrder не заявлен вовсе: строгий мок провалит тест при любом вызове.
 	e.tg.EXPECT().SendMessage(mock.MatchedBy(func(s string) bool {
 		return strings.Contains(s, "исполнен") && strings.Contains(s, "GAZP")
@@ -1336,7 +1336,7 @@ func TestRejectedSellRecordsPendingExit(t *testing.T) {
 		Return(activeList("uid-GAZP", "so-1", gazpStopFromSignal, 10), nil)
 	e.stops.EXPECT().CancelStopOrder(mock.Anything, mock.Anything).
 		Return(&investapi.CancelStopOrderResponse{}, nil).Once()
-	e.orders.EXPECT().PostOrder(mock.Anything, mock.Anything).Return(nil, fmt.Errorf("rejected")).Once()
+	e.orders.EXPECT().PostOrder(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil, fmt.Errorf("rejected")).Once()
 	e.stops.EXPECT().PostStopOrder(mock.Anything, mock.Anything).
 		Return(&investapi.PostStopOrderResponse{StopOrderId: "so-2"}, nil).Once()
 	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
@@ -1372,7 +1372,7 @@ func TestPendingExitSellsOnTheNextPassWithoutASignal(t *testing.T) {
 		Return(&investapi.CancelStopOrderResponse{}, nil).Once()
 	e.orders.EXPECT().PostOrder(mock.Anything, mock.MatchedBy(func(in *investapi.PostOrderRequest) bool {
 		return in.GetDirection() == investapi.OrderDirection_ORDER_DIRECTION_SELL
-	})).Return(filledOrder(10, 100), nil).Once()
+	}), mock.Anything, mock.Anything).Return(filledOrder(10, 100), nil).Once()
 	e.tg.EXPECT().SendMessage(mock.MatchedBy(func(s string) bool {
 		return strings.Contains(s, "Выход") && strings.Contains(s, "RSI")
 	})).Return(nil).Once()
@@ -1442,7 +1442,7 @@ func TestZeroFillOnSellKeepsThePositionAndRemembersTheExit(t *testing.T) {
 		Return(activeList("uid-GAZP", "so-1", gazpStopFromSignal, 10), nil)
 	e.stops.EXPECT().CancelStopOrder(mock.Anything, mock.Anything).
 		Return(&investapi.CancelStopOrderResponse{}, nil).Once()
-	e.orders.EXPECT().PostOrder(mock.Anything, mock.Anything).Return(filledOrder(0, 0), nil).Once()
+	e.orders.EXPECT().PostOrder(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(filledOrder(0, 0), nil).Once()
 	e.stops.EXPECT().PostStopOrder(mock.Anything, mock.Anything).
 		Return(&investapi.PostStopOrderResponse{StopOrderId: "so-2"}, nil).Once()
 	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
