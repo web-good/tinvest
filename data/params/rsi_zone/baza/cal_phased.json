@@ -1,0 +1,104 @@
+{
+  "_comment": "Арбитр phased: фазы entry → trend → exit → risk (keepTop 5). Калибровка rsi_zone на BAZA по /rsi-zone-calibrate (2026-09-29). История 30m BAZA с 2025-12-10 (~9.6 мес, 8909 баров) — протокол нештатный, как у DOMRF: -months 10 -train-months 3 -test-months 2 -min-trades 15 (3 фолда, OOS 2026-03-01—05-01, 04-29—06-29, 06-29—08-29); контроль -train-months 4 -test-months 2. Сетка перечисляет все шесть полей: несвипуемые прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0). EMA 400 оставлена: Lookback 2·400+20 = 820 баров ≈ 9.2% истории. Запуск: go run ./cmd/backtest -ticker BAZA -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/baza/cal_phased.json -out ./reports/BAZA_zone/phased -months 10 -train-months 3 -test-months 2 -min-trades 15 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "entry",
+      "grid": {
+        "RSIPeriod": [
+          2,
+          3,
+          4,
+          5,
+          6,
+          8,
+          10,
+          14
+        ],
+        "RSILower": [
+          5,
+          10,
+          15,
+          20,
+          25,
+          30,
+          35,
+          40,
+          45
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ]
+      },
+      "keepTop": 5
+    },
+    {
+      "name": "trend",
+      "keepTop": 5,
+      "grid": {
+        "EMAPeriod": [
+          10,
+          20,
+          30,
+          50,
+          75,
+          100,
+          150,
+          200,
+          300,
+          400
+        ]
+      }
+    },
+    {
+      "name": "exit",
+      "keepTop": 5,
+      "grid": {
+        "RSIUpper": [
+          50,
+          55,
+          60,
+          65,
+          70,
+          75,
+          80,
+          85,
+          90,
+          95
+        ]
+      }
+    },
+    {
+      "name": "risk",
+      "grid": {
+        "StopDailyATR": [
+          0.3,
+          0.5,
+          0.7,
+          1.0,
+          1.25,
+          1.5,
+          2.0,
+          2.5,
+          3.0
+        ],
+        "DailyATRPeriod": [
+          5,
+          7,
+          10,
+          14,
+          21,
+          30
+        ]
+      }
+    }
+  ]
+}
