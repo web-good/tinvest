@@ -66,32 +66,41 @@ type PFDist struct {
 // Distribution summarizes PFMed across the ranked rows. For N=1, quartiles
 // equal the median to avoid misleading 0.00 values in the report.
 func Distribution(ranked []PullbackRow) PFDist {
-	if len(ranked) == 0 {
-		return PFDist{}
-	}
 	vals := make([]float64, 0, len(ranked))
-	var above int
 	for _, r := range ranked {
 		vals = append(vals, r.PFMed)
-		if r.PFMed >= 1.5 {
+	}
+	return distributionOf(vals)
+}
+
+// distributionOf summarizes a set of profit factors: quartiles, extremes and the share
+// at or above 1.5. Shared by both screeners, each passing its own ranking key.
+func distributionOf(vals []float64) PFDist {
+	if len(vals) == 0 {
+		return PFDist{}
+	}
+	s := append([]float64(nil), vals...)
+	sort.Float64s(s)
+	var above int
+	for _, v := range s {
+		if v >= 1.5 {
 			above++
 		}
 	}
-	sort.Float64s(vals)
-	median := medianF(vals)
+	median := medianF(s)
 	q1, q3 := median, median // default for N=1
-	if len(vals) > 1 {
-		q1 = medianF(vals[:len(vals)/2])
-		q3 = medianF(vals[(len(vals)+1)/2:])
+	if len(s) > 1 {
+		q1 = medianF(s[:len(s)/2])
+		q3 = medianF(s[(len(s)+1)/2:])
 	}
 	return PFDist{
-		Min:          vals[0],
+		Min:          s[0],
 		Q1:           q1,
 		Median:       median,
 		Q3:           q3,
-		Max:          vals[len(vals)-1],
-		ShareAbove15: float64(above) / float64(len(ranked)),
-		N:            len(ranked),
+		Max:          s[len(s)-1],
+		ShareAbove15: float64(above) / float64(len(s)),
+		N:            len(s),
 	}
 }
 
