@@ -10,8 +10,6 @@ import (
 	goldenx "tinvest/internal/service/trading_strategy/golden_x/dto"
 	gxmodel "tinvest/internal/service/trading_strategy/golden_x/model"
 	"tinvest/internal/service/trading_strategy/golden_x/scheduler"
-	reversiondto "tinvest/internal/service/trading_strategy/reversion/live/dto"
-	reversionscheduler "tinvest/internal/service/trading_strategy/reversion/live/scheduler"
 	rsipullbackdto "tinvest/internal/service/trading_strategy/rsi_pullback/live/dto"
 	rsipullbackscheduler "tinvest/internal/service/trading_strategy/rsi_pullback/live/scheduler"
 	"tinvest/internal/service_provider"
@@ -112,8 +110,7 @@ func (a *App) runDev(ctx context.Context) {
 		defer wg.Done()
 		// Раннер поднимается только со своим счётом и токеном. Отсутствие переменных —
 		// штатное состояние (счёт заводится отдельно), и оно не должно ни ронять
-		// приложение, ни поднимать раннер с пустым токеном: рядом работают воркеры
-		// reversion, ведущие реальные позиции.
+		// приложение, ни поднимать раннер с пустым токеном.
 		if !a.config.RSIPullback.Ready() {
 			logger.ErrorContext(ctx, "RSI Pullback worker disabled: RSI_PULLBACK_ACCOUNT_ID/RSI_PULLBACK_TOKEN are not set")
 			return
@@ -133,7 +130,7 @@ func (a *App) runDev(ctx context.Context) {
 
 func (a *App) runProd(ctx context.Context) {
 	wg := sync.WaitGroup{}
-	wg.Add(7)
+	wg.Add(5)
 	go func() {
 		defer wg.Done()
 		listener, err := a.sp.GetTelegramCommands()
@@ -188,33 +185,13 @@ func (a *App) runProd(ctx context.Context) {
 			logger.ErrorContext(ctx, "Error in worker golden X strategy ShareTip:2", err.Error())
 		}
 	}()
-
-	go func() {
-		defer wg.Done()
-		err := reversionscheduler.NewSchedulerService(a.sp.GetReversionLiveService()).Run(
-			ctx,
-			reversiondto.Run{Scheduler: "0 7-23 * * 1-5", Mode: reversiondto.ModeBuy},
-		)
-		if err != nil {
-			logger.ErrorContext(ctx, "Error in worker Reversion buy", err.Error())
-		}
-	}()
-	go func() {
-		defer wg.Done()
-		err := reversionscheduler.NewSchedulerService(a.sp.GetReversionLiveService()).Run(
-			ctx,
-			reversiondto.Run{Scheduler: "0 7-23,0 * * *", Mode: reversiondto.ModeManage},
-		)
-		if err != nil {
-			logger.ErrorContext(ctx, "Error in worker Reversion manage", err.Error())
-		}
-	}()
+	// Live reversion выведен из прода 2026-09-29 решением владельца: воркеры buy/manage
+	// больше не поднимаются. Код раннера (reversion/live) и его конфиг остаются.
 	go func() {
 		defer wg.Done()
 		// Раннер поднимается только со своим счётом и токеном. Отсутствие переменных —
 		// штатное состояние (счёт заводится отдельно), и оно не должно ни ронять
-		// приложение, ни поднимать раннер с пустым токеном: рядом работают воркеры
-		// reversion, ведущие реальные позиции.
+		// приложение, ни поднимать раннер с пустым токеном.
 		// Уровень ERROR, а не Warn: только ERROR-записи дублируются в тему General
 		// Telegram (internal/service/notification/errorlog). Раннер, не поднявшийся
 		// из-за пустого токена, снаружи выглядит ровно как поднявшийся, но не нашедший
