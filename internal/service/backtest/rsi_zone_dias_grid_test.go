@@ -10,7 +10,8 @@ import (
 
 // rsiZoneDIASGridFiles перечисляет тематические сетки DIAS поимённо, а не обходом каталога: в
 // том же каталоге лежат файлы-точки (baseline_point.json, point.json, plateau_*.json), которые
-// законно фиксируют ось одним значением и упали бы на проверке краёв осей.
+// законно фиксируют ось одним значением и упали бы на проверке краёв осей. Сетки второго круга
+// (cal2_*) узкие по построению: для них проверяются инварианты, но не минимальные края осей.
 var rsiZoneDIASGridFiles = []string{
 	"cal_entry.json",
 	"cal_exit.json",
@@ -19,6 +20,10 @@ var rsiZoneDIASGridFiles = []string{
 	"cal_risk.json",
 	"cal_trend_risk.json",
 	"cal_phased.json",
+	"cal2_entry.json",
+	"cal2_exit.json",
+	"cal2_trend.json",
+	"cal2_risk.json",
 }
 
 // rsiZoneDIASMaxEMA — потолок EMAPeriod на 24-месячном окне (история ~31.5 мес): Lookback 2·N+20 не должен

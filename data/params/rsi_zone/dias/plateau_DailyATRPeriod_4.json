@@ -1,0 +1,28 @@
+{
+  "_comment": "Плато DailyATRPeriod точки DIAS: значение 4 поверх point.json (2026-09-29). Запуск: -calibrate plateau_DailyATRPeriod_4.json -months 36 -min-trades 1. РЕЗУЛЬТАТ 2026-09-29 (полная история): 157 сделок, PF 1.559, просадка 14342 ₽ (9.22%), SL 14, 2 сделки через отсечки.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          4
+        ],
+        "StopDailyATR": [
+          1.0
+        ]
+      }
+    }
+  ]
+}

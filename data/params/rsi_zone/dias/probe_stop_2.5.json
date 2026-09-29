@@ -1,0 +1,28 @@
+{
+  "_comment": "Зонд стопа точки DIAS: StopDailyATR 2.5 при DailyATRPeriod 5 (2026-09-29). Запуск: -calibrate probe_stop_2.5.json -months 36 -min-trades 1. РЕЗУЛЬТАТ 2026-09-29 (полная история): 157 сделок, PF 1.870, просадка 16614 ₽ (9.48%), SL 1 — капкан (равно стопу 3.0).",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          5
+        ],
+        "StopDailyATR": [
+          2.5
+        ]
+      }
+    }
+  ]
+}
