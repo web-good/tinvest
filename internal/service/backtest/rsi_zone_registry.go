@@ -7,6 +7,7 @@ import (
 	rsizoneafks "tinvest/internal/service/trading_strategy/rsi_zone/strategy/afks"
 	rsizonebaza "tinvest/internal/service/trading_strategy/rsi_zone/strategy/baza"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/core"
+	rsizonedias "tinvest/internal/service/trading_strategy/rsi_zone/strategy/dias"
 	rsizonedomrf "tinvest/internal/service/trading_strategy/rsi_zone/strategy/domrf"
 	rsizonesber "tinvest/internal/service/trading_strategy/rsi_zone/strategy/sber"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
@@ -35,6 +36,7 @@ func rsiZoneBindingFor(ticker string, defaults func() core.Params) Binding {
 var rsiZoneRegistry = map[string]Binding{
 	rsizoneafks.Ticker:  rsiZoneBindingFor(rsizoneafks.Ticker, rsizoneafks.DefaultParams),
 	rsizonebaza.Ticker:  rsiZoneBindingFor(rsizonebaza.Ticker, rsizonebaza.DefaultParams),
+	rsizonedias.Ticker:  rsiZoneBindingFor(rsizonedias.Ticker, rsizonedias.DefaultParams),
 	rsizonedomrf.Ticker: rsiZoneBindingFor(rsizonedomrf.Ticker, rsizonedomrf.DefaultParams),
 	rsizonesber.Ticker:  rsiZoneBindingFor(rsizonesber.Ticker, rsizonesber.DefaultParams),
 }
