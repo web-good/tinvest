@@ -4,25 +4,44 @@ import (
 	"encoding/json"
 	"fmt"
 
+	rsizoneafks "tinvest/internal/service/trading_strategy/rsi_zone/strategy/afks"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/core"
+	rsizonedomrf "tinvest/internal/service/trading_strategy/rsi_zone/strategy/domrf"
+	rsizonesber "tinvest/internal/service/trading_strategy/rsi_zone/strategy/sber"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 )
 
-// RSIZoneLookupOrGeneric returns an rsi_zone binding bound to the ticker. The strategy is
-// ticker-agnostic and there are no per-ticker packages yet (calibration pending), so every
-// ticker gets the generic defaults.
-func RSIZoneLookupOrGeneric(ticker string) Binding {
+// rsiZoneBindingFor builds an rsi_zone binding for one ticker whose baseline params come from
+// defaults: a calibrated ticker package, or core.DefaultParams for an unregistered ticker.
+func rsiZoneBindingFor(ticker string, defaults func() core.Params) Binding {
 	return Binding{
-		DefaultParams: func() any { return core.DefaultParams() },
+		DefaultParams: func() any { return defaults() },
 		Build: func(params any) strategy.Strategy {
 			return core.NewWithParams(ticker, params.(core.Params))
 		},
 		ParseParams: func(raw []byte) (any, error) {
-			p := core.DefaultParams() // start from defaults so partial JSON overrides
+			p := defaults() // start from defaults so partial JSON overrides
 			if err := json.Unmarshal(raw, &p); err != nil {
 				return nil, fmt.Errorf("backtest: parse rsi_zone params: %w", err)
 			}
 			return p, nil
 		},
 	}
+}
+
+// rsiZoneRegistry gives every calibrated ticker its own parameter package; the calibration
+// write-up lives in the package doc and in data/params/rsi_zone/<ticker>/.
+var rsiZoneRegistry = map[string]Binding{
+	rsizoneafks.Ticker:  rsiZoneBindingFor(rsizoneafks.Ticker, rsizoneafks.DefaultParams),
+	rsizonedomrf.Ticker: rsiZoneBindingFor(rsizonedomrf.Ticker, rsizonedomrf.DefaultParams),
+	rsizonesber.Ticker:  rsiZoneBindingFor(rsizonesber.Ticker, rsizonesber.DefaultParams),
+}
+
+// RSIZoneLookupOrGeneric returns the registered rsi_zone binding for a ticker, or a generic
+// binding bound to that ticker (with core.DefaultParams) when none is registered.
+func RSIZoneLookupOrGeneric(ticker string) Binding {
+	if b, ok := rsiZoneRegistry[ticker]; ok {
+		return b
+	}
+	return rsiZoneBindingFor(ticker, core.DefaultParams)
 }

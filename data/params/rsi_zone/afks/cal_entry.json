@@ -1,0 +1,31 @@
+{
+  "_comment": "Калибровка rsi_zone на AFKS. Протокол штатный: -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor (4 фолда); оси свипались поверх core.DefaultParams() (тикер на момент прогонов не зарегистрирован). Итог 2026-09-28: pooled OOS PF 1.112; фолды 2.139 / 0.744 / 0.785 / 2.463 (36/47/20/6 сделок); все три поля входа гуляли (RSIPeriod 4/4/5/5, RSILower 20/25/20/15, RSIUpper 60/65/60/65). Ось входа края не несёт.",
+  "phases": [
+    {
+      "name": "entry",
+      "grid": {
+        "RSIPeriod": [
+          3,
+          4,
+          5,
+          6
+        ],
+        "RSILower": [
+          10,
+          15,
+          20,
+          25,
+          30
+        ],
+        "RSIUpper": [
+          60,
+          65,
+          70,
+          75,
+          80,
+          85
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "_comment": "SBER rsi_zone, RISK: StopDailyATR x DailyATRPeriod = 6 x 3 = 18 runs over defaults. 0 (no stop) deliberately absent. RESULT 2026-09-28 (walk-forward -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor): pooled OOS PF 0.794 / 209 trades, all four folds below 1; StopDailyATR 0.5,2,2,3 — the stop alone cannot rescue the default entry.",
+  "phases": [
+    {
+      "name": "risk",
+      "grid": {
+        "StopDailyATR": [
+          0.5,
+          0.7,
+          1.0,
+          1.5,
+          2.0,
+          3.0
+        ],
+        "DailyATRPeriod": [
+          7,
+          14,
+          21
+        ]
+      }
+    }
+  ]
+}
