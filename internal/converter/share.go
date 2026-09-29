@@ -42,5 +42,9 @@ func ConvertShareFromPb(share *investapi.Share) *model.Share {
 		AssetUID:     share.AssetUid,
 		DivYieldFlag: share.DivYieldFlag,
 		Sector:       share.Sector,
+		// Without the tick every downstream consumer (screener tick gate, stop
+		// rounding) silently sees 0 and treats the tick as unknown.
+		MinPriceIncrement: float64(share.GetMinPriceIncrement().GetUnits()) +
+			float64(share.GetMinPriceIncrement().GetNano())/1e9,
 	}
 }
