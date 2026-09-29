@@ -456,6 +456,27 @@ func TestStopWinsOverRSIExitOnTheSameBar(t *testing.T) {
 	}
 }
 
+// The weekday gate closes entries only: a position carried into a MOEX weekend session must
+// still be able to exit on a Saturday bar, by stop or by RSI.
+func TestExitsFireOnWeekendBars(t *testing.T) {
+	t.Run("RSI", func(t *testing.T) {
+		md := fixture(recoveryCloses(3), saturdayNoon)
+		md.Position = openPosition(dailyWidth)
+		if sig := NewWithParams("TEST", DefaultParams()).Decide(md); sig.Kind != model.SignalSell || sig.Reason != "RSI" {
+			t.Fatalf("Kind/Reason = %v/%q, want SignalSell/RSI on a weekend bar", sig.Kind, sig.Reason)
+		}
+	})
+	t.Run("SL", func(t *testing.T) {
+		md := fixture(recoveryCloses(4), saturdayNoon)
+		pos := openPosition(dailyWidth)
+		md.Position = pos
+		md.Lows[len(md.Lows)-1] = pos.PurchasePrice - dailyWidth - 0.01
+		if sig := NewWithParams("TEST", DefaultParams()).Decide(md); sig.Kind != model.SignalSell || sig.Reason != "SL" {
+			t.Fatalf("Kind/Reason = %v/%q, want SignalSell/SL on a weekend bar", sig.Kind, sig.Reason)
+		}
+	})
+}
+
 func TestStopUsesEntryATRNotTheCurrentOne(t *testing.T) {
 	// Current daily ATR is 0.5 (level would be entry-0.5), frozen EntryATR is 2 (level entry-2).
 	// A low between the two must NOT stop the trade.
