@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	rsizoneafks "tinvest/internal/service/trading_strategy/rsi_zone/strategy/afks"
+	rsizonebaza "tinvest/internal/service/trading_strategy/rsi_zone/strategy/baza"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/core"
 	rsizonedomrf "tinvest/internal/service/trading_strategy/rsi_zone/strategy/domrf"
 	rsizonesber "tinvest/internal/service/trading_strategy/rsi_zone/strategy/sber"
@@ -33,6 +34,7 @@ func rsiZoneBindingFor(ticker string, defaults func() core.Params) Binding {
 // write-up lives in the package doc and in data/params/rsi_zone/<ticker>/.
 var rsiZoneRegistry = map[string]Binding{
 	rsizoneafks.Ticker:  rsiZoneBindingFor(rsizoneafks.Ticker, rsizoneafks.DefaultParams),
+	rsizonebaza.Ticker:  rsiZoneBindingFor(rsizonebaza.Ticker, rsizonebaza.DefaultParams),
 	rsizonedomrf.Ticker: rsiZoneBindingFor(rsizonedomrf.Ticker, rsizonedomrf.DefaultParams),
 	rsizonesber.Ticker:  rsiZoneBindingFor(rsizonesber.Ticker, rsizonesber.DefaultParams),
 }

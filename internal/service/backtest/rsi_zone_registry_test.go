@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	rsizoneafks "tinvest/internal/service/trading_strategy/rsi_zone/strategy/afks"
+	rsizonebaza "tinvest/internal/service/trading_strategy/rsi_zone/strategy/baza"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/core"
 	rsizonedomrf "tinvest/internal/service/trading_strategy/rsi_zone/strategy/domrf"
 	rsizonesber "tinvest/internal/service/trading_strategy/rsi_zone/strategy/sber"
@@ -50,6 +51,7 @@ func TestRSIZoneParseParamsRejectsGarbage(t *testing.T) {
 func TestRSIZoneRegisteredTickersUseTheirLiteral(t *testing.T) {
 	for ticker, want := range map[string]core.Params{
 		rsizoneafks.Ticker:  rsizoneafks.DefaultParams(),
+		rsizonebaza.Ticker:  rsizonebaza.DefaultParams(),
 		rsizonesber.Ticker:  rsizonesber.DefaultParams(),
 		rsizonedomrf.Ticker: rsizonedomrf.DefaultParams(),
 	} {
