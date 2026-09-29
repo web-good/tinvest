@@ -1,0 +1,28 @@
+{
+  "_comment": "Зонд стопа на дефолтах ядра LENT: StopDailyATR 2.0, остальные поля — core.DefaultParams(). Проверка капкана широкого стопа и формы оси у baseline. Полная история: go run ./cmd/backtest -ticker LENT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/lent/probe_stop_2.0.json -out ./reports/LENT_zone/probe_stop_2.0 -months 36 -min-trades 1 -metric profit_factor. РЕЗУЛЬТАТ 2026-09-29 (полная история): 243 сделки, PF 1.745, DD 22588 ₽ (10.29%), SL 5 (2.1%), хвост 6 1.265/39. У дефолтов (стоп 1.0) — 245 сделок, PF 1.526, DD 17.54%, SL 23 (9.4%): стоп 1.0 работает, капкана нет. Ось растёт до 1.5 и падает дальше, но тема risk стоп не выбрала большинством — в литерал не идёт.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          2.0
+        ]
+      }
+    }
+  ]
+}
