@@ -201,6 +201,70 @@ func crossedUp(series []float64, i, period int, level float64) bool {
 	return i >= 1 && i < len(series) && i-1 >= period && series[i-1] <= level && series[i] > level
 }
 
+// stochDSeries returns Stochastic %D laid over the full bar index: series[b] is the %D reading
+// of bar b, and warm = k+d-2 is the first bar that has one (earlier slots are an unset zero,
+// the same convention RSISeries uses). indicators.StochasticSeries returns a shorter,
+// right-aligned slice; its j-th value belongs to bar j+k+d-2. ok is false when the periods are
+// not positive or history is too short to produce a single %D value.
+func stochDSeries(highs, lows, closes []float64, k, d int) (series []float64, warm int, ok bool) {
+	if k <= 0 || d <= 0 {
+		return nil, 0, false
+	}
+	_, ds := indicators.StochasticSeries(highs, lows, closes, k, d)
+	n := len(closes)
+	warm = k + d - 2
+	if len(ds) == 0 || warm+len(ds) != n {
+		return nil, 0, false
+	}
+	series = make([]float64, n)
+	copy(series[warm:], ds)
+	return series, warm, true
+}
+
+// oscillator is one confirmation series with its first genuine index and its lower band.
+type oscillator struct {
+	series []float64
+	warm   int
+	level  float64
+}
+
+// zoneHit records which oscillator crossed on the current bar and where the other one was seen
+// in its zone.
+type zoneHit struct {
+	by      string // "RSI" or "Stoch": the oscillator that crossed down on the current bar
+	otherAt int    // the most recent bar of the window where the other oscillator was in its zone
+}
+
+// seenInZone returns the most recent bar of [i-window+1, i] (clipped at 0) where o reads
+// strictly below its band on a warmed index, or -1. Validity is gated on the index, as in
+// crossedDown: a genuine 0.00 after warm-up counts, an unset warm-up zero does not.
+func seenInZone(o oscillator, i, window int) int {
+	for b := i; b >= 0 && b > i-window; b-- {
+		if b >= o.warm && b < len(o.series) && o.series[b] < o.level {
+			return b
+		}
+	}
+	return -1
+}
+
+// zoneTrigger is the symmetric confirmation: an entry fires when RSI crosses down through its
+// band on bar i and Stoch was in its zone somewhere in the window, or the other way round. When
+// both cross on the same bar the RSI trigger is reported. crossedDown's period argument is the
+// oscillator's warm index, so the previous bar must itself be a genuine reading.
+func zoneTrigger(rsi, stoch oscillator, i, window int) (zoneHit, bool) {
+	if crossedDown(rsi.series, i, rsi.warm, rsi.level) {
+		if b := seenInZone(stoch, i, window); b >= 0 {
+			return zoneHit{by: "RSI", otherAt: b}, true
+		}
+	}
+	if crossedDown(stoch.series, i, stoch.warm, stoch.level) {
+		if b := seenInZone(rsi, i, window); b >= 0 {
+			return zoneHit{by: "Stoch", otherAt: b}, true
+		}
+	}
+	return zoneHit{}, false
+}
+
 // trendUp reports whether the close sits strictly above a warmed EMA. ema.Compute zero-fills
 // warm-up positions, so an unwarmed EMA must not pass as "price above zero".
 func trendUp(closeP, emaNow float64) bool {
