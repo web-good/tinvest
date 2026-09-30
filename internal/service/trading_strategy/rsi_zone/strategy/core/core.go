@@ -307,9 +307,33 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 		return sig
 	}
 	i := n - 1
-	// 2. RSI crosses down through the lower band on the current bar.
+	// 2. the trigger. Gate off: RSI crosses down through the lower band on the current bar.
+	// Gate on: RSI or Stoch %D crosses down into its zone now while the other one was in its
+	// zone somewhere in the last ZoneWindowBars bars.
 	rsi := indicators.RSISeries(md.Closes, s.p.RSIPeriod)
-	if len(rsi) != n || !crossedDown(rsi, i, s.p.RSIPeriod, s.p.RSILower) {
+	if len(rsi) != n {
+		return sig
+	}
+	var (
+		hit   zoneHit
+		stoch []float64
+	)
+	if s.p.UseStoch == 1 {
+		k, d, lower, window := stochConfig(s.p)
+		st, warm, ok := stochDSeries(md.Highs, md.Lows, md.Closes, k, d)
+		if !ok {
+			return sig
+		}
+		h, fired := zoneTrigger(
+			oscillator{series: rsi, warm: s.p.RSIPeriod, level: s.p.RSILower},
+			oscillator{series: st, warm: warm, level: lower},
+			i, window,
+		)
+		if !fired {
+			return sig
+		}
+		hit, stoch = h, st
+	} else if !crossedDown(rsi, i, s.p.RSIPeriod, s.p.RSILower) {
 		return sig
 	}
 	// 3. trend: close above a warmed EMA.
@@ -333,7 +357,22 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	sig.ATR = atr
 	sig.RSI = rsi[i]
 	sig.EntryReason = s.entryReason(rsi[i], trend[i], entry, stop, atr)
+	if s.p.UseStoch == 1 {
+		sig.EntryReason += s.stochReason(hit, i, rsi[i], stoch[i])
+	}
 	return sig
+}
+
+// stochReason is the journal tail of a stochastic-confirmed entry: which oscillator crossed,
+// how many bars back the other one was in its zone, and both readings on the entry bar.
+func (s *Strategy) stochReason(hit zoneHit, i int, rsiNow, stochNow float64) string {
+	k, d, lower, window := stochConfig(s.p)
+	other := "Stoch"
+	if hit.by == "Stoch" {
+		other = "RSI"
+	}
+	return fmt.Sprintf("; подтверждение: крест дал %s, %s в зоне %d бар(ов) назад (окно %d); RSI %.1f (зона <%.0f), Stoch%%D(%d,%d) %.1f (зона <%.0f)",
+		hit.by, other, i-hit.otherAt, window, rsiNow, s.p.RSILower, k, d, stochNow, lower)
 }
 
 // entryReason renders the human-readable rationale shown in the trade journal.
