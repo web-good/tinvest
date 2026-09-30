@@ -225,3 +225,33 @@ func TestExplainReportsZoneEntry(t *testing.T) {
 		}
 	}
 }
+
+// TestPullbackEntryReasonGolden пинит точный текст причины pullback-входа — он уходит в живой
+// Telegram и журнал сделок. Эталон снят с кода main (f369b65), до выделения exitPlan: рефакторинг
+// не должен молча менять ни слова.
+func TestPullbackEntryReasonGolden(t *testing.T) {
+	cases := []struct {
+		name  string
+		trail bool
+		want  string
+	}{
+		{"без трейла", false, "RSI(4) ушёл под 15 (11.1) на откате, EMA(10) 136.9239 > EMA(100) 132.8734, день прошёл 0.10 ATR (дневной ATR 10.0000); вход 136.3237, стоп 131.3237 (−0.50 ATR), цель 142.3237 (+0.60 ATR)"},
+		{"с трейлом", true, "RSI(4) ушёл под 15 (11.1) на откате, EMA(10) 136.9239 > EMA(100) 132.8734, день прошёл 0.10 ATR (дневной ATR 10.0000); вход 136.3237, стоп 131.3237 (−0.50 ATR), трейл −0.50 ATR от максимума (с первого бара), цель 142.3237 (+0.60 ATR)"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := entryParams()
+			if tc.trail {
+				p.UseTrail = 1
+				p.TrailDailyATR = 0.5
+			}
+			got := NewWithParams("T", p).Decide(withDay(entryFixture(), 10.0, 101, 100))
+			if got.Kind != model.SignalBuy {
+				t.Fatalf("Kind = %v, want Buy", got.Kind)
+			}
+			if got.EntryReason != tc.want {
+				t.Fatalf("EntryReason =\n%q\nwant\n%q", got.EntryReason, tc.want)
+			}
+		})
+	}
+}

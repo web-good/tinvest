@@ -128,6 +128,21 @@ func TestRegisteredTickersKeepTheRSIExitArmed(t *testing.T) {
 	}
 }
 
+// Ловушка нулевого значения во втором входе: zone-поля в ядре по умолчанию нулевые, и тикер с
+// UseZoneEntry=1, забывший поле в литерале, молча не торговал бы zone вовсе. Пока zone не включён
+// ни у одного тикера, тест проходит пусто — он для будущих калибровок.
+func TestRegisteredTickersArmZoneFieldsWhenEnabled(t *testing.T) {
+	for ticker, p := range paramsByTicker {
+		if p.UseZoneEntry != 1 {
+			continue
+		}
+		if p.ZoneRSIPeriod <= 0 || p.ZoneRSILower <= 0 || p.ZoneEMAPeriod <= 0 {
+			t.Errorf("%s: UseZoneEntry=1, но ZoneRSIPeriod=%d ZoneRSILower=%v ZoneEMAPeriod=%d — поле забыто в литерале",
+				ticker, p.ZoneRSIPeriod, p.ZoneRSILower, p.ZoneEMAPeriod)
+		}
+	}
+}
+
 // Стратегия должна строиться на параметрах тикера, а не на дефолтах ядра.
 func TestStrategyForUsesTickerParams(t *testing.T) {
 	st, ok := StrategyFor("UGLD")

@@ -55,10 +55,10 @@ RUB-акций на фиксированной сетке из 24 конфигу
 | `UseRSIExit` | 0/1 | 1 | да (trail: 0, 1) |
 | `UseTrail` | 0/1 | 0 | да (trail: 0, 1) |
 | `TrailDailyATR` | множитель дневного ATR | 0 | да (trail: 0.5, 0.8, 1.2) |
-| `UseZoneEntry` | 0/1 | 0 | да (zone: 0, 1) |
-| `ZoneRSIPeriod` | длина RSI, баров | 0 (задаётся при включении) | да (zone) |
-| `ZoneRSILower` | пункты RSI | 0 (задаётся при включении) | да (zone) |
-| `ZoneEMAPeriod` | баров | 0 (задаётся при включении) | да (zone) |
+| `UseZoneEntry` | 0/1 | 0 | нет (тема zone — со спекой калибровки) |
+| `ZoneRSIPeriod` | длина RSI, баров | 0 (задаётся при включении) | нет (тема zone — со спекой калибровки) |
+| `ZoneRSILower` | пункты RSI | 0 (задаётся при включении) | нет (тема zone — со спекой калибровки) |
+| `ZoneEMAPeriod` | баров | 0 (задаётся при включении) | нет (тема zone — со спекой калибровки) |
 
 `StopDailyATR = 0` в сетке намеренно отсутствует: многодневное удержание без стопа —
 не вариант, который может выбрать калибровка (ядро технически это поддерживает —
@@ -261,6 +261,7 @@ ROSN 2.60%, GAZP 2.66%, NVTK 3.03%. Стоп в один дневной ATR — 
 
 ```
 need := max(EMASlow, EMAFast, RSIPeriod)
+if UseZoneEntry == 1 { need = max(need, ZoneEMAPeriod, ZoneRSIPeriod) }
 volNeed := (VolBaseDays + 1) * maxBarsPerDay * 7 / 5   // maxBarsPerDay = 48 (сутки / 30 минут)
 Lookback = max(120, 2*need + 20, volNeed)
 ```
@@ -278,8 +279,6 @@ EMA: `2·100 + 20 = 220` баров. С включённым гейтом и `Vo
 будним дням, а не по числу баров индикатора. `DailyATRPeriod` в `Lookback` не участвует —
 дневная серия приходит отдельным срезом (`md.DailyHighs`/`...Lows`/`...Closes`/`...Times`)
 и 30-минутное окно не расходует.
-
-При UseZoneEntry = 1 в максимум периодов входят ещё ZoneEMAPeriod и ZoneRSIPeriod.
 
 ## 8. Калибровка
 
