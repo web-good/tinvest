@@ -65,13 +65,11 @@ argument-hint: <TICKER> [заметки владельца]
 7. Профиль якоря: сделки, PF, net, max DD (₽ и %), win rate, expectancy, доли выходов
    SL/TRAIL/TP/RSI, удержание (медиана / p90 / максимум), ночёвки, входы и выходы в выходные и в
    часы 02–06, календарные годы и полугодия, хвосты 6 и 12 месяцев.
-8. **Реальный круг издержек:** 2 × `MinPriceIncrement` / цена. Выше 0.2% — порог пункта 4 (§6)
+8. **Реальный круг издержек:** 2 × `MinPriceIncrement` / цена. Выше 0.2% — порог пункта 4 (§4)
    ужесточается до реального круга, запиши.
 9. **Дивидендные отсечки** окна — из T-Invest `GetDividends` (образец `reports/_analysis/divprobe/`).
    Объяви до прогонов, не меняй.
-10. **Скрипт журнала** `reports/_analysis/zone_journal.py` (есть от rsi_zone): проверь, что он
-    понимает выходы TP и TRAIL, иначе дополни по образцу `reports/_analysis/mdmg_journal.py`.
-    Даты отсечек и хвостов — аргументами. Сверь его вывод с шапкой отчёта якоря.
+10. **Скрипт журнала** `reports/_analysis/zone_journal.py` (вне git; остался от rsi_zone): если файла нет — собери его по образцу `reports/_analysis/mdmg_journal.py`; если есть — проверь, что он понимает выходы TP и TRAIL, иначе дополни. Даты отсечек и хвостов — аргументами. Сверь его вывод с шапкой отчёта якоря.
 
 ## 2. Сетки первого круга
 
@@ -187,7 +185,7 @@ DD в % → меньше убыточных полугодий → якорь.
    числами, точка против якоря, риски). Тест-снимок литерала обновить. Если пакета нет — завести
    его по образцу соседей и алиас в `internal/service/backtest/rsi_pullback_registry.go` и в
    `internal/service/trading_strategy/rsi_pullback/live/registry.go`.
-2. `go run ./cmd/pullparity` по тикеру — ноль расхождений.
+2. `go run ./cmd/pullparity -tickers <T> -months <M>` — ноль расхождений по этому тикеру (без `-tickers` утилита проверяет дефолтные UGLD,T,GAZP).
 3. `go run ./cmd/backtest -ticker <T> -strategy rsi_pullback -interval Minutes30 -months <M>` без
    `-calibrate` — ровно числа точки на полном окне (доказывает, что реестр взял литерал).
 4. `./bin/mage ci` зелёный.
