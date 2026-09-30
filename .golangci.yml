@@ -10,6 +10,10 @@ linters:
     - revive
     - unconvert
   settings:
+    misspell:
+      # strat — сокращение strategy (поле слота раннера счёта), не опечатка start.
+      ignore-rules:
+        - strat
     revive:
       rules:
         - name: var-naming
