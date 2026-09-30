@@ -239,7 +239,7 @@ func TestKindBreakdownNilWithoutKinds(t *testing.T) {
 func TestRenderMarkdownEntryKindColumnAndSection(t *testing.T) {
 	trades := []Trade{kindTrade("pullback", "TP", 100), kindTrade("zone", "SL", -50), kindTrade("", "TP", 10)}
 	out := RenderMarkdown(sampleMeta(), Metrics{}, trades, nil)
-	if !strings.Contains(out, "| № | Вход | Вход | Цена входа |") {
+	if !strings.Contains(out, "| № | Вход | Время входа | Цена входа |") {
 		t.Fatalf("журнал без колонки «Вход» второй: %q", out)
 	}
 	if !strings.Contains(out, "| 1 | pullback |") || !strings.Contains(out, "| 2 | zone |") || !strings.Contains(out, "| 3 | — |") {
@@ -277,7 +277,7 @@ func TestRenderTradesCSVEntryKindIsLastColumn(t *testing.T) {
 }
 ```
 
-Колонки журнала: `| № | Вход | Вход | Цена входа | ...` — первая «Вход» новая (тип), вторая — существующее время входа. Чтобы не путать, существующий заголовок «Вход» (время) переименовывается в «Время входа», а «Выход» — в «Время выхода». Тогда ожидание в тесте выше — `"| № | Вход | Время входа | Цена входа |"`; впиши в тест именно эту строку вместо `"| № | Вход | Вход | Цена входа |"`.
+Существующие заголовки журнала «Вход»/«Выход» (время) переименовываются в «Время входа»/«Время выхода», чтобы новая колонка «Вход» (тип) с ними не путалась.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
@@ -458,12 +458,28 @@ func TestRenderWalkForwardMarkdownKindSection(t *testing.T) {
 	}
 ```
 
-Плюс тест на реальное заполнение: скопировать `alternatingStrategy` в новую `kindedStrategy`, чей Buy несёт `EntryKind: "zone"` (остальное — как у `alternatingStrategy`, включая `Ticker`/`Lookback`), с биндингом по образцу `fakeBinding()`, и тест:
+Плюс тест на реальное заполнение пула:
 
 ```go
+// kindedStrategy торгует как alternatingStrategy, но помечает каждую покупку типом входа zone.
+type kindedStrategy struct{}
+
+func (kindedStrategy) Ticker() string { return "TEST" }
+func (kindedStrategy) Lookback() int  { return 1 }
+func (kindedStrategy) Decide(md strategy.MarketData) model.Signal {
+	if md.Position == nil {
+		return model.Signal{Kind: model.SignalBuy, EntryKind: "zone"}
+	}
+	return model.Signal{Kind: model.SignalSell, Reason: "TP"}
+}
+
 func TestRunWalkForwardPoolsByKind(t *testing.T) {
-	// те же аргументы, что в TestRunWalkForward, но binding — kindedBinding()
-	s, err := RunWalkForward(kindedBinding(), /* фазы, свечи и cfg — как в TestRunWalkForward */)
+	from, to := date(2025, time.January, 1), date(2025, time.October, 1)
+	b := fakeBinding()
+	b.Build = func(any) strategy.Strategy { return kindedStrategy{} }
+	cfg := backtest.Config{InitialCash: 100000, Fraction: 1, Commission: 0.0005, Lot: 1}
+	s, err := RunWalkForward(b, []Phase{{Grid: Grid{"Threshold": {1, 2}}}}, genHourly(from, to), nil, nil, cfg,
+		"profit_factor", 0, from, to, 3, 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -473,8 +489,6 @@ func TestRunWalkForwardPoolsByKind(t *testing.T) {
 	}
 }
 ```
-
-Аргументы `RunWalkForward` взять дословно из `TestRunWalkForward`, заменив только binding; комментарий-заглушку в вызове заменить реальными аргументами.
 
 - [ ] **Step 2: Run to verify fail**
 
@@ -820,8 +834,8 @@ argument-hint: <TICKER> [заметки владельца]
    - `pullback` — `UseZoneEntry 0`;
    - `zone` — `UseZoneEntry 2`, `ZoneRSIPeriod 4`, `ZoneRSILower 25`, `ZoneEMAPeriod 200`;
    - `both` — `UseZoneEntry 1` и те же zone-поля.
-   Плюс пустой-по-смыслу маркер процедуры не нужен: `plateau_mode_both.json` появится на этапе 3, и
-   с ним включится сторож ширины. `_comment` каждого файла — что это и команды.
+   Сторож ширины включится, когда на этапе 3 появится `plateau_mode_both.json`. `_comment` каждого
+   файла — что это и команды.
 5. На каждом baseline: полное окно (`-calibrate <файл> -months <M> -min-trades 1`), walk-forward
    основной, контрольной и основной с `-commission 0.001` (`-min-trades 1`). Сверь «Фолдов: N».
 6. Сверка типа входа по колонке «Вход»: у `pullback` — только `pullback`, у `zone` — только `zone`, у
@@ -970,9 +984,6 @@ Walk-forward и большинство — как в §3. **Гейт A** (пот
 таблица выбора режима на этапах 3 и 5 с подпулами; таблица тем (pooled/пул/голоса); кандидат против
 baseline на всех схемах; восемь пунктов с числами; главные риски строкой; что осталось владельцу.
 ````
-
-В §1 шаге 4 убрать фразу «Плюс пустой-по-смыслу маркер процедуры не нужен: …» целиком и вместо неё
-оставить: «Сторож ширины включится, когда на этапе 3 появится `plateau_mode_both.json`.»
 
 - [ ] **Step 5: CLAUDE.md.** В строке Layout заменить
 `режим \`UseZoneEntry=2\` — только zone-вход, калибровка такого тикера — \`/pullback-zone-calibrate <TICKER>\` (§8.2)`
