@@ -1,0 +1,76 @@
+{
+  "_comment": "data/params/rsi_pullback/afks/plateau_final_both.json — ЭТАП 5, режим both: вход этапов 1–2, выходы этапа 4. Выходы этапа 4 (2026-09-30): ни одно поле выхода не ушло от дефолтов ядра (out_exit, out_risk — нет большинства; out_trail — UseTrail 1 без ширины, инертно), поэтому финальные точки совпадают с точками этапа 3. ЗАПУСК: go run ./cmd/backtest -ticker AFKS -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/afks/plateau_final_both.json -out ./reports/AFKS/final_both_wf1206 -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; полное окно — -out ./reports/AFKS/final_both_full -months 36 -min-trades 1 без -train-months/-test-months.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          10
+        ],
+        "EMASlow": [
+          50
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.5
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ],
+        "UseZoneEntry": [
+          1
+        ],
+        "ZoneRSIPeriod": [
+          4
+        ],
+        "ZoneRSILower": [
+          25
+        ],
+        "ZoneEMAPeriod": [
+          200
+        ]
+      }
+    }
+  ]
+}

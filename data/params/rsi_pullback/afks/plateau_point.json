@@ -1,0 +1,67 @@
+{
+  "_comment": "data/params/rsi_pullback/afks/plateau_point.json — ТОЧКА ПЕРВОГО КРУГА AFKS (копия plateau_final_pullback, режим 0): дефолты ядра + EMASlow 50, UseZoneEntry 0. Выходы этапа 4 (2026-09-30): ни одно поле выхода не ушло от дефолтов ядра (out_exit, out_risk — нет большинства; out_trail — UseTrail 1 без ширины, инертно), поэтому финальные точки совпадают с точками этапа 3. Гейт A: стоп 0.5, трейл выключен — 0.5 <= 1.0. ЗАПУСК: go run ./cmd/backtest -ticker AFKS -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/afks/plateau_point.json -months 36 -min-trades 1 -metric profit_factor с -out ./reports/AFKS/point_full; основная -out ./reports/AFKS/point_wf1206 -train-months 12 -test-months 6; контрольная -out ./reports/AFKS/point_wf1806 -train-months 18 -test-months 6; удвоенные издержки -out ./reports/AFKS/point_c001 -train-months 12 -test-months 6 -commission 0.001. РЕЗУЛЬТАТ ПРОГОНА 2026-09-30: полное окно 111 сделок, PF 1.234, net +13 025.89 ₽, DD 10 268.15 ₽ (9.77%), SL 29 / TP 8 / RSI 74, удержание 9/19/39, ночёвок 46.8%, входов в выходные и 02-06 — 0, через отсечку 2024-07-17 — 0; годы 2023 −1 262 (огрызок), 2024 +2 592, 2025 +10 822, 2026 +873; хвост 6 16/1.447 (крупнейшая 90.4%), хвост 12 36/1.346. 36/12/6 1.433/73 (1.323/22, 2.106/15, 1.222/20, 1.446/16), 36/18/6 1.516/51, c001 1.208/73; справочно 24/12/3 1.358/36 (baseline 1.254/41). Сверка знака: фолд 4 (1.446) = хвост 6 (1.447); фолды 3-4 по формуле GL=net/(PF−1) — 1.345 против хвоста 12 1.346 (на baseline формула дала 1.256 против 1.264). ВОСЕМЬ ПУНКТОВ ПРОЙДЕНЫ; гейты A (0.5 <= 1.0) и B (9.77% <= 13.92%, 10 268 <= 15 184 ₽) пройдены. Baseline pullback/zone/both проваливают пункт 4 (0.999/0.976/0.968) — правило прода: точка.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          10
+        ],
+        "EMASlow": [
+          50
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.5
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ],
+        "UseZoneEntry": [
+          0
+        ]
+      }
+    }
+  ]
+}

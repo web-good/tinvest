@@ -1,0 +1,87 @@
+{
+  "_comment": "data/params/rsi_pullback/afks/cal_out_risk.json — тема out_risk: StopDailyATR x TPDailyATR (110 узлов) поверх входа режима 0; единственная тема, свипающая стоп. Этап 4 единой калибровки AFKS 2026-09-30: вход режима 0 зафиксирован (plateau_entry_pullback: baseline + EMASlow 50, UseZoneEntry 0), схема 36/12/6, большинство >=3/4 невырожденных фолдов. Гейт A (выживаемость уровня >= 30% будних дней окна, afks_recon.py): 0.5 89.4%, 0.6 78.3%, 0.7 68.8%, 0.8 59.0%, 1.0 37.8%, 1.2 24.9%, 1.5 13.6%, 2.0 4.9% — потолок min(StopDailyATR, TrailDailyATR при UseTrail=1) = 1.0. ЗАПУСК: go run ./cmd/backtest -ticker AFKS -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/afks/cal_out_risk.json -out ./reports/AFKS/cal_out_risk -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-09-30: фолдов 4 | пул 82 сделок, PF 1.692, compounded 18.71%; по типу pullback: сделок 82, WR 79.27%, PF 1.692, net 18215.73, SL 8; фолд 1 2024-09-30—2025-03-30: PF 1.074/25, net 0.79%, DD 5.34%; фолд 2 2025-03-30—2025-09-30: PF 94.785/16, net 14.38%, DD 0.15%; фолд 3 2025-09-30—2026-03-30: PF 1.647/20, net 4.61%, DD 4.33%; фолд 4 2026-03-30—2026-09-30: PF 0.812/21, net -1.57%, DD 7.25%; голоса StopDailyATR: 0.3, 2, 2, 1.2 | невырожд. 0.3, 2, 2, 1.2 -> нет большинства (2/4); голоса TPDailyATR: 0.15, 0.3, 0.3, 0.1 | невырожд. 0.15, 0.3, 0.3, 0.1 -> нет большинства (2/4). ВЕРДИКТ: большинства нет ни по стопу (0.3/2/2/1.2), ни по цели — StopDailyATR 0.5 и TPDailyATR 0.6 на дефолтах ядра; гейт A не задействован (0.5 — 89.4% дней).",
+  "phases": [
+    {
+      "name": "risk",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          10
+        ],
+        "EMASlow": [
+          50
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ],
+        "UseZoneEntry": [
+          0
+        ],
+        "StopDailyATR": [
+          0.3,
+          0.4,
+          0.5,
+          0.6,
+          0.7,
+          0.8,
+          1.0,
+          1.2,
+          1.5,
+          2.0
+        ],
+        "TPDailyATR": [
+          0.1,
+          0.15,
+          0.2,
+          0.3,
+          0.4,
+          0.5,
+          0.6,
+          0.8,
+          1.0,
+          1.5,
+          2.5
+        ]
+      },
+      "keepTop": 5
+    }
+  ]
+}
