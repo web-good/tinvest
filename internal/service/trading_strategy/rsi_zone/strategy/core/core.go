@@ -31,6 +31,44 @@ type Params struct {
 	EMAPeriod      int     // trend EMA period; the entry needs close > EMA (grid; default 200)
 	DailyATRPeriod int     // daily ATR length, over WEEKDAY completed dailies (fixed; default 14)
 	StopDailyATR   float64 // stop = entry - StopDailyATR*dailyATR; 0 disables it (grid; never 0 in the grid)
+
+	// Stochastic confirmation gate (theme stoch). With UseStoch=1 the entry needs RSI and
+	// Stoch %D to BOTH read oversold within the last ZoneWindowBars bars, and one of them to
+	// cross down into its zone on the current bar. A zero knob resolves to its default (see
+	// stochConfig), so a ticker literal written before the gate switches it on with UseStoch
+	// alone; DefaultParams leaves them all zero and the gate off.
+	UseStoch       int     // 1 = require the stochastic confirmation; 0 = off (grid: stoch)
+	StochKPeriod   int     // %K lookback; 0 -> 14; negative refuses every entry (grid: stoch)
+	StochDSmooth   int     // %D smoothing, 1 = raw %K; 0 -> 3; negative refuses every entry (grid: stoch)
+	StochLower     float64 // Stoch %D lower critical band; 0 -> 20 (grid: stoch)
+	ZoneWindowBars int     // bars, current one included, in which the other oscillator may have been in its zone; < 1 -> 1 (grid: stoch)
+}
+
+// Defaults the stochastic gate falls back to when its knobs are left at zero.
+const (
+	defaultStochKPeriod = 14
+	defaultStochDSmooth = 3
+	defaultStochLower   = 20.0
+)
+
+// stochConfig resolves the stochastic gate's knobs: a zero period or band falls back to its
+// default and a window below one bar becomes one bar. Negative periods pass through untouched
+// so stochDSeries refuses them — a misconfiguration must block entries, not be papered over.
+func stochConfig(p Params) (k, d int, lower float64, window int) {
+	k, d, lower, window = p.StochKPeriod, p.StochDSmooth, p.StochLower, p.ZoneWindowBars
+	if k == 0 {
+		k = defaultStochKPeriod
+	}
+	if d == 0 {
+		d = defaultStochDSmooth
+	}
+	if lower == 0 {
+		lower = defaultStochLower
+	}
+	if window < 1 {
+		window = 1
+	}
+	return k, d, lower, window
 }
 
 // DefaultParams returns the spec's baseline; swept values come from calibration.
@@ -60,8 +98,15 @@ func (s *Strategy) Ticker() string { return s.ticker }
 // an SMA over the first `period` closes, so a window shorter than the period yields an all-zero
 // series that silently fails the trend gate for the whole run. Doubling the largest period
 // leaves as many recursion steps as the seed span; the +20 covers the two-bar cross lookups.
+// With the stochastic gate on, the %K+%D warm-up joins the largest period and the confirmation
+// window is added on top; with it off the window is exactly what it was before the gate existed.
 func (s *Strategy) Lookback() int {
-	return max(minLookback, 2*max(s.p.EMAPeriod, s.p.RSIPeriod)+20)
+	span := max(s.p.EMAPeriod, s.p.RSIPeriod)
+	if s.p.UseStoch != 1 {
+		return max(minLookback, 2*span+20)
+	}
+	k, d, _, window := stochConfig(s.p)
+	return max(minLookback, 2*max(span, k+d)+window+20)
 }
 
 // mskLoc anchors every calendar rule (weekday checks) to Moscow (UTC fallback).

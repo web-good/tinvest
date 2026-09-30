@@ -157,6 +157,10 @@ func TestLookback(t *testing.T) {
 		{"EMA 50 floors at minLookback", Params{RSIPeriod: 4, EMAPeriod: 50}, 120},
 		{"EMA 150", Params{RSIPeriod: 4, EMAPeriod: 150}, 320},
 		{"zero periods floor at minLookback", Params{}, 120},
+		{"stoch off ignores stoch fields", Params{RSIPeriod: 4, EMAPeriod: 50, StochKPeriod: 90, StochDSmooth: 3, ZoneWindowBars: 8}, 120},
+		{"stoch on, EMA dominates, window adds", Params{RSIPeriod: 4, EMAPeriod: 50, UseStoch: 1, StochKPeriod: 14, StochDSmooth: 3, ZoneWindowBars: 5}, 125},
+		{"stoch on, stoch span dominates", Params{RSIPeriod: 4, EMAPeriod: 10, UseStoch: 1, StochKPeriod: 60, StochDSmooth: 3, ZoneWindowBars: 8}, 154},
+		{"stoch on, zero fields resolve to 14/3 and window 1", Params{RSIPeriod: 4, EMAPeriod: 200, UseStoch: 1}, 421},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -578,6 +582,28 @@ func TestManageDegrades(t *testing.T) {
 			md.Position = openPosition(dailyWidth)
 			if sig := NewWithParams("TEST", p).Decide(md); sig.Kind != model.SignalNone {
 				t.Fatalf("Kind/Reason = %v/%q, want SignalNone", sig.Kind, sig.Reason)
+			}
+		})
+	}
+}
+
+func TestStochConfigResolvesZeros(t *testing.T) {
+	cases := []struct {
+		name                string
+		p                   Params
+		wantK, wantD, wantW int
+		wantLower           float64
+	}{
+		{"all zero -> defaults", Params{}, 14, 3, 1, 20},
+		{"explicit values kept", Params{StochKPeriod: 9, StochDSmooth: 1, StochLower: 15, ZoneWindowBars: 5}, 9, 1, 5, 15},
+		{"negative window -> 1", Params{ZoneWindowBars: -3}, 14, 3, 1, 20},
+		{"negative periods pass through for refusal downstream", Params{StochKPeriod: -1, StochDSmooth: -2}, -1, -2, 1, 20},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			k, d, lower, w := stochConfig(c.p)
+			if k != c.wantK || d != c.wantD || lower != c.wantLower || w != c.wantW {
+				t.Fatalf("stochConfig = (%d, %d, %v, %d), want (%d, %d, %v, %d)", k, d, lower, w, c.wantK, c.wantD, c.wantLower, c.wantW)
 			}
 		})
 	}
