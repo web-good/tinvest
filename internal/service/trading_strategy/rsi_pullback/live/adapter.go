@@ -65,7 +65,9 @@ func (p *pullbackStrategy) Notify(msg string) {
 	}
 }
 
-// mustParams: ParamsFor гарантированно ok — тикер прошёл StrategyFor выше.
+// mustParams: ParamsFor гарантированно ok — пасс получает Decider (реестр StrategyFor) по
+// тикеру раньше, чем зовёт DesiredStop или Reconstruct, и незарегистрированный тикер до
+// них не доходит.
 func mustParams(ticker string) core.Params {
 	p, _ := ParamsFor(ticker)
 	return p

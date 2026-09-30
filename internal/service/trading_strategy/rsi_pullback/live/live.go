@@ -139,8 +139,22 @@ func (s *service) notify(msg string) { s.slots[0].strat.Notify(msg) }
 // Announce объявляет о подъёме воркера. Единственное сообщение раннера, не привязанное
 // к событию: все остальные шлются на входе, выходе, постановке стопа или сбое, а их может
 // не быть неделями — и тогда молчание темы неотличимо от раннера, который не поднялся.
+// Каждая стратегия счёта объявляет о себе в своей теме: своя вселенная и свой режим.
 func (s *service) Announce() {
-	s.slots[0].strat.Notify(notifier.Startup(alertLabel, s.cfg.Tickers, !s.cfg.TradeEnabled))
+	for _, sl := range s.slots {
+		sl.strat.Notify(notifier.Startup(sl.strat.Label(), sl.strat.Tickers(), !sl.strat.TradeEnabled()))
+	}
+}
+
+// slotByName — слот стратегии по имени владельца из стейта; nil — такой стратегии на
+// счёте нет.
+func (s *service) slotByName(name string) *slot {
+	for _, sl := range s.slots {
+		if sl.strat.Name() == name {
+			return sl
+		}
+	}
+	return nil
 }
 
 // sharesByTicker indexes tradable shares for the configured universe.
