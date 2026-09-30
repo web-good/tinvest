@@ -129,7 +129,7 @@ func TestRegisteredTickersKeepTheRSIExitArmed(t *testing.T) {
 }
 
 // Ловушка нулевого значения во втором входе: zone-поля в ядре по умолчанию нулевые, и тикер с
-// UseZoneEntry=1, забывший поле в литерале, молча не торговал бы zone вовсе. Пока zone не включён
+// UseZoneEntry=1 или 2, забывший поле в литерале, молча не торговал бы zone вовсе. Пока zone не включён
 // ни у одного тикера, тест проходит пусто — он для будущих калибровок.
 func TestRegisteredTickersArmZoneFieldsWhenEnabled(t *testing.T) {
 	for ticker, p := range paramsByTicker {

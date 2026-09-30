@@ -23,7 +23,7 @@ argument-hint: <TICKER> [заметки владельца]
 - **`-strategy rsi_pullback -interval Minutes30` в каждой команде `cmd/backtest`.** Дефолт CLI —
   `Hour1`: ошибки не будет, будут чужие числа.
 - **`-months`, `-train-months`, `-test-months` в каждой команде walk-forward.** Дефолт `-months` — 12.
-- **`-refresh` — только в самом первом прогоне.** Дальше хвост кэша дотягивается сам.
+- **`-refresh` — только в прогреве кэша (§1, шаг 2).** Дальше хвост кэша дотягивается сам.
 - **Прогоны строго последовательно**: параллельные запуски ломают файл кэша.
 - **Окно считается от момента запуска** — сравниваемые прогоны делай в один день; годы и хвосты
   режь фиксированными датами; дату прогона пиши в `_comment` и в отчёт.
@@ -45,31 +45,36 @@ argument-hint: <TICKER> [заметки владельца]
 ## 1. Разведка и якорь
 
 1. Ветка `feat/<ticker>-zone-only`.
-2. Длина истории — первый бар `data/candles/<T>_Minutes30.json` (после прогрева кэша):
+2. **Прогрев кэша** — единственный прогон с `-refresh`:
+   ```
+   go run ./cmd/backtest -ticker <T> -strategy rsi_pullback -interval Minutes30 -months 60 -refresh \
+     -out ./reports/<T>_zone/warmup
+   ```
+3. Длина истории — первый бар `data/candles/<T>_Minutes30.json`; по ней схема и `<M>`:
    - ≥ 36 мес — основная схема **36/12/6** (4 фолда), контрольная **36/18/6** (3 фолда);
    - 24–36 мес — **24/12/3** (4 фолда), контрольная **24/15/3** (3 фолда);
    - меньше 24 мес — **СТОП**, доложи.
-3. Файл якоря `data/params/rsi_pullback/<t>/plateau_zone_anchor.json`: одна фаза `point`, по
+4. Файл якоря `data/params/rsi_pullback/<t>/plateau_zone_anchor.json`: одна фаза `point`, по
    одному значению `UseZoneEntry 2`, `ZoneRSIPeriod 4`, `ZoneRSILower 25`, `ZoneEMAPeriod 200` и
    все восемь полей выхода по значениям `core.DefaultParams()`. `_comment` — что это и команды.
-4. Baseline якоря на полном окне (первый прогон — с `-refresh`):
+5. Baseline якоря на полном окне:
    ```
    go run ./cmd/backtest -ticker <T> -strategy rsi_pullback -interval Minutes30 \
      -calibrate data/params/rsi_pullback/<t>/plateau_zone_anchor.json -out ./reports/<T>_zone/anchor \
-     -months <M> -min-trades 1 -refresh
+     -months <M> -min-trades 1
    ```
    Сверь в журнале, что у всех сделок `EntryReason` начинается с `zone:`. Иначе — **СТОП**.
-5. Якорь меньше 20 сделок на полном окне — **СТОП**: доложи, предложи отказ.
-6. Walk-forward якоря: основная схема, контрольная, основная с `-commission 0.001`
+6. Якорь меньше 20 сделок на полном окне — **СТОП**: доложи, предложи отказ.
+7. Walk-forward якоря: основная схема, контрольная, основная с `-commission 0.001`
    (`-min-trades 1`). Сверь «Фолдов: N» в шапке с ожидаемым; расхождение — **СТОП**.
-7. Профиль якоря: сделки, PF, net, max DD (₽ и %), win rate, expectancy, доли выходов
+8. Профиль якоря: сделки, PF, net, max DD (₽ и %), win rate, expectancy, доли выходов
    SL/TRAIL/TP/RSI, удержание (медиана / p90 / максимум), ночёвки, входы и выходы в выходные и в
    часы 02–06, календарные годы и полугодия, хвосты 6 и 12 месяцев.
-8. **Реальный круг издержек:** 2 × `MinPriceIncrement` / цена. Выше 0.2% — порог пункта 4 (§4)
+9. **Реальный круг издержек:** 2 × `MinPriceIncrement` / цена. Выше 0.2% — порог пункта 4 (§4)
    ужесточается до реального круга, запиши.
-9. **Дивидендные отсечки** окна — из T-Invest `GetDividends` (образец `reports/_analysis/divprobe/`).
+10. **Дивидендные отсечки** окна — из T-Invest `GetDividends` (образец `reports/_analysis/divprobe/`).
    Объяви до прогонов, не меняй.
-10. **Скрипт журнала** `reports/_analysis/zone_journal.py` (вне git; остался от rsi_zone): если файла нет — собери его по образцу `reports/_analysis/mdmg_journal.py`; если есть — проверь, что он понимает выходы TP и TRAIL, иначе дополни. Даты отсечек и хвостов — аргументами. Сверь его вывод с шапкой отчёта якоря.
+11. **Скрипт журнала** `reports/_analysis/zone_journal.py` (вне git; остался от rsi_zone): если файла нет — собери его по образцу `reports/_analysis/mdmg_journal.py`; если есть — проверь, что он понимает выходы TP и TRAIL, иначе дополни. Даты отсечек и хвостов — аргументами. Сверь его вывод с шапкой отчёта якоря.
 
 ## 2. Сетки первого круга
 
@@ -86,7 +91,9 @@ argument-hint: <TICKER> [заметки владельца]
 | 1 | `zone_trend` | `ZoneEMAPeriod` 20,30,50,75,100,150,200,250,300,400 |
 | 2 | `exit` | `RSIPeriod` 2,3,4,5,6,8,10,14 × `RSIUpper` 50,55,60,65,70,75,80,85,90,95 |
 | 2 | `risk` | `StopDailyATR` 0.3,0.4,0.5,0.6,0.7,0.8,1.0,1.2,1.5,2.0 × `TPDailyATR` 0.1,0.15,0.2,0.3,0.4,0.5,0.6,0.8,1.0,1.5,2.5 |
-| 2 | `trail` | `UseRSIExit` 0,1 × `UseTrail` 1 × `TrailDailyATR` 0.2,0.3,0.4,0.5,0.7,1.0,1.5 |
+| 2 | `trail` | `UseTrail` 0,1 × `TrailDailyATR` 0.2,0.3,0.4,0.5,0.7,1.0,1.5 |
+
+`UseRSIExit` остаётся 1 (RSI-выход обязателен у каждого зарегистрированного тикера — сторожа реестров), поэтому в сетках не свипается. Тема `trail` умеет проголосовать «трейл выключен».
 
 Инварианты:
 
@@ -101,6 +108,10 @@ argument-hint: <TICKER> [заметки владельца]
 `Test<T>ZoneGridsStayWide` с краевыми узлами из таблицы через `rsiPullbackTickerGrid`. Сетки волны 2
 пишутся после сборки входа (в них фиксируются принятые zone-значения). Тест + сетки волны 1 —
 первый коммит; прогони `go test ./internal/service/backtest/ -run 'Zone|<T>' -count=1`.
+
+Тот же тест проверяет, что ни одна zone-сетка не свипает поля pullback-входа (`RSILower`, `EMAFast`,
+`EMASlow`, `UseDayATRGate`, `FreshDayATR`, `SpentDayATR`, `UseVolume`, `VolMult`, `VolBaseDays`,
+`VolLookbackBars`) и что `StopDailyATR` свипает только `cal_zone_risk`.
 
 ## 3. Walk-forward тем и сборка
 
@@ -117,7 +128,7 @@ go run ./cmd/backtest -ticker <T> -strategy rsi_pullback -interval Minutes30 \
 **Правило большинства:** поле уходит от якоря, только если за значение ≥ 3 из 4 невырожденных
 фолдов основной схемы (на 3 фолдах — единогласно); ничья 2/2 — не большинство. Источники:
 `ZoneRSIPeriod`, `ZoneRSILower` — `zone_entry`; `ZoneEMAPeriod` — `zone_trend`; `RSIPeriod`,
-`RSIUpper` — `exit`; `StopDailyATR`, `TPDailyATR` — `risk`; `UseRSIExit`, `UseTrail`,
+`RSIUpper` — `exit`; `StopDailyATR`, `TPDailyATR` — `risk`; `UseTrail`,
 `TrailDailyATR` — `trail`. Таблица: поле → тема → голоса по фолдам → вырожденные → принято → якорь.
 
 **Порядок:** волна 1 → сборка входа → `plateau_zone_entry.json` (якорь с принятыми zone-значениями)

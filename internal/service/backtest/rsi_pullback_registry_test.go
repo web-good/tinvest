@@ -180,7 +180,7 @@ func TestRSIPullbackTickersKeepTheRSIExitArmed(t *testing.T) {
 }
 
 // TestRSIPullbackZoneEntryFieldsArmedWhenEnabled сторожит ловушку нулевого значения во втором
-// входе: zone-поля в ядре по умолчанию нулевые, и тикер, включивший UseZoneEntry=1 литералом, но
+// входе: zone-поля в ядре по умолчанию нулевые, и тикер, включивший UseZoneEntry=1 или 2 литералом, но
 // забывший поле, молча не торговал бы zone вовсе (ядро отказывает входу при нулевом поле). Пока
 // zone не включён ни у одного тикера, тест проходит пусто — он для будущих калибровок.
 func TestRSIPullbackZoneEntryFieldsArmedWhenEnabled(t *testing.T) {
