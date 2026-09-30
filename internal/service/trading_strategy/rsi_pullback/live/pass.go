@@ -106,10 +106,6 @@ func (s *service) pass(ctx context.Context) error {
 		}
 		// Незарегистрированный тикер — алерт от той стратегии, в чьей он вселенной (или
 		// чья запись), и пропуск; свечи по нему не запрашиваются.
-		type cand struct {
-			sl  *slot
-			dec adapter.Decider
-		}
 		var ready []cand
 		for _, sl := range cands {
 			dec, ok := sl.strat.Decider(ticker)
@@ -142,11 +138,19 @@ func (s *service) pass(ctx context.Context) error {
 			// Позиция без стейта на тикере нескольких стратегий: чья она — из API не узнать.
 			// Угаданный владелец повёл бы её чужим стопом и чужими выходами; реконструкция
 			// и чужие стоп-заявки остаются нетронутыми до ручной разметки.
-			if !hasState && len(s.universeSlots(ticker)) > 1 {
+			if !hasState && len(cands) > 1 {
 				s.slots[0].alert(ticker, "позиция без стейта на общем тикере, владелец неизвестен — нужна ручная разметка стейта; сопровождение пропущено")
 				continue
 			}
 			c := ready[0]
+			// Реальная позиция без стейта на тикере бумажной стратегии при боевой соседке:
+			// бумажный слот восстановил бы стейт, но биржевой стоп не поставил бы (dry-run), а
+			// бумажный SELL стёр бы запись, оставив бумаги у брокера, — и так каждые полчаса.
+			// Реальные бумаги без защиты хуже пропуска: алерт, стоп-заявки не трогаются.
+			if !hasState && s.paperBesideLive(c.sl) {
+				s.slots[0].alert(ticker, fmt.Sprintf("позиция без стейта на тикере бумажной стратегии %s — нужна ручная разметка стейта; сопровождение пропущено", c.sl.strat.Name()))
+				continue
+			}
 			md, ok := s.assemble(ctx, c.sl, ticker, sh, c.dec, now, true)
 			if !ok {
 				continue
@@ -207,6 +211,18 @@ func (s *service) assemble(ctx context.Context, sl *slot, ticker string, sh *imo
 	return md, true
 }
 
+// cand — стратегия, готовая решать по тикеру: тикер есть в её реестре.
+type cand struct {
+	sl  *slot
+	dec adapter.Decider
+}
+
+// paperBesideLive — стратегия бумажная, а на счёте есть боевая. Такая стратегия не вправе
+// занимать тикер: ни стейтом бумажного входа, ни реконструкцией реальной позиции.
+func (s *service) paperBesideLive(sl *slot) bool {
+	return !sl.strat.TradeEnabled() && s.anyLive
+}
+
 // passTickers — объединение вселенных в порядке приоритета стратегий, затем тикеры стейта
 // вне всех вселенных (отсортированно): владелец ведёт позицию до выхода, даже если тикер
 // убрали из его вселенной.
@@ -264,18 +280,22 @@ func (s *service) buy(ctx context.Context, pc *passCtx, sl *slot, ticker string,
 	if err != nil {
 		return true, fmt.Errorf("%s: cash: %w", sl.strat.Name(), err)
 	}
+	// Бумажная стратегия при боевой соседке бар не занимает (signaled=false): цикл пасса
+	// спросит следующую по приоритету, и её боевой вход на этом баре не потеряется. Так
+	// бумажный режим ничего не блокирует — ради этого он и не пишет стейт (см. ниже).
+	paper := s.paperBesideLive(sl)
 	lots, ok, reason := sizing.Lots(sl.strat.BuyPct(), total, cash, sig.Price, sh.Lot)
 	if !ok {
 		sl.strat.Notify(notifier.Skip(ticker, reason))
-		return true, nil
+		return !paper, nil
 	}
 
 	// Бумажный вход при боевой соседке — только уведомление. Запись в стейте заняла бы
 	// тикер до чистки по freshEntryGrace и заблокировала бы боевой вход другой стратегии.
 	// Когда боевых стратегий на счёте нет вовсе, работает прежний dry-run: стейт пишется.
-	if !sl.strat.TradeEnabled() && s.anyLive {
+	if paper {
 		sl.strat.Notify(notifier.Entry(ticker, sig.Price, lots, lots*int64(sh.Lot), true))
-		return true, nil
+		return false, nil
 	}
 
 	res, err := sl.exec.Buy(ctx, sh.ID, lots)
