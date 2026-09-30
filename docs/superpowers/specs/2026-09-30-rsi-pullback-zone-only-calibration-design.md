@@ -3,6 +3,9 @@
 Дата: 2026-09-30. Ветка: `feat/pullback-zone-entry` (не смержена; режим `ZoneEntryOnly` — коммит
 `3849a4c`, docs — `1b44b06`).
 
+> **Заменена** спекой `2026-09-30-rsi-pullback-unified-calibration-design.md`: режим «только zone»
+> теперь один из исходов единой процедуры `/pullback-calibrate`, команда `/pullback-zone-calibrate` удалена.
+
 ## 1. Зачем
 
 Режим `UseZoneEntry=2` (`core.ZoneEntryOnly`) заводит rsi_pullback на тикере, где сам pullback
