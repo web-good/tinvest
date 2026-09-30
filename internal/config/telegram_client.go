@@ -6,7 +6,6 @@ type TelegramClient struct {
 	TopicGoldenX     int    `config:"TELEGRAM_TOPIC_GOLDEN_X"`
 	TopicReversion   int    `config:"TELEGRAM_TOPIC_REVERSION"`
 	TopicRSIPullback int    `config:"TELEGRAM_TOPIC_RSI_PULLBACK"`
-	TopicRSIZone     int    `config:"TELEGRAM_TOPIC_RSI_ZONE"`
 	TopicNews        int    `config:"TELEGRAM_TOPIC_NEWS"`
 	AllowedUserIDs   []int64
 }

@@ -3,18 +3,17 @@ package live
 import (
 	"context"
 	"fmt"
-	"slices"
-	"sort"
 	"strings"
 	"time"
 
 	imodel "tinvest/internal/model"
-	"tinvest/internal/service/trading_strategy/livecore/adapter"
 	"tinvest/internal/service/trading_strategy/livecore/notifier"
 	"tinvest/internal/service/trading_strategy/livecore/sizing"
 	"tinvest/internal/service/trading_strategy/livecore/statestore"
 	"tinvest/internal/service/trading_strategy/livecore/stoporders"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/live/marketdata"
+	"tinvest/internal/service/trading_strategy/rsi_pullback/live/reconstruct"
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 	"tinvest/internal/service/trading_strategy/scalping/model"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 	"tinvest/internal/utils"
@@ -67,7 +66,7 @@ func (s *service) pass(ctx context.Context) error {
 		return fmt.Errorf("rsi_pullback: load state: %w", err)
 	}
 
-	activeStops, listErr := s.accountStops.List(ctx) // один вызов на весь пасс
+	activeStops, listErr := s.stops.List(ctx) // один вызов на весь пасс
 	if listErr != nil {
 		s.notify(notifier.Alert(alertLabel, "", "GetStopOrders недоступен: "+listErr.Error()))
 	}
@@ -79,46 +78,14 @@ func (s *service) pass(ctx context.Context) error {
 	}
 
 	now := s.now()
-	// Ошибка по одному тикеру не обрывает пасс: остальные позиции иначе остались бы без
-	// сопровождения — трейл не подтягивается, выходы не проверяются — и так на каждом
-	// пассе, пока держится причина (сбой записи стейта повторится и завтра). Наверх ошибка
-	// всё равно уходит, чтобы планировщик её залогировал.
-	pc := &passCtx{
-		state: state, store: store, stopByID: stopByID,
-		stopByInstrument: stopByInstrument, listErr: listErr, now: now,
-	}
 	var failed []string
-	for _, ticker := range s.passTickers(state) {
-		entry, hasState := state[ticker]
-
-		// Кто вправе действовать по тикеру. Запись в стейте — владелец из неё; иначе —
-		// стратегии, в чьей вселенной тикер, по приоритету.
-		var cands []*slot
-		if hasState {
-			owner := s.slotByName(adapter.Owner(entry))
-			if owner == nil {
-				s.slots[0].alert(ticker, fmt.Sprintf("позиция принадлежит неизвестной стратегии %q — сопровождение пропущено", adapter.Owner(entry)))
-				continue
-			}
-			cands = []*slot{owner}
-		} else {
-			cands = s.universeSlots(ticker)
-		}
-		// Незарегистрированный тикер — алерт от той стратегии, в чьей он вселенной (или
-		// чья запись), и пропуск; свечи по нему не запрашиваются.
-		var ready []cand
-		for _, sl := range cands {
-			dec, ok := sl.strat.Decider(ticker)
-			if !ok {
-				sl.alert(ticker, "тикер не зарегистрирован в "+sl.strat.Name()+" — пропуск")
-				continue
-			}
-			ready = append(ready, cand{sl, dec})
-		}
-		if len(ready) == 0 {
+	for _, ticker := range s.cfg.Tickers {
+		st, ok := StrategyFor(ticker)
+		if !ok {
+			s.notify(notifier.Alert(alertLabel, ticker, "тикер не зарегистрирован в rsi_pullback — пропуск"))
 			continue
 		}
-
+		_, hasState := state[ticker]
 		// Пропуск тикера, за которым мы следим (позиция у брокера или запись в стейте), —
 		// это пропущенное сопровождение: трейл не подтягивается, выходы не проверяются, а
 		// биржевой стоп остаётся на уровне получасовой давности. Строчка в логе контейнера
@@ -127,57 +94,47 @@ func (s *service) pass(ctx context.Context) error {
 		sh, ok := shares[ticker]
 		if !ok || !sh.Trading {
 			if hasState {
-				ready[0].sl.alert(ticker, "инструмент недоступен для торгов — сопровождение пропущено")
+				s.notify(notifier.Alert(alertLabel, ticker, "инструмент недоступен для торгов — сопровождение пропущено"))
 			}
-			logger.ErrorContext(ctx, fmt.Sprintf("%s: %s not tradable, skip", ready[0].sl.strat.Name(), ticker))
+			logger.ErrorContext(ctx, fmt.Sprintf("rsi_pullback: %s not tradable, skip", ticker))
 			continue
 		}
 		pos, isHeld := held[sh.ID]
-
-		if isHeld || hasState {
-			c := ready[0]
-			if !hasState {
-				var ok bool
-				if c, ok = s.reconstructOwner(ticker, cands, ready); !ok {
-					continue
-				}
-			} else if isHeld && s.paperBesideLive(c.sl) {
-				// Владелец записи сейчас бумажный при боевой соседке (его поставили на паузу
-				// с открытой реальной позицией). Бумажные исполнители «продали» бы вхолостую
-				// и стёрли запись, оставив бумаги у брокера под стопом старого уровня.
-				// Пропуск с алертом: стейт и стоп-заявки не трогаются. Запись без позиции
-				// (isHeld=false) идёт обычным путём settleGonePosition.
-				s.slots[0].alert(ticker, fmt.Sprintf("реальная позиция у бумажной стратегии %s — сопровождение пропущено; снимите паузу или разметьте вручную", c.sl.strat.Name()))
-				continue
+		watched := isHeld || hasState
+		md, err := marketdata.Assemble(ctx, s.market, sh.ID, st.Lookback(), now)
+		if err != nil {
+			if watched {
+				s.notify(notifier.Alert(alertLabel, ticker, "рыночные данные недоступны — сопровождение пропущено: "+err.Error()))
 			}
-			md, ok := s.assemble(ctx, c.sl, ticker, sh, c.dec, now, true)
-			if !ok {
-				continue
+			logger.ErrorContext(ctx, fmt.Sprintf("rsi_pullback: %s marketdata: %v", ticker, err))
+			continue
+		}
+		if n := len(md.Times); n == 0 || now.Sub(md.Times[n-1]) > maxBarAge {
+			if watched {
+				s.notify(notifier.Alert(alertLabel, ticker, "последний завершённый бар протух — сопровождение пропущено"))
 			}
-			if perr := s.manage(ctx, pc, c.sl, ticker, sh, c.dec, md, pos, isHeld); perr != nil {
-				c.sl.alert(ticker, "пасс по тикеру прерван: "+perr.Error())
-				logger.ErrorContext(ctx, fmt.Sprintf("%s: %s pass: %v", c.sl.strat.Name(), ticker, perr))
-				failed = append(failed, ticker)
-			}
+			logger.ErrorContext(ctx, fmt.Sprintf("rsi_pullback: %s stale bar, skip", ticker))
 			continue
 		}
 
-		// Свободный тикер: стратегии по приоритету; первая с BUY входит, остальных на
-		// этом баре не спрашивают.
-		for _, c := range ready {
-			md, ok := s.assemble(ctx, c.sl, ticker, sh, c.dec, now, false)
-			if !ok {
-				continue
-			}
-			signaled, perr := s.buy(ctx, pc, c.sl, ticker, sh, c.dec, md)
-			if perr != nil {
-				c.sl.alert(ticker, "пасс по тикеру прерван: "+perr.Error())
-				logger.ErrorContext(ctx, fmt.Sprintf("%s: %s pass: %v", c.sl.strat.Name(), ticker, perr))
-				failed = append(failed, ticker)
-			}
-			if signaled {
-				break
-			}
+		pc := &passCtx{
+			state: state, store: store, stopByID: stopByID,
+			stopByInstrument: stopByInstrument, listErr: listErr, now: now,
+		}
+		// Ошибка по одному тикеру не обрывает пасс: остальные позиции иначе остались бы
+		// без сопровождения — трейл не подтягивается, выходы не проверяются — и так на
+		// каждом пассе, пока держится причина (сбой записи стейта повторится и завтра).
+		// Наверх ошибка всё равно уходит, чтобы планировщик её залогировал.
+		var perr error
+		if watched {
+			perr = s.manage(ctx, pc, ticker, sh, st, md, pos, isHeld)
+		} else {
+			perr = s.buy(ctx, pc, ticker, sh, st, md)
+		}
+		if perr != nil {
+			s.notify(notifier.Alert(alertLabel, ticker, "пасс по тикеру прерван: "+perr.Error()))
+			logger.ErrorContext(ctx, fmt.Sprintf("rsi_pullback: %s pass: %v", ticker, perr))
+			failed = append(failed, ticker)
 		}
 	}
 	if len(failed) > 0 {
@@ -186,159 +143,39 @@ func (s *service) pass(ctx context.Context) error {
 	return nil
 }
 
-// assemble собирает MarketData окном Lookback стратегии и отбрасывает протухший бар.
-// Своя сборка на стратегию, а не срез общей: окно ровно то, что видит движок бэктеста.
-// watched — по тикеру есть позиция или запись: только тогда пропуск будит владельца.
-func (s *service) assemble(ctx context.Context, sl *slot, ticker string, sh *imodel.Share,
-	dec adapter.Decider, now time.Time, watched bool) (strategy.MarketData, bool) {
-
-	md, err := marketdata.Assemble(ctx, s.market, sh.ID, dec.Lookback(), now)
-	if err != nil {
-		if watched {
-			sl.alert(ticker, "рыночные данные недоступны — сопровождение пропущено: "+err.Error())
-		}
-		logger.ErrorContext(ctx, fmt.Sprintf("%s: %s marketdata: %v", sl.strat.Name(), ticker, err))
-		return strategy.MarketData{}, false
-	}
-	if n := len(md.Times); n == 0 || now.Sub(md.Times[n-1]) > maxBarAge {
-		if watched {
-			sl.alert(ticker, "последний завершённый бар протух — сопровождение пропущено")
-		}
-		logger.ErrorContext(ctx, fmt.Sprintf("%s: %s stale bar, skip", sl.strat.Name(), ticker))
-		return strategy.MarketData{}, false
-	}
-	return md, true
-}
-
-// cand — стратегия, готовая решать по тикеру: тикер есть в её реестре.
-type cand struct {
-	sl  *slot
-	dec adapter.Decider
-}
-
-// reconstructOwner выбирает, кто восстанавливает позицию у брокера без стейта. Кандидаты-
-// владельцы — стратегии вселенной тикера, кроме бумажных при боевой соседке: такая не вправе
-// владеть реальной позицией — она восстановила бы стейт, но биржевой стоп не поставила бы
-// (dry-run), а её бумажный SELL стёр бы запись, оставив бумаги у брокера.
-//   - владельцев больше одного — чья позиция, из API не узнать; угаданный владелец повёл бы
-//     её чужим стопом и чужими выходами: алерт, пропуск до ручной разметки;
-//   - ни одного (тикер только у бумажных) — реальные бумаги без защиты хуже пропуска: алерт;
-//   - ровно один — восстанавливает он, если тикер есть в его реестре (иначе алерт о
-//     незарегистрированном тикере уже ушёл).
-//
-// Во всех случаях пропуска стоп-заявки по инструменту не трогаются.
-func (s *service) reconstructOwner(ticker string, cands []*slot, ready []cand) (cand, bool) {
-	var owners []*slot
-	var names []string
-	for _, sl := range cands {
-		names = append(names, sl.strat.Name())
-		if !s.paperBesideLive(sl) {
-			owners = append(owners, sl)
-		}
-	}
-	switch len(owners) {
-	case 0:
-		s.slots[0].alert(ticker, fmt.Sprintf("позиция без стейта на тикере бумажной стратегии %s — нужна ручная разметка стейта; сопровождение пропущено", strings.Join(names, ", ")))
-		return cand{}, false
-	case 1:
-		for _, c := range ready {
-			if c.sl == owners[0] {
-				return c, true
-			}
-		}
-		return cand{}, false
-	default:
-		s.slots[0].alert(ticker, "позиция без стейта на общем тикере, владелец неизвестен — нужна ручная разметка стейта; сопровождение пропущено")
-		return cand{}, false
-	}
-}
-
-// paperBesideLive — стратегия бумажная, а на счёте есть боевая. Такая стратегия не вправе
-// занимать тикер: ни стейтом бумажного входа, ни реконструкцией реальной позиции.
-func (s *service) paperBesideLive(sl *slot) bool {
-	return !sl.strat.TradeEnabled() && s.anyLive
-}
-
-// passTickers — объединение вселенных в порядке приоритета стратегий, затем тикеры стейта
-// вне всех вселенных (отсортированно): владелец ведёт позицию до выхода, даже если тикер
-// убрали из его вселенной.
-func (s *service) passTickers(state map[string]statestore.Entry) []string {
-	seen := map[string]bool{}
-	var out []string
-	for _, sl := range s.slots {
-		for _, t := range sl.strat.Tickers() {
-			if !seen[t] {
-				seen[t] = true
-				out = append(out, t)
-			}
-		}
-	}
-	var extra []string
-	for t := range state {
-		if !seen[t] {
-			extra = append(extra, t)
-		}
-	}
-	sort.Strings(extra)
-	return append(out, extra...)
-}
-
-// universeSlots — стратегии, в чьей вселенной тикер, в порядке приоритета.
-func (s *service) universeSlots(ticker string) []*slot {
-	var out []*slot
-	for _, sl := range s.slots {
-		if slices.Contains(sl.strat.Tickers(), ticker) {
-			out = append(out, sl)
-		}
-	}
-	return out
-}
-
 // buy opens a long when the core signals one: size from the configured percentage of the
 // account, market BUY, state (with the frozen ATR and target), and immediately the
 // protective exchange stop — the position must never live a single tick unprotected,
 // because the next check is half an hour away while the stop is an intrabar one.
-func (s *service) buy(ctx context.Context, pc *passCtx, sl *slot, ticker string, sh *imodel.Share,
-	dec adapter.Decider, md strategy.MarketData) (signaled bool, err error) {
+func (s *service) buy(ctx context.Context, pc *passCtx, ticker string, sh *imodel.Share,
+	st *core.Strategy, md strategy.MarketData) error {
 
 	md.Position = nil
 
-	sig := dec.Decide(md)
+	sig := st.Decide(md)
 	if sig.Kind != model.SignalBuy {
-		return false, nil
+		return nil
 	}
 
 	total, err := s.ops.GetPortfolioTotal(ctx, s.cfg.AccountID)
 	if err != nil {
-		return true, fmt.Errorf("%s: portfolio total: %w", sl.strat.Name(), err)
+		return fmt.Errorf("rsi_pullback: portfolio total: %w", err)
 	}
 	cash, err := s.ops.GetAvailableCash(ctx, s.cfg.AccountID)
 	if err != nil {
-		return true, fmt.Errorf("%s: cash: %w", sl.strat.Name(), err)
+		return fmt.Errorf("rsi_pullback: cash: %w", err)
 	}
-	// Бумажная стратегия при боевой соседке бар не занимает (signaled=false): цикл пасса
-	// спросит следующую по приоритету, и её боевой вход на этом баре не потеряется. Так
-	// бумажный режим ничего не блокирует — ради этого он и не пишет стейт (см. ниже).
-	paper := s.paperBesideLive(sl)
-	lots, ok, reason := sizing.Lots(sl.strat.BuyPct(), total, cash, sig.Price, sh.Lot)
+	lots, ok, reason := sizing.Lots(s.cfg.BuyPct, total, cash, sig.Price, sh.Lot)
 	if !ok {
-		sl.strat.Notify(notifier.Skip(ticker, reason))
-		return !paper, nil
+		s.notify(notifier.Skip(ticker, reason))
+		return nil
 	}
 
-	// Бумажный вход при боевой соседке — только уведомление. Запись в стейте заняла бы
-	// тикер до чистки по freshEntryGrace и заблокировала бы боевой вход другой стратегии.
-	// Когда боевых стратегий на счёте нет вовсе, работает прежний dry-run: стейт пишется.
-	if paper {
-		sl.strat.Notify(notifier.Entry(ticker, sig.Price, lots, lots*int64(sh.Lot), true))
-		return false, nil
-	}
-
-	res, err := sl.exec.Buy(ctx, sh.ID, lots)
+	res, err := s.exec.Buy(ctx, sh.ID, lots)
 	if err != nil {
-		sl.alert(ticker, "ордер на покупку отклонён: "+err.Error())
-		logger.ErrorContext(ctx, fmt.Sprintf("%s: %s buy rejected: %v", sl.strat.Name(), ticker, err))
-		return true, nil // state unchanged; retried next tick
+		s.notify(notifier.Alert(alertLabel, ticker, "ордер на покупку отклонён: "+err.Error()))
+		logger.ErrorContext(ctx, fmt.Sprintf("rsi_pullback: %s buy rejected: %v", ticker, err))
+		return nil // state unchanged; retried next tick
 	}
 
 	fillPrice := sig.Price
@@ -348,14 +185,11 @@ func (s *service) buy(ctx context.Context, pc *passCtx, sl *slot, ticker string,
 		// сессия, нет встречной ликвидности). Позиции нет — записать стейт на ЗАПРОШЕННЫЙ
 		// объём значило бы повести несуществующую позицию и тут же выставить SELL-стоп на
 		// бумаги, которых нет. Ничего не пишем: если бумаги всё же появятся, следующий пасс
-		// увидит позицию без стейта и восстановит её через reconstruct — когда владелец
-		// однозначен (reconstructOwner: единственная небумажная стратегия вселенной тикера;
-		// входит только боевая или единственная бумажная, так что это она). На тикере двух
-		// боевых стратегий — алерт «владелец неизвестен» и ручная разметка стейта.
+		// увидит позицию без стейта и восстановит её через reconstruct.
 		if res.FilledLots == 0 {
-			sl.alert(ticker, "ордер принят, но не исполнен (0 лотов) — стейт не создан")
-			logger.ErrorContext(ctx, fmt.Sprintf("%s: %s buy accepted with zero fill", sl.strat.Name(), ticker))
-			return true, nil
+			s.notify(notifier.Alert(alertLabel, ticker, "ордер принят, но не исполнен (0 лотов) — стейт не создан"))
+			logger.ErrorContext(ctx, fmt.Sprintf("rsi_pullback: %s buy accepted with zero fill", ticker))
+			return nil
 		}
 		if res.FillPrice > 0 {
 			fillPrice = res.FillPrice
@@ -372,15 +206,14 @@ func (s *service) buy(ctx context.Context, pc *passCtx, sl *slot, ticker string,
 		TakeProfit: sig.TakeProfit,
 		MaxFav:     fillPrice,
 		Quantity:   qty,
-		Strategy:   sl.strat.Name(),
 	}
 	if err := pc.store.Save(pc.state); err != nil {
-		return true, fmt.Errorf("%s: save state after buy %s: %w", sl.strat.Name(), ticker, err)
+		return fmt.Errorf("rsi_pullback: save state after buy %s: %w", ticker, err)
 	}
-	sl.strat.Notify(notifier.Entry(ticker, fillPrice, filledLots, qty, !res.Placed))
+	s.notify(notifier.Entry(ticker, fillPrice, filledLots, qty, !res.Placed))
 
-	pc.state[ticker] = s.placeInitialStop(ctx, pc, sl, ticker, sh, pc.state[ticker])
-	return true, nil
+	pc.state[ticker] = s.placeInitialStop(ctx, pc, ticker, sh, pc.state[ticker])
+	return nil
 }
 
 // placeInitialStop puts the protective exchange stop right after a fill so the position is
@@ -389,35 +222,41 @@ func (s *service) buy(ctx context.Context, pc *passCtx, sl *slot, ticker string,
 // stamping are delegated to replaceStop (same guard/rounding/notification path as manage);
 // for a fresh entry StopPrice is 0, so the StopSet notification always fires. On failure the
 // entry keeps an empty StopOrderID and the next pass retries.
-func (s *service) placeInitialStop(ctx context.Context, pc *passCtx, sl *slot, ticker string,
+func (s *service) placeInitialStop(ctx context.Context, pc *passCtx, ticker string,
 	sh *imodel.Share, entry statestore.Entry) statestore.Entry {
 
-	level, reason := sl.strat.DesiredStop(ticker, entry)
+	level, reason := core.DesiredStop(mustParams(ticker), entry.EntryPrice, entry.EntryATR, entry.MaxFav)
 	if reason == "" {
 		return entry
 	}
-	entry = s.replaceStop(ctx, sl, ticker, sh, entry, level, reason)
+	entry = s.replaceStop(ctx, ticker, sh, entry, level, reason)
 	pc.state[ticker] = entry
 	_ = pc.store.Save(pc.state)
 	return entry
 }
 
+// mustParams: ParamsFor гарантированно ok — тикер прошёл StrategyFor выше.
+func mustParams(ticker string) core.Params {
+	p, _ := ParamsFor(ticker)
+	return p
+}
+
 // replaceStop places a stop at level and stamps the entry (id only when actually placed;
 // price/reason always). StopPrice is stamped ROUNDED to the instrument's price increment,
 // so the state mirrors the exchange-side order (dry-run included).
-func (s *service) replaceStop(ctx context.Context, sl *slot, ticker string, sh *imodel.Share,
+func (s *service) replaceStop(ctx context.Context, ticker string, sh *imodel.Share,
 	entry statestore.Entry, level float64, reason string) statestore.Entry {
 
 	if sh.Lot <= 0 {
-		sl.alert(ticker, "sh.Lot == 0 — невозможно вычислить лоты для стоп-заявки, пропуск")
-		logger.ErrorContext(ctx, fmt.Sprintf("%s: %s sh.Lot=%d, skipping stop placement to avoid divide-by-zero", sl.strat.Name(), ticker, sh.Lot))
+		s.notify(notifier.Alert(alertLabel, ticker, "sh.Lot == 0 — невозможно вычислить лоты для стоп-заявки, пропуск"))
+		logger.ErrorContext(ctx, fmt.Sprintf("rsi_pullback: %s sh.Lot=%d, skipping stop placement to avoid divide-by-zero", ticker, sh.Lot))
 		return entry
 	}
 	lots := entry.Quantity / int64(sh.Lot)
-	res, err := sl.stops.Place(ctx, sh.ID, lots, level, sh.MinPriceIncrement)
+	res, err := s.stops.Place(ctx, sh.ID, lots, level, sh.MinPriceIncrement)
 	if err != nil {
-		sl.alert(ticker, "стоп-заявка не выставлена: "+err.Error())
-		logger.ErrorContext(ctx, fmt.Sprintf("%s: %s place stop: %v", sl.strat.Name(), ticker, err))
+		s.notify(notifier.Alert(alertLabel, ticker, "стоп-заявка не выставлена: "+err.Error()))
+		logger.ErrorContext(ctx, fmt.Sprintf("rsi_pullback: %s place stop: %v", ticker, err))
 		return entry
 	}
 	if res.Placed {
@@ -427,7 +266,7 @@ func (s *service) replaceStop(ctx context.Context, sl *slot, ticker string, sh *
 	changed := rounded != entry.StopPrice || reason != entry.StopReason
 	entry.StopPrice, entry.StopReason = rounded, reason
 	if changed {
-		sl.strat.Notify(notifier.StopSet(ticker, rounded, reason, !res.Placed))
+		s.notify(notifier.StopSet(ticker, rounded, reason, !res.Placed))
 	}
 	return entry
 }
@@ -436,11 +275,11 @@ func (s *service) replaceStop(ctx context.Context, sl *slot, ticker string, sh *
 // stop order that mirrors the protective level. The level is computed by core.DesiredStop —
 // the same function the backtest exits on, so prod and backtest cannot drift apart on the
 // most frequent exit mechanism.
-func (s *service) manage(ctx context.Context, pc *passCtx, sl *slot, ticker string, sh *imodel.Share,
-	dec adapter.Decider, md strategy.MarketData, pos *grpcmodel.Position, isHeld bool) error {
+func (s *service) manage(ctx context.Context, pc *passCtx, ticker string, sh *imodel.Share,
+	st *core.Strategy, md strategy.MarketData, pos *grpcmodel.Position, isHeld bool) error {
 
 	if !isHeld {
-		s.settleGonePosition(ctx, pc, sl, ticker)
+		s.settleGonePosition(ctx, pc, ticker)
 		return nil
 	}
 
@@ -454,27 +293,23 @@ func (s *service) manage(ctx context.Context, pc *passCtx, sl *slot, ticker stri
 		// идёт обычным путём manage ниже, где пустой StopOrderID сначала снимет чужую
 		// заявку по инструменту (если она осталась с прошлой жизни раннера), а затем
 		// поставит свою.
-		rebuilt, rerr := sl.strat.Reconstruct(ctx, adapter.ReconstructInput{
-			Trades: s.ops, Candles: s.market, AccountID: s.cfg.AccountID,
-			InstrumentID: sh.ID, Ticker: ticker,
-			PurchasePrice: utils.CombinePrice(pos.PurchasePrice.Units, pos.PurchasePrice.Nano),
-			Now:           pc.now,
-		})
+		rebuilt, rerr := reconstruct.Entry(ctx, s.ops, s.market, s.cfg.AccountID, sh.ID, ticker,
+			utils.CombinePrice(pos.PurchasePrice.Units, pos.PurchasePrice.Nano),
+			mustParams(ticker), pc.now)
 		if rerr != nil {
-			sl.alert(ticker, "позиция без локального стейта, реконструкция не удалась: "+rerr.Error())
-			logger.ErrorContext(ctx, fmt.Sprintf("%s: reconstruct %s: %v", sl.strat.Name(), ticker, rerr))
+			s.notify(notifier.Alert(alertLabel, ticker, "позиция без локального стейта, реконструкция не удалась: "+rerr.Error()))
+			logger.ErrorContext(ctx, fmt.Sprintf("rsi_pullback: reconstruct %s: %v", ticker, rerr))
 			return nil
 		}
-		rebuilt.Strategy = sl.strat.Name()
 		rebuilt.Quantity = pos.Quantity
 		entry = rebuilt
 		pc.state[ticker] = entry
 		if err := pc.store.Save(pc.state); err != nil {
-			return fmt.Errorf("%s: save reconstructed state %s: %w", sl.strat.Name(), ticker, err)
+			return fmt.Errorf("rsi_pullback: save reconstructed state %s: %w", ticker, err)
 		}
-		sl.alert(ticker, fmt.Sprintf(
+		s.notify(notifier.Alert(alertLabel, ticker, fmt.Sprintf(
 			"стейт восстановлен по API: вход %.4f от %s, дневной ATR %.4f, цель %.4f",
-			entry.EntryPrice, entry.EntryTime.Format("02.01 15:04"), entry.EntryATR, entry.TakeProfit))
+			entry.EntryPrice, entry.EntryTime.Format("02.01 15:04"), entry.EntryATR, entry.TakeProfit)))
 	}
 
 	// Позиция усохла (частичный стоп или ручная продажа) — реконсилируем количество
@@ -488,7 +323,7 @@ func (s *service) manage(ctx context.Context, pc *passCtx, sl *slot, ticker stri
 		entry.Quantity = pos.Quantity
 		pc.state[ticker] = entry
 		_ = pc.store.Save(pc.state)
-		sl.alert(ticker, fmt.Sprintf("позиция уменьшилась частично (стоп или ручная продажа), осталось %d", pos.Quantity))
+		s.notify(notifier.Alert(alertLabel, ticker, fmt.Sprintf("позиция уменьшилась частично (стоп или ручная продажа), осталось %d", pos.Quantity)))
 	}
 
 	// Судьба биржевой заявки разбирается ДО Decide — иначе сработавший стоп ведёт к
@@ -507,26 +342,26 @@ func (s *service) manage(ctx context.Context, pc *passCtx, sl *slot, ticker stri
 				// Заявки нет в ACTIVE: сработала или снята вне раннера. Различить
 				// обязательно — репост свежего стопа на уже проданную стопом позицию
 				// обернулся бы фантомной продажей/шортом при касании уровня.
-				fired, ferr := sl.stops.Executed(ctx, entry.StopOrderID)
+				fired, ferr := s.stops.Executed(ctx, entry.StopOrderID)
 				switch {
 				case ferr != nil:
 					// Не репостим вслепую — ретрай на следующем получасовом тике.
-					sl.alert(ticker, "стоп-заявка исчезла из ACTIVE, но EXECUTED недоступен — репост отложен: "+ferr.Error())
+					s.notify(notifier.Alert(alertLabel, ticker, "стоп-заявка исчезла из ACTIVE, но EXECUTED недоступен — репост отложен: "+ferr.Error()))
 					return nil
 				case fired:
-					sl.strat.Notify(notifier.Exit(ticker, entry.StopReason, entry.StopPrice, entry.Quantity, false))
+					s.notify(notifier.Exit(ticker, entry.StopReason, entry.StopPrice, entry.Quantity, false))
 					delete(pc.state, ticker)
 					_ = pc.store.Save(pc.state)
 					return nil
 				default:
-					sl.alert(ticker, "стоп-заявка снята вне раннера — перевыставляю")
+					s.notify(notifier.Alert(alertLabel, ticker, "стоп-заявка снята вне раннера — перевыставляю"))
 					entry.StopOrderID = ""
 				}
 			}
 		} else if stray, ok := pc.stopByInstrument[sh.ID]; ok {
 			// Чужая/устаревшая заявка (например, после восстановления стейта) — снять.
-			if err := sl.stops.Cancel(ctx, stray.StopOrderID); err != nil {
-				sl.alert(ticker, "не удалось снять неизвестную стоп-заявку: "+err.Error())
+			if err := s.stops.Cancel(ctx, stray.StopOrderID); err != nil {
+				s.notify(notifier.Alert(alertLabel, ticker, "не удалось снять неизвестную стоп-заявку: "+err.Error()))
 				// Не ставим новую заявку в этом тике: stray-заявка всё ещё жива на
 				// бирже и продолжает защищать позицию (см. guard ниже). Без этого
 				// флага на бирже оказались бы ДВЕ живые SELL-заявки на один
@@ -542,7 +377,7 @@ func (s *service) manage(ctx context.Context, pc *passCtx, sl *slot, ticker stri
 		entry.MaxFav = md.Price
 		pc.state[ticker] = entry
 		if err := pc.store.Save(pc.state); err != nil {
-			return fmt.Errorf("%s: save maxFav %s: %w", sl.strat.Name(), ticker, err)
+			return fmt.Errorf("rsi_pullback: save maxFav %s: %w", ticker, err)
 		}
 	}
 
@@ -555,7 +390,7 @@ func (s *service) manage(ctx context.Context, pc *passCtx, sl *slot, ticker stri
 		PrevMaxFavorablePrice: prevMaxFav,
 	}
 
-	sig := dec.Decide(md)
+	sig := st.Decide(md)
 	if sig.Kind != model.SignalSell && entry.PendingExit != "" {
 		// Выход уже принят стратегией на одном из прошлых баров, но брокер его не
 		// исполнил. Выходы по индикатору — события ОДНОГО бара (крест RSI вверх через
@@ -564,14 +399,14 @@ func (s *service) manage(ctx context.Context, pc *passCtx, sl *slot, ticker stri
 		sig = model.Signal{Kind: model.SignalSell, Reason: entry.PendingExit, Price: md.Price}
 	}
 	if sig.Kind == model.SignalSell {
-		return s.sell(ctx, pc, sl, ticker, sh, entry, pos, sig)
+		return s.sell(ctx, pc, ticker, sh, entry, pos, sig)
 	}
 
 	// Желаемый уровень от ОБНОВЛЁННОГО MaxFav — на гранулярности шага цены биржи:
 	// сырой уровень может расти на доли шага каждые полчаса, а биржевая цена после
 	// округления не меняется; сравнение сырых значений гоняло бы cancel+repost
 	// по той же цене с окном без защиты на каждом тике.
-	level, reason := sl.strat.DesiredStop(ticker, entry)
+	level, reason := core.DesiredStop(mustParams(ticker), entry.EntryPrice, entry.EntryATR, entry.MaxFav)
 	desired := stoporders.RoundDownToIncrement(level, sh.MinPriceIncrement)
 
 	// Текущий уровень и размер — от биржевого снапшота (источник истины);
@@ -602,26 +437,26 @@ func (s *service) manage(ctx context.Context, pc *passCtx, sl *slot, ticker stri
 			// Две живые SELL-заявки на одну позицию хуже получаса без биржевой
 			// защиты: вторая продаст бумаги, которых уже нет, то есть откроет шорт
 			// на марже. Ретрай на следующем получасовом тике.
-			sl.alert(ticker, "список заявок недоступен — постановка стопа отложена до следующего тика")
+			s.notify(notifier.Alert(alertLabel, ticker, "список заявок недоступен — постановка стопа отложена до следующего тика"))
 		case strayCancelFailed:
 			// Stray-заявка не снялась и всё ещё жива на бирже — она продолжает
 			// защищать позицию. НЕ ставим вторую: alert уже ушёл выше, ретрай
 			// снятия на следующем получасовом тике.
 		default:
-			entry = s.replaceStop(ctx, sl, ticker, sh, entry, level, reason)
+			entry = s.replaceStop(ctx, ticker, sh, entry, level, reason)
 		}
 	case sizeMismatch, desired > current:
-		if err := sl.stops.Cancel(ctx, entry.StopOrderID); err != nil {
-			sl.alert(ticker, "не удалось снять стоп для переноса: "+err.Error())
+		if err := s.stops.Cancel(ctx, entry.StopOrderID); err != nil {
+			s.notify(notifier.Alert(alertLabel, ticker, "не удалось снять стоп для переноса: "+err.Error()))
 			break // старая заявка продолжает защищать
 		}
 		entry.StopOrderID = ""
-		entry = s.replaceStop(ctx, sl, ticker, sh, entry, level, reason)
+		entry = s.replaceStop(ctx, ticker, sh, entry, level, reason)
 	}
 	if prev := pc.state[ticker]; prev != entry {
 		pc.state[ticker] = entry
 		if err := pc.store.Save(pc.state); err != nil {
-			return fmt.Errorf("%s: save stop state %s: %w", sl.strat.Name(), ticker, err)
+			return fmt.Errorf("rsi_pullback: save stop state %s: %w", ticker, err)
 		}
 	}
 	return nil
@@ -634,7 +469,7 @@ func (s *service) manage(ctx context.Context, pc *passCtx, sl *slot, ticker stri
 // Every path that fails to close the position stamps entry.PendingExit before returning:
 // the core's indicator exits are single-bar events, so a failure that is not remembered is
 // a lost exit, not a retry.
-func (s *service) sell(ctx context.Context, pc *passCtx, sl *slot, ticker string, sh *imodel.Share,
+func (s *service) sell(ctx context.Context, pc *passCtx, ticker string, sh *imodel.Share,
 	entry statestore.Entry, pos *grpcmodel.Position, sig model.Signal) error {
 
 	// Причина не должна быть пустой: "" в PendingExit неотличимо от «выхода не ждём».
@@ -656,17 +491,17 @@ func (s *service) sell(ctx context.Context, pc *passCtx, sl *slot, ticker string
 	// оставила бы позицию без биржевой защиты навсегда (replaceStop с тем же
 	// guard'ом её не вернёт).
 	if sh.Lot <= 0 {
-		sl.alert(ticker, "sh.Lot == 0 — невозможно вычислить лоты для продажи, пропуск")
-		logger.ErrorContext(ctx, fmt.Sprintf("%s: %s sh.Lot=%d, skipping sell to avoid divide-by-zero", sl.strat.Name(), ticker, sh.Lot))
+		s.notify(notifier.Alert(alertLabel, ticker, "sh.Lot == 0 — невозможно вычислить лоты для продажи, пропуск"))
+		logger.ErrorContext(ctx, fmt.Sprintf("rsi_pullback: %s sh.Lot=%d, skipping sell to avoid divide-by-zero", ticker, sh.Lot))
 		remember()
 		return nil
 	}
 
 	hadStop := entry.StopOrderID != ""
 	if hadStop {
-		if err := sl.stops.Cancel(ctx, entry.StopOrderID); err != nil {
-			sl.alert(ticker, "не удалось снять стоп-заявку перед продажей: "+err.Error())
-			logger.ErrorContext(ctx, fmt.Sprintf("%s: %s cancel before sell: %v", sl.strat.Name(), ticker, err))
+		if err := s.stops.Cancel(ctx, entry.StopOrderID); err != nil {
+			s.notify(notifier.Alert(alertLabel, ticker, "не удалось снять стоп-заявку перед продажей: "+err.Error()))
+			logger.ErrorContext(ctx, fmt.Sprintf("rsi_pullback: %s cancel before sell: %v", ticker, err))
 			remember()
 			return nil // без снятия продавать нельзя — двойная продажа
 		}
@@ -676,18 +511,18 @@ func (s *service) sell(ctx context.Context, pc *passCtx, sl *slot, ticker string
 	}
 
 	lots := pos.Quantity / int64(sh.Lot)
-	res, err := sl.exec.Sell(ctx, sh.ID, lots)
+	res, err := s.exec.Sell(ctx, sh.ID, lots)
 	if err != nil {
-		sl.alert(ticker, "ордер на продажу отклонён: "+err.Error())
-		logger.ErrorContext(ctx, fmt.Sprintf("%s: %s sell rejected: %v", sl.strat.Name(), ticker, err))
+		s.notify(notifier.Alert(alertLabel, ticker, "ордер на продажу отклонён: "+err.Error()))
+		logger.ErrorContext(ctx, fmt.Sprintf("rsi_pullback: %s sell rejected: %v", ticker, err))
 		// Стоп уже снят, а продажа не прошла — позиция «голая» до следующего
 		// тика. Возвращаем биржевую защиту на прежнем уровне (дубль StopSet
 		// подавит changed-флаг replaceStop: уровень/причина не менялись).
 		entry.PendingExit = pending
 		if hadStop && entry.StopReason != "" {
-			entry = s.replaceStop(ctx, sl, ticker, sh, entry, entry.StopPrice, entry.StopReason)
+			entry = s.replaceStop(ctx, ticker, sh, entry, entry.StopPrice, entry.StopReason)
 			if entry.StopOrderID != "" {
-				sl.alert(ticker, "стоп-заявка перевыставлена после отклонённой продажи")
+				s.notify(notifier.Alert(alertLabel, ticker, "стоп-заявка перевыставлена после отклонённой продажи"))
 			}
 		}
 		pc.state[ticker] = entry
@@ -699,11 +534,11 @@ func (s *service) sell(ctx context.Context, pc *passCtx, sl *slot, ticker string
 		// Ордер принят, но не исполнен ни на один лот — позиция всё ещё открыта. Чистка
 		// стейта здесь стёрла бы замороженную цель и ATR входа живой позиции, а выход
 		// остался бы неисполненным и никем не запомненным.
-		sl.alert(ticker, "ордер на продажу принят, но не исполнен (0 лотов) — выход отложен")
-		logger.ErrorContext(ctx, fmt.Sprintf("%s: %s sell accepted with zero fill", sl.strat.Name(), ticker))
+		s.notify(notifier.Alert(alertLabel, ticker, "ордер на продажу принят, но не исполнен (0 лотов) — выход отложен"))
+		logger.ErrorContext(ctx, fmt.Sprintf("rsi_pullback: %s sell accepted with zero fill", ticker))
 		entry.PendingExit = pending
 		if hadStop && entry.StopReason != "" {
-			entry = s.replaceStop(ctx, sl, ticker, sh, entry, entry.StopPrice, entry.StopReason)
+			entry = s.replaceStop(ctx, ticker, sh, entry, entry.StopPrice, entry.StopReason)
 		}
 		pc.state[ticker] = entry
 		_ = pc.store.Save(pc.state)
@@ -716,9 +551,9 @@ func (s *service) sell(ctx context.Context, pc *passCtx, sl *slot, ticker string
 	}
 	delete(pc.state, ticker)
 	if err := pc.store.Save(pc.state); err != nil {
-		return fmt.Errorf("%s: save state after sell %s: %w", sl.strat.Name(), ticker, err)
+		return fmt.Errorf("rsi_pullback: save state after sell %s: %w", ticker, err)
 	}
-	sl.strat.Notify(notifier.Exit(ticker, sig.Reason, exitPrice, pos.Quantity, !res.Placed))
+	s.notify(notifier.Exit(ticker, sig.Reason, exitPrice, pos.Quantity, !res.Placed))
 	return nil
 }
 
@@ -726,7 +561,7 @@ func (s *service) sell(ctx context.Context, pc *passCtx, sl *slot, ticker string
 // or the position was sold outside the runner and the stop is orphaned. Telling the two
 // apart matters — an orphaned stop left on the exchange would later sell a new position in
 // the same ticker, and a false "stop fired" notification would misreport the exit.
-func (s *service) settleGonePosition(ctx context.Context, pc *passCtx, sl *slot, ticker string) {
+func (s *service) settleGonePosition(ctx context.Context, pc *passCtx, ticker string) {
 	entry, hadState := pc.state[ticker]
 	switch {
 	case !hadState:
@@ -737,12 +572,12 @@ func (s *service) settleGonePosition(ctx context.Context, pc *passCtx, sl *slot,
 		// нельзя — ниже такая трактовка снимает биржевой стоп и чистит стейт, то есть
 		// оставила бы РЕАЛЬНО открытую позицию без защиты, а следующий пасс, увидев
 		// пустой стейт, вошёл бы в неё второй раз.
-		sl.alert(ticker, "портфель ещё не показывает свежую позицию — сопровождение отложено, стоп и стейт не тронуты")
+		s.notify(notifier.Alert(alertLabel, ticker, "портфель ещё не показывает свежую позицию — сопровождение отложено, стоп и стейт не тронуты"))
 	case pc.listErr != nil:
 		// Не можем свериться с биржей, есть ли ещё живая заявка — значит не можем
 		// отличить сработавший стоп от ручной продажи с осиротевшей заявкой.
 		// Консервативно: alert, стейт не трогаем, повтор на следующем тике.
-		sl.alert(ticker, "позиция исчезла, но GetStopOrders недоступен — не могу подтвердить срабатывание стопа, стейт сохранён")
+		s.notify(notifier.Alert(alertLabel, ticker, "позиция исчезла, но GetStopOrders недоступен — не могу подтвердить срабатывание стопа, стейт сохранён"))
 	case entry.StopOrderID == "":
 		// Нет заявки, за которой нужно присматривать, — просто чистим стейт.
 		delete(pc.state, ticker)
@@ -752,11 +587,11 @@ func (s *service) settleGonePosition(ctx context.Context, pc *passCtx, sl *slot,
 			// Заявка ещё жива на бирже — значит, позицию продали НЕ через наш
 			// стоп (например, вручную в приложении брокера). Снимаем осиротевшую
 			// заявку, иначе она позже продаст новую позицию по этому тикеру.
-			if err := sl.stops.Cancel(ctx, entry.StopOrderID); err != nil {
-				sl.alert(ticker, "позиция продана вне раннера, не удалось снять осиротевший стоп: "+err.Error())
+			if err := s.stops.Cancel(ctx, entry.StopOrderID); err != nil {
+				s.notify(notifier.Alert(alertLabel, ticker, "позиция продана вне раннера, не удалось снять осиротевший стоп: "+err.Error()))
 				return // стейт не чистим — ретрай на следующем тике
 			}
-			sl.alert(ticker, "позиция продана вне раннера, снял осиротевший стоп")
+			s.notify(notifier.Alert(alertLabel, ticker, "позиция продана вне раннера, снял осиротевший стоп"))
 			delete(pc.state, ticker)
 			_ = pc.store.Save(pc.state)
 			return
@@ -765,10 +600,10 @@ func (s *service) settleGonePosition(ctx context.Context, pc *passCtx, sl *slot,
 		// вне раннера вместе с продажей позиции. Различаем по EXECUTED-списку;
 		// при его недоступности считаем срабатыванием — на PnL это не влияет,
 		// вопрос только в тексте уведомления.
-		if fired, ferr := sl.stops.Executed(ctx, entry.StopOrderID); ferr == nil && !fired {
-			sl.alert(ticker, "позиция закрыта и стоп-заявка снята вне раннера — чищу стейт")
+		if fired, ferr := s.stops.Executed(ctx, entry.StopOrderID); ferr == nil && !fired {
+			s.notify(notifier.Alert(alertLabel, ticker, "позиция закрыта и стоп-заявка снята вне раннера — чищу стейт"))
 		} else {
-			sl.strat.Notify(notifier.Exit(ticker, entry.StopReason, entry.StopPrice, entry.Quantity, false))
+			s.notify(notifier.Exit(ticker, entry.StopReason, entry.StopPrice, entry.Quantity, false))
 		}
 		delete(pc.state, ticker)
 		_ = pc.store.Save(pc.state)

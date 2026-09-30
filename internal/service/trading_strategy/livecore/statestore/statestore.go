@@ -38,12 +38,6 @@ type Entry struct {
 	// повтор, а потерю сигнала: позиция досидит до стопа или цели. Пустая строка — выхода
 	// не ждём. reversion её не пишет — omitempty оставляет формат файла прежним.
 	PendingExit string `json:"pendingExit,omitempty"`
-
-	// Strategy — стратегия-владелец позиции на счёте, где торгуют несколько стратегий
-	// (docs/rsi_zone/live.md). Пустое значение — rsi_pullback: прод-файл записан до
-	// появления поля, и его позиции должны вестись как прежде. reversion поле не пишет —
-	// omitempty оставляет формат его файла прежним.
-	Strategy string `json:"strategy,omitempty"`
 }
 
 // Store loads and saves the full per-ticker entry-state map.
