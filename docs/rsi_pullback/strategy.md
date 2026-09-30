@@ -55,7 +55,7 @@ RUB-акций на фиксированной сетке из 24 конфигу
 | `UseRSIExit` | 0/1 | 1 | да (trail: 0, 1) |
 | `UseTrail` | 0/1 | 0 | да (trail: 0, 1) |
 | `TrailDailyATR` | множитель дневного ATR | 0 | да (trail: 0.5, 0.8, 1.2) |
-| `UseZoneEntry` | 0/1 | 0 | нет (тема zone — со спекой калибровки) |
+| `UseZoneEntry` | 0/1/2 (§3.1) | 0 | нет (тема zone — со спекой калибровки) |
 | `ZoneRSIPeriod` | длина RSI, баров | 0 (задаётся при включении) | нет (тема zone — со спекой калибровки) |
 | `ZoneRSILower` | пункты RSI | 0 (задаётся при включении) | нет (тема zone — со спекой калибровки) |
 | `ZoneEMAPeriod` | баров | 0 (задаётся при включении) | нет (тема zone — со спекой калибровки) |
@@ -114,8 +114,18 @@ TP = entry + TPDailyATR  · dailyATR    (0, если TPDailyATR  = 0)
 
 ### 3.1. Второй вход (zone)
 
-Необязательный второй вариант покупки, включается по тикеру: `UseZoneEntry = 1`. Он
-проверяется, только если вход pullback на этом баре сигнала не дал. Условия — свои:
+Необязательный второй вариант покупки, включается по тикеру полем `UseZoneEntry`:
+
+| Значение | Константа | Какие входы проверяются |
+|---|---|---|
+| 0 (или любое другое) | — | только pullback (гейты 1–6) |
+| 1 | `ZoneEntryAlso` | pullback, а если он на баре сигнала не дал — zone |
+| 2 | `ZoneEntryOnly` | только zone; pullback не проверяется вовсе |
+
+Режим 2 — для тикера, на котором pullback не торгуется: вход только по zone, выходы те же.
+Поля pullback-входа (`RSILower`, `EMAFast`, `EMASlow`, гейты дня и объёма) в этом режиме на
+решение не влияют, `RSIPeriod` и `RSIUpper` остаются — на них работает RSI-выход (§4).
+`Params.ZoneArmed()` истинно при 1 и 2 — это общий предикат сторожей реестров. Условия zone-входа:
 
 1. **Будний день** — тот же гейт 1.
 2. **RSI-крест вниз** своего RSI: `RSI(ZoneRSIPeriod)` пересекает `ZoneRSILower` сверху вниз на
@@ -130,9 +140,9 @@ TP = entry + TPDailyATR  · dailyATR    (0, если TPDailyATR  = 0)
 `zone:`.
 
 Все четыре поля по умолчанию нулевые — ноль у любого из трёх числовых полей отключает zone-вход
-даже при `UseZoneEntry = 1`, поэтому значения задаются явно: в сетке калибровки или в литерале
+даже при включённом `UseZoneEntry` (1 или 2), поэтому значения задаются явно: в сетке калибровки или в литерале
 тикера (сторож — `TestRSIPullbackZoneEntryFieldsArmedWhenEnabled`). `Lookback` учитывает
-zone-периоды только при включённом входе.
+zone-периоды только при включённом входе, а в режиме 2 не учитывает EMA pullback и фон объёмов (§7).
 
 ## 4. Четыре выхода и тай-брейк
 
@@ -260,6 +270,11 @@ ROSN 2.60%, GAZP 2.66%, NVTK 3.03%. Стоп в один дневной ATR — 
 считается без него (`volNeed = 0`).
 
 ```
+if UseZoneEntry == 2 {                         // только zone: EMA pullback и объёмы решений не дают
+    need := max(RSIPeriod, ZoneEMAPeriod, ZoneRSIPeriod)   // RSIPeriod — ради RSI-выхода
+    Lookback = max(120, 2*need + 20)
+    return
+}
 need := max(EMASlow, EMAFast, RSIPeriod)
 if UseZoneEntry == 1 { need = max(need, ZoneEMAPeriod, ZoneRSIPeriod) }
 volNeed := (VolBaseDays + 1) * maxBarsPerDay * 7 / 5   // maxBarsPerDay = 48 (сутки / 30 минут)
