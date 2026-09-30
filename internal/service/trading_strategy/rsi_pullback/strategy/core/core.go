@@ -2,7 +2,8 @@
 // inside an uptrend: the fast EMA must sit above the slow one and a short RSI must cross DOWN
 // through its lower band on the current bar. An optional second entry — the zone entry, armed per
 // ticker with UseZoneEntry=1 — buys a short RSI crossing DOWN through ZoneRSILower while the close
-// sits above EMA(ZoneEMAPeriod); the day and volume gates do not apply to it. Both entries share
+// sits above EMA(ZoneEMAPeriod); the day and volume gates do not apply to it. UseZoneEntry=2
+// makes the zone entry the only one, for a ticker on which pullback does not trade. Both entries share
 // the stop, the target, the trail and the RSI exit below. The stop and target are sized off the daily ATR at
 // entry and frozen on the position; the trade is closed on the first of: the protective stop
 // (the fixed SL or the ATR trail, whichever binds), the target, or RSI crossing UP through the
@@ -51,10 +52,23 @@ type Params struct {
 	TrailDailyATR   float64 // trail = maxFav - TrailDailyATR*dailyATR; 0 disables it (grid)
 
 	// --- zone entry: the second, per-ticker buy variant. Exits stay shared (the block above). ---
-	UseZoneEntry  int     // 1 arms the zone entry; any other value disables it (grid; default 0)
+	UseZoneEntry  int     // ZoneEntryAlso adds the zone entry, ZoneEntryOnly replaces pullback with it; any other value disables it (grid; default 0)
 	ZoneRSIPeriod int     // zone RSI length (grid; default 0 — set explicitly when armed)
 	ZoneRSILower  float64 // a DOWNWARD cross of this band is the zone signal (grid; default 0)
 	ZoneEMAPeriod int     // the zone entry needs close > EMA(ZoneEMAPeriod) (grid; default 0)
+}
+
+// UseZoneEntry values. ZoneEntryAlso adds the zone entry behind the pullback one (pullback is
+// checked first and wins a tie); ZoneEntryOnly skips the pullback entry altogether, for a ticker
+// on which pullback does not trade. Exits are the same in every mode.
+const (
+	ZoneEntryAlso = 1
+	ZoneEntryOnly = 2
+)
+
+// ZoneArmed reports whether the zone entry is on in either mode.
+func (p Params) ZoneArmed() bool {
+	return p.UseZoneEntry == ZoneEntryAlso || p.UseZoneEntry == ZoneEntryOnly
 }
 
 // DefaultParams returns the spec's baseline; swept values come from calibration.
@@ -105,10 +119,16 @@ func (s *Strategy) Ticker() string { return s.ticker }
 // VolBaseDays weekday days once the weekend bars inside it are discounted — the baseline then
 // silently shrinks instead of failing loudly. Scaling by 7/5 accounts for the two weekend days
 // riding along with every five weekday ones. The zone entry's periods count only while it is armed: a
-// disabled zone block must not grow the window.
+// disabled zone block must not grow the window. Under ZoneEntryOnly the pullback EMAs and the
+// volume background feed no decision, so they do not size the window either; RSIPeriod stays —
+// the RSI exit runs on it.
 func (s *Strategy) Lookback() int {
+	if s.p.UseZoneEntry == ZoneEntryOnly {
+		need := max(s.p.RSIPeriod, s.p.ZoneEMAPeriod, s.p.ZoneRSIPeriod)
+		return max(minLookback, 2*need+20)
+	}
 	need := max(s.p.EMASlow, s.p.EMAFast, s.p.RSIPeriod)
-	if s.p.UseZoneEntry == 1 {
+	if s.p.ZoneArmed() {
 		need = max(need, s.p.ZoneEMAPeriod, s.p.ZoneRSIPeriod)
 	}
 	vol := 0
@@ -387,7 +407,8 @@ func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 // silent — the zone entry. Both variants share the stop, the target and the trail; only the
 // entry conditions differ, and the position does not remember which one opened it. When both
 // fire on the same bar the pullback entry wins: its check runs first, and the levels are the
-// same either way. Everything is recomputed from md — no state survives between bars.
+// same either way. Under ZoneEntryOnly the pullback entry is not checked at all. Everything is
+// recomputed from md — no state survives between bars.
 func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal {
 	n := len(md.Closes)
 	if n < 2 || len(md.Highs) != n || len(md.Lows) != n {
@@ -397,7 +418,10 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	if !s.tradingDay(s.barTime(md)) {
 		return sig
 	}
-	if got := s.pullbackEntry(md, sig); got.Kind == model.SignalBuy || s.p.UseZoneEntry != 1 {
+	if s.p.UseZoneEntry == ZoneEntryOnly {
+		return s.zoneEntry(md, sig)
+	}
+	if got := s.pullbackEntry(md, sig); got.Kind == model.SignalBuy || s.p.UseZoneEntry != ZoneEntryAlso {
 		return got
 	}
 	return s.zoneEntry(md, sig)
@@ -639,6 +663,9 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 	i := n - 1
 	barT := s.barTime(md)
 	fmt.Fprintf(&sb, "день: вход разрешён? %v (бар %v, выходные закрыты)\n", s.tradingDay(barT), barT)
+	if s.p.UseZoneEntry == ZoneEntryOnly {
+		sb.WriteString("вход pullback: выключен (UseZoneEntry=2 — только zone); строки EMA, дня и объёма ниже на вход не влияют\n")
+	}
 
 	rsi := indicators.RSISeries(md.Closes, s.p.RSIPeriod)
 	if len(rsi) == n {
@@ -681,7 +708,7 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 			s.p.VolLookbackBars, s.p.VolMult, s.p.VolBaseDays, s.volumeOK(md))
 	}
 
-	if s.p.UseZoneEntry != 1 {
+	if !s.p.ZoneArmed() {
 		sb.WriteString("zone-вход: выключен (UseZoneEntry=0)\n")
 	} else {
 		s.explainZone(&sb, md)

@@ -124,7 +124,7 @@ func TestZoneEntryGates(t *testing.T) {
 		tweak   func(p *Params, md *strategy.MarketData)
 		noDaily bool
 	}{
-		{"UseZoneEntry=2 — не 1, значит выключен", func(p *Params, _ *strategy.MarketData) { p.UseZoneEntry = 2 }, false},
+		{"UseZoneEntry=3 — неизвестное значение, значит выключен", func(p *Params, _ *strategy.MarketData) { p.UseZoneEntry = 3 }, false},
 		{"ZoneRSIPeriod=0", func(p *Params, _ *strategy.MarketData) { p.ZoneRSIPeriod = 0 }, false},
 		{"ZoneRSILower=0", func(p *Params, _ *strategy.MarketData) { p.ZoneRSILower = 0 }, false},
 		{"ZoneEMAPeriod=0", func(p *Params, _ *strategy.MarketData) { p.ZoneEMAPeriod = 0 }, false},
@@ -222,6 +222,105 @@ func TestExplainReportsZoneEntry(t *testing.T) {
 	for _, want := range []string{"zone-вход: RSI(4)", "EMA(200)"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("Explain при UseZoneEntry=1 не упоминает %q:\n%s", want, got)
+		}
+	}
+}
+
+// TestZoneOnlyNeverEntersByPullback: при UseZoneEntry=2 вход pullback не проверяется вовсе.
+// Первый случай — только pullback (zone-полоса 0.5 фикстурой не пересекается): режим 1 покупает,
+// режим 2 молчит. Второй — срабатывают оба: режим 1 входит pullback, режим 2 — zone.
+func TestZoneOnlyNeverEntersByPullback(t *testing.T) {
+	md := withDay(entryFixture(), 10.0, 101, 100)
+
+	pullbackOnly := zoneParams()
+	pullbackOnly.ZoneRSILower = 0.5
+	if got := NewWithParams("T", pullbackOnly).Decide(md); got.Kind != model.SignalBuy || strings.HasPrefix(got.EntryReason, "zone:") {
+		t.Fatalf("режим 1, сигнал только pullback: Kind/Reason = %v/%q, want Buy по pullback", got.Kind, got.EntryReason)
+	}
+	pullbackOnly.UseZoneEntry = ZoneEntryOnly
+	if got := NewWithParams("T", pullbackOnly).Decide(md); got.Kind != model.SignalNone {
+		t.Fatalf("режим 2, сигнал только pullback: Kind = %v, want None (reason %q)", got.Kind, got.EntryReason)
+	}
+
+	both := zoneParams()
+	both.UseZoneEntry = ZoneEntryOnly
+	got := NewWithParams("T", both).Decide(md)
+	if got.Kind != model.SignalBuy || !strings.HasPrefix(got.EntryReason, "zone:") {
+		t.Fatalf("режим 2, срабатывают оба: Kind/Reason = %v/%q, want Buy с причиной zone:", got.Kind, got.EntryReason)
+	}
+}
+
+// TestZoneOnlyBuysWhatZoneBuys: закрытые гейты pullback (тренд, день, объём) режиму 2 не мешают —
+// те же случаи, что у режима 1 в TestZoneEntryBuysWhenPullbackIsBlocked.
+func TestZoneOnlyBuysWhatZoneBuys(t *testing.T) {
+	tweaks := map[string]func(p *Params, md *strategy.MarketData){
+		"гейт тренда pullback закрыт": func(p *Params, _ *strategy.MarketData) { blockPullbackTrend(p) },
+		"объёмный гейт закрыт": func(p *Params, md *strategy.MarketData) {
+			p.UseVolume = 1
+			md.Volumes[len(md.Volumes)-1] = 1000
+		},
+	}
+	for name, tweak := range tweaks {
+		t.Run(name, func(t *testing.T) {
+			p := zoneParams()
+			p.UseZoneEntry = ZoneEntryOnly
+			md := entryFixture()
+			tweak(&p, &md)
+			got := NewWithParams("T", p).Decide(withDay(md, 10.0, 105, 100)) // 0.5 ATR — мёртвая зона дня
+			if got.Kind != model.SignalBuy || !strings.HasPrefix(got.EntryReason, "zone:") {
+				t.Fatalf("Kind/Reason = %v/%q, want Buy с причиной zone:", got.Kind, got.EntryReason)
+			}
+		})
+	}
+}
+
+// TestZoneOnlyPositionExitsByPullbackRules: у позиции режима 2 выходы те же — RSI pullback.
+func TestZoneOnlyPositionExitsByPullbackRules(t *testing.T) {
+	md := upperCrossFixture()
+	i := len(md.Closes) - 1
+	md = withPosition(md, md.Closes[i]*0.97, 0, 2)
+	p := zoneParams()
+	p.UseZoneEntry = ZoneEntryOnly
+	got := NewWithParams("T", p).Decide(md)
+	if got.Kind != model.SignalSell || got.Reason != "RSI" {
+		t.Fatalf("Kind/Reason = %v/%q, want Sell/RSI", got.Kind, got.Reason)
+	}
+}
+
+// TestLookbackZoneOnlyDropsPullbackEntryWindows: в режиме 2 окно не держит периоды EMA pullback и
+// объёмный фон — они на вход не влияют. RSIPeriod остаётся: на нём RSI-выход.
+func TestLookbackZoneOnlyDropsPullbackEntryWindows(t *testing.T) {
+	p := DefaultParams() // EMASlow 100
+	p.UseVolume = 1      // (14+1)·48·7/5 = 1008
+	p.UseZoneEntry, p.ZoneEMAPeriod, p.ZoneRSIPeriod = ZoneEntryOnly, 50, 4
+	if got := NewWithParams("T", p).Lookback(); got != 120 {
+		t.Fatalf("режим 2, ZoneEMAPeriod 50: Lookback = %d, want 120 (2·50+20)", got)
+	}
+	p.ZoneEMAPeriod = 200
+	if got := NewWithParams("T", p).Lookback(); got != 420 {
+		t.Fatalf("режим 2, ZoneEMAPeriod 200: Lookback = %d, want 420", got)
+	}
+	p.ZoneEMAPeriod, p.RSIPeriod = 10, 100
+	if got := NewWithParams("T", p).Lookback(); got != 220 {
+		t.Fatalf("режим 2, RSIPeriod 100: Lookback = %d, want 220 — RSI-выход обязан прогреться", got)
+	}
+}
+
+func TestExplainReportsZoneOnly(t *testing.T) {
+	p := zoneParams()
+	p.UseZoneEntry = ZoneEntryOnly
+	got := NewWithParams("T", p).Explain(withDay(entryFixture(), 10.0, 101, 100))
+	for _, want := range []string{"вход pullback: выключен", "zone-вход: RSI(4)"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("Explain при UseZoneEntry=2 не упоминает %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestParamsZoneArmed(t *testing.T) {
+	for mode, want := range map[int]bool{0: false, ZoneEntryAlso: true, ZoneEntryOnly: true, 3: false, -1: false} {
+		if got := (Params{UseZoneEntry: mode}).ZoneArmed(); got != want {
+			t.Errorf("UseZoneEntry=%d: ZoneArmed = %v, want %v", mode, got, want)
 		}
 	}
 }

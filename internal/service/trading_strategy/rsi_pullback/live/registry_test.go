@@ -133,12 +133,12 @@ func TestRegisteredTickersKeepTheRSIExitArmed(t *testing.T) {
 // ни у одного тикера, тест проходит пусто — он для будущих калибровок.
 func TestRegisteredTickersArmZoneFieldsWhenEnabled(t *testing.T) {
 	for ticker, p := range paramsByTicker {
-		if p.UseZoneEntry != 1 {
+		if !p.ZoneArmed() {
 			continue
 		}
 		if p.ZoneRSIPeriod <= 0 || p.ZoneRSILower <= 0 || p.ZoneEMAPeriod <= 0 {
-			t.Errorf("%s: UseZoneEntry=1, но ZoneRSIPeriod=%d ZoneRSILower=%v ZoneEMAPeriod=%d — поле забыто в литерале",
-				ticker, p.ZoneRSIPeriod, p.ZoneRSILower, p.ZoneEMAPeriod)
+			t.Errorf("%s: UseZoneEntry=%d, но ZoneRSIPeriod=%d ZoneRSILower=%v ZoneEMAPeriod=%d — поле забыто в литерале",
+				ticker, p.UseZoneEntry, p.ZoneRSIPeriod, p.ZoneRSILower, p.ZoneEMAPeriod)
 		}
 	}
 }
