@@ -10,5 +10,6 @@ type Config struct {
 	PortfolioYield *PortfolioYieldConfig
 	Reversion      *ReversionConfig
 	RSIPullback    *RSIPullbackConfig
+	RSIZone        *RSIZoneConfig
 	News           *NewsConfig
 }

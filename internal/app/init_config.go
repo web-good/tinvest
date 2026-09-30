@@ -45,6 +45,7 @@ func (a *App) initConfig(ctx context.Context) error {
 		PortfolioYield: config.NewPortfolioYieldConfig(),
 		Reversion:      config.NewReversionConfig(),
 		RSIPullback:    config.NewRSIPullbackConfig(),
+		RSIZone:        config.NewRSIZoneConfig(),
 		News:           config.NewNewsConfig(),
 	}
 	err = confita.NewLoader(
