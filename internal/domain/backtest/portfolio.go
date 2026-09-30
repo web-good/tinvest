@@ -20,6 +20,7 @@ type portfolio struct {
 	entryATR         float64 // ATR captured at entry
 	entryStop        float64 // hard stop frozen at entry
 	entryReason      string  // human-readable entry rationale captured at entry
+	entryKind        string  // entry kind captured at entry
 	maxFavorable     float64 // highest close seen since entry (monotonic)
 	prevMaxFavorable float64 // maxFavorable as of the previous bar
 	bar              int     // current bar index, set by the engine each iteration
@@ -35,7 +36,7 @@ func newPortfolio(cfg Config) *portfolio {
 // cash for a single lot. Risk calculation excludes commission for simplicity: per-share
 // risk is the raw price-minus-stop distance; entry/exit commission is not added to the
 // modeled stop-out loss.
-func (p *portfolio) open(price float64, t time.Time, level, target, atr, stop float64, entryReason string) {
+func (p *portfolio) open(price float64, t time.Time, level, target, atr, stop float64, entryReason, entryKind string) {
 	if p.qty != 0 {
 		return
 	}
@@ -73,6 +74,7 @@ func (p *portfolio) open(price float64, t time.Time, level, target, atr, stop fl
 	p.entryATR = atr
 	p.entryStop = stop
 	p.entryReason = entryReason
+	p.entryKind = entryKind
 	p.maxFavorable = price
 	p.prevMaxFavorable = price
 }
@@ -117,6 +119,7 @@ func (p *portfolio) close(price float64, t time.Time, reason, exitReason string)
 		ResistanceLevel: p.entryTarget,
 		ATR:             p.entryATR,
 		EntryReason:     p.entryReason,
+		EntryKind:       p.entryKind,
 		ExitReason:      exitReason,
 	}
 	p.qty = 0
@@ -126,6 +129,7 @@ func (p *portfolio) close(price float64, t time.Time, reason, exitReason string)
 	p.entryATR = 0
 	p.entryStop = 0
 	p.entryReason = ""
+	p.entryKind = ""
 	p.maxFavorable = 0
 	p.prevMaxFavorable = 0
 	return tr

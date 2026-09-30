@@ -419,6 +419,26 @@ func TestEngineStampsEntryContextOnTrade(t *testing.T) {
 	}
 }
 
+func TestEngineStampsEntryKindOnTrade(t *testing.T) {
+	candles := flatCandles([]float64{10, 100, 110})
+	s := scriptedStrategy{lookback: 1, decide: func(md strategy.MarketData) model.Signal {
+		if md.Position == nil && md.Price == 100 {
+			return model.Signal{Kind: model.SignalBuy, EntryKind: "zone"}
+		}
+		if md.Position != nil && md.Price == 110 {
+			return model.Signal{Kind: model.SignalSell, Reason: "RSI"}
+		}
+		return model.Signal{Kind: model.SignalNone}
+	}}
+	res := Run(s, candles, nil, nil, Config{InitialCash: 100000, Fraction: 1.0, Lot: 1})
+	if len(res.Trades) != 1 {
+		t.Fatalf("trades = %d, want 1", len(res.Trades))
+	}
+	if got := res.Trades[0].EntryKind; got != "zone" {
+		t.Fatalf("EntryKind = %q, want zone", got)
+	}
+}
+
 func TestEngineFillsTPAtTarget(t *testing.T) {
 	// Bar 1 buys at 100; bar 2 has a high of 130 reaching the TP=120, closing at 110.
 	// The TP exit must fill at the target (120), not the close (110).

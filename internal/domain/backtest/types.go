@@ -52,6 +52,7 @@ type Trade struct {
 	ATR             float64 // ATR at entry; 0 when n/a
 	EntryReason     string  // human-readable entry rationale captured at entry
 	ExitReason      string  // human-readable exit rationale captured at exit; empty when n/a
+	EntryKind       string  // which entry opened the trade (rsi_pullback: "pullback" / "zone"); empty for single-entry strategies
 }
 
 // EquityPoint is portfolio value at one bar.

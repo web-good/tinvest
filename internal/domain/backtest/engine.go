@@ -241,7 +241,7 @@ func Run(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Candl
 		switch sig.Kind {
 		case model.SignalBuy:
 			if p.qty == 0 {
-				p.open(c.Close, c.Time, sig.Level, sig.TakeProfit, sig.ATR, sig.StopLoss, sig.EntryReason)
+				p.open(c.Close, c.Time, sig.Level, sig.TakeProfit, sig.ATR, sig.StopLoss, sig.EntryReason, sig.EntryKind)
 			}
 		case model.SignalSell:
 			if p.qty != 0 {
@@ -332,7 +332,7 @@ func Trace(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Can
 		switch sig.Kind {
 		case model.SignalBuy:
 			if p.qty == 0 {
-				p.open(c.Close, c.Time, sig.Level, sig.TakeProfit, sig.ATR, sig.StopLoss, sig.EntryReason)
+				p.open(c.Close, c.Time, sig.Level, sig.TakeProfit, sig.ATR, sig.StopLoss, sig.EntryReason, sig.EntryKind)
 			}
 		case model.SignalSell:
 			if p.qty != 0 {
