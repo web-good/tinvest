@@ -103,6 +103,10 @@ func (s *ServiceProvider) GetRSIPullbackSender() (telegram.Client, error) {
 	return s.topicSender(s.appConfig.TelegramClient.TopicRSIPullback, "rsi_pullback")
 }
 
+func (s *ServiceProvider) GetRSIZoneSender() (telegram.Client, error) {
+	return s.topicSender(s.appConfig.TelegramClient.TopicRSIZone, "rsi_zone")
+}
+
 func (s *ServiceProvider) GetNewsSender() (telegram.Client, error) {
 	return s.topicSender(s.appConfig.TelegramClient.TopicNews, "news")
 }

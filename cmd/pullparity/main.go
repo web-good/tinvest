@@ -4,6 +4,7 @@
 // once the way internal/domain/backtest.Run does it, once through the live
 // marketdata.Assemble fed by a cache-backed CandleClient that only ever returns candles
 // visible at that bar's close. Any divergence is a live/backtest fidelity bug.
+// The -strategy flag picks the live registry to check: rsi_pullback (default) or rsi_zone.
 package main
 
 import (
@@ -22,10 +23,11 @@ import (
 	"tinvest/internal/enum"
 	imodel "tinvest/internal/model"
 	svc "tinvest/internal/service/backtest"
+	"tinvest/internal/service/trading_strategy/livecore/adapter"
 	"tinvest/internal/service/trading_strategy/livecore/candles"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/live"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/live/marketdata"
-	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
+	rsizonelive "tinvest/internal/service/trading_strategy/rsi_zone/live"
 	"tinvest/internal/service/trading_strategy/scalping/model"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 	"tinvest/internal/utils"
@@ -46,10 +48,11 @@ const maxDailyHorizonMonths = 24
 
 func main() {
 	var (
-		tickersCSV = flag.String("tickers", "UGLD,T,GAZP", "comma-separated tickers to check")
-		months     = flag.Int("months", 24, "lookback period in months")
-		examples   = flag.Int("examples", 10, "max diverging lines printed per ticker")
-		cacheDir   = flag.String("cache", "data/candles", "candle cache directory")
+		tickersCSV   = flag.String("tickers", "UGLD,T,GAZP", "comma-separated tickers to check")
+		months       = flag.Int("months", 24, "lookback period in months")
+		examples     = flag.Int("examples", 10, "max diverging lines printed per ticker")
+		cacheDir     = flag.String("cache", "data/candles", "candle cache directory")
+		strategyName = flag.String("strategy", "rsi_pullback", "rsi_pullback | rsi_zone")
 	)
 	flag.Parse()
 	logger.Init()
@@ -59,6 +62,7 @@ func main() {
 		months:   *months,
 		examples: *examples,
 		cacheDir: *cacheDir,
+		strategy: *strategyName,
 	}); err != nil {
 		log.Fatalf("pullparity: %v", err)
 	}
@@ -68,6 +72,7 @@ type runCfg struct {
 	tickers          []string
 	months, examples int
 	cacheDir         string
+	strategy         string
 }
 
 func run(ctx context.Context, cfg runCfg) error {
@@ -99,9 +104,9 @@ func run(ctx context.Context, cfg runCfg) error {
 
 	anyDiff := false
 	for _, ticker := range cfg.tickers {
-		st, ok := live.StrategyFor(ticker)
-		if !ok {
-			return fmt.Errorf("%s: not registered in live.StrategyFor — add calibrated params before checking parity", ticker)
+		st, err := resolveDecider(cfg.strategy, ticker)
+		if err != nil {
+			return err
 		}
 		diffs, bars, err := checkTicker(ctx, provider, ticker, ids[ticker], st, from, to)
 		if err != nil {
@@ -124,13 +129,31 @@ func run(ctx context.Context, cfg runCfg) error {
 	return nil
 }
 
+// resolveDecider берёт ядро тикера из живого реестра выбранной стратегии — того же, из
+// которого его берёт раннер.
+func resolveDecider(strategyName, ticker string) (adapter.Decider, error) {
+	switch strategyName {
+	case "rsi_pullback":
+		if st, ok := live.StrategyFor(ticker); ok {
+			return st, nil
+		}
+	case "rsi_zone":
+		if st, ok := rsizonelive.StrategyFor(ticker); ok {
+			return st, nil
+		}
+	default:
+		return nil, fmt.Errorf("unknown -strategy %q (rsi_pullback | rsi_zone)", strategyName)
+	}
+	return nil, fmt.Errorf("%s: not registered in %s live registry — add calibrated params before checking parity", ticker, strategyName)
+}
+
 // checkTicker replays m30 bar by bar from lookback-1 onward, building the MarketData
 // snapshot (and the resulting Decide verdict) twice per bar — once via the engine's own
 // AssembleMarketData/TodayExtent, once via marketdata.Assemble fed by a cache-backed
 // client that only ever sees candles visible at that bar's close. bars is the number of
 // bars actually replayed (len(m30) - lookback + 1).
 func checkTicker(ctx context.Context, provider *svc.CandleProvider, ticker, instrumentUID string,
-	st *core.Strategy, from, to time.Time) (diffs []string, bars int, err error) {
+	st adapter.Decider, from, to time.Time) (diffs []string, bars int, err error) {
 
 	lookback := st.Lookback()
 	m30, err := provider.Load(ctx, ticker, instrumentUID, enum.Minutes30, from, to, false)
