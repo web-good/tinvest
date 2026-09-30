@@ -179,6 +179,26 @@ func TestRSIPullbackTickersKeepTheRSIExitArmed(t *testing.T) {
 	}
 }
 
+// TestRSIPullbackZoneEntryFieldsArmedWhenEnabled сторожит ловушку нулевого значения во втором
+// входе: zone-поля в ядре по умолчанию нулевые, и тикер, включивший UseZoneEntry=1 литералом, но
+// забывший поле, молча не торговал бы zone вовсе (ядро отказывает входу при нулевом поле). Пока
+// zone не включён ни у одного тикера, тест проходит пусто — он для будущих калибровок.
+func TestRSIPullbackZoneEntryFieldsArmedWhenEnabled(t *testing.T) {
+	for ticker, b := range rsiPullbackRegistry {
+		p, ok := b.DefaultParams().(core.Params)
+		if !ok {
+			t.Fatalf("%s: DefaultParams вернул %T, want core.Params", ticker, b.DefaultParams())
+		}
+		if p.UseZoneEntry != 1 {
+			continue
+		}
+		if p.ZoneRSIPeriod <= 0 || p.ZoneRSILower <= 0 || p.ZoneEMAPeriod <= 0 {
+			t.Errorf("%s: UseZoneEntry=1, но ZoneRSIPeriod=%d ZoneRSILower=%v ZoneEMAPeriod=%d — поле забыто в литерале",
+				ticker, p.ZoneRSIPeriod, p.ZoneRSILower, p.ZoneEMAPeriod)
+		}
+	}
+}
+
 func TestRSIPullbackParseParamsRejectsGarbage(t *testing.T) {
 	b := RSIPullbackLookupOrGeneric("GAZP")
 	if _, err := b.ParseParams([]byte(`{"RSILower":`)); err == nil {
