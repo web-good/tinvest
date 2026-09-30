@@ -1,6 +1,9 @@
 // Package core implements a long-only multi-day RSI pullback strategy. When flat it buys the dip
 // inside an uptrend: the fast EMA must sit above the slow one and a short RSI must cross DOWN
-// through its lower band on the current bar. The stop and target are sized off the daily ATR at
+// through its lower band on the current bar. An optional second entry — the zone entry, armed per
+// ticker with UseZoneEntry=1 — buys a short RSI crossing DOWN through ZoneRSILower while the close
+// sits above EMA(ZoneEMAPeriod); the day and volume gates do not apply to it. Both entries share
+// the stop, the target, the trail and the RSI exit below. The stop and target are sized off the daily ATR at
 // entry and frozen on the position; the trade is closed on the first of: the protective stop
 // (the fixed SL or the ATR trail, whichever binds), the target, or RSI crossing UP through the
 // upper band. The RSI exit can be disabled with UseRSIExit=0, leaving the stop and the target to
@@ -46,6 +49,12 @@ type Params struct {
 	UseRSIExit      int     // 1 arms the RSI exit; any other value disables it (grid; default 1)
 	UseTrail        int     // 1 arms the ATR trailing stop; any other value disables it (grid; default 0)
 	TrailDailyATR   float64 // trail = maxFav - TrailDailyATR*dailyATR; 0 disables it (grid)
+
+	// --- zone entry: the second, per-ticker buy variant. Exits stay shared (the block above). ---
+	UseZoneEntry  int     // 1 arms the zone entry; any other value disables it (grid; default 0)
+	ZoneRSIPeriod int     // zone RSI length (grid; default 0 — set explicitly when armed)
+	ZoneRSILower  float64 // a DOWNWARD cross of this band is the zone signal (grid; default 0)
+	ZoneEMAPeriod int     // the zone entry needs close > EMA(ZoneEMAPeriod) (grid; default 0)
 }
 
 // DefaultParams returns the spec's baseline; swept values come from calibration.
@@ -95,9 +104,13 @@ func (s *Strategy) Ticker() string { return s.ticker }
 // Saturday or Sunday (measured on GAZP), so a calendar window that size can contain fewer than
 // VolBaseDays weekday days once the weekend bars inside it are discounted — the baseline then
 // silently shrinks instead of failing loudly. Scaling by 7/5 accounts for the two weekend days
-// riding along with every five weekday ones.
+// riding along with every five weekday ones. The zone entry's periods count only while it is armed: a
+// disabled zone block must not grow the window.
 func (s *Strategy) Lookback() int {
 	need := max(s.p.EMASlow, s.p.EMAFast, s.p.RSIPeriod)
+	if s.p.UseZoneEntry == 1 {
+		need = max(need, s.p.ZoneEMAPeriod, s.p.ZoneRSIPeriod)
+	}
 	vol := 0
 	if s.p.UseVolume == 1 && s.p.VolBaseDays > 0 {
 		vol = (s.p.VolBaseDays + 1) * maxBarsPerDay * 7 / 5
@@ -370,9 +383,11 @@ func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 	return s.enter(md, sig)
 }
 
-// enter emits a long when a short RSI crosses DOWN through its lower band on the current bar
-// while the fast EMA sits above the slow one, the day is either fresh or spent, and the tape
-// is busy. Everything is recomputed from md — no state survives between bars.
+// enter checks the weekday, then the pullback entry, then — when armed and pullback stayed
+// silent — the zone entry. Both variants share the stop, the target and the trail; only the
+// entry conditions differ, and the position does not remember which one opened it. When both
+// fire on the same bar the pullback entry wins: its check runs first, and the levels are the
+// same either way. Everything is recomputed from md — no state survives between bars.
 func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal {
 	n := len(md.Closes)
 	if n < 2 || len(md.Highs) != n || len(md.Lows) != n {
@@ -382,10 +397,20 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	if !s.tradingDay(s.barTime(md)) {
 		return sig
 	}
-	i := n - 1
+	if got := s.pullbackEntry(md, sig); got.Kind == model.SignalBuy || s.p.UseZoneEntry != 1 {
+		return got
+	}
+	return s.zoneEntry(md, sig)
+}
+
+// pullbackEntry emits a long when a short RSI crosses DOWN through its lower band on the current
+// bar while the fast EMA sits above the slow one, the day is either fresh or spent, and the tape
+// is busy. The caller has already checked the bar count and the weekday.
+func (s *Strategy) pullbackEntry(md strategy.MarketData, sig model.Signal) model.Signal {
+	i := len(md.Closes) - 1
 	// 2. RSI crosses down through the lower band on the current bar.
 	rsi := indicators.RSISeries(md.Closes, s.p.RSIPeriod)
-	if len(rsi) != n || !crossedDown(rsi, i, s.p.RSILower) {
+	if len(rsi) != len(md.Closes) || !crossedDown(rsi, i, s.p.RSILower) {
 		return sig
 	}
 	// 3. trend confirmation: fast EMA above slow EMA (both warmed).
@@ -407,21 +432,9 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 		return sig
 	}
 	entry := md.Closes[i]
-	var stop, target float64
-	if s.p.StopDailyATR > 0 {
-		stop = entry - s.p.StopDailyATR*atr
-	}
-	// A stop that lands at or below zero is not a floor, it is a naked long: entry minus the
-	// stop distance ate through the whole price. manage() rebuilds the protective level from
-	// entry and EntryATR via DesiredStop, and only ever acts on it when it comes back > 0, so a
-	// non-positive stop here would silently hold the position with no protective exit at all —
-	// TP and RSI (when armed) are not a substitute, and RSI can be disabled outright via
-	// UseRSIExit. Refuse the entry outright rather than let that through unprotected.
-	if s.p.StopDailyATR > 0 && stop <= 0 {
+	stop, target, ok := s.entryLevels(entry, atr)
+	if !ok {
 		return sig
-	}
-	if s.p.TPDailyATR > 0 {
-		target = entry + s.p.TPDailyATR*atr
 	}
 	sig.Kind = model.SignalBuy
 	sig.StopLoss = stop
@@ -432,8 +445,87 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	return sig
 }
 
-// entryReason renders the human-readable rationale shown in the trade journal.
+// zoneEntry emits a long when the zone RSI crosses DOWN through ZoneRSILower on the current bar
+// while the close sits strictly above a warmed EMA(ZoneEMAPeriod). The day gate and the volume
+// gate do not apply: the zone entry has its own set of conditions. Any zone field at or below
+// zero refuses the entry — a forgotten field in a ticker literal must not open trades on a
+// zero-length RSI or EMA. The caller has already checked the bar count and the weekday.
+//
+// The cross uses the same crossedDown helper as the pullback entry. Its value guard
+// (series[i-1] > 0) is inert here: with ZoneRSILower > 0 a previous reading of 0 — warm-up or a
+// genuine RSI of 0.00 — is never >= the band, so an index-based warm-up check would give the same
+// answer.
+func (s *Strategy) zoneEntry(md strategy.MarketData, sig model.Signal) model.Signal {
+	if s.p.ZoneRSIPeriod <= 0 || s.p.ZoneEMAPeriod <= 0 || s.p.ZoneRSILower <= 0 {
+		return sig
+	}
+	n := len(md.Closes)
+	i := n - 1
+	rsi := indicators.RSISeries(md.Closes, s.p.ZoneRSIPeriod)
+	if len(rsi) != n || !crossedDown(rsi, i, s.p.ZoneRSILower) {
+		return sig
+	}
+	trend := ema.Compute(md.Closes, s.p.ZoneEMAPeriod)
+	if len(trend) != n || trend[i] <= 0 || md.Closes[i] <= trend[i] {
+		return sig
+	}
+	atr := s.dailyATR(md)
+	if atr <= 0 {
+		return sig
+	}
+	entry := md.Closes[i]
+	stop, target, ok := s.entryLevels(entry, atr)
+	if !ok {
+		return sig
+	}
+	sig.Kind = model.SignalBuy
+	sig.StopLoss = stop
+	sig.TakeProfit = target
+	sig.ATR = atr
+	sig.RSI = rsi[i]
+	sig.EntryReason = fmt.Sprintf(
+		"zone: RSI(%d) ушёл под %.0f (%.1f), close %.4f > EMA(%d) %.4f, дневной ATR %.4f; вход %.4f, %s",
+		s.p.ZoneRSIPeriod, s.p.ZoneRSILower, rsi[i], entry, s.p.ZoneEMAPeriod, trend[i], atr, entry,
+		s.exitPlan(stop, target),
+	)
+	return sig
+}
+
+// entryLevels freezes the stop and the target of a new position off the daily ATR. ok is false
+// when an armed stop lands at or below zero: that is not a floor, it is a naked long. manage()
+// rebuilds the protective level from entry and EntryATR via DesiredStop, and only ever acts on it
+// when it comes back > 0, so a non-positive stop here would silently hold the position with no
+// protective exit at all — TP and RSI (when armed) are not a substitute, and RSI can be disabled
+// outright via UseRSIExit. The entry must be refused instead.
+func (s *Strategy) entryLevels(entry, atr float64) (stop, target float64, ok bool) {
+	if s.p.StopDailyATR > 0 {
+		stop = entry - s.p.StopDailyATR*atr
+		if stop <= 0 {
+			return 0, 0, false
+		}
+	}
+	if s.p.TPDailyATR > 0 {
+		target = entry + s.p.TPDailyATR*atr
+	}
+	return stop, target, true
+}
+
+// entryReason renders the human-readable rationale of a pullback entry shown in the trade journal.
 func (s *Strategy) entryReason(rsiNow, fastNow, slowNow, entry, stop, target, atr float64, md strategy.MarketData) string {
+	dayHow := "гейт дня выключен"
+	if s.p.UseDayATRGate == 1 && md.TodayHigh > 0 && md.TodayLow > 0 && md.TodayHigh >= md.TodayLow && atr > 0 {
+		dayHow = fmt.Sprintf("день прошёл %.2f ATR", (md.TodayHigh-md.TodayLow)/atr)
+	}
+	return fmt.Sprintf(
+		"RSI(%d) ушёл под %.0f (%.1f) на откате, EMA(%d) %.4f > EMA(%d) %.4f, %s (дневной ATR %.4f); вход %.4f, %s",
+		s.p.RSIPeriod, s.p.RSILower, rsiNow, s.p.EMAFast, fastNow, s.p.EMASlow, slowNow,
+		dayHow, atr, entry, s.exitPlan(stop, target),
+	)
+}
+
+// exitPlan renders the stop, the trail and the target of a new position — shared by both entry
+// variants, because the exits are.
+func (s *Strategy) exitPlan(stop, target float64) string {
 	stopHow := "стоп выключен"
 	if stop > 0 {
 		stopHow = fmt.Sprintf("стоп %.4f (−%.2f ATR)", stop, s.p.StopDailyATR)
@@ -449,15 +541,7 @@ func (s *Strategy) entryReason(rsiNow, fastNow, slowNow, entry, stop, target, at
 	if target > 0 {
 		tpHow = fmt.Sprintf("цель %.4f (+%.2f ATR)", target, s.p.TPDailyATR)
 	}
-	dayHow := "гейт дня выключен"
-	if s.p.UseDayATRGate == 1 && md.TodayHigh > 0 && md.TodayLow > 0 && md.TodayHigh >= md.TodayLow && atr > 0 {
-		dayHow = fmt.Sprintf("день прошёл %.2f ATR", (md.TodayHigh-md.TodayLow)/atr)
-	}
-	return fmt.Sprintf(
-		"RSI(%d) ушёл под %.0f (%.1f) на откате, EMA(%d) %.4f > EMA(%d) %.4f, %s (дневной ATR %.4f); вход %.4f, %s, %s",
-		s.p.RSIPeriod, s.p.RSILower, rsiNow, s.p.EMAFast, fastNow, s.p.EMASlow, slowNow,
-		dayHow, atr, entry, stopHow, tpHow,
-	)
+	return stopHow + ", " + tpHow
 }
 
 // manage handles an open long. It exits on one of four signals, evaluated in precedence order
@@ -597,6 +681,12 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 			s.p.VolLookbackBars, s.p.VolMult, s.p.VolBaseDays, s.volumeOK(md))
 	}
 
+	if s.p.UseZoneEntry != 1 {
+		sb.WriteString("zone-вход: выключен (UseZoneEntry=0)\n")
+	} else {
+		s.explainZone(&sb, md)
+	}
+
 	if s.p.StopDailyATR > 0 && atr > 0 {
 		fmt.Fprintf(&sb, "стоп: вход − %.2f×ATR (%.4f)\n", s.p.StopDailyATR, s.p.StopDailyATR*atr)
 	} else {
@@ -619,4 +709,27 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 		sb.WriteString("выход по RSI: выключен (UseRSIExit=0)\n")
 	}
 	return sb.String()
+}
+
+// explainZone reports the zone entry's own gates. The day gate and the volume gate above do not
+// apply to it; the stop, the target and the trail below are shared.
+func (s *Strategy) explainZone(sb *strings.Builder, md strategy.MarketData) {
+	if s.p.ZoneRSIPeriod <= 0 || s.p.ZoneEMAPeriod <= 0 || s.p.ZoneRSILower <= 0 {
+		sb.WriteString("zone-вход: поля не заданы (ZoneRSIPeriod/ZoneRSILower/ZoneEMAPeriod ≤ 0) — вход невозможен\n")
+		return
+	}
+	n := len(md.Closes)
+	i := n - 1
+	if rsi := indicators.RSISeries(md.Closes, s.p.ZoneRSIPeriod); len(rsi) == n {
+		fmt.Fprintf(sb, "zone-вход: RSI(%d) пред %.1f тек %.1f; крест вниз через %.0f? %v\n",
+			s.p.ZoneRSIPeriod, rsi[i-1], rsi[i], s.p.ZoneRSILower, crossedDown(rsi, i, s.p.ZoneRSILower))
+	} else {
+		sb.WriteString("zone-вход: RSI — недостаточно истории\n")
+	}
+	if trend := ema.Compute(md.Closes, s.p.ZoneEMAPeriod); len(trend) == n && trend[i] > 0 {
+		fmt.Fprintf(sb, "zone-вход: close %.4f vs EMA(%d) %.4f: выше? %v (гейты дня и объёма не действуют)\n",
+			md.Closes[i], s.p.ZoneEMAPeriod, trend[i], md.Closes[i] > trend[i])
+	} else {
+		fmt.Fprintf(sb, "zone-вход: EMA(%d) не прогрета\n", s.p.ZoneEMAPeriod)
+	}
 }
