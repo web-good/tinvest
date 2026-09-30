@@ -22,7 +22,7 @@
 
 - Поведение `rsi_pullback` при пустой вселенной `rsi_zone` бит-в-бит прежнее: существующий
   `rsi_pullback/live/service_test.go` проходит без изменения проверок.
-- `cmd/zoneparity` даёт ноль расхождений на всех тикерах вселенной `rsi_zone` за 24 месяца.
+- `go run ./cmd/pullparity -strategy rsi_zone` даёт ноль расхождений на всех тикерах вселенной `rsi_zone` за 24 месяца.
 - `./bin/mage ci` зелёный.
 
 Вне рамок: одна позиция на тикер у двух стратегий одновременно (виртуальные подпозиции);
@@ -42,13 +42,20 @@
 
 ## 3. Компоненты
 
-### 3.1 `livecore/runner` — общий пасс
+### 3.1 Раннер счёта — остаётся в `rsi_pullback/live`
 
-Переезжают из `rsi_pullback/live` без изменения логики: `pass`, `buy`, `manage`, `sell`,
-`settleGonePosition`, `replaceStop`, `placeInitialStop`, константы `maxBarAge` и
-`freshEntryGrace`, мьютекс пасса, `Announce`, а также подпакеты `marketdata` и `scheduler`
-(и `dto`). Всё, что сейчас зашито на rsi_pullback (`core.DesiredStop`, `mustParams`,
-`reconstruct.Entry`, `StrategyFor`, `cfg.BuyPct`, `alertLabel`), уходит за интерфейс адаптера.
+Уточнено при планировании: пасс **не переезжает** в отдельный пакет. Раннер уже владеет
+счётом, токеном, файлом стейта и темой; тесты `service_test.go` написаны изнутри пакета
+(`e.svc.statePath`, `e.svc.now`, `e.svc.store`, моки неэкспортируемых интерфейсов), и
+перенос превратил бы «тесты проходят без изменений» в «тесты переписаны» — ровно ту
+гарантию, ради которой рефакторинг затевается. Поэтому раннер обобщается на месте:
+`rsi_pullback` становится первым адаптером, остальные стратегии подключаются вариадиком
+`NewService(..., cfg, guests ...adapter.Strategy)`. Всё, что сейчас зашито на rsi_pullback
+(`core.DesiredStop`, `mustParams`, `reconstruct.Entry`, `StrategyFor`, `cfg.BuyPct`,
+`alertLabel`, `s.exec`, `s.stops`, `s.notify`), уходит за интерфейс адаптера.
+
+Интерфейс адаптера живёт в новом пакете `livecore/adapter` — чтобы `rsi_zone/live` не
+импортировал `rsi_pullback/live`.
 
 Раннер получает упорядоченный список адаптеров; порядок — приоритет входа. В проде порядок
 `[rsi_pullback, rsi_zone]`.
@@ -62,6 +69,7 @@ type Decider interface {
 
 type Strategy interface {
     Name() string                          // "rsi_pullback" | "rsi_zone"; пишется в стейт
+    Label() string                         // заголовок алертов: "RSI Pullback" | "RSI Zone"
     Tickers() []string                     // вселенная входов
     Decider(ticker string) (Decider, bool) // из реестра тикеров; false — тикер не зарегистрирован
     // DesiredStop — защитный уровень открытой позиции; reason "" — стопа нет.
@@ -69,18 +77,18 @@ type Strategy interface {
     // Reconstruct — вход позиции без локального стейта, по API брокера.
     Reconstruct(ctx context.Context, in ReconstructInput) (statestore.Entry, error)
     BuyPct() float64
-    Exec() *executor.Executor        // со своим TradeEnabled
-    Stops() *stoporders.Executor     // со своим TradeEnabled
     TradeEnabled() bool
-    Notify(msg string)               // своя тема Telegram, свой NotifyEnabled
+    Notify(msg string)                     // своя тема Telegram, свой NotifyEnabled
 }
 ```
 
 `ReconstructInput` несёт то, что сейчас передаётся в `reconstruct.Entry`: клиенты ops/market,
 счёт, instrument ID, тикер, среднюю цену покупки, `now`.
 
-Список активных стоп-заявок (`GetStopOrders`) — счётный, берётся один раз на пасс через стоп-
-клиент любой стратегии (чтение не зависит от `TradeEnabled`).
+Исполнители ордеров и стоп-заявок раннер строит сам, по одному на стратегию, с её
+`TradeEnabled`. Список активных стоп-заявок (`GetStopOrders`) — счётный, берётся один раз на
+пасс отдельным исполнителем, боевым, если боевая хоть одна стратегия (в dry-run `List`
+возвращает пустой список).
 
 ### 3.2 Адаптеры
 
@@ -160,7 +168,7 @@ zone — код от него не зависит.
 уходит только уведомлением, **стейт не пишется и тикер не занимается**. Иначе бумажная запись
 держала бы тикер до чистки по `freshEntryGrace` (2 часа) и блокировала бы боевые входы соседки.
 Следствие: в бумажном режиме видны только сигналы входа, выходы бумажных позиций не ведутся.
-Для сверки с бэктестом этого достаточно: выходы zone уже покрыты `zoneparity`.
+Для сверки с бэктестом этого достаточно: выходы zone уже покрыты сверкой `pullparity -strategy rsi_zone`.
 
 Правило точно: бумажный вход пишет стейт, **только если ни одна подключённая стратегия не
 боевая** — это нынешний dry-run rsi_pullback, он сохраняется как есть. Если хотя бы одна
@@ -182,17 +190,19 @@ zone — код от него не зависит.
 | BUY от обеих на одном баре | входит первая по приоритету (rsi_pullback) |
 | Кэша не хватило второй стратегии | обычное `notifier.Skip` в её тему |
 
-## 6. Сверка с бэктестом — `cmd/zoneparity`
+## 6. Сверка с бэктестом — `cmd/pullparity -strategy rsi_zone`
 
-Аналог `cmd/pullparity` для rsi_zone: живая сборка `MarketData` против сборки движка по кэшу
-свечей, сравнение всех полей и вердикта `Decide` (`Kind`, `Reason`, `StopLoss`, `ATR`).
-Приёмка — ноль расхождений на AFKS, BAZA, DIAS, DOMRF, LENT за 24 месяца. Если общий код
-сверки с `pullparity` выносится без изменения поведения `pullparity` — выносится; иначе копия.
+Уточнено при планировании: отдельный `cmd/zoneparity` не нужен. `pullparity` сравнивает
+сборку и вердикт через два метода ядра (`Decide`, `Lookback`), поэтому получает флаг
+`-strategy rsi_pullback|rsi_zone` (дефолт `rsi_pullback` — прежнее поведение) и берёт
+`adapter.Decider` из реестра выбранной стратегии. Живая сборка `MarketData` против сборки
+движка по кэшу свечей, сравнение всех полей и вердикта `Decide`. Приёмка — ноль расхождений
+на AFKS, BAZA, DIAS, DOMRF, LENT за 24 месяца.
 
 ## 7. Тесты
 
-- `rsi_pullback/live/service_test.go` переезжает к `livecore/runner`; меняется только сборка
-  сервиса (раннер с одним адаптером rsi_pullback), проверки — без изменений.
+- `rsi_pullback/live/service_test.go` остаётся на месте и проходит без изменений — ни сборки
+  окружения, ни проверок (раннер с единственным адаптером rsi_pullback).
 - Новые тесты раннера:
   - позицию ведёт владелец из стейта, а не первая стратегия по приоритету;
   - BUY от обеих на одном баре → вход rsi_pullback, zone не вызывается;
@@ -215,13 +225,13 @@ zone — код от него не зависит.
 - Новый `docs/rsi_zone/live.md` — механика раннера для zone, со ссылками на общий раздел
   rsi_pullback вместо копии; без калибровочных результатов (правило документации проекта).
 - `docs/rsi_pullback/live.md`: раздел «Почему отдельный счёт» заменяется описанием общего
-  счёта и владения позицией; путь кода — `livecore/runner`.
+  счёта и владения позицией; путь кода — прежний `rsi_pullback/live`, интерфейс адаптера — `livecore/adapter`.
 - `docs/rsi_zone/strategy.md`: «Только бэктест» → ссылка на `live.md`.
 - `CLAUDE.md`: строка про live-раннер rsi_zone и общий счёт.
 
 ## 9. Порядок выката
 
-1. `zoneparity` — ноль расхождений по всей вселенной.
+1. `pullparity -strategy rsi_zone` — ноль расхождений по всей вселенной.
 2. Прод: `RSI_ZONE_TICKERS` задан, `RSI_ZONE_TRADE_ENABLED=false`,
    `RSI_ZONE_NOTIFY_ENABLED=true`, тема заведена. rsi_pullback продолжает торговать вживую.
 3. Сверка приходящих сигналов zone с бэктестом на тех же датах.
