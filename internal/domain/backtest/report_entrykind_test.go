@@ -31,9 +31,16 @@ func TestKindBreakdownOrdersAndSkipsEmpty(t *testing.T) {
 		t.Fatalf("kinds = %v, want pullback,zone,alpha", kinds)
 	}
 	zone := got[1]
-	want := Compute(Result{Trades: []Trade{trades[0], trades[4]}}, 0, 0, 0)
-	if zone.Metrics.TotalTrades != 2 || zone.Metrics.ProfitFactor != want.ProfitFactor || zone.Metrics.NetPnL != want.NetPnL {
-		t.Fatalf("zone metrics = %+v, want Compute над подмножеством %+v", zone.Metrics, want)
+	if zone.Metrics.TotalTrades != 2 || zone.Metrics.NetPnL != 100 {
+		t.Fatalf("zone: сделок %d, Net PnL %v, want 2 и 100 (−50+150)", zone.Metrics.TotalTrades, zone.Metrics.NetPnL)
+	}
+	if got[0].Metrics.NetPnL != 60 || got[2].Metrics.NetPnL != 5 {
+		t.Fatalf("Net PnL pullback/alpha = %v/%v, want 60/5", got[0].Metrics.NetPnL, got[2].Metrics.NetPnL)
+	}
+	var tbl strings.Builder
+	RenderKindTable(&tbl, got)
+	if !strings.Contains(tbl.String(), "| zone | 2 |") || !strings.Contains(tbl.String(), "| 100.00 |") {
+		t.Fatalf("строка zone не показывает Net PnL 100.00: %q", tbl.String())
 	}
 	if zone.SLExits != 1 || got[0].SLExits != 1 || got[2].SLExits != 0 {
 		t.Fatalf("SLExits = %d/%d/%d, want 1/1/0", got[0].SLExits, zone.SLExits, got[2].SLExits)
@@ -49,11 +56,17 @@ func TestKindBreakdownNilWithoutKinds(t *testing.T) {
 func TestRenderMarkdownEntryKindColumnAndSection(t *testing.T) {
 	trades := []Trade{kindTrade("pullback", "TP", 100), kindTrade("zone", "SL", -50), kindTrade("", "TP", 10)}
 	out := RenderMarkdown(sampleMeta(), Metrics{}, trades, nil)
-	if !strings.Contains(out, "| № | Вход | Время входа | Цена входа |") {
-		t.Fatalf("журнал без колонки «Вход» второй: %q", out)
+	const header = "| № | Вход | Цена входа | Выход | Цена выхода | Причина | Баров | PnL | PnL %% | Support | Resist | ATR | Причина входа | Причина выхода | Тип входа |"
+	if !strings.Contains(out, header) {
+		t.Fatalf("заголовок журнала: старые 14 колонок на местах, «Тип входа» последней; got %q", out)
 	}
-	if !strings.Contains(out, "| 1 | pullback |") || !strings.Contains(out, "| 2 | zone |") || !strings.Contains(out, "| 3 | — |") {
-		t.Fatalf("колонка «Вход» не заполнена или пустой тип не «—»: %q", out)
+	rows := map[string]string{"| 1 |": "| pullback |", "| 2 |": "| zone |", "| 3 |": "| — |"}
+	for _, line := range strings.Split(out, "\n") {
+		for prefix, suffix := range rows {
+			if strings.HasPrefix(line, prefix) && !strings.HasSuffix(line, suffix) {
+				t.Fatalf("строка %q не оканчивается типом входа %q", line, suffix)
+			}
+		}
 	}
 	sec := strings.Index(out, "## По типу входа")
 	journal := strings.Index(out, "## Журнал сделок")
@@ -70,8 +83,8 @@ func TestRenderMarkdownNoKindSectionWithoutKinds(t *testing.T) {
 	if strings.Contains(out, "## По типу входа") {
 		t.Fatal("раздел по типам выведен для стратегии без типа входа")
 	}
-	if !strings.Contains(out, "| 1 | — |") {
-		t.Fatalf("пустой тип должен печататься «—»: %q", out)
+	if !strings.Contains(out, "| — |\n") {
+		t.Fatalf("пустой тип должен печататься «—» последней колонкой: %q", out)
 	}
 }
 

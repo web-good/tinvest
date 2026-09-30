@@ -51,7 +51,10 @@ func KindBreakdown(trades []Trade) []KindStats {
 	out := make([]KindStats, 0, len(kinds))
 	for _, k := range kinds {
 		ks := KindStats{Kind: k, Metrics: Compute(Result{Trades: groups[k]}, 0, 0, 0)}
+		// Compute берёт NetPnL как FinalEquity − InitialCash, а здесь кривой капитала нет.
+		ks.Metrics.NetPnL = 0
 		for _, t := range groups[k] {
+			ks.Metrics.NetPnL += t.PnL
 			if t.Reason == "SL" {
 				ks.SLExits++
 			}
@@ -106,16 +109,16 @@ func RenderMarkdown(meta Meta, m Metrics, trades []Trade, equity []EquityPoint) 
 		RenderKindTable(&b, kinds)
 	}
 
-	b.WriteString("\n## Журнал сделок\n\n| № | Вход | Время входа | Цена входа | Время выхода | Цена выхода | Причина | Баров | PnL | PnL %% | Support | Resist | ATR | Причина входа | Причина выхода |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+	b.WriteString("\n## Журнал сделок\n\n| № | Вход | Цена входа | Выход | Цена выхода | Причина | Баров | PnL | PnL %% | Support | Resist | ATR | Причина входа | Причина выхода | Тип входа |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	for i, t := range trades {
 		kind := t.EntryKind
 		if kind == "" {
 			kind = "—"
 		}
-		fmt.Fprintf(&b, "| %d | %s | %s | %.4f | %s | %.4f | %s | %d | %.2f | %.2f%% | %.4f | %.4f | %.4f | %s | %s |\n",
-			i+1, kind, t.EntryTime.Format(tsLayout), t.EntryPrice, t.ExitTime.Format(tsLayout),
+		fmt.Fprintf(&b, "| %d | %s | %.4f | %s | %.4f | %s | %d | %.2f | %.2f%% | %.4f | %.4f | %.4f | %s | %s | %s |\n",
+			i+1, t.EntryTime.Format(tsLayout), t.EntryPrice, t.ExitTime.Format(tsLayout),
 			t.ExitPrice, t.Reason, t.BarsHeld, t.PnL, t.PnLPct*100,
-			t.SupportLevel, t.ResistanceLevel, t.ATR, t.EntryReason, t.ExitReason)
+			t.SupportLevel, t.ResistanceLevel, t.ATR, t.EntryReason, t.ExitReason, kind)
 	}
 
 	b.WriteString("\n## Движение капитала\n\n")
