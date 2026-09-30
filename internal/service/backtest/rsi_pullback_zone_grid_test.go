@@ -32,14 +32,16 @@ var rsiPullbackModeBySuffix = map[string]float64{"pullback": 0, "zone": core.Zon
 
 // rsiPullbackModeFromName возвращает режим, жёстко заданный именем plateau_{base,mode,final}_<m>.
 // known=false — имя не из этого семейства; bad — суффикс вне pullback/zone/both.
-func rsiPullbackModeFromName(name string) (mode float64, known bool, bad bool) {
+// suffix — часть имени после префикса без «.json».
+func rsiPullbackModeFromName(name string) (mode float64, suffix string, known bool, bad bool) {
 	for _, prefix := range []string{"plateau_base_", "plateau_mode_", "plateau_final_"} {
 		if strings.HasPrefix(name, prefix) {
-			m, ok := rsiPullbackModeBySuffix[strings.TrimSuffix(strings.TrimPrefix(name, prefix), ".json")]
-			return m, true, !ok
+			suffix = strings.TrimSuffix(strings.TrimPrefix(name, prefix), ".json")
+			m, ok := rsiPullbackModeBySuffix[suffix]
+			return m, suffix, true, !ok
 		}
 	}
-	return 0, false, false
+	return 0, "", false, false
 }
 
 // rsiPullbackZoneFileViolations — сторож режима файла для обеих процедур калибровки (zone-only и
@@ -54,8 +56,9 @@ func rsiPullbackModeFromName(name string) (mode float64, known bool, bad bool) {
 //  4. plateau_base_/mode_/final_<m> обязаны задавать режим 0/2/1 для <m> pullback/zone/both,
 //     иной суффикс — нарушение;
 //  5. plateau_entry_pullback — режим не задан или 0;
-//  6. cal_out_*, cal2_out_* обязаны задавать режим; при unified (в каталоге лежит
-//     plateau_mode_both.json) то же для plateau_point.json и r2_point.json.
+//  6. cal_out_*, cal2_out_* обязаны задавать режим (и вне каталога единой процедуры);
+//  7. при unified (в каталоге лежит plateau_base_pullback.json) каждая фаза каждого файла
+//     задаёт UseZoneEntry явно (0 допустим).
 //
 // Требование на фазу, а не на файл, — чтобы не зависеть от того, как калибратор переносит
 // значения между фазами.
@@ -113,11 +116,11 @@ func rsiPullbackZoneFileViolations(name string, unified bool, phases []Phase) []
 			out = append(out, fmt.Sprintf("%s: имя zone-файла, но UseZoneEntry=0", name))
 		}
 	}
-	if want, known, bad := rsiPullbackModeFromName(name); known {
+	if want, suffix, known, bad := rsiPullbackModeFromName(name); known {
 		required = true
 		switch {
 		case bad:
-			out = append(out, fmt.Sprintf("%s: суффикс режима %q не из pullback/zone/both", name, strings.TrimSuffix(name, ".json")))
+			out = append(out, fmt.Sprintf("%s: суффикс режима %q не из pullback/zone/both", name, suffix))
 		case !armed:
 			out = append(out, fmt.Sprintf("%s: режим обязателен (ожидается UseZoneEntry=%v)", name, want))
 		case modeSet && mode != want:
@@ -128,9 +131,11 @@ func rsiPullbackZoneFileViolations(name string, unified bool, phases []Phase) []
 		out = append(out, fmt.Sprintf("%s: pullback-вход, а UseZoneEntry=%v", name, mode))
 	}
 	if !required && !armed {
-		if strings.HasPrefix(name, "cal_out_") || strings.HasPrefix(name, "cal2_out_") ||
-			(unified && (name == "plateau_point.json" || name == "r2_point.json")) {
+		switch {
+		case strings.HasPrefix(name, "cal_out_") || strings.HasPrefix(name, "cal2_out_"):
 			out = append(out, fmt.Sprintf("%s: режим обязателен, но ни одна фаза не задаёт UseZoneEntry", name))
+		case unified:
+			out = append(out, fmt.Sprintf("%s: файл в каталоге единой процедуры, а ни одна фаза не задаёт UseZoneEntry явно (0 допустим)", name))
 		}
 	}
 	return out
@@ -214,6 +219,18 @@ func TestRSIPullbackZoneFileViolations(t *testing.T) {
 			[]Phase{{Name: "point", Grid: Grid{"RSIUpper": {70}}}}, false},
 		{"точка единой процедуры без режима", "plateau_point.json", true,
 			[]Phase{{Name: "point", Grid: Grid{"RSIUpper": {70}}}}, true},
+		{"единая: cal2_entry без режима", "cal2_entry.json", true,
+			[]Phase{{Name: "entry", Grid: Grid{"RSILower": {20, 25}}}}, true},
+		{"единая: plateau_RSIUpper_70 без режима", "plateau_RSIUpper_70.json", true,
+			[]Phase{{Name: "p", Grid: Grid{"RSIUpper": {70}}}}, true},
+		{"единая: cal_entry с режимом 0", "cal_entry.json", true,
+			[]Phase{{Name: "entry", Grid: Grid{"UseZoneEntry": {0}, "RSILower": {20, 25}}}}, false},
+		{"не единая: cal_entry без режима", "cal_entry.json", false,
+			[]Phase{{Name: "entry", Grid: Grid{"RSILower": {20, 25}}}}, false},
+		{"plateau_entry_pullback без режима", "plateau_entry_pullback.json", false,
+			[]Phase{{Name: "point", Grid: Grid{"RSILower": {25}}}}, false},
+		{"plateau_entry_pullback с режимом 0", "plateau_entry_pullback.json", false,
+			[]Phase{{Name: "point", Grid: Grid{"UseZoneEntry": {0}}}}, false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -228,12 +245,26 @@ func TestRSIPullbackZoneFileViolations(t *testing.T) {
 	}
 }
 
+func TestRSIPullbackZoneFileViolationsUnifiedMessage(t *testing.T) {
+	got := rsiPullbackZoneFileViolations("cal2_entry.json", true, []Phase{{Name: "entry", Grid: Grid{"RSILower": {25}}}})
+	if len(got) != 1 || !strings.Contains(got[0], "единой процедуры") {
+		t.Fatalf("сообщение должно называть каталог единой процедуры: %v", got)
+	}
+}
+
+func TestRSIPullbackZoneFileViolationsUnknownSuffixMessage(t *testing.T) {
+	got := rsiPullbackZoneFileViolations("plateau_mode_mixed.json", false, []Phase{{Name: "point", Grid: Grid{"UseZoneEntry": {0}}}})
+	if len(got) != 1 || !strings.Contains(got[0], `"mixed"`) || strings.Contains(got[0], "plateau_mode_mixed\"") {
+		t.Fatalf("сообщение должно печатать один суффикс: %v", got)
+	}
+}
+
 // TestRSIPullbackZoneFilesPinZone применяет проверку ко всем сеткам каталога. Пока zone-сеток нет,
 // тест проходит на pullback-файлах — и этим же сторожит, что проверка их не задевает.
 func TestRSIPullbackZoneFilesPinZone(t *testing.T) {
 	for _, path := range rsiPullbackGridFiles(t) {
 		name := filepath.Base(path)
-		_, err := os.Stat(filepath.Join(filepath.Dir(path), "plateau_mode_both.json"))
+		_, err := os.Stat(filepath.Join(filepath.Dir(path), "plateau_base_pullback.json"))
 		for _, v := range rsiPullbackZoneFileViolations(name, err == nil, rsiPullbackPhases(t, path)) {
 			t.Errorf("%s/%s", filepath.Base(filepath.Dir(path)), v)
 		}
@@ -327,16 +358,24 @@ func TestRSIPullbackUnifiedAxisViolations(t *testing.T) {
 	if got := rsiPullbackUnifiedAxisViolations("cal_out_exit.json", []Phase{exitMode2}); len(got) == 0 {
 		t.Fatal("exit режима 2 без оси RSIPeriod не пойман")
 	}
+	exit2Full := zoneArmedPhase("exit", Grid{"RSIUpper": exitMode0["RSIUpper"], "RSIPeriod": rsiPullbackExitZoneOnlyRSIPeriod})
+	if got := rsiPullbackUnifiedAxisViolations("cal_out_exit.json", []Phase{exit2Full}); len(got) != 0 {
+		t.Fatalf("exit режима 2 с полными осями: ложное нарушение %v", got)
+	}
+	exitMode1 := zoneArmedPhase("exit", Grid{"RSIUpper": exitMode0["RSIUpper"], "UseZoneEntry": {core.ZoneEntryAlso}})
+	if got := rsiPullbackUnifiedAxisViolations("cal_out_exit.json", []Phase{exitMode1}); len(got) != 0 {
+		t.Fatalf("exit режима 1 не обязан свипать RSIPeriod: %v", got)
+	}
 	if got := rsiPullbackUnifiedAxisViolations("plateau_point.json", []Phase{{Name: "p", Grid: Grid{"RSIUpper": {70}}}}); len(got) != 0 {
 		t.Fatalf("файл вне таблицы не проверяется: %v", got)
 	}
 }
 
 // TestRSIPullbackUnifiedGridsStayWide проверяет ширину осей в каталогах единой процедуры —
-// тех, где лежит plateau_mode_both.json. Каталоги старых калибровок не проверяются.
+// тех, где лежит plateau_base_pullback.json (создаётся в первый день калибровки). Каталоги старых калибровок не проверяются.
 func TestRSIPullbackUnifiedGridsStayWide(t *testing.T) {
 	for _, path := range rsiPullbackGridFiles(t) {
-		if _, err := os.Stat(filepath.Join(filepath.Dir(path), "plateau_mode_both.json")); err != nil {
+		if _, err := os.Stat(filepath.Join(filepath.Dir(path), "plateau_base_pullback.json")); err != nil {
 			continue
 		}
 		for _, v := range rsiPullbackUnifiedAxisViolations(filepath.Base(path), rsiPullbackPhases(t, path)) {
