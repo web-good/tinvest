@@ -27,7 +27,7 @@ func TestEngineRunsAZoneTradeEndToEnd(t *testing.T) {
 	entryBar := exitBar.Add(-30 * time.Minute)
 
 	// Ровный рост +0.08% за бар и три бара по −0.2%: RSI(4) пересекает 25 вниз ровно на третьем
-	// (та же форма, на которой проверялось удалённое ядро rsi_zone), close далеко над EMA(200).
+	// close далеко над EMA(200).
 	closes := make([]float64, 0, lookback+3)
 	price := 100.0
 	for i := 0; i < lookback; i++ {
