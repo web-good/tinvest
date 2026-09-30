@@ -80,8 +80,10 @@ argument-hint: <TICKER> [заметки владельца]
 
 ## 2. Сетки первого круга — максимально широкие
 
-Шесть полей `core.Params`: `RSIPeriod`, `RSILower`, `RSIUpper`, `EMAPeriod`, `DailyATRPeriod`,
-`StopDailyATR`. Файлы кладутся в `data/params/rsi_zone/<t>/`. У каждого файла `_comment`: что
+Шесть базовых полей `core.Params`: `RSIPeriod`, `RSILower`, `RSIUpper`, `EMAPeriod`, `DailyATRPeriod`,
+`StopDailyATR`. Тема `stoch` добавляет пять полей гейта стохастика: `UseStoch`, `StochKPeriod`,
+`StochDSmooth`, `StochLower`, `ZoneWindowBars`. Остальные темы их не перечисляют: там гейт выключен
+(`UseStoch = 0`). Файлы кладутся в `data/params/rsi_zone/<t>/`. У каждого файла `_comment`: что
 меряет тема, команда запуска, а после прогона — строка `РЕЗУЛЬТАТ <дата>` с pooled OOS, пулом,
 пофолдовыми PF и голосами фолдов.
 
@@ -96,6 +98,7 @@ argument-hint: <TICKER> [заметки владельца]
 | `risk` | `cal_risk.json` | `StopDailyATR` 0.3,0.5,0.7,1.0,1.25,1.5,2.0,2.5,3.0 × `DailyATRPeriod` 5,7,10,14,21,30 |
 | `trend_risk` | `cal_trend_risk.json` | фазы `trend` (keepTop 3) → `risk` |
 | `phased` | `cal_phased.json` | фазы entry → trend → exit → risk (keepTop 5), оси как выше |
+| `stoch` | `cal_stoch.json` | `UseStoch` 1 × `StochKPeriod` 5,9,14 × `StochDSmooth` 1,3 × `StochLower` 10,15,20,25,30 × `ZoneWindowBars` 1,2,3,5,8 (150 комбинаций, шесть базовых полей прибиты к baseline) |
 
 Жёсткие инварианты сеток:
 
@@ -105,6 +108,8 @@ argument-hint: <TICKER> [заметки владельца]
   съедать больше ~10% окна. На короткой истории выбрасывай длинные EMA и пиши это в `_comment`,
   как у DOMRF.
 - Упор лучшего значения в край оси — не повод обрезать ось. Это повод для зонда за краем (§4).
+- В `cal_stoch.json` перечислены все четыре оси стохастика и `UseStoch` = [1]. Ось, которой нет в
+  файле, молча измерится на дефолте ядра (14/3/20/1). Сторож — `rsi_zone_stoch_grid_test.go`.
 
 Сторожевой тест: `internal/service/backtest/rsi_zone_<t>_grid_test.go`. Он парсит каждую сетку
 тикера, применяет каждое значение через `applyField` к `core.DefaultParams()` и прибивает инварианты

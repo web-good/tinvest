@@ -1,0 +1,21 @@
+{
+  "_comment": "Тема stoch: подтверждение входа Stoch %D в окне ZoneWindowBars (симметричный триггер: крест RSI или Stoch на текущем баре, второй осциллятор в зоне в окне). Несвипуемые шесть полей прибиты к литералу LENT (4/25/75, EMA 200, ATR 14, стоп 1.0). Запуск: go run ./cmd/backtest -ticker LENT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/lent/cal_stoch.json -out ./reports/LENT_zone/stoch -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "stoch",
+      "grid": {
+        "RSIPeriod": [4],
+        "RSILower": [25],
+        "RSIUpper": [75],
+        "EMAPeriod": [200],
+        "DailyATRPeriod": [14],
+        "StopDailyATR": [1.0],
+        "UseStoch": [1],
+        "StochKPeriod": [5, 9, 14],
+        "StochDSmooth": [1, 3],
+        "StochLower": [10, 15, 20, 25, 30],
+        "ZoneWindowBars": [1, 2, 3, 5, 8]
+      }
+    }
+  ]
+}
