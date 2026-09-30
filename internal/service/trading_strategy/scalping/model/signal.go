@@ -23,6 +23,7 @@ type Signal struct {
 	ATR            float64 // ATR at entry; 0 when n/a
 	Reason         string  // exit reason code, e.g. "TP", "SL", "TRAIL", "ATRSL", "OB", "RSI50"; drives backtest fill pricing (see IsStopReason); ignored for entries
 	EntryReason    string  // human-readable entry rationale (set on Buy); empty for sells
+	EntryKind      string  // which entry opened the position, for strategies with more than one (rsi_pullback: "pullback" / "zone"); empty otherwise
 	ExitReason     string  // human-readable exit rationale (set on Sell); empty for buys
 }
 

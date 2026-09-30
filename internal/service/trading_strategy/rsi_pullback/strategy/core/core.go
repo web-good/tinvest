@@ -66,6 +66,13 @@ const (
 	ZoneEntryOnly = 2
 )
 
+// Entry kinds stamped on a Buy signal (model.Signal.EntryKind): the backtest report groups
+// trades by them, which is how the unified calibration tells the two entries apart.
+const (
+	EntryKindPullback = "pullback"
+	EntryKindZone     = "zone"
+)
+
 // ZoneArmed reports whether the zone entry is on in either mode.
 func (p Params) ZoneArmed() bool {
 	return p.UseZoneEntry == ZoneEntryAlso || p.UseZoneEntry == ZoneEntryOnly
@@ -466,6 +473,7 @@ func (s *Strategy) pullbackEntry(md strategy.MarketData, sig model.Signal) model
 	sig.ATR = atr
 	sig.RSI = rsi[i]
 	sig.EntryReason = s.entryReason(rsi[i], fast[i], slow[i], entry, stop, target, atr, md)
+	sig.EntryKind = EntryKindPullback
 	return sig
 }
 
@@ -512,6 +520,7 @@ func (s *Strategy) zoneEntry(md strategy.MarketData, sig model.Signal) model.Sig
 		s.p.ZoneRSIPeriod, s.p.ZoneRSILower, rsi[i], entry, s.p.ZoneEMAPeriod, trend[i], atr, entry,
 		s.exitPlan(stop, target),
 	)
+	sig.EntryKind = EntryKindZone
 	return sig
 }
 

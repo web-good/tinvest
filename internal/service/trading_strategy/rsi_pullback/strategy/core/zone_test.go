@@ -354,3 +354,40 @@ func TestPullbackEntryReasonGolden(t *testing.T) {
 		})
 	}
 }
+
+// TestEntryKindMarksWhichEntryBought: тип входа сделки — то, что отчёт показывает в колонке «Вход».
+// При совпадении сигналов в режиме 1 входит pullback, в режиме 2 — только zone.
+func TestEntryKindMarksWhichEntryBought(t *testing.T) {
+	md := withDay(entryFixture(), 10.0, 101, 100)
+
+	pullbackOff := zoneParams()
+	pullbackOff.UseZoneEntry = 0
+
+	pullbackBlocked := zoneParams()
+	blockPullbackTrend(&pullbackBlocked)
+
+	zoneOnly := zoneParams()
+	zoneOnly.UseZoneEntry = ZoneEntryOnly
+
+	cases := []struct {
+		name string
+		p    Params
+		want string
+	}{
+		{"режим 0 — pullback", pullbackOff, EntryKindPullback},
+		{"режим 1, срабатывают оба — pullback", zoneParams(), EntryKindPullback},
+		{"режим 1, pullback закрыт — zone", pullbackBlocked, EntryKindZone},
+		{"режим 2, срабатывают оба — zone", zoneOnly, EntryKindZone},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := NewWithParams("T", c.p).Decide(md)
+			if got.Kind != model.SignalBuy {
+				t.Fatalf("Kind = %v, want Buy", got.Kind)
+			}
+			if got.EntryKind != c.want {
+				t.Fatalf("EntryKind = %q, want %q (reason %q)", got.EntryKind, c.want, got.EntryReason)
+			}
+		})
+	}
+}
