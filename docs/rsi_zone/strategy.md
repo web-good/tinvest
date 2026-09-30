@@ -9,7 +9,7 @@
 Спека: `docs/superpowers/specs/2026-09-28-rsi-zone-design.md`
 Скринер тикеров: `docs/rsi_zone/screener.md` (`go run ./cmd/zonescreen`).
 
-Только бэктест: живого раннера нет.
+Живой раннер — гость раннера счёта rsi_pullback: [live.md](live.md).
 
 ## 1. Идея
 
