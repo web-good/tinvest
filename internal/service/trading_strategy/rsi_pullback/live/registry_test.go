@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"tinvest/internal/config"
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/afks"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/aqua"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/irkt"
@@ -271,6 +272,18 @@ func TestRegistryHasMDMG(t *testing.T) {
 		t.Fatal("MDMG нет в реестре живого раннера: тикер не будет торговать вовсе")
 	}
 	if want := mdmg.DefaultParams(); p != want {
+		t.Fatalf("реестр отдаёт не параметры пакета:\n got: %+v\nwant: %+v", p, want)
+	}
+}
+
+// TestRegistryHasAFKS держит связку «пакет — реестр живого раннера» для AFKS (единая калибровка
+// 2026-09-30, режим 0): раннер обязан торговать ровно параметры пакета.
+func TestRegistryHasAFKS(t *testing.T) {
+	p, ok := ParamsFor(afks.Ticker)
+	if !ok {
+		t.Fatal("AFKS нет в реестре живого раннера: тикер не будет торговать вовсе")
+	}
+	if want := afks.DefaultParams(); p != want {
 		t.Fatalf("реестр отдаёт не параметры пакета:\n got: %+v\nwant: %+v", p, want)
 	}
 }
