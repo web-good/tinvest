@@ -475,3 +475,103 @@ func TestPullbackBuyDoesNotTouchGuestOwnedPosition(t *testing.T) {
 	}
 	e.orders.AssertNotCalled(t, "PostOrder", mock.Anything, mock.Anything)
 }
+
+// Смешанный режим, общий тикер: rsi_pullback боевой, гость бумажный. Бумажная стратегия при
+// боевой соседке владеть реальной позицией не может, значит кандидат-владелец один —
+// rsi_pullback: он восстанавливает стейт и ставит биржевой стоп, как до появления гостя.
+func TestHeldSharedTickerMixedModeIsReconstructedByLivePullback(t *testing.T) {
+	fill := time.Date(2026, 3, 5, 11, 30, 0, 0, msk)
+	zone := zoneFake(model.SignalSell, "GAZP")
+	e := newSharedEnv(t, sharedNow, []string{"GAZP"},
+		func(c *config.RSIPullbackConfig) { c.TradeEnabled = true }, zone)
+	e.instruments.EXPECT().Shares(mock.Anything).Return(sharesOf("GAZP"), nil)
+	e.expectCandles(flatAt30m(sharedLastBar, 400, 100), dailies(sharedNow, 60))
+	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(heldGAZP(500), nil)
+	e.ops.EXPECT().GetInstrumentTrades(mock.Anything, "acc", "uid-GAZP", mock.Anything, mock.Anything).
+		Return([]grpcmodel.Trade{{IsBuy: true, Date: fill, Price: 100, Quantity: 500}}, nil)
+	e.stops.EXPECT().GetStopOrders(mock.Anything, mock.Anything).Return(emptyStopList(), nil)
+	e.stops.EXPECT().PostStopOrder(mock.Anything, mock.MatchedBy(func(in *investapi.PostStopOrderRequest) bool {
+		return in.GetQuantity() == 50
+	})).Return(&investapi.PostStopOrderResponse{StopOrderId: "so-rec"}, nil).Once()
+	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
+
+	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	got, ok := e.state(t)["GAZP"]
+	if !ok || got.Strategy != "rsi_pullback" || got.StopOrderID != "so-rec" {
+		t.Fatalf("боевой rsi_pullback не восстановил позицию на общем тикере: %+v", e.state(t))
+	}
+	if zone.rebuildCalls != 0 || zone.decideCalls != 0 {
+		t.Fatalf("бумажный гость тронул реальную позицию: rebuild=%d decide=%d", zone.rebuildCalls, zone.decideCalls)
+	}
+}
+
+// Обе стратегии боевые, общий тикер, позиция без стейта: владелец неизвестен — алерт, без
+// реконструкции, стоп-заявки не трогаются.
+func TestHeldSharedTickerBothLiveIsNotReconstructed(t *testing.T) {
+	zone := zoneFake(model.SignalNone, "GAZP")
+	zone.trade = true
+	e := newSharedEnv(t, sharedNow, []string{"GAZP"},
+		func(c *config.RSIPullbackConfig) { c.TradeEnabled = true }, zone)
+	e.instruments.EXPECT().Shares(mock.Anything).Return(sharesOf("GAZP"), nil)
+	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(heldGAZP(100), nil)
+	e.stops.EXPECT().GetStopOrders(mock.Anything, mock.Anything).Return(emptyStopList(), nil)
+	e.tg.EXPECT().SendMessage(mock.MatchedBy(func(s string) bool {
+		return strings.Contains(s, "владелец неизвестен") && strings.Contains(s, "GAZP")
+	})).Return(nil).Once()
+
+	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if st := e.state(t); len(st) != 0 {
+		t.Fatalf("стейт создан без владельца: %+v", st)
+	}
+	if zone.rebuildCalls != 0 {
+		t.Fatal("гость реконструировал позицию на общем тикере")
+	}
+}
+
+// Запись принадлежит гостю, которого поставили на паузу (бумажный) при боевом rsi_pullback,
+// а реальные бумаги ещё у брокера. Бумажные исполнители «продали» бы вхолостую и стёрли
+// запись, оставив бумаги со старым стопом: алерт, стейт и биржа не трогаются, гостя не
+// спрашивают.
+func TestPaperOwnerOfRealPositionIsNotManaged(t *testing.T) {
+	zone := zoneFake(model.SignalSell, "AFKS")
+	e := newSharedEnv(t, sharedNow, []string{"GAZP"},
+		func(c *config.RSIPullbackConfig) { c.TradeEnabled = true }, zone)
+	seeded := statestore.Entry{Ticker: "AFKS", Strategy: "rsi_zone", EntryPrice: 100,
+		EntryATR: 10, MaxFav: 100, Quantity: 100, EntryTime: sharedNow.Add(-48 * time.Hour),
+		StopOrderID: "so-z", StopPrice: 90, StopReason: "SL"}
+	e.seed(t, seeded)
+	e.instruments.EXPECT().Shares(mock.Anything).Return(sharesOf("GAZP", "AFKS"), nil)
+	e.expectCandles(flatAt30m(sharedLastBar, 400, 100), dailies(sharedNow, 60)) // свободный GAZP rsi_pullback
+	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return([]*grpcmodel.Position{held("AFKS", 100)}, nil)
+	e.stops.EXPECT().GetStopOrders(mock.Anything, mock.Anything).Return(emptyStopList(), nil)
+	var sent []string
+	e.tg.EXPECT().SendMessage(mock.Anything).RunAndReturn(func(s string) error {
+		sent = append(sent, s)
+		return nil
+	}).Maybe()
+
+	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	got, ok := e.state(t)["AFKS"]
+	if !ok || got.Strategy != "rsi_zone" || got.StopOrderID != "so-z" || got.StopPrice != 90 ||
+		got.Quantity != 100 || got.MaxFav != 100 || got.PendingExit != "" || !got.EntryTime.Equal(seeded.EntryTime) {
+		t.Fatalf("стейт бумажного владельца изменён: %+v", e.state(t))
+	}
+	if zone.decideCalls != 0 || zone.rebuildCalls != 0 {
+		t.Fatalf("бумажный владелец повёл реальную позицию: decide=%d rebuild=%d", zone.decideCalls, zone.rebuildCalls)
+	}
+	alerted := false
+	for _, s := range sent {
+		alerted = alerted || (strings.Contains(s, "AFKS") && strings.Contains(s, "реальная позиция у бумажной стратегии rsi_zone"))
+	}
+	if !alerted {
+		t.Fatalf("нет алерта о реальной позиции у бумажной стратегии: %v", sent)
+	}
+	// stops без ожиданий на Cancel/PostStopOrder, orders без ожиданий — mockery провалит
+	// тест на любом таком вызове.
+}

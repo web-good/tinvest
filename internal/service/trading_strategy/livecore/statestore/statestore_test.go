@@ -115,7 +115,10 @@ func TestEmptyStrategyIsNotWritten(t *testing.T) {
 	if err := New(path).Save(map[string]Entry{"UGLD": {Ticker: "UGLD"}}); err != nil {
 		t.Fatal(err)
 	}
-	b, _ := os.ReadFile(path)
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if strings.Contains(string(b), "strategy") {
 		t.Fatalf("пустое поле strategy попало в файл: %s", b)
 	}
