@@ -1,0 +1,67 @@
+{
+  "_comment": "data/params/rsi_pullback/afks/plateau_base_pullback.json — BASELINE pullback: дефолты ядра, UseZoneEntry 0. Маркер каталога единой процедуры (с ним включаются сторожа ширины и режима). Единая калибровка rsi_pullback AFKS (/pullback-calibrate, спека docs/superpowers/specs/2026-09-30-rsi-pullback-unified-calibration-design.md §4.1). История кэша с 2021-09-30 (60 мес) — основная схема 36/12/6, контрольная 36/18/6, окно -months 36. Выходы — дефолты ядра. ЗАПУСК (строго последовательно): полное окно — go run ./cmd/backtest -ticker AFKS -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/afks/plateau_base_pullback.json -out ./reports/AFKS/base_pullback_full -months 36 -min-trades 1 -metric profit_factor; walk-forward основной 36/12/6 — go run ./cmd/backtest -ticker AFKS -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/afks/plateau_base_pullback.json -out ./reports/AFKS/base_pullback_wf1206 -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контрольный 36/18/6 — go run ./cmd/backtest -ticker AFKS -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/afks/plateau_base_pullback.json -out ./reports/AFKS/base_pullback_wf1806 -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; удвоенные издержки — go run ./cmd/backtest -ticker AFKS -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/afks/plateau_base_pullback.json -out ./reports/AFKS/base_pullback_c001 -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.001 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          10
+        ],
+        "EMASlow": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.5
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ],
+        "UseZoneEntry": [
+          0
+        ]
+      }
+    }
+  ]
+}

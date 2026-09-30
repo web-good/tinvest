@@ -1,0 +1,86 @@
+{
+  "_comment": "data/params/rsi_pullback/afks/cal_zone_zone_trend.json — тема zone_trend: трендовый фильтр zone-входа: ZoneEMAPeriod (10 узлов) над якорем zone (UseZoneEntry 2, ZoneRSIPeriod 4, ZoneRSILower 25), выходы — дефолты ядра; источник ZoneEMAPeriod. Единая калибровка rsi_pullback AFKS 2026-09-30 (спека docs/superpowers/specs/2026-09-30-rsi-pullback-unified-calibration-design.md). Схема 36/12/6 (4 фолда), большинство >=3/4 невырожденных фолдов (<5 сделок OOS или без убыточных — не голосует). ЗАПУСК: go run ./cmd/backtest -ticker AFKS -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/afks/cal_zone_zone_trend.json -out ./reports/AFKS/cal_zone_zone_trend -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "zone_trend",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          30
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAFast": [
+          10
+        ],
+        "EMASlow": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "UseDayATRGate": [
+          1
+        ],
+        "FreshDayATR": [
+          0
+        ],
+        "SpentDayATR": [
+          0.8
+        ],
+        "StopDailyATR": [
+          0.5
+        ],
+        "TPDailyATR": [
+          0.6
+        ],
+        "UseVolume": [
+          0
+        ],
+        "VolBaseDays": [
+          14
+        ],
+        "VolLookbackBars": [
+          3
+        ],
+        "VolMult": [
+          1.2
+        ],
+        "UseRSIExit": [
+          1
+        ],
+        "UseTrail": [
+          0
+        ],
+        "TrailDailyATR": [
+          0
+        ],
+        "UseZoneEntry": [
+          2
+        ],
+        "ZoneRSIPeriod": [
+          4
+        ],
+        "ZoneRSILower": [
+          25
+        ],
+        "ZoneEMAPeriod": [
+          20,
+          30,
+          50,
+          75,
+          100,
+          150,
+          200,
+          250,
+          300,
+          400
+        ]
+      },
+      "keepTop": 5
+    }
+  ]
+}
