@@ -1,0 +1,33 @@
+{
+  "_comment": "rsi_zone phased grid. Phase 1 (entry) sweeps the RSI length and the lower critical band whose DOWNWARD cross opens the trade. Phase 2 (trend) sweeps the single trend EMA the close must sit above. Phase 3 (exit) sweeps the upper critical band whose UPWARD cross closes the trade. Phase 4 (risk) sweeps the stop in daily ATR; 0 (no stop) is deliberately absent - a multi-day long without a stop is not a point calibration may pick. DailyATRPeriod stays at its default and is NOT swept. RunPhases expands each phase over the previous phase's keepTop survivors: 15 + 5x4 + 5x6 + 5x4 = 85 combos. Judge on pooled OOS profit factor from a walk-forward, never on the in-sample best.",
+  "phases": [
+    {
+      "name": "entry",
+      "keepTop": 5,
+      "grid": {
+        "RSIPeriod": [4, 5, 6],
+        "RSILower": [10, 15, 20, 25, 30]
+      }
+    },
+    {
+      "name": "trend",
+      "keepTop": 5,
+      "grid": {
+        "EMAPeriod": [50, 100, 150, 200]
+      }
+    },
+    {
+      "name": "exit",
+      "keepTop": 5,
+      "grid": {
+        "RSIUpper": [60, 65, 70, 75, 80, 85]
+      }
+    },
+    {
+      "name": "risk",
+      "grid": {
+        "StopDailyATR": [0.5, 0.7, 1.0, 1.5]
+      }
+    }
+  ]
+}

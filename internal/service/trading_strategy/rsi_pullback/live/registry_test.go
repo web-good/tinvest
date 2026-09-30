@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"tinvest/internal/config"
-	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/afks"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/aqua"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/irkt"
@@ -125,21 +124,6 @@ func TestRegisteredTickersKeepTheRSIExitArmed(t *testing.T) {
 		p, _ := ParamsFor(ticker)
 		if p.UseRSIExit != 1 {
 			t.Fatalf("%s: UseRSIExit = %d, want 1", ticker, p.UseRSIExit)
-		}
-	}
-}
-
-// Ловушка нулевого значения во втором входе: zone-поля в ядре по умолчанию нулевые, и тикер с
-// UseZoneEntry=1 или 2, забывший поле в литерале, молча не торговал бы zone вовсе. Пока zone не включён
-// ни у одного тикера, тест проходит пусто — он для будущих калибровок.
-func TestRegisteredTickersArmZoneFieldsWhenEnabled(t *testing.T) {
-	for ticker, p := range paramsByTicker {
-		if !p.ZoneArmed() {
-			continue
-		}
-		if p.ZoneRSIPeriod <= 0 || p.ZoneRSILower <= 0 || p.ZoneEMAPeriod <= 0 {
-			t.Errorf("%s: UseZoneEntry=%d, но ZoneRSIPeriod=%d ZoneRSILower=%v ZoneEMAPeriod=%d — поле забыто в литерале",
-				ticker, p.UseZoneEntry, p.ZoneRSIPeriod, p.ZoneRSILower, p.ZoneEMAPeriod)
 		}
 	}
 }
@@ -272,18 +256,6 @@ func TestRegistryHasMDMG(t *testing.T) {
 		t.Fatal("MDMG нет в реестре живого раннера: тикер не будет торговать вовсе")
 	}
 	if want := mdmg.DefaultParams(); p != want {
-		t.Fatalf("реестр отдаёт не параметры пакета:\n got: %+v\nwant: %+v", p, want)
-	}
-}
-
-// TestRegistryHasAFKS держит связку «пакет — реестр живого раннера» для AFKS (единая калибровка
-// 2026-09-30, режим 0): раннер обязан торговать ровно параметры пакета.
-func TestRegistryHasAFKS(t *testing.T) {
-	p, ok := ParamsFor(afks.Ticker)
-	if !ok {
-		t.Fatal("AFKS нет в реестре живого раннера: тикер не будет торговать вовсе")
-	}
-	if want := afks.DefaultParams(); p != want {
 		t.Fatalf("реестр отдаёт не параметры пакета:\n got: %+v\nwant: %+v", p, want)
 	}
 }

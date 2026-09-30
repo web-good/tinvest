@@ -125,3 +125,18 @@ func TestDiffSignalComparesTradeRelevantFields(t *testing.T) {
 		}
 	}
 }
+
+func TestResolveDeciderPicksStrategyRegistry(t *testing.T) {
+	if _, err := resolveDecider("rsi_pullback", "GAZP"); err != nil {
+		t.Fatalf("rsi_pullback GAZP: %v", err)
+	}
+	if _, err := resolveDecider("rsi_zone", "AFKS"); err != nil {
+		t.Fatalf("rsi_zone AFKS: %v", err)
+	}
+	if _, err := resolveDecider("rsi_zone", "GAZP"); err == nil {
+		t.Fatal("GAZP не в реестре rsi_zone — ждали ошибку")
+	}
+	if _, err := resolveDecider("nope", "GAZP"); err == nil {
+		t.Fatal("неизвестная стратегия — ждали ошибку")
+	}
+}

@@ -12,7 +12,7 @@ func TestPortfolioOpenSizesByFractionAndLots(t *testing.T) {
 	// cash 100000, fraction 0.5 -> budget 50000; price 100, lot 10,
 	// commission 0 -> lotCost 1000; lots = floor(50) = 50; qty = 500.
 	p := newPortfolio(Config{InitialCash: 100000, Fraction: 0.5, Commission: 0, Lot: 10})
-	p.open(100, time.Unix(0, 0), 0, 0, 0, 0, "", "")
+	p.open(100, time.Unix(0, 0), 0, 0, 0, 0, "")
 	if p.qty != 500 {
 		t.Fatalf("qty = %d, want 500", p.qty)
 	}
@@ -24,7 +24,7 @@ func TestPortfolioOpenSizesByFractionAndLots(t *testing.T) {
 
 func TestPortfolioOpenChargesCommission(t *testing.T) {
 	p := newPortfolio(Config{InitialCash: 100000, Fraction: 1.0, Commission: 0.001, Lot: 1})
-	p.open(100, time.Unix(0, 0), 0, 0, 0, 0, "", "")
+	p.open(100, time.Unix(0, 0), 0, 0, 0, 0, "")
 	// budget 100000; lotCost = 100*1*1.001 = 100.1; lots = floor(999.0) = 999.
 	if p.qty != 999 {
 		t.Fatalf("qty = %d, want 999", p.qty)
@@ -37,7 +37,7 @@ func TestPortfolioOpenChargesCommission(t *testing.T) {
 
 func TestPortfolioRefusesEntryWhenCashTooSmallForALot(t *testing.T) {
 	p := newPortfolio(Config{InitialCash: 50, Fraction: 1.0, Commission: 0, Lot: 1})
-	p.open(100, time.Unix(0, 0), 0, 0, 0, 0, "", "") // one share costs 100 > 50
+	p.open(100, time.Unix(0, 0), 0, 0, 0, 0, "") // one share costs 100 > 50
 	if p.qty != 0 {
 		t.Fatalf("qty = %d, want 0 (no entry)", p.qty)
 	}
@@ -49,7 +49,7 @@ func TestPortfolioRefusesEntryWhenCashTooSmallForALot(t *testing.T) {
 func TestPortfolioCloseComputesPnLAndBarsHeld(t *testing.T) {
 	p := newPortfolio(Config{InitialCash: 100000, Fraction: 1.0, Commission: 0, Lot: 1})
 	p.bar = 3
-	p.open(100, time.Unix(3, 0), 0, 0, 0, 0, "", "") // qty = 1000, cash = 0
+	p.open(100, time.Unix(3, 0), 0, 0, 0, 0, "") // qty = 1000, cash = 0
 	p.bar = 8
 	tr := p.close(110, time.Unix(8, 0), "TP", "")
 	// revenue 110000; entryCost 100000; PnL 10000; PnLPct 0.1.
@@ -69,7 +69,7 @@ func TestPortfolioCloseComputesPnLAndBarsHeld(t *testing.T) {
 
 func TestPortfolioEquityMarksToMarket(t *testing.T) {
 	p := newPortfolio(Config{InitialCash: 100000, Fraction: 1.0, Commission: 0, Lot: 1})
-	p.open(100, time.Unix(0, 0), 0, 0, 0, 0, "", "") // qty 1000, cash 0
+	p.open(100, time.Unix(0, 0), 0, 0, 0, 0, "") // qty 1000, cash 0
 	if !approx(p.equity(120), 120000) {
 		t.Fatalf("equity = %f, want 120000", p.equity(120))
 	}
@@ -80,7 +80,7 @@ func TestStrategyPositionNilWhenFlat(t *testing.T) {
 	if p.strategyPosition() != nil {
 		t.Fatal("expected nil position when flat")
 	}
-	p.open(100, time.Unix(0, 0), 0, 0, 0, 0, "", "")
+	p.open(100, time.Unix(0, 0), 0, 0, 0, 0, "")
 	pos := p.strategyPosition()
 	if pos == nil || !approx(pos.PurchasePrice, 100) || pos.Quantity != 1000 {
 		t.Fatalf("position = %+v, want {100, 1000}", pos)
@@ -89,7 +89,7 @@ func TestStrategyPositionNilWhenFlat(t *testing.T) {
 
 func TestPortfolioOpenFreezesStopAndSeedsFavorable(t *testing.T) {
 	p := newPortfolio(Config{InitialCash: 100000, Fraction: 1.0, Commission: 0, Lot: 1})
-	p.open(100, time.Unix(0, 0), 90, 110, 2, 95, "", "") // level 90, target 110, atr 2, stop 95
+	p.open(100, time.Unix(0, 0), 90, 110, 2, 95, "") // level 90, target 110, atr 2, stop 95
 	pos := p.strategyPosition()
 	if pos == nil {
 		t.Fatal("expected a position after open")
@@ -116,7 +116,7 @@ func TestPortfolioOpenFreezesStopAndSeedsFavorable(t *testing.T) {
 
 func TestPortfolioMarkRaisesFavorableMonotonically(t *testing.T) {
 	p := newPortfolio(Config{InitialCash: 100000, Fraction: 1.0, Commission: 0, Lot: 1})
-	p.open(100, time.Unix(0, 0), 0, 0, 1, 95, "", "") // maxFavorable seeded to 100
+	p.open(100, time.Unix(0, 0), 0, 0, 1, 95, "") // maxFavorable seeded to 100
 	p.mark(105)
 	if !approx(p.maxFavorable, 105) {
 		t.Fatalf("maxFavorable = %v, want 105 after mark(105)", p.maxFavorable)
@@ -142,7 +142,7 @@ func TestPortfolioMarkIsNoOpWhenFlat(t *testing.T) {
 func TestPortfolioCloseResetsEntryState(t *testing.T) {
 	p := newPortfolio(Config{InitialCash: 100000, Fraction: 1.0, Commission: 0, Lot: 1})
 	p.bar = 1
-	p.open(100, time.Unix(0, 0), 0, 0, 1, 95, "", "")
+	p.open(100, time.Unix(0, 0), 0, 0, 1, 95, "")
 	p.mark(110)
 	p.bar = 2
 	p.close(108, time.Unix(1, 0), "TRAIL", "")
@@ -156,7 +156,7 @@ func TestOpenRiskBasedSizing(t *testing.T) {
 	// target shares = 1000/2 = 500; lot 1 -> 500 shares.
 	cfg := Config{InitialCash: 100000, Fraction: 1.0, Commission: 0, Lot: 1, RiskFractionPct: 1.0}
 	p := newPortfolio(cfg)
-	p.open(100, time.Time{}, 0, 0, 2.0, 98.0, "", "")
+	p.open(100, time.Time{}, 0, 0, 2.0, 98.0, "")
 	if p.qty != 500 {
 		t.Fatalf("risk-sized qty = %d, want 500", p.qty)
 	}
@@ -167,7 +167,7 @@ func TestOpenRiskBasedCappedByCash(t *testing.T) {
 	// Capped to affordable floor(100000/100) = 1000 shares.
 	cfg := Config{InitialCash: 100000, Fraction: 1.0, Commission: 0, Lot: 1, RiskFractionPct: 1.0}
 	p := newPortfolio(cfg)
-	p.open(100, time.Time{}, 0, 0, 0.1, 99.9, "", "")
+	p.open(100, time.Time{}, 0, 0, 0.1, 99.9, "")
 	if p.qty != 1000 {
 		t.Fatalf("cash-capped qty = %d, want 1000", p.qty)
 	}
@@ -175,7 +175,7 @@ func TestOpenRiskBasedCappedByCash(t *testing.T) {
 
 func TestPrevMaxFavorableLagsMark(t *testing.T) {
 	p := newPortfolio(Config{InitialCash: 1000, Fraction: 1, Commission: 0, Lot: 1})
-	p.open(100, time.Now(), 0, 0, 0, 0, "", "")
+	p.open(100, time.Now(), 0, 0, 0, 0, "")
 	pos := p.strategyPosition()
 	if pos.PrevMaxFavorablePrice != 100 || pos.MaxFavorablePrice != 100 {
 		t.Fatalf("after open: prev=%v max=%v, want 100/100", pos.PrevMaxFavorablePrice, pos.MaxFavorablePrice)
@@ -196,7 +196,7 @@ func TestOpenLegacyFractionUnchanged(t *testing.T) {
 	// RiskFractionPct 0 -> legacy Fraction path: floor(100000/100) = 1000.
 	cfg := Config{InitialCash: 100000, Fraction: 1.0, Commission: 0, Lot: 1, RiskFractionPct: 0}
 	p := newPortfolio(cfg)
-	p.open(100, time.Time{}, 0, 0, 0, 0, "", "")
+	p.open(100, time.Time{}, 0, 0, 0, 0, "")
 	if p.qty != 1000 {
 		t.Fatalf("legacy qty = %d, want 1000", p.qty)
 	}
@@ -205,7 +205,7 @@ func TestOpenLegacyFractionUnchanged(t *testing.T) {
 func TestStrategyPositionCarriesEntryTime(t *testing.T) {
 	p := newPortfolio(Config{InitialCash: 1000, Fraction: 1, Commission: 0, Lot: 1})
 	entry := time.Date(2026, 7, 1, 10, 0, 0, 0, time.UTC)
-	p.open(100, entry, 0, 0, 0, 95, "", "")
+	p.open(100, entry, 0, 0, 0, 95, "")
 	pos := p.strategyPosition()
 	if pos == nil {
 		t.Fatal("strategyPosition() = nil, want position")

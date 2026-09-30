@@ -223,9 +223,6 @@ func TestRunWalkForward(t *testing.T) {
 	if s.PooledOOS.TotalTrades != oosSum {
 		t.Fatalf("pooled trades = %d, want sum of folds %d", s.PooledOOS.TotalTrades, oosSum)
 	}
-	if s.PooledByKind != nil {
-		t.Fatalf("PooledByKind = %v, want nil: тестовая стратегия не ставит тип входа", s.PooledByKind)
-	}
 }
 
 // hungryStrategy's lookback grows with BOTH params, so a grid-aware bound has to accumulate
@@ -477,55 +474,5 @@ func TestRunWalkForwardCountsOnlyTradesOpenedInTheTestWindow(t *testing.T) {
 				"сделки прогревочного train-периода",
 				f.Index, f.OOSTrades, want, f.TestFrom.Format("2006-01-02"))
 		}
-	}
-}
-
-func TestRenderWalkForwardMarkdownKindSection(t *testing.T) {
-	s := WalkForwardSummary{
-		PooledOOS: backtest.Metrics{ProfitFactor: 1.2, TotalTrades: 3},
-		PooledByKind: []backtest.KindStats{
-			{Kind: "pullback", Metrics: backtest.Metrics{TotalTrades: 2, ProfitFactor: 1.5}},
-			{Kind: "zone", Metrics: backtest.Metrics{TotalTrades: 1, ProfitFactor: 0.7}, SLExits: 1},
-		},
-	}
-	md := RenderWalkForwardMarkdown("T", "profit_factor", s, 12, 6)
-	sec := strings.Index(md, "## Пул по типу входа")
-	folds := strings.Index(md, "## Результаты по фолдам")
-	if sec < 0 || sec > folds {
-		t.Fatalf("раздел «Пул по типу входа» отсутствует или стоит после фолдов:\n%s", md)
-	}
-	if !strings.Contains(md, "| zone | 1 |") {
-		t.Fatalf("строка zone не найдена:\n%s", md)
-	}
-	if strings.Contains(RenderWalkForwardMarkdown("T", "profit_factor", WalkForwardSummary{}, 12, 6), "## Пул по типу входа") {
-		t.Fatal("раздел выведен без типов входа")
-	}
-}
-
-// kindedStrategy торгует как alternatingStrategy, но помечает каждую покупку типом входа zone.
-type kindedStrategy struct{}
-
-func (kindedStrategy) Ticker() string { return "TEST" }
-func (kindedStrategy) Lookback() int  { return 1 }
-func (kindedStrategy) Decide(md strategy.MarketData) model.Signal {
-	if md.Position == nil {
-		return model.Signal{Kind: model.SignalBuy, EntryKind: "zone"}
-	}
-	return model.Signal{Kind: model.SignalSell, Reason: "TP"}
-}
-
-func TestRunWalkForwardPoolsByKind(t *testing.T) {
-	from, to := date(2025, time.January, 1), date(2025, time.October, 1)
-	b := fakeBinding()
-	b.Build = func(any) strategy.Strategy { return kindedStrategy{} }
-	cfg := backtest.Config{InitialCash: 100000, Fraction: 1, Commission: 0.0005, Lot: 1}
-	s, err := RunWalkForward(b, []Phase{{Grid: Grid{"Threshold": {1, 2}}}}, genHourly(from, to), nil, nil, cfg,
-		"profit_factor", 0, from, to, 3, 3)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(s.PooledByKind) != 1 || s.PooledByKind[0].Kind != "zone" ||
-		s.PooledByKind[0].Metrics.TotalTrades != s.PooledOOS.TotalTrades {
-		t.Fatalf("PooledByKind = %+v, want один тип zone со всеми %d сделками пула", s.PooledByKind, s.PooledOOS.TotalTrades)
 	}
 }

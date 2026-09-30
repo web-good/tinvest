@@ -1,5 +1,5 @@
-// Package screenrun holds the I/O plumbing used by the ticker screener
-// (cmd/pullscreen): the tradable-universe loader, the API token loader
+// Package screenrun holds the I/O plumbing shared by the ticker screeners
+// (cmd/pullscreen, cmd/zonescreen): the tradable-universe loader, the API token loader
 // and the worker-pool pacing rules. The scoring itself lives in
 // internal/service/backtest and stays pure.
 package screenrun

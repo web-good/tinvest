@@ -179,26 +179,6 @@ func TestRSIPullbackTickersKeepTheRSIExitArmed(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackZoneEntryFieldsArmedWhenEnabled сторожит ловушку нулевого значения во втором
-// входе: zone-поля в ядре по умолчанию нулевые, и тикер, включивший UseZoneEntry=1 или 2 литералом, но
-// забывший поле, молча не торговал бы zone вовсе (ядро отказывает входу при нулевом поле). Пока
-// zone не включён ни у одного тикера, тест проходит пусто — он для будущих калибровок.
-func TestRSIPullbackZoneEntryFieldsArmedWhenEnabled(t *testing.T) {
-	for ticker, b := range rsiPullbackRegistry {
-		p, ok := b.DefaultParams().(core.Params)
-		if !ok {
-			t.Fatalf("%s: DefaultParams вернул %T, want core.Params", ticker, b.DefaultParams())
-		}
-		if !p.ZoneArmed() {
-			continue
-		}
-		if p.ZoneRSIPeriod <= 0 || p.ZoneRSILower <= 0 || p.ZoneEMAPeriod <= 0 {
-			t.Errorf("%s: UseZoneEntry=%d, но ZoneRSIPeriod=%d ZoneRSILower=%v ZoneEMAPeriod=%d — поле забыто в литерале",
-				ticker, p.UseZoneEntry, p.ZoneRSIPeriod, p.ZoneRSILower, p.ZoneEMAPeriod)
-		}
-	}
-}
-
 func TestRSIPullbackParseParamsRejectsGarbage(t *testing.T) {
 	b := RSIPullbackLookupOrGeneric("GAZP")
 	if _, err := b.ParseParams([]byte(`{"RSILower":`)); err == nil {
@@ -853,10 +833,10 @@ func TestRSIPullbackHEADTracksBaseline(t *testing.T) {
 	}
 }
 
-// TestRSIPullbackAFKSIsRegisteredAndCalibrated сторожит, что реестр бэктеста отдаёт литерал пакета
-// afks: единая калибровка 2026-09-30 приняла режим 0 с EMASlow 50, и перепроверка отчёта обязана
-// мерить ровно его. Снимок самого литерала — в strategy/afks/afks_test.go.
-func TestRSIPullbackAFKSIsRegisteredAndCalibrated(t *testing.T) {
+// TestRSIPullbackAFKSTracksBaseline сторожит ЧЕСТНОЕ состояние: AFKS заведён в реестр до
+// калибровки, чтобы прогоны шли через реестр, а не через generic-ветку, и обязан возвращать ровно
+// baseline ядра. Тест заменяется снимком литерала в Task 12.
+func TestRSIPullbackAFKSTracksBaseline(t *testing.T) {
 	b, ok := rsiPullbackRegistry[rsipullbackafks.Ticker]
 	if !ok {
 		t.Fatal("AFKS отсутствует в rsiPullbackRegistry: тикер провалится в generic-ветку")
@@ -865,11 +845,8 @@ func TestRSIPullbackAFKSIsRegisteredAndCalibrated(t *testing.T) {
 	if !pok {
 		t.Fatalf("AFKS: DefaultParams() вернул %T, want core.Params", b.DefaultParams())
 	}
-	if p == core.DefaultParams() {
-		t.Fatal("AFKS вернул baseline: откалиброванный тикер обязан иметь собственный литерал")
-	}
-	if want := rsipullbackafks.DefaultParams(); p != want {
-		t.Fatalf("AFKS params = %+v, want литерал пакета %+v", p, want)
+	if p != core.DefaultParams() {
+		t.Fatalf("AFKS ещё не откалиброван, params обязаны совпадать с baseline:\n got: %+v\nwant: %+v", p, core.DefaultParams())
 	}
 	if got := b.Build(p).Ticker(); got != "AFKS" {
 		t.Fatalf("Ticker() = %q, want AFKS", got)

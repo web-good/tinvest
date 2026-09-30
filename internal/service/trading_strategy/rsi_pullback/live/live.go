@@ -15,6 +15,7 @@ import (
 
 	"tinvest/internal/config"
 	imodel "tinvest/internal/model"
+	"tinvest/internal/service/trading_strategy/livecore/adapter"
 	"tinvest/internal/service/trading_strategy/livecore/candles"
 	"tinvest/internal/service/trading_strategy/livecore/executor"
 	"tinvest/internal/service/trading_strategy/livecore/notifier"
@@ -23,7 +24,6 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/live/dto"
 	grpcmodel "tinvest/pkg/client/grpc/model"
 	"tinvest/pkg/client/telegram"
-	"tinvest/pkg/logger"
 )
 
 // alertLabel — заголовок операционных уведомлений; пакет notifier общий, и по сообщению
@@ -59,11 +59,16 @@ type service struct {
 	instruments instrumentsClient
 	market      candles.CandleClient
 	ops         operationsClient
-	exec        *executor.Executor
-	stops       *stoporders.Executor
-	tg          telegram.Client
 	cfg         *config.RSIPullbackConfig
-	statePath   string
+	// slots — стратегии счёта в порядке приоритета входа; slots[0] — rsi_pullback.
+	slots []*slot
+	// accountStops читает список активных стоп-заявок счёта — один раз на пасс. Боевой,
+	// если боевая хоть одна стратегия: в dry-run List возвращает пустой список.
+	accountStops *stoporders.Executor
+	// anyLive — боевая хоть одна стратегия. Тогда бумажные входы стейт не пишут: бумажная
+	// запись заняла бы тикер и заблокировала боевой вход соседки.
+	anyLive   bool
+	statePath string
 	// now — источник времени пасса. Подменяется в тестах так же, как statePath: гейт
 	// свежести бара (maxBarAge) сравнивает время последнего бара именно с ним, поэтому
 	// на фиксированных датах фикстур настенные часы дали бы «протухшие» данные всегда.
@@ -74,8 +79,20 @@ type service struct {
 	store statestore.Store
 }
 
+// slot — стратегия счёта со своими исполнителями: TradeEnabled у каждой свой.
+type slot struct {
+	strat adapter.Strategy
+	exec  *executor.Executor
+	stops *stoporders.Executor
+}
+
+func (sl *slot) alert(ticker, msg string) {
+	sl.strat.Notify(notifier.Alert(sl.strat.Label(), ticker, msg))
+}
+
 // NewService wires the live rsi_pullback service. The orders and stops clients may be nil
 // only when TradeEnabled is false and no order will ever be placed (tests/dry-run).
+// guests — стратегии, торгующие на том же счёте; встают слотами после rsi_pullback.
 func NewService(
 	instruments instrumentsClient,
 	market candles.CandleClient,
@@ -84,18 +101,27 @@ func NewService(
 	stops stoporders.Client,
 	tg telegram.Client,
 	cfg *config.RSIPullbackConfig,
+	guests ...adapter.Strategy,
 ) *service {
-	return &service{
+	strats := append([]adapter.Strategy{&pullbackStrategy{cfg: cfg, tg: tg}}, guests...)
+	s := &service{
 		instruments: instruments,
 		market:      market,
 		ops:         ops,
-		exec:        executor.New(orders, cfg.AccountID, cfg.TradeEnabled),
-		stops:       stoporders.New(stops, cfg.AccountID, cfg.TradeEnabled),
-		tg:          tg,
 		cfg:         cfg,
 		statePath:   filepath.Join("data", "state", "rsi_pullback_"+cfg.AccountID+".json"),
 		now:         nowMSK,
 	}
+	for _, st := range strats {
+		s.slots = append(s.slots, &slot{
+			strat: st,
+			exec:  executor.New(orders, cfg.AccountID, st.TradeEnabled()),
+			stops: stoporders.New(stops, cfg.AccountID, st.TradeEnabled()),
+		})
+		s.anyLive = s.anyLive || st.TradeEnabled()
+	}
+	s.accountStops = stoporders.New(stops, cfg.AccountID, s.anyLive)
+	return s
 }
 
 // Run makes the single pass. The mutex is held for the whole pass so that two overlapping
@@ -107,31 +133,28 @@ func (s *service) Run(ctx context.Context, _ dto.Run) error {
 	return s.pass(ctx)
 }
 
-// notify sends a Telegram message only when NotifyEnabled.
-//
-// Сбой доставки логируется уровнем ERROR, а не отбрасывается: отброшенная ошибка — это
-// молчание о молчании. Бот, выкинутый из группы, отозванный токен или упёртый лимит
-// оставляют раннер внешне работающим, а тему — пустой, и отличить это от «событий не
-// было» становится нечем. Уровень ERROR выбран потому, что его подхватывает
-// errorlog-sink и дублирует в тему General — то есть сообщение о недоставке уходит по
-// каналу, который в этот момент ещё может быть жив.
-func (s *service) notify(msg string) {
-	if !s.cfg.NotifyEnabled {
-		return
-	}
-	if err := s.tg.SendMessage(msg); err != nil {
-		// Контекст пасса сюда намеренно не протянут: notify зовут три десятка мест, а
-		// хендлер логгера ctx всё равно не использует — сигнатура подорожала бы зря.
-		logger.ErrorContext(context.Background(),
-			fmt.Sprintf("rsi_pullback: уведомление не доставлено: %v", err))
-	}
-}
+// notify шлёт счётное сообщение (не привязанное к стратегии) в тему rsi_pullback.
+func (s *service) notify(msg string) { s.slots[0].strat.Notify(msg) }
 
 // Announce объявляет о подъёме воркера. Единственное сообщение раннера, не привязанное
 // к событию: все остальные шлются на входе, выходе, постановке стопа или сбое, а их может
 // не быть неделями — и тогда молчание темы неотличимо от раннера, который не поднялся.
+// Каждая стратегия счёта объявляет о себе в своей теме: своя вселенная и свой режим.
 func (s *service) Announce() {
-	s.notify(notifier.Startup(alertLabel, s.cfg.Tickers, !s.cfg.TradeEnabled))
+	for _, sl := range s.slots {
+		sl.strat.Notify(notifier.Startup(sl.strat.Label(), sl.strat.Tickers(), !sl.strat.TradeEnabled()))
+	}
+}
+
+// slotByName — слот стратегии по имени владельца из стейта; nil — такой стратегии на
+// счёте нет.
+func (s *service) slotByName(name string) *slot {
+	for _, sl := range s.slots {
+		if sl.strat.Name() == name {
+			return sl
+		}
+	}
+	return nil
 }
 
 // sharesByTicker indexes tradable shares for the configured universe.

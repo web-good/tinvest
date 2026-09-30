@@ -91,3 +91,35 @@ func TestEntrySaveOmitsZeroTakeProfitFromFile(t *testing.T) {
 		t.Fatalf("state file must omit zero-value takeProfit, got: %s", b)
 	}
 }
+
+// Прод-файл rsi_pullback записан до появления поля strategy. Он обязан читаться без
+// ошибок, а поле — оставаться пустым: пустое значение и есть «позиция rsi_pullback».
+func TestEntryWithoutStrategyFieldLoadsEmpty(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	raw := `{"GAZP":{"ticker":"GAZP","entryPrice":100,"entryATR":10,"quantity":10}}`
+	if err := os.WriteFile(path, []byte(raw), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	st, err := New(path).Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := st["GAZP"].Strategy; got != "" {
+		t.Fatalf("Strategy = %q, want пусто", got)
+	}
+}
+
+// omitempty: reversion поле не пишет, и формат его файла меняться не должен.
+func TestEmptyStrategyIsNotWritten(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	if err := New(path).Save(map[string]Entry{"UGLD": {Ticker: "UGLD"}}); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), "strategy") {
+		t.Fatalf("пустое поле strategy попало в файл: %s", b)
+	}
+}

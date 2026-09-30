@@ -1,68 +1,11 @@
 {
-  "_comment": "data/params/rsi_pullback/afks/cal_screen.json — тема screen: цена двух опциональных гейтов pullback-входа в сделках: UseDayATRGate x UseVolume поверх baseline pullback (UseZoneEntry 0), выходы — дефолты ядра; единственная тема с -min-trades 1. Единая калибровка rsi_pullback AFKS 2026-09-30 (спека docs/superpowers/specs/2026-09-30-rsi-pullback-unified-calibration-design.md). Схема 36/12/6 (4 фолда), большинство >=3/4 невырожденных фолдов (<5 сделок OOS или без убыточных — не голосует). ЗАПУСК: go run ./cmd/backtest -ticker AFKS -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/afks/cal_screen.json -out ./reports/AFKS/cal_screen -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-09-30: фолдов 4 | пул 147 сделок, PF 0.947, compounded -4.22%; по типу pullback: сделок 147, WR 64.63%, PF 0.947, net -4087.47, SL 36; фолд 1 2024-09-30—2025-03-30: PF 0.914/24, net -1.68%, DD 6.44%; фолд 2 2025-03-30—2025-09-30: PF 0.843/87, net -5.92%, DD 9.27%; фолд 3 2025-09-30—2026-03-30: PF 1.310/17, net 1.88%, DD 4.00%; фолд 4 2026-03-30—2026-09-30: PF 1.120/19, net 1.63%, DD 4.28%; голоса UseDayATRGate: 1, 0, 1, 1 | невырожд. 1, 0, 1, 1 -> БОЛЬШИНСТВО 1 (3/4); голоса UseVolume: 0, 0, 1, 0 | невырожд. 0, 0, 1, 0 -> БОЛЬШИНСТВО 0 (3/4). ВЕРДИКТ: UseDayATRGate 1 и UseVolume 0 большинством 3/4 — совпадают с baseline; screen проголосовала за UseVolume 0, поэтому поля объёма из volume/vol_window в сборку не идут.",
+  "_comment": "data/params/rsi_pullback/afks/cal_screen.json — тема screen для AFKS, 4 прогона, поверх дефолтов ядра. Тема меряет цену каждого из двух гейтов в сделках. ЗАМЕР 2026-09-02 (36 мес, in-sample, точечно по одной оси разом): UseDayATRGate 1 -> PF 1.100/126 (дефолт), UseDayATRGate 0 -> PF 0.991/474 — БЕЗ ДНЕВНОГО ГЕЙТА СТРАТЕГИЯ УХОДИТ В УБЫТОК (в отличие от NKHP, где без гейта оставалось 1.440): дневной гейт НЕСЁТ EDGE, а не просто повышает качество сделки. Объёмный гейт на дефолтной форме (VolMult 1.2, VolBaseDays 14): UseVolume 1 -> 1.194/103 против UseVolume 0 (baseline) -> 1.100/126 — прирост слабее, чем на NKHP (+0.33), что согласуется с ликвидностью бумаги: на обороте будних дней 1226 млн ₽ всплеск объёма несёт мало информации. АПРИОРНЫЙ КОНТРОЛЬНЫЙ WALK-FORWARD темы (36/12/6, уже прогнан до этой задачи, см. reports/_analysis/afks_pullback_prep_measurements.md): «Фолдов: 4» подтверждено, pooled OOS PF 0.987 на 164 сделках (109/55, win rate 66.46%, compounded -1.49%) — свободный выбор гейтов вне in-sample даёт БЕЗУБЫТОК, а не прибыль; ловушка ASTR (схема, дающая три фолда вместо четырёх) на AFKS не срабатывает. ОЖИДАНИЕ: обе единицы (день включён, объём включён) должны собрать большинство фолдов, раз без дневного гейта стратегия убыточна на всём окне. ЗАПУСК: go run ./cmd/backtest -ticker AFKS -strategy rsi_pullback -interval Minutes30 -calibrate data/params/rsi_pullback/afks/cal_screen.json -out ./reports/AFKS_screen -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor. РЕЗУЛЬТАТ ПРОГОНА 2026-09-02: фолдов в шапке 4 (гейт числа фолдов пройден). Pooled OOS PF 1.020 на 155 сделках пула (103 выигрышных / 52 проигрышных, win rate 66.45%, compounded 1.51%) — почти безубыток, что согласуется с контрольным walk-forward (0.987/164), но чуть лучше. Пофолдово согласия НЕТ ни по одной оси: UseDayATRGate 1,0,1,1 (3 из 4 — большинство, но не единогласие, вопреки ожиданию из точечного замера); UseVolume 1,0,1,0 (ровно 2 из 4 — раскол, как и предсказывалось). OOS по фолдам: фолд 1 — PF 1.017/19 сделок/MaxDD 5.14%; фолд 2 — PF 0.944/97/MaxDD 13.40% (единственный убыточный фолд, самый длинный по сделкам, и именно он выбрал UseDayATRGate=0 и UseVolume=0); фолд 3 — PF 1.710/17/MaxDD 3.73%; фолд 4 — PF 1.023/22/MaxDD 4.65%. Отчёт: reports/AFKS_screen/AFKS_rsi_pullback_Minutes30_20260902_222944_walkforward.md. ВЫВОД: тема принимает UseDayATRGate=1 (большинство фолдов, согласуется с in-sample убытком без гейта); UseVolume остаётся спорным (2/2) — решение уходит в дефолт ядра (UseVolume=1) до дальнейших тем, а не фиксируется этой темой.",
   "phases": [
     {
       "name": "screen",
       "grid": {
-        "RSIPeriod": [
-          4
-        ],
-        "RSILower": [
-          30
-        ],
-        "RSIUpper": [
-          70
-        ],
-        "EMAFast": [
-          10
-        ],
-        "EMASlow": [
-          100
-        ],
-        "DailyATRPeriod": [
-          14
-        ],
-        "FreshDayATR": [
-          0
-        ],
-        "SpentDayATR": [
-          0.8
-        ],
-        "StopDailyATR": [
-          0.5
-        ],
-        "TPDailyATR": [
-          0.6
-        ],
-        "VolBaseDays": [
-          14
-        ],
-        "VolLookbackBars": [
-          3
-        ],
-        "VolMult": [
-          1.2
-        ],
-        "UseRSIExit": [
-          1
-        ],
-        "UseTrail": [
-          0
-        ],
-        "TrailDailyATR": [
-          0
-        ],
-        "UseZoneEntry": [
-          0
-        ],
-        "UseDayATRGate": [
-          0,
-          1
-        ],
-        "UseVolume": [
-          0,
-          1
-        ]
+        "UseDayATRGate": [0, 1],
+        "UseVolume": [0, 1]
       },
       "keepTop": 5
     }

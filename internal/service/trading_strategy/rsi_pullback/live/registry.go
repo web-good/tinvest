@@ -1,7 +1,6 @@
 package live
 
 import (
-	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/afks"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/aqua"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/astr"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/banep"
@@ -717,7 +716,6 @@ var paramsByTicker = map[string]core.Params{
 	svcb.Ticker:  svcb.DefaultParams(),
 	ragr.Ticker:  ragr.DefaultParams(),
 	mdmg.Ticker:  mdmg.DefaultParams(),
-	afks.Ticker:  afks.DefaultParams(),
 }
 
 // ParamsFor returns the params for a known ticker, ok=false otherwise.

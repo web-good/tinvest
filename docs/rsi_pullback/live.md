@@ -21,6 +21,11 @@
 3. исполняет ровно один сигнал: BUY — рыночный ордер и немедленная защитная стоп-заявка;
    SELL — снятие стоп-заявки и рыночная продажа; иначе — синхронизация уровня стоп-заявки.
 
+Раннер ведёт несколько стратегий через интерфейс адаптера
+(`livecore/adapter`): `rsi_pullback` — первый адаптер, остальные (`rsi_zone`) подключаются
+гостями; позицию ведёт стратегия-владелец из поля `strategy` записи стейта (пусто =
+`rsi_pullback`). Подробности — [../rsi_zone/live.md](../rsi_zone/live.md).
+
 Никакого второго прохода: у `reversion` пассы `buy` и `manage` разведены только потому, что
 у них разные cron-выражения, здесь же входы и выходы считаются на одном и том же баре.
 
@@ -188,6 +193,7 @@ API недоступен) — алерт в Telegram, лог, и тикер пр
 go run ./cmd/pullparity -tickers XXXX,YYYY -months 24
 # -examples 10   сколько расхождений печатать на тикер
 # -cache data/candles   каталог кэша свечей
+# -strategy rsi_pullback|rsi_zone   какой реестр сверять (по умолчанию rsi_pullback)
 ```
 
 Для каждого бара сравниваются все поля `MarketData` (`Closes`, `Highs`, `Lows`, `Volumes`,
@@ -203,7 +209,7 @@ go run ./cmd/pullparity -tickers XXXX,YYYY -months 24
 |---|---|---|
 | `RSI_PULLBACK_ACCOUNT_ID` | — | брокерский счёт раннера; пусто = воркер не поднимается |
 | `RSI_PULLBACK_TOKEN` | — | токен этого счёта; отдельный gRPC-клиент; пусто = воркер не поднимается |
-| `RSI_PULLBACK_TICKERS` | `UGLD,T,GAZP,DOMRF,FESH,WUSH,LENT,RENI,NVTK,LSNGP,IVAT,SVAV,SIBN,ELFV,DIAS,BSPB,YDEX,BANEP,ASTR,SNGSP,NKHP,SOFL,TGKA,VSMO,SPBE,MVID,CNRU,AQUA,MAGN,IRKT,X5,SFIN,SVCB,RAGR,MDMG,AFKS` | вселенная; тикер вне реестра даёт алерт и пропуск |
+| `RSI_PULLBACK_TICKERS` | `UGLD,T,GAZP,DOMRF,FESH,WUSH,LENT,RENI,NVTK,LSNGP,IVAT,SVAV,SIBN,ELFV,DIAS,BSPB,YDEX,BANEP,ASTR,SNGSP,NKHP,SOFL,TGKA,VSMO,SPBE,MVID,CNRU,AQUA,MAGN,IRKT` | вселенная; тикер вне реестра даёт алерт и пропуск |
 | `RSI_PULLBACK_BUY_PCT` | `5` | доля **полной стоимости счёта** (кэш + позиции) на сделку, затем ограничение доступным кэшем |
 | `RSI_PULLBACK_TRADE_ENABLED` | `false` | выключен — ордера и стоп-заявки не уходят на биржу (dry-run) |
 | `RSI_PULLBACK_NOTIFY_ENABLED` | `false` | уведомления в Telegram |
@@ -242,9 +248,11 @@ rsi_pullback не запускается, остальное приложени�
 Если тема пуста и стартового сообщения не было — смотреть логи контейнера:
 `docker logs tinvest-container 2>&1 | grep -i "RSI Pullback"`.
 
-**Почему отдельный счёт.** `reversion` тоже торгует UGLD. На общем счёте каждая стратегия
-видела бы позицию другой как свою и управляла бы ей: отдельные счёт, токен, gRPC-клиент,
-файл стейта и тема Telegram снимают этот конфликт целиком.
+**Почему отдельный счёт.** `reversion` тоже торгует UGLD. На общем с ним счёте каждая
+стратегия видела бы позицию другой как свою и управляла бы ей: отдельные счёт, токен,
+gRPC-клиент, файл стейта и тема Telegram снимают этот конфликт целиком. Зато на этом же
+счёте торгует `rsi_zone` — гость раннера; владение тикером, приоритет входа и бумажный режим
+описаны в [../rsi_zone/live.md](../rsi_zone/live.md).
 
 Реестр тикеров (`live/registry.go`) знает пакет параметров каждого отслеживаемого тикера.
 Торгуют только перечисленные в `RSI_PULLBACK_TICKERS`. Тикер, чей пакет возвращает baseline

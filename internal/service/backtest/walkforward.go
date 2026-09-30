@@ -121,8 +121,7 @@ type WalkForwardFold struct {
 // compounded fold-over-fold return.
 type WalkForwardSummary struct {
 	Folds               []WalkForwardFold
-	PooledOOS           backtest.Metrics     // PooledMetrics over every fold's OOS trades
-	PooledByKind        []backtest.KindStats // OOS pool split by entry kind; nil for single-entry strategies
+	PooledOOS           backtest.Metrics // PooledMetrics over every fold's OOS trades
 	CompoundedReturnPct float64
 }
 
@@ -275,7 +274,6 @@ func RunWalkForward(b Binding, phases []Phase, candles, dailyCandles, htfCandles
 	}
 
 	summary.PooledOOS = PooledMetrics(pool)
-	summary.PooledByKind = backtest.KindBreakdown(pool)
 	summary.CompoundedReturnPct = compoundReturns(foldPcts)
 	return summary, nil
 }
@@ -306,12 +304,6 @@ func RenderWalkForwardMarkdown(ticker, metric string, s WalkForwardSummary, trai
 	fmt.Fprintf(&b, "| Sortino | %.3f |\n", m.Sortino)
 	fmt.Fprintf(&b, "| Лучшая / худшая сделка | %.2f / %.2f |\n", m.BestTrade, m.WorstTrade)
 	fmt.Fprintf(&b, "| Compounded return | %.2f%% |\n\n", s.CompoundedReturnPct*100)
-
-	if len(s.PooledByKind) > 0 {
-		b.WriteString("## Пул по типу входа\n\n")
-		backtest.RenderKindTable(&b, s.PooledByKind)
-		b.WriteString("\n")
-	}
 
 	b.WriteString("## Результаты по фолдам\n\n")
 	b.WriteString("| # | Train-окно | Test-окно | In-sample PF | OOS PF | OOS сделок | OOS NetPnL% | OOS MaxDD% |\n")

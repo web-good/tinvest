@@ -600,14 +600,9 @@ type RSIPullbackConfig struct {
 // дней, окно) есть правка главного механизма этого тикера — единственного такого во вселенной. И
 // если дневной ATR-стоп здесь когда-нибудь дойдёт до 1.0 любым путём, это капкан, а не улучшение:
 // замер говорит, что стоп при этом просто перестаёт существовать.
-//
-// AFKS заведён тридцать шестым 2026-09-30 — первым тикером единой калибровки (/pullback-calibrate):
-// режим 0 (только pullback), литерал = дефолты ядра + EMASlow 50; pooled OOS 36/12/6 1.433/73,
-// контроль 36/18/6 1.516/51, удвоенные издержки 1.208, все восемь пунктов стоп-условия пройдены.
-// Риски — 2026 почти в нуле (+873 ₽), бумага −60% за окно. Разбор — док-комментарий strategy/afks.
 func NewRSIPullbackConfig() *RSIPullbackConfig {
 	return &RSIPullbackConfig{
-		Tickers:  []string{"UGLD", "T", "GAZP", "DOMRF", "FESH", "WUSH", "LENT", "RENI", "NVTK", "LSNGP", "IVAT", "SVAV", "SIBN", "ELFV", "DIAS", "BSPB", "YDEX", "BANEP", "ASTR", "SNGSP", "NKHP", "SOFL", "TGKA", "VSMO", "SPBE", "MVID", "CNRU", "AQUA", "MAGN", "IRKT", "X5", "SFIN", "SVCB", "RAGR", "MDMG", "AFKS"},
+		Tickers:  []string{"UGLD", "T", "GAZP", "DOMRF", "FESH", "WUSH", "LENT", "RENI", "NVTK", "LSNGP", "IVAT", "SVAV", "SIBN", "ELFV", "DIAS", "BSPB", "YDEX", "BANEP", "ASTR", "SNGSP", "NKHP", "SOFL", "TGKA", "VSMO", "SPBE", "MVID", "CNRU", "AQUA", "MAGN", "IRKT", "X5", "SFIN", "SVCB", "RAGR", "MDMG"},
 		BuyPct:   5,
 		Schedule: "1,31 6-23 * * *",
 	}

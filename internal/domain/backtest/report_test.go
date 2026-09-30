@@ -52,7 +52,7 @@ func TestRenderTradesCSVHeaderAndRow(t *testing.T) {
 	if !strings.Contains(lines[1], "TP") {
 		t.Fatalf("row missing reason: %q", lines[1])
 	}
-	if !strings.HasSuffix(lines[0], "support_level,resistance_level,atr,entry_reason,exit_reason,entry_kind") {
+	if !strings.HasSuffix(lines[0], "support_level,resistance_level,atr,entry_reason,exit_reason") {
 		t.Fatalf("header missing new columns: %q", lines[0])
 	}
 	if !strings.Contains(lines[1], "цель") {

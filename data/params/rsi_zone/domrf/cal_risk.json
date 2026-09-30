@@ -1,0 +1,23 @@
+{
+  "_comment": "Калибровка rsi_zone на DOMRF. История с ~2025-12 (IPO), штатный протокол 36/12/6 невозможен; прогоны: -months 10 -train-months 3 -test-months 2 -min-trades 15 -metric profit_factor (3 фолда). EMA 400/600 выкинуты: прогрев 2*N+20 баров съел бы до трети истории. Итог 2026-09-28: pooled OOS PF 1.123 на 54 сделках, фолды 0.303 / 2.675 / 1.605; StopDailyATR гулял 2/3/1.5, DailyATRPeriod 7/14/7 — на EMA 200 стоп не лечит.",
+  "phases": [
+    {
+      "name": "risk",
+      "grid": {
+        "StopDailyATR": [
+          0.5,
+          0.7,
+          1.0,
+          1.5,
+          2.0,
+          3.0
+        ],
+        "DailyATRPeriod": [
+          7,
+          14,
+          21
+        ]
+      }
+    }
+  ]
+}

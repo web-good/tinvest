@@ -14,8 +14,10 @@ import (
 	"tinvest/internal/service/telegram_commands"
 	"tinvest/internal/service/trading_strategy/bonds"
 	"tinvest/internal/service/trading_strategy/golden_x"
+	"tinvest/internal/service/trading_strategy/livecore/adapter"
 	"tinvest/internal/service/trading_strategy/reversion/live"
 	rsipullbacklive "tinvest/internal/service/trading_strategy/rsi_pullback/live"
+	rsizonelive "tinvest/internal/service/trading_strategy/rsi_zone/live"
 	"tinvest/pkg/client/rss"
 	"tinvest/pkg/client/telegram"
 )
@@ -191,14 +193,22 @@ func (*ServiceProvider) GetReversionLiveService() live.Service {
 	return serviceProvider.service.reversionLiveService
 }
 
-// GetRSIPullbackLiveService wires the live rsi_pullback runner onto its own account: its own
-// gRPC client (RSI_PULLBACK_TOKEN) and its own Telegram topic. Sharing either with reversion
-// would let one strategy see the other's position in the portfolio and manage it as its own —
-// the two overlap on tickers.
+// GetRSIPullbackLiveService wires the live account runner. The account is separate from
+// reversion: its own gRPC client (RSI_PULLBACK_TOKEN) and its own Telegram topic — sharing
+// either with reversion would let one strategy see the other's position in the portfolio and
+// manage it as its own, since the two overlap on tickers. rsi_pullback owns the account;
+// rsi_zone joins it as a guest (same client and state file, its own Telegram topic).
 func (*ServiceProvider) GetRSIPullbackLiveService() rsipullbacklive.Service {
 	if serviceProvider.service.rsiPullbackLiveService == nil {
 		grpcClient, _ := serviceProvider.GetRSIPullbackGrpcClient()
 		tgClient, _ := serviceProvider.GetRSIPullbackSender()
+		var guests []adapter.Strategy
+		// rsi_zone торгует на том же счёте (docs/rsi_zone/live.md): тот же gRPC-клиент и
+		// файл стейта, своя тема Telegram. Пустая вселенная — стратегия не подключается.
+		if zone := serviceProvider.appConfig.RSIZone; zone.Enabled() {
+			zoneTG, _ := serviceProvider.GetRSIZoneSender()
+			guests = append(guests, rsizonelive.New(zone, zoneTG))
+		}
 		serviceProvider.service.rsiPullbackLiveService = rsipullbacklive.NewService(
 			grpcClient.InstrumentsServiceClient(),
 			grpcClient.MarketDataServiceClient(),
@@ -207,6 +217,7 @@ func (*ServiceProvider) GetRSIPullbackLiveService() rsipullbacklive.Service {
 			grpcClient.StopOrdersServiceClient(),
 			tgClient,
 			serviceProvider.appConfig.RSIPullback,
+			guests...,
 		)
 	}
 
