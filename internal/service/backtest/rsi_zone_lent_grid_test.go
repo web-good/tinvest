@@ -20,6 +20,8 @@ var rsiZoneLENTGridFiles = []string{
 	"cal_risk.json",
 	"cal_trend_risk.json",
 	"cal_phased.json",
+	"cal_stoch.json",
+	"cal_stuck.json",
 }
 
 // rsiZoneLENTMaxEMA — потолок EMAPeriod на 36-месячном окне: Lookback 2·N+20 не должен
@@ -110,6 +112,12 @@ func TestRSIZoneLENTGridsStayWide(t *testing.T) {
 		{"cal_phased.json", "RSIUpper", upper},
 		{"cal_phased.json", "StopDailyATR", stop},
 		{"cal_phased.json", "DailyATRPeriod", atr},
+		{"cal_stoch.json", "UseStoch", []float64{1}},
+		{"cal_stoch.json", "StochKPeriod", []float64{5, 9, 14}},
+		{"cal_stoch.json", "StochDSmooth", []float64{1, 3}},
+		{"cal_stoch.json", "StochLower", []float64{10, 15, 20, 25, 30}},
+		{"cal_stoch.json", "ZoneWindowBars", []float64{1, 2, 3, 5, 8}},
+		{"cal_stuck.json", "StuckExitBars", []float64{0, 1, 2, 3, 4, 5, 6, 8, 10}},
 	}
 	for _, m := range mustHave {
 		for _, w := range m.want {
