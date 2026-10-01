@@ -1,20 +1,53 @@
 {
-  "_comment": "Тема stoch: подтверждение входа Stoch %D в окне ZoneWindowBars (симметричный триггер: крест RSI или Stoch на текущем баре, второй осциллятор в зоне в окне). Несвипуемые шесть полей прибиты к литералу LENT (4/25/75, EMA 200, ATR 14, стоп 1.0). Запуск: go run ./cmd/backtest -ticker LENT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/lent/cal_stoch.json -out ./reports/LENT_zone/stoch -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ 2026-09-30: литерал pooled 1.822/199 (фолды 2.783/46, 1.389/56, 2.313/56, 1.311/41), stoch pooled 1.953/81 (фолды 4.409/24, 1.091/15, 1.755/22, 1.396/20); голоса осей: StochKPeriod 5,5,14,14; StochDSmooth 3,3,1,1; StochLower 15,10,10,10; ZoneWindowBars 5,5,2,1 (большинства ≥3 из 4 нет ни по KPeriod, ни по DSmooth, ни по ZoneWindowBars; StochLower 10 — 3 из 4); доля SL литерал ≈7.5% (≈15/199) → stoch ≈9.8% (≈8/82), приблизительно: знаменатели могут отличаться от пулов walk-forward на 0–2 сделки; считано по сделкам полного прогона каждой фолдовой точки, отфильтрованным по входу в OOS-окно (журналов OOS walk-forward не пишет); критерий спеки (PF выше, пул ≥ 20, доля SL ниже) — НЕ выполнен (PF выше и пул 81, но доля SL выше). Шесть стопов: точки большинства нет, шаг пропущен, отсечение не проверялось.",
+  "_comment": "Тема stoch: подтверждение входа Stoch %D в окне ZoneWindowBars (симметричный триггер: крест RSI или Stoch на текущем баре, второй осциллятор в зоне в окне). Несвипуемые шесть полей прибиты к литералу LENT (4/25/75, EMA 200, ATR 14, стоп 1.0). Запуск: go run ./cmd/backtest -ticker LENT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/lent/cal_stoch.json -out ./reports/LENT_zone/stoch -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ 2026-09-30: литерал pooled 1.822/199 (фолды 2.783/46, 1.389/56, 2.313/56, 1.311/41), stoch pooled 1.953/81 (фолды 4.409/24, 1.091/15, 1.755/22, 1.396/20); голоса осей: StochKPeriod 5,5,14,14; StochDSmooth 3,3,1,1; StochLower 15,10,10,10; ZoneWindowBars 5,5,2,1 (большинства ≥3 из 4 нет ни по KPeriod, ни по DSmooth, ни по ZoneWindowBars; StochLower 10 — 3 из 4); доля SL литерал ≈7.5% (≈15/199) → stoch ≈9.8% (≈8/82), приблизительно: знаменатели могут отличаться от пулов walk-forward на 0–2 сделки; считано по сделкам полного прогона каждой фолдовой точки, отфильтрованным по входу в OOS-окно (журналов OOS walk-forward не пишет); критерий спеки (PF выше, пул ≥ 20, доля SL ниже) — НЕ выполнен (PF выше и пул 81, но доля SL выше). Шесть стопов: точки большинства нет, шаг пропущен, отсечение не проверялось. РЕЗУЛЬТАТ 2026-10-01 (окно 2023-10-01—2026-10-01, отчёты reports/LENT_zone/r20261001/): (перекалибровка, тема-источник) pooled 2.051/82 против baseline_point 1.869/200 того же дня (+0.182, пул ≥ 20) — гейт включён; фолды 4.409/24, 1.091/15, 1.755/22, 1.790/21; голоса StochKPeriod 5/5/14/14 и StochDSmooth 3/3/1/1 — нет (дефолты 14/3), StochLower 15/10/10/10 — 10 (на плато сдвинуто в 15), ZoneWindowBars 5/5/2/1 — нет (1). Планка взята.",
   "phases": [
     {
       "name": "stoch",
       "grid": {
-        "RSIPeriod": [4],
-        "RSILower": [25],
-        "RSIUpper": [75],
-        "EMAPeriod": [200],
-        "DailyATRPeriod": [14],
-        "StopDailyATR": [1.0],
-        "UseStoch": [1],
-        "StochKPeriod": [5, 9, 14],
-        "StochDSmooth": [1, 3],
-        "StochLower": [10, 15, 20, 25, 30],
-        "ZoneWindowBars": [1, 2, 3, 5, 8]
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          1
+        ],
+        "StochKPeriod": [
+          5,
+          9,
+          14
+        ],
+        "StochDSmooth": [
+          1,
+          3
+        ],
+        "StochLower": [
+          10,
+          15,
+          20,
+          25,
+          30
+        ],
+        "ZoneWindowBars": [
+          1,
+          2,
+          3,
+          5,
+          8
+        ]
       }
     }
   ]

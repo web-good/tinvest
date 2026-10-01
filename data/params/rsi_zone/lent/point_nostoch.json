@@ -1,0 +1,43 @@
+{
+  "_comment": "Проверка механизма §4.7 для точки LENT 2026-10-01 (ATR 7): гейт стохастика выключен. Запуск: go run ./cmd/backtest -ticker LENT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/lent/point_nostoch.json -out ./reports/LENT_zone/r20261001/point_nostoch -months 36 -min-trades 1 (полное окно) и с -train-months 12 -test-months 6 (walk-forward). РЕЗУЛЬТАТ 2026-10-01: полное окно 247 сделок PF 1.684, +97.45%, DD 18.24%; WF 2.099/199 против 2.893/64 у точки — гейт остаётся (§4.7).",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          7
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StochKPeriod": [
+          0
+        ],
+        "StochDSmooth": [
+          0
+        ],
+        "StochLower": [
+          0
+        ],
+        "ZoneWindowBars": [
+          0
+        ]
+      }
+    }
+  ]
+}

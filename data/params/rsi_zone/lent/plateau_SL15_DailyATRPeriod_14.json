@@ -1,0 +1,43 @@
+{
+  "_comment": "Перепроверка DailyATRPeriod при StochLower 15 (LENT 2026-10-01): значение 14 (14 — дефолт ядра). Запуск: go run ./cmd/backtest -ticker LENT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/lent/plateau_SL15_DailyATRPeriod_14.json -out ./reports/LENT_zone/r20261001/plateau_SL15_DailyATRPeriod_14 -months 36 -min-trades 1 (полное окно) и с -train-months 12 -test-months 6 (walk-forward). РЕЗУЛЬТАТ 2026-10-01: полное окно 82 сделки PF 2.313 DD 9.87%; WF 2.525/64 (фолд 3 0.971) — обрыв.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          1
+        ],
+        "StochKPeriod": [
+          14
+        ],
+        "StochDSmooth": [
+          3
+        ],
+        "StochLower": [
+          15
+        ],
+        "ZoneWindowBars": [
+          1
+        ]
+      }
+    }
+  ]
+}
