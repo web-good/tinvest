@@ -5,8 +5,7 @@
 // touched. Optionally (StuckExitBars > 0) it also sells when RSI has sat below the lower band on
 // every one of the first StuckExitBars bars after the entry: the bounce never started. There is
 // no target, no trail and no end-of-day close: the position is held across nights and weekends
-// until an exit fires. The decision logic is pure,
-// stateless between bars and ticker-agnostic. The reference timeframe is 30 minutes. Run with
+// until an exit fires. The decision logic is pure, stateless between bars and ticker-agnostic. The reference timeframe is 30 minutes. Run with
 // `-strategy rsi_zone -interval Minutes30`.
 package core
 
@@ -34,6 +33,44 @@ type Params struct {
 	DailyATRPeriod int     // daily ATR length, over WEEKDAY completed dailies (fixed; default 14)
 	StopDailyATR   float64 // stop = entry - StopDailyATR*dailyATR; 0 disables it (grid; never 0 in the grid)
 	StuckExitBars  int     // exit when RSI stayed below RSILower on this many bars after the entry bar without ever leaving the zone; 0 disables it (grid: stuck)
+
+	// Stochastic confirmation gate (theme stoch). With UseStoch=1 the entry needs RSI and
+	// Stoch %D to BOTH read oversold within the last ZoneWindowBars bars, and one of them to
+	// cross down into its zone on the current bar. A zero knob resolves to its default (see
+	// stochConfig), so a ticker literal written before the gate switches it on with UseStoch
+	// alone; DefaultParams leaves them all zero and the gate off.
+	UseStoch       int     // 0 = off; any non-zero value = require the stochastic confirmation (grid: stoch, 1)
+	StochKPeriod   int     // %K lookback; 0 -> 14; negative refuses every entry (grid: stoch)
+	StochDSmooth   int     // %D smoothing, 1 = raw %K; 0 -> 3; negative refuses every entry (grid: stoch)
+	StochLower     float64 // Stoch %D lower critical band; 0 -> 20 (grid: stoch)
+	ZoneWindowBars int     // bars, current one included, in which the other oscillator may have been in its zone; < 1 -> 1 (grid: stoch)
+}
+
+// Defaults the stochastic gate falls back to when its knobs are left at zero.
+const (
+	defaultStochKPeriod = 14
+	defaultStochDSmooth = 3
+	defaultStochLower   = 20.0
+)
+
+// stochConfig resolves the stochastic gate's knobs: a zero period or band falls back to its
+// default and a window below one bar becomes one bar. Negative periods pass through untouched
+// so stochDSeries refuses them — a misconfiguration must block entries, not be papered over.
+func stochConfig(p Params) (k, d int, lower float64, window int) {
+	k, d, lower, window = p.StochKPeriod, p.StochDSmooth, p.StochLower, p.ZoneWindowBars
+	if k == 0 {
+		k = defaultStochKPeriod
+	}
+	if d == 0 {
+		d = defaultStochDSmooth
+	}
+	if lower == 0 {
+		lower = defaultStochLower
+	}
+	if window < 1 {
+		window = 1
+	}
+	return k, d, lower, window
 }
 
 // DefaultParams returns the spec's baseline; swept values come from calibration.
@@ -63,8 +100,15 @@ func (s *Strategy) Ticker() string { return s.ticker }
 // an SMA over the first `period` closes, so a window shorter than the period yields an all-zero
 // series that silently fails the trend gate for the whole run. Doubling the largest period
 // leaves as many recursion steps as the seed span; the +20 covers the two-bar cross lookups.
+// With the stochastic gate on, the %K+%D warm-up joins the largest period and the confirmation
+// window is added on top; with it off the window is exactly what it was before the gate existed.
 func (s *Strategy) Lookback() int {
-	return max(minLookback, 2*max(s.p.EMAPeriod, s.p.RSIPeriod)+20)
+	span := max(s.p.EMAPeriod, s.p.RSIPeriod)
+	if s.p.UseStoch == 0 {
+		return max(minLookback, 2*span+20)
+	}
+	k, d, _, window := stochConfig(s.p)
+	return max(minLookback, 2*max(span, k+d)+window+20)
 }
 
 // mskLoc anchors every calendar rule (weekday checks) to Moscow (UTC fallback).
@@ -159,6 +203,70 @@ func crossedUp(series []float64, i, period int, level float64) bool {
 	return i >= 1 && i < len(series) && i-1 >= period && series[i-1] <= level && series[i] > level
 }
 
+// stochDSeries returns Stochastic %D laid over the full bar index: series[b] is the %D reading
+// of bar b, and warm = k+d-2 is the first bar that has one (earlier slots are an unset zero,
+// the same convention RSISeries uses). indicators.StochasticSeries returns a shorter,
+// right-aligned slice; its j-th value belongs to bar j+k+d-2. ok is false when the periods are
+// not positive or history is too short to produce a single %D value.
+func stochDSeries(highs, lows, closes []float64, k, d int) (series []float64, warm int, ok bool) {
+	if k <= 0 || d <= 0 {
+		return nil, 0, false
+	}
+	_, ds := indicators.StochasticSeries(highs, lows, closes, k, d)
+	n := len(closes)
+	warm = k + d - 2
+	if len(ds) == 0 || warm+len(ds) != n {
+		return nil, 0, false
+	}
+	series = make([]float64, n)
+	copy(series[warm:], ds)
+	return series, warm, true
+}
+
+// oscillator is one confirmation series with its first genuine index and its lower band.
+type oscillator struct {
+	series []float64
+	warm   int
+	level  float64
+}
+
+// zoneHit records which oscillator crossed on the current bar and where the other one was seen
+// in its zone.
+type zoneHit struct {
+	by      string // "RSI" or "Stoch": the oscillator that crossed down on the current bar
+	otherAt int    // the most recent bar of the window where the other oscillator was in its zone
+}
+
+// seenInZone returns the most recent bar of [i-window+1, i] (clipped at 0) where o reads
+// strictly below its band on a warmed index, or -1. Validity is gated on the index, as in
+// crossedDown: a genuine 0.00 after warm-up counts, an unset warm-up zero does not.
+func seenInZone(o oscillator, i, window int) int {
+	for b := i; b >= 0 && b > i-window; b-- {
+		if b >= o.warm && b < len(o.series) && o.series[b] < o.level {
+			return b
+		}
+	}
+	return -1
+}
+
+// zoneTrigger is the symmetric confirmation: an entry fires when RSI crosses down through its
+// band on bar i and Stoch was in its zone somewhere in the window, or the other way round. When
+// both cross on the same bar the RSI trigger is reported. crossedDown's period argument is the
+// oscillator's warm index, so the previous bar must itself be a genuine reading.
+func zoneTrigger(rsi, stoch oscillator, i, window int) (zoneHit, bool) {
+	if crossedDown(rsi.series, i, rsi.warm, rsi.level) {
+		if b := seenInZone(stoch, i, window); b >= 0 {
+			return zoneHit{by: "RSI", otherAt: b}, true
+		}
+	}
+	if crossedDown(stoch.series, i, stoch.warm, stoch.level) {
+		if b := seenInZone(rsi, i, window); b >= 0 {
+			return zoneHit{by: "Stoch", otherAt: b}, true
+		}
+	}
+	return zoneHit{}, false
+}
+
 // trendUp reports whether the close sits strictly above a warmed EMA. ema.Compute zero-fills
 // warm-up positions, so an unwarmed EMA must not pass as "price above zero".
 func trendUp(closeP, emaNow float64) bool {
@@ -201,9 +309,33 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 		return sig
 	}
 	i := n - 1
-	// 2. RSI crosses down through the lower band on the current bar.
+	// 2. the trigger. Gate off: RSI crosses down through the lower band on the current bar.
+	// Gate on: RSI or Stoch %D crosses down into its zone now while the other one was in its
+	// zone somewhere in the last ZoneWindowBars bars.
 	rsi := indicators.RSISeries(md.Closes, s.p.RSIPeriod)
-	if len(rsi) != n || !crossedDown(rsi, i, s.p.RSIPeriod, s.p.RSILower) {
+	if len(rsi) != n {
+		return sig
+	}
+	var (
+		hit   zoneHit
+		stoch []float64
+	)
+	if s.p.UseStoch != 0 {
+		k, d, lower, window := stochConfig(s.p)
+		st, warm, ok := stochDSeries(md.Highs, md.Lows, md.Closes, k, d)
+		if !ok {
+			return sig
+		}
+		h, fired := zoneTrigger(
+			oscillator{series: rsi, warm: s.p.RSIPeriod, level: s.p.RSILower},
+			oscillator{series: st, warm: warm, level: lower},
+			i, window,
+		)
+		if !fired {
+			return sig
+		}
+		hit, stoch = h, st
+	} else if !crossedDown(rsi, i, s.p.RSIPeriod, s.p.RSILower) {
 		return sig
 	}
 	// 3. trend: close above a warmed EMA.
@@ -227,7 +359,22 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	sig.ATR = atr
 	sig.RSI = rsi[i]
 	sig.EntryReason = s.entryReason(rsi[i], trend[i], entry, stop, atr)
+	if s.p.UseStoch != 0 {
+		sig.EntryReason += s.stochReason(hit, i, rsi[i], stoch[i])
+	}
 	return sig
+}
+
+// stochReason is the journal tail of a stochastic-confirmed entry: which oscillator crossed,
+// how many bars back the other one was in its zone, and both readings on the entry bar.
+func (s *Strategy) stochReason(hit zoneHit, i int, rsiNow, stochNow float64) string {
+	k, d, lower, window := stochConfig(s.p)
+	other := "Stoch"
+	if hit.by == "Stoch" {
+		other = "RSI"
+	}
+	return fmt.Sprintf("; подтверждение: крест дал %s, %s в зоне %d бар(ов) назад (окно %d); RSI %.1f (зона <%.0f), Stoch%%D(%d,%d) %.1f (зона <%.0f)",
+		hit.by, other, i-hit.otherAt, window, rsiNow, s.p.RSILower, k, d, stochNow, lower)
 }
 
 // entryReason renders the human-readable rationale shown in the trade journal.

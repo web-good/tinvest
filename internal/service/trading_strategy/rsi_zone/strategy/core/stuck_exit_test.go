@@ -164,3 +164,20 @@ func TestStopWinsOverStuckExitOnTheSameBar(t *testing.T) {
 		t.Fatalf("Reason = %q, want SL: the stop wins a same-bar tie", sig.Reason)
 	}
 }
+
+// With the stochastic gate an entry can fire while RSI has already been in its zone for a while
+// (Stoch crossed, RSI was seen in the window). The stuck count starts at the entry bar, not at the
+// start of RSI's run in the zone: here RSI sits below 25 from bar 402, the entry is on bar 404 and
+// only two bars follow it, so N=3 must not fire yet.
+func TestStuckExitCountsFromTheEntryBarNotFromTheZoneRun(t *testing.T) {
+	md := stuckMarket(stuckCloses(4)) // RSI < 25 on bars 402..406
+	md.Position.EntryTime = md.Times[stuckEntryIdx+2]
+	if sig := NewWithParams("TEST", stuckParams(3)).Decide(md); sig.Kind != model.SignalNone {
+		t.Fatalf("Kind/Reason = %v/%q, want SignalNone: two bars after the entry, not four", sig.Kind, sig.Reason)
+	}
+	md = stuckMarket(stuckCloses(5))
+	md.Position.EntryTime = md.Times[stuckEntryIdx+2]
+	if sig := NewWithParams("TEST", stuckParams(3)).Decide(md); sig.Reason != "STUCK" {
+		t.Fatalf("Kind/Reason = %v/%q, want SignalSell/STUCK on the third bar after the entry", sig.Kind, sig.Reason)
+	}
+}
