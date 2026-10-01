@@ -1,0 +1,33 @@
+{
+  "_comment": "rsi_mid phased grid. Phase 1 (entry) sweeps the RSI length whose UPWARD cross of 50 opens the trade (the midline itself is fixed). Phase 2 (trend) sweeps the trend EMA the close must sit above; 0 (no filter) is deliberately absent - the filter is mandatory. Phase 3 (exit) sweeps the upper band whose UPWARD cross closes the trade together with the number of consecutive bars below 50 after entry that also close it; the two exits interact, so they are swept jointly. Phase 4 (risk) sweeps the stop in daily ATR; 0 (no stop) is deliberately absent. DailyATRPeriod stays at its default and is NOT swept. RunPhases expands each phase over the previous phase's keepTop survivors: 5 + 5x5 + 5x30 + 5x5 = 205 combos. Judge on pooled OOS profit factor from a walk-forward, never on the in-sample best.",
+  "phases": [
+    {
+      "name": "entry",
+      "keepTop": 5,
+      "grid": {
+        "RSIPeriod": [5, 7, 9, 14, 21]
+      }
+    },
+    {
+      "name": "trend",
+      "keepTop": 5,
+      "grid": {
+        "EMAPeriod": [20, 50, 100, 150, 200]
+      }
+    },
+    {
+      "name": "exit",
+      "keepTop": 5,
+      "grid": {
+        "RSIUpper": [60, 65, 70, 75, 80, 85],
+        "BelowMidBars": [1, 2, 3, 4, 6]
+      }
+    },
+    {
+      "name": "risk",
+      "grid": {
+        "StopDailyATR": [0.2, 0.3, 0.5, 0.7, 1.0]
+      }
+    }
+  ]
+}
