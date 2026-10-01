@@ -89,15 +89,22 @@ func rsiAt(closes []float64, period, window int) float64 {
 }
 
 // crossCloses builds a history whose LAST bar is an RSI(period) cross UP through `level`:
-// `lead` bars drifting by `drift` per bar, then -0.3% bars until RSI reads below `level`, then
+// `lead` bars drifting by `drift` per bar (every 4th bar a counter-move of the opposite sign),
+// then -0.3% bars until RSI reads below `level`, then
 // +0.3% bars until it reads above `level`. Every bar is measured as it is appended, so the shape
-// holds for any period. NOTE: indicators.RSISeries reads exactly 50 (not 100) on a run with no
-// losing bar, so after an uptrend lead the dip phase is what pushes RSI below 50.
+// holds for any period. The lead carries counter-move bars because indicators.RSISeries returns
+// exactly 50 while avgLoss == 0: a pure monotonic lead would read 50 on every engine window, and
+// the first dip bar (tiny positive avgLoss, large avgGain) would jump RSI to ~79 and fire a false
+// cross up through 50 there. Real data always has losing bars, so avgLoss > 0 from the seed on.
 func crossCloses(lead int, drift float64, period int, level float64, window int) []float64 {
 	out := make([]float64, 0, lead+64)
 	p := 100.0
 	for i := 0; i < lead; i++ {
-		p *= 1 + drift
+		if i%4 == 3 {
+			p *= 1 - drift
+		} else {
+			p *= 1 + drift
+		}
 		out = append(out, p)
 	}
 	for guard := 0; rsiAt(out, period, window) >= level; guard++ {
