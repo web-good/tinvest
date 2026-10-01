@@ -22,7 +22,6 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/core"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/dias"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/domrf"
-	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/lent"
 )
 
 var update = flag.Bool("update", false, "rewrite testdata/*.golden from the current code")
@@ -68,7 +67,8 @@ func syntheticHistory(seed int64, days int) (bars, daily []bt.Candle) {
 }
 
 // legacyCases are the parameter sets whose trades are pinned: the core baseline and every
-// ticker literal registered today.
+// ticker literal with the gate off. LENT left the list on 2026-10-01 when its literal switched the
+// stochastic gate on; its earlier literal equalled the core baseline, which stays pinned as "core".
 func legacyCases() []struct {
 	name string
 	p    core.Params
@@ -82,7 +82,6 @@ func legacyCases() []struct {
 		{baza.Ticker, baza.DefaultParams()},
 		{dias.Ticker, dias.DefaultParams()},
 		{domrf.Ticker, domrf.DefaultParams()},
-		{lent.Ticker, lent.DefaultParams()},
 	}
 }
 

@@ -14,21 +14,24 @@ func TestCalibratedLiteralIsPinned(t *testing.T) {
 		RSILower:       25,
 		RSIUpper:       75,
 		EMAPeriod:      200,
-		DailyATRPeriod: 14,
+		DailyATRPeriod: 7,
 		StopDailyATR:   1.0,
+		UseStoch:       1,
+		StochKPeriod:   14,
+		StochDSmooth:   3,
+		StochLower:     15,
+		ZoneWindowBars: 1,
 	}
 	if got := DefaultParams(); got != want {
 		t.Fatalf("откалиброванный литерал LENT изменился:\n got: %+v\nwant: %+v", got, want)
 	}
 }
 
-// TestParamsAreTheCoreBaselineByDesign заменяет у LENT проверку «литерал не равен дефолтам»:
-// калибровка 2026-09-29 заводит тикер на дефолтах ядра, потому что правило большинства не
-// сдвинуло ни одного поля. Если дефолты ядра сменятся, тест упадёт — решение LENT тогда нужно
-// перепроверить, а не молча унаследовать новые дефолты.
-func TestParamsAreTheCoreBaselineByDesign(t *testing.T) {
-	if got, want := DefaultParams(), core.DefaultParams(); got != want {
-		t.Fatalf("LENT торгует дефолты ядра по решению 2026-09-29:\n got: %+v\nwant: %+v", got, want)
+// Перекалибровка 2026-10-01 увела LENT с дефолтов ядра (гейт стохастика, DailyATRPeriod 7):
+// литерал, совпавший с дефолтами, значит, что точка потерялась.
+func TestParamsDoNotTrackTheBaseline(t *testing.T) {
+	if DefaultParams() == core.DefaultParams() {
+		t.Fatal("литерал LENT совпал с core.DefaultParams() — точка перекалибровки 2026-10-01 потеряна")
 	}
 }
 
