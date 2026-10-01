@@ -96,6 +96,12 @@ argument-hint: <TICKER> [заметки владельца]
 | `risk` | `cal_risk.json` | `StopDailyATR` 0.3,0.5,0.7,1.0,1.25,1.5,2.0,2.5,3.0 × `DailyATRPeriod` 5,7,10,14,21,30 |
 | `trend_risk` | `cal_trend_risk.json` | фазы `trend` (keepTop 3) → `risk` |
 | `phased` | `cal_phased.json` | фазы entry → trend → exit → risk (keepTop 5), оси как выше |
+| `stuck` | `cal_stuck.json` | `StuckExitBars` 0,1,2,3,4,5,6,8,10 (шесть базовых полей прибиты к литералу/точке тикера) |
+
+Тема `stuck` — оценочная, не источник поля: её гоняют поверх собранной точки (§4) или литерала
+тикера, 0 в оси — сам литерал, baseline в том же прогоне. `StuckExitBars` попадает в литерал
+только решением владельца. В §4 эта тема голосов за поля не даёт. Сторож —
+`rsi_zone_stuck_grid_test.go`.
 
 Жёсткие инварианты сеток:
 
