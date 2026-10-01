@@ -1,20 +1,53 @@
 {
-  "_comment": "Тема stoch: подтверждение входа Stoch %D в окне ZoneWindowBars (симметричный триггер: крест RSI или Stoch на текущем баре, второй осциллятор в зоне в окне). Несвипуемые шесть полей прибиты к литералу DOMRF (4/25/75, EMA 50, ATR 14, стоп 1.0). История DOMRF с ~2025-12 — протокол нештатный, как у прочих тем DOMRF. Запуск: go run ./cmd/backtest -ticker DOMRF -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/domrf/cal_stoch.json -out ./reports/DOMRF_zone/stoch -months 10 -train-months 3 -test-months 2 -min-trades 15 -metric profit_factor. РЕЗУЛЬТАТ 2026-09-30: литерал pooled 3.595/33 (фолды 0.801/11, 3.447/12, 14.157/10), stoch pooled 2.721/28 (фолды 0.590/9, 1.771/9, 84.593/10; PF фолда 3 раздут почти нулевым убытком, на вердикт не влияет); голоса осей: StochKPeriod 5,9,5; StochDSmooth 1,3,1; StochLower 15,30,30; ZoneWindowBars 8,8,5; доля SL литерал 0% (0/34) → stoch 0% (0/30), знаменатели приблизительные (могут отличаться от пулов walk-forward на 0–2 сделки), считано по сделкам полного прогона фолдовых точек, отфильтрованным по входу в OOS-окно; критерий спеки (PF выше, пул ≥ 20, доля SL ниже) — НЕ выполнен (PF ниже, доля SL не снизилась: SL нет ни там, ни там).",
+  "_comment": "Тема stoch: подтверждение входа Stoch %D в окне ZoneWindowBars (симметричный триггер). Перекалибровка rsi_zone на DOMRF по /rsi-zone-calibrate с темами stoch и stuck (2026-10-01, все прогоны в этот день, отчёты reports/DOMRF_zone/r20261001/). История 30m с 2025-11-20 (~10 мес) — протокол нештатный: -months 10 -train-months 3 -test-months 2 -min-trades 15 (3 фолда); контроль -train-months 4. EMA 400 оставлена: Lookback 2·400+20 = 820 баров ≈ 8% истории. По §2 процедуры при перекалибровке шесть базовых полей прибиты к литералу DOMRF (4/25/75, EMA 50, ATR 14, стоп 1.0). Гейт всегда включён (UseStoch=[1]); решение о гейте — сравнение pooled темы с pooled литерала (literal_point.json) и дефолтов (baseline_point.json) той же схемы. Запуск: go run ./cmd/backtest -ticker DOMRF -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/domrf/cal_stoch.json -out ./reports/DOMRF_zone/r20261001/stoch -months 10 -train-months 3 -test-months 2 -min-trades 15 -metric profit_factor.",
   "phases": [
     {
       "name": "stoch",
       "grid": {
-        "RSIPeriod": [4],
-        "RSILower": [25],
-        "RSIUpper": [75],
-        "EMAPeriod": [50],
-        "DailyATRPeriod": [14],
-        "StopDailyATR": [1.0],
-        "UseStoch": [1],
-        "StochKPeriod": [5, 9, 14],
-        "StochDSmooth": [1, 3],
-        "StochLower": [10, 15, 20, 25, 30],
-        "ZoneWindowBars": [1, 2, 3, 5, 8]
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          50
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          1
+        ],
+        "StochKPeriod": [
+          5,
+          9,
+          14
+        ],
+        "StochDSmooth": [
+          1,
+          3
+        ],
+        "StochLower": [
+          10,
+          15,
+          20,
+          25,
+          30
+        ],
+        "ZoneWindowBars": [
+          1,
+          2,
+          3,
+          5,
+          8
+        ]
       }
     }
   ]
