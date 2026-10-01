@@ -98,7 +98,12 @@ argument-hint: <TICKER> [заметки владельца]
 | `risk` | `cal_risk.json` | `StopDailyATR` 0.3,0.5,0.7,1.0,1.25,1.5,2.0,2.5,3.0 × `DailyATRPeriod` 5,7,10,14,21,30 |
 | `trend_risk` | `cal_trend_risk.json` | фазы `trend` (keepTop 3) → `risk` |
 | `phased` | `cal_phased.json` | фазы entry → trend → exit → risk (keepTop 5), оси как выше |
-| `stoch` | `cal_stoch.json` | `UseStoch` 1 × `StochKPeriod` 5,9,14 × `StochDSmooth` 1,3 × `StochLower` 10,15,20,25,30 × `ZoneWindowBars` 1,2,3,5,8 (150 комбинаций, шесть базовых полей прибиты к baseline) |
+| `stoch` | `cal_stoch.json` | `UseStoch` 1 × `StochKPeriod` 5,9,14 × `StochDSmooth` 1,3 × `StochLower` 10,15,20,25,30 × `ZoneWindowBars` 1,2,3,5,8 (150 комбинаций, шесть базовых полей прибиты к литералу/точке тикера) |
+
+Тема `stoch` — оценочная, не источник поля. Её гоняют поверх собранной точки (§4) или поверх
+существующего литерала тикера: шесть базовых полей прибиты к этой точке/литералу, не к baseline.
+Её пять полей попадают в литерал только решением владельца; тогда `point.json` перечисляет
+`UseStoch` и четыре поля стохастика. В §4 эта тема голосов за поля не даёт.
 
 Жёсткие инварианты сеток:
 

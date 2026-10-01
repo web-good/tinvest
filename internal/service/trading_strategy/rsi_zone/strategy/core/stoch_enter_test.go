@@ -7,8 +7,10 @@ import (
 	"time"
 
 	bt "tinvest/internal/domain/backtest"
+	"tinvest/internal/domain/ema"
 	"tinvest/internal/service/trading_strategy/scalping/model"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
+	"tinvest/pkg/indicators"
 )
 
 // stochOf computes the %D series the strategy will see for md with the given knobs.
@@ -106,6 +108,32 @@ func TestStochGateKeepsTheTrendGate(t *testing.T) {
 	}
 }
 
+// Spec test 6: a STOCH-triggered entry is still rejected when close <= EMA. RSI is already in
+// its zone on the last two bars (no RSI cross), and the band sits between the last two %D
+// readings, so only the stoch can fire; the preconditions pin that. The trend-gate removal
+// mutation turns this test red (checked by hand, see the fix report).
+func TestStochTriggeredEntryKeepsTheTrendGate(t *testing.T) {
+	base := downtrendCloses()
+	closes := append(base, base[len(base)-1]*0.998)
+	md := fixture(closes, mondayNoon)
+	st := stochOf(t, md, 14, 3)
+	i := len(st) - 1
+	if !(st[i] < st[i-1]) {
+		t.Fatalf("fixture drift: stoch %.2f -> %.2f is not falling on the last bar", st[i-1], st[i])
+	}
+	rsi := indicators.RSISeries(md.Closes, 4)
+	if !(rsi[i] < 25 && rsi[i-1] < 25) {
+		t.Fatalf("fixture drift: RSI %.2f, %.2f must both be under 25 (no RSI cross)", rsi[i-1], rsi[i])
+	}
+	if !(md.Closes[i] <= ema.Compute(md.Closes, 200)[i]) {
+		t.Fatal("fixture drift: close must sit at or under EMA(200)")
+	}
+	p := stochParams((st[i-1]+st[i])/2, 1)
+	if sig := NewWithParams("T", p).Decide(md); sig.Kind == model.SignalBuy {
+		t.Fatal("Stoch-triggered Buy below the trend EMA")
+	}
+}
+
 // Review Focus 1: UseStoch alone on a literal without stochastic knobs behaves like explicit
 // 14/3/20/1 — never like "no entries at all".
 func TestUseStochAloneResolvesZeroFields(t *testing.T) {
@@ -170,5 +198,25 @@ func TestEngineEntersOnStochTrigger(t *testing.T) {
 	}
 	if !strings.Contains(tr.EntryReason, "крест дал Stoch") {
 		t.Fatalf("EntryReason = %q, want the Stoch trigger", tr.EntryReason)
+	}
+}
+
+// UseStoch is a switch with two defined values, 0 and 1. Any other non-zero value must not
+// silently fall back to the old behaviour: it means "on", exactly like 1.
+func TestUseStochNonZeroMeansOn(t *testing.T) {
+	md := fixture(trendCloses(4), mondayNoon) // no RSI cross: only the stoch trigger can fire
+	st := stochOf(t, md, 14, 3)
+	i := len(st) - 1
+	one := stochParams((st[i-1]+st[i])/2, 1)
+	for _, v := range []int{2, -1} {
+		p := one
+		p.UseStoch = v
+		a, b := NewWithParams("T", p).Decide(md), NewWithParams("T", one).Decide(md)
+		if a.Kind != b.Kind || a.EntryReason != b.EntryReason {
+			t.Fatalf("UseStoch=%d -> (%v, %q), UseStoch=1 -> (%v, %q)", v, a.Kind, a.EntryReason, b.Kind, b.EntryReason)
+		}
+		if NewWithParams("T", p).Lookback() != NewWithParams("T", one).Lookback() {
+			t.Fatalf("UseStoch=%d changes Lookback relative to UseStoch=1", v)
+		}
 	}
 }

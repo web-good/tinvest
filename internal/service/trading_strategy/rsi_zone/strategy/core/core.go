@@ -37,7 +37,7 @@ type Params struct {
 	// cross down into its zone on the current bar. A zero knob resolves to its default (see
 	// stochConfig), so a ticker literal written before the gate switches it on with UseStoch
 	// alone; DefaultParams leaves them all zero and the gate off.
-	UseStoch       int     // 1 = require the stochastic confirmation; 0 = off (grid: stoch)
+	UseStoch       int     // 0 = off; any non-zero value = require the stochastic confirmation (grid: stoch, 1)
 	StochKPeriod   int     // %K lookback; 0 -> 14; negative refuses every entry (grid: stoch)
 	StochDSmooth   int     // %D smoothing, 1 = raw %K; 0 -> 3; negative refuses every entry (grid: stoch)
 	StochLower     float64 // Stoch %D lower critical band; 0 -> 20 (grid: stoch)
@@ -102,7 +102,7 @@ func (s *Strategy) Ticker() string { return s.ticker }
 // window is added on top; with it off the window is exactly what it was before the gate existed.
 func (s *Strategy) Lookback() int {
 	span := max(s.p.EMAPeriod, s.p.RSIPeriod)
-	if s.p.UseStoch != 1 {
+	if s.p.UseStoch == 0 {
 		return max(minLookback, 2*span+20)
 	}
 	k, d, _, window := stochConfig(s.p)
@@ -318,7 +318,7 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 		hit   zoneHit
 		stoch []float64
 	)
-	if s.p.UseStoch == 1 {
+	if s.p.UseStoch != 0 {
 		k, d, lower, window := stochConfig(s.p)
 		st, warm, ok := stochDSeries(md.Highs, md.Lows, md.Closes, k, d)
 		if !ok {
@@ -357,7 +357,7 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	sig.ATR = atr
 	sig.RSI = rsi[i]
 	sig.EntryReason = s.entryReason(rsi[i], trend[i], entry, stop, atr)
-	if s.p.UseStoch == 1 {
+	if s.p.UseStoch != 0 {
 		sig.EntryReason += s.stochReason(hit, i, rsi[i], stoch[i])
 	}
 	return sig
