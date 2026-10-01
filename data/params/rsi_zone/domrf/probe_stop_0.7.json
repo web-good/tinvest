@@ -1,0 +1,28 @@
+{
+  "_comment": "Зонд стопа на точке DOMRF (дефолты + EMA 50): StopDailyATR 0.7 — проверка капкана широкого стопа (§4.5). Запуск 2026-10-01: go run ./cmd/backtest -ticker DOMRF -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/domrf/probe_stop_0.7.json -out ./reports/DOMRF_zone/r20261001/probe_stop_0.7_full -months 36 -min-trades 1. РЕЗУЛЬТАТ 2026-10-01: 57 сделок, PF 1.903, +12.62%, DD 3.90%, SL 6 из 57 (−11.1 тыс. ₽); хвост 6 PF 1.414.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          50
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          0.7
+        ]
+      }
+    }
+  ]
+}
