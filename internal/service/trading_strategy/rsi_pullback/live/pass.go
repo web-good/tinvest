@@ -40,6 +40,22 @@ const maxBarAge = 60 * time.Minute
 // second entry, and the exchange stop keeps working.
 const freshEntryGrace = 2 * maxBarAge
 
+// barSpan — длина бара, на котором работает раннер (30m).
+const barSpan = 30 * time.Minute
+
+// entryBarTime переводит время заявки из стейта во время открытия бара входа, как его ставит
+// движок бэктеста в Position.EntryTime. Заявка уходит после закрытия бара входа, то есть внутри
+// следующего бара, поэтому шаг назад на один бар попадает в бар входа (пока проход раннера
+// опаздывает меньше чем на бар). Ядра, которые привязываются к бару входа (выход STUCK у
+// rsi_zone), берут последний бар, открывшийся не позже этого времени. Нулевое время остаётся
+// нулевым: ядро тогда молчит, а не гадает.
+func entryBarTime(fill time.Time) time.Time {
+	if fill.IsZero() {
+		return fill
+	}
+	return fill.Add(-barSpan)
+}
+
 // passCtx несёт состояние, общее для всех тикеров одного пасса: снапшот биржевых заявок
 // берётся ОДИН раз на пасс, иначе повторный Cancel одной и той же заявки в одном тике
 // дал бы ложный алерт.
@@ -553,6 +569,7 @@ func (s *service) manage(ctx context.Context, pc *passCtx, sl *slot, ticker stri
 		TakeProfit:            entry.TakeProfit,
 		MaxFavorablePrice:     entry.MaxFav,
 		PrevMaxFavorablePrice: prevMaxFav,
+		EntryTime:             entryBarTime(entry.EntryTime),
 	}
 
 	sig := dec.Decide(md)

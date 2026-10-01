@@ -117,3 +117,30 @@ func TestEngineHandsSignalATRIntoPositionEntryATRForTheStop(t *testing.T) {
 			tr.ExitPrice, wantExit, level, gapOpen)
 	}
 }
+
+// TestEngineStuckExitFiresOnTheNthBarAfterEntry replays the stuck exit through the backtest
+// engine: it anchors on the Position.EntryTime the engine stamps (the entry bar's open-time), so
+// with StuckExitBars 3 the trade closes at the close of the third bar after the entry bar.
+func TestEngineStuckExitFiresOnTheNthBarAfterEntry(t *testing.T) {
+	p := DefaultParams()
+	p.StuckExitBars = 3
+	s := NewWithParams("TEST", p)
+	closes := engineUptrendCloses(s.Lookback(), 3+3) // the cross on the 3rd down bar, then 3 more
+	candles := engineCandles(closes, mondayNoon)
+	daily := engineDailyCandles(mondayNoon, 40, dailyWidth, dailyWidth/10)
+	cfg := bt.Config{InitialCash: 1_000_000, Fraction: 1.0, Commission: 0, Lot: 1}
+
+	res := bt.Run(s, candles, daily, nil, cfg)
+	if len(res.Trades) != 1 {
+		t.Fatalf("trades = %d, want 1", len(res.Trades))
+	}
+	tr := res.Trades[0]
+	entryBar := candles[len(candles)-4]
+	if !tr.EntryTime.Equal(entryBar.Time) {
+		t.Fatalf("EntryTime = %v, want %v: the entry did not fire on the designed cross bar", tr.EntryTime, entryBar.Time)
+	}
+	last := candles[len(candles)-1]
+	if tr.Reason != "STUCK" || !tr.ExitTime.Equal(last.Time) || math.Abs(tr.ExitPrice-last.Close) > 1e-9 {
+		t.Fatalf("exit = %q at %v by %v, want STUCK at %v by the close %v", tr.Reason, tr.ExitTime, tr.ExitPrice, last.Time, last.Close)
+	}
+}

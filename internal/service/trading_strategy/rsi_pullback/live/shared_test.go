@@ -38,6 +38,7 @@ type fakeStrategy struct {
 
 	decideCalls  int
 	rebuildCalls int
+	lastPosition *strategy.Position // md.Position последнего Decide
 	msgs         []string
 }
 
@@ -73,6 +74,7 @@ type fakeDecider struct{ f *fakeStrategy }
 func (d fakeDecider) Lookback() int { return 50 }
 func (d fakeDecider) Decide(md strategy.MarketData) model.Signal {
 	d.f.decideCalls++
+	d.f.lastPosition = md.Position
 	sig := d.f.sig
 	sig.Price = md.Price
 	return sig
@@ -202,6 +204,34 @@ func TestOwnerFromStateManagesThePosition(t *testing.T) {
 	}
 	if zone.decideCalls != 1 {
 		t.Fatalf("Decide гостя вызван %d раз, want 1", zone.decideCalls)
+	}
+}
+
+// В стейте EntryTime — момент заявки, он приходится на бар ПОСЛЕ бара входа: заявка уходит,
+// когда бар входа уже закрылся. Ядро привязывается к бару входа по Position.EntryTime («последний
+// бар, открывшийся не позже»), поэтому раннер сдвигает время на один 30-минутный бар назад —
+// иначе live считал бы бары после входа на один меньше, чем бэктест.
+func TestManagedPositionCarriesEntryBarTime(t *testing.T) {
+	zone := zoneFake(model.SignalNone, "GAZP")
+	e := newSharedEnv(t, sharedNow, []string{"GAZP"}, nil, zone)
+	fill := time.Date(2026, 3, 9, 15, 0, 7, 0, msk) // бар входа 14:30–15:00, заявка через 7 с
+	e.seed(t, statestore.Entry{Ticker: "GAZP", Strategy: "rsi_zone", EntryPrice: 100,
+		EntryATR: 10, MaxFav: 100, Quantity: 100, EntryTime: fill})
+	e.instruments.EXPECT().Shares(mock.Anything).Return(sharesOf("GAZP"), nil)
+	e.expectCandles(flatAt30m(sharedLastBar, 400, 100), dailies(sharedNow, 60))
+	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return([]*grpcmodel.Position{held("GAZP", 100)}, nil)
+	e.stops.EXPECT().GetStopOrders(mock.Anything, mock.Anything).Return(emptyStopList(), nil).Maybe()
+	e.stops.EXPECT().PostStopOrder(mock.Anything, mock.Anything).Return(nil, nil).Maybe()
+	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
+
+	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if zone.lastPosition == nil {
+		t.Fatal("Decide гостя не получил позицию")
+	}
+	if want := fill.Add(-30 * time.Minute); !zone.lastPosition.EntryTime.Equal(want) {
+		t.Fatalf("Position.EntryTime = %v, want %v (заявка минус один бар)", zone.lastPosition.EntryTime, want)
 	}
 }
 

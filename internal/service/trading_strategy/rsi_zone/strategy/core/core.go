@@ -2,8 +2,10 @@
 // crossing DOWN through its lower critical band on the current bar while the close sits above a
 // single trend EMA. It sells when the same RSI crosses UP through its upper critical band, or
 // when the protective stop — sized in daily ATR at entry and frozen on the position — is
-// touched. There is no target, no trail, no time stop and no end-of-day close: the position is
-// held across nights and weekends until one of the two exits fires. The decision logic is pure,
+// touched. Optionally (StuckExitBars > 0) it also sells when RSI has sat below the lower band on
+// every one of the first StuckExitBars bars after the entry: the bounce never started. There is
+// no target, no trail and no end-of-day close: the position is held across nights and weekends
+// until an exit fires. The decision logic is pure,
 // stateless between bars and ticker-agnostic. The reference timeframe is 30 minutes. Run with
 // `-strategy rsi_zone -interval Minutes30`.
 package core
@@ -31,6 +33,7 @@ type Params struct {
 	EMAPeriod      int     // trend EMA period; the entry needs close > EMA (grid; default 200)
 	DailyATRPeriod int     // daily ATR length, over WEEKDAY completed dailies (fixed; default 14)
 	StopDailyATR   float64 // stop = entry - StopDailyATR*dailyATR; 0 disables it (grid; never 0 in the grid)
+	StuckExitBars  int     // exit when RSI stayed below RSILower on this many bars after the entry bar without ever leaving the zone; 0 disables it (grid: stuck)
 }
 
 // DefaultParams returns the spec's baseline; swept values come from calibration.
@@ -267,11 +270,52 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 		return sig
 	}
 	rsi := indicators.RSISeries(md.Closes, s.p.RSIPeriod)
-	if len(rsi) == n && crossedUp(rsi, i, s.p.RSIPeriod, s.p.RSIUpper) {
+	if len(rsi) != n {
+		return sig
+	}
+	if crossedUp(rsi, i, s.p.RSIPeriod, s.p.RSIUpper) {
 		sig.Kind, sig.Reason = model.SignalSell, "RSI"
 		sig.RSI = rsi[i]
 		sig.ExitReason = fmt.Sprintf("RSI: RSI(%d) пересёк %.0f снизу вверх (%.1f), выход по %.4f (вход %.4f)",
 			s.p.RSIPeriod, s.p.RSIUpper, rsi[i], closeP, pos.PurchasePrice)
+		return sig
+	}
+	// 3. optional: RSI never left the lower zone for StuckExitBars bars after the entry bar.
+	if bars := s.stuckBars(md, rsi); s.p.StuckExitBars > 0 && bars >= s.p.StuckExitBars {
+		sig.Kind, sig.Reason = model.SignalSell, "STUCK"
+		sig.RSI = rsi[i]
+		sig.ExitReason = fmt.Sprintf("STUCK: RSI(%d) %d бар(ов) после входа ниже %.0f (%.1f), выход по %.4f (вход %.4f)",
+			s.p.RSIPeriod, bars, s.p.RSILower, rsi[i], closeP, pos.PurchasePrice)
 	}
 	return sig
+}
+
+// stuckBars counts the bars after the entry bar on which RSI read strictly below RSILower,
+// provided it did so on EVERY one of them; a single bar at or above the band (or an unwarmed
+// reading) disarms the stuck exit for the rest of the trade and yields 0. The entry bar is the
+// last bar that opened at or before Position.EntryTime and is not counted itself. Without
+// EntryTime or aligned Times, or when the entry bar has already left the candle window, there is
+// no anchor and the result is 0: the window (>= minLookback bars) dwarfs any StuckExitBars, so a
+// position that old either exited long ago or was disarmed by a rise the window may no longer show.
+func (s *Strategy) stuckBars(md strategy.MarketData, rsi []float64) int {
+	pos, n := md.Position, len(md.Closes)
+	if s.p.StuckExitBars <= 0 || pos == nil || pos.EntryTime.IsZero() || len(md.Times) != n || len(rsi) != n {
+		return 0
+	}
+	entryIdx := -1
+	for b := n - 1; b >= 0; b-- {
+		if !md.Times[b].After(pos.EntryTime) {
+			entryIdx = b
+			break
+		}
+	}
+	if entryIdx < 0 {
+		return 0
+	}
+	for b := entryIdx + 1; b < n; b++ {
+		if b < s.p.RSIPeriod || rsi[b] >= s.p.RSILower {
+			return 0
+		}
+	}
+	return n - 1 - entryIdx
 }
