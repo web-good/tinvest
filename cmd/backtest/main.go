@@ -38,7 +38,7 @@ func main() {
 	var (
 		ticker       = flag.String("ticker", "", "ticker, e.g. RUAL (required)")
 		intervalS    = flag.String("interval", "Hour1", "candle timeframe: Minutes5|Minutes15|Minutes30|Hour1|Hour4|Day1|Week1")
-		strategyName = flag.String("strategy", "scalping", "strategy engine: scalping|reversion|scalping_rsimacd|rsi_ema|vwap_rev|rsi_pullback|rsi_zone|rsi_mid")
+		strategyName = flag.String("strategy", "scalping", "strategy engine: scalping|reversion|scalping_rsimacd|rsi_ema|vwap_rev|rsi_pullback|rsi_zone")
 		months       = flag.Int("months", 12, "lookback period in months")
 		cash         = flag.Float64("cash", 100000, "starting mock cash")
 		fraction     = flag.Float64("fraction", 1.0, "fraction of cash per Buy")
@@ -167,10 +167,8 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 		binding = svc.RSIPullbackLookupOrGeneric(ticker)
 	case "rsi_zone":
 		binding = svc.RSIZoneLookupOrGeneric(ticker)
-	case "rsi_mid":
-		binding = svc.RSIMidLookupOrGeneric(ticker, interval)
 	default:
-		return fmt.Errorf("unknown strategy %q (want scalping|reversion|scalping_rsimacd|rsi_ema|vwap_rev|rsi_pullback|rsi_zone|rsi_mid)", strategyName)
+		return fmt.Errorf("unknown strategy %q (want scalping|reversion|scalping_rsimacd|rsi_ema|vwap_rev|rsi_pullback|rsi_zone)", strategyName)
 	}
 
 	share, err := resolveShare(ctx, client, ticker)
