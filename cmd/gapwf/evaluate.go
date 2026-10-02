@@ -112,7 +112,7 @@ func runCombos(data []tickerData, combos []any, only map[int]bool, commission fl
 			defer sem.Release()
 			d := data[ti]
 			binding := svc.GapFadeLookupOrGeneric(d.ticker)
-			cfg := domain.Config{InitialCash: engineCash, Fraction: 1.0, Commission: commission, Lot: d.lot}
+			cfg := domain.Config{InitialCash: engineCash, Fraction: 1.0, Commission: commission, Lot: d.lot, EntryAtNextOpen: true}
 			days := map[string]bool{}
 			perTicker[ti] = make([][]svc.GapTrade, len(combos))
 			for ci, p := range combos {

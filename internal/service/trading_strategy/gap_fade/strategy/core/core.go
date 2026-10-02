@@ -193,7 +193,7 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	target := closeP + s.p.TargetFill*(prevClose-closeP)
 	sig.Kind = model.SignalBuy
 	sig.TakeProfit, sig.StopLoss, sig.ATR = target, stop, atr
-	sig.EntryReason = fmt.Sprintf("GAP: open %.4f ниже close %.4f на %.2f ATR (дневной ATR %.4f), вход %.4f на баре %d дня, цель %.4f, стоп %.4f",
+	sig.EntryReason = fmt.Sprintf("GAP: open %.4f ниже close %.4f на %.2f ATR (дневной ATR %.4f), сигнал по close %.4f бара %d дня, цель %.4f, стоп %.4f",
 		openDay, prevClose, -gap, atr, closeP, s.p.EntryBar, target, stop)
 	return sig
 }

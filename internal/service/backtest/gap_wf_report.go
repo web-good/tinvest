@@ -66,7 +66,7 @@ func RenderGapWFMarkdown(r GapReport) string {
 
 	b.WriteString("# gap_fade — walk-forward по пулу тикеров\n\n")
 	fmt.Fprintf(&b, "- Сформирован: %s\n", r.Generated.In(gapLoc).Format("2006-01-02 15:04"))
-	fmt.Fprintf(&b, "- Окно: %s — %s, фолды %d/%d мес., min-trades %d, издержки %.2f%% на сторону\n",
+	fmt.Fprintf(&b, "- Окно: %s — %s, фолды %d/%d мес., min-trades %d, издержки %.2f%% на сторону, вход по open бара после сигнала\n",
 		gapDate(r.From), gapDate(r.To), r.TrainMonths, r.TestMonths, r.MinTrades, 100*r.Commission)
 	fmt.Fprintf(&b, "- Вселенная (%d): %s\n", len(r.Universe), strings.Join(r.Universe, ", "))
 	if len(r.Skipped) > 0 {

@@ -25,6 +25,12 @@ type Config struct {
 	// HTFInterval is the bar-span of the higher-timeframe series passed to Run/Trace.
 	// Zero means 4 hours — the legacy span reversion was built on.
 	HTFInterval time.Duration
+
+	// EntryAtNextOpen fills a Buy decided on bar i at bar i+1's open instead of bar i's close:
+	// the first price a live order sent after the bar completes can get. It matters when the
+	// signal bar's close is itself the trigger (an opening-auction print). The signal's levels
+	// stay frozen as decided; the fill bar is then managed like any other bar.
+	EntryAtNextOpen bool
 }
 
 // htfSpan returns the configured higher-timeframe bar span, defaulting to 4 hours so

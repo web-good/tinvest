@@ -225,8 +225,10 @@ func Run(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Candl
 	lastClose := candles[len(candles)-1].Close
 	htf := newHTFCursor(htfCandles, cfg.htfSpan())
 	daily := newDailyCursor(dailyCandles, mskLoc)
+	var pending *model.Signal
 	for i := l - 1; i < len(candles); i++ {
 		p.bar = i
+		pending = fillPending(p, pending, candles[i])
 		md := buildMarketData(candles[i-l+1 : i+1])
 		md.DailyCloses, md.DailyHighs, md.DailyLows, md.DailyTimes = daily.visible(candles[i].Time)
 		md.HTFCloses, md.HTFHighs, md.HTFLows = htf.visible(candles[i].Time)
@@ -241,6 +243,10 @@ func Run(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Candl
 		switch sig.Kind {
 		case model.SignalBuy:
 			if p.qty == 0 {
+				if cfg.EntryAtNextOpen {
+					pending = &sig
+					break
+				}
 				p.open(c.Close, c.Time, sig.Level, sig.TakeProfit, sig.ATR, sig.StopLoss, sig.EntryReason)
 			}
 		case model.SignalSell:
@@ -275,6 +281,16 @@ func Run(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Candl
 	return res
 }
 
+// fillPending opens a Buy deferred by Config.EntryAtNextOpen at bar c's open, before the bar is
+// managed, and clears it. A pending Buy with a position already open is dropped. Returns the new
+// pending state (always nil).
+func fillPending(p *portfolio, pending *model.Signal, c Candle) *model.Signal {
+	if pending != nil && p.qty == 0 {
+		p.open(c.Open, c.Time, pending.Level, pending.TakeProfit, pending.ATR, pending.StopLoss, pending.EntryReason)
+	}
+	return nil
+}
+
 // explainer is the optional gate-level diagnostic a strategy may implement.
 type explainer interface {
 	Explain(md strategy.MarketData) string
@@ -293,8 +309,10 @@ func Trace(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Can
 	p := newPortfolio(cfg)
 	htf := newHTFCursor(htfCandles, cfg.htfSpan())
 	daily := newDailyCursor(dailyCandles, mskLoc)
+	var pending *model.Signal
 	for i := l - 1; i < len(candles); i++ {
 		p.bar = i
+		pending = fillPending(p, pending, candles[i])
 		md := buildMarketData(candles[i-l+1 : i+1])
 		md.DailyCloses, md.DailyHighs, md.DailyLows, md.DailyTimes = daily.visible(candles[i].Time)
 		md.HTFCloses, md.HTFHighs, md.HTFLows = htf.visible(candles[i].Time)
@@ -332,6 +350,10 @@ func Trace(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Can
 		switch sig.Kind {
 		case model.SignalBuy:
 			if p.qty == 0 {
+				if cfg.EntryAtNextOpen {
+					pending = &sig
+					break
+				}
 				p.open(c.Close, c.Time, sig.Level, sig.TakeProfit, sig.ATR, sig.StopLoss, sig.EntryReason)
 			}
 		case model.SignalSell:
