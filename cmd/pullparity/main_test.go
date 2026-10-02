@@ -23,7 +23,7 @@ func TestDiffMarketDataFindsNothingWhenIdentical(t *testing.T) {
 // Именно эти поля рвутся при неверной сборке: смещение окна, невидимая дневная свеча,
 // посчитанный по-своему диапазон дня. Каждое обязано быть названо в отчёте.
 //
-// Table covers all 12 fields diffMarketData compares, not just the 4 the original brief
+// Table covers all 13 fields diffMarketData compares, not just the 4 the original brief
 // spelled out (Closes/DailyCloses/TodayHigh/TodayLow): a field diffMarketData never
 // touches would otherwise report a silent "0 расхождений" on real data — exactly the
 // failure mode this tool exists to catch (2026-08-06 review, fix round 1).
@@ -41,6 +41,7 @@ func TestDiffMarketDataFindsNothingWhenIdentical(t *testing.T) {
 func TestDiffMarketDataNamesTheDivergingField(t *testing.T) {
 	base := strategy.MarketData{
 		Price:       2,
+		Opens:       []float64{1, 2},
 		Closes:      []float64{1, 2},
 		Highs:       []float64{1, 2},
 		Lows:        []float64{1, 2},
@@ -55,6 +56,7 @@ func TestDiffMarketDataNamesTheDivergingField(t *testing.T) {
 	}
 	cases := map[string]func(m *strategy.MarketData){
 		"Price":       func(m *strategy.MarketData) { m.Price = 99 },
+		"Opens":       func(m *strategy.MarketData) { m.Opens = []float64{1, 7} },
 		"Closes":      func(m *strategy.MarketData) { m.Closes = []float64{1, 3} },
 		"Highs":       func(m *strategy.MarketData) { m.Highs = []float64{1, 9} },
 		"Lows":        func(m *strategy.MarketData) { m.Lows = []float64{1, 8} },

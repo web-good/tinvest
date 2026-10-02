@@ -256,6 +256,7 @@ func toQuotation(price float64) imodel.Quotation {
 func diffMarketData(want, got strategy.MarketData) []string {
 	var out []string
 	out = append(out, diffFloat("Price", want.Price, got.Price)...)
+	out = append(out, diffFloats("Opens", want.Opens, got.Opens)...)
 	out = append(out, diffFloats("Closes", want.Closes, got.Closes)...)
 	out = append(out, diffFloats("Highs", want.Highs, got.Highs)...)
 	out = append(out, diffFloats("Lows", want.Lows, got.Lows)...)
