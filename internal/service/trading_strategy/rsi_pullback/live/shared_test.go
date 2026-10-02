@@ -2,6 +2,7 @@ package live
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -604,4 +605,173 @@ func TestPaperOwnerOfRealPositionIsNotManaged(t *testing.T) {
 	}
 	// stops без ожиданий на Cancel/PostStopOrder, orders без ожиданий — mockery провалит
 	// тест на любом таком вызове.
+}
+
+// windowFake — гость с окном входа.
+type windowFake struct {
+	*fakeStrategy
+	open bool
+}
+
+func (w *windowFake) EntryPossible(time.Time) bool { return w.open }
+
+// filterFake — гость с вето на вход.
+type filterFake struct {
+	*fakeStrategy
+	reason string
+	err    error
+	calls  int
+}
+
+func (f *filterFake) EntryBlocked(context.Context, string, string, strategy.MarketData) (string, error) {
+	f.calls++
+	return f.reason, f.err
+}
+
+func guestFake(name string, sig model.SignalKind, universe ...string) *fakeStrategy {
+	f := zoneFake(sig, universe...)
+	f.name = name
+	return f
+}
+
+// Окно входа закрыто — свечи по свободному тикеру не запрашиваются, гостя не спрашивают.
+// market-мок без ожиданий падает на любом GetCandles.
+func TestClosedEntryWindowSkipsAssembly(t *testing.T) {
+	gap := &windowFake{fakeStrategy: guestFake("gap_fade", model.SignalBuy, "GAZP"), open: false}
+	e := newSharedEnv(t, sharedNow, nil, nil, gap)
+	e.instruments.EXPECT().Shares(mock.Anything).Return(sharesOf("GAZP"), nil)
+	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(nil, nil)
+	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
+
+	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if gap.decideCalls != 0 {
+		t.Fatalf("гостя спросили %d раз при закрытом окне", gap.decideCalls)
+	}
+	if len(e.state(t)) != 0 {
+		t.Fatal("вход при закрытом окне")
+	}
+}
+
+// Окно открыто — обычный вход.
+func TestOpenEntryWindowEnters(t *testing.T) {
+	gap := &windowFake{fakeStrategy: guestFake("gap_fade", model.SignalBuy, "GAZP"), open: true}
+	e := newSharedEnv(t, sharedNow, nil, nil, gap)
+	e.instruments.EXPECT().Shares(mock.Anything).Return(sharesOf("GAZP"), nil)
+	e.expectCandles(flatAt30m(sharedLastBar, 400, 100), dailies(sharedNow, 60))
+	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(nil, nil)
+	e.ops.EXPECT().GetPortfolioTotal(mock.Anything, mock.Anything).Return(1_000_000.0, nil)
+	e.ops.EXPECT().GetAvailableCash(mock.Anything, mock.Anything).Return(1_000_000.0, nil)
+	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
+
+	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := e.state(t)["GAZP"].Strategy; got != "gap_fade" {
+		t.Fatalf("владелец = %q, want gap_fade", got)
+	}
+}
+
+// Окно входа не мешает сопровождению: позиция гостя ведётся и вне окна.
+func TestClosedEntryWindowStillManagesPosition(t *testing.T) {
+	gap := &windowFake{fakeStrategy: guestFake("gap_fade", model.SignalSell, "GAZP"), open: false}
+	e := newSharedEnv(t, sharedNow, nil, nil, gap)
+	e.seed(t, statestore.Entry{Ticker: "GAZP", Strategy: "gap_fade", EntryPrice: 100,
+		EntryATR: 10, MaxFav: 100, Quantity: 100, EntryTime: sharedNow.Add(-3 * time.Hour)})
+	e.instruments.EXPECT().Shares(mock.Anything).Return(sharesOf("GAZP"), nil)
+	e.expectCandles(flatAt30m(sharedLastBar, 400, 100), dailies(sharedNow, 60))
+	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return([]*grpcmodel.Position{held("GAZP", 100)}, nil)
+	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
+
+	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if gap.decideCalls != 1 {
+		t.Fatalf("Decide вызван %d раз, want 1", gap.decideCalls)
+	}
+	if _, ok := e.state(t)["GAZP"]; ok {
+		t.Fatal("SELL владельца вне окна входа не закрыл позицию")
+	}
+}
+
+// Вето с причиной: ордера и стейта нет, причина — уведомлением; следующий гость на этом же
+// баре входит.
+func TestEntryFilterReasonSkipsAndAsksNextStrategy(t *testing.T) {
+	first := &filterFake{fakeStrategy: guestFake("rsi_zone", model.SignalBuy, "GAZP"), reason: "день дивидендной отсечки"}
+	second := guestFake("gap_fade", model.SignalBuy, "GAZP")
+	e := newSharedEnv(t, sharedNow, nil, nil, first, second)
+	e.instruments.EXPECT().Shares(mock.Anything).Return(sharesOf("GAZP"), nil)
+	e.expectCandles(flatAt30m(sharedLastBar, 400, 100), dailies(sharedNow, 60))
+	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(nil, nil)
+	e.ops.EXPECT().GetPortfolioTotal(mock.Anything, mock.Anything).Return(1_000_000.0, nil)
+	e.ops.EXPECT().GetAvailableCash(mock.Anything, mock.Anything).Return(1_000_000.0, nil)
+	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
+
+	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if first.calls != 1 {
+		t.Fatalf("EntryBlocked вызван %d раз, want 1", first.calls)
+	}
+	if !first.said("день дивидендной отсечки") {
+		t.Fatalf("причина вето не ушла уведомлением: %v", first.msgs)
+	}
+	if got := e.state(t)["GAZP"].Strategy; got != "gap_fade" {
+		t.Fatalf("владелец = %q, want gap_fade (следующий по приоритету)", got)
+	}
+}
+
+// Ошибка вето: вход не делается (fail-closed), алерт; бар не расходуется.
+func TestEntryFilterErrorFailsClosed(t *testing.T) {
+	gap := &filterFake{fakeStrategy: guestFake("gap_fade", model.SignalBuy, "GAZP"), err: errors.New("api down")}
+	e := newSharedEnv(t, sharedNow, nil, nil, gap)
+	e.instruments.EXPECT().Shares(mock.Anything).Return(sharesOf("GAZP"), nil)
+	e.expectCandles(flatAt30m(sharedLastBar, 400, 100), dailies(sharedNow, 60))
+	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(nil, nil)
+	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
+
+	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(e.state(t)) != 0 {
+		t.Fatal("вход при ошибке вето")
+	}
+	if !gap.said("api down") {
+		t.Fatalf("ошибка вето не ушла алертом: %v", gap.msgs)
+	}
+}
+
+// Стоп, замороженный сигналом, пишется в стейт при входе и возвращается ядру в Position.
+func TestSignalStopLossIsFrozenAndPassedBack(t *testing.T) {
+	gap := guestFake("gap_fade", model.SignalBuy, "GAZP")
+	gap.sig.StopLoss = 77
+	e := newSharedEnv(t, sharedNow, nil, nil, gap)
+	e.instruments.EXPECT().Shares(mock.Anything).Return(sharesOf("GAZP"), nil)
+	e.expectCandles(flatAt30m(sharedLastBar, 400, 100), dailies(sharedNow, 60))
+	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(nil, nil)
+	e.ops.EXPECT().GetPortfolioTotal(mock.Anything, mock.Anything).Return(1_000_000.0, nil)
+	e.ops.EXPECT().GetAvailableCash(mock.Anything, mock.Anything).Return(1_000_000.0, nil)
+	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
+	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := e.state(t)["GAZP"].StopLoss; got != 77 {
+		t.Fatalf("Entry.StopLoss = %v, want 77", got)
+	}
+
+	held2 := guestFake("gap_fade", model.SignalNone, "GAZP")
+	e2 := newSharedEnv(t, sharedNow, nil, nil, held2)
+	e2.seed(t, statestore.Entry{Ticker: "GAZP", Strategy: "gap_fade", EntryPrice: 100,
+		EntryATR: 10, MaxFav: 100, Quantity: 100, StopLoss: 77, EntryTime: sharedNow.Add(-time.Hour)})
+	e2.instruments.EXPECT().Shares(mock.Anything).Return(sharesOf("GAZP"), nil)
+	e2.expectCandles(flatAt30m(sharedLastBar, 400, 100), dailies(sharedNow, 60))
+	e2.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return([]*grpcmodel.Position{held("GAZP", 100)}, nil)
+	e2.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
+	if err := e2.svc.Run(context.Background(), dto.Run{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if held2.lastPosition == nil || held2.lastPosition.StopLoss != 77 {
+		t.Fatalf("Position.StopLoss = %+v, want 77", held2.lastPosition)
+	}
 }

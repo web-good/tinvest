@@ -123,3 +123,36 @@ func TestEmptyStrategyIsNotWritten(t *testing.T) {
 		t.Fatalf("пустое поле strategy попало в файл: %s", b)
 	}
 }
+
+// StopLoss — замороженный уровень стопа gap_fade — переживает перезапуск.
+func TestStopLossRoundTrips(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	s := New(path)
+	if err := s.Save(map[string]Entry{"GAZP": {Ticker: "GAZP", StopLoss: 78.5}}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	got, err := s.Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got["GAZP"].StopLoss != 78.5 {
+		t.Fatalf("StopLoss = %v, want 78.5", got["GAZP"].StopLoss)
+	}
+}
+
+// Стейт, записанный до появления поля, читается как прежде: StopLoss = 0.
+func TestLegacyStateWithoutStopLossLoads(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	legacy := `{"GAZP":{"ticker":"GAZP","entryTime":"2026-03-10T07:01:00+03:00","entryPrice":100,"entryATR":10,"maxFav":100,"quantity":10,"takeProfit":120}}`
+	if err := os.WriteFile(path, []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := New(path).Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	e := got["GAZP"]
+	if e.StopLoss != 0 || e.TakeProfit != 120 || e.EntryPrice != 100 {
+		t.Fatalf("legacy entry = %+v", e)
+	}
+}

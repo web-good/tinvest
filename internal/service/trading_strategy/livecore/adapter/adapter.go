@@ -67,3 +67,19 @@ type Strategy interface {
 	// Notify — своя тема Telegram и свой рубильник NotifyEnabled.
 	Notify(msg string)
 }
+
+// EntryWindow — необязательная подсказка стратегии: может ли она войти на пассе в момент now.
+// Ложь — пасс по свободному тикеру не собирает данные и не спрашивает стратегию: сборка
+// MarketData — запросы свечей, а стратегия с узким окном входа (gap_fade — только утро) иначе
+// тянула бы их на каждом пассе. Сопровождение открытых позиций окно не ограничивает.
+type EntryWindow interface {
+	EntryPossible(now time.Time) bool
+}
+
+// EntryFilter — необязательное вето стратегии на вход после BUY-сигнала ядра (например,
+// день дивидендной отсечки). Непустая причина — вход пропускается с уведомлением; ошибка —
+// вход пропускается с алертом (fail-closed). В обоих случаях бар не расходуется: пасс
+// спрашивает следующую по приоритету стратегию.
+type EntryFilter interface {
+	EntryBlocked(ctx context.Context, ticker, instrumentID string, md strategy.MarketData) (reason string, err error)
+}

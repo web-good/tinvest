@@ -181,6 +181,9 @@ func (s *service) pass(ctx context.Context) error {
 		// Свободный тикер: стратегии по приоритету; первая с BUY входит, остальных на
 		// этом баре не спрашивают.
 		for _, c := range ready {
+			if w, ok := c.sl.strat.(adapter.EntryWindow); ok && !w.EntryPossible(now) {
+				continue // окно входа закрыто: ни свечей, ни вопроса стратегии
+			}
 			md, ok := s.assemble(ctx, c.sl, ticker, sh, c.dec, now, false)
 			if !ok {
 				continue
@@ -324,6 +327,21 @@ func (s *service) buy(ctx context.Context, pc *passCtx, sl *slot, ticker string,
 		return false, nil
 	}
 
+	// Вето стратегии (дивидендная отсечка у gap_fade) — до сайзинга и ордера. Бар не
+	// расходуется (signaled=false): следующая по приоритету стратегия всё равно спрашивается.
+	if f, ok := sl.strat.(adapter.EntryFilter); ok {
+		reason, ferr := f.EntryBlocked(ctx, ticker, sh.ID, md)
+		if ferr != nil {
+			sl.alert(ticker, "проверка входа не удалась — вход пропущен: "+ferr.Error())
+			logger.ErrorContext(ctx, fmt.Sprintf("%s: %s entry filter: %v", sl.strat.Name(), ticker, ferr))
+			return false, nil
+		}
+		if reason != "" {
+			sl.strat.Notify(notifier.Skip(ticker, reason))
+			return false, nil
+		}
+	}
+
 	total, err := s.ops.GetPortfolioTotal(ctx, s.cfg.AccountID)
 	if err != nil {
 		return true, fmt.Errorf("%s: portfolio total: %w", sl.strat.Name(), err)
@@ -386,6 +404,7 @@ func (s *service) buy(ctx context.Context, pc *passCtx, sl *slot, ticker string,
 		EntryPrice: fillPrice,
 		EntryATR:   sig.ATR, // дневной ATR: им же меряются стоп, цель и обе границы гейта дня
 		TakeProfit: sig.TakeProfit,
+		StopLoss:   sig.StopLoss,
 		MaxFav:     fillPrice,
 		Quantity:   qty,
 		Strategy:   sl.strat.Name(),
@@ -567,6 +586,7 @@ func (s *service) manage(ctx context.Context, pc *passCtx, sl *slot, ticker stri
 		Quantity:              pos.Quantity,
 		EntryATR:              entry.EntryATR,
 		TakeProfit:            entry.TakeProfit,
+		StopLoss:              entry.StopLoss,
 		MaxFavorablePrice:     entry.MaxFav,
 		PrevMaxFavorablePrice: prevMaxFav,
 		EntryTime:             entryBarTime(entry.EntryTime),

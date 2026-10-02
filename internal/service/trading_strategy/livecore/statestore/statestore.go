@@ -27,6 +27,10 @@ type Entry struct {
 	// иначе close-модель TP не с чем сравнивать high бара. reversion её не пишет —
 	// omitempty оставляет формат файла прежним.
 	TakeProfit float64 `json:"takeProfit,omitempty"`
+	// StopLoss — уровень стопа, замороженный на входе от цены сигнала (gap_fade меряет стоп от
+	// close сигнального бара, а не от цены исполнения, поэтому из EntryPrice его не вывести).
+	// Стратегии, считающие стоп от входа, его не читают — omitempty оставляет их записи прежними.
+	StopLoss float64 `json:"stopLoss,omitempty"`
 
 	StopOrderID string  `json:"stopOrderId,omitempty"` // активная биржевая стоп-заявка ("" = нет)
 	StopPrice   float64 `json:"stopPrice,omitempty"`   // уровень выставленной заявки
