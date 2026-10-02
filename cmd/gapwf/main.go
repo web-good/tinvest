@@ -32,7 +32,7 @@ import (
 
 func main() {
 	var (
-		tickersCSV  = flag.String("tickers", "", "comma-separated universe (default: RSI_PULLBACK_TICKERS from -env-file)")
+		tickersCSV  = flag.String("tickers", "", "comma-separated universe (default: GAP_FADE_TICKERS from -env-file)")
 		envFile     = flag.String("env-file", "env/prod.env", "file the default universe is read from")
 		months      = flag.Int("months", 36, "history window in months")
 		trainMonths = flag.Int("train-months", 12, "walk-forward training window in months")
@@ -90,15 +90,16 @@ func validate(cfg runCfg) error {
 	return nil
 }
 
-// defaultTickers reads the rsi_pullback production universe — gap_fade is meant as its companion.
+// defaultTickers reads the gap_fade universe picked by cmd/gapscreen. There is no fallback to
+// RSI_PULLBACK_TICKERS: that set was chosen for another strategy and is mostly too thin at 07:00.
 func defaultTickers(path string) ([]string, error) {
 	env, err := godotenv.Read(path)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
-	t := screenrun.SplitCSV(env["RSI_PULLBACK_TICKERS"])
+	t := screenrun.SplitCSV(env["GAP_FADE_TICKERS"])
 	if len(t) == 0 {
-		return nil, fmt.Errorf("%s: RSI_PULLBACK_TICKERS is empty", path)
+		return nil, fmt.Errorf("%s: GAP_FADE_TICKERS is empty — run go run ./cmd/gapscreen and add its GAP_FADE_TICKERS line, or pass -tickers", path)
 	}
 	return t, nil
 }

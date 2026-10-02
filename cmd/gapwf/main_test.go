@@ -40,17 +40,19 @@ func TestValidate(t *testing.T) {
 func TestDefaultTickers(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "prod.env")
-	if err := os.WriteFile(path, []byte("FOO=1\nRSI_PULLBACK_TICKERS=UGLD, T ,GAZP\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte("RSI_PULLBACK_TICKERS=UGLD\nGAP_FADE_TICKERS=SBER, T ,GAZP\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	got, err := defaultTickers(path)
-	if err != nil || !reflect.DeepEqual(got, []string{"UGLD", "T", "GAZP"}) {
+	if err != nil || !reflect.DeepEqual(got, []string{"SBER", "T", "GAZP"}) {
 		t.Fatalf("got %v, %v", got, err)
 	}
-	empty := filepath.Join(dir, "empty.env")
-	_ = os.WriteFile(empty, []byte("FOO=1\n"), 0o600)
-	if _, err := defaultTickers(empty); err == nil || !strings.Contains(err.Error(), "RSI_PULLBACK_TICKERS") {
-		t.Fatalf("empty key: err = %v", err)
+	// No fallback to the rsi_pullback universe: that set was picked for another strategy.
+	pullbackOnly := filepath.Join(dir, "pullback.env")
+	_ = os.WriteFile(pullbackOnly, []byte("RSI_PULLBACK_TICKERS=UGLD,T\n"), 0o600)
+	_, err = defaultTickers(pullbackOnly)
+	if err == nil || !strings.Contains(err.Error(), "GAP_FADE_TICKERS") || !strings.Contains(err.Error(), "cmd/gapscreen") {
+		t.Fatalf("missing key: err = %v, want GAP_FADE_TICKERS and a cmd/gapscreen hint", err)
 	}
 }
 
