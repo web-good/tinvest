@@ -2,6 +2,7 @@ package core
 
 import (
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -265,6 +266,34 @@ func TestManageExitsOnNextDayBar(t *testing.T) {
 	sig := manageOn(bar{"2026-09-15 07:00", 99, 99.1, 98.9, 99})
 	if sig.Kind != model.SignalSell || sig.Reason != "EOD" {
 		t.Fatalf("got %v/%q, want Sell/EOD on the next date", sig.Kind, sig.Reason)
+	}
+}
+
+// The overnight guard must not depend on EntryTime: a position whose entry time is unknown is
+// still closed on the first bar of a new date.
+func TestManageExitsOnNewDateFirstBarWithoutEntryTime(t *testing.T) {
+	md := fixture(append(friday(), mondayFirst, bar{"2026-09-14 07:30", 99, 99.1, 98.9, 99}, bar{"2026-09-15 07:00", 99, 99.1, 98.9, 99}), 2.0)
+	md.Position = openPos()
+	md.Position.EntryTime = time.Time{}
+	sig := NewWithParams("TEST", DefaultParams()).Decide(md)
+	if sig.Kind != model.SignalSell || sig.Reason != "EOD" {
+		t.Fatalf("got %v/%q, want Sell/EOD on the new date's first bar", sig.Kind, sig.Reason)
+	}
+}
+
+// Without bar times the core cannot tell whether the night has passed, so it fails closed.
+func TestManageExitsWhenTimesMissing(t *testing.T) {
+	for name, mut := range map[string]func(*strategy.MarketData){
+		"nil":        func(md *strategy.MarketData) { md.Times = nil },
+		"misaligned": func(md *strategy.MarketData) { md.Times = md.Times[1:] },
+	} {
+		md := fixture(append(friday(), mondayFirst, bar{"2026-09-14 07:30", 99, 99.1, 98.9, 99}), 2.0)
+		md.Position = openPos()
+		mut(&md)
+		sig := NewWithParams("TEST", DefaultParams()).Decide(md)
+		if sig.Kind != model.SignalSell || sig.Reason != "EOD" || !strings.Contains(sig.ExitReason, "нет времени баров") {
+			t.Fatalf("%s: got %v/%q/%q, want Sell/EOD for missing times", name, sig.Kind, sig.Reason, sig.ExitReason)
+		}
 	}
 }
 

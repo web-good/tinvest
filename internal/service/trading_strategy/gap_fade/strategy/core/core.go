@@ -4,8 +4,8 @@
 // EntryBar of the day still closes below that previous close, it buys that close. The target is
 // a TargetFill share of the remaining gap, the stop StopDailyATR daily ATRs below the entry; both
 // are frozen on the position. Whatever is still open at the first bar starting at or after
-// EODHour:EODMinute MSK — or on any bar of a later date — is sold at that bar's close, so no
-// position survives the night. Entries only on Mon–Fri MSK. Pure, stateless between bars and
+// EODHour:EODMinute MSK — or on the first bar of a new date, or on any bar when bar times are
+// missing — is sold at that bar's close, so no position survives the night. Entries only on Mon–Fri MSK. Pure, stateless between bars and
 // ticker-agnostic. Run with `-strategy gap_fade -interval Minutes30`.
 package core
 
@@ -225,14 +225,19 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 }
 
 // eodReason explains why the position must close on the current bar, or returns "" when it may
-// stay. A bar of a later date than the entry always closes it — the guard for days whose data
-// has no bar at the EOD time.
+// stay. The overnight guard fails closed: without aligned bar times the position is closed, and
+// the first bar of a new MSK date always closes it — a gap_fade position is never legitimately
+// open there, whatever EntryTime says (it may be unset). A bar of a later date than a known
+// entry closes it too; together they cover days whose data has no bar at the EOD time.
 func (s *Strategy) eodReason(md strategy.MarketData, pos *strategy.Position) string {
 	n := len(md.Closes)
-	if n == 0 || len(md.Times) != n {
-		return ""
+	if n < 2 || len(md.Times) != n {
+		return "нет времени баров — выход по безопасности"
 	}
 	now := md.Times[n-1]
+	if dayKey(now) != dayKey(md.Times[n-2]) {
+		return "первый бар новой даты — позиция не переносится через ночь"
+	}
 	if !pos.EntryTime.IsZero() && dayKey(now) != dayKey(pos.EntryTime) {
 		return "бар следующего дня — позиция не переносится через ночь"
 	}
