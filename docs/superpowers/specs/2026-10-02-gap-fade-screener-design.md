@@ -48,13 +48,15 @@ gap_fade нужен свой набор тикеров `GAP_FADE_TICKERS`, гд�
   - `GapScreenRow` — тикер, метрики, `Pass bool`, `Reasons []string` (по одной причине на
     проваленный гейт, тексты на русском);
   - `GapMorningStats(bars, lot)` — утреннее присутствие и утренний оборот;
-  - `ScreenGap(info, bars, signalsPerYear, opts) GapScreenRow` — собирает строку и применяет гейты.
+  - `GapSignalsPerYear(ticker, bars, daily, lot, months)` — сигналы в год прогоном движка;
+  - `ScreenGap(GapScreenInput, opts) GapScreenRow` — собирает строку, гейты применяет
+    `ApplyGapGates(row, opts)`.
 - `internal/service/backtest/gap_screen_report.go` — markdown: параметры прогона; прошедшие по
   убыванию утреннего оборота; отсеянные с причинами; тикеры «нет данных»; итоговая строка
   `GAP_FADE_TICKERS=A,B,C` (порядок как в таблице прошедших).
 - `cmd/gapscreen/main.go` — обвязка по образцу `cmd/zonescreen`: `screenrun.LoadUniverse`, кэш
   свечей `NewCandleProvider`, пул воркеров, флаги `-months 12`, `-tickers`, `-workers 8`,
-  `-pause`, `-refresh`, `-commission 0.0005`, `-out reports/gap_fade`; отчёт
+  `-pause`, `-refresh`, `-out reports/gap_fade` (число сделок от издержек не зависит, флага издержек нет); отчёт
   `reports/gap_fade/screen_<время>.md`; в консоль — число прошедших и путь к отчёту.
 
 ## Ошибки
