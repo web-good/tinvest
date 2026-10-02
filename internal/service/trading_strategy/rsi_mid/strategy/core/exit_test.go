@@ -76,6 +76,7 @@ func TestMIDHoldsOneBarShort(t *testing.T) {
 
 func TestMIDDisabledWithZeroBars(t *testing.T) {
 	closes, e := afterEntry(upCross(), -0.01, 6)
+	requireBelowMid(t, closes, e+1, e+6)
 	md := held(fixture(closes, mondayNoon), e, 0)
 	if sig := midParams(0).Decide(md); sig.Kind == model.SignalSell {
 		t.Fatalf("sold with BelowMidBars 0: %q", sig.Reason)
@@ -150,6 +151,7 @@ func TestMIDSilentWithoutAnAnchor(t *testing.T) {
 		}
 	})
 	t.Run("misaligned Times", func(t *testing.T) {
+		requireBelowMid(t, closes, e+1, e+3)
 		md := held(fixture(closes, mondayNoon), e, 0)
 		md.Times = md.Times[1:]
 		if sig := midParams(3).Decide(md); sig.Kind == model.SignalSell {
@@ -256,6 +258,44 @@ func TestSLBeatsMIDOnTheSameBar(t *testing.T) {
 	}
 }
 
+// Same bar: the stop is touched AND RSI crosses up through RSIUpper. The stop wins and fills
+// as a stop, not at the close.
+func TestSLBeatsRSIOnTheSameBar(t *testing.T) {
+	entry := upCross()
+	e := len(entry) - 1
+	closes := append([]float64(nil), entry...)
+	p := closes[e]
+	for guard := 0; ; guard++ {
+		if guard > 100 {
+			t.Fatal("fixture: RSI never crossed 70")
+		}
+		p *= 1.01
+		closes = append(closes, p)
+		r := indicators.RSISeries(closes, 14)
+		if n := len(r); r[n-2] <= 70 && r[n-1] > 70 {
+			break
+		}
+	}
+	md := held(fixture(closes, mondayNoon), e, dailyWidth)
+	level := closes[e] - 0.5*dailyWidth
+	last := len(closes) - 1
+	md.Lows[last] = level - 1
+	// Precondition: without the stop this bar is an RSI exit, so the test is not vacuous.
+	if sig := NewWithParams("T", DefaultParams()).Decide(held(fixture(closes, mondayNoon), e, 0)); sig.Reason != "RSI" {
+		t.Fatalf("fixture: got %q without a stop, want RSI on this bar", sig.Reason)
+	}
+	sig := NewWithParams("T", DefaultParams()).Decide(md)
+	if sig.Kind != model.SignalSell || sig.Reason != "SL" {
+		t.Fatalf("got %v %q, want Sell SL to win the tie", sig.Kind, sig.Reason)
+	}
+	if math.Abs(sig.StopLoss-level) > 1e-9 {
+		t.Fatalf("StopLoss = %v, want %v", sig.StopLoss, level)
+	}
+	if !model.IsStopReason(sig.Reason) {
+		t.Fatal("SL must be a stop reason so the engine fills it at min(level, open)")
+	}
+}
+
 func TestExitsFireOnWeekendBars(t *testing.T) {
 	closes, e := afterEntry(upCross(), -0.01, 3)
 	md := held(fixture(closes, saturdayNoon), e, 0)
@@ -275,5 +315,25 @@ func TestManageNoPanicOnDegenerateInput(t *testing.T) {
 		if sig := s.Decide(md); sig.Kind == model.SignalSell {
 			t.Fatalf("%s: sold on degenerate input", name)
 		}
+	}
+}
+
+// A bar exactly at the midline resets the run: only strictly-below bars count.
+func TestBelowMidRunResetsOnExactly50(t *testing.T) {
+	p := DefaultParams()
+	p.RSIPeriod = 1 // no warm-up cut inside the handmade series
+	s := NewWithParams("T", p)
+	rsi := []float64{49, 50, 49, 49}
+	times := make([]time.Time, len(rsi))
+	for i := range times {
+		times[i] = mondayNoon.Add(time.Duration(i) * 30 * time.Minute)
+	}
+	md := strategy.MarketData{
+		Closes:   make([]float64, len(rsi)),
+		Times:    times,
+		Position: &strategy.Position{EntryTime: times[0].Add(-time.Hour)}, // every bar is after the entry
+	}
+	if got := s.belowMidRun(md, rsi); got != 2 {
+		t.Fatalf("run = %d, want 2: the bar at exactly 50 must reset it", got)
 	}
 }

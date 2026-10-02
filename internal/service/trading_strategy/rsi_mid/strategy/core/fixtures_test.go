@@ -7,20 +7,11 @@ import (
 	"tinvest/pkg/indicators"
 )
 
-// msk is the timezone every calendar rule is anchored to.
-var msk = func() *time.Location {
-	loc, err := time.LoadLocation("Europe/Moscow")
-	if err != nil {
-		return time.UTC
-	}
-	return loc
-}()
-
 // mondayNoon is a weekday bar time (2026-06-01 is a Monday).
-var mondayNoon = time.Date(2026, 6, 1, 12, 0, 0, 0, msk)
+var mondayNoon = time.Date(2026, 6, 1, 12, 0, 0, 0, mskLoc)
 
 // saturdayNoon is a weekend bar time (2026-05-30 is a Saturday).
-var saturdayNoon = time.Date(2026, 5, 30, 12, 0, 0, 0, msk)
+var saturdayNoon = time.Date(2026, 5, 30, 12, 0, 0, 0, mskLoc)
 
 // dailyWidth is the weekday daily range of the fixture; with a flat close the daily ATR over
 // weekday bars is exactly this value.
@@ -30,8 +21,8 @@ const dailyWidth = 2.0
 // oldest-first. Every bar closes at 100; a weekday bar spans `w`, a weekend bar spans `we`, so a
 // test can prove weekend sessions never reach the ATR.
 func dailyBars(before time.Time, days int, w, we float64) (highs, lows, closes []float64, times []time.Time) {
-	b := before.In(msk)
-	start := time.Date(b.Year(), b.Month(), b.Day(), 0, 0, 0, 0, msk).AddDate(0, 0, -days)
+	b := before.In(mskLoc)
+	start := time.Date(b.Year(), b.Month(), b.Day(), 0, 0, 0, 0, mskLoc).AddDate(0, 0, -days)
 	const price = 100.0
 	for i := 0; i < days; i++ {
 		d := start.AddDate(0, 0, i)
