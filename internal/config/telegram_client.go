@@ -7,6 +7,7 @@ type TelegramClient struct {
 	TopicReversion   int    `config:"TELEGRAM_TOPIC_REVERSION"`
 	TopicRSIPullback int    `config:"TELEGRAM_TOPIC_RSI_PULLBACK"`
 	TopicRSIZone     int    `config:"TELEGRAM_TOPIC_RSI_ZONE"`
+	TopicGapFade     int    `config:"TELEGRAM_TOPIC_GAP_FADE"`
 	TopicNews        int    `config:"TELEGRAM_TOPIC_NEWS"`
 	AllowedUserIDs   []int64
 }

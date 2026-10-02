@@ -46,6 +46,7 @@ func (a *App) initConfig(ctx context.Context) error {
 		Reversion:      config.NewReversionConfig(),
 		RSIPullback:    config.NewRSIPullbackConfig(),
 		RSIZone:        config.NewRSIZoneConfig(),
+		GapFade:        config.NewGapFadeConfig(),
 		News:           config.NewNewsConfig(),
 	}
 	err = confita.NewLoader(

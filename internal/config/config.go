@@ -11,5 +11,6 @@ type Config struct {
 	Reversion      *ReversionConfig
 	RSIPullback    *RSIPullbackConfig
 	RSIZone        *RSIZoneConfig
+	GapFade        *GapFadeConfig
 	News           *NewsConfig
 }
