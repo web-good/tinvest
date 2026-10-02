@@ -56,6 +56,19 @@ type Strategy struct {
 }
 
 // NewWithParams returns the strategy for a ticker with explicit params.
+// EffectiveStop — стоп открытой позиции: замороженный на входе, а без него (рукописная запись
+// стейта) — от цены входа, entryPrice − StopDailyATR·entryATR. 0 — стопа нет (нечем считать).
+// Единая формула для ядра, адаптера раннера и реконструкции.
+func (p Params) EffectiveStop(stopLoss, entryPrice, entryATR float64) float64 {
+	if stopLoss > 0 {
+		return stopLoss
+	}
+	if entryATR > 0 && p.StopDailyATR > 0 {
+		return entryPrice - p.StopDailyATR*entryATR
+	}
+	return 0
+}
+
 func NewWithParams(ticker string, p Params) *Strategy { return &Strategy{ticker: ticker, p: p} }
 
 func (s *Strategy) Ticker() string { return s.ticker }
@@ -207,9 +220,9 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 	}
 	i := n - 1
 	low, high, closeP := md.Lows[i], md.Highs[i], md.Closes[i]
-	if pos.StopLoss > 0 && low <= pos.StopLoss {
-		sig.Kind, sig.Reason, sig.StopLoss = model.SignalSell, "SL", pos.StopLoss
-		sig.ExitReason = fmt.Sprintf("SL: low %.4f ≤ стоп %.4f (вход %.4f)", low, pos.StopLoss, pos.PurchasePrice)
+	if stop := s.p.EffectiveStop(pos.StopLoss, pos.PurchasePrice, pos.EntryATR); stop > 0 && low <= stop {
+		sig.Kind, sig.Reason, sig.StopLoss = model.SignalSell, "SL", stop
+		sig.ExitReason = fmt.Sprintf("SL: low %.4f ≤ стоп %.4f (вход %.4f)", low, stop, pos.PurchasePrice)
 		return sig
 	}
 	if pos.TakeProfit > 0 && high >= pos.TakeProfit {

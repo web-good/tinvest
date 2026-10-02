@@ -722,8 +722,35 @@ func TestEntryFilterReasonSkipsAndAsksNextStrategy(t *testing.T) {
 	}
 }
 
-// Ошибка вето: вход не делается (fail-closed), алерт; бар не расходуется.
+// Ошибка вето: вход гостя не делается (fail-closed), алерт; бар не расходуется — следующий по
+// приоритету гость на этом же баре спрашивается и входит.
 func TestEntryFilterErrorFailsClosed(t *testing.T) {
+	first := &filterFake{fakeStrategy: guestFake("rsi_zone", model.SignalBuy, "GAZP"), err: errors.New("api down")}
+	second := guestFake("gap_fade", model.SignalBuy, "GAZP")
+	e := newSharedEnv(t, sharedNow, nil, nil, first, second)
+	e.instruments.EXPECT().Shares(mock.Anything).Return(sharesOf("GAZP"), nil)
+	e.expectCandles(flatAt30m(sharedLastBar, 400, 100), dailies(sharedNow, 60))
+	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(nil, nil)
+	e.ops.EXPECT().GetPortfolioTotal(mock.Anything, mock.Anything).Return(1_000_000.0, nil)
+	e.ops.EXPECT().GetAvailableCash(mock.Anything, mock.Anything).Return(1_000_000.0, nil)
+	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
+
+	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if first.calls != 1 {
+		t.Fatalf("EntryBlocked вызван %d раз, want 1", first.calls)
+	}
+	if !first.said("api down") {
+		t.Fatalf("ошибка вето не ушла алертом: %v", first.msgs)
+	}
+	if got := e.state(t)["GAZP"].Strategy; got != "gap_fade" {
+		t.Fatalf("владелец = %q, want gap_fade: ошибка вето израсходовала бар", got)
+	}
+}
+
+// Ошибка вето единственного гостя: входа нет совсем.
+func TestEntryFilterErrorAloneEntersNothing(t *testing.T) {
 	gap := &filterFake{fakeStrategy: guestFake("gap_fade", model.SignalBuy, "GAZP"), err: errors.New("api down")}
 	e := newSharedEnv(t, sharedNow, nil, nil, gap)
 	e.instruments.EXPECT().Shares(mock.Anything).Return(sharesOf("GAZP"), nil)
@@ -736,9 +763,6 @@ func TestEntryFilterErrorFailsClosed(t *testing.T) {
 	}
 	if len(e.state(t)) != 0 {
 		t.Fatal("вход при ошибке вето")
-	}
-	if !gap.said("api down") {
-		t.Fatalf("ошибка вето не ушла алертом: %v", gap.msgs)
 	}
 }
 

@@ -238,6 +238,33 @@ func TestManageStopLoss(t *testing.T) {
 	}
 }
 
+// Позиция без замороженного стопа (рукописный стейт) закрывается по стопу от цены входа:
+// PurchasePrice − StopDailyATR·EntryATR (DefaultParams: 0.5·EntryATR).
+func TestManageStopFallsBackToEntryATR(t *testing.T) {
+	md := fixture(append(friday(), mondayFirst, bar{"2026-09-14 07:30", 98.5, 99.0, 97.7, 97.9}), 2.0)
+	md.Position = openPos()
+	md.Position.StopLoss, md.Position.EntryATR = 0, 2.0 // стоп 98.8 − 0.5·2 = 97.8
+	sig := NewWithParams("TEST", DefaultParams()).Decide(md)
+	if sig.Kind != model.SignalSell || sig.Reason != "SL" || math.Abs(sig.StopLoss-97.8) > eps {
+		t.Fatalf("got %v/%q/SL %v, want Sell/SL/97.8", sig.Kind, sig.Reason, sig.StopLoss)
+	}
+}
+
+func TestEffectiveStop(t *testing.T) {
+	p := DefaultParams()
+	cases := []struct{ stop, price, atr, want float64 }{
+		{78, 90, 4, 78}, // замороженный стоп главнее
+		{0, 90, 4, 88},  // фолбэк: 90 − 0.5·4
+		{0, 90, 0, 0},   // нечем считать
+		{-1, 90, 4, 88}, // отрицательный = нет
+	}
+	for _, c := range cases {
+		if got := p.EffectiveStop(c.stop, c.price, c.atr); math.Abs(got-c.want) > eps {
+			t.Errorf("EffectiveStop(%v,%v,%v) = %v, want %v", c.stop, c.price, c.atr, got, c.want)
+		}
+	}
+}
+
 func TestManageTakeProfit(t *testing.T) {
 	sig := manageOn(bar{"2026-09-14 07:30", 99.0, 100.2, 98.9, 100.1})
 	if sig.Kind != model.SignalSell || sig.Reason != "TP" || sig.TakeProfit != 100 {

@@ -10,6 +10,7 @@ import (
 
 	"tinvest/internal/config"
 	svc "tinvest/internal/service/backtest"
+	"tinvest/internal/service/trading_strategy/gap_fade/strategy/shared"
 	"tinvest/internal/service/trading_strategy/livecore/adapter"
 	"tinvest/internal/service/trading_strategy/livecore/rebuild"
 	"tinvest/internal/service/trading_strategy/livecore/statestore"
@@ -24,9 +25,13 @@ const Name = "gap_fade"
 
 const alertLabel = "Gap Fade"
 
-// entryCutoffMinute — пасс с этого времени MSK (10:00) gap_fade не спрашивает: сигнал — бар 06:30,
-// запас покрывает сдвиг расписания сессии и опоздавший пасс.
-const entryCutoffMinute = 10 * 60
+// Окно входа MSK: [07:00, 10:00). Сигнальный бар 06:30 закрывается в 07:00 — раньше смотреть
+// нечего (последний бар был бы вчерашним, и сторож устаревшего бара плодил бы ERROR); после 10:00
+// не спрашиваем: запас покрывает сдвиг расписания сессии и опоздавший пасс.
+const (
+	entryOpenMinute   = 7 * 60
+	entryCutoffMinute = 10 * 60
+)
 
 // DividendsClient — источник дивидендов для фильтра дня отсечки.
 type DividendsClient interface {
@@ -72,22 +77,29 @@ func (s *Strategy) Decider(ticker string) (adapter.Decider, bool) {
 	return st, true
 }
 
-// EntryPossible — будний день MSK до 10:00: gap_fade входит только по бару 06:30.
+// EntryPossible — будний день MSK, 07:00 ≤ t < 10:00: gap_fade входит только по бару 06:30.
 func (s *Strategy) EntryPossible(now time.Time) bool {
 	t := now.In(mskLoc)
 	if wd := t.Weekday(); wd == time.Saturday || wd == time.Sunday {
 		return false
 	}
-	return t.Hour()*60+t.Minute() < entryCutoffMinute
+	m := t.Hour()*60 + t.Minute()
+	return m >= entryOpenMinute && m < entryCutoffMinute
 }
 
 // DesiredStop — стоп, замороженный на входе от close сигнального бара (Entry.StopLoss). Уровень
-// не меняется за всю жизнь позиции.
-func (s *Strategy) DesiredStop(_ string, e statestore.Entry) (float64, string) {
-	if e.StopLoss <= 0 {
+// не меняется за всю жизнь позиции. Рукописная запись без stopLoss получает стоп от цены входа
+// (EntryPrice − StopDailyATR·EntryATR, формула core.Params.EffectiveStop); без EntryATR стопа нет.
+func (s *Strategy) DesiredStop(ticker string, e statestore.Entry) (float64, string) {
+	p, ok := ParamsFor(ticker)
+	if !ok {
+		p = shared.Params()
+	}
+	stop := p.EffectiveStop(e.StopLoss, e.EntryPrice, e.EntryATR)
+	if stop <= 0 {
 		return 0, ""
 	}
-	return e.StopLoss, "SL"
+	return stop, "SL"
 }
 
 // Reconstruct поднимает вход по API. Close сигнального бара неизвестен, поэтому стоп меряется
@@ -116,7 +128,7 @@ func (s *Strategy) Reconstruct(ctx context.Context, in adapter.ReconstructInput)
 		EntryTime:  entryTime,
 		EntryPrice: in.PurchasePrice,
 		EntryATR:   atr,
-		StopLoss:   in.PurchasePrice - p.StopDailyATR*atr,
+		StopLoss:   p.EffectiveStop(0, in.PurchasePrice, atr),
 		MaxFav:     in.PurchasePrice,
 	}, nil
 }

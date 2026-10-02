@@ -91,7 +91,17 @@ func TestDesiredStopIsFrozenStopLoss(t *testing.T) {
 		t.Fatalf("DesiredStop = %v/%q, want 78/SL", lvl, why)
 	}
 	if lvl, why := s.DesiredStop("SBER", statestore.Entry{EntryPrice: 90}); lvl != 0 || why != "" {
-		t.Fatalf("DesiredStop без StopLoss = %v/%q, want 0/\"\"", lvl, why)
+		t.Fatalf("DesiredStop без StopLoss и ATR = %v/%q, want 0/\"\"", lvl, why)
+	}
+}
+
+// Рукописная запись без stopLoss, но с EntryATR получает стоп от цены входа
+// (EntryPrice − StopDailyATR·EntryATR, как в Reconstruct), а не остаётся без защиты.
+func TestDesiredStopFallsBackToEntryATR(t *testing.T) {
+	s := newGap(t)
+	lvl, why := s.DesiredStop("SBER", statestore.Entry{EntryPrice: 90, EntryATR: 4})
+	if want := 90 - 1.0*4; lvl != want || why != "SL" {
+		t.Fatalf("DesiredStop = %v/%q, want %v/SL", lvl, why, want)
 	}
 }
 
@@ -139,14 +149,17 @@ func TestReconstructWithoutBuyFails(t *testing.T) {
 	}
 }
 
-// Окно входа: будний день до 10:00 MSK.
+// Окно входа: будний день, 07:00 ≤ t < 10:00 MSK.
 func TestEntryPossible(t *testing.T) {
 	s := newGap(t)
 	cases := []struct {
 		at   time.Time
 		want bool
 	}{
+		{time.Date(2026, 3, 10, 6, 59, 0, 0, msk), false}, // до закрытия сигнального бара
+		{time.Date(2026, 3, 10, 7, 0, 0, 0, msk), true},   // ровно 07:00 — открыто
 		{time.Date(2026, 3, 10, 7, 1, 0, 0, msk), true},   // вторник 07:01
+		{time.Date(2026, 3, 10, 0, 1, 0, 0, msk), false},  // ночь
 		{time.Date(2026, 3, 10, 9, 59, 0, 0, msk), true},  // до 10:00
 		{time.Date(2026, 3, 10, 10, 0, 0, 0, msk), false}, // ровно 10:00 — уже нет
 		{time.Date(2026, 3, 10, 19, 1, 0, 0, msk), false},

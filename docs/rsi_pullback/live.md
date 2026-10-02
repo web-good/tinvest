@@ -193,7 +193,7 @@ API недоступен) — алерт в Telegram, лог, и тикер пр
 go run ./cmd/pullparity -tickers XXXX,YYYY -months 24
 # -examples 10   сколько расхождений печатать на тикер
 # -cache data/candles   каталог кэша свечей
-# -strategy rsi_pullback|rsi_zone   какой реестр сверять (по умолчанию rsi_pullback)
+# -strategy rsi_pullback|rsi_zone|gap_fade какой реестр сверять (по умолчанию rsi_pullback)
 ```
 
 Для каждого бара сравниваются все поля `MarketData` (`Closes`, `Highs`, `Lows`, `Volumes`,
