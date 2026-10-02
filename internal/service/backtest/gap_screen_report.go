@@ -102,7 +102,7 @@ func RenderGapScreenMarkdown(rows []GapScreenRow, meta GapScreenMeta) string {
 
 	b.WriteString("## Нет данных\n\n")
 	if len(meta.NoData) == 0 {
-		b.WriteString("Нет.")
+		b.WriteString("Нет.\n")
 	} else {
 		for _, s := range meta.NoData {
 			fmt.Fprintf(&b, "- %s\n", s)
