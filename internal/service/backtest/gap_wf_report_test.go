@@ -20,7 +20,7 @@ func TestRenderGapWFMarkdown(t *testing.T) {
 		Runs: runs, Folds: folds,
 		Sensitivity: []GapCostRow{{Commission: 0.0005, Trades: oos}, {Commission: 0.002, Trades: oos}},
 		ExDays:      map[string]int{"A": 2},
-		Verdict:     GapGate(oos, oos, gapAt("2024-01-01 00:00")),
+		Verdict:     GapGate(oos, oos, gapAt("2024-01-01 00:00"), 2, 2),
 	}
 	md := RenderGapWFMarkdown(r)
 	for _, want := range []string{
@@ -33,13 +33,32 @@ func TestRenderGapWFMarkdown(t *testing.T) {
 		"0.20%",
 		"| A | 2 |",
 		"EOD на баре следующего дня: 0",
+		"| сделок в pooled OOS | 2 | ≥ 2 | да |",
+		"| сделок в OOS за последние 12 месяцев | 2 | ≥ 2 | да |",
 	} {
 		if !strings.Contains(md, want) {
 			t.Errorf("report lacks %q:\n%s", want, md)
 		}
 	}
-	r.Verdict = GapGate(nil, nil, gapAt("2024-01-01 00:00"))
+	if strings.Contains(md, "неканоничные издержки") {
+		t.Errorf("canonical commission must not be flagged:\n%s", md)
+	}
+	r.Verdict = GapGate(nil, nil, gapAt("2024-01-01 00:00"), 2, 2)
 	if md := RenderGapWFMarkdown(r); !strings.Contains(md, "**ОТКАЗ**") {
 		t.Errorf("failed gate must render ОТКАЗ:\n%s", md)
+	}
+	r.Commission = 0.001
+	if md := RenderGapWFMarkdown(r); !strings.Contains(md, "**ОТКАЗ (неканоничные издержки)**") {
+		t.Errorf("non-canonical commission must be flagged in the verdict heading:\n%s", md)
+	}
+	r.Verdict = GapGate(oos, oos, gapAt("2024-01-01 00:00"), 2, 2)
+	if md := RenderGapWFMarkdown(r); !strings.Contains(md, "**ПРОЙДЕН (неканоничные издержки)**") {
+		t.Errorf("non-canonical commission must be flagged in the verdict heading:\n%s", md)
+	}
+}
+
+func TestGapCanonicalCommission(t *testing.T) {
+	if !IsGapCanonicalCommission(0.0005) || IsGapCanonicalCommission(0.001) || IsGapCanonicalCommission(0) {
+		t.Fatal("only 0.0005 per side is the canonical gap_fade commission")
 	}
 }

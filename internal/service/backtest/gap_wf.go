@@ -16,7 +16,21 @@ const (
 	gapGateLast12PF    = 1.2
 	gapGateTickerShare = 0.6
 	gapGateStressedPF  = 1.0
+
+	// GapGateMinLast12Trades is the minimum number of pooled OOS trades in the last 12 months;
+	// the pooled-trade minimum is the run's -min-trades.
+	GapGateMinLast12Trades = 20
+	// GapStressCommission is the per-side cost of the stressed replay gate 4 judges.
+	GapStressCommission = 0.002
+	// gapCanonicalCommission is the per-side cost the gate thresholds were set for.
+	gapCanonicalCommission = 0.0005
 )
+
+// IsGapCanonicalCommission reports whether a run used the commission the gate was set for;
+// a verdict at any other cost is flagged as non-canonical.
+func IsGapCanonicalCommission(c float64) bool {
+	return math.Abs(c-gapCanonicalCommission) < 1e-12
+}
 
 // gapLoc anchors gap_fade calendar rules (ex-days, quarters, next-day exits) to Moscow.
 var gapLoc = func() *time.Location {
@@ -67,11 +81,12 @@ type GapComboRank struct {
 	ProfitableTickers, TradedTickers int
 }
 
-// GapCheck is one gate condition.
+// GapCheck is one gate condition. Count marks a trade-count condition, rendered as integers.
 type GapCheck struct {
 	Name      string
 	Value     float64
 	Threshold float64
+	Count     bool
 	Pass      bool
 }
 
@@ -92,7 +107,14 @@ func ExpandGapGrid(raw []byte) ([]any, error) {
 	if len(phases) != 1 {
 		return nil, fmt.Errorf("backtest: gap_fade grid must have exactly one phase, got %d", len(phases))
 	}
-	return expandGrid(core.DefaultParams(), phases[0].Grid)
+	combos, err := expandGrid(core.DefaultParams(), phases[0].Grid)
+	if err != nil {
+		return nil, err
+	}
+	if len(combos) == 0 {
+		return nil, fmt.Errorf("backtest: gap_fade grid expands to zero combinations (an empty axis?)")
+	}
+	return combos, nil
 }
 
 // TagGapTrades attaches the ticker to engine trades.
@@ -104,7 +126,8 @@ func TagGapTrades(ticker string, trades []backtest.Trade) []GapTrade {
 	return out
 }
 
-func gapDay(t time.Time) string { return t.In(gapLoc).Format("2006-01-02") }
+// GapDay is the MSK calendar date of t, keyed "2006-01-02" like ex-day maps.
+func GapDay(t time.Time) string { return t.In(gapLoc).Format("2006-01-02") }
 
 // DividendExDays maps each dividend's ex-day — the first weekday strictly after its last buy
 // date, taken as an MSK calendar date — keyed "2006-01-02". Zero dates are skipped.
@@ -124,13 +147,40 @@ func DividendExDays(lastBuy []time.Time) map[string]bool {
 	return out
 }
 
+// DividendExDaysFromBars maps each dividend's ex-day to the MSK date of the first bar strictly
+// after its last buy date, so exchange holidays are skipped the way the market skipped them.
+// barTimes must be oldest-first. When no bar follows a last buy date (the data ends first), that
+// date falls back to DividendExDays' next weekday. Zero dates are skipped.
+func DividendExDaysFromBars(lastBuy, barTimes []time.Time) map[string]bool {
+	days := make([]string, len(barTimes))
+	for i, t := range barTimes {
+		days[i] = GapDay(t)
+	}
+	out := make(map[string]bool, len(lastBuy))
+	for _, lb := range lastBuy {
+		if lb.IsZero() {
+			continue
+		}
+		day := GapDay(lb)
+		// "2006-01-02" strings order like dates.
+		if i := sort.SearchStrings(days, day+"\x00"); i < len(days) {
+			out[days[i]] = true
+			continue
+		}
+		for d := range DividendExDays([]time.Time{lb}) {
+			out[d] = true
+		}
+	}
+	return out
+}
+
 // DropExDayTrades removes trades entered on an ex-day — the structural dividend gap does not
 // close and would pose as a signal. It also returns the distinct ex-days that were hit, sorted.
 func DropExDayTrades(trades []GapTrade, exDays map[string]bool) (kept []GapTrade, droppedDays []string) {
 	hit := map[string]bool{}
 	kept = make([]GapTrade, 0, len(trades))
 	for _, t := range trades {
-		if d := gapDay(t.EntryTime); exDays[d] {
+		if d := GapDay(t.EntryTime); exDays[d] {
 			hit[d] = true
 			continue
 		}
@@ -238,16 +288,20 @@ func SelectedGapCombos(folds []GapFold) map[int]bool {
 
 // ReplayGapFolds re-reads every fold's test window from alt — the same grid run at another
 // commission — with the combination the fold already chose: it measures how fragile the chosen
-// parameters are, it does not re-fit.
-func ReplayGapFolds(folds []GapFold, alt []GapComboRun) []GapTrade {
+// parameters are, it does not re-fit. A fold whose combination alt does not hold is an error:
+// skipping it would quietly shrink the stressed sample.
+func ReplayGapFolds(folds []GapFold, alt []GapComboRun) ([]GapTrade, error) {
 	var out []GapTrade
-	for _, f := range folds {
-		if f.Combo < 0 || f.Combo >= len(alt) {
+	for i, f := range folds {
+		if f.Combo < 0 {
 			continue
+		}
+		if f.Combo >= len(alt) {
+			return nil, fmt.Errorf("backtest: fold %d chose combo %d, but the replay has %d runs", i+1, f.Combo, len(alt))
 		}
 		out = append(out, gapTradesIn(alt[f.Combo].Trades, f.TestFrom, f.TestTo)...)
 	}
-	return out
+	return out, nil
 }
 
 // gapGroupBy breaks trades down by key, rows sorted by key.
@@ -293,7 +347,7 @@ func GapByReason(trades []GapTrade) []GapGroup {
 func GapNextDayEOD(trades []GapTrade) int {
 	n := 0
 	for _, t := range trades {
-		if t.Reason == "EOD" && gapDay(t.ExitTime) != gapDay(t.EntryTime) {
+		if t.Reason == "EOD" && GapDay(t.ExitTime) != GapDay(t.EntryTime) {
 			n++
 		}
 	}
@@ -334,20 +388,24 @@ func RankGapCombos(runs []GapComboRun, minTrades, top int) []GapComboRank {
 	return out
 }
 
-// GapGate applies the spec's four conditions: pooled OOS PF, pooled OOS PF since last12From,
-// the share of profitable tickers among tickers with OOS trades, and the pooled OOS PF of the
-// stressed-cost replay.
-func GapGate(oos, stressed []GapTrade, last12From time.Time) GapVerdict {
+// GapGate applies the spec's six conditions: pooled OOS PF, pooled OOS PF since last12From,
+// the share of profitable tickers among tickers with OOS trades, the pooled OOS PF of the
+// stressed-cost replay, and the minimum pooled OOS trade counts over the whole OOS and since
+// last12From.
+func GapGate(oos, stressed []GapTrade, last12From time.Time, minPooled, minLast12 int) GapVerdict {
 	p, n := profitableTickers(oos)
 	share := 0.0
 	if n > 0 {
 		share = float64(p) / float64(n)
 	}
+	last12 := GapTradesFrom(oos, last12From)
 	checks := []GapCheck{
 		{Name: "pooled OOS PF", Value: GapPF(oos), Threshold: gapGatePooledPF},
-		{Name: "pooled OOS PF, последние 12 месяцев", Value: GapPF(GapTradesFrom(oos, last12From)), Threshold: gapGateLast12PF},
+		{Name: "pooled OOS PF, последние 12 месяцев", Value: GapPF(last12), Threshold: gapGateLast12PF},
 		{Name: "доля прибыльных тикеров в OOS", Value: share, Threshold: gapGateTickerShare},
 		{Name: "pooled OOS PF при 0.2% на сторону", Value: GapPF(stressed), Threshold: gapGateStressedPF},
+		{Name: "сделок в pooled OOS", Value: float64(len(oos)), Threshold: float64(minPooled), Count: true},
+		{Name: "сделок в OOS за последние 12 месяцев", Value: float64(len(last12)), Threshold: float64(minLast12), Count: true},
 	}
 	v := GapVerdict{Pass: true}
 	for _, c := range checks {

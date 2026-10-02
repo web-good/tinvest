@@ -35,6 +35,19 @@ func fmtGapPF(pf float64) string {
 	return fmt.Sprintf("%.3f", pf)
 }
 
+// GapVerdictStatus is the verdict word, flagged when the run's commission is not the one the
+// gate thresholds were set for (0.05% per side).
+func GapVerdictStatus(v GapVerdict, commission float64) string {
+	status := "ОТКАЗ"
+	if v.Pass {
+		status = "ПРОЙДЕН"
+	}
+	if !IsGapCanonicalCommission(commission) {
+		status += " (неканоничные издержки)"
+	}
+	return status
+}
+
 func gapDate(t time.Time) string { return t.In(gapLoc).Format("2006-01-02") }
 
 func writeGapGroups(b *strings.Builder, title, keyHeader string, groups []GapGroup) {
@@ -64,16 +77,16 @@ func RenderGapWFMarkdown(r GapReport) string {
 	}
 
 	b.WriteString("\n## Вердикт гейта\n\n")
-	if r.Verdict.Pass {
-		b.WriteString("**ПРОЙДЕН**\n\n")
-	} else {
-		b.WriteString("**ОТКАЗ**\n\n")
-	}
+	fmt.Fprintf(&b, "**%s**\n\n", GapVerdictStatus(r.Verdict, r.Commission))
 	b.WriteString("| Условие | Значение | Порог | Итог |\n|---|---|---|---|\n")
 	for _, c := range r.Verdict.Checks {
 		res := "нет"
 		if c.Pass {
 			res = "да"
+		}
+		if c.Count {
+			fmt.Fprintf(&b, "| %s | %d | ≥ %d | %s |\n", c.Name, int(c.Value), int(c.Threshold), res)
+			continue
 		}
 		fmt.Fprintf(&b, "| %s | %s | ≥ %.2f | %s |\n", c.Name, fmtGapPF(c.Value), c.Threshold, res)
 	}

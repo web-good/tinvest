@@ -1,7 +1,7 @@
 // Command gapwf validates the gap_fade strategy on a whole ticker universe at once: one set of
 // parameters for every ticker, chosen per walk-forward fold by the pooled profit factor of all
 // tickers' training trades, scored on the pooled out-of-sample trades and judged by the spec's
-// four-condition gate. Every grid combination runs once per ticker over the full window; folds
+// six-condition gate. Every grid combination runs once per ticker over the full window; folds
 // slice those trades by entry date, which is exact for an intraday strategy. Trades entered on a
 // dividend ex-day are dropped. All gRPC/file I/O lives here; the fold logic, gate and report are
 // pure (internal/service/backtest/gap_wf*.go). Spec: docs/superpowers/specs/2026-10-02-gap-fade-design.md.
@@ -17,7 +17,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -27,16 +26,9 @@ import (
 	svc "tinvest/internal/service/backtest"
 	"tinvest/internal/service/backtest/screenrun"
 	grpcclient "tinvest/pkg/client/grpc"
+	pkgmodel "tinvest/pkg/client/grpc/model"
 	"tinvest/pkg/logger"
-	"tinvest/pkg/semaphore"
 )
-
-// engineCash is the mock account per ticker run; with Fraction 1.0 lot rounding is negligible
-// and the pooled PF is taken on per-trade returns anyway.
-const engineCash = 1e7
-
-// stressCommissions are the per-side costs of the sensitivity table; the last one feeds gate 4.
-var stressCommissions = []float64{0.001, 0.002}
 
 func main() {
 	var (
@@ -63,7 +55,7 @@ func main() {
 		}
 	}
 	if err := run(context.Background(), runCfg{
-		tickers: tickers, months: *months, trainMonths: *trainMonths, testMonths: *testMonths,
+		tickers: dedupeTickers(tickers), months: *months, trainMonths: *trainMonths, testMonths: *testMonths,
 		minTrades: *minTrades, workers: *workers, commission: *commission,
 		gridPath: *gridPath, outDir: *outDir, refresh: *refresh,
 	}); err != nil {
@@ -109,6 +101,22 @@ func defaultTickers(path string) ([]string, error) {
 		return nil, fmt.Errorf("%s: RSI_PULLBACK_TICKERS is empty", path)
 	}
 	return t, nil
+}
+
+// dedupeTickers drops repeated tickers (case-insensitive), keeping the first spelling and the
+// order: a duplicate would run twice and double its weight in the pool.
+func dedupeTickers(in []string) []string {
+	seen := make(map[string]bool, len(in))
+	out := make([]string, 0, len(in))
+	for _, t := range in {
+		k := strings.ToUpper(t)
+		if seen[k] {
+			continue
+		}
+		seen[k] = true
+		out = append(out, t)
+	}
+	return out
 }
 
 // missingTickers lists requested tickers the share list did not return.
@@ -160,8 +168,11 @@ func run(ctx context.Context, cfg runCfg) error {
 	}
 	sort.Slice(universe, func(i, j int) bool { return universe[i].Ticker < universe[j].Ticker })
 
+	if !svc.IsGapCanonicalCommission(cfg.commission) {
+		fmt.Printf("gapwf: ВНИМАНИЕ: издержки %.4f на сторону вместо 0.0005 — пороги гейта заданы не для них, вердикт неканоничный\n", cfg.commission)
+	}
 	to := time.Now()
-	from := to.AddDate(0, -cfg.months, 0)
+	from := windowStart(to, cfg.months)
 	dailyFrom := from.AddDate(-1, 0, 0) // a year of lead-in warms the daily ATR
 	provider := svc.NewCandleProvider(client.MarketDataServiceClient(), screenrun.CacheDir)
 
@@ -185,31 +196,19 @@ func run(ctx context.Context, cfg runCfg) error {
 	}
 	fmt.Printf("gapwf: %d tickers, %d combos, base commission %.4f\n", len(data), len(combos), cfg.commission)
 
-	base, exDays := runCombos(data, combos, nil, cfg.commission, cfg.workers)
-	folds, err := svc.RunGapWalkForward(base, from, to, cfg.trainMonths, cfg.testMonths, cfg.minTrades)
+	res, err := evaluate(data, combos, cfg, from, to)
 	if err != nil {
 		return err
 	}
-	oos := svc.PooledGapOOS(folds)
-	selected := svc.SelectedGapCombos(folds)
-	sens := []svc.GapCostRow{{Commission: cfg.commission, Trades: oos}}
-	var stressed []svc.GapTrade
-	for _, c := range stressCommissions {
-		alt, _ := runCombos(data, combos, selected, c, cfg.workers)
-		stressed = svc.ReplayGapFolds(folds, alt)
-		sens = append(sens, svc.GapCostRow{Commission: c, Trades: stressed})
-	}
-	last12 := to.AddDate(0, -12, 0)
-	verdict := svc.GapGate(oos, stressed, last12)
 
 	loaded := make([]string, len(data))
 	for i, d := range data {
 		loaded[i] = d.ticker
 	}
 	md := svc.RenderGapWFMarkdown(svc.GapReport{
-		Generated: to, From: from, To: to, Last12From: last12,
+		Generated: to, From: from, To: to, Last12From: res.last12From,
 		TrainMonths: cfg.trainMonths, TestMonths: cfg.testMonths, MinTrades: cfg.minTrades, Commission: cfg.commission,
-		Universe: loaded, Skipped: skipped, Runs: base, Folds: folds, Sensitivity: sens, ExDays: exDays, Verdict: verdict,
+		Universe: loaded, Skipped: skipped, Runs: res.runs, Folds: res.folds, Sensitivity: res.sens, ExDays: res.exDays, Verdict: res.verdict,
 	})
 	if err := os.MkdirAll(cfg.outDir, 0o755); err != nil {
 		return fmt.Errorf("mkdir out dir: %w", err)
@@ -218,11 +217,8 @@ func run(ctx context.Context, cfg runCfg) error {
 	if err := os.WriteFile(path, []byte(md), 0o644); err != nil {
 		return fmt.Errorf("write report: %w", err)
 	}
-	status := "ОТКАЗ"
-	if verdict.Pass {
-		status = "ПРОЙДЕН"
-	}
-	fmt.Printf("gapwf: гейт %s, pooled OOS %d сделок; отчёт %s\n", status, len(oos), path)
+	fmt.Printf("gapwf: гейт %s, pooled OOS %d сделок; отчёт %s\n",
+		svc.GapVerdictStatus(res.verdict, cfg.commission), len(svc.PooledGapOOS(res.folds)), path)
 	return nil
 }
 
@@ -242,62 +238,31 @@ func loadTicker(ctx context.Context, client grpcclient.GrpcClient, provider *svc
 	if err != nil {
 		return tickerData{}, fmt.Errorf("дивиденды: %w", err)
 	}
-	var lastBuy []time.Time
-	for _, d := range divs {
-		if d.DividendType == "Cancelled" {
-			continue
-		}
-		lastBuy = append(lastBuy, d.LastBuyDate)
-	}
-	return tickerData{ticker: u.Ticker, lot: u.Lot, bars: bars, daily: daily, exDays: svc.DividendExDays(lastBuy)}, nil
+	return tickerData{ticker: u.Ticker, lot: u.Lot, bars: bars, daily: daily, exDays: dividendExDays(divs, bars)}, nil
 }
 
-// runCombos runs the engine for every combination (or only those in `only`, when non-nil) on
-// every ticker at one commission, drops ex-day trades and returns runs index-aligned with
-// combos plus, per ticker, the number of distinct ex-days on which some trade was dropped.
-// Tickers run concurrently; the merge is in ticker order, so the output is deterministic.
-func runCombos(data []tickerData, combos []any, only map[int]bool, commission float64, workers int) ([]svc.GapComboRun, map[string]int) {
-	perTicker := make([][][]svc.GapTrade, len(data))
-	exHit := make([]int, len(data))
-	sem := semaphore.New(workers)
-	var wg sync.WaitGroup
-	for ti := range data {
-		wg.Add(1)
-		sem.Acquire()
-		go func(ti int) {
-			defer wg.Done()
-			defer sem.Release()
-			d := data[ti]
-			binding := svc.GapFadeLookupOrGeneric(d.ticker)
-			cfg := domain.Config{InitialCash: engineCash, Fraction: 1.0, Commission: commission, Lot: d.lot}
-			days := map[string]bool{}
-			perTicker[ti] = make([][]svc.GapTrade, len(combos))
-			for ci, p := range combos {
-				if only != nil && !only[ci] {
-					continue
-				}
-				res := domain.Run(binding.Build(p), d.bars, d.daily, nil, cfg)
-				kept, dropped := svc.DropExDayTrades(svc.TagGapTrades(d.ticker, res.Trades), d.exDays)
-				perTicker[ti][ci] = kept
-				for _, day := range dropped {
-					days[day] = true
-				}
-			}
-			exHit[ti] = len(days)
-		}(ti)
+// dividendExDays maps every non-cancelled dividend to its ex-day: the first trading bar's date
+// after last_buy_date (svc.DividendExDaysFromBars). A dividend without last_buy_date falls back
+// to its record date, which under T+1 settlement is itself the ex-day.
+func dividendExDays(divs []*pkgmodel.Dividend, bars []domain.Candle) map[string]bool {
+	barTimes := make([]time.Time, len(bars))
+	for i, b := range bars {
+		barTimes[i] = b.Time
 	}
-	wg.Wait()
-
-	runs := make([]svc.GapComboRun, len(combos))
-	for ci := range combos {
-		runs[ci].Params = combos[ci]
-		for ti := range data {
-			runs[ci].Trades = append(runs[ci].Trades, perTicker[ti][ci]...)
+	var lastBuy []time.Time
+	var recordEx []time.Time
+	for _, d := range divs {
+		switch {
+		case d == nil || d.DividendType == "Cancelled":
+		case !d.LastBuyDate.IsZero():
+			lastBuy = append(lastBuy, d.LastBuyDate)
+		case !d.RecordDate.IsZero():
+			recordEx = append(recordEx, d.RecordDate)
 		}
 	}
-	ex := make(map[string]int, len(data))
-	for ti, d := range data {
-		ex[d.ticker] = exHit[ti]
+	out := svc.DividendExDaysFromBars(lastBuy, barTimes)
+	for _, r := range recordEx {
+		out[svc.GapDay(r)] = true
 	}
-	return runs, ex
+	return out
 }

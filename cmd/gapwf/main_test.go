@@ -6,6 +6,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
+
+	pkgmodel "tinvest/pkg/client/grpc/model"
 )
 
 func okCfg() runCfg {
@@ -55,5 +58,27 @@ func TestMissingTickers(t *testing.T) {
 	got := missingTickers([]string{"gazp", "XXX", "T"}, []string{"GAZP", "T"})
 	if !reflect.DeepEqual(got, []string{"XXX: нет в списке акций"}) {
 		t.Fatalf("got %v", got)
+	}
+}
+
+func TestDedupeTickers(t *testing.T) {
+	got := dedupeTickers([]string{"GAZP", "ugld", "gazp", "UGLD", "T"})
+	if !reflect.DeepEqual(got, []string{"GAZP", "ugld", "T"}) {
+		t.Fatalf("got %v, want first spelling of each ticker kept in order", got)
+	}
+}
+
+func TestDividendExDays(t *testing.T) {
+	// Bars on 2025-06-11 and 2025-06-13: 2025-06-12 is a holiday.
+	bars := append(flatBars(mskDate("2025-06-11"), 14, 100), flatBars(mskDate("2025-06-13"), 14, 100)...)
+	divs := []*pkgmodel.Dividend{
+		{LastBuyDate: time.Date(2025, 6, 11, 0, 0, 0, 0, time.UTC), DividendType: "Regular Cash"},
+		{RecordDate: time.Date(2025, 7, 22, 0, 0, 0, 0, time.UTC)}, // no last buy date: the record date is the ex-day (T+1)
+		{LastBuyDate: time.Date(2025, 5, 5, 0, 0, 0, 0, time.UTC), DividendType: "Cancelled"},
+	}
+	got := dividendExDays(divs, bars)
+	want := map[string]bool{"2025-06-13": true, "2025-07-22": true}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("ex-days = %v, want %v", got, want)
 	}
 }
