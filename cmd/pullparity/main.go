@@ -4,7 +4,7 @@
 // once the way internal/domain/backtest.Run does it, once through the live
 // marketdata.Assemble fed by a cache-backed CandleClient that only ever returns candles
 // visible at that bar's close. Any divergence is a live/backtest fidelity bug.
-// The -strategy flag picks the live registry to check: rsi_pullback (default) or rsi_zone.
+// The -strategy flag picks the live registry to check: rsi_pullback (default), rsi_zone or gap_fade.
 package main
 
 import (
@@ -23,6 +23,7 @@ import (
 	"tinvest/internal/enum"
 	imodel "tinvest/internal/model"
 	svc "tinvest/internal/service/backtest"
+	gaplive "tinvest/internal/service/trading_strategy/gap_fade/live"
 	"tinvest/internal/service/trading_strategy/livecore/adapter"
 	"tinvest/internal/service/trading_strategy/livecore/candles"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/live"
@@ -52,7 +53,7 @@ func main() {
 		months       = flag.Int("months", 24, "lookback period in months")
 		examples     = flag.Int("examples", 10, "max diverging lines printed per ticker")
 		cacheDir     = flag.String("cache", "data/candles", "candle cache directory")
-		strategyName = flag.String("strategy", "rsi_pullback", "rsi_pullback | rsi_zone")
+		strategyName = flag.String("strategy", "rsi_pullback", "rsi_pullback | rsi_zone | gap_fade")
 	)
 	flag.Parse()
 	logger.Init()
@@ -141,8 +142,12 @@ func resolveDecider(strategyName, ticker string) (adapter.Decider, error) {
 		if st, ok := rsizonelive.StrategyFor(ticker); ok {
 			return st, nil
 		}
+	case "gap_fade":
+		if st, ok := gaplive.StrategyFor(ticker); ok {
+			return st, nil
+		}
 	default:
-		return nil, fmt.Errorf("unknown -strategy %q (rsi_pullback | rsi_zone)", strategyName)
+		return nil, fmt.Errorf("unknown -strategy %q (rsi_pullback | rsi_zone | gap_fade)", strategyName)
 	}
 	return nil, fmt.Errorf("%s: not registered in %s live registry — add calibrated params before checking parity", ticker, strategyName)
 }

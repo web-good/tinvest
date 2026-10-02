@@ -138,6 +138,16 @@ func TestResolveDeciderPicksStrategyRegistry(t *testing.T) {
 	if _, err := resolveDecider("rsi_zone", "GAZP"); err == nil {
 		t.Fatal("GAZP не в реестре rsi_zone — ждали ошибку")
 	}
+	gd, err := resolveDecider("gap_fade", "SBER")
+	if err != nil {
+		t.Fatalf("gap_fade SBER: %v", err)
+	}
+	if gd.Lookback() != 64 {
+		t.Fatalf("gap_fade Lookback = %d, want 64", gd.Lookback())
+	}
+	if _, err := resolveDecider("gap_fade", ""); err == nil {
+		t.Fatal("gap_fade без тикера — ждали ошибку")
+	}
 	if _, err := resolveDecider("nope", "GAZP"); err == nil {
 		t.Fatal("неизвестная стратегия — ждали ошибку")
 	}

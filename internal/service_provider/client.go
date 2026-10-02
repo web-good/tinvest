@@ -107,6 +107,10 @@ func (s *ServiceProvider) GetRSIZoneSender() (telegram.Client, error) {
 	return s.topicSender(s.appConfig.TelegramClient.TopicRSIZone, "rsi_zone")
 }
 
+func (s *ServiceProvider) GetGapFadeSender() (telegram.Client, error) {
+	return s.topicSender(s.appConfig.TelegramClient.TopicGapFade, "gap_fade")
+}
+
 func (s *ServiceProvider) GetNewsSender() (telegram.Client, error) {
 	return s.topicSender(s.appConfig.TelegramClient.TopicNews, "news")
 }
