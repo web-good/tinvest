@@ -32,6 +32,7 @@ type InstrumentsServiceClient interface {
 	Bonds(ctx context.Context) ([]*pkgmodel.Bond, error)
 	BondByID(ctx context.Context, id string) (*pkgmodel.Bond, error)
 	GetBondCoupons(instrumentID string, from time.Time, to time.Time) ([]*pkgmodel.BondCoupon, error)
+	GetDividends(ctx context.Context, instrumentID string, from, to time.Time) ([]*pkgmodel.Dividend, error)
 	GetAssetFundamentals(ctx context.Context, assetUIDs []string) ([]*model.Fundamentals, error)
 }
 
@@ -79,6 +80,24 @@ func (c *instrumentsServiceClient) GetBondCoupons(instrumentID string, from time
 	}
 
 	return converter2.ConvertCouponsFromPb(resp.Events), nil
+}
+
+// GetDividends returns the dividend events of a share whose record date falls in [from, to].
+func (c *instrumentsServiceClient) GetDividends(ctx context.Context, instrumentID string, from, to time.Time) ([]*pkgmodel.Dividend, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+	resp, err := c.instrumentsAPI.GetDividends(
+		ctx,
+		&investapi.GetDividendsRequest{
+			From:         timestamppb.New(from),
+			To:           timestamppb.New(to),
+			InstrumentId: instrumentID,
+		},
+		NewRPCCredential(c.auth))
+	if err != nil {
+		return nil, fmt.Errorf("failed to request Dividends: %w", err)
+	}
+	return converter2.ConvertDividendsFromPb(resp.GetDividends()), nil
 }
 
 func (c *instrumentsServiceClient) Shares(ctx context.Context) ([]*model.Share, error) {
