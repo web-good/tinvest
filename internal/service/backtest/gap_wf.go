@@ -8,6 +8,7 @@ import (
 
 	"tinvest/internal/domain/backtest"
 	"tinvest/internal/service/trading_strategy/gap_fade/strategy/core"
+	pkgmodel "tinvest/pkg/client/grpc/model"
 )
 
 // Gate thresholds of the gap_fade pooled walk-forward (spec section 5).
@@ -416,4 +417,26 @@ func GapGate(oos, stressed []GapTrade, last12From time.Time, minPooled, minLast1
 		v.Checks = append(v.Checks, c)
 	}
 	return v
+}
+
+// GapDividendExDays maps every non-cancelled dividend to its ex-day: the first bar's date after
+// last_buy_date (DividendExDaysFromBars). A dividend without last_buy_date falls back to its
+// record date, which under T+1 settlement is itself the ex-day. Shared by cmd/gapwf and the
+// live gap_fade entry filter, so backtest and live drop the same days.
+func GapDividendExDays(divs []*pkgmodel.Dividend, barTimes []time.Time) map[string]bool {
+	var lastBuy, recordEx []time.Time
+	for _, d := range divs {
+		switch {
+		case d == nil || d.DividendType == "Cancelled":
+		case !d.LastBuyDate.IsZero():
+			lastBuy = append(lastBuy, d.LastBuyDate)
+		case !d.RecordDate.IsZero():
+			recordEx = append(recordEx, d.RecordDate)
+		}
+	}
+	out := DividendExDaysFromBars(lastBuy, barTimes)
+	for _, r := range recordEx {
+		out[GapDay(r)] = true
+	}
+	return out
 }

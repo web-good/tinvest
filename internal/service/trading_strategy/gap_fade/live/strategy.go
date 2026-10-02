@@ -9,9 +9,11 @@ import (
 	"time"
 
 	"tinvest/internal/config"
+	svc "tinvest/internal/service/backtest"
 	"tinvest/internal/service/trading_strategy/livecore/adapter"
 	"tinvest/internal/service/trading_strategy/livecore/rebuild"
 	"tinvest/internal/service/trading_strategy/livecore/statestore"
+	"tinvest/internal/service/trading_strategy/scalping/strategy"
 	pkgmodel "tinvest/pkg/client/grpc/model"
 	"tinvest/pkg/client/telegram"
 	"tinvest/pkg/logger"
@@ -41,6 +43,7 @@ type Strategy struct {
 var (
 	_ adapter.Strategy    = (*Strategy)(nil)
 	_ adapter.EntryWindow = (*Strategy)(nil)
+	_ adapter.EntryFilter = (*Strategy)(nil)
 )
 
 func New(cfg *config.GapFadeConfig, tg telegram.Client, divs DividendsClient) *Strategy {
@@ -126,4 +129,28 @@ func (s *Strategy) Notify(msg string) {
 	if err := s.tg.SendMessage("[" + alertLabel + "] " + msg); err != nil {
 		logger.ErrorContext(context.Background(), fmt.Sprintf("gap_fade: уведомление не доставлено: %v", err))
 	}
+}
+
+// EntryBlocked не пускает вход в день дивидендной отсечки: гэп там — дивиденд, а не шум, и
+// бэктест такие сделки выбрасывает (cmd/gapwf). Правило дня отсечки общее с бэктестом —
+// svc.GapDividendExDays по барам окна. Без клиента или при сбое API — ошибка: раннер
+// пропускает вход (fail-closed).
+func (s *Strategy) EntryBlocked(ctx context.Context, ticker, instrumentID string, md strategy.MarketData) (string, error) {
+	n := len(md.Times)
+	if n == 0 {
+		return "", nil // ядро без баров BUY не даёт
+	}
+	if s.divs == nil {
+		return "", fmt.Errorf("gap_fade: нет клиента дивидендов для %s", ticker)
+	}
+	last := md.Times[n-1]
+	divs, err := s.divs.GetDividends(ctx, instrumentID, last.AddDate(0, 0, -30), last.AddDate(0, 0, 7))
+	if err != nil {
+		return "", fmt.Errorf("gap_fade: дивиденды %s: %w", ticker, err)
+	}
+	today := svc.GapDay(last)
+	if svc.GapDividendExDays(divs, md.Times)[today] {
+		return fmt.Sprintf("день дивидендной отсечки %s — гэп дивидендный, вход пропущен", today), nil
+	}
+	return "", nil
 }

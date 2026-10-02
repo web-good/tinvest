@@ -26,7 +26,6 @@ import (
 	svc "tinvest/internal/service/backtest"
 	"tinvest/internal/service/backtest/screenrun"
 	grpcclient "tinvest/pkg/client/grpc"
-	pkgmodel "tinvest/pkg/client/grpc/model"
 	"tinvest/pkg/logger"
 )
 
@@ -239,31 +238,9 @@ func loadTicker(ctx context.Context, client grpcclient.GrpcClient, provider *svc
 	if err != nil {
 		return tickerData{}, fmt.Errorf("дивиденды: %w", err)
 	}
-	return tickerData{ticker: u.Ticker, lot: u.Lot, bars: bars, daily: daily, exDays: dividendExDays(divs, bars)}, nil
-}
-
-// dividendExDays maps every non-cancelled dividend to its ex-day: the first trading bar's date
-// after last_buy_date (svc.DividendExDaysFromBars). A dividend without last_buy_date falls back
-// to its record date, which under T+1 settlement is itself the ex-day.
-func dividendExDays(divs []*pkgmodel.Dividend, bars []domain.Candle) map[string]bool {
 	barTimes := make([]time.Time, len(bars))
 	for i, b := range bars {
 		barTimes[i] = b.Time
 	}
-	var lastBuy []time.Time
-	var recordEx []time.Time
-	for _, d := range divs {
-		switch {
-		case d == nil || d.DividendType == "Cancelled":
-		case !d.LastBuyDate.IsZero():
-			lastBuy = append(lastBuy, d.LastBuyDate)
-		case !d.RecordDate.IsZero():
-			recordEx = append(recordEx, d.RecordDate)
-		}
-	}
-	out := svc.DividendExDaysFromBars(lastBuy, barTimes)
-	for _, r := range recordEx {
-		out[svc.GapDay(r)] = true
-	}
-	return out
+	return tickerData{ticker: u.Ticker, lot: u.Lot, bars: bars, daily: daily, exDays: svc.GapDividendExDays(divs, barTimes)}, nil
 }

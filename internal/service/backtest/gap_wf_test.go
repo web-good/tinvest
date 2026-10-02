@@ -8,6 +8,7 @@ import (
 
 	"tinvest/internal/domain/backtest"
 	"tinvest/internal/service/trading_strategy/gap_fade/strategy/core"
+	pkgmodel "tinvest/pkg/client/grpc/model"
 )
 
 func gapAt(s string) time.Time {
@@ -300,5 +301,21 @@ func TestDividendExDaysFromBars(t *testing.T) {
 	want := map[string]bool{"2025-06-13": true, "2025-06-16": true}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("ex-days = %v, want %v", got, want)
+	}
+}
+
+func TestGapDividendExDays(t *testing.T) {
+	loc, _ := time.LoadLocation("Europe/Moscow")
+	bar := func(d, h int) time.Time { return time.Date(2026, 3, d, h, 0, 0, 0, loc) }
+	bars := []time.Time{bar(6, 18), bar(9, 18), bar(10, 7), bar(10, 8)}
+	divs := []*pkgmodel.Dividend{
+		nil,
+		{LastBuyDate: time.Date(2026, 3, 9, 0, 0, 0, 0, time.UTC), DividendType: "Regular Cash"}, // -> 2026-03-10
+		{LastBuyDate: time.Date(2026, 3, 5, 0, 0, 0, 0, time.UTC), DividendType: "Cancelled"},    // отменён
+		{RecordDate: time.Date(2026, 3, 12, 0, 0, 0, 0, time.UTC)},                               // по дате реестра
+	}
+	got := GapDividendExDays(divs, bars)
+	if !got["2026-03-10"] || !got["2026-03-12"] || got["2026-03-06"] || len(got) != 2 {
+		t.Fatalf("GapDividendExDays = %v", got)
 	}
 }

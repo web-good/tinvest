@@ -14,6 +14,7 @@ import (
 	imodel "tinvest/internal/model"
 	"tinvest/internal/service/trading_strategy/livecore/adapter"
 	"tinvest/internal/service/trading_strategy/livecore/statestore"
+	"tinvest/internal/service/trading_strategy/scalping/strategy"
 	grpcmodel "tinvest/pkg/client/grpc/model"
 	tgmocks "tinvest/pkg/client/telegram/mocks"
 	"tinvest/pkg/logger"
@@ -80,6 +81,7 @@ func TestIdentity(t *testing.T) {
 	}
 	var _ adapter.Strategy = s
 	var _ adapter.EntryWindow = s
+	var _ adapter.EntryFilter = s
 }
 
 // Стоп заморожен сигналом и хранится в стейте; без него стопа нет.
@@ -172,4 +174,80 @@ func TestNotifyDeliveryFailureDoesNotPanic(t *testing.T) {
 	tg := tgmocks.NewMockClient(t)
 	tg.EXPECT().SendMessage("[Gap Fade] x").Return(errors.New("down")).Once()
 	New(&config.GapFadeConfig{NotifyEnabled: true}, tg, nil).Notify("x")
+}
+
+type fakeDivs struct {
+	divs     []*grpcmodel.Dividend
+	err      error
+	from, to time.Time
+	calls    int
+}
+
+func (f *fakeDivs) GetDividends(_ context.Context, _ string, from, to time.Time) ([]*grpcmodel.Dividend, error) {
+	f.calls++
+	f.from, f.to = from, to
+	return f.divs, f.err
+}
+
+// gapMD — окно из баров 9 марта (до 23:30) и сигнального бара 06:30 10 марта.
+func gapMD() strategy.MarketData {
+	var times []time.Time
+	for t := time.Date(2026, 3, 9, 7, 0, 0, 0, msk); !t.After(time.Date(2026, 3, 9, 23, 30, 0, 0, msk)); t = t.Add(30 * time.Minute) {
+		times = append(times, t)
+	}
+	times = append(times, time.Date(2026, 3, 10, 6, 30, 0, 0, msk))
+	return strategy.MarketData{Times: times}
+}
+
+func utcDay(d int) time.Time { return time.Date(2026, 3, d, 0, 0, 0, 0, time.UTC) }
+
+func TestEntryBlockedOnExDay(t *testing.T) {
+	f := &fakeDivs{divs: []*grpcmodel.Dividend{{LastBuyDate: utcDay(9), DividendType: "Regular Cash"}}}
+	s := New(&config.GapFadeConfig{}, nil, f)
+	reason, err := s.EntryBlocked(context.Background(), "SBER", "uid", gapMD())
+	if err != nil || !strings.Contains(reason, "отсечк") {
+		t.Fatalf("EntryBlocked = %q, %v; want причина про отсечку", reason, err)
+	}
+	last := gapMD().Times[len(gapMD().Times)-1]
+	if !f.from.Equal(last.AddDate(0, 0, -30)) || !f.to.Equal(last.AddDate(0, 0, 7)) {
+		t.Fatalf("окно запроса %v—%v, want [−30д, +7д] от %v", f.from, f.to, last)
+	}
+}
+
+func TestEntryNotBlockedByCancelledDividend(t *testing.T) {
+	f := &fakeDivs{divs: []*grpcmodel.Dividend{{LastBuyDate: utcDay(9), DividendType: "Cancelled"}}}
+	reason, err := New(&config.GapFadeConfig{}, nil, f).EntryBlocked(context.Background(), "SBER", "uid", gapMD())
+	if err != nil || reason != "" {
+		t.Fatalf("EntryBlocked = %q, %v; want вход разрешён", reason, err)
+	}
+}
+
+func TestEntryBlockedByRecordDateWithoutLastBuy(t *testing.T) {
+	f := &fakeDivs{divs: []*grpcmodel.Dividend{{RecordDate: utcDay(10)}}}
+	reason, err := New(&config.GapFadeConfig{}, nil, f).EntryBlocked(context.Background(), "SBER", "uid", gapMD())
+	if err != nil || reason == "" {
+		t.Fatalf("EntryBlocked = %q, %v; want блок по дате реестра", reason, err)
+	}
+}
+
+// Старая отсечка до начала окна помечает первый день окна, а не сегодняшний: вход разрешён.
+func TestOldDividendDoesNotBlockToday(t *testing.T) {
+	f := &fakeDivs{divs: []*grpcmodel.Dividend{{LastBuyDate: utcDay(2), DividendType: "Regular Cash"}}}
+	reason, err := New(&config.GapFadeConfig{}, nil, f).EntryBlocked(context.Background(), "SBER", "uid", gapMD())
+	if err != nil || reason != "" {
+		t.Fatalf("EntryBlocked = %q, %v; want вход разрешён", reason, err)
+	}
+}
+
+func TestEntryBlockedAPIErrorFailsClosed(t *testing.T) {
+	f := &fakeDivs{err: errors.New("unavailable")}
+	if _, err := New(&config.GapFadeConfig{}, nil, f).EntryBlocked(context.Background(), "SBER", "uid", gapMD()); err == nil {
+		t.Fatal("ошибка API не вернулась")
+	}
+}
+
+func TestEntryBlockedWithoutClientFailsClosed(t *testing.T) {
+	if _, err := New(&config.GapFadeConfig{}, nil, nil).EntryBlocked(context.Background(), "SBER", "uid", gapMD()); err == nil {
+		t.Fatal("nil-клиент не дал ошибку")
+	}
 }

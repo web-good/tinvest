@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	svc "tinvest/internal/service/backtest"
 	pkgmodel "tinvest/pkg/client/grpc/model"
 )
 
@@ -78,7 +79,11 @@ func TestDividendExDays(t *testing.T) {
 		{RecordDate: time.Date(2025, 7, 22, 0, 0, 0, 0, time.UTC)}, // no last buy date: the record date is the ex-day (T+1)
 		{LastBuyDate: time.Date(2025, 5, 5, 0, 0, 0, 0, time.UTC), DividendType: "Cancelled"},
 	}
-	got := dividendExDays(divs, bars)
+	barTimes := make([]time.Time, len(bars))
+	for i, b := range bars {
+		barTimes[i] = b.Time
+	}
+	got := svc.GapDividendExDays(divs, barTimes)
 	want := map[string]bool{"2025-06-13": true, "2025-07-22": true}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("ex-days = %v, want %v", got, want)
