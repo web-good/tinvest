@@ -358,6 +358,7 @@ func Trace(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Can
 // mirroring scalping/trade.go's buildMarketData.
 func buildMarketData(window []Candle) strategy.MarketData {
 	md := strategy.MarketData{
+		Opens:   make([]float64, len(window)),
 		Highs:   make([]float64, len(window)),
 		Lows:    make([]float64, len(window)),
 		Closes:  make([]float64, len(window)),
@@ -365,6 +366,7 @@ func buildMarketData(window []Candle) strategy.MarketData {
 		Times:   make([]time.Time, len(window)),
 	}
 	for i, c := range window {
+		md.Opens[i] = c.Open
 		md.Highs[i] = c.High
 		md.Lows[i] = c.Low
 		md.Closes[i] = c.Close

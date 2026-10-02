@@ -39,7 +39,11 @@ type Position struct {
 // MarketData is the raw, per-instrument snapshot the runner hands to a strategy.
 // All series are oldest-first and aligned to the same candles; Price is the last close.
 type MarketData struct {
-	Price   float64
+	Price float64
+	// Opens are oldest-first bar opens, index-aligned to Closes. The backtest engine always
+	// fills them; live builders may leave them empty, and consumers must then refuse to act
+	// on them rather than guess (gap_fade does not enter without Opens).
+	Opens   []float64
 	Highs   []float64
 	Lows    []float64
 	Closes  []float64
