@@ -145,6 +145,10 @@ func run(ctx context.Context, cfg runCfg) error {
 				skip(u.Ticker, fmt.Sprintf("дневные свечи: %v", err))
 				return
 			}
+			if len(daily) == 0 {
+				skip(u.Ticker, "нет дневных свечей")
+				return
+			}
 			row := svc.ScreenGap(svc.GapScreenInput{
 				Ticker: u.Ticker, Name: u.Name, Bars: bars, Lot: u.Lot, MinPriceIncrement: u.MinPriceIncrement,
 				SignalsPerYear: svc.GapSignalsPerYear(u.Ticker, bars, daily, u.Lot, cfg.months),
