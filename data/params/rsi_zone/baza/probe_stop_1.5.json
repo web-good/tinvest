@@ -1,5 +1,5 @@
 {
-  "_comment": "Зонд стопа на точке BAZA (дефолты + RSIUpper 60 + DailyATRPeriod 5): StopDailyATR=1.5. Полная история -months 36 -min-trades 1. РЕЗУЛЬТАТ 2026-09-29: PF 3.002/78, 0 SL. От 1.25 и шире — капкан широкого стопа: ноль SL и одинаковый PF.",
+  "_comment": "Зонд стопа точки перекалибровки 2026-10-03: StopDailyATR 1.5 при ATR 5. РЕЗУЛЬТАТ 2026-10-03: полная история PF 3.967. ПРЕЖНЯЯ ВЕРСИЯ (калибровка 2026-09-29): Зонд стопа на точке BAZA (дефолты + RSIUpper 60 + DailyATRPeriod 5): StopDailyATR=1.5. Полная история -months 36 -min-trades 1. РЕЗУЛЬТАТ 2026-09-29: PF 3.002/78, 0 SL. От 1.25 и шире — капкан широкого стопа: ноль SL и одинаковый PF.",
   "phases": [
     {
       "name": "point",
@@ -11,7 +11,7 @@
           25
         ],
         "RSIUpper": [
-          60
+          75
         ],
         "EMAPeriod": [
           200
@@ -21,6 +21,18 @@
         ],
         "StopDailyATR": [
           1.5
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          3
+        ],
+        "ProfitExitPct": [
+          0.5
         ]
       }
     }

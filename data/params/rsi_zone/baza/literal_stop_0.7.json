@@ -1,0 +1,40 @@
+{
+  "_comment": "Капкан стопа литерала (§4.5), перекалибровка 2026-10-03: литерал BAZA со StopDailyATR 0.7 при ATR 14 и PROFIT 3 · 0.5. РЕЗУЛЬТАТ 2026-10-03 (полная история): 70 сделок PF 1.538, +18325 ₽, DD 14.30%, SL 8 (−31324 ₽).",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          0.7
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          3
+        ],
+        "ProfitExitPct": [
+          0.5
+        ]
+      }
+    }
+  ]
+}
