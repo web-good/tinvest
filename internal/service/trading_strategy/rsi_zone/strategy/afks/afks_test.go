@@ -16,6 +16,11 @@ func TestCalibratedLiteralIsPinned(t *testing.T) {
 		EMAPeriod:      50,
 		DailyATRPeriod: 14,
 		StopDailyATR:   1.0,
+		UseStoch:       1,
+		StochKPeriod:   14,
+		StochDSmooth:   3,
+		StochLower:     20,
+		ZoneWindowBars: 1,
 		ProfitExitBars: 0,
 		ProfitExitPct:  0,
 	}
@@ -29,6 +34,14 @@ func TestCalibratedLiteralIsPinned(t *testing.T) {
 func TestParamsDoNotTrackTheBaseline(t *testing.T) {
 	if DefaultParams() == core.DefaultParams() {
 		t.Fatal("AFKS вернул core.DefaultParams(): откалиброванный тикер не должен отслеживать baseline")
+	}
+}
+
+// Перекалибровка 2026-10-03 включила гейт стохастика: литерал без него — это прежняя точка
+// 2026-09-28, и гейт потерян.
+func TestStochGateIsOn(t *testing.T) {
+	if p := DefaultParams(); p.UseStoch == 0 {
+		t.Fatal("UseStoch = 0 — гейт стохастика перекалибровки 2026-10-03 потерян")
 	}
 }
 
