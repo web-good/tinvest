@@ -1,0 +1,47 @@
+{
+  "_comment": "Тема profit: фиксация прибыли — после ProfitExitBars баров от бара входа первый close не ниже входа на ProfitExitPct% продаёт по close (ProfitExitPct 0 = выход выключен, это литерал как есть — baseline в том же прогоне). Оценочная тема поверх литерала AFKS: все поля литерала прибиты. Окно — как у калибровки литерала. Запуск: go run ./cmd/backtest -ticker AFKS -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/afks/cal_profit.json -out ./reports/AFKS_zone/profit -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-02: pooled OOS 2.591/114, +54.97% против 2.324/111, +65.02% без выхода (литерал); голоса N 2/0/3/3, порог 1/1/0.3/0.3 — большинства нет. Общий зонд N 3 · 0.5%: 2.164/116, +45.18%. Полная история: лучшая точка N 2 · 1.5% — PF 1.528, 36706 ₽ против 1.503, 34346 ₽. Решение: выход выключен (литерал ProfitExitPct 0) — PF темы растёт за счёт срезанных прибыльных сделок, доходность ниже.",
+  "phases": [
+    {
+      "name": "profit",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          50
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "ProfitExitBars": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          6,
+          8,
+          12
+        ],
+        "ProfitExitPct": [
+          0,
+          0.3,
+          0.5,
+          0.75,
+          1.0,
+          1.5,
+          2.0
+        ]
+      }
+    }
+  ]
+}
