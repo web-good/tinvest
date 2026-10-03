@@ -1,0 +1,40 @@
+{
+  "_comment": "Действующий литерал AFKS (2026-09-28) одной точкой, все поля явно. Перекалибровка 2026-10-03: опора тем и сравнения.",
+  "phases": [
+    {
+      "name": "literal",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          50
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}

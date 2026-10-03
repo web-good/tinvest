@@ -1,31 +1,55 @@
 {
-  "_comment": "Калибровка rsi_zone на AFKS. Протокол штатный: -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor (4 фолда); оси свипались поверх core.DefaultParams() (тикер на момент прогонов не зарегистрирован). Итог 2026-09-28: pooled OOS PF 1.547 на 110 сделках, фолды 2.141 / 0.869 / 2.112 / 3.641; формально выше планки, но гуляли все пять полей (EMA 150/50/50/100, стоп 2/2/1/0.7) — устойчивости нет.",
+  "_comment": "Арбитр phased: фазы entry → trend → exit → risk (keepTop 5). Перекалибровка rsi_zone на AFKS по /rsi-zone-calibrate (2026-10-03, онбординг). Протокол канон 36/12/6: -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor (4 фолда); контроль 36/18/6. Тикер зарегистрирован, поэтому сетка перечисляет все шесть базовых полей: несвипуемые прибиты к литералу AFKS (4/25/75, EMA 50, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены). EMA 600 оставлена: Lookback 2·600+20 = 1220 баров ≈ 3.7% окна.  Запуск: go run ./cmd/backtest -ticker AFKS -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/afks/cal_phased.json -out ./reports/AFKS_zone/r20261003/phased -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor. ПРЕЖНЯЯ ВЕРСИЯ СЕТКИ (калибровка литерала): Калибровка rsi_zone на AFKS. Протокол штатный: -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor (4 фолда); оси свипались поверх core.DefaultParams() (тикер на момент прогонов не зарегистрирован). Итог 2026-09-28: pooled OOS PF 1.547 на 110 сделках, фолды 2.141 / 0.869 / 2.112 / 3.641; формально выше планки, но гуляли все пять полей (EMA 150/50/50/100, стоп 2/2/1/0.7) — устойчивости нет.",
   "phases": [
     {
       "name": "entry",
-      "keepTop": 5,
       "grid": {
         "RSIPeriod": [
+          2,
           3,
           4,
           5,
-          6
+          6,
+          8,
+          10,
+          14
         ],
         "RSILower": [
+          5,
           10,
           15,
           20,
           25,
-          30
+          30,
+          35,
+          40,
+          45
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          50
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
         ]
-      }
+      },
+      "keepTop": 5
     },
     {
       "name": "trend",
       "keepTop": 5,
       "grid": {
         "EMAPeriod": [
+          10,
+          20,
+          30,
           50,
+          75,
           100,
           150,
           200,
@@ -40,12 +64,16 @@
       "keepTop": 5,
       "grid": {
         "RSIUpper": [
+          50,
+          55,
           60,
           65,
           70,
           75,
           80,
-          85
+          85,
+          90,
+          95
         ]
       }
     },
@@ -53,12 +81,23 @@
       "name": "risk",
       "grid": {
         "StopDailyATR": [
+          0.3,
           0.5,
           0.7,
           1.0,
+          1.25,
           1.5,
           2.0,
+          2.5,
           3.0
+        ],
+        "DailyATRPeriod": [
+          5,
+          7,
+          10,
+          14,
+          21,
+          30
         ]
       }
     }

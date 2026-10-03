@@ -1,29 +1,41 @@
 {
-  "_comment": "Калибровка rsi_zone на AFKS. Протокол штатный: -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor (4 фолда); оси свипались поверх core.DefaultParams() (тикер на момент прогонов не зарегистрирован). Итог 2026-09-28: pooled OOS PF 1.112; фолды 2.139 / 0.744 / 0.785 / 2.463 (36/47/20/6 сделок); все три поля входа гуляли (RSIPeriod 4/4/5/5, RSILower 20/25/20/15, RSIUpper 60/65/60/65). Ось входа края не несёт.",
+  "_comment": "Тема entry: период RSI × нижняя зона. Перекалибровка rsi_zone на AFKS по /rsi-zone-calibrate (2026-10-03, онбординг). Протокол канон 36/12/6: -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor (4 фолда); контроль 36/18/6. Тикер зарегистрирован, поэтому сетка перечисляет все шесть базовых полей: несвипуемые прибиты к литералу AFKS (4/25/75, EMA 50, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены). EMA 600 оставлена: Lookback 2·600+20 = 1220 баров ≈ 3.7% окна.  Запуск: go run ./cmd/backtest -ticker AFKS -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/afks/cal_entry.json -out ./reports/AFKS_zone/r20261003/entry -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor. ПРЕЖНЯЯ ВЕРСИЯ СЕТКИ (калибровка литерала): Калибровка rsi_zone на AFKS. Протокол штатный: -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor (4 фолда); оси свипались поверх core.DefaultParams() (тикер на момент прогонов не зарегистрирован). Итог 2026-09-28: pooled OOS PF 1.112; фолды 2.139 / 0.744 / 0.785 / 2.463 (36/47/20/6 сделок); все три поля входа гуляли (RSIPeriod 4/4/5/5, RSILower 20/25/20/15, RSIUpper 60/65/60/65). Ось входа края не несёт.",
   "phases": [
     {
       "name": "entry",
       "grid": {
         "RSIPeriod": [
+          2,
           3,
           4,
           5,
-          6
+          6,
+          8,
+          10,
+          14
         ],
         "RSILower": [
+          5,
           10,
           15,
           20,
           25,
-          30
+          30,
+          35,
+          40,
+          45
         ],
         "RSIUpper": [
-          60,
-          65,
-          70,
-          75,
-          80,
-          85
+          75
+        ],
+        "EMAPeriod": [
+          50
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
         ]
       }
     }

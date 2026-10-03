@@ -1,0 +1,40 @@
+{
+  "_comment": "Baseline: дефолты ядра core.DefaultParams() одной точкой, все поля явно (тикер зарегистрирован, иначе подставился бы литерал). Перекалибровка 2026-10-03.",
+  "phases": [
+    {
+      "name": "baseline",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}
