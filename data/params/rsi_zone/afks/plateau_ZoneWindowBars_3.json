@@ -1,8 +1,8 @@
 {
-  "_comment": "Действующий литерал AFKS (2026-09-28) одной точкой, все поля явно. Перекалибровка 2026-10-03: опора тем и сравнения. РЕЗУЛЬТАТ 2026-10-03: WF 2.324/111 (5.011/2.663/2.706/1.540), контроль 1.941/84, комиссия 0.001 1.943; полное окно 154 сделки PF 1.503, +34.3k ₽, DD 19.19%. Это же point_nostoch для §4.7.",
+  "_comment": "Плато ZoneWindowBars вокруг 1 на точке.",
   "phases": [
     {
-      "name": "literal",
+      "name": "plateau_ZoneWindowBars_3",
       "grid": {
         "RSIPeriod": [
           4
@@ -23,7 +23,19 @@
           1.0
         ],
         "UseStoch": [
-          0
+          1
+        ],
+        "StochKPeriod": [
+          14
+        ],
+        "StochDSmooth": [
+          3
+        ],
+        "StochLower": [
+          20
+        ],
+        "ZoneWindowBars": [
+          3
         ],
         "StuckExitBars": [
           0
