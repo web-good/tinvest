@@ -53,9 +53,8 @@ func TestEveryProdTickerIsRegistered(t *testing.T) {
 }
 
 // Тикер на дефолтах ядра в боевой вселенной — только именным исключением с причиной.
-var baselineByDesignTickers = map[string]string{
-	"BAZA": "калибровка 2026-09-29: заведён на дефолтах ядра — точка большинства проиграла дефолтам на всех трёх схемах (док пакета strategy/baza)",
-}
+// BAZA была им до 2026-10-03: поверх дефолтов ядра включён выход PROFIT (док пакета strategy/baza).
+var baselineByDesignTickers = map[string]string{}
 
 func TestBaselineTickersInProdAreNamedExceptions(t *testing.T) {
 	prod := map[string]bool{}

@@ -66,6 +66,12 @@
 // упала с ~6300 до ~1085 ₽, против роста конфигурация почти не проверена; оборот медиана
 // ≈ 18.7 млн ₽ в день с марта 2026 (лот 1); дивиденды платятся до четырёх раз в год — отсечки
 // контролировать вручную.
+//
+// # Выход PROFIT (тема profit, 2026-10-02/03)
+//
+// Выключен: ProfitExitBars 0, ProfitExitPct 0. Тема profit — pooled 1.362/95, +11.85% против
+// 1.373/93, +12.06% без выхода; голоса N 3 / 3 / 2 / 2, порог 0.3 / 0.3 / 0.5 / 0.5 — ничьи 2/2,
+// большинства нет. Общий зонд N 3 · 0.5%: 1.305/93, +9.88%.
 package dias
 
 import "tinvest/internal/service/trading_strategy/rsi_zone/strategy/core"
@@ -82,5 +88,7 @@ func DefaultParams() core.Params {
 		EMAPeriod:      200,
 		DailyATRPeriod: 4,
 		StopDailyATR:   1.0,
+		ProfitExitBars: 0,
+		ProfitExitPct:  0,
 	}
 }

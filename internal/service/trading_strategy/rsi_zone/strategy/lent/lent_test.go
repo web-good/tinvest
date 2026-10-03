@@ -21,6 +21,8 @@ func TestCalibratedLiteralIsPinned(t *testing.T) {
 		StochDSmooth:   3,
 		StochLower:     15,
 		ZoneWindowBars: 1,
+		ProfitExitBars: 0,
+		ProfitExitPct:  0,
 	}
 	if got := DefaultParams(); got != want {
 		t.Fatalf("откалиброванный литерал LENT изменился:\n got: %+v\nwant: %+v", got, want)

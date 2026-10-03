@@ -16,6 +16,8 @@ func TestCalibratedLiteralIsPinned(t *testing.T) {
 		EMAPeriod:      200,
 		DailyATRPeriod: 4,
 		StopDailyATR:   1.0,
+		ProfitExitBars: 0,
+		ProfitExitPct:  0,
 	}
 	if got := DefaultParams(); got != want {
 		t.Fatalf("откалиброванный литерал DIAS изменился:\n got: %+v\nwant: %+v", got, want)
