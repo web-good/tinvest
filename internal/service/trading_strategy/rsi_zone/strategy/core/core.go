@@ -3,8 +3,10 @@
 // single trend EMA. It sells when the same RSI crosses UP through its upper critical band, or
 // when the protective stop — sized in daily ATR at entry and frozen on the position — is
 // touched. Optionally (StuckExitBars > 0) it also sells when RSI has sat below the lower band on
-// every one of the first StuckExitBars bars after the entry: the bounce never started. There is
-// no target, no trail and no end-of-day close: the position is held across nights and weekends
+// every one of the first StuckExitBars bars after the entry: the bounce never started. Optionally
+// (ProfitExitPct > 0) it locks a profit: past ProfitExitBars bars after the entry, the first close
+// at least ProfitExitPct percent above the entry sells. There is no fixed target, no trail and no
+// end-of-day close: the position is held across nights and weekends
 // until an exit fires. The decision logic is pure, stateless between bars and ticker-agnostic. The reference timeframe is 30 minutes. Run with
 // `-strategy rsi_zone -interval Minutes30`.
 package core
@@ -33,6 +35,13 @@ type Params struct {
 	DailyATRPeriod int     // daily ATR length, over WEEKDAY completed dailies (fixed; default 14)
 	StopDailyATR   float64 // stop = entry - StopDailyATR*dailyATR; 0 disables it (grid; never 0 in the grid)
 	StuckExitBars  int     // exit when RSI stayed below RSILower on this many bars after the entry bar without ever leaving the zone; 0 disables it (grid: stuck)
+
+	// Profit lock (theme profit). Once more than ProfitExitBars bars have closed after the entry
+	// bar without another exit, the first bar that closes at least ProfitExitPct percent above
+	// the entry price sells at its close. ProfitExitPct <= 0 disables it; DefaultParams leaves
+	// it off.
+	ProfitExitBars int     // bars after the entry bar that must pass before the lock arms (grid: profit)
+	ProfitExitPct  float64 // close-to-entry gain, in percent, that triggers the exit; 0 disables it (grid: profit)
 
 	// Stochastic confirmation gate (theme stoch). With UseStoch=1 the entry needs RSI and
 	// Stoch %D to BOTH read oversold within the last ZoneWindowBars bars, and one of them to
@@ -389,13 +398,13 @@ func (s *Strategy) entryReason(rsiNow, emaNow, entry, stop, atr float64) string 
 	)
 }
 
-// manage handles an open long. It exits on one of two signals, evaluated in precedence order
-// SL → RSI. The stop triggers INTRABAR (the bar's low touching the level), because a real stop
+// manage handles an open long. It exits on one of up to four signals, evaluated in precedence
+// order SL → RSI → STUCK → PROFIT (the last two only when switched on). The stop triggers INTRABAR (the bar's low touching the level), because a real stop
 // order fills as soon as price trades through it; the engine prices that fill via
 // model.IsStopReason. It wins a same-bar tie with the RSI exit: the intrabar order is unknowable
 // from OHLC, and assuming the worse outcome is the honest choice. The stop level is rebuilt from
-// the entry price and the daily ATR frozen at entry, never from the current ATR. The RSI exit
-// fills at the bar close. There is no time stop and no end-of-day close.
+// the entry price and the daily ATR frozen at entry, never from the current ATR. The RSI, STUCK
+// and PROFIT exits fill at the bar close. There is no time stop and no end-of-day close.
 func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal {
 	pos := md.Position
 	n := len(md.Closes)
@@ -433,29 +442,51 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 		sig.RSI = rsi[i]
 		sig.ExitReason = fmt.Sprintf("STUCK: RSI(%d) %d бар(ов) после входа ниже %.0f (%.1f), выход по %.4f (вход %.4f)",
 			s.p.RSIPeriod, bars, s.p.RSILower, rsi[i], closeP, pos.PurchasePrice)
+		return sig
+	}
+	// 4. optional: profit lock — past ProfitExitBars bars after the entry the close is at least
+	// ProfitExitPct percent above the entry.
+	if s.p.ProfitExitPct > 0 && pos.PurchasePrice > 0 {
+		gain := (closeP/pos.PurchasePrice - 1) * 100
+		if entryIdx := entryBarIndex(md); entryIdx >= 0 && i-entryIdx > s.p.ProfitExitBars && gain >= s.p.ProfitExitPct {
+			sig.Kind, sig.Reason = model.SignalSell, "PROFIT"
+			sig.RSI = rsi[i]
+			sig.ExitReason = fmt.Sprintf("PROFIT: %d бар(ов) после входа (> %d), close %.4f выше входа %.4f на %.2f%% (≥ %.2f%%)",
+				i-entryIdx, s.p.ProfitExitBars, closeP, pos.PurchasePrice, gain, s.p.ProfitExitPct)
+		}
 	}
 	return sig
 }
 
-// stuckBars counts the bars after the entry bar on which RSI read strictly below RSILower,
-// provided it did so on EVERY one of them; a single bar at or above the band (or an unwarmed
-// reading) disarms the stuck exit for the rest of the trade and yields 0. The entry bar is the
-// last bar that opened at or before Position.EntryTime and is not counted itself. Without
-// EntryTime or aligned Times, or when the entry bar has already left the candle window, there is
-// no anchor and the result is 0: the window (>= minLookback bars) dwarfs any StuckExitBars, so a
-// position that old either exited long ago or was disarmed by a rise the window may no longer show.
-func (s *Strategy) stuckBars(md strategy.MarketData, rsi []float64) int {
+// entryBarIndex returns the index of the entry bar: the last bar that opened at or before
+// Position.EntryTime. It is -1 without EntryTime or aligned Times, or when the entry bar has
+// already left the candle window — there is no anchor then, and the bar-counting exits stay
+// silent rather than guess.
+func entryBarIndex(md strategy.MarketData) int {
 	pos, n := md.Position, len(md.Closes)
-	if s.p.StuckExitBars <= 0 || pos == nil || pos.EntryTime.IsZero() || len(md.Times) != n || len(rsi) != n {
-		return 0
+	if pos == nil || pos.EntryTime.IsZero() || len(md.Times) != n {
+		return -1
 	}
-	entryIdx := -1
 	for b := n - 1; b >= 0; b-- {
 		if !md.Times[b].After(pos.EntryTime) {
-			entryIdx = b
-			break
+			return b
 		}
 	}
+	return -1
+}
+
+// stuckBars counts the bars after the entry bar on which RSI read strictly below RSILower,
+// provided it did so on EVERY one of them; a single bar at or above the band (or an unwarmed
+// reading) disarms the stuck exit for the rest of the trade and yields 0. The entry bar (see
+// entryBarIndex) is not counted itself. Without an anchor the result is 0: the window
+// (>= minLookback bars) dwarfs any StuckExitBars, so a position that old either exited long ago
+// or was disarmed by a rise the window may no longer show.
+func (s *Strategy) stuckBars(md strategy.MarketData, rsi []float64) int {
+	n := len(md.Closes)
+	if s.p.StuckExitBars <= 0 || len(rsi) != n {
+		return 0
+	}
+	entryIdx := entryBarIndex(md)
 	if entryIdx < 0 {
 		return 0
 	}
