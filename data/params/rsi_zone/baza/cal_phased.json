@@ -1,5 +1,5 @@
 {
-  "_comment": "Арбитр phased: фазы entry → trend → exit → risk (keepTop 5). Калибровка rsi_zone на BAZA по /rsi-zone-calibrate (2026-09-29). История 30m BAZA с 2025-12-10 (~9.6 мес, 8909 баров) — протокол нештатный, как у DOMRF: -months 10 -train-months 3 -test-months 2 -min-trades 15 (3 фолда, OOS 2026-03-01—05-01, 04-29—06-29, 06-29—08-29); контроль -train-months 4 -test-months 2. Сетка перечисляет все шесть полей: несвипуемые прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0). EMA 400 оставлена: Lookback 2·400+20 = 820 баров ≈ 9.2% истории. Запуск: go run ./cmd/backtest -ticker BAZA -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/baza/cal_phased.json -out ./reports/BAZA_zone/phased -months 10 -train-months 3 -test-months 2 -min-trades 15 -metric profit_factor. РЕЗУЛЬТАТ 2026-09-29: (арбитр) pooled OOS PF 1.645 на 43 сделках; фолды 2999.927 (3 сделки, вырожден) / 1.708 / 1.253; EMAPeriod 50/150/200, RSILower 10/30/30, RSIPeriod 2/4/4, RSIUpper 80/75/65, StopDailyATR 0.5/0.7/1.25, DailyATRPeriod 14/5/5. RSIUpper 60 не подтверждает (75/65), ATR 5 подтверждает; pooled ниже дефолтов.",
+  "_comment": "Арбитр phased: фазы entry → trend → exit → risk (keepTop 5). Перекалибровка rsi_zone на BAZA по /rsi-zone-calibrate (2026-10-03, онбординг). Протокол нештатный, как у калибровки литерала: история 30m с 2025-12-10, -months 10 -train-months 3 -test-months 2 -min-trades 15 -metric profit_factor (3 фолда); контроль -train-months 4. Тикер зарегистрирован, поэтому сетка перечисляет все поля литерала: несвипуемые прибиты к литералу BAZA (4/25/75, EMA 200, ATR 14, стоп 1.0, PROFIT 3 бара · 0.5%; stoch и STUCK выключены). EMA 400 — потолок: Lookback 2·400+20 = 820 баров ≈ 9.2% окна. Запуск: go run ./cmd/backtest -ticker BAZA -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/baza/cal_phased.json -out ./reports/BAZA_zone/r20261003/phased -months 10 -train-months 3 -test-months 2 -min-trades 15 -metric profit_factor. ПРЕЖНЯЯ ВЕРСИЯ СЕТКИ: Арбитр phased: фазы entry → trend → exit → risk (keepTop 5). Калибровка rsi_zone на BAZA по /rsi-zone-calibrate (2026-09-29). История 30m BAZA с 2025-12-10 (~9.6 мес, 8909 баров) — протокол нештатный, как у DOMRF: -months 10 -train-months 3 -test-months 2 -min-trades 15 (3 фолда, OOS 2026-03-01—05-01, 04-29—06-29, 06-29—08-29); контроль -train-months 4 -test-months 2. Сетка перечисляет все шесть полей: несвипуемые прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0). EMA 400 оставлена: Lookback 2·400+20 = 820 баров ≈ 9.2% истории. Запуск: go run ./cmd/backtest -ticker BAZA -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/baza/cal_phased.json -out ./reports/BAZA_zone/phased -months 10 -train-months 3 -test-months 2 -min-trades 15 -metric profit_factor. РЕЗУЛЬТАТ 2026-09-29: (арбитр) pooled OOS PF 1.645 на 43 сделках; фолды 2999.927 (3 сделки, вырожден) / 1.708 / 1.253; EMAPeriod 50/150/200, RSILower 10/30/30, RSIPeriod 2/4/4, RSIUpper 80/75/65, StopDailyATR 0.5/0.7/1.25, DailyATRPeriod 14/5/5. RSIUpper 60 не подтверждает (75/65), ATR 5 подтверждает; pooled ниже дефолтов.",
   "phases": [
     {
       "name": "entry",
@@ -36,6 +36,12 @@
         ],
         "StopDailyATR": [
           1.0
+        ],
+        "ProfitExitBars": [
+          3
+        ],
+        "ProfitExitPct": [
+          0.5
         ]
       },
       "keepTop": 5

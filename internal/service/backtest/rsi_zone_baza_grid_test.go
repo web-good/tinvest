@@ -19,6 +19,9 @@ var rsiZoneBAZAGridFiles = []string{
 	"cal_risk.json",
 	"cal_trend_risk.json",
 	"cal_phased.json",
+	"cal_stoch.json",
+	"cal_stuck.json",
+	"cal_profit.json",
 }
 
 // rsiZoneBAZAMaxEMA — потолок EMAPeriod на ~9.6 месяцах истории: Lookback 2·N+20 не должен
@@ -40,9 +43,9 @@ func rsiZoneBAZAPhases(t *testing.T, file string) []Phase {
 
 // TestRSIZoneBAZAGridsStayWide держит инварианты процедуры /rsi-zone-calibrate: каждое значение
 // применимо к core.Params, стоп никогда не выключен, RSIPeriod >= 2, EMA не длиннее истории,
-// каждая сетка перечисляет все шесть полей (после регистрации BAZA иначе оси мерялись бы поверх
-// его литерала, и повторный прогон сетки дал бы другие числа) и оси не урезаны ниже минимальных
-// краёв.
+// каждая сетка перечисляет все шесть полей и поля выхода PROFIT (после регистрации BAZA иначе оси
+// мерялись бы поверх его литерала, и повторный прогон сетки дал бы другие числа) и оси не урезаны
+// ниже минимальных краёв.
 func TestRSIZoneBAZAGridsStayWide(t *testing.T) {
 	fields := []string{"RSIPeriod", "RSILower", "RSIUpper", "EMAPeriod", "DailyATRPeriod", "StopDailyATR"}
 	axes := map[string]map[string][]float64{}
@@ -62,6 +65,13 @@ func TestRSIZoneBAZAGridsStayWide(t *testing.T) {
 		for _, f := range fields {
 			if len(grid[f]) == 0 {
 				t.Errorf("baza/%s: поле %s не перечислено — ось мерялась бы поверх литерала BAZA", file, f)
+			}
+		}
+		// Литерал BAZA включает PROFIT 3 · 0.5: тема, которая его не перечислит, молча мерялась бы
+		// с выходом, а повторный прогон после смены литерала дал бы другие числа.
+		for _, f := range []string{"ProfitExitBars", "ProfitExitPct"} {
+			if len(grid[f]) == 0 {
+				t.Errorf("baza/%s: поле %s не перечислено — выход PROFIT взялся бы из литерала BAZA", file, f)
 			}
 		}
 		for _, v := range grid["StopDailyATR"] {
@@ -109,6 +119,14 @@ func TestRSIZoneBAZAGridsStayWide(t *testing.T) {
 		{"cal_phased.json", "RSIUpper", upper},
 		{"cal_phased.json", "StopDailyATR", stop},
 		{"cal_phased.json", "DailyATRPeriod", atr},
+		{"cal_stoch.json", "UseStoch", []float64{1}},
+		{"cal_stoch.json", "StochKPeriod", []float64{5, 9, 14}},
+		{"cal_stoch.json", "StochDSmooth", []float64{1, 3}},
+		{"cal_stoch.json", "StochLower", []float64{10, 15, 20, 25, 30}},
+		{"cal_stoch.json", "ZoneWindowBars", []float64{1, 2, 3, 5, 8}},
+		{"cal_stuck.json", "StuckExitBars", []float64{0, 1, 2, 3, 4, 5, 6, 8, 10}},
+		{"cal_profit.json", "ProfitExitBars", []float64{0, 1, 2, 3, 4, 6, 8, 12}},
+		{"cal_profit.json", "ProfitExitPct", []float64{0, 0.3, 0.5, 0.75, 1.0, 1.5, 2.0}},
 	}
 	for _, m := range mustHave {
 		for _, w := range m.want {
