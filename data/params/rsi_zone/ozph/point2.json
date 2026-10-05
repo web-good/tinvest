@@ -1,0 +1,40 @@
+{
+  "_comment": "ТОЧКА второго круга по правилу большинства: дефолты ядра + DailyATRPeriod 3 + StopDailyATR 2.0; stoch/STUCK/PROFIT выкл. Голоса второго круга (23/11/3, 4 фолда; stoch/STUCK/PROFIT выкл): entry_exit2 2.348/24 — фолды 2 и 3 вырождены (3 сделки), голосуют два фолда: RSIPeriod 5/5, RSILower 20/20, RSIUpper 65/60 — правило ≥ 3 из 4 невыполнимо, консервативно → дефолты 4/25/75 (прецедент RAGR); trend2 0.867/47 — EMAPeriod 300/30*/50/40, большинства нет, дефолт 200; risk2 1.959/82 — DailyATRPeriod 3/3/3/3 → 3 (4/4), StopDailyATR 2/2/2/1.75 → 2.0 (3/4). Планку взяла только risk2 (фолды 2.030/4.415/0.591/2.229). Калибровка rsi_zone на OZPH по /rsi-zone-calibrate (2026-10-05, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История 30m в кэше с 2024-10-17 (IPO 2024-10), ~23.6 мес < 24 → нештатный протокол. Схема DOMRF (-train 3 -test 2) на 23 мес дала бы 10 фолдов вместо 3–4, под которые написаны правило большинства и планка (СТОП «число фолдов», решение пакетного режима по прецеденту RAGR 19/7/3): 23/11/3 (-months 23 -train-months 11 -test-months 3, 4 фолда, OOS ≈ окт 2025 … окт 2026), контроль 23/14/3 (3 фолда), -min-trades 15 (правило короткой истории). Окно 2024-11-05 … 2026-10-05 (~24 200 баров 30m). Шаг цены 0.01 ₽, лот 10: круг 2 шага / цена = 0.045% при 44.46 ₽, 0.078% при минимуме окна 25.55 ₽ < 0.2% → п.4 при -commission 0.001. Дивидендные отсечки в окне (GetDividends, объявлены до прогонов; дата — первый день без дивиденда): 2024-12-28 (0.18 ₽ ≈ 0.52%), 2025-06-05 (0.26 ₽ ≈ 0.51%), 2025-07-03 (0.28 ₽ ≈ 0.63%), 2025-10-04 (0.24 ₽ ≈ 0.48%), 2026-01-10 (0.27 ₽ ≈ 0.53%), 2026-06-03 (0.27 ₽ ≈ 0.57%), 2026-07-08 (0.27 ₽ ≈ 0.66%), 2026-09-29 (0.49 ₽ ≈ 1.09%). Baseline (дефолты, -months 36 = вся история) 164 сделки, PF 1.478. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 5% окна. Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker OZPH -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/ozph/point2.json -out ./reports/OZPH_zone/r20261005/point2_full -months 23 -min-trades 1 -metric profit_factor; walk-forward 23/11/3 — go run ./cmd/backtest -ticker OZPH -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/ozph/point2.json -out ./reports/OZPH_zone/r20261005/point2_wf -months 23 -train-months 11 -test-months 3 -min-trades 1 -metric profit_factor; контроль 23/14/3 — go run ./cmd/backtest -ticker OZPH -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/ozph/point2.json -out ./reports/OZPH_zone/r20261005/point2_ctrl -months 23 -train-months 14 -test-months 3 -min-trades 1 -metric profit_factor; удвоенная комиссия -commission 0.001 — go run ./cmd/backtest -ticker OZPH -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/ozph/point2.json -out ./reports/OZPH_zone/r20261005/point2_comm -months 23 -train-months 11 -test-months 3 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-05: полное окно 161/PF 1.813, net +58.8k, DD 22 053 ₽ (19.33%) > baseline 15.39% (гейт пробит); SL 1 из 161 (8.6% → 0.6%) при росте удержания 17 → 19 и ночёвок 59.5% → 62.7% — капкан широкого стопа (§4.5); WF 1.959/—, контроль 1.843, комиссия 1.520; хвосты 1.559/40, 1.907/82; через отсечки 4 → п.7 ПРОВАЛ. Капкан-коррекция стопа к 1.0 возвращает точку к дефолтам, которые тоже проваливают п.7 (4 сделки). Второй круг провален; §7: дефолты проходят п.1–6, проваливают п.7 → ОТКАЗ.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          3
+        ],
+        "StopDailyATR": [
+          2.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}

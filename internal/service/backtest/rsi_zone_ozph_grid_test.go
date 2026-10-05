@@ -23,6 +23,9 @@ var rsiZoneOzphGridFiles = []string{
 	"cal_stoch.json",
 	"cal_stuck.json",
 	"cal_profit.json",
+	"cal2_entry_exit.json",
+	"cal2_trend.json",
+	"cal2_risk.json",
 }
 
 // rsiZoneOzphMaxEMA — потолок EMAPeriod на 23-месячном окне (нештатный протокол 23/11/3, история
