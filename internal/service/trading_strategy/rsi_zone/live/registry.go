@@ -5,6 +5,7 @@ package live
 import (
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/afks"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/aflt"
+	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/bane"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/baza"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/core"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/dias"
@@ -25,6 +26,7 @@ var paramsByTicker = map[string]core.Params{
 	afks.Ticker:  afks.DefaultParams(),
 	aflt.Ticker:  aflt.DefaultParams(),
 	msng.Ticker:  msng.DefaultParams(),
+	bane.Ticker:  bane.DefaultParams(),
 	baza.Ticker:  baza.DefaultParams(),
 	dias.Ticker:  dias.DefaultParams(),
 	domrf.Ticker: domrf.DefaultParams(),
