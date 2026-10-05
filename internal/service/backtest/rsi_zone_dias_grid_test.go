@@ -3,6 +3,7 @@ package backtest
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/core"
@@ -20,6 +21,9 @@ var rsiZoneDIASGridFiles = []string{
 	"cal_risk.json",
 	"cal_trend_risk.json",
 	"cal_phased.json",
+	"cal_stoch.json",
+	"cal_stuck.json",
+	"cal_profit.json",
 	"cal2_entry.json",
 	"cal2_exit.json",
 	"cal2_trend.json",
@@ -46,7 +50,8 @@ func rsiZoneDIASPhases(t *testing.T, file string) []Phase {
 // TestRSIZoneDIASGridsStayWide держит инварианты процедуры /rsi-zone-calibrate: каждое значение
 // применимо к core.Params, стоп никогда не выключен, RSIPeriod >= 2, EMA не длиннее истории,
 // каждая сетка перечисляет все шесть полей (после регистрации DIAS иначе оси мерялись бы поверх
-// его литерала, и повторный прогон сетки дал бы другие числа) и оси не урезаны ниже минимальных
+// его литерала, и повторный прогон сетки дал бы другие числа), сетки перекалибровки 2026-10-05
+// (cal_*) перечисляют ещё и выключатели stoch/STUCK/PROFIT, а оси не урезаны ниже минимальных
 // краёв.
 func TestRSIZoneDIASGridsStayWide(t *testing.T) {
 	fields := []string{"RSIPeriod", "RSILower", "RSIUpper", "EMAPeriod", "DailyATRPeriod", "StopDailyATR"}
@@ -69,6 +74,15 @@ func TestRSIZoneDIASGridsStayWide(t *testing.T) {
 				t.Errorf("dias/%s: поле %s не перечислено — ось мерялась бы поверх литерала DIAS", file, f)
 			}
 		}
+		// Сетки перекалибровки прибивают выключатели механизмов явно: смена литерала (например,
+		// включённый PROFIT) иначе молча поменяла бы baseline темы при повторном прогоне.
+		if strings.HasPrefix(file, "cal_") {
+			for _, f := range []string{"UseStoch", "StuckExitBars", "ProfitExitBars", "ProfitExitPct"} {
+				if len(grid[f]) == 0 {
+					t.Errorf("dias/%s: поле %s не перечислено — механизм взялся бы из литерала DIAS", file, f)
+				}
+			}
+		}
 		for _, v := range grid["StopDailyATR"] {
 			if v <= 0 {
 				t.Errorf("dias/%s: StopDailyATR=%v — многодневный лонг без стопа не может быть точкой", file, v)
@@ -88,10 +102,10 @@ func TestRSIZoneDIASGridsStayWide(t *testing.T) {
 
 	entry := []float64{2, 3, 4, 5, 6, 8, 10, 14}
 	lower := []float64{5, 10, 15, 20, 25, 30, 35, 40, 45}
-	upper := []float64{50, 55, 60, 65, 70, 75, 80, 85, 90, 95}
+	upper := []float64{50, 52.5, 55, 60, 65, 70, 75, 80, 85, 90, 95}
 	trend := []float64{10, 20, 30, 50, 75, 100, 150, 200, 300, 400}
 	stop := []float64{0.3, 0.5, 0.7, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0}
-	atr := []float64{5, 7, 10, 14, 21, 30}
+	atr := []float64{3, 4, 5, 7, 10, 14, 21, 30}
 	mustHave := []struct {
 		file, axis string
 		want       []float64
@@ -101,7 +115,7 @@ func TestRSIZoneDIASGridsStayWide(t *testing.T) {
 		{"cal_exit.json", "RSIUpper", upper},
 		{"cal_entry_exit.json", "RSIPeriod", []float64{2, 3, 4, 5, 6, 7, 8}},
 		{"cal_entry_exit.json", "RSILower", []float64{10, 15, 20, 25, 30, 35}},
-		{"cal_entry_exit.json", "RSIUpper", []float64{55, 60, 65, 70, 75, 80, 85, 90}},
+		{"cal_entry_exit.json", "RSIUpper", []float64{50, 52.5, 55, 60, 65, 70, 75, 80, 85, 90}},
 		{"cal_trend.json", "EMAPeriod", trend},
 		{"cal_risk.json", "StopDailyATR", stop},
 		{"cal_risk.json", "DailyATRPeriod", atr},
@@ -114,6 +128,14 @@ func TestRSIZoneDIASGridsStayWide(t *testing.T) {
 		{"cal_phased.json", "RSIUpper", upper},
 		{"cal_phased.json", "StopDailyATR", stop},
 		{"cal_phased.json", "DailyATRPeriod", atr},
+		{"cal_stoch.json", "UseStoch", []float64{1}},
+		{"cal_stoch.json", "StochKPeriod", []float64{5, 9, 14}},
+		{"cal_stoch.json", "StochDSmooth", []float64{1, 3}},
+		{"cal_stoch.json", "StochLower", []float64{10, 15, 20, 25, 30}},
+		{"cal_stoch.json", "ZoneWindowBars", []float64{1, 2, 3, 5, 8}},
+		{"cal_stuck.json", "StuckExitBars", []float64{0, 1, 2, 3, 4, 5, 6, 8, 10}},
+		{"cal_profit.json", "ProfitExitBars", []float64{0, 1, 2, 3, 4, 6, 8, 12}},
+		{"cal_profit.json", "ProfitExitPct", []float64{0, 0.3, 0.5, 0.75, 1.0, 1.5, 2.0}},
 	}
 	for _, m := range mustHave {
 		for _, w := range m.want {
