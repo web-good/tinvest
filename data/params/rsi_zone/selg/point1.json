@@ -1,0 +1,40 @@
+{
+  "_comment": "ТОЧКА первого круга по правилу большинства: RSI 4/15/75, EMA 30, ATR 14, стоп 2.5; гейт стохастика, STUCK, PROFIT выключены. Голоса первого круга (36/12/6, 4 фолда, вырожденных нет — в каждом фолде ≥ 6 сделок и есть убыточные): RSIPeriod/RSILower — источник entry_exit (pooled 0.840/86 > entry 0.826/95): RSIPeriod 3/4/4/3 — ничья, дефолт 4; RSILower 10/15/15/15 → 15 (3/4). RSIUpper — источник exit (0.960/190 > entry_exit 0.840): 55/80/60/60 — нет большинства, дефолт 75 (entry_exit 70/80/60/70 — тоже нет). EMAPeriod — trend 1.128/66: 30/200/30/30 → 30 (3/4). risk 0.896/168: DailyATRPeriod 21/30/5/5 — нет, дефолт 14; StopDailyATR 2.5/1/2.5/2.5 → 2.5 (3/4). stoch: pooled 0.507/91 против baseline_point 0.877/169 → условие (а) не выполнено, UseStoch 0. stuck 5/5/2/2 — ничья → STUCK выключен. profit 0.878/190 (Compounded −15.87% против baseline −15.04%): ProfitExitBars 12/2/2/3 — нет большинства, ProfitExitPct 0.3×3 → общий зонд 3·0.5, проверка §4.7 (point1_profit). Арбитры: trend_risk 1.140/66 (EMA 30/200/30/30, ATR 5/30/5/5, стоп 1.5/1/1/1.5) подтверждает EMA 30, но не стоп 2.5; phased 0.710/46. Планку (pooled ≥ 1.5 и ≥ 3 из 4 фолдов > 1) не взяла ни одна тема: лучшие trend 1.128 и trend_risk 1.140, у обеих фолд 2 ниже 1 (EMA 200 в нём). Baseline_point: WF 0.877/169, контроль 0.745, комиссия 0.739 — дефолты проваливают п.1, п.3, п.4. Калибровка rsi_zone на SELG по /rsi-zone-calibrate (2026-10-05, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История 30m в кэше с 2023-08-04 (≥ 36 мес) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20. Шаг цены 0.01 ₽, лот 10: круг 2 шага / цена = 0.053% при 37.88 ₽, 0.083% при минимуме окна 24.18 ₽ < 0.2% → п.4 при -commission 0.001. Дивидендные отсечки в окне (GetDividends, объявлены до прогонов): 2023-12-01 (last_buy 11-30, 2 ₽ ≈ 2.99%), 2024-06-14 (last_buy 06-13, 2 ₽ ≈ 2.85%), 2024-10-11 (last_buy 10-10, 4 ₽ ≈ 7.04%); в 2025–2026 выплат нет. Бумага в окне упала с ~85 (2024-04) до ~24 ₽ (2026-07), сейчас ~38. Baseline (дефолты, 36 мес) убыточен: 244 сделки, PF 0.979, DD 33.06%. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.3% окна (36 634 бара). Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker SELG -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/selg/point1.json -out ./reports/SELG_zone/r20261005/point1_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker SELG -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/selg/point1.json -out ./reports/SELG_zone/r20261005/point1_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker SELG -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/selg/point1.json -out ./reports/SELG_zone/r20261005/point1_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; удвоенная комиссия -commission 0.001 — go run ./cmd/backtest -ticker SELG -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/selg/point1.json -out ./reports/SELG_zone/r20261005/point1_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-05: полное окно 36 мес 2 сделки (2024 +0.8k, 2025 +1.5k), PF 2294.9, net +2 295 ₽; WF 1 сделка в пуле (фолды 2–4 пусты), контроль 0 сделок, комиссия 1 сделка; хвосты 6 и 12 пусты. Стоп-условие: п.1 формально (PF на 1 сделке), п.2 ПРОВАЛ (1 < 20), п.3 ПРОВАЛ (0 сделок), п.4 формально, п.5 ПРОВАЛ (2026 — 0 сделок, net 0), п.6 ПРОВАЛ (хвост 6 — 0 сделок < 5), п.7 ок. Первый круг провален; плато/капкан/§4.7 по точке без сделок не информативны. RSI(4) < 15 при close > EMA(30) почти не случается.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          15
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          30
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          2.5
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}
