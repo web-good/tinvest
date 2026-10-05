@@ -1,0 +1,40 @@
+{
+  "_comment": "ИТОГОВАЯ ТОЧКА = ДЕФОЛТЫ ЯДРА (маршрут TGKA/CNRU, §4.2/§7): первый круг (point1.json, дефолты + RSILower 10) провален пунктами 1–6; во втором круге (cal2_*) ни одно поле не набрало большинства, точка второго круга = дефолты; дефолты проходят все семь пунктов стоп-условия. Калибровка rsi_zone на VSMO по /rsi-zone-calibrate (2026-10-05, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История VSMO длиннее 36 мес (дневной кэш с 2022-10, 30m с 2023-10-05 по окну) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда), контроль 36/18/6. Окно 2023-10-05 … 2026-10-05. Шаг цены 20 ₽: круг 2 шага / цена = 0.177% при 22 640 ₽ (текущая), 0.222% при минимуме окна 18 040 ₽ — консервативно берётся реальный круг 0.222% > 0.2% → п.4 при -commission 0.0012 (как IRKT: 0.21% → 0.0011). Дивидендная отсечка в окне одна: последний день с дивидендом 2024-05-31, отсечка 2024-06-01 (564 ₽ ≈ 1.6%; GetDividends). EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 4.4% окна (~27 700 баров). Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker VSMO -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/vsmo/point.json -out ./reports/VSMO_zone/r20261005/final_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker VSMO -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/vsmo/point.json -out ./reports/VSMO_zone/r20261005/final_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker VSMO -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/vsmo/point.json -out ./reports/VSMO_zone/r20261005/final_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; реальный круг -commission 0.0012 — go run ./cmd/backtest -ticker VSMO -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/vsmo/point.json -out ./reports/VSMO_zone/r20261005/final_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.0012 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-05 (= baseline_point.json, те же числа): полное окно 187 сделок PF 1.720, net +86.6k, DD 13.29%, SL 16 (8.6%) / RSI 171, удержание медиана 18 баров, ночёвок 59.9%. Семь пунктов: 1) WF 36/12/6 pooled 1.554 ≥ 1.0 — пройден; 2) пул 149 ≥ 20 — пройден; 3) контроль 36/18/6 1.644 — пройден; 4) реальный круг -commission 0.0012 1.269 — пройден (запас 27%); 5) 2024 +31.9k, 2025 +29.6k, 2026 +26.3k (2023 — огрызок −1.2k, не пункт) — пройден; 6) хвост 6 (вход с 2026-04-05) 29 сделок PF 1.816, хвост 12 68 сделок PF 1.313 — пройден; сверка знака: фолды 3+4 объединённо GP 60.9k / GL 46.0k = PF 1.325 > 1, знак совпадает с хвостом 6; 7) через отсечку 2024-06-01 — 0 сделок, входов в выходные 0 — пройден. Стоп 1.0 срабатывает (16 SL) — не капкан. Точка против дефолтов: совпадает; point1 проигрывает на всех схемах (0.696/0.348/0.569). Риски: калибровка не нашла ни одного поля — все темы ниже baseline (ось без сигнала, rsi_zone на VSMO работает только на дефолтах); фолд 3 (OOS 2025-04…2025-10) убыточен 0.890 (0.628 при реальном круге); 2026-07 даёт +27.5k из +86.6k (32%); 2026H1 −3.2k; хвост 12 PF 1.313 слабее окна; режим −47% за окно (43 060 → 22 640 ₽, минимум 18 040); ликвидность ~27 млн ₽/день (память rsi_pullback).",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}

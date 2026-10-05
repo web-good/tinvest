@@ -24,6 +24,10 @@ var rsiZoneVSMOGridFiles = []string{
 	"cal_stoch.json",
 	"cal_stuck.json",
 	"cal_profit.json",
+	"cal2_entry.json",
+	"cal2_exit.json",
+	"cal2_trend.json",
+	"cal2_risk.json",
 }
 
 // rsiZoneVSMOMaxEMA — потолок EMAPeriod на 36-месячном окне (36/12/6): Lookback 2·N+20 не должен
