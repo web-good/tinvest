@@ -1,0 +1,40 @@
+{
+  "_comment": "Плато (§4.4) вокруг точки (RSIPeriod 4): EMAPeriod 40 — проверка, где кончается плато 50–75 слева (100 уже обрывается до 1.373 с просадкой выше baseline). Калибровка rsi_zone на BANE по /rsi-zone-calibrate (2026-10-05, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История 30m в кэше с 2023-10-06 (≈ 36 мес) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20. Шаг цены 0.5 ₽, лот 1: круг 2 шага / цена = 0.082% при 1213.5 ₽, 0.115% при минимуме окна 871 ₽ < 0.2% → п.4 при -commission 0.001. Дивидендные отсечки в окне (GetDividends, объявлены до прогонов): 2024-07-12 (last_buy 07-11, 249.69 ₽ ≈ 8.1%), 2025-07-12 (last_buy 07-11, 147.31 ₽ ≈ 8.4%), 2026-07-11 (last_buy 07-10, 69.29 ₽ ≈ 6.7%). Бумага в окне упала с ~3500 до ~1210 ₽. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.9% окна. Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker BANE -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/bane/plateau4_EMAPeriod_40.json -out ./reports/BANE_zone/r20261005/plateau4_EMAPeriod_40_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker BANE -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/bane/plateau4_EMAPeriod_40.json -out ./reports/BANE_zone/r20261005/plateau4_EMAPeriod_40_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker BANE -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/bane/plateau4_EMAPeriod_40.json -out ./reports/BANE_zone/r20261005/plateau4_EMAPeriod_40_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-05: полное 96/1.508 DD 12.23%, WF 1.559/61 (фолд 1 0.642), контроль 2.067.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          40
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}

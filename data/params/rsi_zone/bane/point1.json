@@ -1,0 +1,40 @@
+{
+  "_comment": "ТОЧКА первого круга: дефолты ядра + RSIPeriod 2, EMA 75; гейт стохастика, STUCK, PROFIT выключены. Голоса первого круга (36/12/6, 4 фолда, вырожденных нет; phased фолд 1 — 6 сделок без убыточных, но арбитр): RSIPeriod/RSILower — источник entry (pooled 1.425/266 > entry_exit 1.223/122): RSIPeriod 2 во всех четырёх → 2 (4/4, край оси, зонд за краем невозможен — инвариант RSIPeriod ≥ 2); RSILower 25/10/5/10 → ничья 2/4 → дефолт 25. RSIUpper — exit 50/60/60/55 → нет большинства → 75 (entry_exit 60/55/60/70 — тоже нет). EMAPeriod — trend 50/75/75/75 → 75 (3/4). risk: StopDailyATR 0.3/2.5/1/0.7, DailyATRPeriod 14/5/21/7 → нет большинства, дефолты 1.0/14. stoch: pooled 1.353/60 против baseline_point 1.356/157 (−0.003) → условие (а) не выполнено, гейт выключен. stuck 6/1/3/2 → нет большинства → 0. profit: Bars 2/3/2/0 (нет большинства), Pct 0.3/0.5/0.5/0.5 → кандидат — общий зонд 3·0.5 (тема profit pooled 1.427 / Compounded 37.66% против baseline 1.356 / 35.74%), проверка §4.7 (point1_profit.json). Планку взяли trend 1.683/100 (3/4 > 1, фолд 1 0.878) и арбитр trend_risk 1.539/90 (3/4, EMA 50/75/75/50). Не взяли: entry 1.425 (фолд 3 0.723), exit 1.366, entry_exit 1.223, risk 1.155, stoch 1.353, stuck 1.282, profit 1.427, phased 1.014. Калибровка rsi_zone на BANE по /rsi-zone-calibrate (2026-10-05, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История 30m в кэше с 2023-10-06 (≈ 36 мес) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20. Шаг цены 0.5 ₽, лот 1: круг 2 шага / цена = 0.082% при 1213.5 ₽, 0.115% при минимуме окна 871 ₽ < 0.2% → п.4 при -commission 0.001. Дивидендные отсечки в окне (GetDividends, объявлены до прогонов): 2024-07-12 (last_buy 07-11, 249.69 ₽ ≈ 8.1%), 2025-07-12 (last_buy 07-11, 147.31 ₽ ≈ 8.4%), 2026-07-11 (last_buy 07-10, 69.29 ₽ ≈ 6.7%). Бумага в окне упала с ~3500 до ~1210 ₽. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.9% окна. Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker BANE -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/bane/point1.json -out ./reports/BANE_zone/r20261005/point1_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker BANE -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/bane/point1.json -out ./reports/BANE_zone/r20261005/point1_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker BANE -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/bane/point1.json -out ./reports/BANE_zone/r20261005/point1_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; удвоенная комиссия -commission 0.001 — go run ./cmd/backtest -ticker BANE -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/bane/point1.json -out ./reports/BANE_zone/r20261005/point1_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-05: полное окно 765 сделок PF 1.158 net +46.2k ₽ DD 25.61% (41 384 ₽) — гейт просадки §4.6 пробит; WF 1.151/520 (1.228/1.403/0.813/1.324), контроль 1.118, комиссия 0.001 0.850 — провал п.4; хвост 12 1.023. RSIPeriod 2 на RSILower 25 даёт втрое больше мелких сделок, съедаемых издержками. Отвергнута в пользу point.json (RSIPeriod 4).",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          2
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          75
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}
