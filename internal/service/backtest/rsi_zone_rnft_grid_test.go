@@ -11,7 +11,7 @@ import (
 // rsiZoneRNFTGridFiles перечисляет тематические сетки RNFT поимённо, а не обходом каталога: в
 // том же каталоге лежат файлы-точки (baseline_point.json, point.json, plateau_*.json), которые
 // законно фиксируют ось одним значением и упали бы на проверке краёв осей. Сетки второго круга
-// (cal2_*), если понадобятся, узкие по построению: для них проверяются инварианты, но не
+// (cal2_*) узкие по построению: для них проверяются инварианты, но не
 // минимальные края осей.
 var rsiZoneRNFTGridFiles = []string{
 	"cal_entry.json",
@@ -24,6 +24,9 @@ var rsiZoneRNFTGridFiles = []string{
 	"cal_stoch.json",
 	"cal_stuck.json",
 	"cal_profit.json",
+	"cal2_entry.json",
+	"cal2_trend.json",
+	"cal2_risk.json",
 }
 
 // rsiZoneRNFTMaxEMA — потолок EMAPeriod на каноническом 36-месячном окне (36/12/6): Lookback

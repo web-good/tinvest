@@ -1,0 +1,40 @@
+{
+  "_comment": "ТОЧКА первого круга: дефолты ядра + StuckExitBars 2 (единственное поле с большинством). Голоса первого круга (36/12/6, 4 фолда; вырожденных нет — фолд 3 entry 5 сделок с убыточными): RSIPeriod/RSILower — источник entry (pooled 1.212/54 > entry_exit 1.122/46): RSIPeriod 4/6/3/3, RSILower 10/20/5/10 — по 2/4, большинства нет → дефолты 4/25. RSIUpper — exit 50/95/70/85 → нет → 75. EMAPeriod — trend 100/50/50/30 → 2/4, большинства нет → 200 (тема trend взяла планку 1.630/103, 4/4 > 1, но голоса разошлись). risk: StopDailyATR 0.3/0.3/0.7/0.7, DailyATRPeriod 10/5/21/30 → нет большинства → 1.0/14. stoch: pooled 0.961/88 против baseline_point 0.973/179 → (а) не выполнено, гейт выкл. stuck 2/1/2/2 → StuckExitBars 2 (3/4) — кандидат, проверка §4.7 (без него = baseline_point). profit: Bars 0/6/2/6 → нет большинства, Pct 0.3/0.3/0.3/0.5 → кандидат — общий зонд 3·0.5 (pooled темы 0.817 / Compounded −19.44% против baseline 0.973 / −3.78%), проверка §4.7 (point1_profit.json). Планку взяли: trend 1.630/103 (4/4) и арбитр trend_risk 1.614/105 (4/4); остальные — нет (entry 1.212, entry_exit 1.122, exit 0.820, risk 1.000, phased 0.897, stoch 0.961, stuck 0.946, profit 0.817). Калибровка rsi_zone на RNFT по /rsi-zone-calibrate (2026-10-05, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История 30m в кэше с 2023-10-05 (≥ 36 мес) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20. Шаг цены 0.05 ₽, лот 1: круг 2 шага / цена = 0.118% при 84.7 ₽, 0.154% при минимуме окна 65.05 ₽ < 0.2% → п.4 при -commission 0.001. Дивидендные отсечки в окне (GetDividends, объявлены до прогонов): нет ни одной. Бумага в окне упала с ~274 до ~85 ₽. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.3% окна. Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker RNFT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/rnft/point1.json -out ./reports/RNFT_zone/r20261005/point1_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker RNFT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/rnft/point1.json -out ./reports/RNFT_zone/r20261005/point1_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker RNFT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/rnft/point1.json -out ./reports/RNFT_zone/r20261005/point1_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; удвоенная комиссия -commission 0.001 — go run ./cmd/backtest -ticker RNFT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/rnft/point1.json -out ./reports/RNFT_zone/r20261005/point1_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-05: полное окно 290 сделок PF 0.865, net −22 155 ₽, DD 39.29%; WF 0.987/–, контроль 0.885, комиссия 0.841; без STUCK (= baseline_point) WF 0.973 — прирост 0.014 < 0.05 → STUCK выключен, точка первого круга = дефолты ядра.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          2
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}
