@@ -1,0 +1,50 @@
+{
+  "_comment": "Тема trend: EMAPeriod (11 узлов); источник EMAPeriod. Калибровка rsi_zone на SELG по /rsi-zone-calibrate (2026-10-05, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История 30m в кэше с 2023-08-04 (≥ 36 мес) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20. Шаг цены 0.01 ₽, лот 10: круг 2 шага / цена = 0.053% при 37.88 ₽, 0.083% при минимуме окна 24.18 ₽ < 0.2% → п.4 при -commission 0.001. Дивидендные отсечки в окне (GetDividends, объявлены до прогонов): 2023-12-01 (last_buy 11-30, 2 ₽ ≈ 2.99%), 2024-06-14 (last_buy 06-13, 2 ₽ ≈ 2.85%), 2024-10-11 (last_buy 10-10, 4 ₽ ≈ 7.04%); в 2025–2026 выплат нет. Бумага в окне упала с ~85 (2024-04) до ~24 ₽ (2026-07), сейчас ~38. Baseline (дефолты, 36 мес) убыточен: 244 сделки, PF 0.979, DD 33.06%. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.3% окна (36 634 бара). Запуск: go run ./cmd/backtest -ticker SELG -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/selg/cal_trend.json -out ./reports/SELG_zone/r20261005/trend -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "trend",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          10,
+          20,
+          30,
+          50,
+          75,
+          100,
+          150,
+          200,
+          300,
+          400,
+          600
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}
