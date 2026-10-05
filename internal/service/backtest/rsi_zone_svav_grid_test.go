@@ -23,6 +23,10 @@ var rsiZoneSvavGridFiles = []string{
 	"cal_stoch.json",
 	"cal_stuck.json",
 	"cal_profit.json",
+	"cal2_entry.json",
+	"cal2_exit.json",
+	"cal2_trend.json",
+	"cal2_risk.json",
 }
 
 // rsiZoneSvavMaxEMA — потолок EMAPeriod на 36-месячном окне (канон 36/12/6): Lookback 2·N+20 не

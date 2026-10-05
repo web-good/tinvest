@@ -1,0 +1,40 @@
+{
+  "_comment": "ИТОГОВАЯ ТОЧКА SVAV rsi_zone = point2 (второй круг): RSI 3/15/75, EMA 40, ATR 4, стоп 1.0; гейт стохастика, STUCK, PROFIT выключены. Голоса второго круга (36/12/6, 4 фолда, поверх дефолтов+EMA 50): entry2 2.354/76 — RSIPeriod 3/3/3/3 → 3, RSILower 15/15/15/20 → 15; exit2 1.562/82 — RSIUpper 57.5/57.5/60/55 — нет, дефолт 75; trend2 1.789/55 — EMA 50/40/40/40 → 40; risk2 2.255/76 — ATR 4/4/4/4 → 4, стоп 1.25/1/1/2 — нет, дефолт 1.0. Гейт стохастика, STUCK, PROFIT — по первому кругу выключены. Калибровка rsi_zone на SVAV по /rsi-zone-calibrate (2026-10-05, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История 30m в кэше с 2023-09-28 (≥ 36 мес) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20. Шаг цены 0.5 ₽, лот 1: круг 2 шага / цена = 0.270% при 371 ₽ (текущая), 0.153% при медиане окна 652 ₽, 0.434% при минимуме окна 230.5 ₽ (2026-07-17) > 0.2% → модель -commission 0.0005 оптимистична, п.4 стоп-условия ужесточён до реального круга при текущей цене: -commission 0.0014 (круг 0.28% ≥ 0.270%, прецедент IRKT 0.0011). Дивидендные отсечки в окне (GetDividends, объявлены до прогонов): 2024-07-05 (last_buy 07-04, 89 ₽ ≈ 9.24%), 2025-06-11 (last_buy 06-10, 70 ₽ ≈ 9.14%), 2026-06-11 (last_buy 06-10, 25.5 ₽ ≈ 5.94%). Бумага в окне упала с ~1010 (2023-10) до ~230 ₽ (2026-07), сейчас ~371. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.6% окна (~34 000 баров). Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker SVAV -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/svav/point.json -out ./reports/SVAV_zone/r20261005/final_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker SVAV -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/svav/point.json -out ./reports/SVAV_zone/r20261005/final_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker SVAV -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/svav/point.json -out ./reports/SVAV_zone/r20261005/final_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; реальный круг -commission 0.0014 — go run ./cmd/backtest -ticker SVAV -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/svav/point.json -out ./reports/SVAV_zone/r20261005/final_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.0014 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-05: повтор point2 того же дня совпал — полное 57/PF 3.913/+39 373.70 ₽/DD 12.23%; WF 5.821/40, контроль 6.498/29, круг 0.0014 3.960, круг 0.0022 2.737. ВЕРДИКТ: заведён на точке второго круга, 7/7 пунктов (1: 5.821; 2: 40 сделок; 3: 6.498; 4: 3.960 при реальном круге; 5: 2024 +5.8k, 2025 +23.3k, 2026 +8.9k; 6: хвост 6 5.200/12, хвост 12 5.733/23, знак совпал с фолдами 3+4; 7: 0/0). Дефолты ядра проваливают п.4 (0.924), п.5 (2026 −15.5k), п.6 (хвост 6 0.850) → точка побеждает (§7). Гейт DD: 12.23% / 16 200 ₽ против 19.78% / 33 021 ₽. Риски: пул 40 сделок, фолд 2 — 6 сделок с PF 201.8 (почти вырожден); RSIPeriod на лезвии (4 → 5 сделок, 2 → 367 сделок PF 1.658); второй круг мерился поверх EMA 50, а точка взяла EMA 40 из другой темы (склейка, плато EMA 30–50 держит WF ≥ 3.8); 2024H1 и 2026H1 в минусе; лучшая сделка 15.9% net, три лучших 31.4% (октябрь 2025); круг издержек при падении цены растёт (0.434% на минимуме окна).",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          3
+        ],
+        "RSILower": [
+          15
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          40
+        ],
+        "DailyATRPeriod": [
+          4
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}
