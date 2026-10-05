@@ -1,0 +1,52 @@
+{
+  "_comment": "ТОЧКА первого круга по правилу большинства: RSIPeriod 3, RSIUpper 85, EMA 50, ATR 5, гейт стохастика 14/3/20/1, STUCK 5; PROFIT выключен. Голоса первого круга (24/12/3, 4 фолда): RSIPeriod/RSILower/RSIUpper — источник entry_exit (pooled 1.860/48 > entry 1.457/48 и exit 1.775/95); фолд 3 вырожден (3 сделки), невырожденных три → нужна единогласность: RSIPeriod 3/3/3 → 3; RSILower 10/10/15 → нет, дефолт 25; RSIUpper 85/85/85 → 85 (exit: 60/75/75/75 — за дефолт 75). EMAPeriod — trend 50/50/50/50 → 50 (4/4, планка взята 5.418/54). risk: DailyATRPeriod 21/5/5/5 → 5 (3/4), StopDailyATR 1/1/1/2 → дефолт 1.0 (3/4); арбитр trend_risk 6.609/54 подтверждает EMA 50 + ATR 5 + стоп 1.0. stoch: pooled 3.104/28 против baseline_point 1.826/88 (+1.28, пул ≥ 20) → условие (а) выполнено; но невырожденный фолд один (фолды 1 и 4 — по 4 сделки, фолд 3 без убыточных) → ни у одной оси нет большинства → оси на дефолтах ядра 14/3/20/1, гейт проверяется §4.7 (point1_nostoch). stuck 5/5/5/0 → 5 (3/4), проверка §4.7 (point1_nostuck). profit: Bars 2/6/8/12, Pct 1.5/0.5/0.75/0.3 — нет большинства → общий зонд 3·0.5 (тема profit 1.732 / Compounded 33.22% против baseline 1.826 / 37.66%), проверка §4.7 (point1_profit). Планку взяли: trend 5.418/54, exit 1.775/95, entry_exit 1.860/48 (3 из 3 невырожденных), risk 1.778/87, stuck 1.788/88, profit 1.732/89, арбитры trend_risk 6.609/54; не взяли entry 1.457 (фолды 2 и 3 ниже 1), stoch (один невырожденный фолд), phased 5.233/21 (фолд 4 без убыточных). Baseline_point сам берёт планку: 1.826/88, все 4 фолда > 1. Калибровка rsi_zone на ASTR по /rsi-zone-calibrate (2026-10-05, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История 30m в кэше с 2023-10-13 (IPO, ≈ 35.7 мес < 36) → по правилу §1.3 протокол 24/12/3 (-months 24 -train-months 12 -test-months 3, 4 фолда, OOS ≈ окт 2025 … окт 2026), контроль 24/15/3 (3 фолда), -min-trades 20. Шаг цены 0.05 ₽, лот 1: круг 2 шага / цена = 0.047% при 211.6 ₽, 0.084% при минимуме окна 119.55 ₽ < 0.2% → п.4 при -commission 0.001. Дивидендные отсечки в окне (GetDividends, объявлены до прогонов): 2025-01-16 (last_buy 01-15, 2.64 ₽ ≈ 0.54%), 2025-07-10 (last_buy 07-09, 3.15 ₽ ≈ 0.82%), 2026-05-30 (last_buy 05-29, 4.68 ₽ ≈ 1.68%); 2024-07-09 (1.45%) — до окна. Бумага в окне упала с ~550 до ~210 ₽ (минимум 119.55). EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 4.5% окна (26 882 бара). Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker ASTR -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/astr/point1.json -out ./reports/ASTR_zone/r20261005/point1_full -months 24 -min-trades 1 -metric profit_factor; walk-forward 24/12/3 — go run ./cmd/backtest -ticker ASTR -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/astr/point1.json -out ./reports/ASTR_zone/r20261005/point1_wf -months 24 -train-months 12 -test-months 3 -min-trades 1 -metric profit_factor; контроль 24/15/3 — go run ./cmd/backtest -ticker ASTR -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/astr/point1.json -out ./reports/ASTR_zone/r20261005/point1_ctrl -months 24 -train-months 15 -test-months 3 -min-trades 1 -metric profit_factor; удвоенная комиссия -commission 0.001 — go run ./cmd/backtest -ticker ASTR -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/astr/point1.json -out ./reports/ASTR_zone/r20261005/point1_comm -months 24 -train-months 12 -test-months 3 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-05 (24/12/3, 4 фолда): полное окно 28 сделок PF 5.601 net +26.5k DD 6.66%; WF 3.494/19 (3.504/3, 2.533/6, 1.437/5, 16.103/5), контроль 3.511/16, комиссия 2.878/19 → провал п.2 (пул 19 < 20); хвост 6 — 10 сделок. Первый круг провален.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          3
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          85
+        ],
+        "EMAPeriod": [
+          50
+        ],
+        "DailyATRPeriod": [
+          5
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          1
+        ],
+        "StuckExitBars": [
+          5
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ],
+        "StochKPeriod": [
+          14
+        ],
+        "StochDSmooth": [
+          3
+        ],
+        "StochLower": [
+          20
+        ],
+        "ZoneWindowBars": [
+          1
+        ]
+      }
+    }
+  ]
+}

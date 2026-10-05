@@ -1,0 +1,40 @@
+{
+  "_comment": "ТОЧКА второго круга по правилу большинства: RSI 3/10/85, EMA 40, ATR 3, стоп 1.0; гейт стохастика, STUCK, PROFIT выключены. Голоса второго круга (24/12/3, 4 фолда, вырожденных нет; гейт стохастика, STUCK, PROFIT выключены): trend2 5.610/47 — EMAPeriod 40/40/40/50 → 40 (3/4); entry_exit2 1.994/49 — RSIPeriod 3/3/3/3 → 3, RSILower 10/10/10/12.5 → 10 (3/4), RSIUpper 85/85/85/85 → 85; risk2 1.796/87 — DailyATRPeriod 3/3/3/6 → 3 (3/4), StopDailyATR 1.0×4 → 1.0. Калибровка rsi_zone на ASTR по /rsi-zone-calibrate (2026-10-05, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История 30m в кэше с 2023-10-13 (IPO, ≈ 35.7 мес < 36) → по правилу §1.3 протокол 24/12/3 (-months 24 -train-months 12 -test-months 3, 4 фолда, OOS ≈ окт 2025 … окт 2026), контроль 24/15/3 (3 фолда), -min-trades 20. Шаг цены 0.05 ₽, лот 1: круг 2 шага / цена = 0.047% при 211.6 ₽, 0.084% при минимуме окна 119.55 ₽ < 0.2% → п.4 при -commission 0.001. Дивидендные отсечки в окне (GetDividends, объявлены до прогонов): 2025-01-16 (last_buy 01-15, 2.64 ₽ ≈ 0.54%), 2025-07-10 (last_buy 07-09, 3.15 ₽ ≈ 0.82%), 2026-05-30 (last_buy 05-29, 4.68 ₽ ≈ 1.68%); 2024-07-09 (1.45%) — до окна. Бумага в окне упала с ~550 до ~210 ₽ (минимум 119.55). EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 4.5% окна (26 882 бара). Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker ASTR -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/astr/point2.json -out ./reports/ASTR_zone/r20261005/point2_full -months 24 -min-trades 1 -metric profit_factor; walk-forward 24/12/3 — go run ./cmd/backtest -ticker ASTR -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/astr/point2.json -out ./reports/ASTR_zone/r20261005/point2_wf -months 24 -train-months 12 -test-months 3 -min-trades 1 -metric profit_factor; контроль 24/15/3 — go run ./cmd/backtest -ticker ASTR -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/astr/point2.json -out ./reports/ASTR_zone/r20261005/point2_ctrl -months 24 -train-months 15 -test-months 3 -min-trades 1 -metric profit_factor; удвоенная комиссия -commission 0.001 — go run ./cmd/backtest -ticker ASTR -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/astr/point2.json -out ./reports/ASTR_zone/r20261005/point2_comm -months 24 -train-months 12 -test-months 3 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-05 (24/12/3, 4 фолда): полное окно 17 сделок (все RSI, без убыточных) net +16.1k DD 1.79%; WF на 8 сделках пула (2/2/1/3), контроль 6, комиссия 8; хвост 6 мес 4 сделки → провал п.2 и п.6. Связка RSI 3/10 + EMA 40 + ATR 3 почти не даёт входов. Второй круг провален → §7: дефолты.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          3
+        ],
+        "RSILower": [
+          10
+        ],
+        "RSIUpper": [
+          85
+        ],
+        "EMAPeriod": [
+          40
+        ],
+        "DailyATRPeriod": [
+          3
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}

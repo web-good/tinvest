@@ -24,6 +24,9 @@ var rsiZoneAstrGridFiles = []string{
 	"cal_stoch.json",
 	"cal_stuck.json",
 	"cal_profit.json",
+	"cal2_trend.json",
+	"cal2_entry_exit.json",
+	"cal2_risk.json",
 }
 
 // rsiZoneAstrMaxEMA — потолок EMAPeriod на 24-месячном окне (24/12/3, история ASTR с IPO
