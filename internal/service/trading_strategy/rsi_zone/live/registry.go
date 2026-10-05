@@ -4,6 +4,7 @@ package live
 
 import (
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/afks"
+	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/aflt"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/baza"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/core"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/dias"
@@ -21,6 +22,7 @@ import (
 // не взяла. Торгуют только перечисленные в RSI_ZONE_TICKERS.
 var paramsByTicker = map[string]core.Params{
 	afks.Ticker:  afks.DefaultParams(),
+	aflt.Ticker:  aflt.DefaultParams(),
 	baza.Ticker:  baza.DefaultParams(),
 	dias.Ticker:  dias.DefaultParams(),
 	domrf.Ticker: domrf.DefaultParams(),

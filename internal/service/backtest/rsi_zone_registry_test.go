@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	rsizoneafks "tinvest/internal/service/trading_strategy/rsi_zone/strategy/afks"
+	rsizoneaflt "tinvest/internal/service/trading_strategy/rsi_zone/strategy/aflt"
 	rsizonebaza "tinvest/internal/service/trading_strategy/rsi_zone/strategy/baza"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/core"
 	rsizonedias "tinvest/internal/service/trading_strategy/rsi_zone/strategy/dias"
@@ -67,6 +68,7 @@ func TestRSIZoneRegisteredTickersUseTheirLiteral(t *testing.T) {
 		rsizoneragr.Ticker:  rsizoneragr.DefaultParams(),
 		rsizoneupro.Ticker:  rsizoneupro.DefaultParams(),
 		rsizonemtss.Ticker:  rsizonemtss.DefaultParams(),
+		rsizoneaflt.Ticker:  rsizoneaflt.DefaultParams(),
 		rsizonevsmo.Ticker:  rsizonevsmo.DefaultParams(),
 	} {
 		b := RSIZoneLookupOrGeneric(ticker)

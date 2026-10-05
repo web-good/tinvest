@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	rsizoneafks "tinvest/internal/service/trading_strategy/rsi_zone/strategy/afks"
+	rsizoneaflt "tinvest/internal/service/trading_strategy/rsi_zone/strategy/aflt"
 	rsizonebaza "tinvest/internal/service/trading_strategy/rsi_zone/strategy/baza"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/core"
 	rsizonedias "tinvest/internal/service/trading_strategy/rsi_zone/strategy/dias"
@@ -50,6 +51,7 @@ var rsiZoneRegistry = map[string]Binding{
 	rsizoneragr.Ticker:  rsiZoneBindingFor(rsizoneragr.Ticker, rsizoneragr.DefaultParams),
 	rsizoneupro.Ticker:  rsiZoneBindingFor(rsizoneupro.Ticker, rsizoneupro.DefaultParams),
 	rsizonemtss.Ticker:  rsiZoneBindingFor(rsizonemtss.Ticker, rsizonemtss.DefaultParams),
+	rsizoneaflt.Ticker:  rsiZoneBindingFor(rsizoneaflt.Ticker, rsizoneaflt.DefaultParams),
 	rsizonevsmo.Ticker:  rsiZoneBindingFor(rsizonevsmo.Ticker, rsizonevsmo.DefaultParams),
 }
 
