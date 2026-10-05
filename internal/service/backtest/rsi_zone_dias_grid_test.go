@@ -12,7 +12,7 @@ import (
 // rsiZoneDIASGridFiles перечисляет тематические сетки DIAS поимённо, а не обходом каталога: в
 // том же каталоге лежат файлы-точки (baseline_point.json, point.json, plateau_*.json), которые
 // законно фиксируют ось одним значением и упали бы на проверке краёв осей. Сетки второго круга
-// (cal2_*) узкие по построению: для них проверяются инварианты, но не минимальные края осей.
+// (cal2_*, cal3_* — второй круг перекалибровки 2026-10-05) узкие по построению: для них проверяются инварианты, но не минимальные края осей.
 var rsiZoneDIASGridFiles = []string{
 	"cal_entry.json",
 	"cal_exit.json",
@@ -28,6 +28,10 @@ var rsiZoneDIASGridFiles = []string{
 	"cal2_exit.json",
 	"cal2_trend.json",
 	"cal2_risk.json",
+	"cal3_entry.json",
+	"cal3_risk.json",
+	"cal3_trend.json",
+	"cal3_profit.json",
 }
 
 // rsiZoneDIASMaxEMA — потолок EMAPeriod на 24-месячном окне (история ~31.5 мес): Lookback 2·N+20 не должен
@@ -76,7 +80,7 @@ func TestRSIZoneDIASGridsStayWide(t *testing.T) {
 		}
 		// Сетки перекалибровки прибивают выключатели механизмов явно: смена литерала (например,
 		// включённый PROFIT) иначе молча поменяла бы baseline темы при повторном прогоне.
-		if strings.HasPrefix(file, "cal_") {
+		if strings.HasPrefix(file, "cal_") || strings.HasPrefix(file, "cal3_") {
 			for _, f := range []string{"UseStoch", "StuckExitBars", "ProfitExitBars", "ProfitExitPct"} {
 				if len(grid[f]) == 0 {
 					t.Errorf("dias/%s: поле %s не перечислено — механизм взялся бы из литерала DIAS", file, f)

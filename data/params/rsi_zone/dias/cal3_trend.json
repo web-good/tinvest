@@ -1,0 +1,45 @@
+{
+  "_comment": "Второй круг перекалибровки DIAS 2026-10-05 (§6): первый круг провален — точка point3 (литерал + RSI 8/30 + ATR 3) дала WF 0.782/23, пункт 1 стоп-условия. Зоны — по фактическим голосам фолдов первого круга, шаг — половина шага первого круга; несвипуемые поля прибиты к литералу DIAS (4/25/52.5, EMA 200, ATR 4, стоп 1.0, механизмы выключены). Префикс cal3_, потому что cal2_* — второй круг калибровки 2026-09-29. Тема trend: голоса EMAPeriod 200/200/50/50 (ничья — две зоны вокруг обоих голосов). Запуск: go run ./cmd/backtest -ticker DIAS -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/dias/cal3_trend.json -out ./reports/DIAS_zone/r20261005/cal3_trend -months 24 -train-months 12 -test-months 3 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-05 (второй круг): pooled 1.615/62; фолды 0.984/15, 0.944/26, 1.404/6, 2.995/15; голоса EMA 200/175/50/60 — большинства нет.",
+  "phases": [
+    {
+      "name": "trend",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          52.5
+        ],
+        "EMAPeriod": [
+          40,
+          50,
+          60,
+          175,
+          200,
+          250
+        ],
+        "DailyATRPeriod": [
+          4
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}

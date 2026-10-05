@@ -1,0 +1,40 @@
+{
+  "_comment": "Перекалибровка DIAS 2026-10-05, второй круг (reports/DIAS_zone/r20261005/<имя>): плато point4: RSILower 27.5. РЕЗУЛЬТАТ 2026-10-05: WF 1.290/109; полная 1.836, +64.8k, DD 8.86%.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          27.5
+        ],
+        "RSIUpper": [
+          52.5
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          2
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}

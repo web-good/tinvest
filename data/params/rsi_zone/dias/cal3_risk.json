@@ -1,0 +1,46 @@
+{
+  "_comment": "Второй круг перекалибровки DIAS 2026-10-05 (§6): первый круг провален — точка point3 (литерал + RSI 8/30 + ATR 3) дала WF 0.782/23, пункт 1 стоп-условия. Зоны — по фактическим голосам фолдов первого круга, шаг — половина шага первого круга; несвипуемые поля прибиты к литералу DIAS (4/25/52.5, EMA 200, ATR 4, стоп 1.0, механизмы выключены). Префикс cal3_, потому что cal2_* — второй круг калибровки 2026-09-29. Тема risk: голоса DailyATRPeriod 3/3/3/3 (край оси — в зону входит 2), StopDailyATR 1/1/2/2 (ничья — зона накрывает оба голоса шагом 0.25). Запуск: go run ./cmd/backtest -ticker DIAS -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/dias/cal3_risk.json -out ./reports/DIAS_zone/r20261005/cal3_risk -months 24 -train-months 12 -test-months 3 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-05 (второй круг): pooled 1.488/93; фолды 0.984/15, 1.123/29, 1.193/15, 1.985/34; DailyATRPeriod 2/2/2/2 — принят в point4; стоп 1/1/2/2 — ничья.",
+  "phases": [
+    {
+      "name": "risk",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          52.5
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          2,
+          3,
+          4
+        ],
+        "StopDailyATR": [
+          1.0,
+          1.25,
+          1.5,
+          1.75,
+          2.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}
