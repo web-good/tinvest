@@ -24,6 +24,10 @@ var rsiZoneRAGRGridFiles = []string{
 	"cal_stoch.json",
 	"cal_stuck.json",
 	"cal_profit.json",
+	"cal2_entry_exit.json",
+	"cal2_trend.json",
+	"cal2_risk.json",
+	"cal2_profit.json",
 }
 
 // rsiZoneRAGRMaxEMA — потолок EMAPeriod на 19-месячном окне после редомициляции (19/7/3): Lookback
