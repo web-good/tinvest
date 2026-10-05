@@ -1,0 +1,40 @@
+{
+  "_comment": "Капкан широкого стопа / плато стопа на точке: StopDailyATR 0.7 (на точке 1.0). Прогоны с собранной точкой (стоп 2.5) сняты в ./reports/MDMG_zone/r20261005/probe_stop_* — числа для DailyATRPeriod 5 совпадают, т.к. поля, кроме стопа, те же. Калибровка rsi_zone на MDMG по /rsi-zone-calibrate (2026-10-05, онбординг /rsi-zone-onboard). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. Кэш 30m с 2023-09-27, но до 2024-05-22 торговались расписки (другая бумага, только основная сессия, ~19 баров в будний день), затем пауза торгов редомициляции 2024-05-22 → 2024-06-17 и обвал 1 387 → 811 ₽ за три дня (с отсечкой 141 ₽). Однородная история обыкновенных акций — с 2024-06-17, ~27.5 мес → протокол 24–36 мес: 24/12/3 (-months 24 -train-months 12 -test-months 3, 4 фолда), контроль 24/15/3 — то же окно, что у калибровки rsi_pullback MDMG (решение владельца 2026-09-26). Окно 2024-10-05 … 2026-10-05: пауза, обвал и отсечка 141 ₽ в него не входят. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 5.6% окна (~21 800 баров). Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker MDMG -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/mdmg/probe_stop_0.7.json -out ./reports/MDMG_zone/r20261005/probe_stop_0.7_full -months 24 -min-trades 1 -metric profit_factor; walk-forward 24/12/3 — go run ./cmd/backtest -ticker MDMG -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/mdmg/probe_stop_0.7.json -out ./reports/MDMG_zone/r20261005/probe_stop_0.7_wf -months 24 -train-months 12 -test-months 3 -min-trades 1 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-05: полное окно 46 PF 5.408 net +26 088 ₽ DD 3.25%, SL 2; WF 3.912/23 — хуже точки 1.0 и по PF, и по DD.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          15
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAPeriod": [
+          100
+        ],
+        "DailyATRPeriod": [
+          5
+        ],
+        "StopDailyATR": [
+          0.7
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}

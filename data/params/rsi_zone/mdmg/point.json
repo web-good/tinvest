@@ -1,0 +1,40 @@
+{
+  "_comment": "ТОЧКА первого круга: дефолты ядра + RSILower 15 и RSIUpper 70 (entry_exit 3.413/35 выше entry 2.065/44 и exit 0.979/104 — источник RSIPeriod/RSILower/RSIUpper она: RSIPeriod 4/4/4/7 = дефолт 4, RSILower 15/15/15/25, RSIUpper 70/70/70/60) + EMAPeriod 100 (trend 75/100/100/100) + DailyATRPeriod 5 (risk 5/5/5/5). StopDailyATR: risk 2/2.5/2.5/2.5 → 2.5, но это капкан широкого стопа (point_trap_stop2.5.json: 0 SL, PF одинаков на 1.25–3.0) → самый широкий срабатывающий стоп оси 1.0 (= дефолт). stoch 0.876/28 < baseline 1.073/89 → гейт выкл. stuck 2/3/3/5 — нет большинства → 0. profit: ProfitExitBars 0/0/0/3, ProfitExitPct 0.3×4 → кандидат 0·0.3 проверяется §4.7 (point_profit.json). Калибровка rsi_zone на MDMG по /rsi-zone-calibrate (2026-10-05, онбординг /rsi-zone-onboard). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. Кэш 30m с 2023-09-27, но до 2024-05-22 торговались расписки (другая бумага, только основная сессия, ~19 баров в будний день), затем пауза торгов редомициляции 2024-05-22 → 2024-06-17 и обвал 1 387 → 811 ₽ за три дня (с отсечкой 141 ₽). Однородная история обыкновенных акций — с 2024-06-17, ~27.5 мес → протокол 24–36 мес: 24/12/3 (-months 24 -train-months 12 -test-months 3, 4 фолда), контроль 24/15/3 — то же окно, что у калибровки rsi_pullback MDMG (решение владельца 2026-09-26). Окно 2024-10-05 … 2026-10-05: пауза, обвал и отсечка 141 ₽ в него не входят. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 5.6% окна (~21 800 баров). Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker MDMG -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/mdmg/point.json -out ./reports/MDMG_zone/r20261005/point10_full -months 24 -min-trades 1 -metric profit_factor; walk-forward 24/12/3 — go run ./cmd/backtest -ticker MDMG -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/mdmg/point.json -out ./reports/MDMG_zone/r20261005/point10_wf -months 24 -train-months 12 -test-months 3 -min-trades 1 -metric profit_factor; контроль 24/15/3 — go run ./cmd/backtest -ticker MDMG -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/mdmg/point.json -out ./reports/MDMG_zone/r20261005/point10_ctrl -months 24 -train-months 15 -test-months 3 -min-trades 1 -metric profit_factor; удвоенный круг -commission 0.001 — go run ./cmd/backtest -ticker MDMG -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/mdmg/point.json -out ./reports/MDMG_zone/r20261005/point10_comm -months 24 -train-months 12 -test-months 3 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-05 — ТОЧКА ПРИНЯТА (первый круг, второй не нужен). Литерал: RSIPeriod 4, RSILower 15, RSIUpper 70, EMAPeriod 100, DailyATRPeriod 5, StopDailyATR 1.0; UseStoch 0, StuckExitBars 0, ProfitExitBars 0, ProfitExitPct 0. Полное окно (2024-10-05 … 2026-10-05): 46 сделок, PF 5.841, net +26 519 ₽ (26.52%), DD 3 337 ₽ (2.89%) против baseline 24 870 ₽ (19.38%) — гейт просадки пройден; win rate 82.6%, выходы RSI 45 / SL 1, удержание 10/23/58 (baseline 15/35/125), ночёвок 37.0% (50.8%) — подписи капкана нет. WF 24/12/3 4.267/23 (2.533/9, 20.823/5, 1.710/6, 4779.654*/3 — фолд 4 вырожден), контроль 24/15/3 7.598/14, -commission 0.001 3.249/23. Годы: 2024 (огрызок) +2.1k, 2025 +13.8k (PF 4.46), 2026 +10.6k (PF 8.10); полугодий в минусе нет. Хвосты: 6 мес 9 сделок PF 5.714, 12 мес 23 PF 4.354; объединённые фолды 3+4 ≈5.6 — знак совпал. Отсечки 0, входов в выходные 0. СЕМЬ ПУНКТОВ: (1) 4.267 ✓ (2) 23 ≥ 20 ✓ (3) 7.598 ✓ (4) 3.249 ✓ (5) 2025 и 2026 в плюсе ✓ (6) 9/5.714 и 23/4.354 ✓ (7) 0/0 ✓. Против дефолтов (§7): дефолты проваливают п.3–5 (0.939, 0.890, 2026 −2.2k), точка обходит их на всех срезах. Плато: RSILower 15 — пик (10 → 11 сделок, 20 → WF 1.860/58, DD 7.22%), RSIUpper 70 — пик (65 → 3.400, 75 → 2.405), EMA 100 (75 → пул 15, 150 → 3.345/27), ATR 5 — голос 4/4 сохранён: 3/4/7 дают 4.571/4.379/4.109 и отличаются только единственной SL-сделкой #27 — уход с единогласного голоса ради одной сделки не делается. РИСКИ: малая выборка (46 сделок за 2 года, пул OOS 23 у порога, фолд 4 вырожден, хвост 6 — 9 сделок); стоп почти инертен (1 SL из 46) — защита держится на RSI-выходе; точка на пике узкой полосы RSILower; окно — рост 2025 года; ближайшая отсечка 2026-10-16 (38 ₽ ≈3%) — ядро про дивиденды не знает.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          15
+        ],
+        "RSIUpper": [
+          70
+        ],
+        "EMAPeriod": [
+          100
+        ],
+        "DailyATRPeriod": [
+          5
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}
