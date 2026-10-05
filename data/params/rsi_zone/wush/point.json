@@ -1,0 +1,52 @@
+{
+  "_comment": "ТОЧКА (итог первого круга): RSI 4/25/55, EMA 50, ATR 14, стоп 1.0, гейт стохастика 5/3/20/1; STUCK и PROFIT выключены. Отличие от point1 — DailyATRPeriod возвращён к дефолту 14: плато §4.4 показало, что ось инертна — ATR 5/7/10/14 дают одинаковый WF 2.565/30 (полное окно PF 1.984/1.997/1.998/1.992, DD 4.13/4.03/4.02/4.07%), стоп срабатывает 1 раз из 54; инертная ось — отсутствие сигнала, поле остаётся на дефолте; ATR 3 (зонд за краем) хуже — WF 2.085. Голоса первого круга (36/12/6, 4 фолда; вырожденных фолдов в источниках нет — во всех ≥ 5 сделок и есть убыточные): RSIPeriod/RSILower/RSIUpper — источник entry_exit (pooled 1.918/75 > entry 1.234/115 и exit 1.671/208): RSIPeriod 4/5/4/4 → 4 (= дефолт); RSILower 10/20/20/15 → нет большинства, дефолт 25 (entry: RSIPeriod 4/3/2/3, RSILower 20/10/5/15 — тоже нет); RSIUpper 55/55/55/65 → 55 (3/4; exit 50/50/50/55 → 50, но pooled exit ниже). EMAPeriod — trend 50/50/600/50 → 50 (3/4; pooled темы 0.906/106 — голос при убыточной теме, проверяется точкой). risk: DailyATRPeriod 5/5/5/21 → 5 (3/4), StopDailyATR 3/2/2/0.5 → нет, дефолт 1.0 (pooled 1.077/155). stoch: pooled 1.089/46 против baseline_point 0.955/156 (+0.134, пул ≥ 20) → условие (а) выполнено; оси: StochKPeriod 14/5/5/5 → 5 (3/4); StochDSmooth 3×4 → 3; StochLower 20/10/15/15 — нет → 20; ZoneWindowBars 1/8/5/1 — нет → 1. stuck 0/3/0/0 → выключен. profit: Bars 1/2/0/0 — нет большинства, Pct 0.3×4 → общий зонд 3·0.5 (тема profit 1.290 / Compounded 25.79% против baseline 0.955 / −6.35%), проверка §4.7 (point1_profit). Планку взяли: exit 1.671/208 (4/4 фолда > 1), entry_exit 1.918/75 (4/4 > 1), phased 1.595/70 (3/4 > 1, фолд 3 0.936); не взяли entry 1.234, trend 0.906, risk 1.077, trend_risk 1.020, stoch 1.089, stuck 0.923, profit 1.290. Baseline_point (дефолты): WF 0.955/156, контроль 0.999/111, комиссия 0.830 — дефолты проваливают п.1, 3, 4, 5 (2025 −19.9k), 6 (хвост 12 0.954). Калибровка rsi_zone на WUSH по /rsi-zone-calibrate (2026-10-05, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История 30m с 2023-08-14 (≈ 38 мес ≥ 36) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20. Окно 2023-10-05 … 2026-10-05 (35 313 баров 30m); цена за окно упала с ≈ 350 до ≈ 35 ₽ (−90%) — режим долгого падения. Шаг цены 0.01 ₽, лот 1: круг 2 шага / цена = 0.057% при 35.15 ₽, 0.068% при минимуме окна 29.54 ₽ < 0.2% → п.4 при -commission 0.001. Дивидендные отсечки в окне (GetDividends, объявлены до прогонов): 2023-12-04 (last_buy 12-01, 10.25 ₽ ≈ 4.6%), 2024-12-06 (last_buy 12-05, 2.11 ₽ ≈ 1.4%). EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.5% окна. Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker WUSH -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/wush/point.json -out ./reports/WUSH_zone/r20261005/point_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker WUSH -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/wush/point.json -out ./reports/WUSH_zone/r20261005/point_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker WUSH -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/wush/point.json -out ./reports/WUSH_zone/r20261005/point_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; удвоенная комиссия -commission 0.001 — go run ./cmd/backtest -ticker WUSH -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/wush/point.json -out ./reports/WUSH_zone/r20261005/point_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-05 (ИТОГ, принят литералом): полное окно 54 сделки, PF 1.992, net +15.9k (15.86%), DD 4.4k (4.07%) против baseline 29.8k (25.01%); win rate/выходы RSI 53 (98.1%), SL 1; удержание 6/13/18 баров, ночёвок 33.3%; годы 2023 +0.8k / 2024 +5.5k / 2025 +6.2k / 2026 +3.4k; хвост 6 11/+2.9k PF 1.668, хвост 12 16/+3.5k PF 1.572. WF 2.565/30 (фолды 1943/5, 7.820/9, 1.338/5, 1.668/11), контроль 36/18/6 2.315/25, комиссия 0.001 1.931/30. Стоп-условие: п.1 2.565 ✓, п.2 30 ✓, п.3 2.315 ✓, п.4 1.931 ✓, п.5 2024/2025/2026 в плюсе ✓, п.6 хвосты 1.668/11 и 1.572 ✓ (знак: фолды 3+4 → 1.570), п.7 отсечек 0, выходных 0 ✓ — все семь пройдены, первый круг принят. §7: дефолты проваливают п.1, 3–6 → точка побеждает. Гейт стохастика 5/3/20/1 включён (без него 1.306), STUCK выключен (голоса 0/3/0/0), PROFIT выключен (§4.7). Риски: пул 30 сделок, фолды 1 и 3 по 5 сделок (фолд 1 почти без убытков); гейт режет 129 → 54 сделки; EMA 50 — голос убыточной темы trend (0.906); правый сосед RSIUpper 60 и левый StochK 3 рвут п.5/6; стоп срабатывает 1 раз из 54 (защита от гэпа, а не выход); цена за окно −90%.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          55
+        ],
+        "EMAPeriod": [
+          50
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          1
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ],
+        "StochKPeriod": [
+          5
+        ],
+        "StochDSmooth": [
+          3
+        ],
+        "StochLower": [
+          20
+        ],
+        "ZoneWindowBars": [
+          1
+        ]
+      }
+    }
+  ]
+}
