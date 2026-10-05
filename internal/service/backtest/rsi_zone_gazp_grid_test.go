@@ -10,7 +10,8 @@ import (
 
 // rsiZoneGazpGridFiles перечисляет тематические сетки GAZP поимённо, а не обходом каталога: в
 // том же каталоге лежат файлы-точки (baseline_point.json, point.json, plateau_*.json), которые
-// законно фиксируют ось одним значением и упали бы на проверке краёв осей.
+// законно фиксируют ось одним значением и упали бы на проверке краёв осей. Сетки второго круга
+// (cal2_*) узкие по построению: для них проверяются инварианты, но не минимальные края осей.
 var rsiZoneGazpGridFiles = []string{
 	"cal_entry.json",
 	"cal_exit.json",
@@ -22,6 +23,10 @@ var rsiZoneGazpGridFiles = []string{
 	"cal_stoch.json",
 	"cal_stuck.json",
 	"cal_profit.json",
+	"cal2_entry.json",
+	"cal2_exit.json",
+	"cal2_trend.json",
+	"cal2_risk.json",
 }
 
 // rsiZoneGazpMaxEMA — потолок EMAPeriod на 36-месячном окне (канон 36/12/6): Lookback 2·N+20 не

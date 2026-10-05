@@ -1,0 +1,40 @@
+{
+  "_comment": "Проверка §4.7 PROFIT на точке первого круга (= дефолты ядра): + общий зонд ProfitExitBars 3 · ProfitExitPct 0.5. Четыре среза одного дня против baseline_point.json. Голоса первого круга (36/12/6, 4 фолда; вырожден только фолд 3 у trend/trend_risk — 10 сделок без убытков): entry 1.367/117 < entry_exit 1.420/87 → источник RSIPeriod/RSILower/RSIUpper — entry_exit: RSIPeriod 3/7/5/6, RSILower 15/25/15/20, RSIUpper 60/55/60/70 — большинства нет ни по одному полю → 4/25/75 (entry: 3/3/4/8 и 15/15/10/35 — тоже нет; exit 1.107/194: 65/70/70/70 — 3/4 за 70, но источник по правилу — entry_exit с pooled выше). trend 1.739/59: EMA 30/30/30*/50, невырожденных три (30/30/50) — не единогласно → дефолт 200; планка не взята (фолд 4 0.759). risk 0.872/171: ATR 30/30/5/5 — ничья, стоп 0.7/1/2/2.5 — нет → 14 / 1.0. stoch 1.014/125 против baseline 0.981/170: +0.033 < 0.05 → гейт выкл. stuck 4/4/0/2 → нет большинства → выкл. profit 1.071/188 (Comp +4.58% против baseline −3.74%): Bars 0/0/8/4 — нет, Pct 0.5/0.5/0.5/1 → большинства по паре нет → общий зонд 3·0.5 (§4.7). Арбитры: trend_risk 1.927/59 (EMA 30/30/30/50, стоп 1/1/1.25/1) подтверждает только связку EMA 30 со стопом 1.0; phased 0.968/53 — связка не держится. Все поля по правилу большинства = дефолты ядра → точка первого круга = baseline (WF 0.981/170, контроль 0.880, комиссия 0.807) — провал п.1, п.3, п.4, п.5 (2026 −12.5k), п.6 (хвосты 0.494/0.726). Калибровка rsi_zone на GAZP по /rsi-zone-calibrate (2026-10-05, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. Бумага торгуется десятилетиями, кэш 30m прогрет на 36 мес (с 2023-10-05) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20. Шаг цены 0.01 ₽, лот 10: круг 2 шага / цена = 0.021% при 97.4 ₽ (текущая) ≤ 0.2% → модель -commission 0.0005 честна, п.4 стоп-условия — удвоенная -commission 0.001. Дивидендные отсечки в окне (GetDividends 2023–2027, объявлено до прогонов): нет ни одной — Газпром не платил дивиденды за 2022–2025 гг., п.7 по отсечкам пуст. Бумага в окне упала с ~166 (2023-10) до ~97 ₽ (2026-10). EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.3% окна (~37 400 баров). Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker GAZP -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/gazp/point_profit.json -out ./reports/GAZP_zone/r20261005/point_profit_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker GAZP -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/gazp/point_profit.json -out ./reports/GAZP_zone/r20261005/point_profit_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker GAZP -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/gazp/point_profit.json -out ./reports/GAZP_zone/r20261005/point_profit_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; удвоенная комиссия -commission 0.001 — go run ./cmd/backtest -ticker GAZP -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/gazp/point_profit.json -out ./reports/GAZP_zone/r20261005/point_profit_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-05: WF 1.011/191 против baseline 0.981 (+0.030 < 0.05) — §4.7 провалена первым же условием; контроль 0.830 (< 0.880), комиссия 0.798 (< 0.807), полное окно 263/PF 1.005 net +658 ₽, DD 26 664 ₽ (20.97%) > baseline 18.80% → PROFIT выключен (оба поля 0).",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          3
+        ],
+        "ProfitExitPct": [
+          0.5
+        ]
+      }
+    }
+  ]
+}
