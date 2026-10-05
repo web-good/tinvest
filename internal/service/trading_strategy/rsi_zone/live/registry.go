@@ -12,6 +12,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/ivat"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/lent"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/mdmg"
+	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/msng"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/mtss"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/ragr"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/upro"
@@ -23,6 +24,7 @@ import (
 var paramsByTicker = map[string]core.Params{
 	afks.Ticker:  afks.DefaultParams(),
 	aflt.Ticker:  aflt.DefaultParams(),
+	msng.Ticker:  msng.DefaultParams(),
 	baza.Ticker:  baza.DefaultParams(),
 	dias.Ticker:  dias.DefaultParams(),
 	domrf.Ticker: domrf.DefaultParams(),
