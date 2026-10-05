@@ -1,0 +1,53 @@
+{
+  "_comment": "ВТОРОЙ КРУГ (§6): первый провален (точка дефолты+RSILower 15+EMA 50 — 6 сделок OOS). Темы прибиты к дефолтам ядра + EMAPeriod 50 (only_EMAPeriod_50.json, WF 1.726/81), зоны — по голосам фолдов первого круга, шаг — половина шага первого; каждое поле свипует одна тема. Тема entry2: RSIPeriod 3–8 (голоса entry_exit 4/4/3/4, entry 6/8/4/6) × RSILower 15–35 шаг 2.5 (голоса 15/15/10/15 и 25/45/35/25; 10 и 45 отсечены — на EMA 50 RSILower 10 даёт 2 сделки за 3 года). Калибровка rsi_zone на IRKT по /rsi-zone-calibrate (2026-10-05, онбординг /rsi-zone-onboard). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() + EMAPeriod 50 (4/25/75, EMA 50, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История 30m ≥ 36 мес (кэш с 2023-10-05, ряд бумаги с 2022-09) — канон 36/12/6: -months 36 -train-months 12 -test-months 6 (4 фолда); контроль 36/18/6. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.8% окна (~32 500 баров). Запуск: go run ./cmd/backtest -ticker IRKT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/irkt/cal2_entry.json -out ./reports/IRKT_zone/r20261005/cal2_entry -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "entry2",
+      "grid": {
+        "RSIPeriod": [
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "RSILower": [
+          15,
+          17.5,
+          20,
+          22.5,
+          25,
+          27.5,
+          30,
+          32.5,
+          35
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          50
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}

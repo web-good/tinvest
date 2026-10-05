@@ -1,0 +1,40 @@
+{
+  "_comment": "ТОЧКА первого круга: дефолты ядра + RSILower 15 (entry_exit 15/15/10/15; entry_exit pooled 1.036 выше entry 0.766, поэтому источник RSIPeriod/RSILower — она; RSIPeriod 4/4/3/4 = дефолт) + EMAPeriod 50 (trend 150/50/50/50). RSIUpper — exit 55/55/60/50, большинства нет → 75. risk 21/21/5/5 и 0.5/1.25/3/3 — нет → 14 и 1.0. stoch 1.043 < baseline 1.089 → гейт выкл. stuck 5/5/8/0 — нет → 0. profit — нет большинства → общий зонд 3·0.5 проверяется отдельно (point_profit.json). Калибровка rsi_zone на IRKT по /rsi-zone-calibrate (2026-10-05, онбординг /rsi-zone-onboard). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История 30m ≥ 36 мес (кэш с 2023-10-05, ряд бумаги с 2022-09) — канон 36/12/6: -months 36 -train-months 12 -test-months 6 (4 фолда); контроль 36/18/6. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.8% окна (~32 500 баров). Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker IRKT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/irkt/point.json -out ./reports/IRKT_zone/r20261005/point_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker IRKT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/irkt/point.json -out ./reports/IRKT_zone/r20261005/point_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker IRKT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/irkt/point.json -out ./reports/IRKT_zone/r20261005/point_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; реальный круг -commission 0.0011 — go run ./cmd/backtest -ticker IRKT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/irkt/point.json -out ./reports/IRKT_zone/r20261005/point_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.0011 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-05: КРУГ ПРОВАЛЕН. RSILower 15 голосовал в entry_exit при EMA 200; поверх EMA 50 вход почти исчезает: полное окно 11 сделок PF 1.615 (+8.0k, DD 10.82%, 2 SL); WF 0.403/6 (все 4 фолда вырождены), контроль 0.127/3, круг 0.0011 0.366/6. Стоп-условие: п.1 (0.403 < 1), п.2 (6 < 20), п.3 (0.127), п.4 (0.366) провалены. Плато не держит: RSILower 10 — 2 сделки, 20 — WF 1.237/31 (полное 48 сделок PF 1.519); EMA 30 — 2 сделки, 75 — WF 1.023/25. Стоп ≥ 1.25 — капкан (0 SL, PF 2.958 одинаков). Урок DIAS m15 повторился: правило источника склеило RSILower из entry_exit (EMA 200, верх 55–85) с EMA 50 из trend.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          15
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          50
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}
