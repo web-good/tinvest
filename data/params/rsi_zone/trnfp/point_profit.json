@@ -1,0 +1,52 @@
+{
+  "_comment": "Проверка §4.7 PROFIT на точке: + общий зонд ProfitExitBars 3 · ProfitExitPct 0.5. Четыре среза одного дня. Калибровка rsi_zone на TRNFP по /rsi-zone-calibrate (2026-10-05, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История 30m в кэше с 2023-09-05 (≥ 36 мес; сплит 1:100 в 2024-02 в кэше скорректирован) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20. Шаг цены 0.2 ₽, лот 1: круг 2 шага / цена = 0.039% при 1034 ₽ (текущая) < 0.2% → модель -commission 0.0005 консервативна, п.4 стоп-условия — удвоенная комиссия -commission 0.001. Дивидендные отсечки в окне (GetDividends, объявлены до прогонов; дата — день после last_buy): 2024-07-18 (177.2 ₽ ≈ 12.33%), 2025-07-17 (198.25 ₽ ≈ 13.23%), 2026-07-18 (204.17 ₽ ≈ 17.22%). EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 4.5% окна (~27 000 баров). Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker TRNFP -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/trnfp/point_profit.json -out ./reports/TRNFP_zone/r20261005/point_profit_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker TRNFP -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/trnfp/point_profit.json -out ./reports/TRNFP_zone/r20261005/point_profit_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker TRNFP -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/trnfp/point_profit.json -out ./reports/TRNFP_zone/r20261005/point_profit_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; удвоенная комиссия -commission 0.001 — go run ./cmd/backtest -ticker TRNFP -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/trnfp/point_profit.json -out ./reports/TRNFP_zone/r20261005/point_profit_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-05: WF 1.900/111 (Compounded 23.57%) против точки 1.950 (28.47%) — условие «pooled выше на 0.05» не выполнено, Compounded основной ниже; контроль 1.978 (16.60% против 14.96%), комиссия 1.342 против 1.444 (ниже), полное окно 151 сделка PF 1.579, net +21 122 против +26 495 ₽ (ниже), DD 6.00% (7 448 ₽ против 7 826). Выходы PROFIT 29 / RSI 115 / SL 7. §4.7 провален по трём условиям → ProfitExitBars 0, ProfitExitPct 0.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          1
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          3
+        ],
+        "ProfitExitPct": [
+          0.5
+        ],
+        "StochKPeriod": [
+          5
+        ],
+        "StochDSmooth": [
+          3
+        ],
+        "StochLower": [
+          20
+        ],
+        "ZoneWindowBars": [
+          1
+        ]
+      }
+    }
+  ]
+}
