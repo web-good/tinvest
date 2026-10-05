@@ -8,6 +8,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/core"
 	rsizonedias "tinvest/internal/service/trading_strategy/rsi_zone/strategy/dias"
 	rsizonedomrf "tinvest/internal/service/trading_strategy/rsi_zone/strategy/domrf"
+	rsizoneivat "tinvest/internal/service/trading_strategy/rsi_zone/strategy/ivat"
 	rsizonelent "tinvest/internal/service/trading_strategy/rsi_zone/strategy/lent"
 	rsizonemdmg "tinvest/internal/service/trading_strategy/rsi_zone/strategy/mdmg"
 )
@@ -56,6 +57,7 @@ func TestRSIZoneRegisteredTickersUseTheirLiteral(t *testing.T) {
 		rsizonebaza.Ticker:  rsizonebaza.DefaultParams(),
 		rsizonedias.Ticker:  rsizonedias.DefaultParams(),
 		rsizonedomrf.Ticker: rsizonedomrf.DefaultParams(),
+		rsizoneivat.Ticker:  rsizoneivat.DefaultParams(),
 		rsizonelent.Ticker:  rsizonelent.DefaultParams(),
 		rsizonemdmg.Ticker:  rsizonemdmg.DefaultParams(),
 	} {

@@ -8,6 +8,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/core"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/dias"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/domrf"
+	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/ivat"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/lent"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/mdmg"
 )
@@ -19,6 +20,7 @@ var paramsByTicker = map[string]core.Params{
 	baza.Ticker:  baza.DefaultParams(),
 	dias.Ticker:  dias.DefaultParams(),
 	domrf.Ticker: domrf.DefaultParams(),
+	ivat.Ticker:  ivat.DefaultParams(),
 	lent.Ticker:  lent.DefaultParams(),
 	mdmg.Ticker:  mdmg.DefaultParams(),
 }

@@ -9,6 +9,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/core"
 	rsizonedias "tinvest/internal/service/trading_strategy/rsi_zone/strategy/dias"
 	rsizonedomrf "tinvest/internal/service/trading_strategy/rsi_zone/strategy/domrf"
+	rsizoneivat "tinvest/internal/service/trading_strategy/rsi_zone/strategy/ivat"
 	rsizonelent "tinvest/internal/service/trading_strategy/rsi_zone/strategy/lent"
 	rsizonemdmg "tinvest/internal/service/trading_strategy/rsi_zone/strategy/mdmg"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
@@ -39,6 +40,7 @@ var rsiZoneRegistry = map[string]Binding{
 	rsizonebaza.Ticker:  rsiZoneBindingFor(rsizonebaza.Ticker, rsizonebaza.DefaultParams),
 	rsizonedias.Ticker:  rsiZoneBindingFor(rsizonedias.Ticker, rsizonedias.DefaultParams),
 	rsizonedomrf.Ticker: rsiZoneBindingFor(rsizonedomrf.Ticker, rsizonedomrf.DefaultParams),
+	rsizoneivat.Ticker:  rsiZoneBindingFor(rsizoneivat.Ticker, rsizoneivat.DefaultParams),
 	rsizonelent.Ticker:  rsiZoneBindingFor(rsizonelent.Ticker, rsizonelent.DefaultParams),
 	rsizonemdmg.Ticker:  rsiZoneBindingFor(rsizonemdmg.Ticker, rsizonemdmg.DefaultParams),
 }
