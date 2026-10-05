@@ -1,0 +1,40 @@
+{
+  "_comment": "ТОЧКА первого круга: дефолты ядра + RSIUpper 50 (exit 4.024/78: 50/50/50/50 единогласно, край оси; зонд за краем 45/40 — спад). DailyATRPeriod: голос risk 5/5/5/5 отвергнут плато (point_atr5.json: ATR 5 WF 3.442 и DD 9.46% против ATR 14 4.024 и 6.62% на стопе 1.0; голос подан в зоне капкана стопа 2.0) → дефолт 14. StopDailyATR: голос 2/2/2/1.5 — капкан широкого стопа (point_trap_stop2.json: 1.25–3.0 ноль SL, одинаковые числа) → самый широкий срабатывающий 1.0 = дефолт (проверка на этой точке — probeB_stop_*). RSIPeriod/RSILower: источник entry_exit (pooled 3.451 > entry 2.401), голосующих фолдов два (f2 3 сделки, f3 0) — 3 голоса из 4 невозможны; RSIPeriod 3/3 шёл в паре с RSIUpper 60, phased 2/4/4/5 не подтверждает → дефолт 4/25 (консервативное решение пакетного режима). EMAPeriod: trend 50/200/100/75 — нет большинства → 200. stoch 2.454/32 < baseline 2.523/63 → гейт выкл. stuck 6/0/0/0 → 0. profit: ProfitExitBars 6/0/0/1 — нет большинства → общий зонд 3·0.5, проверка §4.7 (point_profit.json). Калибровка rsi_zone на IVAT по /rsi-zone-calibrate (2026-10-05, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. Кэш 30m с 2024-06-04 (IPO), ~28 мес → протокол 24–36 мес: 24/12/3 (-months 24 -train-months 12 -test-months 3, 4 фолда), контроль 24/15/3. Окно 2024-10-05 … 2026-10-05. Шаг цены 0.05 ₽ при цене ~63 ₽: реальный круг 0.16% < 0.2% → п.4 при -commission 0.001. Дивидендных отсечек нет: T-Invest GetDividends за 2023–2026 пуст. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 5% окна (~24 700 баров). Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker IVAT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/ivat/point.json -out ./reports/IVAT_zone/r20261005/pointB_full -months 24 -min-trades 1 -metric profit_factor; walk-forward 24/12/3 — go run ./cmd/backtest -ticker IVAT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/ivat/point.json -out ./reports/IVAT_zone/r20261005/pointB_wf -months 24 -train-months 12 -test-months 3 -min-trades 1 -metric profit_factor; контроль 24/15/3 — go run ./cmd/backtest -ticker IVAT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/ivat/point.json -out ./reports/IVAT_zone/r20261005/pointB_ctrl -months 24 -train-months 15 -test-months 3 -min-trades 1 -metric profit_factor; удвоенный круг -commission 0.001 — go run ./cmd/backtest -ticker IVAT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/ivat/point.json -out ./reports/IVAT_zone/r20261005/pointB_comm -months 24 -train-months 12 -test-months 3 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-05 (24/12/3, OOS 2025-10-05 … 2026-10-05): полное окно 161 сделка PF 3.267, net +97 581 ₽ (97.6%), DD 10 720 ₽ (6.62%) против baseline 31 482 ₽ (18.46%) — гейт просадки пройден; win 74.5%, expectancy 606 ₽; выходы RSI 160 / SL 1; удержание 4/11/17 (baseline 16/49/75), ночёвок 9.3% (48.8%) — не капкан: удержание и ночёвки упали вместе с долей SL; 2024 (огрызок) +5.0k, 2025 +42.8k, 2026 +49.8k; все полугодия в плюсе (2026H1 +2.2k, PF 1.536); июль–август 2026 (после обвала до ~50 ₽) +44.2k = 45% результата. Хвост 6 38/5.894, хвост 12 78/4.147. Через отсечки 0 (отсечек нет), входов в выходные 0. WF 4.024/78 (2.607/29, 1.035/11, 10.921/8, 5.591/30 — все > 1, планка взята); контроль 24/15/3 4.458/49; -commission 0.001 2.976/78 (фолд 2 0.642). Сверка знака хвоста: фолды 3+4 объединённо ≈5.90 против хвоста 6 5.894 — совпал. Стоп-условие: п.1 4.024 ✓, п.2 78 ✓, п.3 4.458 ✓, п.4 2.976 ✓, п.5 2025 +42.8k и 2026 +49.8k ✓, п.6 5.894/38 и 4.147 ✓, п.7 0/0 ✓ — 7/7. Против дефолтов того же дня: WF 4.024 против 2.523, контроль 4.458 против 1.768, комиссия 2.976 против 2.198, DD 6.62% против 18.46% — точка побеждает (§7); net полного окна ниже (97.6k против 108.5k). Стоп на точке: 0.7 → 2.320/9 SL, WF 3.391; 1.0 → 3.267/1 SL; 1.25 → 3.146; 1.5 → 3.033; 2.0 → 2.824, DD 10.49% — стоп срабатывает на всех ширинах, 1.0 — пик полного окна и минимум просадки. Плато RSIUpper: 40 → WF 2.574 (полное 2.776), 45 → 3.323 (3.153), 50 → 4.024 (3.267), 55 → 4.960 (2.879, DD 8.53%) — WF растёт к 55, полное окно и просадка за 50; оставлен единогласный голос 50.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          50
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}

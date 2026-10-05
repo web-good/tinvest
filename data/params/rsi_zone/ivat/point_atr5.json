@@ -1,0 +1,40 @@
+{
+  "_comment": "ТОЧКА первого круга: дефолты ядра + RSIUpper 50 (exit 4.024/78: 50/50/50/50 единогласно; зонд за краем 45 → WF 3.323, 40 → 2.574 — спад, не обрыв) + DailyATRPeriod 5 (risk 5/5/5/5) + StopDailyATR 1.0. Голос risk 2/2/2/1.5 за стоп 2.0 — капкан широкого стопа (§4.5): на стопах 1.25–3.0 ноль SL и одинаковые числа (161/3.287, WF 4.023), поэтому взят самый широкий срабатывающий стоп 1.0 (2 SL) = дефолт. RSIPeriod/RSILower: источник entry_exit (pooled 3.451 > entry 2.401), но голосующих фолдов два (f2 3 сделки, f3 0) — 3 голоса из 4 невозможны; RSIPeriod 3/3 шёл в паре с RSIUpper 60 (урок DIAS 15m) и phased 2/4/4/5 его не подтверждает → дефолт 4/25 (консервативное решение пакетного режима). EMAPeriod: trend 50/200/100/75 — нет большинства → 200. stoch 2.454/32 < baseline 2.523/63 → гейт выкл. stuck 6/0/0/0 → 0. profit: ProfitExitBars 6/0/0/1 — нет большинства → общий зонд 3·0.5, проверка §4.7 (point_profit.json). Калибровка rsi_zone на IVAT по /rsi-zone-calibrate (2026-10-05, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. Кэш 30m с 2024-06-04 (IPO), ~28 мес → протокол 24–36 мес: 24/12/3 (-months 24 -train-months 12 -test-months 3, 4 фолда), контроль 24/15/3. Окно 2024-10-05 … 2026-10-05. Шаг цены 0.05 ₽ при цене ~63 ₽: реальный круг 0.16% < 0.2% → п.4 при -commission 0.001. Дивидендных отсечек нет: T-Invest GetDividends за 2023–2026 пуст. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 5% окна (~24 700 баров). Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker IVAT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/ivat/point.json -out ./reports/IVAT_zone/r20261005/point_full -months 24 -min-trades 1 -metric profit_factor; walk-forward 24/12/3 — go run ./cmd/backtest -ticker IVAT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/ivat/point.json -out ./reports/IVAT_zone/r20261005/point_wf -months 24 -train-months 12 -test-months 3 -min-trades 1 -metric profit_factor; контроль 24/15/3 — go run ./cmd/backtest -ticker IVAT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/ivat/point.json -out ./reports/IVAT_zone/r20261005/point_ctrl -months 24 -train-months 15 -test-months 3 -min-trades 1 -metric profit_factor; удвоенный круг -commission 0.001 — go run ./cmd/backtest -ticker IVAT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/ivat/point.json -out ./reports/IVAT_zone/r20261005/point_comm -months 24 -train-months 12 -test-months 3 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-05 (отвергнута): полное окно 161/2.757, DD 12 919 ₽ (9.46%), SL 2; WF 3.442/78, контроль 4.458/49, -commission 0.001 2.602/78. Плато ATR на стопе 1.0: 3 → WF 3.537 (полное 3.125), 4 → 3.491 (3.109), 5 → 3.442 (2.757), 7 → 4.024 (3.062, DD 7.85%), 14 → 4.024 (3.267, DD 6.62%) — голос ATR 5 лежит в провале плато, а не на пике: он подан вместе со стопом 2.0 в зоне капкана, где стоп почти не срабатывает и ATR (действует только через дистанцию стопа) нечем различить. По §4.4 (разница PF > 0.05 в пользу соседей, у ATR 14 меньше просадка) ATR возвращён на дефолт 14 → point.json.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          50
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          5
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}
