@@ -1,0 +1,75 @@
+{
+  "_comment": "Арбитр trend_risk: фазы trend (keepTop 3) → risk; голоса в сборку не идут. Калибровка rsi_zone на RNFT по /rsi-zone-calibrate (2026-10-05, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История 30m в кэше с 2023-10-05 (≥ 36 мес) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20. Шаг цены 0.05 ₽, лот 1: круг 2 шага / цена = 0.118% при 84.7 ₽, 0.154% при минимуме окна 65.05 ₽ < 0.2% → п.4 при -commission 0.001. Дивидендные отсечки в окне (GetDividends, объявлены до прогонов): нет ни одной. Бумага в окне упала с ~274 до ~85 ₽. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.3% окна. Запуск: go run ./cmd/backtest -ticker RNFT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/rnft/cal_trend_risk.json -out ./reports/RNFT_zone/r20261005/trend_risk -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "trend",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          10,
+          20,
+          30,
+          50,
+          75,
+          100,
+          150,
+          200,
+          300,
+          400,
+          600
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      },
+      "keepTop": 3
+    },
+    {
+      "name": "risk",
+      "grid": {
+        "StopDailyATR": [
+          0.3,
+          0.5,
+          0.7,
+          1.0,
+          1.25,
+          1.5,
+          2.0,
+          2.5,
+          3.0
+        ],
+        "DailyATRPeriod": [
+          5,
+          7,
+          10,
+          14,
+          21,
+          30
+        ]
+      }
+    }
+  ]
+}
