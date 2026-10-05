@@ -9,6 +9,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/dias"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/domrf"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/lent"
+	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/mdmg"
 )
 
 // paramsByTicker — тикеры, которые раннер знает. SBER сюда не заводится: калибровка планку
@@ -19,6 +20,7 @@ var paramsByTicker = map[string]core.Params{
 	dias.Ticker:  dias.DefaultParams(),
 	domrf.Ticker: domrf.DefaultParams(),
 	lent.Ticker:  lent.DefaultParams(),
+	mdmg.Ticker:  mdmg.DefaultParams(),
 }
 
 // ParamsFor возвращает параметры тикера; false — тикер не зарегистрирован.
