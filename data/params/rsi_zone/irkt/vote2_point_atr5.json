@@ -1,0 +1,40 @@
+{
+  "_comment": "ТОЧКА второго круга: дефолты ядра + EMAPeriod 50 (первый круг trend 150/50/50/50; trend2 40/65/55/40 — нового большинства нет, поле остаётся с первого круга) + DailyATRPeriod 5 (risk2 5/5/5/5, единогласно). entry2 RSIPeriod 3/4/4/3 и RSILower 15/27.5/27.5/15 — ничьи → 4 и 25; exit2 60/60/65/65 — ничья → 75; risk2 StopDailyATR 2/1.25/1.25/1.75 — нет → 1.0. stoch/STUCK выключены (первый круг), PROFIT — общий зонд проверяется в point2_profit.json. Калибровка rsi_zone на IRKT по /rsi-zone-calibrate (2026-10-05, онбординг /rsi-zone-onboard). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История 30m ≥ 36 мес (кэш с 2023-10-05, ряд бумаги с 2022-09) — канон 36/12/6: -months 36 -train-months 12 -test-months 6 (4 фолда); контроль 36/18/6. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.8% окна (~32 500 баров). Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker IRKT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/irkt/point2.json -out ./reports/IRKT_zone/r20261005/point2_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker IRKT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/irkt/point2.json -out ./reports/IRKT_zone/r20261005/point2_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker IRKT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/irkt/point2.json -out ./reports/IRKT_zone/r20261005/point2_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; реальный круг -commission 0.0011 — go run ./cmd/backtest -ticker IRKT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/irkt/point2.json -out ./reports/IRKT_zone/r20261005/point2_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.0011 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-05 (отчёты point2_*): WF 1.786/81 (2.138/19, 1.623/15, 1.234/23, 1.940/24), Compounded 40.25%; контроль 1.648/62 (23.24%); круг 0.0011 1.501/81; полное окно 115 сделок PF 1.612, +44.6k, DD 14.5k (13.11%), 8 SL. Плато DailyATRPeriod (WF / DD полного окна): 2 — 1.729/12.29%, 3 — 1.758/12.66%, 4 — 1.783/12.92%, 5 — 1.786/13.11%, 7 — 1.641/13.30%. Узлы 3 и 4 в пределах 0.05 PF от голоса 5 — по правилу §4.4 берётся меньшая просадка: ATR 3 (узел 2 уже на 0.057 ниже голоса). Итоговая точка — point2.json (ATR 3). Плато EMAPeriod (на ATR 5): 40 — 2.057/58, 45 — 2.126/70, 50 — 1.786/81, 55 — 2.033/88, 60 — 1.960/98: EMA 50 — локальная яма, но все соседи выше голоса, плато держит. Стопы (на ATR 5): 0.7 1.792/13 SL, 1.0 1.786/8 SL, 1.25 1.869/5, 1.5 1.970/3, 2.0 и 3.0 2.134/0 SL — капкан с 2.0.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          50
+        ],
+        "DailyATRPeriod": [
+          5
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}

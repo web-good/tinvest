@@ -1,0 +1,40 @@
+{
+  "_comment": "Плато DailyATRPeriod на point2: 7 (5 — край оси risk2, 3 и 4 — зонд за краем). Калибровка rsi_zone на IRKT по /rsi-zone-calibrate (2026-10-05, онбординг /rsi-zone-onboard). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История 30m ≥ 36 мес (кэш с 2023-10-05, ряд бумаги с 2022-09) — канон 36/12/6: -months 36 -train-months 12 -test-months 6 (4 фолда); контроль 36/18/6. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.8% окна (~32 500 баров). Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker IRKT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/irkt/plateau2_DailyATRPeriod_7.json -out ./reports/IRKT_zone/r20261005/plateau2_DailyATRPeriod_7_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker IRKT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/irkt/plateau2_DailyATRPeriod_7.json -out ./reports/IRKT_zone/r20261005/plateau2_DailyATRPeriod_7_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-05: сводка плато/стопов второго круга — в point2.json и vote2_point_atr5.json; отчёты reports/IRKT_zone/r20261005/plateau2_DailyATRPeriod_7_*.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          50
+        ],
+        "DailyATRPeriod": [
+          7
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}
