@@ -11,6 +11,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/ivat"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/lent"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/mdmg"
+	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/vsmo"
 )
 
 // paramsByTicker — тикеры, которые раннер знает. SBER сюда не заводится: калибровка планку
@@ -23,6 +24,7 @@ var paramsByTicker = map[string]core.Params{
 	ivat.Ticker:  ivat.DefaultParams(),
 	lent.Ticker:  lent.DefaultParams(),
 	mdmg.Ticker:  mdmg.DefaultParams(),
+	vsmo.Ticker:  vsmo.DefaultParams(),
 }
 
 // ParamsFor возвращает параметры тикера; false — тикер не зарегистрирован.
