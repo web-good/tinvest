@@ -1,0 +1,52 @@
+{
+  "_comment": "ТОЧКА: дефолты ядра + EMA 50, ATR 5, стоп 1.25 (капкан), гейт стохастика 14/3/20/1. Капкан широкого стопа (§4.5): на point1 (стоп 2.5) ноль SL-выходов на полном окне против 9.1% у baseline, и полное окно и WF одинаковы на стопах 1.5/2.0/2.5/3.0 (45 сделок, PF 3.308, WF 2.710) — стоп не работает; самый широкий срабатывающий стоп — 1.25 (1 SL, PF 2.982, WF 2.445); 1.0 — 2 SL, 2.193; 0.7 — 6 SL, 1.376. Голоса первого круга (36/12/6, 4 фолда, вырожденных нет): RSIPeriod/RSILower/RSIUpper — источник entry_exit (pooled 2.293/58 > entry 1.794/64 и exit 1.030/202): RSIPeriod 7/7/4/4 ничья, RSILower 25/25/10/10 ничья, RSIUpper 55/55/65/85 → нет большинства, дефолты 4/25/75 (exit голосовал RSIUpper 90/65/65/65, но источник — entry_exit с более высоким pooled; консервативно — дефолт 75). EMAPeriod — trend 600/50/50/50 → 50 (3/4). risk: StopDailyATR 1.5/2.5/2.5/2.5 → 2.5, DailyATRPeriod 30/5/5/5 → 5 (3/4). stoch: pooled 1.581/77 против baseline_point 1.097/193 (+0.484, пул ≥ 20) → гейт ВКЛ; оси: KPeriod 14/5/14/14 → 14, DSmooth 3 во всех, StochLower 15/15/10/10 ничья → дефолт 20, ZoneWindowBars 1/1/2/8 → нет большинства, дефолт 1. stuck 2/2/6/0 → нет большинства → 0. profit: Bars 2/12/3/0, Pct 0.5/1.5/0.5/0.3 → нет большинства → общий зонд 3·0.5, проверка §4.7 (point1_profit.json). Планку взяли entry_exit (2.293/58, 4/4 > 1) и stoch (1.581/77, 4/4 > 1); арбитр phased 1.572/54 (4/4 > 1). Калибровка rsi_zone на MTSS по /rsi-zone-calibrate (2026-10-05, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История 30m в кэше с 2023-10-05 (≥ 36 мес) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20. Шаг цены 0.05 ₽, лот 10: круг 2 шага / цена = 0.060% при 167 ₽, 0.064% при минимуме окна 156.5 ₽ < 0.2% → п.4 при -commission 0.001. Дивидендные отсечки в окне (GetDividends, объявлены до прогонов): 2024-07-16 (35 ₽ ≈ 13.4%), 2025-07-07 (35 ₽ ≈ 15.5%), 2026-07-09 (35 ₽ ≈ 16.7%). EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.3% окна. Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker MTSS -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/mtss/point.json -out ./reports/MTSS_zone/r20261005/point_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker MTSS -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/mtss/point.json -out ./reports/MTSS_zone/r20261005/point_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker MTSS -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/mtss/point.json -out ./reports/MTSS_zone/r20261005/point_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; удвоенная комиссия -commission 0.001 — go run ./cmd/backtest -ticker MTSS -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/mtss/point.json -out ./reports/MTSS_zone/r20261005/point_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-05 (36/12/6, 4 фолда, вырожденных нет): полное окно 45 сделок PF 2.982 net +16 292 ₽ (+16.29%) DD 5 907 ₽ (5.45%) против baseline 15 640 ₽ (15.54%); RSI 44, SL 1 (2.2%); удержание 13/29/64, ночёвок 46.7%; годы 2024 +8 185 (17), 2025 +1 212 (17), 2026 +6 895 (11); полугодие 2025H1 −3 317 — единственное убыточное; хвост 6 — 7 сделок PF 3.802, хвост 12 — 13 PF 6.065; лучшая сделка +3 759 (23% net). WF 2.445/29 (фолды 0.990/6, 4.927/10, 31.125/6, 3.802/7; compounded 11.88%) — планка взята литералом (3/4 > 1); контроль 36/18/6 5.741/23; -commission 0.001 1.983/29. Стоп-условие 7/7: п.1 2.445 ≥ 1; п.2 29 ≥ 20; п.3 5.741; п.4 1.983; п.5 2024/2025/2026 в плюсе; п.6 хвосты 3.802 (7 сделок) и 6.065, знак хвоста 6 сходится с фолдами 3+4 (≈6.05); п.7 через отсечки 0, входов в выходные 0. Против дефолтов (§7): дефолты проваливают п.4 и п.5, точка обходит их по pooled (2.445 против 1.097) с DD втрое ниже → точка. Риски: малый пул (29 OOS, 45 за 3 года), убыточный фолд 1 (0.990/6), EMA 50 — пик без плато, гейт режет число сделок в 3.4 раза и доходность WF (11.88% против 28.47% без гейта).",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          50
+        ],
+        "DailyATRPeriod": [
+          5
+        ],
+        "StopDailyATR": [
+          1.25
+        ],
+        "UseStoch": [
+          1
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ],
+        "StochKPeriod": [
+          14
+        ],
+        "StochDSmooth": [
+          3
+        ],
+        "StochLower": [
+          20
+        ],
+        "ZoneWindowBars": [
+          1
+        ]
+      }
+    }
+  ]
+}
