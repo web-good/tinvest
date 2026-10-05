@@ -5,6 +5,7 @@ package live
 import (
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/afks"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/aflt"
+	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/astr"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/bane"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/baza"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/core"
@@ -37,6 +38,7 @@ var paramsByTicker = map[string]core.Params{
 	upro.Ticker:  upro.DefaultParams(),
 	mtss.Ticker:  mtss.DefaultParams(),
 	vsmo.Ticker:  vsmo.DefaultParams(),
+	astr.Ticker:  astr.DefaultParams(),
 }
 
 // ParamsFor возвращает параметры тикера; false — тикер не зарегистрирован.

@@ -1,0 +1,39 @@
+package astr
+
+import (
+	"testing"
+
+	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/core"
+)
+
+// TestParamsAreTheCoreBaselineByDesign пинит РЕШЕНИЕ, а не промежуточное состояние: калибровка
+// ASTR 2026-10-05 прошла два круга, и обе точки, собранные правилом большинства, провалили
+// стоп-условие редкостью (19 и 8 сделок в пуле OOS), а дефолты ядра прошли все семь пунктов. Замена литерала «по аналогии с соседями» была бы подгонкой без
+// подтверждения темой. Если дефолты ядра изменятся, ASTR должен быть перекалиброван, а не
+// молча унаследовать их, поэтому снимок ниже записан числами. Разбор — doc-комментарий пакета.
+func TestParamsAreTheCoreBaselineByDesign(t *testing.T) {
+	want := core.Params{
+		RSIPeriod:      4,
+		RSILower:       25,
+		RSIUpper:       75,
+		EMAPeriod:      200,
+		DailyATRPeriod: 14,
+		StopDailyATR:   1.0,
+		ProfitExitBars: 0,
+		ProfitExitPct:  0,
+	}
+	if got := DefaultParams(); got != want {
+		t.Fatalf("литерал ASTR изменился без калибровки:\n got: %+v\nwant: %+v", got, want)
+	}
+	if got := core.DefaultParams(); got != want {
+		t.Fatalf("дефолты ядра изменились — ASTR заведён на дефолтах 2026-10-05, перекалибруй:\n got: %+v\nwant: %+v", got, want)
+	}
+}
+
+// Стоп — единственное, что ограничивает убыток: RSI-выход закрывает и в плюс, и в минус.
+// Нулевой StopDailyATR отключает стоп в ядре.
+func TestStopIsArmed(t *testing.T) {
+	if p := DefaultParams(); p.StopDailyATR <= 0 {
+		t.Fatalf("StopDailyATR = %v, want > 0", p.StopDailyATR)
+	}
+}
