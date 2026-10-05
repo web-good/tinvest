@@ -1,0 +1,50 @@
+{
+  "_comment": "Тема trend: EMAPeriod (11 узлов); источник EMAPeriod. Калибровка rsi_zone на GAZP по /rsi-zone-calibrate (2026-10-05, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. Бумага торгуется десятилетиями, кэш 30m прогрет на 36 мес (с 2023-10-05) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20. Шаг цены 0.01 ₽, лот 10: круг 2 шага / цена = 0.021% при 97.4 ₽ (текущая) ≤ 0.2% → модель -commission 0.0005 честна, п.4 стоп-условия — удвоенная -commission 0.001. Дивидендные отсечки в окне (GetDividends 2023–2027, объявлено до прогонов): нет ни одной — Газпром не платил дивиденды за 2022–2025 гг., п.7 по отсечкам пуст. Бумага в окне упала с ~166 (2023-10) до ~97 ₽ (2026-10). EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.3% окна (~37 400 баров). Запуск: go run ./cmd/backtest -ticker GAZP -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/gazp/cal_trend.json -out ./reports/GAZP_zone/r20261005/trend -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "trend",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          10,
+          20,
+          30,
+          50,
+          75,
+          100,
+          150,
+          200,
+          300,
+          400,
+          600
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}
