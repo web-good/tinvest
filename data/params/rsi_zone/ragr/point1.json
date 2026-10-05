@@ -1,0 +1,40 @@
+{
+  "_comment": "ТОЧКА первого круга: дефолты ядра + RSIUpper 55. Голоса первого круга (19/7/3): RSIPeriod/RSILower/RSIUpper — источник entry_exit (pooled 2.905/27 > entry 0.964/49 и exit 0.941/88); фолд 3 вырожден (4 сделки), голосуют три фолда — нужна единогласность: RSIPeriod 5/5/8 → нет, дефолт 4; RSILower 20/20/30 → нет, дефолт 25; RSIUpper 55/55/55 (и в вырожденном) → 55. EMAPeriod — trend: фолд 2 вырожден (4 сделки), 200/150/200 → нет единогласия, дефолт 200. risk: стоп 1/1/1.25/1.5, ATR 5/30/21/5 → нет большинства, 1.0/14. stoch 1.087/38 < baseline 1.210/84 → гейт ВЫКЛ. stuck 0/3/3/0 ничья → 0. profit: Pct 0.3/0.3/0/0 ничья, Bars 0 → нет большинства по Pct → общий зонд 3·0.5, проверка §4.7 (point1_profit.json). Планку взяла только entry_exit (2.905/27, три невырожденных фолда все > 1); phased 3.473/22 — два вырожденных фолда, планка не засчитана. Калибровка rsi_zone на RAGR по /rsi-zone-calibrate (2026-10-05, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История RAGR однородна только после паузы редомициляции 2024-12-02 → 2025-02-17 (гэп +40%), ~19.5 мес < 24 → нештатный протокол. Схема DOMRF (-train 3 -test 2) на 19 мес дала бы 8 фолдов вместо 3–4, под которые написаны правило большинства и планка (СТОП «число фолдов», решение пакетного режима): взят протокол rsi_pullback RAGR — 19/7/3 (-months 19 -train-months 7 -test-months 3, 4 фолда, OOS ≈ окт 2025 … окт 2026), контроль 19/10/3 (3 фолда), -min-trades 15 (правило короткой истории). Окно 2025-03-05 … 2026-10-05 (20 720 баров 30m), лид-ин дневок (год) пересекает гэп: дневной ATR раздут до ~конца марта 2025, это только первый train. Шаг цены 0.02 ₽, лот 1: круг 2 шага / цена = 0.058% при 69.3 ₽, 0.076% при минимуме окна 52.76 ₽ < 0.2% → п.4 при -commission 0.001. Дивидендная отсечка в окне одна: 2026-08-06 (last_buy 2026-08-05, 16.48 ₽ ≈ 15.5% цены, гэп 106.18 → 91.94). EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 5.9% окна. Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker RAGR -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/ragr/point1.json -out ./reports/RAGR_zone/r20261005/point1_full -months 19 -min-trades 1 -metric profit_factor; walk-forward 19/7/3 — go run ./cmd/backtest -ticker RAGR -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/ragr/point1.json -out ./reports/RAGR_zone/r20261005/point1_wf -months 19 -train-months 7 -test-months 3 -min-trades 1 -metric profit_factor; контроль 19/10/3 — go run ./cmd/backtest -ticker RAGR -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/ragr/point1.json -out ./reports/RAGR_zone/r20261005/point1_ctrl -months 19 -train-months 10 -test-months 3 -min-trades 1 -metric profit_factor; удвоенная комиссия -commission 0.001 — go run ./cmd/backtest -ticker RAGR -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/ragr/point1.json -out ./reports/RAGR_zone/r20261005/point1_comm -months 19 -train-months 7 -test-months 3 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-05: ПРОВАЛ. Полное окно 144 сделки PF 1.346 net +20 252 DD 13.89%; WF 0.891 (п.1), контроль 0.934 (п.3), комиссия 0.691 (п.4), 2026 −1 448 ₽ (п.5), хвост 12 PF 0.907 (п.6), хвост 6 1.086/40. RSIUpper 55 склеен в entry_exit с входом RSI 5/20; на дефолтном входе 4/25 ранний выход режет прибыль → второй круг.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          55
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}
