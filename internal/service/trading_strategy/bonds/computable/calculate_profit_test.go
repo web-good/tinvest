@@ -10,6 +10,17 @@ import (
 )
 
 func TestCalculateProfit(t *testing.T) {
+	// Купонная доходность считается по купонам календарного года, поэтому даты
+	// купонов ОФЗ нельзя задавать как now+N месяцев: в зависимости от месяца запуска
+	// в текущий год попадает 0 или 2 купона. Первый купон — посередине между now и
+	// концом года (всегда в текущем году и в будущем), второй — посередине между
+	// концом года и погашением (всегда в следующем году).
+	now := time.Now()
+	ofzMaturity := now.AddDate(1, 0, 0)
+	yearEnd := time.Date(now.Year()+1, 1, 1, 0, 0, 0, 0, now.Location())
+	ofzCoupon1 := now.Add(yearEnd.Sub(now) / 2)
+	ofzCoupon2 := yearEnd.Add(ofzMaturity.Sub(yearEnd) / 2)
+
 	tests := []struct {
 		name           string
 		bond           *pkgmodel.Bond
@@ -25,13 +36,13 @@ func TestCalculateProfit(t *testing.T) {
 				Name:                  "ОФЗ 26234",
 				Nominal:               1000.0,
 				Nkd:                   15.5,
-				MaturityDate:          time.Now().AddDate(1, 0, 0), // Через год
+				MaturityDate:          ofzMaturity, // Через год
 				Exchange:              "moex_morning_evening_ofz",
 				CouponQuantityPerYear: 2,
 			},
 			coupons: []*pkgmodel.BondCoupon{
-				{PayOnBond: *utils.CreateQuotation(30, 0), CouponDate: time.Now().AddDate(0, 3, 0)}, // 30 руб через 3 месяца
-				{PayOnBond: *utils.CreateQuotation(30, 0), CouponDate: time.Now().AddDate(0, 9, 0)}, // 30 руб через 9 месяцев
+				{PayOnBond: *utils.CreateQuotation(30, 0), CouponDate: ofzCoupon1}, // 30 руб в текущем году
+				{PayOnBond: *utils.CreateQuotation(30, 0), CouponDate: ofzCoupon2}, // 30 руб в следующем году
 			},
 			candle: &model.CandleItemTechAnalyse{
 				Close: utils.CreateInternalQuotation(98, 500000000), // 98.5% от номинала
