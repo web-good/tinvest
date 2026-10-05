@@ -1,0 +1,55 @@
+{
+  "_comment": "Тема entry: RSIPeriod × RSILower (72 узла); источник RSIPeriod, RSILower. Калибровка rsi_zone на UPRO по /rsi-zone-calibrate (2026-10-05, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История UPRO (Юнипро) длиннее 36 мес → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда), контроль 36/18/6. Окно 2023-10-05 … 2026-10-05 (36 048 баров 30m). Шаг цены 0.0005 ₽, лот 1000: круг 2 шага / цена = 0.103% при 0.9755 ₽ (текущая), 0.133% при минимуме окна 0.7515 ₽ — ниже 0.2% → п.4 при удвоенной комиссии -commission 0.001. Дивидендных отсечек в окне нет (GetDividends с 2023-01-01 пуст). EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.4% окна. Запуск: go run ./cmd/backtest -ticker UPRO -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/upro/cal_entry.json -out ./reports/UPRO_zone/r20261005/entry -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "entry",
+      "grid": {
+        "RSIPeriod": [
+          2,
+          3,
+          4,
+          5,
+          6,
+          8,
+          10,
+          14
+        ],
+        "RSILower": [
+          5,
+          10,
+          15,
+          20,
+          25,
+          30,
+          35,
+          40,
+          45
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}
