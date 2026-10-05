@@ -1,0 +1,52 @@
+{
+  "_comment": "Проверка §4.7 PROFIT на точке второго круга: + общий зонд ProfitExitBars 3 · ProfitExitPct 0.5. Четыре среза одного дня. Калибровка rsi_zone на X5 по /rsi-zone-calibrate (2026-10-05, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История X5 однородна только после паузы редомициляции 2024-04-03 → 2025-01-09 (до паузы — расписки FIVE, другой инструмент), ≈ 20.9 мес < 24 → нештатный протокол. Схема DOMRF (-train 3 -test 2) на 20 мес дала бы 8 фолдов вместо 3–4, под которые написаны правило большинства и планка (СТОП «число фолдов», решение пакетного режима, прецедент RAGR): взят протокол rsi_pullback X5 — 20/8/3 (-months 20 -train-months 8 -test-months 3, 4 фолда, OOS ≈ окт 2025 … окт 2026), контроль 20/11/3 (3 фолда), -min-trades 15 (правило короткой истории). Окно 2025-02-05 … 2026-10-05 (22 851 бар 30m) целиком после редомициляции; годовой лид-ин дневок пересекает паузу — дневной ATR первых недель окна захватывает FIVE, это только первый train. Шаг цены 0.5 ₽, лот 1: круг 2 шага / цена = 0.050% при 1988 ₽, 0.058% при минимуме окна 1718.5 ₽ < 0.2% → п.4 при -commission 0.001. Дивидендные отсечки в окне (GetDividends, объявлены до прогонов): 2025-07-09 (last_buy 07-08, 648 ₽ ≈ 18.8%), 2026-01-06 (last_buy 01-05, 368 ₽ ≈ 12.2%), 2026-07-07 (last_buy 07-06, 245 ₽ ≈ 11.6%). EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 5.3% окна. Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker X5 -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/x5/point2_profit.json -out ./reports/X5_zone/r20261005/point2_profit_full -months 20 -min-trades 1 -metric profit_factor; walk-forward 20/8/3 — go run ./cmd/backtest -ticker X5 -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/x5/point2_profit.json -out ./reports/X5_zone/r20261005/point2_profit_wf -months 20 -train-months 8 -test-months 3 -min-trades 1 -metric profit_factor; контроль 20/11/3 — go run ./cmd/backtest -ticker X5 -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/x5/point2_profit.json -out ./reports/X5_zone/r20261005/point2_profit_ctrl -months 20 -train-months 11 -test-months 3 -min-trades 1 -metric profit_factor; удвоенная комиссия -commission 0.001 — go run ./cmd/backtest -ticker X5 -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/x5/point2_profit.json -out ./reports/X5_zone/r20261005/point2_profit_comm -months 20 -train-months 8 -test-months 3 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-05: 6 сделок (1 PROFIT), WF пул 4 (все фолды вырождены), Compounded 2.31% против 3.49% у point2 — §4.7 PROFIT провален (доходность ниже), PROFIT выключен.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          50
+        ],
+        "DailyATRPeriod": [
+          3
+        ],
+        "StopDailyATR": [
+          1.5
+        ],
+        "UseStoch": [
+          1
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          3
+        ],
+        "ProfitExitPct": [
+          0.5
+        ],
+        "StochKPeriod": [
+          9
+        ],
+        "StochDSmooth": [
+          3
+        ],
+        "StochLower": [
+          10
+        ],
+        "ZoneWindowBars": [
+          2
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "_comment": "ТОЧКА второго круга по правилу большинства: RSI 4/25/75, EMA 50, ATR 3, стоп 1.5, гейт стохастика 9/3/10/2; STUCK и PROFIT выключены. Голоса второго круга (20/8/3, 4 фолда; несвипуемые поля — дефолты ядра): entry_exit2 2.664/33 — RSIPeriod 4/3/3/4 ничья → 4, RSILower 10/12.5/7.5/12.5 нет → 25, RSIUpper 65/85/90/80 нет → 75 (фолды 1 и 3 по 5 сделок); trend2 0.876/58 — EMAPeriod 125/50/50/50 → 50 (3/4); risk2 1.182/97 — DailyATRPeriod 3×4 → 3 (край оси второго круга, зонд 2 на плато), StopDailyATR 1.75/1.5/1.5/1.5 → 1.5 (3/4); stoch2 1.463/47 против baseline_point 1.057/97 (+0.41, пул ≥ 20) → гейт по (а) да; StochKPeriod 7/9/9/9 → 9, StochDSmooth 1/2/2/1 ничья → 3, StochLower 10/10/10/5 → 10, ZoneWindowBars 3/2/2/2 → 2. Калибровка rsi_zone на X5 по /rsi-zone-calibrate (2026-10-05, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История X5 однородна только после паузы редомициляции 2024-04-03 → 2025-01-09 (до паузы — расписки FIVE, другой инструмент), ≈ 20.9 мес < 24 → нештатный протокол. Схема DOMRF (-train 3 -test 2) на 20 мес дала бы 8 фолдов вместо 3–4, под которые написаны правило большинства и планка (СТОП «число фолдов», решение пакетного режима, прецедент RAGR): взят протокол rsi_pullback X5 — 20/8/3 (-months 20 -train-months 8 -test-months 3, 4 фолда, OOS ≈ окт 2025 … окт 2026), контроль 20/11/3 (3 фолда), -min-trades 15 (правило короткой истории). Окно 2025-02-05 … 2026-10-05 (22 851 бар 30m) целиком после редомициляции; годовой лид-ин дневок пересекает паузу — дневной ATR первых недель окна захватывает FIVE, это только первый train. Шаг цены 0.5 ₽, лот 1: круг 2 шага / цена = 0.050% при 1988 ₽, 0.058% при минимуме окна 1718.5 ₽ < 0.2% → п.4 при -commission 0.001. Дивидендные отсечки в окне (GetDividends, объявлены до прогонов): 2025-07-09 (last_buy 07-08, 648 ₽ ≈ 18.8%), 2026-01-06 (last_buy 01-05, 368 ₽ ≈ 12.2%), 2026-07-07 (last_buy 07-06, 245 ₽ ≈ 11.6%). EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 5.3% окна. Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker X5 -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/x5/point2.json -out ./reports/X5_zone/r20261005/point2_full -months 20 -min-trades 1 -metric profit_factor; walk-forward 20/8/3 — go run ./cmd/backtest -ticker X5 -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/x5/point2.json -out ./reports/X5_zone/r20261005/point2_wf -months 20 -train-months 8 -test-months 3 -min-trades 1 -metric profit_factor; контроль 20/11/3 — go run ./cmd/backtest -ticker X5 -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/x5/point2.json -out ./reports/X5_zone/r20261005/point2_ctrl -months 20 -train-months 11 -test-months 3 -min-trades 1 -metric profit_factor; удвоенная комиссия -commission 0.001 — go run ./cmd/backtest -ticker X5 -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/x5/point2.json -out ./reports/X5_zone/r20261005/point2_comm -months 20 -train-months 8 -test-months 3 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-05: полное окно 20 мес 6 сделок (все RSI), PF 4652 (без убыточных), net +4 652 ₽; WF пул 4 сделки (все четыре фолда вырождены), контроль 3, комиссия 4 → п.2 ПРОВАЛ (4 < 20), п.6 ПРОВАЛ (хвост 6: 2 сделки < 5). Гейт стохастика 9/3/10/2 поверх EMA 50 почти полностью выключает вход. Второй круг провален. Дефолты ядра тоже проваливают стоп-условие (п.4 0.806, п.5 2026 −1.3k) → ОТКАЗ (§6/§7): пакета и регистрации нет.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          50
+        ],
+        "DailyATRPeriod": [
+          3
+        ],
+        "StopDailyATR": [
+          1.5
+        ],
+        "UseStoch": [
+          1
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ],
+        "StochKPeriod": [
+          9
+        ],
+        "StochDSmooth": [
+          3
+        ],
+        "StochLower": [
+          10
+        ],
+        "ZoneWindowBars": [
+          2
+        ]
+      }
+    }
+  ]
+}

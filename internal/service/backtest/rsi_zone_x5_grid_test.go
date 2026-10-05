@@ -24,6 +24,10 @@ var rsiZoneX5GridFiles = []string{
 	"cal_stoch.json",
 	"cal_stuck.json",
 	"cal_profit.json",
+	"cal2_entry_exit.json",
+	"cal2_trend.json",
+	"cal2_risk.json",
+	"cal2_stoch.json",
 }
 
 // rsiZoneX5MaxEMA — потолок EMAPeriod на 20-месячном окне (20/8/3, история X5 однородна только

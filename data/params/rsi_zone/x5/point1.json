@@ -1,0 +1,52 @@
+{
+  "_comment": "ТОЧКА первого круга по правилу большинства: RSI 4/10/75, EMA 50, ATR 5, стоп 1.5, гейт стохастика 14/1/10/1; STUCK и PROFIT выключены. Голоса первого круга (20/8/3, 4 фолда, вырожденных фолдов в источниках нет): RSIPeriod/RSILower/RSIUpper — источник entry_exit (pooled 2.339/36 > entry 1.792/59 и exit 1.023/113): RSIPeriod 4/3/3/4 — ничья → дефолт 4 (entry 4/5/5/4 — тоже ничья); RSILower 10/10/10/15 → 10 (3/4); RSIUpper 65/90/90/80 → нет, дефолт 75 (exit 65/55/55/60 — нет). EMAPeriod — trend 150/50/50/50 → 50 (3/4; pooled темы 0.945/60, фолд 1 0.667). risk: DailyATRPeriod 5×4 → 5, StopDailyATR 2/1.5/1.5/1.5 → 1.5 (3/4; pooled 1.182/97). stoch: pooled 1.595/50 против baseline_point 1.057/97 (+0.54, пул ≥ 20) → условие (а) выполнено; оси: StochKPeriod 9/9/14/14 — ничья → 14; StochDSmooth 1/3/1/1 → 1 (3/4); StochLower 10×4 → 10 (край оси — зонд 5 на плато); ZoneWindowBars 3/3/1/1 — ничья → 1. stuck 0/3/0/0 → выключен. profit: Bars 4/6/8/0, Pct 0.3/0.3/0.5/0 — нет большинства → общий зонд 3·0.5 (тема profit 1.004 / Compounded −0.27% против baseline 1.057 / 1.70%), проверка §4.7 (point1_profit). Планку взяли: entry_exit 2.339/36 (3 из 4 фолдов > 1, фолд 1 0.635/5), entry 1.792/59 (4/4 > 1), stoch 1.595/50 (3/4 > 1), phased 2.107/39 (фолд 3 вырожден: 5 сделок без убыточных; 2 из 3 невырожденных > 1 — нет); не взяли exit 1.023, trend 0.945, risk 1.182, trend_risk 0.886, stuck 1.031, profit 1.004. Baseline_point: WF 1.057/97 (фолд 1 0.664), контроль 1.521/73, комиссия 0.806. Калибровка rsi_zone на X5 по /rsi-zone-calibrate (2026-10-05, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История X5 однородна только после паузы редомициляции 2024-04-03 → 2025-01-09 (до паузы — расписки FIVE, другой инструмент), ≈ 20.9 мес < 24 → нештатный протокол. Схема DOMRF (-train 3 -test 2) на 20 мес дала бы 8 фолдов вместо 3–4, под которые написаны правило большинства и планка (СТОП «число фолдов», решение пакетного режима, прецедент RAGR): взят протокол rsi_pullback X5 — 20/8/3 (-months 20 -train-months 8 -test-months 3, 4 фолда, OOS ≈ окт 2025 … окт 2026), контроль 20/11/3 (3 фолда), -min-trades 15 (правило короткой истории). Окно 2025-02-05 … 2026-10-05 (22 851 бар 30m) целиком после редомициляции; годовой лид-ин дневок пересекает паузу — дневной ATR первых недель окна захватывает FIVE, это только первый train. Шаг цены 0.5 ₽, лот 1: круг 2 шага / цена = 0.050% при 1988 ₽, 0.058% при минимуме окна 1718.5 ₽ < 0.2% → п.4 при -commission 0.001. Дивидендные отсечки в окне (GetDividends, объявлены до прогонов): 2025-07-09 (last_buy 07-08, 648 ₽ ≈ 18.8%), 2026-01-06 (last_buy 01-05, 368 ₽ ≈ 12.2%), 2026-07-07 (last_buy 07-06, 245 ₽ ≈ 11.6%). EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 5.3% окна. Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker X5 -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/x5/point1.json -out ./reports/X5_zone/r20261005/point1_full -months 20 -min-trades 1 -metric profit_factor; walk-forward 20/8/3 — go run ./cmd/backtest -ticker X5 -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/x5/point1.json -out ./reports/X5_zone/r20261005/point1_wf -months 20 -train-months 8 -test-months 3 -min-trades 1 -metric profit_factor; контроль 20/11/3 — go run ./cmd/backtest -ticker X5 -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/x5/point1.json -out ./reports/X5_zone/r20261005/point1_ctrl -months 20 -train-months 11 -test-months 3 -min-trades 1 -metric profit_factor; удвоенная комиссия -commission 0.001 — go run ./cmd/backtest -ticker X5 -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/x5/point1.json -out ./reports/X5_zone/r20261005/point1_comm -months 20 -train-months 8 -test-months 3 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-05: полное окно 20 мес — 0 сделок; WF 0/0, контроль 0/0, комиссия 0/0 → п.1, п.2, п.3, п.4, п.6 ПРОВАЛ. Причина: RSILower 10 (голос entry_exit при EMA 200) склеен с EMA 50 и гейтом StochLower 10 — откат RSI(4) ниже 10 над EMA 50 на X5 почти не случается. Первый круг провален.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          10
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          50
+        ],
+        "DailyATRPeriod": [
+          5
+        ],
+        "StopDailyATR": [
+          1.5
+        ],
+        "UseStoch": [
+          1
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ],
+        "StochKPeriod": [
+          14
+        ],
+        "StochDSmooth": [
+          1
+        ],
+        "StochLower": [
+          10
+        ],
+        "ZoneWindowBars": [
+          1
+        ]
+      }
+    }
+  ]
+}
