@@ -19,6 +19,7 @@ import (
 	rsizonemtss "tinvest/internal/service/trading_strategy/rsi_zone/strategy/mtss"
 	rsizoneragr "tinvest/internal/service/trading_strategy/rsi_zone/strategy/ragr"
 	rsizonesvav "tinvest/internal/service/trading_strategy/rsi_zone/strategy/svav"
+	rsizonetrnfp "tinvest/internal/service/trading_strategy/rsi_zone/strategy/trnfp"
 	rsizoneupro "tinvest/internal/service/trading_strategy/rsi_zone/strategy/upro"
 	rsizonevsmo "tinvest/internal/service/trading_strategy/rsi_zone/strategy/vsmo"
 	rsizonewush "tinvest/internal/service/trading_strategy/rsi_zone/strategy/wush"
@@ -63,6 +64,7 @@ var rsiZoneRegistry = map[string]Binding{
 	rsizoneastr.Ticker:  rsiZoneBindingFor(rsizoneastr.Ticker, rsizoneastr.DefaultParams),
 	rsizonesvav.Ticker:  rsiZoneBindingFor(rsizonesvav.Ticker, rsizonesvav.DefaultParams),
 	rsizonewush.Ticker:  rsiZoneBindingFor(rsizonewush.Ticker, rsizonewush.DefaultParams),
+	rsizonetrnfp.Ticker: rsiZoneBindingFor(rsizonetrnfp.Ticker, rsizonetrnfp.DefaultParams),
 }
 
 // RSIZoneLookupOrGeneric returns the registered rsi_zone binding for a ticker, or a generic

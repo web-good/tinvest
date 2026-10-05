@@ -18,6 +18,7 @@ import (
 	rsizonemtss "tinvest/internal/service/trading_strategy/rsi_zone/strategy/mtss"
 	rsizoneragr "tinvest/internal/service/trading_strategy/rsi_zone/strategy/ragr"
 	rsizonesvav "tinvest/internal/service/trading_strategy/rsi_zone/strategy/svav"
+	rsizonetrnfp "tinvest/internal/service/trading_strategy/rsi_zone/strategy/trnfp"
 	rsizoneupro "tinvest/internal/service/trading_strategy/rsi_zone/strategy/upro"
 	rsizonevsmo "tinvest/internal/service/trading_strategy/rsi_zone/strategy/vsmo"
 	rsizonewush "tinvest/internal/service/trading_strategy/rsi_zone/strategy/wush"
@@ -80,6 +81,7 @@ func TestRSIZoneRegisteredTickersUseTheirLiteral(t *testing.T) {
 		rsizoneastr.Ticker:  rsizoneastr.DefaultParams(),
 		rsizonesvav.Ticker:  rsizonesvav.DefaultParams(),
 		rsizonewush.Ticker:  rsizonewush.DefaultParams(),
+		rsizonetrnfp.Ticker: rsizonetrnfp.DefaultParams(),
 	} {
 		b := RSIZoneLookupOrGeneric(ticker)
 		if got := b.DefaultParams().(core.Params); got != want {
