@@ -17,6 +17,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/msng"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/mtss"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/ragr"
+	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/svav"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/upro"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/vsmo"
 )
@@ -39,6 +40,7 @@ var paramsByTicker = map[string]core.Params{
 	mtss.Ticker:  mtss.DefaultParams(),
 	vsmo.Ticker:  vsmo.DefaultParams(),
 	astr.Ticker:  astr.DefaultParams(),
+	svav.Ticker:  svav.DefaultParams(),
 }
 
 // ParamsFor возвращает параметры тикера; false — тикер не зарегистрирован.
