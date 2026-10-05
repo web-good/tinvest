@@ -1,0 +1,52 @@
+{
+  "_comment": "ТОЧКА второго круга: дефолты ядра + EMAPeriod 75 + гейт стохастика 14/3/20/1. Голоса второго круга (36/12/6, поверх дефолтов ядра + гейт 14/3/20/1): trend2 EMAPeriod 75/75/75/75 — единогласно, pooled 2.660/46, фолды 2.278/14, 2.342/11, 17.293/13, 2.028/8 — тема взяла планку. entry_exit2 (2.065/61; фолд 3 вырожден — 9 сделок без убытков): RSIPeriod 3/3/–/4, RSILower 20/12.5/–/17.5, RSIUpper 65/75/–/65 — на трёх голосующих фолдах единогласия нет → 4/25/75. stoch2 (1.501/74): StochLower 15/15/20/12.5, ZoneWindowBars 8/8/1/4 — нет большинства → 20/1. risk2 (1.828/84): стоп 1.25/0.7/0.7/1.5, ATR 30/7/5/5 — нет большинства → 1.0/14. Гейт стохастика — из первого круга (stoch 1.625/94 против baseline 0.996/174), оси на дефолтах 14/3/20/1. STUCK выкл (первый круг 1/1/6/6). PROFIT: первый круг без большинства по ProfitExitBars → общий зонд 3·0.5, проверка §4.7 (point2_profit.json). Калибровка rsi_zone на UPRO по /rsi-zone-calibrate (2026-10-05, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История UPRO (Юнипро) длиннее 36 мес → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда), контроль 36/18/6. Окно 2023-10-05 … 2026-10-05 (36 048 баров 30m). Шаг цены 0.0005 ₽, лот 1000: круг 2 шага / цена = 0.103% при 0.9755 ₽ (текущая), 0.133% при минимуме окна 0.7515 ₽ — ниже 0.2% → п.4 при удвоенной комиссии -commission 0.001. Дивидендных отсечек в окне нет (GetDividends с 2023-01-01 пуст). EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.4% окна. Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker UPRO -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/upro/point2.json -out ./reports/UPRO_zone/r20261005/point2_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker UPRO -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/upro/point2.json -out ./reports/UPRO_zone/r20261005/point2_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker UPRO -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/upro/point2.json -out ./reports/UPRO_zone/r20261005/point2_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; удвоенная комиссия -commission 0.001 — go run ./cmd/backtest -ticker UPRO -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/upro/point2.json -out ./reports/UPRO_zone/r20261005/point2_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-05: полное окно 66 сделок PF 2.353, net +30.38k, DD 5.60% (7 466 ₽); WF 2.660/46 (2.278/14, 2.342/11, 17.293/13, 2.028/8), контроль 2.923/32, комиссия 0.001 2.231/46; годы 2024 +0.08k, 2025 +19.57k, 2026 +8.40k; хвост 6 8 сделок PF 2.025, хвост 12 21 PF 3.310; отсечек и входов в выходные 0 — 7/7 пунктов.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          75
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          1
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ],
+        "StochKPeriod": [
+          14
+        ],
+        "StochDSmooth": [
+          3
+        ],
+        "StochLower": [
+          20
+        ],
+        "ZoneWindowBars": [
+          1
+        ]
+      }
+    }
+  ]
+}
