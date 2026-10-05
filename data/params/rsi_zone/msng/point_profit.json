@@ -1,0 +1,40 @@
+{
+  "_comment": "Проверка §4.7 PROFIT на точке: + общий зонд ProfitExitBars 3 · ProfitExitPct 0.5 (голоса темы profit без большинства). Четыре среза одного дня. Калибровка rsi_zone на MSNG по /rsi-zone-calibrate (2026-10-05, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История 30m в кэше с 2023-10-05 (≥ 36 мес) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20. Шаг цены 0.0005 ₽, лот 1000: круг 2 шага / цена = 0.077% при 1.304 ₽, 0.078% при минимуме окна 1.2895 ₽ < 0.2% → п.4 при -commission 0.001. Дивидендные отсечки в окне (GetDividends, объявлены до прогонов): 2024-07-09 (last_buy 07-08, 0.160 ₽ ≈ 5.3%), 2026-07-14 (last_buy 07-13, 0.272 ₽ ≈ 15.0%). Бумага в окне упала с ~3.0 до ~1.30 ₽. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.7% окна. Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker MSNG -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/msng/point_profit.json -out ./reports/MSNG_zone/r20261005/point_profit_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker MSNG -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/msng/point_profit.json -out ./reports/MSNG_zone/r20261005/point_profit_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker MSNG -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/msng/point_profit.json -out ./reports/MSNG_zone/r20261005/point_profit_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; удвоенная комиссия -commission 0.001 — go run ./cmd/backtest -ticker MSNG -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/msng/point_profit.json -out ./reports/MSNG_zone/r20261005/point_profit_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-05 (36/12/6): WF 1.805/94 (1.312/23, 1.939/29, 2.038/29, 4.215/13, Compounded 32.83%) против точки 1.912/90 (44.13%); контроль 2.154 (28.53%) против 2.000 (30.66%); комиссия 1.481 против 1.612; полное окно 147 сделок PF 1.791, net +42347 ₽ против +55064 ₽, DD 8.63% против 7.13%. Не выполнено ни одно условие §4.7 → PROFIT выключен.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          50
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          3
+        ],
+        "ProfitExitPct": [
+          0.5
+        ]
+      }
+    }
+  ]
+}
