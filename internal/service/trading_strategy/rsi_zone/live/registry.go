@@ -20,6 +20,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/svav"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/upro"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/vsmo"
+	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/wush"
 )
 
 // paramsByTicker — тикеры, которые раннер знает. SBER сюда не заводится: калибровка планку
@@ -41,6 +42,7 @@ var paramsByTicker = map[string]core.Params{
 	vsmo.Ticker:  vsmo.DefaultParams(),
 	astr.Ticker:  astr.DefaultParams(),
 	svav.Ticker:  svav.DefaultParams(),
+	wush.Ticker:  wush.DefaultParams(),
 }
 
 // ParamsFor возвращает параметры тикера; false — тикер не зарегистрирован.
