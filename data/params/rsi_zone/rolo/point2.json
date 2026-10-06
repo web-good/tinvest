@@ -1,0 +1,40 @@
+{
+  "_comment": "ТОЧКА второго круга: дефолты ядра (RSI 4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK выкл) + общий зонд PROFIT ProfitExitBars 3 · ProfitExitPct 0.5 — единственное, что второй круг не отдал дефолтам. Голоса второго круга (36/12/6, 4 фолда, вырожденных нет): entry_exit2 1.088/145 — RSIPeriod 2/3/3/2 (ничья 2/2) → 4, RSILower 5/10/10/12.5 (2/4) → 25, RSIUpper 77.5/77.5/70/60 (2/4) → 75; risk2 0.831/162 — DailyATRPeriod 3/3/4/7 (2/4) → 14, StopDailyATR 0.3/1.25/1.25/0.5 (2/4) → 1.0; profit2 1.432/201 (Compounded 49.26% против baseline −0.76%) — ProfitExitBars 5/4/0/2 и ProfitExitPct 0.3/0.3/0.4/0.4 без большинства → кандидат — общий зонд 3·0.5 (§4.1). Без PROFIT точка второго круга = baseline_point.json того же дня (WF 1.032/157) — это и есть point2_noprofit. Калибровка rsi_zone на ROLO по /rsi-zone-calibrate (2026-10-06, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История у брокера ≥ 36 мес (дневки с 2022-10-06, 30m в кэше после -refresh с 2023-10-06, 31 297 баров) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20. Шаг цены 0.0002 ₽, лот 1000: круг 2 шага / цена = 0.106% при 0.376 ₽ < 0.2% → модель -commission 0.0005 не оптимистична, п.4 стоп-условия — удвоенная комиссия -commission 0.001 (круг 0.2% ≥ реального). Дивидендные отсечки в окне: нет (GetDividends 2023–2027 пуст, объявлено до прогонов). EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.9% окна (31 297 баров). Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker ROLO -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/rolo/point2.json -out ./reports/ROLO_zone/r20261006/point2_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker ROLO -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/rolo/point2.json -out ./reports/ROLO_zone/r20261006/point2_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker ROLO -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/rolo/point2.json -out ./reports/ROLO_zone/r20261006/point2_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; удвоенная комиссия -commission 0.001 — go run ./cmd/backtest -ticker ROLO -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/rolo/point2.json -out ./reports/ROLO_zone/r20261006/point2_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-06: WF 36/12/6 1.225/186 (Compounded 23.73%; фолды 1.784/52, 1.365/48, 1.726/47, 0.672/39), контроль 36/18/6 1.092/134 (1.368, 1.729, 0.672), -commission 0.001 1.030/186 (1.443, 1.092, 1.462, 0.591). Полное окно 231 сделка PF 1.167, net +25 084 ₽, DD 24.14% (36 908 ₽) против baseline 31.04%; выходы PROFIT 110 / RSI 103 / SL 18; удержание 8/34/70; годы 2023 (огрызок) −5.8k, 2024 +9.2k, 2025 +33.6k, 2026 −11.9k; хвост 6 39 сделок PF 0.672 (≡ фолд 4 0.672/39, знаки согласованы), хвост 12 86 сделок PF 1.005; входов в выходные 0, сделок через отсечки 0. §4.7 PROFIT против point2_noprofit (= baseline_point того же дня): pooled +0.193 ✓, Compounded основной 23.73% против −0.76% и контрольной 5.87% против −15.16% ✓, комиссия 1.030 против 0.907 ✓, DD полного окна 24.14% против 31.04% ✓, net +25.1k против −9.3k ✓ — выход PROFIT на дефолтах проходит §4.7. Стоп-условие: п.1 1.225 ✓, п.2 186 ✓, п.3 1.092 ✓, п.4 1.030 ✓, п.5 2026 −11.9k ✗, п.6 хвост 6 PF 0.672/39 ✗ (хвост 12 1.005/86), п.7 0/0 ✓ — ВТОРОЙ КРУГ ПРОВАЛЕН пунктами 5 и 6. Плато PROFIT (plateau2_*): Bars 2/3/4 WF 1.407/1.225/1.168, Pct 0.4/0.5/0.75 WF 1.287/1.225/1.198 — у всех четырёх соседей хвост 6 < 1 (0.788/0.706/0.667/0.596), фолд 4 (апр — окт 2026) убыточен на любой настройке выхода; Bars 2 выводит 2026 в плюс (+7.6k), но не хвост 6 — ни один сосед не спасает круг. §7: дефолты ядра проваливают п.3 (0.903), п.4 (0.907), п.5 (2026 −27.1k) и п.6 (хвост 6 0.588); точка первого круга — п.5 (2024 −0.3k); точка второго круга — п.5 и п.6. Ни точка, ни дефолты не проходят → ОТКАЗ: пакета и регистрации нет. Почему: стратегия на ROLO не держит последний режим — апрель — октябрь 2026 (бумага −55% в 2026H1 и +56% в 2026H2, цена 0.24–0.38 ₽) убыточен на дефолтах, на всех темах первого и второго круга (фолд 4 < 1 у exit, trend, risk, stoch, stuck, profit, entry_exit2, risk2, profit2) и у всех вариантов PROFIT; единственная связка с прибыльным хвостом (RSI 3/10, хвост 6 2.567) провалила 2024 и держится на краю обрыва по RSIPeriod (RSIPeriod 4 → 27 сделок, PF 0.552). Наблюдение без права на выбор: сосед RSILower 15 у точки первого круга (WF 1.692/137, 2024 +6.2k) голосов не набрал (15/10/10/10 и 5/10/10/15), брать его по рельефу OOS запрещено процедурой.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          3
+        ],
+        "ProfitExitPct": [
+          0.5
+        ]
+      }
+    }
+  ]
+}

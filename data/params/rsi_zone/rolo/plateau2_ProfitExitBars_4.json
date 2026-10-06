@@ -1,0 +1,40 @@
+{
+  "_comment": "Плато второго круга ProfitExitBars вокруг point2 (3: соседи 2 и 4): point2 с ProfitExitBars 4. Калибровка rsi_zone на ROLO по /rsi-zone-calibrate (2026-10-06, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История у брокера ≥ 36 мес (дневки с 2022-10-06, 30m в кэше после -refresh с 2023-10-06, 31 297 баров) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20. Шаг цены 0.0002 ₽, лот 1000: круг 2 шага / цена = 0.106% при 0.376 ₽ < 0.2% → модель -commission 0.0005 не оптимистична, п.4 стоп-условия — удвоенная комиссия -commission 0.001 (круг 0.2% ≥ реального). Дивидендные отсечки в окне: нет (GetDividends 2023–2027 пуст, объявлено до прогонов). EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.9% окна (31 297 баров). Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker ROLO -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/rolo/plateau2_ProfitExitBars_4.json -out ./reports/ROLO_zone/r20261006/plateau2_b4_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker ROLO -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/rolo/plateau2_ProfitExitBars_4.json -out ./reports/ROLO_zone/r20261006/plateau2_b4_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-06: Bars 4: WF 1.168/182 (фолд 4 0.706), полное окно 227 сделок PF 1.138, net +21.8k, DD 25.01%, 2026 −16.1k, хвост 6 0.706/38, хвост 12 0.929/84.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          4
+        ],
+        "ProfitExitPct": [
+          0.5
+        ]
+      }
+    }
+  ]
+}
