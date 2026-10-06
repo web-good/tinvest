@@ -1,0 +1,40 @@
+{
+  "_comment": "Плато §4.4 точки второго круга (дефолты + EMA 30, стоп 1.5 · ATR 3, STUCK 0): сосед EMAPeriod = 25, остальное как в точке. Калибровка rsi_zone на YDEX по /rsi-zone-calibrate (2026-10-06, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. Кэш 30m с 2023-09-28, но торги YNDX остановлены 2024-06-14, YDEX начались 2024-07-24 — дыра 40 дней с прыжком цены 4007 → 4542 (редомициляция). Однородная история ≈ 26.4 мес (24–36) → схема 24/12/3 (-months 24 -train-months 12 -test-months 3, 4 фолда, OOS ≈ окт 2025 … окт 2026), контроль 24/15/3 (3 фолда), -min-trades 20; окно 2024-10-06 … 2026-10-06 (≈ 27 000 баров) целиком после дыры, как окно 25/9/4 у rsi_pullback YDEX. Шаг цены 0.5 ₽, лот 1: круг 2 шага / цена = 0.028% при 3606 ₽, 0.032% при минимуме окна 3092 ₽ < 0.2% → п.4 при -commission 0.001. Дивидендные отсечки в окне (GetDividends, объявлены до прогонов; первый день без дивиденда): 2025-04-26 (last_buy 04-25, 80 ₽ ≈ 1.8%), 2025-09-27 (last_buy 09-26, 80 ₽ ≈ 2.0%), 2026-04-25 (last_buy 04-24, 110 ₽ ≈ 2.6%), 2026-09-19 (last_buy 09-18, 110 ₽ ≈ 2.9%); 2024-09-20 вне окна. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 4.5% окна, прогрев целиком после дыры. Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker YDEX -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/ydex/plateau_EMAPeriod_25.json -out ./reports/YDEX_zone/r20261006/plateau_EMAPeriod_25_full -months 24 -min-trades 1 -metric profit_factor; walk-forward 24/12/3 — go run ./cmd/backtest -ticker YDEX -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/ydex/plateau_EMAPeriod_25.json -out ./reports/YDEX_zone/r20261006/plateau_EMAPeriod_25_wf -months 24 -train-months 12 -test-months 3 -min-trades 1 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-06: полное окно 35 сделок PF 2.151, net +8 280 ₽, DD 4.57%; WF 2.005 (+4.45%); годы 2024 +1.1k / 2025 +1.4k / 2026 +5.9k; хвосты 6 9 PF 7.95, 12 20 PF 2.26.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          25
+        ],
+        "DailyATRPeriod": [
+          3
+        ],
+        "StopDailyATR": [
+          1.5
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}
