@@ -50,7 +50,7 @@ func TestRSIZoneEnabledIgnoresBlankTickers(t *testing.T) {
 // env/prod.env и оба образца несут одну и ту же вселенную rsi_zone (прод-файл уже дважды
 // молча терял тикеры rsi_pullback — см. TestRSIPullbackTickersMatchEnvFiles).
 func TestRSIZoneTickersMatchAcrossEnvFiles(t *testing.T) {
-	want := "AFKS,BAZA,DIAS,IVAT,UPRO,MTSS,AFLT,MSNG,BANE,SVAV,TRNFP,SMLT,TATNP,RENI,FIXR"
+	want := "AFKS,BAZA,DIAS,IVAT,UPRO,MTSS,AFLT,MSNG,BANE,SVAV,TRNFP,SMLT,TATNP,RENI,FIXR,MOEX"
 	for _, path := range []string{"../../env/prod.env", "../../env/prod.env.example", "../../env/local.env.example"} {
 		raw, err := os.ReadFile(path) //nolint:gosec // fixed repository path
 		if err != nil {
