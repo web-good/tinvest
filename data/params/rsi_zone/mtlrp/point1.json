@@ -1,0 +1,40 @@
+{
+  "_comment": "Точка первого круга. Сборка по большинству первого круга (планку не взяла ни одна тема): RSI-поля — источник entry_exit (pooled 2.178/62 выше exit 1.257 и entry 1.055), фолд 4 вырожден (4 сделки без убытка), голоса трёх фолдов RSIPeriod 5/3/6, RSILower 20/10/25, RSIUpper 55/75/55 — единогласия нет → 4/25/75 (exit сам по себе давал RSIUpper 60 3/4, но источником по правилу §4.1 становится тема с бóльшим pooled); EMAPeriod 50/100/100/400 — нет → 200; DailyATRPeriod 5/5/5/14 → 5 (3/4); StopDailyATR 3/3/2/0.5 — нет → 1.0; гейт stoch 1.045/84 против baseline 1.036/149 (+0.009 < 0.05) → UseStoch 0; StuckExitBars 1/1/1/2 → 1 (3/4); PROFIT: ProfitExitBars 12/1/2/2 — нет большинства → кандидат общий зонд 3·0.5 (point1_profit.json). Калибровка rsi_zone на MTLRP по /rsi-zone-calibrate (2026-10-06, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован в rsi_zone: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. Кэш 30m MTLRP с 2023-08-04 (≥ 36 мес окна) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20; окно 2023-10-06 … 2026-10-06; цена в окне упала с ~226 до ~37 ₽ (затяжной нисходящий тренд). Шаг цены 0.05 ₽, лот 10: круг 2 шага / цена = 0.268% при 37.3 ₽ (текущая), 0.345% при минимуме окна 29 ₽ > 0.2% — консервативно (как VSMO, по минимуму окна) п.4 при -commission 0.0018. Дивидендные отсечки: GetDividends за 2023–2026 пуст (Мечел по префам не платил) — отсечек в окне нет, объявлено до прогонов. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.4% окна. Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker MTLRP -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/mtlrp/point1.json -out ./reports/MTLRP_zone/r20261006/point1_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker MTLRP -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/mtlrp/point1.json -out ./reports/MTLRP_zone/r20261006/point1_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker MTLRP -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/mtlrp/point1.json -out ./reports/MTLRP_zone/r20261006/point1_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; реальный круг -commission 0.0018 — go run ./cmd/backtest -ticker MTLRP -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/mtlrp/point1.json -out ./reports/MTLRP_zone/r20261006/point1_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.0018 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-06: дефолты + ATR 5 + STUCK 1: полное окно 247 сделок PF 0.870, net −15 502 ₽, DD 24 636 ₽ (23.19%); STUCK 130, RSI 107, SL 10; 2024 −9 157, 2025 +5 067, 2026 −10 864 ₽; хвосты 6/12 PF 0.577/0.715. WF 0.973 (compounded −3.43%), контроль 0.826, реальный круг 0.588 — ПРОВАЛ п.1, п.3, п.4, п.5, п.6. Первый круг провален (плато не снимались — точка убыточна по WF).",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          5
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          1
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}

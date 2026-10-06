@@ -1,0 +1,40 @@
+{
+  "_comment": "СПРАВОЧНЫЙ зонд (не точка, в сборку не идёт): дефолты ядра + RSIUpper 60 — самый устойчивый голос первого круга (exit 60/60/60/65), отвергнутый правилом источника (entry_exit с бóльшим pooled); меряет, спасает ли ранний выход стратегию под реальным кругом издержек. Калибровка rsi_zone на MTLRP по /rsi-zone-calibrate (2026-10-06, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован в rsi_zone: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. Кэш 30m MTLRP с 2023-08-04 (≥ 36 мес окна) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20; окно 2023-10-06 … 2026-10-06; цена в окне упала с ~226 до ~37 ₽ (затяжной нисходящий тренд). Шаг цены 0.05 ₽, лот 10: круг 2 шага / цена = 0.268% при 37.3 ₽ (текущая), 0.345% при минимуме окна 29 ₽ > 0.2% — консервативно (как VSMO, по минимуму окна) п.4 при -commission 0.0018. Дивидендные отсечки: GetDividends за 2023–2026 пуст (Мечел по префам не платил) — отсечек в окне нет, объявлено до прогонов. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.4% окна. Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker MTLRP -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/mtlrp/probe_upper60.json -out ./reports/MTLRP_zone/r20261006/probe_upper60_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker MTLRP -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/mtlrp/probe_upper60.json -out ./reports/MTLRP_zone/r20261006/probe_upper60_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker MTLRP -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/mtlrp/probe_upper60.json -out ./reports/MTLRP_zone/r20261006/probe_upper60_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; реальный круг -commission 0.0018 — go run ./cmd/backtest -ticker MTLRP -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/mtlrp/probe_upper60.json -out ./reports/MTLRP_zone/r20261006/probe_upper60_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.0018 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-06: СПРАВОЧНО: дефолты + RSIUpper 60 — WF 1.322/183 (2.376, 1.595, 1.437, 0.725), контроль 1.124, реальный круг 0.668; полное окно 247 сделок PF 1.048, net +4 822 ₽, DD 20.55%; 2024 −3 618, 2025 +15 397, 2026 −3 837 ₽; хвосты 6/12 0.725/1.015. Провал п.4, п.5, п.6 — кандидатом на пересмотр не является: при реальном круге 0.27–0.35% ни одна конфигурация не прибыльна.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          60
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}
