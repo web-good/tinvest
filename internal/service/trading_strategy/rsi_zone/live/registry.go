@@ -17,6 +17,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/msng"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/mtss"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/ragr"
+	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/smlt"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/svav"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/trnfp"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/upro"
@@ -47,6 +48,7 @@ var paramsByTicker = map[string]core.Params{
 	wush.Ticker:  wush.DefaultParams(),
 	trnfp.Ticker: trnfp.DefaultParams(),
 	ydex.Ticker:  ydex.DefaultParams(),
+	smlt.Ticker:  smlt.DefaultParams(),
 }
 
 // ParamsFor возвращает параметры тикера; false — тикер не зарегистрирован.
