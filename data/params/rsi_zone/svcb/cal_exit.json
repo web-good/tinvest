@@ -1,0 +1,49 @@
+{
+  "_comment": "Тема exit: RSIUpper (10 узлов); источник RSIUpper. Калибровка rsi_zone на SVCB по /rsi-zone-calibrate (прогоны 2026-10-07, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован в rsi_zone: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. Кэш 30m SVCB с 2023-12-15 (листинг) ≈ 33.7 мес (24–36) → схема 24/12/3 (-months 24 -train-months 12 -test-months 3, 4 фолда, OOS ≈ окт 2025 … окт 2026), контроль 24/15/3 (3 фолда), -min-trades 20; окно 2024-10-07 … 2026-10-07 (≈ 26 500 баров). Шаг цены 0.005 ₽, лот 100: круг 2 шага / цена = 0.104% при 9.58 ₽, 0.114% при минимуме окна 8.785 ₽ (июль 2026) < 0.2% → п.4 при удвоенной комиссии -commission 0.001 (прецедент VSMO/MTLRP: ужесточение только при круге ≥ 0.2%). Дивидендные отсечки в окне (GetDividends, объявлены до прогонов; первый день без дивиденда): 2025-07-08 (last_buy 07-07, 0.35 ₽ ≈ 2.2%), 2026-07-11 (last_buy 07-10, 0.35 ₽ ≈ 3.5%); 2024-07-06 и 2023-11-11 вне окна. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 4.6% окна. Запуск: go run ./cmd/backtest -ticker SVCB -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/svcb/cal_exit.json -out ./reports/SVCB_zone/r20261007/exit -months 24 -train-months 12 -test-months 3 -min-trades 20 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "exit",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          50,
+          55,
+          60,
+          65,
+          70,
+          75,
+          80,
+          85,
+          90,
+          95
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}
