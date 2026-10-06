@@ -1,0 +1,40 @@
+{
+  "_comment": "Опора второго круга: дефолты ядра + EMAPeriod 30 одной точкой (полное окно, основная, контрольная, удвоенная комиссия). Второй круг (§6): первый круг провален (point1 4/20/75, EMA 200, STUCK 6: WF 1.196/150, комиссия 0.980 — п.4; 2 сделки через отсечки — п.7; с зондом PROFIT 3·0.5 — 2025 в минусе, п.5). Зоны — по фактическим голосам фолдов первого круга, шаг вдвое мельче. База второго круга — дефолты ядра + EMAPeriod 30 (решение пакетного режима, прецедент YDEX): trend — единственная тема с планкой (2.058/95, 4/4 фолда > 1), голоса 100/30/30/50 без большинства, арбитр trend_risk 2.258/75 даёт EMA 30 в 3 из 4 фолдов; на EMA 200 стратегия на TATNP не проходит п.4. EMAPeriod свипует только trend2 (над дефолтами), остальные поля — свои темы над базой. Калибровка rsi_zone на TATNP по /rsi-zone-calibrate (2026-10-06, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. Кэш 30m с 2023-08-04 (≥ 36 мес, без дыр) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20; окно 2023-10-06 … 2026-10-06. Шаг цены 0.1 ₽, лот 1: круг 2 шага / цена = 0.033% при 609 ₽, 0.051% при минимуме окна 390 ₽ < 0.2% → п.4 при -commission 0.001. Дивидендные отсечки в окне (GetDividends, объявлены до прогонов; первый день без дивиденда, дивиденд к цене): 2023-10-11 (27.54 ₽ ≈ 4.2%), 2024-01-09 (35.17 ₽ ≈ 4.9%), 2024-07-09 (25.17 ₽ ≈ 3.7%), 2024-10-08 (38.20 ₽ ≈ 5.8%), 2025-01-07 (17.39 ₽ ≈ 2.6%), 2025-05-31 (43.11 ₽ ≈ 6.4%), 2025-10-14 (14.35 ₽ ≈ 2.6%), 2026-01-09 (8.13 ₽ ≈ 1.5%), 2026-07-15 (11.61 ₽ ≈ 2.5%); объявленная 2026-10-13 (last_buy 2026-10-12, 32.88 ₽ ≈ 5.4%) — за окном. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.4% окна (≈ 36 000 баров). Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker TATNP -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/tatnp/baseline_ema30_point.json -out ./reports/TATNP_zone/r20261006/baseline_ema30_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker TATNP -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/tatnp/baseline_ema30_point.json -out ./reports/TATNP_zone/r20261006/baseline_ema30_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker TATNP -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/tatnp/baseline_ema30_point.json -out ./reports/TATNP_zone/r20261006/baseline_ema30_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; удвоенная комиссия -commission 0.001 — go run ./cmd/backtest -ticker TATNP -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/tatnp/baseline_ema30_point.json -out ./reports/TATNP_zone/r20261006/baseline_ema30_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-06: полное окно 72 сделки PF 3.094, net +34 072 ₽, DD 3 975 ₽ (3.19%), выходы RSI 67 / SL 5; WF 36/12/6 3.635/45, compounded +29.50% (фолды 7.801/7, 1.520/13, 1.583/10, 21.807/15); контроль 36/18/6 3.325/38 (+23.94%); комиссия 0.001 2.970/45 (+22.87%).",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          30
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}

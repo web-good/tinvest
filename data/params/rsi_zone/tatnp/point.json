@@ -1,0 +1,40 @@
+{
+  "_comment": "Итоговая точка TATNP: дефолты ядра + EMAPeriod 30 (RSI 4/25/75, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выкл). Калибровка rsi_zone на TATNP по /rsi-zone-calibrate (2026-10-06, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. Кэш 30m с 2023-08-04 (≥ 36 мес, без дыр) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20; окно 2023-10-06 … 2026-10-06. Шаг цены 0.1 ₽, лот 1: круг 2 шага / цена = 0.033% при 609 ₽, 0.051% при минимуме окна 390 ₽ < 0.2% → п.4 при -commission 0.001. Дивидендные отсечки в окне (GetDividends, объявлены до прогонов; первый день без дивиденда, дивиденд к цене): 2023-10-11 (27.54 ₽ ≈ 4.2%), 2024-01-09 (35.17 ₽ ≈ 4.9%), 2024-07-09 (25.17 ₽ ≈ 3.7%), 2024-10-08 (38.20 ₽ ≈ 5.8%), 2025-01-07 (17.39 ₽ ≈ 2.6%), 2025-05-31 (43.11 ₽ ≈ 6.4%), 2025-10-14 (14.35 ₽ ≈ 2.6%), 2026-01-09 (8.13 ₽ ≈ 1.5%), 2026-07-15 (11.61 ₽ ≈ 2.5%); объявленная 2026-10-13 (last_buy 2026-10-12, 32.88 ₽ ≈ 5.4%) — за окном. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.4% окна (≈ 36 000 баров). Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker TATNP -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/tatnp/point.json -out ./reports/TATNP_zone/r20261006/point_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker TATNP -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/tatnp/point.json -out ./reports/TATNP_zone/r20261006/point_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker TATNP -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/tatnp/point.json -out ./reports/TATNP_zone/r20261006/point_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; удвоенная комиссия -commission 0.001 — go run ./cmd/backtest -ticker TATNP -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/tatnp/point.json -out ./reports/TATNP_zone/r20261006/point_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-06 (итог калибровки, ВЕРДИКТ — ТОЧКА): литерал RSI 4/25/75 (дефолт), EMAPeriod 30, DailyATRPeriod 14, StopDailyATR 1.0 (дефолты); UseStoch 0, StuckExitBars 0, ProfitExitBars 0 / ProfitExitPct 0. Единственное отличие от дефолтов ядра — EMAPeriod 30. Полное окно 2023-10-06 … 2026-10-06: 72 сделки PF 3.094, net +34 072 ₽ (+34.07%), max DD 3 975 ₽ (3.19%) против baseline 22 148 ₽ (17.66%) — гейт просадки пройден; win 77.8%, выходы RSI 67 / SL 5 (стоп срабатывает — капкана нет), удержание 13/26/51 бара (baseline 14/32/98), ночёвок 48.6% (baseline 51.3%), exposure 2.83%. Годы: 2023 (огрызок) +0.7k, 2024 +6.6k (PF 2.09), 2025 +6.1k (PF 1.92), 2026 +20.6k (PF 7.21); убыточных полугодий нет. WF 36/12/6 3.635/45, compounded +29.50% (фолды 7.801/7, 1.520/13, 1.583/10, 21.807/15 — вырожденных нет); контроль 36/18/6 3.325/38 (+23.94%); комиссия 0.001 2.970/45 (+22.87%). Семь пунктов: 1) 3.635 ≥ 1 ✓; 2) пул 45 ≥ 20 ✓; 3) 3.325 ✓; 4) 2.970 ✓ (реальный круг 0.051% < 0.2%); 5) 2024 +6.6k, 2025 +6.1k, 2026 +20.6k ✓; 6) хвост 6 15 сделок PF 21.771, хвост 12 25 PF 4.375 ✓; сверка знака: фолды 3+4 по формуле PF 4.26 против хвоста 6 21.77 — оба > 1, согласованы; 7) сделок через девять отсечек окна 0, входов в выходные 0 ✓. Против дефолтов ядра того же дня (§7): WF 3.635 против 1.197, контроль 3.325 против 1.040, комиссия 2.970 против 0.978, DD 3.19% против 17.66% — дефолты проваливают п.4 и п.7, точка побеждает. Путь: первый круг — планку взяла только trend (2.058/95), point1 (RSILower 20, STUCK 6) провален п.4 и п.7; второй круг на опоре дефолты + EMA 30 (решение пакетного режима: trend 100/30/30/50 и trend2 100/30/30/40 без большинства, арбитр trend_risk 30 в 3 из 4); entry_exit2 дал RSIPeriod 3 (4/4), но плато его отвергло: RSIPeriod 2 → WF 0.861 (обрыв), 3 → 1.882 (DD 7.06%), 4 → 3.635 (DD 3.19%) — выбран 4. Плато EMA на RSI 4: 25 → 4.481/23 (фолд 1 вырожден, хвост 6 — 3 сделки), 30 → 3.635/45, 35 → 1.581, 40 → 1.787 (у 35/40 по сделке через отсечку). Механизмы §4.7: гейт стохастика ВЫКЛ (stoch 0.880 < baseline 1.197); STUCK ВЫКЛ (3.634 против 3.635); PROFIT ВЫКЛ (зонд 3·0.5: WF 3.049 < 3.635, compounded и net ниже). Риски: EMA 30 — пик плато (соседи 35/40 вдвое хуже по PF), литерал держится на решении пакетного режима, а не на большинстве голосов; редкие сделки (≈ 2 в месяц, exposure 2.8%), фолды 1–3 по 7–13 сделок; 47% net полного окна — 2026H2 (фолд 4 PF 21.8 на 15 сделках); частые дивидендные отсечки (2–3 в год, до 6.4%) — защиты в литерале нет, ближайшая 2026-10-13 (last_buy 2026-10-12, 32.88 ₽ ≈ 5.4%).",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          30
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}
