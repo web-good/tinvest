@@ -1,0 +1,52 @@
+{
+  "_comment": "Плато §4.4 точки первого круга RTKM: DailyATRPeriod=7 (соседи значения точки; DailyATRPeriod 3 — зонд за краем оси 5). РЕЗУЛЬТАТ 2026-10-06: WF 1.832/29; полное окно 45 сделок PF 1.402, DD 12.13%, 2024 −3.9k.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          6
+        ],
+        "RSILower": [
+          20
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          7
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          1
+        ],
+        "StochKPeriod": [
+          14
+        ],
+        "StochDSmooth": [
+          3
+        ],
+        "StochLower": [
+          20
+        ],
+        "ZoneWindowBars": [
+          1
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}

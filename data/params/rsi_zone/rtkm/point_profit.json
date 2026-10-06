@@ -1,0 +1,52 @@
+{
+  "_comment": "Проверка §4.7 PROFIT: у темы profit большинства нет (Bars 6,3,0,6; Pct 0.3,0.3,0.75,0.75) → общий зонд ProfitExitBars 3 · ProfitExitPct 0.5 поверх точки. РЕЗУЛЬТАТ 2026-10-06: WF 3.399/31 (Compounded 16.94% против 14.66% у точки), контроль 4.077/26 (16.09% против 20.35% — НИЖЕ), комиссия 2.811 против 1.620; полное окно 47 сделок PF 3.342, net +23.2k против +14.1k, DD 3.76% против 11.07%; выходы PROFIT 35 (+27.7k), RSI 11 (−0.9k), SL 1. Условие §4.7 «Compounded контрольной не ниже» нарушено → PROFIT выключен.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          6
+        ],
+        "RSILower": [
+          20
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          5
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          1
+        ],
+        "StochKPeriod": [
+          14
+        ],
+        "StochDSmooth": [
+          3
+        ],
+        "StochLower": [
+          20
+        ],
+        "ZoneWindowBars": [
+          1
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          3
+        ],
+        "ProfitExitPct": [
+          0.5
+        ]
+      }
+    }
+  ]
+}
