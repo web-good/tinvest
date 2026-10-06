@@ -1,0 +1,49 @@
+{
+  "_comment": "Тема exit: RSIUpper (10 узлов); источник RSIUpper. Калибровка rsi_zone на FESH по /rsi-zone-calibrate (2026-10-07, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован в rsi_zone: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT и окно запрета входа выключены) и перечислены явно. Кэш 30m с 2022-08-29 покрывает всё окно 36 мес (≈35 500 баров, без дыр > 5 дней) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20; окно 2023-10-07 … 2026-10-07. Шаг цены 0.01 ₽, лот 1: круг 2 шага / цена = 0.033% при 60.7 ₽, 0.050% при минимуме окна 40.11 ₽ (2024-12-13) < 0.2% → п.4 при -commission 0.001. Дивидендные отсечки в окне: нет (GetDividends с 2023-01-01 пуст; объявлено до прогонов). Цена окна 103 → 40 → 61 ₽ (падающий режим 2023–2024, боковик после). EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.4% окна. Запуск: go run ./cmd/backtest -ticker FESH -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/fesh/cal_exit.json -out ./reports/FESH_zone/r20261007/exit -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "exit",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          50,
+          55,
+          60,
+          65,
+          70,
+          75,
+          80,
+          85,
+          90,
+          95
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}
