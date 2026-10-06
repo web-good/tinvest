@@ -1,0 +1,52 @@
+{
+  "_comment": "Плато point1: RSIUpper 75. Калибровка rsi_zone на MOEX по /rsi-zone-calibrate (2026-10-06, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован в rsi_zone: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История MOEX на бирже с 2013 г., кэш 30m с 2023-08-04 (≥ 36 мес окна) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20; окно 2023-10-06 … 2026-10-06. Шаг цены 0.01 ₽, лот 10: круг 2 шага / цена = 0.015% при минимуме окна 132.2 ₽ < 0.2% → п.4 при -commission 0.001. Дивидендные отсечки в окне (GetDividends, объявлены до прогонов; первый день без дивиденда = день после last_buy, дивиденд к цене закрытия last_buy): 2024-06-14 (17.35 ₽ ≈ 7.0%), 2025-07-10 (26.11 ₽ ≈ 13.5%), 2026-07-09 (19.57 ₽ ≈ 11.9%). EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.4% окна. Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker MOEX -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/moex/plateau_RSIUpper_75.json -out ./reports/MOEX_zone/r20261006/plateau_RSIUpper_75_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker MOEX -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/moex/plateau_RSIUpper_75.json -out ./reports/MOEX_zone/r20261006/plateau_RSIUpper_75_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker MOEX -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/moex/plateau_RSIUpper_75.json -out ./reports/MOEX_zone/r20261006/plateau_RSIUpper_75_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; удвоенная комиссия -commission 0.001 — go run ./cmd/backtest -ticker MOEX -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/moex/plateau_RSIUpper_75.json -out ./reports/MOEX_zone/r20261006/plateau_RSIUpper_75_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-06: WF 1.591/70, контроль 1.300, комиссия 1.265, полное 105/1.380 DD 8.29% — лучше голоса 70 на всех срезах; RSIUpper возвращён к дефолту 75 во втором круге (= baseline2_point).",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          5
+        ],
+        "StopDailyATR": [
+          2.0
+        ],
+        "UseStoch": [
+          1
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ],
+        "StochKPeriod": [
+          14
+        ],
+        "StochDSmooth": [
+          3
+        ],
+        "StochLower": [
+          15
+        ],
+        "ZoneWindowBars": [
+          1
+        ]
+      }
+    }
+  ]
+}
