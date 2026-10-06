@@ -1,0 +1,52 @@
+{
+  "_comment": "Проверка §4.7 PROFIT на точке: + ProfitExitBars 3 · ProfitExitPct 0.5 (общий зонд — большинства в теме profit нет). Четыре среза одного дня. Калибровка rsi_zone на FIXR по /rsi-zone-calibrate (2026-10-06, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История ≥ 36 мес (дневки с 2022-08-04, 30m в кэше после -refresh с 2023-10-06, 33 551 бар; цены в кэше скорректированы на сплит) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20. Шаг цены 0.0001 ₽, лот 1000: круг 2 шага / цена = 0.053% при 0.377 ₽ < 0.2% → модель -commission 0.0005 не оптимистична, п.4 стоп-условия — удвоенная комиссия -commission 0.001. Дивидендные отсечки в окне (GetDividends 2023–2027, объявлено до прогонов): одна — последний день с дивидендом 2026-05-18, отсечка 2026-05-19, 0.11 ₽ ≈ 17.3% цены (гэп −17.8% на открытии 2026-05-19). EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.6% окна (33 551 бар). Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker FIXR -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/fixr/point_profit.json -out ./reports/FIXR_zone/r20261006/point_profit_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker FIXR -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/fixr/point_profit.json -out ./reports/FIXR_zone/r20261006/point_profit_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker FIXR -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/fixr/point_profit.json -out ./reports/FIXR_zone/r20261006/point_profit_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; удвоенная комиссия -commission 0.001 — go run ./cmd/backtest -ticker FIXR -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/fixr/point_profit.json -out ./reports/FIXR_zone/r20261006/point_profit_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-06: WF 2.028/85 (Compounded 22.00%) против точки 1.952 (22.54%): pooled +0.076 ✓, доходность основной ниже ✗; контроль 1.200 (3.46% против 4.90%) ✗; комиссия 1.492 против 1.472 ✓; полное окно 116 сделок PF 2.088, net +31 747 против +34 023 ₽ ✗, DD 8.84% (11 973 ₽) против 9.20% ✓; выходы PROFIT 11 / RSI 104 / SL 1. §4.7 провален (доходность основной и контрольной, net полного окна) → ProfitExitBars 0, ProfitExitPct 0.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          60
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          1
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          3
+        ],
+        "ProfitExitPct": [
+          0.5
+        ],
+        "StochKPeriod": [
+          14
+        ],
+        "StochDSmooth": [
+          3
+        ],
+        "StochLower": [
+          20
+        ],
+        "ZoneWindowBars": [
+          1
+        ]
+      }
+    }
+  ]
+}
