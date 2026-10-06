@@ -1,0 +1,52 @@
+{
+  "_comment": "§4.7: point2 + общий зонд PROFIT 3·0.5. Калибровка rsi_zone на TRMK по /rsi-zone-calibrate (2026-10-06, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован в rsi_zone: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. TRMK на бирже давно, кэш 30m с 2023-08-05 (≥ 36 мес окна) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20; окно 2023-10-06 … 2026-10-06. Шаг цены 0.02 ₽, лот 10: круг 2 шага / цена = 0.089% при минимуме окна 45.02 ₽ < 0.2% → п.4 при -commission 0.001. Дивидендные отсечки в окне (GetDividends, объявлены до прогонов; первый день без дивиденда = день после last_buy, дивиденд к цене закрытия last_buy): 2024-06-04 (9.51 ₽ ≈ 5.1%); отсечка 2023-09-05 лежит до окна, после июня 2024 дивидендов нет. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.4% окна. Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker TRMK -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/trmk/point2_profit.json -out ./reports/TRMK_zone/r20261006/point2_profit_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker TRMK -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/trmk/point2_profit.json -out ./reports/TRMK_zone/r20261006/point2_profit_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker TRMK -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/trmk/point2_profit.json -out ./reports/TRMK_zone/r20261006/point2_profit_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; удвоенная комиссия -commission 0.001 — go run ./cmd/backtest -ticker TRMK -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/trmk/point2_profit.json -out ./reports/TRMK_zone/r20261006/point2_profit_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-06: PROFIT 3·0.5 на point2: WF 1.367/43 (ниже на 0.351), контроль 1.526, комиссия 1.103, полное 50/1.497 net +8 937 ₽ против +17 680 → §4.7 провален, PROFIT выключен.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          1
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          3
+        ],
+        "ProfitExitPct": [
+          0.5
+        ],
+        "StochKPeriod": [
+          9
+        ],
+        "StochDSmooth": [
+          3
+        ],
+        "StochLower": [
+          10
+        ],
+        "ZoneWindowBars": [
+          1
+        ]
+      }
+    }
+  ]
+}

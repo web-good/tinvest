@@ -10,7 +10,9 @@ import (
 
 // rsiZoneTRMKGridFiles перечисляет тематические сетки TRMK поимённо, а не обходом каталога: в
 // том же каталоге лежат файлы-точки (baseline_point.json, point.json, plateau_*.json), которые
-// законно фиксируют ось одним значением и упали бы на проверке краёв осей.
+// законно фиксируют ось одним значением и упали бы на проверке краёв осей. Сетки второго круга
+// (cal2_*) узкие по построению: для них проверяются инварианты, но не
+// минимальные края осей.
 var rsiZoneTRMKGridFiles = []string{
 	"cal_entry.json",
 	"cal_exit.json",
@@ -22,6 +24,10 @@ var rsiZoneTRMKGridFiles = []string{
 	"cal_stoch.json",
 	"cal_stuck.json",
 	"cal_profit.json",
+	"cal2_entry_exit.json",
+	"cal2_trend.json",
+	"cal2_stoch.json",
+	"cal2_profit.json",
 }
 
 // rsiZoneTRMKMaxEMA — потолок EMAPeriod на 36-месячном окне (канон 36/12/6):
