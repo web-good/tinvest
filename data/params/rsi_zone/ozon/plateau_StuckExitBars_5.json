@@ -1,0 +1,40 @@
+{
+  "_comment": "Плато §4.4: point с StuckExitBars 5 (сосед голоса 4). Калибровка rsi_zone на OZON по /rsi-zone-calibrate (2026-10-06, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован в rsi_zone: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. Кэш 30m с 2023-08-05 (≥ 36 мес окна) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20; окно 2023-10-06 … 2026-10-06. В окне пауза торгов редомициляции 2025-09-22 … 2025-11-11 (7 недель, ряд цен непрерывен: 4135 → 3899.5, гэп −5.7%); окно не обрезается, позиция через паузу — принятый риск. Шаг цены 0.5 ₽, лот 1: круг 2 шага / цена = 0.047% при минимуме окна 2129 ₽ < 0.2% → п.4 при -commission 0.001. Дивидендные отсечки в окне (GetDividends, объявлены до прогонов; первый день без дивиденда = день после last_buy, дивиденд к цене закрытия last_buy): 2025-12-20 (143.55 ₽ ≈ 3.4%), 2026-05-26 (70 ₽ ≈ 1.7%). EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 4% окна. Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker OZON -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/ozon/plateau_StuckExitBars_5.json -out ./reports/OZON_zone/r20261006/plateau_StuckExitBars_5_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker OZON -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/ozon/plateau_StuckExitBars_5.json -out ./reports/OZON_zone/r20261006/plateau_StuckExitBars_5_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker OZON -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/ozon/plateau_StuckExitBars_5.json -out ./reports/OZON_zone/r20261006/plateau_StuckExitBars_5_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; удвоенная комиссия -commission 0.001 — go run ./cmd/backtest -ticker OZON -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/ozon/plateau_StuckExitBars_5.json -out ./reports/OZON_zone/r20261006/plateau_StuckExitBars_5_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-06: WF 0.857, контроль 0.825, комиссия 0.691; полное 269/0.924, DD 29.09% — хуже 4; плато STUCK — отсутствие сигнала.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          5
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}

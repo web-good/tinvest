@@ -1,0 +1,40 @@
+{
+  "_comment": "Точка первого круга: дефолты ядра + StuckExitBars 4. Сборка по большинству первого круга (планку не взяла ни одна тема): RSIPeriod/RSILower — источник entry (pooled 1.188 > entry_exit 1.031), голоса 3/6/8/4 и 15/20/30/15 — нет большинства → 4/25; RSIUpper — источник entry_exit (1.031 > exit 0.897), голоса 60/60/55/85 — ничья 2/4 → 75; EMAPeriod 75/300/50/50 — 2/4 → 200; StopDailyATR 0.5/0.5/2.5/2.5 и DailyATRPeriod 10/10/5/5 — ничьи → 1.0/14; гейт stoch 0.908/83 против baseline 0.880/180 (+0.028 < 0.05) → UseStoch 0; StuckExitBars 1/4/4/4 → 4 (3/4); PROFIT: ProfitExitBars 8/4/4/0 и ProfitExitPct 0.5/0.3/0.5/0.3 — нет большинства → общий зонд 3·0.5 (point_profit.json). point_nostuck ≡ baseline_point.json (тот же день). Калибровка rsi_zone на OZON по /rsi-zone-calibrate (2026-10-06, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован в rsi_zone: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. Кэш 30m с 2023-08-05 (≥ 36 мес окна) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20; окно 2023-10-06 … 2026-10-06. В окне пауза торгов редомициляции 2025-09-22 … 2025-11-11 (7 недель, ряд цен непрерывен: 4135 → 3899.5, гэп −5.7%); окно не обрезается, позиция через паузу — принятый риск. Шаг цены 0.5 ₽, лот 1: круг 2 шага / цена = 0.047% при минимуме окна 2129 ₽ < 0.2% → п.4 при -commission 0.001. Дивидендные отсечки в окне (GetDividends, объявлены до прогонов; первый день без дивиденда = день после last_buy, дивиденд к цене закрытия last_buy): 2025-12-20 (143.55 ₽ ≈ 3.4%), 2026-05-26 (70 ₽ ≈ 1.7%). EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 4% окна. Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker OZON -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/ozon/point.json -out ./reports/OZON_zone/r20261006/point_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker OZON -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/ozon/point.json -out ./reports/OZON_zone/r20261006/point_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker OZON -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/ozon/point.json -out ./reports/OZON_zone/r20261006/point_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; удвоенная комиссия -commission 0.001 — go run ./cmd/backtest -ticker OZON -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/ozon/point.json -out ./reports/OZON_zone/r20261006/point_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-06: ТОЧКА ПЕРВОГО КРУГА (дефолты + STUCK 4): полное окно 273 сделки PF 0.964, net −5 100 ₽, DD 25.58%; 2024 +224, 2025 +4 378, 2026 −18 901 ₽; хвосты 6/12 PF 0.793/0.616. WF 0.888/185 (1.069/45, 1.332/55, 0.449/40, 0.796/45), контроль 0.847, комиссия 0.714. §4.7: без STUCK (≡ baseline) WF 0.880 — прирост +0.008 < 0.05 → STUCK выключен, точка первого круга = дефолты ядра, а они проваливают п.1, п.3–п.7. ПЕРВЫЙ КРУГ ПРОВАЛЕН → второй круг (cal2_*.json, point2.json).",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          4
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}
