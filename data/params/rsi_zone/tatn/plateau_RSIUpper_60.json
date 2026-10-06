@@ -1,0 +1,40 @@
+{
+  "_comment": "Плато §4.4: point с RSIUpper 60 (сосед/зонд за краем). Калибровка rsi_zone на TATN по /rsi-zone-calibrate (2026-10-06, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. Кэш 30m покрывает всё окно 36 мес (37 067 баров, без дыр; бумага торгуется много лет) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20; окно 2023-10-06 … 2026-10-06. Шаг цены 0.1 ₽, лот 1: круг 2 шага / цена = 0.032% при 633 ₽, 0.049% при минимуме окна 407.9 ₽ < 0.2% → п.4 при -commission 0.001. Дивидендные отсечки в окне (GetDividends, объявлены до прогонов; первый день без дивиденда = last_buy + 1, дивиденд к цене): 2023-10-11 (27.54 ₽ ≈ 4.0%), 2024-01-09 (35.17 ₽ ≈ 5.0%), 2024-07-09 (25.17 ₽ ≈ 3.6%), 2024-10-08 (38.20 ₽ ≈ 5.6%), 2025-01-07 (17.39 ₽ ≈ 2.6%), 2025-05-31 (43.11 ₽ ≈ 6.2%), 2025-10-14 (14.35 ₽ ≈ 2.4%), 2026-01-09 (8.13 ₽ ≈ 1.3%), 2026-07-15 (11.61 ₽ ≈ 1.8%); объявленная 2026-10-13 (last_buy 2026-10-12, 32.88 ₽ ≈ 5.2%) — за окном. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.3% окна (≈ 37 000 баров). Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker TATN -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/tatn/plateau_RSIUpper_60.json -out ./reports/TATN_zone/r20261006/plateau_RSIUpper_60_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker TATN -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/tatn/plateau_RSIUpper_60.json -out ./reports/TATN_zone/r20261006/plateau_RSIUpper_60_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-06: полное окно 335 сделок PF 1.085, DD 18.83%; WF 0.976 (−1.90%).",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          60
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          5
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}

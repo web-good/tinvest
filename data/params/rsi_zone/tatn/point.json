@@ -1,0 +1,40 @@
+{
+  "_comment": "Точка первого круга: дефолты ядра + RSIUpper 55 + DailyATRPeriod 5. Сборка по большинству первого круга (планку взяла только entry 1.614/86, 3 из 4 фолдов > 1): RSIPeriod/RSILower — источник entry (1.614 > entry_exit 1.181), голоса 5/4/5/3 и 20/15/15/10 — нет большинства → 4/25; RSIUpper — источник entry_exit (1.181 > exit 0.939), голоса 55/60/55/55 → 55 (3/4); EMAPeriod 30/150/100/50 — нет → 200; StopDailyATR 2/2.5/2.5/2 — ничья → 1.0; DailyATRPeriod 5/5/5/5 → 5 (4/4, край оси — зонд 3); гейт stoch 1.046/114 < baseline 1.127/208 → UseStoch 0; StuckExitBars 0/0/3/1 — нет → 0; PROFIT: ProfitExitBars 2/0/0/8, ProfitExitPct 0.3/0.3/0.5/0.75 — нет большинства → общий зонд 3·0.5 (point_profit.json). Калибровка rsi_zone на TATN по /rsi-zone-calibrate (2026-10-06, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. Кэш 30m покрывает всё окно 36 мес (37 067 баров, без дыр; бумага торгуется много лет) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20; окно 2023-10-06 … 2026-10-06. Шаг цены 0.1 ₽, лот 1: круг 2 шага / цена = 0.032% при 633 ₽, 0.049% при минимуме окна 407.9 ₽ < 0.2% → п.4 при -commission 0.001. Дивидендные отсечки в окне (GetDividends, объявлены до прогонов; первый день без дивиденда = last_buy + 1, дивиденд к цене): 2023-10-11 (27.54 ₽ ≈ 4.0%), 2024-01-09 (35.17 ₽ ≈ 5.0%), 2024-07-09 (25.17 ₽ ≈ 3.6%), 2024-10-08 (38.20 ₽ ≈ 5.6%), 2025-01-07 (17.39 ₽ ≈ 2.6%), 2025-05-31 (43.11 ₽ ≈ 6.2%), 2025-10-14 (14.35 ₽ ≈ 2.4%), 2026-01-09 (8.13 ₽ ≈ 1.3%), 2026-07-15 (11.61 ₽ ≈ 1.8%); объявленная 2026-10-13 (last_buy 2026-10-12, 32.88 ₽ ≈ 5.2%) — за окном. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.3% окна (≈ 37 000 баров). Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker TATN -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/tatn/point.json -out ./reports/TATN_zone/r20261006/point_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker TATN -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/tatn/point.json -out ./reports/TATN_zone/r20261006/point_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker TATN -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/tatn/point.json -out ./reports/TATN_zone/r20261006/point_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; удвоенная комиссия -commission 0.001 — go run ./cmd/backtest -ticker TATN -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/tatn/point.json -out ./reports/TATN_zone/r20261006/point_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-06: полное окно 344 сделки PF 0.998, net −175 ₽, DD 21 143 ₽ (18.85%), выходы RSI 335 / SL 9, удержание 5/13/34, ночёвок 15.1%, отсечек 0; годы 2024 +9.3k, 2025 −5.9k, 2026 −4.6k; хвост 6 70 PF 0.850, хвост 12 118 PF 0.870. WF 0.934/241 (−4.76%; фолды 1.015/61, 1.002/62, 0.899/48, 0.847/70), контроль 0.907/180, комиссия 0.646/241. ПЕРВЫЙ КРУГ ПРОВАЛЕН: п.1, п.3, п.4, п.5 (2025 и 2026), п.6 (оба хвоста) → второй круг (§6).",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          55
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          5
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}
