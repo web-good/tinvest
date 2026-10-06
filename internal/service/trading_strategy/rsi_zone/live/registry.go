@@ -17,6 +17,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/msng"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/mtss"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/ragr"
+	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/reni"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/smlt"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/svav"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/tatnp"
@@ -51,6 +52,7 @@ var paramsByTicker = map[string]core.Params{
 	ydex.Ticker:  ydex.DefaultParams(),
 	smlt.Ticker:  smlt.DefaultParams(),
 	tatnp.Ticker: tatnp.DefaultParams(),
+	reni.Ticker:  reni.DefaultParams(),
 }
 
 // ParamsFor возвращает параметры тикера; false — тикер не зарегистрирован.
