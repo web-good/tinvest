@@ -1,0 +1,52 @@
+{
+  "_comment": "Точка первого круга AQUA (2026-10-06): RSI 4/25/75 — entry_exit (pooled 1.043 > entry 0.962, источник RSIPeriod/RSILower) RSIPeriod 4,3,4,5 и RSILower 15,10,20,30 — нет большинства; RSIUpper — exit (1.170 > entry_exit) 65,60,50,65 — нет; EMAPeriod 150 — trend 75,150,150,150 (3/4); ATR 14 / стоп 1.0 — risk ATR 30,30,14,14 ничья, стоп 1.25,1.25,2.5,0.7 нет; гейт стохастика — stoch 1.095/77 > baseline 0.998/150 на 0.097 при пуле ≥ 20 → включён: K 14 (14,14,14,5 3/4), D 3 (3,3,1,3 3/4), StochLower 15 (15,15,15,20 3/4), ZoneWindowBars 8 (8,1,8,8 3/4, край оси); STUCK — stuck 5,0,1,0 → выкл.; PROFIT — profit Bars 0 4/4, Pct 0.3,0.3,1,1 нет → общий зонд 3·0.5 в point_profit.json. Калибровка rsi_zone на AQUA по /rsi-zone-calibrate (2026-10-06, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован в rsi_zone: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. Кэш 30m AQUA с 2023-09-11 (≥ 36 мес окна) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20; окно 2023-10-06 … 2026-10-06. Шаг цены 0.1 ₽, лот 1: круг 2 шага / цена = 0.078% при минимуме окна 258 ₽ < 0.2% → п.4 при -commission 0.001. Дивидендные отсечки в окне (GetDividends, объявлены до прогонов; первый день без дивиденда = день после last_buy, дивиденд к цене закрытия last_buy): 2023-12-08 (19 ₽ ≈ 2.3%), 2024-07-06 (10 ₽ ≈ 1.2%, запись в GetDividends продублирована), 2024-10-04 (10 ₽ ≈ 1.6%), 2024-11-30 (20 ₽ ≈ 3.3%), 2025-07-05 (10 ₽ ≈ 1.6%), 2026-07-07 (10 ₽ ≈ 3.1%), 2026-10-02 (10 ₽ ≈ 3.1%); отсечка 2023-09-22 лежит до окна. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.5% окна. Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker AQUA -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/aqua/point.json -out ./reports/AQUA_zone/r20261006/point_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker AQUA -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/aqua/point.json -out ./reports/AQUA_zone/r20261006/point_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker AQUA -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/aqua/point.json -out ./reports/AQUA_zone/r20261006/point_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; удвоенная комиссия -commission 0.001 — go run ./cmd/backtest -ticker AQUA -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/aqua/point.json -out ./reports/AQUA_zone/r20261006/point_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-06 (точка с гейтом, ОТВЕРГНУТА §4.7): полное окно 68 сделок PF 1.182, net +6 167 ₽, DD 15 489 ₽ (12.73%), 2026 −11 998 ₽ (PF 0.312), хвост 6 PF 0.354/15, хвост 12 0.473/23; WF 0.927/49 (фолды 3.258/14, 0.693/12, 1.220/8, 0.354/15), контроль 0.562, комиссия 0.769. Без гейта (point_nostoch.json) WF 1.110/146 — гейт хуже на 0.18 → UseStoch 0, поля стохастика в литерал не идут. Итоговая точка первого круга — point_nostoch.json.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          150
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          1
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ],
+        "StochKPeriod": [
+          14
+        ],
+        "StochDSmooth": [
+          3
+        ],
+        "StochLower": [
+          15
+        ],
+        "ZoneWindowBars": [
+          8
+        ]
+      }
+    }
+  ]
+}

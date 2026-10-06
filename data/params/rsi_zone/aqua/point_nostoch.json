@@ -1,0 +1,40 @@
+{
+  "_comment": "§4.7: point без гейта стохастика (UseStoch 0) — дефолты + EMA 150. Калибровка rsi_zone на AQUA по /rsi-zone-calibrate (2026-10-06, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован в rsi_zone: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. Кэш 30m AQUA с 2023-09-11 (≥ 36 мес окна) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20; окно 2023-10-06 … 2026-10-06. Шаг цены 0.1 ₽, лот 1: круг 2 шага / цена = 0.078% при минимуме окна 258 ₽ < 0.2% → п.4 при -commission 0.001. Дивидендные отсечки в окне (GetDividends, объявлены до прогонов; первый день без дивиденда = день после last_buy, дивиденд к цене закрытия last_buy): 2023-12-08 (19 ₽ ≈ 2.3%), 2024-07-06 (10 ₽ ≈ 1.2%, запись в GetDividends продублирована), 2024-10-04 (10 ₽ ≈ 1.6%), 2024-11-30 (20 ₽ ≈ 3.3%), 2025-07-05 (10 ₽ ≈ 1.6%), 2026-07-07 (10 ₽ ≈ 3.1%), 2026-10-02 (10 ₽ ≈ 3.1%); отсечка 2023-09-22 лежит до окна. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.5% окна. Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker AQUA -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/aqua/point_nostoch.json -out ./reports/AQUA_zone/r20261006/point_nostoch_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker AQUA -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/aqua/point_nostoch.json -out ./reports/AQUA_zone/r20261006/point_nostoch_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker AQUA -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/aqua/point_nostoch.json -out ./reports/AQUA_zone/r20261006/point_nostoch_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; удвоенная комиссия -commission 0.001 — go run ./cmd/backtest -ticker AQUA -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/aqua/point_nostoch.json -out ./reports/AQUA_zone/r20261006/point_nostoch_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-06 — ИТОГОВАЯ ТОЧКА ПЕРВОГО КРУГА (дефолты + EMA 150; гейт снят §4.7, STUCK нет большинства, PROFIT 3·0.5 провалил §4.7). Полное окно 202 сделки, PF 1.160, net +16 462 ₽ (16.46%), DD 19 030 ₽ (15.45%) — ниже baseline 23 418 ₽ / 19.68%, гейт просадки пройден; выходы RSI 181 (+85 551 ₽) / SL 21 (−69 089 ₽) — стоп дефолтный, капкана нет; удержание 16/44/110, ночёвок 113 (55.9%). Годы 2023 +3 905, 2024 +13 362 (1.603), 2025 −5 439 (0.883), 2026 +4 634 (1.157). WF 1.110/146 (фолды 1.162/39, 1.005/40, 0.750/25, 1.338/42), compounded +8.09%; контроль 1.085/107; комиссия 0.001 0.910/146. Стоп-условие: п.1 1.110 — ок; п.2 146 — ок; п.3 1.085 — ок; п.4 0.910 < 1 — ПРОВАЛ; п.5 2025 −5 439 ₽ — ПРОВАЛ; п.6 хвост 6 PF 1.337/42, хвост 12 1.132/67 — ок, знак сверен: net = OOS NetPnL%·1000, GL = net/(PF−1), GP = PF·GL; фолды 3+4 точки → GL 11 680 + 22 485, GP 8 760 + 30 085 → PF 1.137 > 1, знак совпадает с хвостами 6 (1.337) и 12 (1.132). Формула проверена на baseline: фолд 4 → 1.087 против хвоста 6 1.086, фолды 3+4 → 0.936 против хвоста 12 0.932; п.7 — сделка через отсечку 2026-10-02 (вход 2026-10-01 20:00, SL 06:30, −3 383 ₽) — ПРОВАЛ; входов в выходные 0. Первый круг провален (п.4, п.5, п.7). Плато EMA: 100 → WF 0.899, полное PF 1.007, DD 23.40%; 150 → 1.110; 200 (baseline) → 0.998 — одиночный пик, а не плато.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          150
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}
