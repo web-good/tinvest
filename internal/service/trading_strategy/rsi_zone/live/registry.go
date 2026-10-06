@@ -11,6 +11,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/core"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/dias"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/domrf"
+	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/fixr"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/ivat"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/lent"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/mdmg"
@@ -53,6 +54,7 @@ var paramsByTicker = map[string]core.Params{
 	smlt.Ticker:  smlt.DefaultParams(),
 	tatnp.Ticker: tatnp.DefaultParams(),
 	reni.Ticker:  reni.DefaultParams(),
+	fixr.Ticker:  fixr.DefaultParams(),
 }
 
 // ParamsFor возвращает параметры тикера; false — тикер не зарегистрирован.
