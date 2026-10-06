@@ -23,6 +23,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/smlt"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/svav"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/tatnp"
+	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/trmk"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/trnfp"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/upro"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/vsmo"
@@ -57,6 +58,7 @@ var paramsByTicker = map[string]core.Params{
 	reni.Ticker:  reni.DefaultParams(),
 	fixr.Ticker:  fixr.DefaultParams(),
 	moex.Ticker:  moex.DefaultParams(),
+	trmk.Ticker:  trmk.DefaultParams(),
 }
 
 // ParamsFor возвращает параметры тикера; false — тикер не зарегистрирован.
