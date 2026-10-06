@@ -608,3 +608,52 @@ func TestStochConfigResolvesZeros(t *testing.T) {
 		})
 	}
 }
+
+// The entry block window refuses entries whose bar opens inside [EntryBlockFrom, EntryBlockTo)
+// MSK, written as HHMM. mondayNoon opens at 12:00.
+func TestEntryBlockWindow(t *testing.T) {
+	cases := []struct {
+		name     string
+		from, to int
+		wantBuy  bool
+	}{
+		{"off by default", 0, 0, true},
+		{"bar inside the window", 1000, 1400, false},
+		{"window starts exactly at the bar", 1200, 1400, false},
+		{"window ends exactly at the bar", 1000, 1200, true},
+		{"bar before the window", 1230, 1400, true},
+		{"degenerate window is off", 1400, 1000, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			p := DefaultParams()
+			p.EntryBlockFrom, p.EntryBlockTo = c.from, c.to
+			sig := NewWithParams("TEST", p).Decide(fixture(trendCloses(3), mondayNoon))
+			if got := sig.Kind == model.SignalBuy; got != c.wantBuy {
+				t.Fatalf("buy = %v, want %v", got, c.wantBuy)
+			}
+		})
+	}
+}
+
+// Missing bar times must not block: the window degrades like the weekday gate.
+func TestEntryBlockWindowSkippedWithoutTimes(t *testing.T) {
+	p := DefaultParams()
+	p.EntryBlockFrom, p.EntryBlockTo = 1000, 1400
+	md := fixture(trendCloses(3), mondayNoon)
+	md.Times = nil
+	if sig := NewWithParams("TEST", p).Decide(md); sig.Kind != model.SignalBuy {
+		t.Fatalf("Kind = %v, want SignalBuy without bar times", sig.Kind)
+	}
+}
+
+// The window closes entries only: an open position still exits inside it.
+func TestEntryBlockWindowKeepsExits(t *testing.T) {
+	p := DefaultParams()
+	p.EntryBlockFrom, p.EntryBlockTo = 0, 2400
+	md := fixture(recoveryCloses(3), mondayNoon)
+	md.Position = openPosition(dailyWidth)
+	if sig := NewWithParams("TEST", p).Decide(md); sig.Kind != model.SignalSell {
+		t.Fatalf("Kind = %v, want SignalSell inside the entry block window", sig.Kind)
+	}
+}

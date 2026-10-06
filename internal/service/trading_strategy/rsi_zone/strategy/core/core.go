@@ -53,6 +53,12 @@ type Params struct {
 	StochDSmooth   int     // %D smoothing, 1 = raw %K; 0 -> 3; negative refuses every entry (grid: stoch)
 	StochLower     float64 // Stoch %D lower critical band; 0 -> 20 (grid: stoch)
 	ZoneWindowBars int     // bars, current one included, in which the other oscillator may have been in its zone; < 1 -> 1 (grid: stoch)
+
+	// Entry block window (theme window). An entry is refused when the signal bar OPENS inside
+	// [EntryBlockFrom, EntryBlockTo) MSK, both written as HHMM (1000 = 10:00). Exits are never
+	// blocked. The window is off unless 0 <= From < To; DefaultParams leaves both zero.
+	EntryBlockFrom int // HHMM, inclusive (grid: window)
+	EntryBlockTo   int // HHMM, exclusive (grid: window)
 }
 
 // Defaults the stochastic gate falls back to when its knobs are left at zero.
@@ -181,6 +187,18 @@ func (s *Strategy) tradingDay(t time.Time) bool {
 		return true
 	}
 	return !isWeekend(t.In(mskLoc))
+}
+
+// entryBlocked reports whether bar-time t opens inside the entry block window. A zero time or
+// a degenerate window never blocks.
+func (s *Strategy) entryBlocked(t time.Time) bool {
+	from, to := s.p.EntryBlockFrom, s.p.EntryBlockTo
+	if t.IsZero() || from < 0 || from >= to {
+		return false
+	}
+	tl := t.In(mskLoc)
+	hhmm := tl.Hour()*100 + tl.Minute()
+	return hhmm >= from && hhmm < to
 }
 
 // barTime returns the open-time of the latest bar, or the zero time when Times is absent or
@@ -315,6 +333,10 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	}
 	// 1. weekday: any time of a trading day will do, weekends will not.
 	if !s.tradingDay(s.barTime(md)) {
+		return sig
+	}
+	// 1a. time of day: no entry from a bar opening inside the block window.
+	if s.entryBlocked(s.barTime(md)) {
 		return sig
 	}
 	i := n - 1
