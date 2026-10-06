@@ -1,0 +1,52 @@
+{
+  "_comment": "Плато RSIPeriod вокруг point2 (3: соседи 2 — за краем оси второго круга 3–6 — и 4 = дефолт): point2 с RSIPeriod 2. Калибровка rsi_zone на MAGN по /rsi-zone-calibrate (прогоны 2026-10-06, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован в rsi_zone: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История 30m ≥ 36 мес (MAGN торгуется давно; кэш после -refresh с 2023-10-05) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20. Шаг цены 0.005 ₽, лот 10: круг 2 шага / цена = 0.046% при 21.9 ₽ (текущая; 0.018% при 55 ₽ в начале окна) < 0.2% → модель -commission 0.0005 консервативна, п.4 стоп-условия — удвоенная комиссия -commission 0.001. Дивидендные отсечки в окне (GetDividends, объявлены до прогонов; дата — день после last_buy): 2024-06-08 (2.752 ₽ ≈ 4.86%), 2024-10-17 (2.494 ₽ ≈ 5.63%); в 2025–2026 выплат нет. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.5% окна (~36 000 баров). Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker MAGN -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/magn/plateau_RSIPeriod_2.json -out ./reports/MAGN_zone/r20261006/plateau_rsi2_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker MAGN -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/magn/plateau_RSIPeriod_2.json -out ./reports/MAGN_zone/r20261006/plateau_rsi2_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-06: полное окно 87/PF 1.933, net +15 249 ₽, DD 2.84%, годы 2023 +0.9k, 2024 +1.6k, 2025 +5.2k, 2026 +6.9k, хвосты 2.366/14, 2.345/29; WF 2.325/60, контроль 2.034/50 (plateau_rsi2_ctrl, тот же день), -commission 0.001 1.577/60 (plateau_rsi2_comm) — справочно 7/7, см. point2.json.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          2
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          1
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ],
+        "StochKPeriod": [
+          14
+        ],
+        "StochDSmooth": [
+          3
+        ],
+        "StochLower": [
+          12.5
+        ],
+        "ZoneWindowBars": [
+          1
+        ]
+      }
+    }
+  ]
+}
