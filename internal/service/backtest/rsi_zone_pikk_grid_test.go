@@ -24,6 +24,10 @@ var rsiZonePIKKGridFiles = []string{
 	"cal_stoch.json",
 	"cal_stuck.json",
 	"cal_profit.json",
+	"cal2_entry_exit.json",
+	"cal2_trend.json",
+	"cal2_risk.json",
+	"cal2_profit.json",
 }
 
 // rsiZonePIKKMaxEMA — потолок EMAPeriod на 36-месячном окне (канон 36/12/6):

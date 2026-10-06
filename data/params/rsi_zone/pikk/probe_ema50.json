@@ -1,0 +1,40 @@
+{
+  "_comment": "СПРАВОЧНЫЙ зонд (не точка, в сборку не идёт): дефолты ядра + EMAPeriod 50 — единственное поле с устойчивым голосом первого круга (trend 50/50/50/75); меряет, держится ли стратегия на одном фильтре тренда без рискового блока point1. Калибровка rsi_zone на PIKK по /rsi-zone-calibrate (2026-10-06, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован в rsi_zone: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. PIKK на бирже давно, кэш 30m с 2023-08-04 (≥ 36 мес окна) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20; окно 2023-10-06 … 2026-10-06. Шаг цены 0.1 ₽, лот 1: круг 2 шага / цена = 0.057% при минимуме окна 352.1 ₽ < 0.2% → п.4 при -commission 0.001. Дивидендные отсечки: GetDividends за 2023–2026 пуст (ПИК дивидендов не платит) — отсечек в окне нет, объявлено до прогонов. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.4% окна. Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker PIKK -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/pikk/probe_ema50.json -out ./reports/PIKK_zone/r20261006/probe_ema50_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker PIKK -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/pikk/probe_ema50.json -out ./reports/PIKK_zone/r20261006/probe_ema50_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker PIKK -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/pikk/probe_ema50.json -out ./reports/PIKK_zone/r20261006/probe_ema50_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; удвоенная комиссия -commission 0.001 — go run ./cmd/backtest -ticker PIKK -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/pikk/probe_ema50.json -out ./reports/PIKK_zone/r20261006/probe_ema50_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-06: СПРАВОЧНО: дефолты + EMA 50 — WF 1.162/110 (1.726, 1.296, 0.708, 1.161), контроль 1.036, комиссия 0.969; полное окно 150 сделок PF 1.197, net +14 968 ₽, DD 15.74%; 2024 +7 931, 2025 +8 611, 2026 +1 398 ₽; хвосты 6/12 1.161/0.875. Провал п.4 и п.6 — кандидатом на пересмотр не является.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          50
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}

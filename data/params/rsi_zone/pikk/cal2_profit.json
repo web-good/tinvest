@@ -1,0 +1,48 @@
+{
+  "_comment": "Тема cal2_profit: ProfitExitBars 1–4 (голоса 2/2/2/4) × ProfitExitPct 0, 0.3–0.75 (голоса 0.75/0.3/0.3/0.75); ноль в оси. Решение по §4.1/§4.7 (pooled и Compounded против опоры B). Второй круг (первый провален: point1 = дефолты + EMA 50 + ATR 5 + стоп 0.5 — WF 0.957/… п.1, контроль 0.843 п.3, комиссия 0.806 п.4, 2025 −5 172 ₽ п.5, хвост 12 PF 0.848 п.6; PROFIT 3·0.5 провалил §4.7 (комиссия 0.777 < 0.806)). Решение пакетного режима (консервативное, как SIBN/MOEX): база B = point1 (все поля, взявшие большинство первого круга; гейт, STUCK и PROFIT выключены). Зоны — по фактическим голосам фолдов первого круга, шаг — половина шага первого круга; каждое поле свипует ровно одна тема, не больше четырёх тем. Несвипуемые поля прибиты к базе B и перечислены явно. Калибровка rsi_zone на PIKK по /rsi-zone-calibrate (2026-10-06, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован в rsi_zone: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. PIKK на бирже давно, кэш 30m с 2023-08-04 (≥ 36 мес окна) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20; окно 2023-10-06 … 2026-10-06. Шаг цены 0.1 ₽, лот 1: круг 2 шага / цена = 0.057% при минимуме окна 352.1 ₽ < 0.2% → п.4 при -commission 0.001. Дивидендные отсечки: GetDividends за 2023–2026 пуст (ПИК дивидендов не платит) — отсечек в окне нет, объявлено до прогонов. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.4% окна. Запуск: go run ./cmd/backtest -ticker PIKK -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/pikk/cal2_profit.json -out ./reports/PIKK_zone/r20261006/cal2_profit -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-06: pooled 0.953/113 (≈ опоре B 0.957); фолды 1.680/19, 0.848/38, 0.599/32, 1.234/24; ProfitExitBars 2/2/4/4 ничья, ProfitExitPct 0.6/0.75/0.3/0.75 — нет → PROFIT выключен.",
+  "phases": [
+    {
+      "name": "profit",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          50
+        ],
+        "DailyATRPeriod": [
+          5
+        ],
+        "StopDailyATR": [
+          0.5
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "ProfitExitPct": [
+          0,
+          0.3,
+          0.4,
+          0.5,
+          0.6,
+          0.75
+        ]
+      }
+    }
+  ]
+}
