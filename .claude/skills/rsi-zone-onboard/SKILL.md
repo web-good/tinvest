@@ -121,6 +121,11 @@ baseline, расхождение знаков хвоста) — настоящи
 - `RSI_ZONE_TICKERS` правится одним коммитом сразу в трёх файлах — `env/prod.env`,
   `env/prod.env.example`, `env/local.env.example` — и в тестах, которые сверяют список
   (`grep -rn RSI_ZONE_TICKERS internal/` — например, `internal/config/`). Затем `./bin/mage ci`;
+- перед добавлением тикера в `RSI_ZONE_TICKERS` проверь, что в его литерале включено окно
+  запрета входа Пн–Чт 10:00–14:00 (`EntryBlockFrom: 1000`, `EntryBlockTo: 1400`,
+  `EntryBlockMonThu: 1`) — общее правило вселенной с 2026-10-06. Старые литералы (DOMRF, LENT,
+  MDMG, VSMO, RAGR, ASTR, WUSH, YDEX, UNAC) его не имеют: допиши окно в литерал и тест пакета тем
+  же коммитом и прогони `cmd/pullparity -strategy rsi_zone -tickers <T>`;
 - `RSI_ZONE_TRADE_ENABLED` не трогай — это отдельное решение владельца, и оно затрагивает все
   тикеры zone сразу;
 - если литерал тикера, уже стоящего в `RSI_ZONE_TICKERS`, изменился, напомни: деплой — только
