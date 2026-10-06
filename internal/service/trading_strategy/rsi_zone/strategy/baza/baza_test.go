@@ -10,14 +10,17 @@ import (
 // обосновывающие решение, — в доке пакета и в _comment гридов data/params/rsi_zone/baza/.
 func TestCalibratedLiteralIsPinned(t *testing.T) {
 	want := core.Params{
-		RSIPeriod:      4,
-		RSILower:       25,
-		RSIUpper:       75,
-		EMAPeriod:      200,
-		DailyATRPeriod: 14,
-		StopDailyATR:   1.0,
-		ProfitExitBars: 3,
-		ProfitExitPct:  0.5,
+		RSIPeriod:        4,
+		RSILower:         25,
+		RSIUpper:         75,
+		EMAPeriod:        200,
+		DailyATRPeriod:   14,
+		StopDailyATR:     1.0,
+		ProfitExitBars:   3,
+		ProfitExitPct:    0.5,
+		EntryBlockFrom:   1000,
+		EntryBlockTo:     1400,
+		EntryBlockMonThu: 1,
 	}
 	if got := DefaultParams(); got != want {
 		t.Fatalf("откалиброванный литерал BAZA изменился:\n got: %+v\nwant: %+v", got, want)
@@ -32,6 +35,7 @@ func TestCalibratedLiteralIsPinned(t *testing.T) {
 func TestParamsAreTheCoreBaselineByDesign(t *testing.T) {
 	want := core.DefaultParams()
 	want.ProfitExitBars, want.ProfitExitPct = 3, 0.5
+	want.EntryBlockFrom, want.EntryBlockTo, want.EntryBlockMonThu = 1000, 1400, 1
 	if got := DefaultParams(); got != want {
 		t.Fatalf("BAZA торгует дефолты ядра + выход PROFIT по решению 2026-10-03:\n got: %+v\nwant: %+v", got, want)
 	}

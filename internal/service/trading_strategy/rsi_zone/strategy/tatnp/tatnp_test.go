@@ -10,15 +10,18 @@ import (
 // обосновывающие каждое поле, — в доке пакета и в _comment гридов data/params/rsi_zone/tatnp/.
 func TestCalibratedLiteralIsPinned(t *testing.T) {
 	want := core.Params{
-		RSIPeriod:      4,
-		RSILower:       25,
-		RSIUpper:       75,
-		EMAPeriod:      30,
-		DailyATRPeriod: 14,
-		StopDailyATR:   1.0,
-		StuckExitBars:  0,
-		ProfitExitBars: 0,
-		ProfitExitPct:  0,
+		RSIPeriod:        4,
+		RSILower:         25,
+		RSIUpper:         75,
+		EMAPeriod:        30,
+		DailyATRPeriod:   14,
+		StopDailyATR:     1.0,
+		StuckExitBars:    0,
+		ProfitExitBars:   0,
+		ProfitExitPct:    0,
+		EntryBlockFrom:   1000,
+		EntryBlockTo:     1400,
+		EntryBlockMonThu: 1,
 	}
 	if got := DefaultParams(); got != want {
 		t.Fatalf("откалиброванный литерал TATNP изменился:\n got: %+v\nwant: %+v", got, want)

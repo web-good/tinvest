@@ -18,7 +18,6 @@ import (
 
 	bt "tinvest/internal/domain/backtest"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/core"
-	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/dias"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/domrf"
 )
 
@@ -68,7 +67,8 @@ func syntheticHistory(seed int64, days int) (bars, daily []bt.Candle) {
 // ticker literal with the gate off. LENT left the list on 2026-10-01 when its literal switched the
 // stochastic gate on, BAZA on 2026-10-03 when its literal switched the PROFIT exit on (both earlier
 // literals equalled the core baseline, which stays pinned as "core"), AFKS on 2026-10-03 when its
-// recalibrated literal switched the stochastic gate on.
+// recalibrated literal switched the stochastic gate on, DIAS on 2026-10-06 when its literal switched
+// the Mon–Thu entry block window on.
 func legacyCases() []struct {
 	name string
 	p    core.Params
@@ -78,7 +78,6 @@ func legacyCases() []struct {
 		p    core.Params
 	}{
 		{"core", core.DefaultParams()},
-		{dias.Ticker, dias.DefaultParams()},
 		{domrf.Ticker, domrf.DefaultParams()},
 	}
 }

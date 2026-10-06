@@ -10,14 +10,17 @@ import (
 // обосновывающие каждое поле, — в доке пакета и в _comment гридов data/params/rsi_zone/dias/.
 func TestCalibratedLiteralIsPinned(t *testing.T) {
 	want := core.Params{
-		RSIPeriod:      4,
-		RSILower:       25,
-		RSIUpper:       52.5,
-		EMAPeriod:      200,
-		DailyATRPeriod: 4,
-		StopDailyATR:   1.0,
-		ProfitExitBars: 0,
-		ProfitExitPct:  0,
+		RSIPeriod:        4,
+		RSILower:         25,
+		RSIUpper:         52.5,
+		EMAPeriod:        200,
+		DailyATRPeriod:   4,
+		StopDailyATR:     1.0,
+		ProfitExitBars:   0,
+		ProfitExitPct:    0,
+		EntryBlockFrom:   1000,
+		EntryBlockTo:     1400,
+		EntryBlockMonThu: 1,
 	}
 	if got := DefaultParams(); got != want {
 		t.Fatalf("откалиброванный литерал DIAS изменился:\n got: %+v\nwant: %+v", got, want)

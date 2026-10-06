@@ -56,9 +56,11 @@ type Params struct {
 
 	// Entry block window (theme window). An entry is refused when the signal bar OPENS inside
 	// [EntryBlockFrom, EntryBlockTo) MSK, both written as HHMM (1000 = 10:00). Exits are never
-	// blocked. The window is off unless 0 <= From < To; DefaultParams leaves both zero.
-	EntryBlockFrom int // HHMM, inclusive (grid: window)
-	EntryBlockTo   int // HHMM, exclusive (grid: window)
+	// blocked. The window is off unless 0 <= From < To; DefaultParams leaves both zero. With
+	// EntryBlockMonThu != 0 the window applies Monday to Thursday only and Friday stays open.
+	EntryBlockFrom   int // HHMM, inclusive (grid: window)
+	EntryBlockTo     int // HHMM, exclusive (grid: window)
+	EntryBlockMonThu int // 0 = every weekday; non-zero = Monday to Thursday only (grid: window)
 }
 
 // Defaults the stochastic gate falls back to when its knobs are left at zero.
@@ -197,6 +199,9 @@ func (s *Strategy) entryBlocked(t time.Time) bool {
 		return false
 	}
 	tl := t.In(mskLoc)
+	if s.p.EntryBlockMonThu != 0 && tl.Weekday() == time.Friday {
+		return false
+	}
 	hhmm := tl.Hour()*100 + tl.Minute()
 	return hhmm >= from && hhmm < to
 }

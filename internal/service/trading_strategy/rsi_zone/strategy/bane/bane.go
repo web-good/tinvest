@@ -86,5 +86,11 @@ func DefaultParams() core.Params {
 		StopDailyATR:   1.0,
 		ProfitExitBars: 0,
 		ProfitExitPct:  0,
+		// Окно запрета входа Пн–Чт 10:00–14:00 MSK (2026-10-06): общее решение по вселенной
+		// RSI_ZONE_TICKERS, не калибровка тикера. 17 тикеров × 24 мес.: PF 2.55→2.80 / 2.25→2.52,
+		// сильных убытков 37→29 / 42→30, просадка нового года 19.7→8.6 (сумма % по сделкам).
+		EntryBlockFrom:   1000,
+		EntryBlockTo:     1400,
+		EntryBlockMonThu: 1,
 	}
 }

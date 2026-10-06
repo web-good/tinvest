@@ -10,20 +10,23 @@ import (
 // обосновывающие каждое поле, — в доке пакета и в _comment гридов data/params/rsi_zone/moex/.
 func TestCalibratedLiteralIsPinned(t *testing.T) {
 	want := core.Params{
-		RSIPeriod:      5,
-		RSILower:       25,
-		RSIUpper:       75,
-		EMAPeriod:      200,
-		DailyATRPeriod: 5,
-		StopDailyATR:   2.0,
-		UseStoch:       1,
-		StochKPeriod:   14,
-		StochDSmooth:   3,
-		StochLower:     15,
-		ZoneWindowBars: 1,
-		StuckExitBars:  0,
-		ProfitExitBars: 0,
-		ProfitExitPct:  0,
+		RSIPeriod:        5,
+		RSILower:         25,
+		RSIUpper:         75,
+		EMAPeriod:        200,
+		DailyATRPeriod:   5,
+		StopDailyATR:     2.0,
+		UseStoch:         1,
+		StochKPeriod:     14,
+		StochDSmooth:     3,
+		StochLower:       15,
+		ZoneWindowBars:   1,
+		StuckExitBars:    0,
+		ProfitExitBars:   0,
+		ProfitExitPct:    0,
+		EntryBlockFrom:   1000,
+		EntryBlockTo:     1400,
+		EntryBlockMonThu: 1,
 	}
 	if got := DefaultParams(); got != want {
 		t.Fatalf("откалиброванный литерал MOEX изменился:\n got: %+v\nwant: %+v", got, want)

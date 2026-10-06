@@ -10,19 +10,22 @@ import (
 // обосновывающие каждое поле, — в доке пакета и в _comment гридов data/params/rsi_zone/fixr/.
 func TestCalibratedLiteralIsPinned(t *testing.T) {
 	want := core.Params{
-		RSIPeriod:      4,
-		RSILower:       25,
-		RSIUpper:       60,
-		EMAPeriod:      200,
-		DailyATRPeriod: 14,
-		StopDailyATR:   1.0,
-		UseStoch:       1,
-		StochKPeriod:   14,
-		StochDSmooth:   3,
-		StochLower:     20,
-		ZoneWindowBars: 1,
-		ProfitExitBars: 0,
-		ProfitExitPct:  0,
+		RSIPeriod:        4,
+		RSILower:         25,
+		RSIUpper:         60,
+		EMAPeriod:        200,
+		DailyATRPeriod:   14,
+		StopDailyATR:     1.0,
+		UseStoch:         1,
+		StochKPeriod:     14,
+		StochDSmooth:     3,
+		StochLower:       20,
+		ZoneWindowBars:   1,
+		ProfitExitBars:   0,
+		ProfitExitPct:    0,
+		EntryBlockFrom:   1000,
+		EntryBlockTo:     1400,
+		EntryBlockMonThu: 1,
 	}
 	if got := DefaultParams(); got != want {
 		t.Fatalf("откалиброванный литерал FIXR изменился:\n got: %+v\nwant: %+v", got, want)

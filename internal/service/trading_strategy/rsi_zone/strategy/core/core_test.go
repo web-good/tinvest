@@ -657,3 +657,29 @@ func TestEntryBlockWindowKeepsExits(t *testing.T) {
 		t.Fatalf("Kind = %v, want SignalSell inside the entry block window", sig.Kind)
 	}
 }
+
+// With EntryBlockMonThu=1 the window applies Monday to Thursday only: a Friday bar inside it
+// still buys, a Monday bar is still refused.
+func TestEntryBlockWindowMonThu(t *testing.T) {
+	fridayNoon := time.Date(2026, 6, 5, 12, 0, 0, 0, msk)
+	cases := []struct {
+		name    string
+		last    time.Time
+		monThu  int
+		wantBuy bool
+	}{
+		{"friday blocked when the window covers every day", fridayNoon, 0, false},
+		{"friday free with MonThu", fridayNoon, 1, true},
+		{"monday still blocked with MonThu", mondayNoon, 1, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			p := DefaultParams()
+			p.EntryBlockFrom, p.EntryBlockTo, p.EntryBlockMonThu = 1000, 1400, c.monThu
+			sig := NewWithParams("TEST", p).Decide(fixture(trendCloses(3), c.last))
+			if got := sig.Kind == model.SignalBuy; got != c.wantBuy {
+				t.Fatalf("buy = %v, want %v", got, c.wantBuy)
+			}
+		})
+	}
+}
