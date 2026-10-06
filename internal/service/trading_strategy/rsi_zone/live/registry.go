@@ -25,6 +25,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/tatnp"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/trmk"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/trnfp"
+	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/unac"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/upro"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/vsmo"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/wush"
@@ -59,6 +60,7 @@ var paramsByTicker = map[string]core.Params{
 	fixr.Ticker:  fixr.DefaultParams(),
 	moex.Ticker:  moex.DefaultParams(),
 	trmk.Ticker:  trmk.DefaultParams(),
+	unac.Ticker:  unac.DefaultParams(),
 }
 
 // ParamsFor возвращает параметры тикера; false — тикер не зарегистрирован.
