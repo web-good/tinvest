@@ -1,0 +1,117 @@
+{
+  "_comment": "Арбитр phased: фазы entry → trend → exit → risk (keepTop 5); голоса в сборку не идут. Калибровка rsi_zone на SIBN по /rsi-zone-calibrate (2026-10-06, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован в rsi_zone: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. Кэш 30m SIBN с 2023-09-28 (≈ 36.3 мес ≥ 36) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20; окно 2023-10-06 … 2026-10-06. Шаг цены 0.05 ₽, лот 1: круг 2 шага / цена = 0.029% при минимуме окна 346.9 ₽ < 0.2% → п.4 при -commission 0.001. Дивидендные отсечки в окне (GetDividends, объявлены до прогонов; первый календарный день без дивиденда = день после last_buy, дивиденд к цене закрытия last_buy): 2023-12-27 (82.94 ₽ ≈ 8.9%), 2024-07-06 (19.49 ₽ ≈ 2.8%), 2024-10-12 (51.96 ₽ ≈ 7.5%), 2025-07-08 (27.21 ₽ ≈ 5.2%), 2025-10-11 (17.30 ₽ ≈ 3.5%), 2026-07-04 (28.11 ₽ ≈ 6.2%); следующая 2026-10-13 (42.51 ₽) — за окном. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.3% окна. Запуск: go run ./cmd/backtest -ticker SIBN -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/sibn/cal_phased.json -out ./reports/SIBN_zone/r20261006/phased -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "entry",
+      "grid": {
+        "RSIPeriod": [
+          2,
+          3,
+          4,
+          5,
+          6,
+          8,
+          10,
+          14
+        ],
+        "RSILower": [
+          5,
+          10,
+          15,
+          20,
+          25,
+          30,
+          35,
+          40,
+          45
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      },
+      "keepTop": 5
+    },
+    {
+      "name": "trend",
+      "grid": {
+        "EMAPeriod": [
+          10,
+          20,
+          30,
+          50,
+          75,
+          100,
+          150,
+          200,
+          300,
+          400,
+          600
+        ]
+      },
+      "keepTop": 5
+    },
+    {
+      "name": "exit",
+      "grid": {
+        "RSIUpper": [
+          50,
+          55,
+          60,
+          65,
+          70,
+          75,
+          80,
+          85,
+          90,
+          95
+        ]
+      },
+      "keepTop": 5
+    },
+    {
+      "name": "risk",
+      "grid": {
+        "StopDailyATR": [
+          0.3,
+          0.5,
+          0.7,
+          1.0,
+          1.25,
+          1.5,
+          2.0,
+          2.5,
+          3.0
+        ],
+        "DailyATRPeriod": [
+          5,
+          7,
+          10,
+          14,
+          21,
+          30
+        ]
+      }
+    }
+  ]
+}
