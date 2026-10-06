@@ -1,0 +1,52 @@
+{
+  "_comment": "Проверка §4.7 PROFIT на point2: общий зонд ProfitExitBars 3 · ProfitExitPct 0.5. РЕЗУЛЬТАТ 2026-10-06: WF 4.881/31 (19.49% < 25.80% у point2), контроль 7.081/26 (18.71% < 31.77%) → §4.7 не пройдена; справочно, point2 отвергнута капканом.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          6
+        ],
+        "RSILower": [
+          20
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          3
+        ],
+        "StopDailyATR": [
+          2.25
+        ],
+        "UseStoch": [
+          1
+        ],
+        "StochKPeriod": [
+          14
+        ],
+        "StochDSmooth": [
+          3
+        ],
+        "StochLower": [
+          20
+        ],
+        "ZoneWindowBars": [
+          1
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          3
+        ],
+        "ProfitExitPct": [
+          0.5
+        ]
+      }
+    }
+  ]
+}

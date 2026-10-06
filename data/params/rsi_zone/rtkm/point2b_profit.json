@@ -1,0 +1,52 @@
+{
+  "_comment": "Проверка §4.7 PROFIT на point2b: общий зонд 3·0.5. РЕЗУЛЬТАТ 2026-10-06: WF 4.881/31 (Compounded 19.49% < 19.68% у point2b), контроль 7.081/26 (18.71% < 25.23%), комиссия 3.957 ≥ 1.999; полное окно 47 сделок PF 4.263, net +25.6k ≥ +20.1k, DD 3.76% ≤ 10.04%; годы 2023 +1.0k, 2024 +4.0k, 2025 +13.9k, 2026 +6.7k; выходы PROFIT 35 (+28.0k), RSI 12 (−2.4k), SL 0. Два условия §4.7 нарушены (Compounded основной и контрольной ниже) → PROFIT выключен.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          6
+        ],
+        "RSILower": [
+          20
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          3
+        ],
+        "StopDailyATR": [
+          2.0
+        ],
+        "UseStoch": [
+          1
+        ],
+        "StochKPeriod": [
+          14
+        ],
+        "StochDSmooth": [
+          3
+        ],
+        "StochLower": [
+          20
+        ],
+        "ZoneWindowBars": [
+          1
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          3
+        ],
+        "ProfitExitPct": [
+          0.5
+        ]
+      }
+    }
+  ]
+}

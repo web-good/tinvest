@@ -1,0 +1,40 @@
+{
+  "_comment": "Проверка §4.7 на point2b: без гейта стохастика. РЕЗУЛЬТАТ 2026-10-06: WF 1.635/40 (17.26%); полное окно 59 сделок PF 1.372, DD 16.33%, 2024 −2.0k → гейт нужен.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          6
+        ],
+        "RSILower": [
+          20
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          3
+        ],
+        "StopDailyATR": [
+          2.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}

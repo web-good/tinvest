@@ -1,0 +1,52 @@
+{
+  "_comment": "Плато §4.4 точки второго круга RTKM: DailyATRPeriod=4 (соседи; DailyATRPeriod 2 — зонд за краем оси 3). РЕЗУЛЬТАТ 2026-10-06: идентично point2 (WF 3.312/29, PF 2.278, SL 0) — поле инертно.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          6
+        ],
+        "RSILower": [
+          20
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          4
+        ],
+        "StopDailyATR": [
+          2.25
+        ],
+        "UseStoch": [
+          1
+        ],
+        "StochKPeriod": [
+          14
+        ],
+        "StochDSmooth": [
+          3
+        ],
+        "StochLower": [
+          20
+        ],
+        "ZoneWindowBars": [
+          1
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}

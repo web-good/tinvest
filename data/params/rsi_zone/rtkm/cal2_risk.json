@@ -1,0 +1,48 @@
+{
+  "_comment": "Тема risk2: голоса risk первого круга StopDailyATR 3,2,2,2.5 (зона 2–3 шаг 0.25), DailyATRPeriod 30,5,5,5 (5 — край оси, зона 3–7 шаг 1). ВТОРОЙ КРУГ (§6), 2026-10-06: point (RSI 6/20/75, EMA 200, ATR 5, стоп 1.0, гейт стохастика 14/3/20/1) провалила п.5 стоп-условия — 2024 −2 264 ₽ (PF 0.802) на полном окне; плато не лечит (все соседи RSIPeriod 5/7, RSILower 15/25, DailyATRPeriod 3/7 тоже в минусе в 2024). Зоны — по фактическим голосам фолдов первого круга, шаг — половина шага первого круга, четыре темы, каждое поле свипует ровно одна тема; оси меряются поверх дефолтов ядра (как в первом круге и в образце ASTR), гейт стохастика в темах выключен — его поля в point2 берутся из первого круга. Тема stoch во второй круг не взята (лимит четырёх тем; по StochLower ничья 10/15, ZoneWindowBars без голоса — уже на дефолтах), stuck — без голосов (1,1,8,0). Тикер не зарегистрирован, шесть базовых полей перечислены явно. Протокол 36/12/6 (4 фолда), -min-trades 20. Запуск: go run ./cmd/backtest -ticker RTKM -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/rtkm/cal2_risk.json -out ./reports/RTKM_zone/r20261006/risk2 -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor РЕЗУЛЬТАТ 2026-10-06: pooled 1.070/175 (+4.20%); фолды 0.951/38, 1.868/53, 1.393/48, 0.574/36; голоса DailyATRPeriod 3,3,3,3 → 3 (4/4), StopDailyATR 2.25,2.25,2,2.25 → 2.25 (3/4).",
+  "phases": [
+    {
+      "name": "risk2",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
+        "StopDailyATR": [
+          2.0,
+          2.25,
+          2.5,
+          2.75,
+          3.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}

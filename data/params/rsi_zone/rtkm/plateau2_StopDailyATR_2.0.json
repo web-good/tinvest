@@ -1,0 +1,52 @@
+{
+  "_comment": "Плато §4.4 точки второго круга RTKM: StopDailyATR=2.0 (соседи; DailyATRPeriod 2 — зонд за краем оси 3). РЕЗУЛЬТАТ 2026-10-06: WF 2.246/29 (19.68%); полное окно 45 сделок PF 1.806, DD 10.04%, SL 1 (−6.6k) — самый широкий срабатывающий стоп, = point2b.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          6
+        ],
+        "RSILower": [
+          20
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          3
+        ],
+        "StopDailyATR": [
+          2.0
+        ],
+        "UseStoch": [
+          1
+        ],
+        "StochKPeriod": [
+          14
+        ],
+        "StochDSmooth": [
+          3
+        ],
+        "StochLower": [
+          20
+        ],
+        "ZoneWindowBars": [
+          1
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}

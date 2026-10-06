@@ -1,0 +1,40 @@
+{
+  "_comment": "Проверка §4.7 на point2: без гейта стохастика. РЕЗУЛЬТАТ 2026-10-06: WF 3.364/40, контроль 5.843/31; полное окно 59 сделок PF 2.140, SL 0 (тот же капкан); справочно, точка отвергнута капканом.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          6
+        ],
+        "RSILower": [
+          20
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          3
+        ],
+        "StopDailyATR": [
+          2.25
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}
