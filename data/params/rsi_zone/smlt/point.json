@@ -1,0 +1,52 @@
+{
+  "_comment": "ТОЧКА первого круга по правилу большинства: дефолты ядра + гейт стохастика K 5 / D 1 / StochLower 10 / ZoneWindowBars 1 (RSI 4/25/75, EMA 200, ATR 14, стоп 1.0; STUCK/PROFIT выкл). Голоса первого круга (36/12/6, 4 фолда, вырожденных нет): RSIPeriod/RSILower — entry 1.838/146 (entry_exit 2.225/108 выше, но и там большинства нет): entry 4/4/3/3 (ничья) · 20/35/15/10; entry_exit 6/3/6/8 · 25/15/30/30 · 65/80/55/55 — всё 2/4 → дефолты 4/25/75; exit 75/50/55/75 — ничья → 75. EMAPeriod — trend 1.365/124: 600/600/30/50 — ничья → 200. risk 1.196/165: ATR 30/14/5/14 — 2/4 → 14; стоп 0.3/0.3/1.25/1 — 2/4 → 1.0. stoch 1.876/85 > baseline_point 1.410/156 (+0.466, пул ≥ 20) → гейт вкл: K 5 (3/4), D 1 (3/4), StochLower 10 (3/4), ZoneWindowBars 1 (3/4). stuck 2/1/2/0 → нет большинства → выкл. profit 1.709/176 (Compounded 76.23% против baseline 44.07%): Bars 6/2/2/1, Pct 1/0.75/0.5/0.5 — большинства нет → общий зонд 3·0.5 (point_profit.json, §4.7). Без гейта точка = baseline_point.json (тот же день): WF 1.410/156 — это и есть point_nostoch. Калибровка rsi_zone на SMLT по /rsi-zone-calibrate (2026-10-06, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История 30m у брокера ≥ 36 мес (в кэше после -refresh с 2023-10-06, ранее с 2023-03-14) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20. Шаг цены 0.2 ₽, лот 1: круг 2 шага / цена = 0.175% при 229 ₽ (текущая; в окне цена упала с ~2500 ₽, круг рос от ~0.016%) < 0.2% → модель -commission 0.0005 не оптимистична, п.4 стоп-условия — удвоенная комиссия -commission 0.001 (круг 0.2% ≥ реального). Дивидендные отсечки в окне: нет (GetDividends 2023–2027 пуст, объявлено до прогонов). EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.3% окна (~37 000 баров). Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker SMLT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/smlt/point.json -out ./reports/SMLT_zone/r20261006/point_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker SMLT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/smlt/point.json -out ./reports/SMLT_zone/r20261006/point_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker SMLT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/smlt/point.json -out ./reports/SMLT_zone/r20261006/point_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; удвоенная комиссия -commission 0.001 — go run ./cmd/backtest -ticker SMLT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/smlt/point.json -out ./reports/SMLT_zone/r20261006/point_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-06: WF 36/12/6 2.156/90 (Compounded 57.75%; фолды 2.847/17, 1.599/28, 0.840/20, 4.028/25 — 3/4 > 1, вырожденных нет), контроль 36/18/6 2.096/73 (1.601/28, 0.844/20, 4.035/25), -commission 0.001 1.850/90 (2.535, 1.308, 0.691, 3.509). Полное окно 130 сделок PF 1.912, net +56 900 ₽, DD 11.25% (15 580 ₽) против baseline 18.38% (19 059 ₽) — гейт просадки пройден в ₽ и в %; выходы RSI 125 / SL 5 (3.8% против 6.2% у baseline), удержание 16.5/37/79 баров (baseline 16/41/81), ночёвок 43.1% (48.1%) — капкана широкого стопа нет (стоп 1.0 = дефолт, срабатывает, удержание и ночёвки не выросли); годы 2023 (огрызок) +3.3k, 2024 +1.3k, 2025 +21.6k, 2026 +30.7k; хвост 6 25 сделок PF 4.028 (≡ фолд 4 4.028/25), хвост 12 45 сделок PF 2.286 (знак = фолды 3+4); входов в выходные 0, сделок через отсечки 0 (отсечек нет). Стоп-условие: п.1 2.156 ✓, п.2 90 ✓, п.3 2.096 ✓, п.4 1.850 ✓ (0.1% на сторону ≥ реального круга 0.175%), п.5 2024/2025/2026 в плюсе ✓, п.6 хвосты 4.028/25 и 2.286/45 ✓, п.7 0/0 ✓ — 7/7, первый круг пройден, второй не нужен. §4.7: без гейта (= baseline_point того же дня) WF 1.410/156 — хуже на 0.746 → гейт остаётся; PROFIT 3·0.5 провалил §4.7 (DD % полной истории выше, 2024 уходит в минус — см. point_profit.json) → оба поля 0. Плато: K 3/5/9/14 WF 2.227/2.156/2.140/2.104 — плато, K 5 в середине; зонд за краем K 3 выше на 0.071, но не голосовался и хуже на фолде 3 (0.677 против 0.840) → голосованное 5. D 1/2/3 WF 2.156/90, 4.771/35, 2.403/15 — обрыв по числу сделок: D 2 даёт 2024 −4.6k, D 3 — 25 сделок за 3 года → D 1. StochLower 5/10/15 WF 2.357/52, 2.156/90, 1.790/119 — зонд 5 выше по PF при равном PF полного окна (1.914 против 1.912), но вдвое меньше net (33.2k против 56.9k) и пул 52; L 15 даёт 2024 −3.2k → голосованное 10. §7: точка обходит дефолты ядра на всех срезах (2.156/2.096/1.850 против 1.410/1.444/1.219) при DD 11.25% против 18.38%; дефолты проваливают п.5 (2024 −8.7k) → ПОБЕДИТЕЛЬ — ТОЧКА. Планку взяли entry, entry_exit, stoch (источник гейта) и profit. Риски: результат сосредоточен в фолде 4 / хвосте 6 (+35.2k из 56.9k); фолд 3 (окт 2025 — апр 2026) убыточен на всех схемах (0.840/0.844/0.691); 2024 в плюсе на +1.3k — тонко; StochDSmooth — обрыв, не плато; цена упала с ~2500 до 229 ₽, круг 0.175% приближается к 0.2% (при цене < 200 ₽ п.4 ужесточается до реального круга).",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          1
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ],
+        "StochKPeriod": [
+          5
+        ],
+        "StochDSmooth": [
+          1
+        ],
+        "StochLower": [
+          10
+        ],
+        "ZoneWindowBars": [
+          1
+        ]
+      }
+    }
+  ]
+}

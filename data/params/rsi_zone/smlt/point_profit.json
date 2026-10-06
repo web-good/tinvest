@@ -1,0 +1,52 @@
+{
+  "_comment": "Проверка §4.7 PROFIT на точке: + общий зонд ProfitExitBars 3 · ProfitExitPct 0.5. Четыре среза одного дня. Калибровка rsi_zone на SMLT по /rsi-zone-calibrate (2026-10-06, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История 30m у брокера ≥ 36 мес (в кэше после -refresh с 2023-10-06, ранее с 2023-03-14) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20. Шаг цены 0.2 ₽, лот 1: круг 2 шага / цена = 0.175% при 229 ₽ (текущая; в окне цена упала с ~2500 ₽, круг рос от ~0.016%) < 0.2% → модель -commission 0.0005 не оптимистична, п.4 стоп-условия — удвоенная комиссия -commission 0.001 (круг 0.2% ≥ реального). Дивидендные отсечки в окне: нет (GetDividends 2023–2027 пуст, объявлено до прогонов). EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.3% окна (~37 000 баров). Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker SMLT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/smlt/point_profit.json -out ./reports/SMLT_zone/r20261006/point_profit_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker SMLT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/smlt/point_profit.json -out ./reports/SMLT_zone/r20261006/point_profit_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker SMLT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/smlt/point_profit.json -out ./reports/SMLT_zone/r20261006/point_profit_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; удвоенная комиссия -commission 0.001 — go run ./cmd/backtest -ticker SMLT -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/smlt/point_profit.json -out ./reports/SMLT_zone/r20261006/point_profit_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-06: WF 2.902/99 (Compounded 70.44%) против точки 2.156 (57.75%) ✓, контроль 3.132 (58.11% против 42.20%) ✓, комиссия 2.431 против 1.850 ✓, полное окно 139 сделок PF 2.358, net +66 376 против +56 900 ₽ ✓, но max DD 12.31% против 11.25% — выше в % (в ₽ 13 384 против 15 580 ниже) ✗, и календарный 2024 уходит в минус −2 607 ₽ (п.5 стоп-условия) ✗; прирост сосредоточен в фолде 4 (PF 20.097/30, хвост 6 20.101). Выходы PROFIT 49 / RSI 85 / SL 5. §4.7 провален (DD полной истории выше, а точка с ним проваливает п.5) → ProfitExitBars 0, ProfitExitPct 0.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          1
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          3
+        ],
+        "ProfitExitPct": [
+          0.5
+        ],
+        "StochKPeriod": [
+          5
+        ],
+        "StochDSmooth": [
+          1
+        ],
+        "StochLower": [
+          10
+        ],
+        "ZoneWindowBars": [
+          1
+        ]
+      }
+    }
+  ]
+}
