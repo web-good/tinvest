@@ -1,0 +1,40 @@
+{
+  "_comment": "Калибровка rsi_zone на RENI (2026-10-06, пакетный режим). плато RSILower на point1: сосед 10. РЕЗУЛЬТАТ 2026-10-06: полное окно 352 сделки PF 1.320, net +33 109 ₽, DD 13 191 ₽ (12.53%); WF 1.515/256, контроль 1.175, комиссия 1.045; хвост 12 PF 0.965. Сосед сверху заметно хуже → RSILower 5.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          2
+        ],
+        "RSILower": [
+          10
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          5
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}
