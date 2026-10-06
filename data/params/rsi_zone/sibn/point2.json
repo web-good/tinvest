@@ -1,0 +1,40 @@
+{
+  "_comment": "Точка второго круга: база B (RSILower 15, RSIUpper 55, ATR 5) с полями по большинству cal2_*: RSILower 20 (cal2_entry_exit 3/4), RSIPeriod 4/4/5/6 — нет → 4 базы, RSIUpper 50/50/52.5/52.5 — ничья → 55 базы, EMAPeriod 90/100/90/100 — ничья → 200 базы, DailyATRPeriod 3 (cal2_risk 4/4), StopDailyATR 1.0 (4/4); гейт cal2_stoch 1.434 ниже опоры B 1.580 → выключен. Калибровка rsi_zone на SIBN по /rsi-zone-calibrate (2026-10-06, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован в rsi_zone: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. Кэш 30m SIBN с 2023-09-28 (≈ 36.3 мес ≥ 36) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20; окно 2023-10-06 … 2026-10-06. Шаг цены 0.05 ₽, лот 1: круг 2 шага / цена = 0.029% при минимуме окна 346.9 ₽ < 0.2% → п.4 при -commission 0.001. Дивидендные отсечки в окне (GetDividends, объявлены до прогонов; первый календарный день без дивиденда = день после last_buy, дивиденд к цене закрытия last_buy): 2023-12-27 (82.94 ₽ ≈ 8.9%), 2024-07-06 (19.49 ₽ ≈ 2.8%), 2024-10-12 (51.96 ₽ ≈ 7.5%), 2025-07-08 (27.21 ₽ ≈ 5.2%), 2025-10-11 (17.30 ₽ ≈ 3.5%), 2026-07-04 (28.11 ₽ ≈ 6.2%); следующая 2026-10-13 (42.51 ₽) — за окном. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.3% окна. Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker SIBN -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/sibn/point2.json -out ./reports/SIBN_zone/r20261006/point2_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker SIBN -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/sibn/point2.json -out ./reports/SIBN_zone/r20261006/point2_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker SIBN -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/sibn/point2.json -out ./reports/SIBN_zone/r20261006/point2_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; удвоенная комиссия -commission 0.001 — go run ./cmd/backtest -ticker SIBN -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/sibn/point2.json -out ./reports/SIBN_zone/r20261006/point2_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-06: база B + RSILower 20 + ATR 3: полное окно 231 сделка PF 1.141, net +8 411 ₽, DD 12.53%; 2024 +2 119, 2025 +12 169, 2026 −5 220 ₽; хвосты 6/12 PF 0.812/0.848 (знак совпадает с фолдами 3–4 0.737/0.885); одна сделка через отсечку. WF 1.278/171 (2.071, 3.066, 0.737, 0.885), контроль 1.101/133, комиссия 0.881 — ПРОВАЛ п.4, п.5, п.6, п.7. Второй круг провален → ОТКАЗ (дефолты тоже проваливают п.4, п.5, п.7).",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          20
+        ],
+        "RSIUpper": [
+          55
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          3
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}
