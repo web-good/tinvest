@@ -1,0 +1,40 @@
+{
+  "_comment": "§4.7: point без гейта стохастика (UseStoch 0) — дефолты + RSIUpper 55. Калибровка rsi_zone на UNAC по /rsi-zone-calibrate (2026-10-06, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован в rsi_zone: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. Кэш 30m UNAC с 2023-08-04 (≥ 36 мес окна) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20; окно 2023-10-06 … 2026-10-06. Шаг цены 0.0005 ₽, лот 1000: круг 2 шага / цена = 0.24% при 0.42 ₽ (текущая), 0.59% при минимуме окна 0.169 ₽ (июль 2026) > 0.2% → модель -commission 0.0005 оптимистична, п.4 ужесточён до реального круга по минимуму окна (как VSMO/MTLRP): -commission 0.003 на сторону. Дивидендные отсечки: GetDividends пуст (ОАК дивидендов не платит) — отсечек в окне нет, объявлено до прогонов. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.7% окна (~33 300 баров). Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker UNAC -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/unac/point_nostoch.json -out ./reports/UNAC_zone/r20261006/point_nostoch_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker UNAC -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/unac/point_nostoch.json -out ./reports/UNAC_zone/r20261006/point_nostoch_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker UNAC -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/unac/point_nostoch.json -out ./reports/UNAC_zone/r20261006/point_nostoch_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; реальный круг издержек -commission 0.003 — go run ./cmd/backtest -ticker UNAC -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/unac/point_nostoch.json -out ./reports/UNAC_zone/r20261006/point_nostoch_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.003 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-06: §4.7: WF 1.469/175 (1.505/42, 2.193/53, 0.226/26, 2.107/54), контроль 1.444, флэт 0.003 0.432, флэт 0.0012 1.051, по-сделочный круг 1.146; полное 255 сделок PF 1.721, DD 18.56% — ниже точки на 0.564, гейт остаётся.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          55
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}
