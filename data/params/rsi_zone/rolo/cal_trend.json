@@ -1,0 +1,50 @@
+{
+  "_comment": "Тема trend: EMAPeriod (11 узлов); источник EMAPeriod. Калибровка rsi_zone на ROLO по /rsi-zone-calibrate (2026-10-06, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История у брокера ≥ 36 мес (дневки с 2022-10-06, 30m в кэше после -refresh с 2023-10-06, 31 297 баров) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20. Шаг цены 0.0002 ₽, лот 1000: круг 2 шага / цена = 0.106% при 0.376 ₽ < 0.2% → модель -commission 0.0005 не оптимистична, п.4 стоп-условия — удвоенная комиссия -commission 0.001 (круг 0.2% ≥ реального). Дивидендные отсечки в окне: нет (GetDividends 2023–2027 пуст, объявлено до прогонов). EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.9% окна (31 297 баров). Запуск: go run ./cmd/backtest -ticker ROLO -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/rolo/cal_trend.json -out ./reports/ROLO_zone/r20261006/trend -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "trend",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          10,
+          20,
+          30,
+          50,
+          75,
+          100,
+          150,
+          200,
+          300,
+          400,
+          600
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ]
+      }
+    }
+  ]
+}
