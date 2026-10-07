@@ -1,0 +1,61 @@
+{
+  "_comment": "Проверка §4.7: первая сборка точки с гейтом стохастика на дефолтных осях 14/3/20/1 (условие (а) выполнено: pooled stoch 1.899/40 против baseline 1.248/156; ни одна ось не набрала единогласия трёх невырожденных фолдов). Сравнивается с point.json (без гейта). Калибровка rsi_zone на PHOR по /rsi-zone-calibrate (прогоны 2026-10-07, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован в rsi_zone: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История PHOR длиннее 36 мес (дневки с 2022, кэш 30m после -refresh с 2023-10-07) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20; окно 2023-10-07 … 2026-10-07 (≈ 36 400 баров). Шаг цены 1 ₽, лот 1: круг 2 шага / цена = 0.038% при 5258 ₽, 0.045% при минимуме окна 4420 ₽ (2026-07-17) < 0.2% → п.4 при удвоенной комиссии -commission 0.001 (прецедент VSMO/MTLRP: ужесточение только при круге ≥ 0.2%). Дивидендные отсечки в окне (GetDividends, объявлены до прогонов; первый день без дивиденда): 2023-12-25 (last_buy 12-22, 291 ₽ ≈ 4.2%), 2024-07-11 (last_buy 07-10, 309 ₽ ≈ 5.5%), 2024-09-20 (last_buy 09-19, 117 ₽ ≈ 2.3%), 2024-12-20 (last_buy 12-19, 126 ₽ ≈ 2.2%), 2025-06-09 (last_buy 06-06, 87 ₽ ≈ 1.3%), 2025-10-01 (last_buy 09-30, 273 ₽ ≈ 3.8%); в 2026 году отсечек по GetDividends нет. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.4% окна. Окно запрета входа Пн–Чт 10:00–14:00 MSK (EntryBlockFrom 1000, EntryBlockTo 1400, EntryBlockMonThu 1) — общее правило вселенной rsi_zone с 2026-10-06, не ось: прибито одним значением в каждой фазе, «дефолты ядра»/baseline здесь = дефолты ядра плюс окно. Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker PHOR -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/phor/point_stoch.json -out ./reports/PHOR_zone/r20261007/point_stoch_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker PHOR -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/phor/point_stoch.json -out ./reports/PHOR_zone/r20261007/point_stoch_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker PHOR -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/phor/point_stoch.json -out ./reports/PHOR_zone/r20261007/point_stoch_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; удвоенная комиссия -commission 0.001 — go run ./cmd/backtest -ticker PHOR -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/phor/point_stoch.json -out ./reports/PHOR_zone/r20261007/point_stoch_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-07 (отчёт reports/PHOR_zone/r20261007/point_stoch_*): с гейтом стохастика 14/3/20/1: полное окно 44 сделки PF 1.566, net +5 888 ₽, DD 5.32%; WF 1.310/33 (+2.89%; фолды 2.436/10, 0.845/13, 1.594/8, 0.949*/2); контроль 1.052/23; комиссия 0.971/33 — без гейта (point.json) pooled 1.876/74 выше на 0.566 → по §4.7 гейт выключен (UseStoch 0): на точке с RSI(3)<10 стохастик лишь отрезает половину и без того редких входов.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          3
+        ],
+        "RSILower": [
+          10
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          1
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ],
+        "EntryBlockFrom": [
+          1000
+        ],
+        "EntryBlockTo": [
+          1400
+        ],
+        "EntryBlockMonThu": [
+          1
+        ],
+        "StochKPeriod": [
+          14
+        ],
+        "StochDSmooth": [
+          3
+        ],
+        "StochLower": [
+          20
+        ],
+        "ZoneWindowBars": [
+          1
+        ]
+      }
+    }
+  ]
+}
