@@ -1,0 +1,49 @@
+{
+  "_comment": "Точка первого круга VTBR: дефолты ядра + EMAPeriod 50 (trend 3/4) + DailyATRPeriod 5 (risk 4/4) + окно; stoch (а) не выполнено, STUCK и PROFIT без большинства. Калибровка rsi_zone на VTBR по /rsi-zone-calibrate (прогоны 2026-10-07, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован в rsi_zone: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История VTBR длиннее 36 мес (кэш 30m с 2023-08-04) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20; окно 2023-10-07 … 2026-10-07. Консолидация акций 5000:1 (торги остановлены 2024-07-09…07-12) и допэмиссии: кэш 30m скорректирован (цена 2023-08 132.5 ₽ ≈ 0.0265·5000, закрытие 2024-07-08 99.65 → открытие 2024-07-15 100.0, объёмы в одних единицах), разрывов цены > 6% в окне только два — оба дивидендные гэпы (2025-07-11 −26.2%, 2026-07-18 −10.5%), поэтому окно не обрезается. Шаг цены 0.005 ₽, лот 1: круг 2 шага / цена = 0.019% при 51.9 ₽, 0.020% при минимуме окна 49.435 ₽ (2026-09-17) < 0.2% → п.4 при удвоенной комиссии -commission 0.001 (прецедент VSMO/MTLRP: ужесточение только при круге ≥ 0.2%). Дивидендные отсечки в окне (GetDividends, объявлены до прогонов; первый день без дивиденда): 2025-07-11 (last_buy 07-10, 25.58 ₽ ≈ 27.4%), 2026-07-18 (last_buy 07-17, 9.71 ₽ ≈ 16.3%; первый день без дивиденда — сессия выходного дня); в 2023–2024 отсечек нет. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.3% окна (≈ 37 000 баров). Окно запрета входа Пн–Чт 10:00–14:00 MSK (EntryBlockFrom 1000, EntryBlockTo 1400, EntryBlockMonThu 1) — общее правило вселенной rsi_zone с 2026-10-06, не ось: прибито одним значением в каждой фазе, «дефолты ядра»/baseline здесь = дефолты ядра плюс окно. Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker VTBR -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/vtbr/point.json -out ./reports/VTBR_zone/r20261007/point_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker VTBR -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/vtbr/point.json -out ./reports/VTBR_zone/r20261007/point_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker VTBR -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/vtbr/point.json -out ./reports/VTBR_zone/r20261007/point_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; удвоенная комиссия -commission 0.001 — go run ./cmd/backtest -ticker VTBR -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/vtbr/point.json -out ./reports/VTBR_zone/r20261007/point_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-07 (36/12/6, 4 фолда, отчёт reports/VTBR_zone/r20261007/point_*): ИТОГОВАЯ ТОЧКА (литерал пакета vtbr). WF 36/12/6 1.469/70, compounded +11.92% (фолды 6.577/13, 1.509/15, 0.831/25, 1.756/17; вырожденных нет; планка не взята — фолд 3 < 1 и pooled < 1.5); контроль 36/18/6 1.221/57 (+5.24%); комиссия 0.001 1.153/70 (+3.77%). Полное окно: 111 сделок, PF 1.323, net +11 666 ₽ (11.67%), DD 6 460 ₽ (5.79%) против 11 517 ₽ (10.14%) у baseline; win 68.5%, выходы RSI 104 / SL 7, удержание 14/37/92 баров, ночёвок 58.6% (baseline 15/40/99, 60.3% — капкана стопа нет). Годы 2023 (огрызок) −0.7k, 2024 +4.5k, 2025 +2.0k, 2026 +6.4k; полугодия в минусе 2023H2, 2025H2 (−2.0k). Хвост 6 17 сделок PF 1.757, хвост 12 43 PF 1.187; фолды 3+4 → PF 1.077 — знак хвоста 6 согласован. Входов в выходные 0, сделок через отсечки 2025-07-11 и 2026-07-18 — 0. Стоп-условие: п.1 1.469 ✓, п.2 70 ✓, п.3 1.221 ✓, п.4 1.153 ✓ (круг 0.020% < 0.2% → удвоенная комиссия), п.5 2024/2025/2026 > 0 ✓, п.6 хвосты 1.757/17 и 1.187/43 ✓, п.7 0/0 ✓ — все семь пройдены. Против дефолтов (§7): WF +0.224, контроль +0.067, комиссия 1.153 против 0.980, DD ниже в ₽ и % — точка побеждает. stoch выключен (а), STUCK без большинства, PROFIT провалил §4.7. EMA 75 (сосед) равна по PF, но EMA 100 — обрыв; выбрано голосованное 50. Риски: фолд 3 (окт 2025 – апр 2026) 0.831; результат WF опирается на фолд 1 (6.66% из 11.92%); 2025H2 −2.0k; огромные дивидендные гэпы VTBR (27% в 2025, 16% в 2026) — защиты в литерале нет, в окне через них 0 сделок.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          50
+        ],
+        "DailyATRPeriod": [
+          5
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ],
+        "EntryBlockFrom": [
+          1000
+        ],
+        "EntryBlockTo": [
+          1400
+        ],
+        "EntryBlockMonThu": [
+          1
+        ]
+      }
+    }
+  ]
+}
