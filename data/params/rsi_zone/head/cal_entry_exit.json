@@ -1,0 +1,67 @@
+{
+  "_comment": "Тема entry_exit: RSIPeriod 2–8 × RSILower 10–35 × RSIUpper 55–90 (336 узлов); источник RSIPeriod/RSILower/RSIUpper, если pooled выше entry/exit. Калибровка rsi_zone на HEAD по /rsi-zone-calibrate (2026-10-07, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован в rsi_zone: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены; окно запрета входа Пн–Чт 10:00–14:00 включено и перечислено в каждой сетке (EntryBlockFrom 1000, EntryBlockTo 1400, EntryBlockMonThu 1 — общее правило вселенной с 2026-10-06, не ось, голосов за него нет)) и перечислены явно. HEAD — бывш. HHRU после редомициляции: кэш 30m HEAD начинается 2023-08-04, но до 2024-08-09 это ряд HHRU (≈400 баров/мес, без выходных сессий), затем дыра 7 недель до 2024-09-26 (возобновление торгов под HEAD, ≈1100 баров/мес). Однородной истории ≈24.4 мес → протокол 24–36 мес 24/12/3 (-months 24 -train-months 12 -test-months 3, 4 фолда, OOS ≈ окт 2025 … окт 2026), контроль 24/15/3 (3 фолда), -min-trades 20; окно 2024-10-07 … 2026-10-07 (≈26 600 баров) целиком после возобновления торгов — как у калибровки rsi_pullback HEAD 2026-09-02 (24/12/3); 36-месячное окно отвергнуто: оно захватило бы год тонкого ряда HHRU и дыру редомициляции. Шаг цены 1 ₽, лот 1: круг 2 шага / цена = 0.074% при 2712 ₽, 0.091% при минимуме окна 2195 ₽ (2026-07-17) < 0.2% → п.4 при -commission 0.001. Дивидендные отсечки в окне (GetDividends; первый день без дивиденда, net/close последнего дня с дивидендом; объявлено до прогонов): 2024-12-17 (22.8%), 2025-09-26 (6.4%), 2026-05-12 (8.0%), 2026-09-26 (6.9%) — сделок через отсечку должно быть 0 (п.7). Цена окна 4254 → 4544 (2024-11) → 2195 (2026-07) → 2712 ₽. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 4.6% окна. Запуск: go run ./cmd/backtest -ticker HEAD -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/head/cal_entry_exit.json -out ./reports/HEAD_zone/r20261007/entry_exit -months 24 -train-months 12 -test-months 3 -min-trades 20 -metric profit_factor.",
+  "phases": [
+    {
+      "name": "entry_exit",
+      "grid": {
+        "RSIPeriod": [
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "RSILower": [
+          10,
+          15,
+          20,
+          25,
+          30,
+          35
+        ],
+        "RSIUpper": [
+          55,
+          60,
+          65,
+          70,
+          75,
+          80,
+          85,
+          90
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ],
+        "EntryBlockFrom": [
+          1000
+        ],
+        "EntryBlockTo": [
+          1400
+        ],
+        "EntryBlockMonThu": [
+          1
+        ]
+      }
+    }
+  ]
+}
