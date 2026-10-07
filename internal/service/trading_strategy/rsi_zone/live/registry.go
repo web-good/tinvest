@@ -24,6 +24,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/reni"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/sfin"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/smlt"
+	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/sofl"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/svav"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/svcb"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/tatnp"
@@ -69,6 +70,7 @@ var paramsByTicker = map[string]core.Params{
 	sfin.Ticker:  sfin.DefaultParams(),
 	phor.Ticker:  phor.DefaultParams(),
 	head.Ticker:  head.DefaultParams(),
+	sofl.Ticker:  sofl.DefaultParams(),
 }
 
 // ParamsFor возвращает параметры тикера; false — тикер не зарегистрирован.
