@@ -148,3 +148,33 @@ func TestRSIZoneFESHGridsStayWide(t *testing.T) {
 		}
 	}
 }
+
+// TestRSIZoneFESHGridsCarryEntryBlockWindow прибивает общее правило вселенной (2026-10-06): каждый
+// json тикера — сетки, точки, плато, зонды — перечисляет окно запрета входа Пн–Чт 10:00–14:00
+// ровно одним значением. Без него калибровка мерила бы входы, которых в торговле не будет.
+func TestRSIZoneFESHGridsCarryEntryBlockWindow(t *testing.T) {
+	files, err := filepath.Glob("../../../data/params/rsi_zone/fesh/*.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) == 0 {
+		t.Fatal("нет сеток FESH")
+	}
+	want := map[string]float64{"EntryBlockFrom": 1000, "EntryBlockTo": 1400, "EntryBlockMonThu": 1}
+	for _, path := range files {
+		file := filepath.Base(path)
+		got := map[string][]float64{}
+		for _, ph := range rsiZoneFESHPhases(t, file) {
+			for name, values := range ph.Grid {
+				if _, ok := want[name]; ok {
+					got[name] = append(got[name], values...)
+				}
+			}
+		}
+		for name, v := range want {
+			if len(got[name]) != 1 || got[name][0] != v {
+				t.Errorf("fesh/%s: %s = %v, want ровно [%v] — окно запрета входа обязательно в каждой сетке", file, name, got[name], v)
+			}
+		}
+	}
+}
