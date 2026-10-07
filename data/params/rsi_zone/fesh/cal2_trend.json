@@ -1,0 +1,53 @@
+{
+  "_comment": "Тема trend2: голоса EMAPeriod первого круга 50/50/30/50 — зона 30…75 с половинным шагом. Второй круг (§6): первый круг провален — точка (RSI 2/5, EMA 50, стоп 1.5) дала WF 1.031/61, комиссия 0.770 (п.4), 2024 −4.3k ₽ (п.5), хвост 6 PF 0.756 (п.6); дефолты тоже проваливают п.5 (2024 −11.3k ₽). Решение пакетного режима (прецедент UPRO/TRMK/RTKM): темы второго круга меряются поверх дефолтов ядра (не поверх распавшейся точки), зоны — по фактическим голосам фолдов первого круга, шаг — половина шага первого круга, каждое поле свипует ровно одна тема, тем четыре. Калибровка rsi_zone на FESH по /rsi-zone-calibrate (2026-10-07, пакетный режим); несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены); окно запрета входа Пн–Чт 10:00–14:00 включено (общее правило вселенной с 2026-10-06, не ось). Окно 2023-10-07 … 2026-10-07, канон 36/12/6 (4 фолда). Запуск: go run ./cmd/backtest -ticker FESH -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/fesh/cal2_trend.json -out ./reports/FESH_zone/r20261007/trend2 -months 36 -train-months 12 -test-months 6 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-07: pooled 1.518/82 (+27.03%); фолды 2.497/18, 0.743/28, 2.682/13, 2.041/23 — планка взята; EMAPeriod 62/62/30/50 — нет большинства → 200.",
+  "phases": [
+    {
+      "name": "trend2",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          30,
+          40,
+          50,
+          62,
+          75
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ],
+        "EntryBlockFrom": [
+          1000
+        ],
+        "EntryBlockTo": [
+          1400
+        ],
+        "EntryBlockMonThu": [
+          1
+        ]
+      }
+    }
+  ]
+}

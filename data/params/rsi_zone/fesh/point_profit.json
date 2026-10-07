@@ -1,0 +1,49 @@
+{
+  "_comment": "Точка первого круга FESH + общий зонд PROFIT 3·0.5 (§4.1: у profit нет большинства по ProfitExitPct 0.3/1.5/1.5/0). Калибровка rsi_zone на FESH по /rsi-zone-calibrate (2026-10-07, онбординг /rsi-zone-onboard, пакетный режим); окно запрета входа Пн–Чт 10:00–14:00 включено (общее правило вселенной с 2026-10-06, не ось). Окно 2023-10-07 … 2026-10-07, канон 36/12/6 (4 фолда), контроль 36/18/6, п.4 при -commission 0.001 (круг 0.050% < 0.2%), отсечек в окне нет. Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker FESH -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/fesh/point_profit.json -out ./reports/FESH_zone/r20261007/point_profit_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker FESH -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/fesh/point_profit.json -out ./reports/FESH_zone/r20261007/point_profit_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker FESH -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/fesh/point_profit.json -out ./reports/FESH_zone/r20261007/point_profit_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; удвоенная комиссия — go run ./cmd/backtest -ticker FESH -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/fesh/point_profit.json -out ./reports/FESH_zone/r20261007/point_profit_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-07: полное окно 81 сделка PF 0.943, net −1.7k ₽, DD 11.58%; WF 1.028/61 (против 1.031 без PROFIT), контроль 1.121, комиссия 0.766 — §4.7 провален (pooled не выше на 0.05) → PROFIT выкл.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          2
+        ],
+        "RSILower": [
+          5
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          50
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.5
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          3
+        ],
+        "ProfitExitPct": [
+          0.5
+        ],
+        "EntryBlockFrom": [
+          1000
+        ],
+        "EntryBlockTo": [
+          1400
+        ],
+        "EntryBlockMonThu": [
+          1
+        ]
+      }
+    }
+  ]
+}

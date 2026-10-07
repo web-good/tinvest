@@ -1,0 +1,49 @@
+{
+  "_comment": "Точка первого круга FESH: дефолты ядра + RSIPeriod 2, RSILower 5 (entry 4/4), EMAPeriod 50 (trend 3/4), StopDailyATR 1.5 (risk 3/4); RSIUpper, DailyATRPeriod без большинства → дефолты; stoch 1.158 < baseline 1.281 → выкл; STUCK без большинства → 0; PROFIT без большинства по ProfitExitPct → зонд 3·0.5 отдельно (point_profit.json). Калибровка rsi_zone на FESH по /rsi-zone-calibrate (2026-10-07, онбординг /rsi-zone-onboard, пакетный режим); окно запрета входа Пн–Чт 10:00–14:00 включено (общее правило вселенной с 2026-10-06, не ось). Окно 2023-10-07 … 2026-10-07, канон 36/12/6 (4 фолда), контроль 36/18/6, п.4 при -commission 0.001 (круг 0.050% < 0.2%), отсечек в окне нет. Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker FESH -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/fesh/point.json -out ./reports/FESH_zone/r20261007/point_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker FESH -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/fesh/point.json -out ./reports/FESH_zone/r20261007/point_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker FESH -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/fesh/point.json -out ./reports/FESH_zone/r20261007/point_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; удвоенная комиссия — go run ./cmd/backtest -ticker FESH -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/fesh/point.json -out ./reports/FESH_zone/r20261007/point_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-07: полное окно 80 сделок PF 0.924, net −2.3k ₽, DD 11.64%, выходы RSI 80 / SL 0 (капкан стопа 1.5: ноль SL, удержание 5/14/19), 2023 −1.3k, 2024 −4.3k, 2025 +1.2k, 2026 +2.1k; хвост 6 13 сделок PF 0.756, хвост 12 32 PF 2.033. WF 1.031/61 (0.839/13, 0.523/16, 35.274/19, 0.756/13), контроль 1.125/48, комиссия 0.770. Стоп-условие: п.4 (0.770), п.5 (2024 −4.3k), п.6 (хвост 6 PF 0.756) провалены → первый круг провален.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          2
+        ],
+        "RSILower": [
+          5
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          50
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.5
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ],
+        "EntryBlockFrom": [
+          1000
+        ],
+        "EntryBlockTo": [
+          1400
+        ],
+        "EntryBlockMonThu": [
+          1
+        ]
+      }
+    }
+  ]
+}
