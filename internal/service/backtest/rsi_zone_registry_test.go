@@ -12,6 +12,7 @@ import (
 	rsizonedias "tinvest/internal/service/trading_strategy/rsi_zone/strategy/dias"
 	rsizonedomrf "tinvest/internal/service/trading_strategy/rsi_zone/strategy/domrf"
 	rsizonefixr "tinvest/internal/service/trading_strategy/rsi_zone/strategy/fixr"
+	rsizonehead "tinvest/internal/service/trading_strategy/rsi_zone/strategy/head"
 	rsizoneivat "tinvest/internal/service/trading_strategy/rsi_zone/strategy/ivat"
 	rsizonelent "tinvest/internal/service/trading_strategy/rsi_zone/strategy/lent"
 	rsizonemdmg "tinvest/internal/service/trading_strategy/rsi_zone/strategy/mdmg"
@@ -104,6 +105,7 @@ func TestRSIZoneRegisteredTickersUseTheirLiteral(t *testing.T) {
 		rsizonesvcb.Ticker:  rsizonesvcb.DefaultParams(),
 		rsizonesfin.Ticker:  rsizonesfin.DefaultParams(),
 		rsizonephor.Ticker:  rsizonephor.DefaultParams(),
+		rsizonehead.Ticker:  rsizonehead.DefaultParams(),
 	} {
 		b := RSIZoneLookupOrGeneric(ticker)
 		if got := b.DefaultParams().(core.Params); got != want {

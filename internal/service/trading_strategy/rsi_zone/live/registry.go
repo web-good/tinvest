@@ -12,6 +12,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/dias"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/domrf"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/fixr"
+	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/head"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/ivat"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/lent"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/mdmg"
@@ -67,6 +68,7 @@ var paramsByTicker = map[string]core.Params{
 	svcb.Ticker:  svcb.DefaultParams(),
 	sfin.Ticker:  sfin.DefaultParams(),
 	phor.Ticker:  phor.DefaultParams(),
+	head.Ticker:  head.DefaultParams(),
 }
 
 // ParamsFor возвращает параметры тикера; false — тикер не зарегистрирован.
