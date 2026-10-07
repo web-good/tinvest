@@ -33,6 +33,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/unac"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/upro"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/vsmo"
+	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/vtbr"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/wush"
 	"tinvest/internal/service/trading_strategy/rsi_zone/strategy/ydex"
 )
@@ -71,6 +72,7 @@ var paramsByTicker = map[string]core.Params{
 	phor.Ticker:  phor.DefaultParams(),
 	head.Ticker:  head.DefaultParams(),
 	sofl.Ticker:  sofl.DefaultParams(),
+	vtbr.Ticker:  vtbr.DefaultParams(),
 }
 
 // ParamsFor возвращает параметры тикера; false — тикер не зарегистрирован.
