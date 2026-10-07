@@ -132,6 +132,27 @@ func TestRSIZoneSVCBGridsStayWide(t *testing.T) {
 		}
 	}
 
+	// Окно запрета входа Пн–Чт 10:00–14:00 — общее правило вселенной (2026-10-06), а не ось:
+	// каждая фаза каждого файла каталога (сетки, baseline_point, point*, плато, зонды, cal2_*)
+	// перечисляет его ровно одним значением, иначе калибровка мерила бы входы, которых в
+	// торговле не будет.
+	window := map[string]float64{"EntryBlockFrom": 1000, "EntryBlockTo": 1400, "EntryBlockMonThu": 1}
+	all, err := filepath.Glob("../../../data/params/rsi_zone/svcb/*.json")
+	if err != nil || len(all) == 0 {
+		t.Fatalf("glob svcb grids: %v (%d files)", err, len(all))
+	}
+	for _, path := range all {
+		file := filepath.Base(path)
+		for _, ph := range rsiZoneSVCBPhases(t, file) {
+			for name, want := range window {
+				got := ph.Grid[name]
+				if len(got) != 1 || got[0] != want {
+					t.Errorf("svcb/%s phase %q: %s = %v, want [%v] (окно запрета входа)", file, ph.Name, name, got, want)
+				}
+			}
+		}
+	}
+
 	// Арбитры держат порядок фаз процедуры.
 	for file, want := range map[string][]string{
 		"cal_trend_risk.json": {"trend", "risk"},
