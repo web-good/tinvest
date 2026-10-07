@@ -71,7 +71,7 @@ func (s *service) buyPass(ctx context.Context) error {
 		}
 		lots, ok, reason := sizing.Lots(s.cfg.BuyPct, total, cash, sig.Price, sh.Lot)
 		if !ok {
-			s.notify(notifier.Skip(ticker, reason))
+			s.notify(notifier.Skip("Reversion", ticker, reason))
 			continue
 		}
 
@@ -105,7 +105,7 @@ func (s *service) buyPass(ctx context.Context) error {
 		if err := store.Save(state); err != nil {
 			return fmt.Errorf("reversion: save state after buy %s: %w", ticker, err)
 		}
-		s.notify(notifier.Entry(ticker, fillPrice, filledLots, qty, !res.Placed))
+		s.notify(notifier.Entry("Reversion", ticker, fillPrice, filledLots, qty, !res.Placed))
 
 		state[ticker] = s.placeInitialStop(ctx, ticker, sh, state[ticker], state, store)
 	}

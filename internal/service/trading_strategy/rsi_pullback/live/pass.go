@@ -337,7 +337,7 @@ func (s *service) buy(ctx context.Context, pc *passCtx, sl *slot, ticker string,
 			return false, nil
 		}
 		if reason != "" {
-			sl.strat.Notify(notifier.Skip(ticker, reason))
+			sl.strat.Notify(notifier.Skip(sl.strat.Label(), ticker, reason))
 			return false, nil
 		}
 	}
@@ -356,7 +356,7 @@ func (s *service) buy(ctx context.Context, pc *passCtx, sl *slot, ticker string,
 	paper := s.paperBesideLive(sl)
 	lots, ok, reason := sizing.Lots(sl.strat.BuyPct(), total, cash, sig.Price, sh.Lot)
 	if !ok {
-		sl.strat.Notify(notifier.Skip(ticker, reason))
+		sl.strat.Notify(notifier.Skip(sl.strat.Label(), ticker, reason))
 		return !paper, nil
 	}
 
@@ -364,7 +364,7 @@ func (s *service) buy(ctx context.Context, pc *passCtx, sl *slot, ticker string,
 	// тикер до чистки по freshEntryGrace и заблокировала бы боевой вход другой стратегии.
 	// Когда боевых стратегий на счёте нет вовсе, работает прежний dry-run: стейт пишется.
 	if paper {
-		sl.strat.Notify(notifier.Entry(ticker, sig.Price, lots, lots*int64(sh.Lot), true))
+		sl.strat.Notify(notifier.Entry(sl.strat.Label(), ticker, sig.Price, lots, lots*int64(sh.Lot), true))
 		return false, nil
 	}
 
@@ -412,7 +412,7 @@ func (s *service) buy(ctx context.Context, pc *passCtx, sl *slot, ticker string,
 	if err := pc.store.Save(pc.state); err != nil {
 		return true, fmt.Errorf("%s: save state after buy %s: %w", sl.strat.Name(), ticker, err)
 	}
-	sl.strat.Notify(notifier.Entry(ticker, fillPrice, filledLots, qty, !res.Placed))
+	sl.strat.Notify(notifier.Entry(sl.strat.Label(), ticker, fillPrice, filledLots, qty, !res.Placed))
 
 	pc.state[ticker] = s.placeInitialStop(ctx, pc, sl, ticker, sh, pc.state[ticker])
 	return true, nil
@@ -462,7 +462,7 @@ func (s *service) replaceStop(ctx context.Context, sl *slot, ticker string, sh *
 	changed := rounded != entry.StopPrice || reason != entry.StopReason
 	entry.StopPrice, entry.StopReason = rounded, reason
 	if changed {
-		sl.strat.Notify(notifier.StopSet(ticker, rounded, reason, !res.Placed))
+		sl.strat.Notify(notifier.StopSet(sl.strat.Label(), ticker, rounded, reason, !res.Placed))
 	}
 	return entry
 }
@@ -549,7 +549,7 @@ func (s *service) manage(ctx context.Context, pc *passCtx, sl *slot, ticker stri
 					sl.alert(ticker, "стоп-заявка исчезла из ACTIVE, но EXECUTED недоступен — репост отложен: "+ferr.Error())
 					return nil
 				case fired:
-					sl.strat.Notify(notifier.Exit(ticker, entry.StopReason, entry.StopPrice, entry.Quantity, false))
+					sl.strat.Notify(notifier.Exit(sl.strat.Label(), ticker, entry.StopReason, entry.StopPrice, entry.Quantity, false))
 					delete(pc.state, ticker)
 					_ = pc.store.Save(pc.state)
 					return nil
@@ -755,7 +755,7 @@ func (s *service) sell(ctx context.Context, pc *passCtx, sl *slot, ticker string
 	if err := pc.store.Save(pc.state); err != nil {
 		return fmt.Errorf("%s: save state after sell %s: %w", sl.strat.Name(), ticker, err)
 	}
-	sl.strat.Notify(notifier.Exit(ticker, sig.Reason, exitPrice, pos.Quantity, !res.Placed))
+	sl.strat.Notify(notifier.Exit(sl.strat.Label(), ticker, sig.Reason, exitPrice, pos.Quantity, !res.Placed))
 	return nil
 }
 
@@ -805,7 +805,7 @@ func (s *service) settleGonePosition(ctx context.Context, pc *passCtx, sl *slot,
 		if fired, ferr := sl.stops.Executed(ctx, entry.StopOrderID); ferr == nil && !fired {
 			sl.alert(ticker, "позиция закрыта и стоп-заявка снята вне раннера — чищу стейт")
 		} else {
-			sl.strat.Notify(notifier.Exit(ticker, entry.StopReason, entry.StopPrice, entry.Quantity, false))
+			sl.strat.Notify(notifier.Exit(sl.strat.Label(), ticker, entry.StopReason, entry.StopPrice, entry.Quantity, false))
 		}
 		delete(pc.state, ticker)
 		_ = pc.store.Save(pc.state)

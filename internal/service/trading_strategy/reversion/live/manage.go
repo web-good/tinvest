@@ -90,7 +90,7 @@ func (s *service) managePass(ctx context.Context) error {
 					if fired, ferr := s.stops.Executed(ctx, entry.StopOrderID); ferr == nil && !fired {
 						s.notify(notifier.Alert("Reversion", ticker, "позиция закрыта и стоп-заявка снята вне раннера — чищу стейт"))
 					} else {
-						s.notify(notifier.Exit(ticker, entry.StopReason, entry.StopPrice, entry.Quantity, false))
+						s.notify(notifier.Exit("Reversion", ticker, entry.StopReason, entry.StopPrice, entry.Quantity, false))
 					}
 					delete(state, ticker)
 					_ = store.Save(state)
@@ -158,7 +158,7 @@ func (s *service) managePass(ctx context.Context) error {
 					s.notify(notifier.Alert("Reversion", ticker, "стоп-заявка исчезла из ACTIVE, но EXECUTED недоступен — репост отложен: "+ferr.Error()))
 					continue
 				case fired:
-					s.notify(notifier.Exit(ticker, entry.StopReason, entry.StopPrice, entry.Quantity, false))
+					s.notify(notifier.Exit("Reversion", ticker, entry.StopReason, entry.StopPrice, entry.Quantity, false))
 					delete(state, ticker)
 					_ = store.Save(state)
 					continue
@@ -240,7 +240,7 @@ func (s *service) managePass(ctx context.Context) error {
 			if err := store.Save(state); err != nil {
 				return fmt.Errorf("reversion: save state after sell %s: %w", ticker, err)
 			}
-			s.notify(notifier.Exit(ticker, sig.Reason, exitPrice, pos.Quantity, !res.Placed))
+			s.notify(notifier.Exit("Reversion", ticker, sig.Reason, exitPrice, pos.Quantity, !res.Placed))
 			continue
 		}
 
@@ -375,7 +375,7 @@ func (s *service) replaceStop(ctx context.Context, ticker string, sh *imodel.Sha
 	changed := rounded != entry.StopPrice || reason != entry.StopReason
 	entry.StopPrice, entry.StopReason = rounded, reason
 	if changed {
-		s.notify(notifier.StopSet(ticker, rounded, reason, !res.Placed))
+		s.notify(notifier.StopSet("Reversion", ticker, rounded, reason, !res.Placed))
 	}
 	return entry
 }

@@ -163,6 +163,33 @@ func TestPullbackWinsTheSameBarBuy(t *testing.T) {
 	}
 }
 
+// Вход rsi_pullback на общем счёте подписан её меткой: сделки всех стратегий счёта приходят
+// в Telegram, и без метки покупку не отличить от покупки гостя.
+func TestPullbackEntryNotificationNamesPullback(t *testing.T) {
+	zone := zoneFake(model.SignalBuy, "GAZP")
+	e := newSharedEnv(t, sharedNow, []string{"GAZP"}, nil, zone)
+	e.instruments.EXPECT().Shares(mock.Anything).Return(sharesOf("GAZP"), nil)
+	e.expectCandles(pullback30m(sharedLastBar, 400), dailies(sharedNow, 60))
+	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(nil, nil)
+	e.ops.EXPECT().GetPortfolioTotal(mock.Anything, mock.Anything).Return(1_000_000.0, nil)
+	e.ops.EXPECT().GetAvailableCash(mock.Anything, mock.Anything).Return(1_000_000.0, nil)
+	var sent []string
+	e.tg.EXPECT().SendMessage(mock.Anything).RunAndReturn(func(s string) error {
+		sent = append(sent, s)
+		return nil
+	}).Maybe()
+
+	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	for _, s := range sent {
+		if strings.Contains(s, "RSI Pullback · Вход GAZP") {
+			return
+		}
+	}
+	t.Fatalf("нет входа с меткой RSI Pullback, отправлено: %q", sent)
+}
+
 // rsi_pullback молчит — входит гость, запись помечена его именем, стоп — от его DesiredStop.
 func TestGuestEntersWhenPullbackIsSilent(t *testing.T) {
 	zone := zoneFake(model.SignalBuy, "GAZP")
@@ -180,6 +207,10 @@ func TestGuestEntersWhenPullbackIsSilent(t *testing.T) {
 	entry := e.state(t)["GAZP"]
 	if entry.Strategy != "rsi_zone" {
 		t.Fatalf("владелец = %q, want rsi_zone", entry.Strategy)
+	}
+	// Вход и стоп гостя подписаны меткой гостя, а не раннера.
+	if !zone.said("FAKE · Вход GAZP") || !zone.said("FAKE · GAZP: стоп-заявка") {
+		t.Fatalf("уведомления гостя без его метки: %q", zone.msgs)
 	}
 	if entry.StopPrice != 90 || entry.StopReason != "SL" {
 		t.Fatalf("стоп = %v/%q, want 90/SL от DesiredStop гостя", entry.StopPrice, entry.StopReason)
@@ -202,6 +233,9 @@ func TestOwnerFromStateManagesThePosition(t *testing.T) {
 	}
 	if _, ok := e.state(t)["GAZP"]; ok {
 		t.Fatal("SELL владельца-гостя не закрыл позицию")
+	}
+	if !zone.said("FAKE · Выход GAZP") {
+		t.Fatalf("выход позиции гостя без его метки: %q", zone.msgs)
 	}
 	if zone.decideCalls != 1 {
 		t.Fatalf("Decide гостя вызван %d раз, want 1", zone.decideCalls)

@@ -179,19 +179,19 @@ func TestReconstructFailsWithoutDailyHistory(t *testing.T) {
 	}
 }
 
-func TestNotifyIsLabelledAndRespectsSwitch(t *testing.T) {
+func TestNotifyPassesMessageAsIsAndRespectsSwitch(t *testing.T) {
 	t.Run("выключено", func(t *testing.T) {
 		tg := tgmocks.NewMockClient(t) // без ожиданий: любой вызов — провал
 		New(&config.RSIZoneConfig{NotifyEnabled: false}, tg).Notify("вход")
 	})
 	t.Run("включено", func(t *testing.T) {
 		tg := tgmocks.NewMockClient(t)
-		tg.EXPECT().SendMessage("[RSI Zone] вход").Return(nil).Once()
+		tg.EXPECT().SendMessage("вход").Return(nil).Once()
 		New(&config.RSIZoneConfig{NotifyEnabled: true}, tg).Notify("вход")
 	})
 	t.Run("сбой доставки не паникует", func(t *testing.T) {
 		tg := tgmocks.NewMockClient(t)
-		tg.EXPECT().SendMessage("[RSI Zone] вход").Return(errors.New("boom")).Once()
+		tg.EXPECT().SendMessage("вход").Return(errors.New("boom")).Once()
 		New(&config.RSIZoneConfig{NotifyEnabled: true}, tg).Notify("вход")
 	})
 }

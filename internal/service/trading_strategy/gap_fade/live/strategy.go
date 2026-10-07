@@ -133,12 +133,13 @@ func (s *Strategy) Reconstruct(ctx context.Context, in adapter.ReconstructInput)
 	}, nil
 }
 
-// Notify шлёт в тему gap_fade с меткой стратегии. Сбой доставки — ERROR-лог, как у соседей.
+// Notify шлёт в тему gap_fade. Метку стратегии несёт само сообщение: раннер рендерит его
+// через notifier с Label(). Сбой доставки — ERROR-лог, как у соседей.
 func (s *Strategy) Notify(msg string) {
 	if !s.cfg.NotifyEnabled || s.tg == nil {
 		return
 	}
-	if err := s.tg.SendMessage("[" + alertLabel + "] " + msg); err != nil {
+	if err := s.tg.SendMessage(msg); err != nil {
 		logger.ErrorContext(context.Background(), fmt.Sprintf("gap_fade: уведомление не доставлено: %v", err))
 	}
 }

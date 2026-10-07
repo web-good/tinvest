@@ -173,9 +173,9 @@ func TestEntryPossible(t *testing.T) {
 	}
 }
 
-func TestNotifyPrefixAndSwitch(t *testing.T) {
+func TestNotifyPassesMessageAsIsAndSwitch(t *testing.T) {
 	tg := tgmocks.NewMockClient(t)
-	tg.EXPECT().SendMessage("[Gap Fade] привет").Return(nil).Once()
+	tg.EXPECT().SendMessage("привет").Return(nil).Once()
 	New(&config.GapFadeConfig{NotifyEnabled: true}, tg, nil).Notify("привет")
 
 	off := tgmocks.NewMockClient(t) // без ожиданий: любой вызов — падение
@@ -185,7 +185,7 @@ func TestNotifyPrefixAndSwitch(t *testing.T) {
 
 func TestNotifyDeliveryFailureDoesNotPanic(t *testing.T) {
 	tg := tgmocks.NewMockClient(t)
-	tg.EXPECT().SendMessage("[Gap Fade] x").Return(errors.New("down")).Once()
+	tg.EXPECT().SendMessage("x").Return(errors.New("down")).Once()
 	New(&config.GapFadeConfig{NotifyEnabled: true}, tg, nil).Notify("x")
 }
 

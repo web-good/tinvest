@@ -14,21 +14,22 @@ func paperTag(paper bool) string {
 	return ""
 }
 
-// Entry renders a buy notification.
-func Entry(ticker string, price float64, lots, qty int64, paper bool) string {
-	return fmt.Sprintf("🟢 <b>Вход %s</b>%s\n  Цена: %.4f | Лотов: %d | Штук: %d",
-		ticker, paperTag(paper), price, lots, qty)
+// Entry renders a buy notification. strategy — метка стратегии в заголовке: на одном счёте
+// торгуют несколько стратегий, и по сделке должно быть видно, чья она (как у Alert).
+func Entry(strategy, ticker string, price float64, lots, qty int64, paper bool) string {
+	return fmt.Sprintf("🟢 <b>%s · Вход %s</b>%s\n  Цена: %.4f | Лотов: %d | Штук: %d",
+		strategy, ticker, paperTag(paper), price, lots, qty)
 }
 
 // Exit renders a sell notification with the exit reason code (OB/RSI50/BE/TRAIL/...).
-func Exit(ticker, reason string, price float64, qty int64, paper bool) string {
-	return fmt.Sprintf("🔴 <b>Выход %s</b> [%s]%s\n  Цена: %.4f | Штук: %d",
-		ticker, reason, paperTag(paper), price, qty)
+func Exit(strategy, ticker, reason string, price float64, qty int64, paper bool) string {
+	return fmt.Sprintf("🔴 <b>%s · Выход %s</b> [%s]%s\n  Цена: %.4f | Штук: %d",
+		strategy, ticker, reason, paperTag(paper), price, qty)
 }
 
 // Skip renders a skipped-entry notification (e.g. sub-lot budget, insufficient cash).
-func Skip(ticker, reason string) string {
-	return fmt.Sprintf("⏭️ <b>Пропуск %s</b>\n  %s", ticker, reason)
+func Skip(strategy, ticker, reason string) string {
+	return fmt.Sprintf("⏭️ <b>%s · Пропуск %s</b>\n  %s", strategy, ticker, reason)
 }
 
 // Alert renders an operational alert (e.g. state reconstructed, order rejected).
@@ -58,6 +59,6 @@ func Startup(strategy string, tickers []string, paper bool) string {
 }
 
 // StopSet reports a protective stop order (re)placed at price for reason.
-func StopSet(ticker string, price float64, reason string, paper bool) string {
-	return fmt.Sprintf("🛡 %s: стоп-заявка %s на %.4f%s", ticker, reason, price, paperTag(paper))
+func StopSet(strategy, ticker string, price float64, reason string, paper bool) string {
+	return fmt.Sprintf("🛡 %s · %s: стоп-заявка %s на %.4f%s", strategy, ticker, reason, price, paperTag(paper))
 }

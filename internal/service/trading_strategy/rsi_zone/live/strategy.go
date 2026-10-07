@@ -92,13 +92,13 @@ func (s *Strategy) Reconstruct(ctx context.Context, in adapter.ReconstructInput)
 	}, nil
 }
 
-// Notify шлёт в тему rsi_zone с меткой стратегии: сообщения входа/выхода/стопа из общего
-// notifier метки не несут. Сбой доставки — ERROR-лог, как у rsi_pullback.
+// Notify шлёт в тему rsi_zone. Метку стратегии несёт само сообщение: раннер рендерит его
+// через notifier с Label(). Сбой доставки — ERROR-лог, как у rsi_pullback.
 func (s *Strategy) Notify(msg string) {
 	if !s.cfg.NotifyEnabled || s.tg == nil {
 		return
 	}
-	if err := s.tg.SendMessage("[" + alertLabel + "] " + msg); err != nil {
+	if err := s.tg.SendMessage(msg); err != nil {
 		logger.ErrorContext(context.Background(), fmt.Sprintf("rsi_zone: уведомление не доставлено: %v", err))
 	}
 }

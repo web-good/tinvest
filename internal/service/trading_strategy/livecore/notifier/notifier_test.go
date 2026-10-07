@@ -6,22 +6,22 @@ import (
 )
 
 func TestEntry(t *testing.T) {
-	msg := Entry("UGLD", 100.5, 10, 100, false)
+	msg := Entry("RSI Pullback", "UGLD", 100.5, 10, 100, false)
 	for _, want := range []string{"UGLD", "100.5", "🟢"} {
 		if !strings.Contains(msg, want) {
 			t.Fatalf("Entry msg %q missing %q", msg, want)
 		}
 	}
-	if !strings.Contains(Entry("UGLD", 1, 1, 1, true), "БУМАЖНАЯ") {
+	if !strings.Contains(Entry("RSI Pullback", "UGLD", 1, 1, 1, true), "БУМАЖНАЯ") {
 		t.Fatal("paper-mode entry must be flagged")
 	}
 }
 
 func TestExitAndSkipAndAlert(t *testing.T) {
-	if !strings.Contains(Exit("NVTK", "OB", 200, 50, false), "NVTK") {
+	if !strings.Contains(Exit("Reversion", "NVTK", "OB", 200, 50, false), "NVTK") {
 		t.Fatal("Exit must name the ticker")
 	}
-	if !strings.Contains(Skip("EUTR", "кэша не хватает"), "кэша не хватает") {
+	if !strings.Contains(Skip("Reversion", "EUTR", "кэша не хватает"), "кэша не хватает") {
 		t.Fatal("Skip must carry the reason")
 	}
 	if !strings.Contains(Alert("Reversion", "UGLD", "стейт потерян"), "⚠️") {
@@ -39,14 +39,31 @@ func TestAlertUsesStrategyLabel(t *testing.T) {
 	}
 }
 
+// На одном счёте торгуют несколько стратегий, и сделки уходят в одни и те же темы. Без
+// метки в заголовке нельзя понять, чья это покупка или продажа, поэтому каждое сообщение о
+// сделке начинается с метки стратегии рядом с тикером.
+func TestTradeMessagesNameTheStrategy(t *testing.T) {
+	cases := map[string]string{
+		"Entry":   Entry("RSI Zone", "UGLD", 100, 1, 10, false),
+		"Exit":    Exit("RSI Zone", "UGLD", "SL", 100, 10, false),
+		"Skip":    Skip("RSI Zone", "UGLD", "кэша не хватает"),
+		"StopSet": StopSet("RSI Zone", "UGLD", 95, "SL", false),
+	}
+	for name, msg := range cases {
+		if !strings.Contains(msg, "RSI Zone · ") || !strings.Contains(msg, "UGLD") {
+			t.Errorf("%s = %q, want the strategy label before the ticker", name, msg)
+		}
+	}
+}
+
 func TestStopSet(t *testing.T) {
-	msg := StopSet("UGLD", 107.5, "TRAIL", true)
+	msg := StopSet("RSI Zone", "UGLD", 107.5, "TRAIL", true)
 	for _, want := range []string{"UGLD", "107.5", "TRAIL", "БУМАЖНАЯ"} {
 		if !strings.Contains(msg, want) {
 			t.Fatalf("StopSet msg %q missing %q", msg, want)
 		}
 	}
-	if strings.Contains(StopSet("UGLD", 107.5, "TRAIL", false), "БУМАЖНАЯ") {
+	if strings.Contains(StopSet("RSI Zone", "UGLD", 107.5, "TRAIL", false), "БУМАЖНАЯ") {
 		t.Fatal("non-paper StopSet must not be flagged as БУМАЖНАЯ")
 	}
 }
