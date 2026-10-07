@@ -1,0 +1,49 @@
+{
+  "_comment": "Плато EMAPeriod точки SVCB (2026-10-07): point.json с EMAPeriod 75 (сосед справа по оси trend). Запуск как у point.json, срезы plateau_EMAPeriod_75_<full|wf>. РЕЗУЛЬТАТ 2026-10-07: WF 1.305/51, compounded +6.66% (фолды 0.962/16, 5.509/12, 1.056/11, 1.237/12); полное окно 109 сделок PF 1.421, net +23 121 ₽, DD 10 410 ₽ (8.49%), SL 9; годы 2024 +4.8k, 2025 +10.8k, 2026 +7.6k; хвост 6 23 PF 1.165, хвост 12 51 PF 1.303. Против EMA 50 разница pooled 0.004 < 0.05 → решает просадка: 5.88% у 50 против 8.49% — остаётся 50.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          75
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ],
+        "EntryBlockFrom": [
+          1000
+        ],
+        "EntryBlockTo": [
+          1400
+        ],
+        "EntryBlockMonThu": [
+          1
+        ]
+      }
+    }
+  ]
+}

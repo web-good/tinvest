@@ -1,0 +1,49 @@
+{
+  "_comment": "Кандидат PROFIT на точке SVCB (§4.7, 2026-10-07): point.json + ProfitExitBars 0 (profit 4/4) · ProfitExitPct 0.3 (profit 3/4). Запуск как у point.json, -calibrate data/params/rsi_zone/svcb/point_profit.json, срезы point_profit_<full|wf|ctrl|comm>. РЕЗУЛЬТАТ 2026-10-07: WF 1.313/45, compounded +3.90% (против точки без PROFIT 1.301/43, +5.18%); контроль 1.496/32, +4.12% (против 1.459, +5.06%); комиссия 0.001 0.931/45 (против 1.027 — проваливает п.4); полное окно 88 сделок PF 1.549, net +12 306 ₽ (против +18 220), DD 5.21% (против 5.88%); выходы PROFIT 49 (+21.3k), RSI 35 (+5.8k), SL 4 (−14.9k); 2025H2 в минусе. §4.7 провален по четырём условиям из пяти (pooled +0.012 < 0.05, доходность основной и контрольной ниже, комиссия ниже, net полного окна ниже) → ProfitExitBars/ProfitExitPct = 0.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          50
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0.3
+        ],
+        "EntryBlockFrom": [
+          1000
+        ],
+        "EntryBlockTo": [
+          1400
+        ],
+        "EntryBlockMonThu": [
+          1
+        ]
+      }
+    }
+  ]
+}
