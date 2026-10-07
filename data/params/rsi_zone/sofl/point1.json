@@ -1,0 +1,49 @@
+{
+  "_comment": "Точка первого круга: ни одно поле не набрало большинства (entry RSIPeriod 2,4,2,4 / RSILower 20,20,5,45; exit RSIUpper 60,55,55,60; trend EMA 50,75,75,50; risk ATR 7,5,7,5 / стоп 3,1.5,1,1 — ничьи), stoch не выше baseline (1.334 против 1.335), STUCK без большинства (1,0,0,5) → точка = дефолты ядра + окно (= baseline_point.json, §4.2). Калибровка rsi_zone на SOFL по /rsi-zone-calibrate (прогоны 2026-10-07, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован в rsi_zone: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История SOFL: IPO 2023-09-25, кэш 30m с 2023-09-25 (≈ 36.4 мес) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20; окно 2023-10-07 … 2026-10-07 (≈ 35 000 баров; прогрев длинных EMA в начале окна частично внутри окна — до окна лишь ≈ 9 сессий истории). Схема 24/12/3, принятая во втором круге калибровки rsi_pullback SOFL, здесь не используется: процедура rsi_zone выбирает схему по длине истории, а не по режиму. Шаг цены 0.02 ₽, лот 10: круг 2 шага / цена = 0.087% при 45.84 ₽, 0.106% при минимуме окна 37.78 ₽ (2026-07-16) < 0.2% → п.4 при удвоенной комиссии -commission 0.001 (прецедент VSMO/MTLRP: ужесточение только при круге ≥ 0.2%). Дивидендные отсечки в окне (GetDividends, объявлены до прогонов; первый день без дивиденда): 2026-07-09 (last_buy 07-08, 0.18 ₽ ≈ 0.4%) — единственная. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.5% окна. Окно запрета входа Пн–Чт 10:00–14:00 MSK (EntryBlockFrom 1000, EntryBlockTo 1400, EntryBlockMonThu 1) — общее правило вселенной rsi_zone с 2026-10-06, не ось: прибито одним значением в каждой фазе, «дефолты ядра»/baseline здесь = дефолты ядра плюс окно. Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker SOFL -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/sofl/point1.json -out ./reports/SOFL_zone/r20261007/point1_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker SOFL -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/sofl/point1.json -out ./reports/SOFL_zone/r20261007/point1_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker SOFL -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/sofl/point1.json -out ./reports/SOFL_zone/r20261007/point1_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; удвоенная комиссия -commission 0.001 — go run ./cmd/backtest -ticker SOFL -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/sofl/point1.json -out ./reports/SOFL_zone/r20261007/point1_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-07 (36/12/6, 4 фолда, отчёт reports/SOFL_zone/r20261007/point1_*): точка первого круга = baseline_point.json до копейки (152/1.281/+24 430 ₽, DD 14.97%; WF 1.335/101, контроль 1.123, комиссия 1.129). Семь пунктов: 1) 1.335 — да; 2) 101 — да; 3) 1.123 — да; 4) 1.129 — да; 5) 2025 −4 829 ₽ — ПРОВАЛЕН; 6) хвост 6 22/1.536, хвост 12 46/1.188, знак сходится с фолдами 3+4 (1.154) — да; 7) 0/0 — да. Первый круг провален пунктом 5 → второй круг (cal2_*).",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ],
+        "EntryBlockFrom": [
+          1000
+        ],
+        "EntryBlockTo": [
+          1400
+        ],
+        "EntryBlockMonThu": [
+          1
+        ]
+      }
+    }
+  ]
+}

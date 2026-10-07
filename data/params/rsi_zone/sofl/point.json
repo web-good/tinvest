@@ -1,0 +1,49 @@
+{
+  "_comment": "Итоговая точка SOFL (= point2.json, точка второго круга; команды пишут в те же каталоги point2_*): дефолты ядра + окно + EMAPeriod 38, DailyATRPeriod 5; stoch, STUCK, PROFIT выключены. Калибровка rsi_zone на SOFL по /rsi-zone-calibrate (прогоны 2026-10-07, онбординг /rsi-zone-onboard, пакетный режим). Тикер не зарегистрирован в rsi_zone: несвипуемые поля прибиты к core.DefaultParams() (4/25/75, EMA 200, ATR 14, стоп 1.0; stoch/STUCK/PROFIT выключены) и перечислены явно. История SOFL: IPO 2023-09-25, кэш 30m с 2023-09-25 (≈ 36.4 мес) → канон 36/12/6 (-months 36 -train-months 12 -test-months 6, 4 фолда, OOS ≈ окт 2024 … окт 2026), контроль 36/18/6 (3 фолда), -min-trades 20; окно 2023-10-07 … 2026-10-07 (≈ 35 000 баров; прогрев длинных EMA в начале окна частично внутри окна — до окна лишь ≈ 9 сессий истории). Схема 24/12/3, принятая во втором круге калибровки rsi_pullback SOFL, здесь не используется: процедура rsi_zone выбирает схему по длине истории, а не по режиму. Шаг цены 0.02 ₽, лот 10: круг 2 шага / цена = 0.087% при 45.84 ₽, 0.106% при минимуме окна 37.78 ₽ (2026-07-16) < 0.2% → п.4 при удвоенной комиссии -commission 0.001 (прецедент VSMO/MTLRP: ужесточение только при круге ≥ 0.2%). Дивидендные отсечки в окне (GetDividends, объявлены до прогонов; первый день без дивиденда): 2026-07-09 (last_buy 07-08, 0.18 ₽ ≈ 0.4%) — единственная. EMA 600 — потолок: Lookback 2·600+20 = 1220 баров ≈ 3.5% окна. Окно запрета входа Пн–Чт 10:00–14:00 MSK (EntryBlockFrom 1000, EntryBlockTo 1400, EntryBlockMonThu 1) — общее правило вселенной rsi_zone с 2026-10-06, не ось: прибито одним значением в каждой фазе, «дефолты ядра»/baseline здесь = дефолты ядра плюс окно. Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker SOFL -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/sofl/point.json -out ./reports/SOFL_zone/r20261007/point2_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker SOFL -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/sofl/point.json -out ./reports/SOFL_zone/r20261007/point2_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker SOFL -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/sofl/point.json -out ./reports/SOFL_zone/r20261007/point2_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; удвоенная комиссия -commission 0.001 — go run ./cmd/backtest -ticker SOFL -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/sofl/point.json -out ./reports/SOFL_zone/r20261007/point2_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-07 (36/12/6, 4 фолда, отчёт reports/SOFL_zone/r20261007/point2_*): ИТОГ — точка второго круга = литерал SOFL. Литерал: дефолты ядра + окно + EMAPeriod 38 (cal2_trend 3/4), DailyATRPeriod 5 (cal2_risk 3/4); RSI 4/25/75 и стоп 1.0 — дефолты; гейт стохастика, STUCK, PROFIT выключены. Полное окно 70 сделок PF 2.906, net +55 768 ₽ (55.77%), DD 8 929 ₽ (6.76%) против baseline 19 314 ₽ (14.97%), win 70.0%, expectancy 797 ₽, выходы RSI 66 / SL 4 (5.7% против 9.2%; удержание 13.5/32/65 против 15/41/115 — капкана стопа нет, ночёвок 68.6% против 63.2%). Годы 2024 +12.6k, 2025 +12.1k, 2026 +28.0k; убыточных полугодий нет (2026H1 +0.1k — безубыточное). WF 36/12/6 2.857/52, compounded +43.59% (фолды 5.533/9, 2.353/17, 0.849/12, 4.425/14); контроль 36/18/6 2.596/43 (+34.45%); -commission 0.001 2.419/52 (+34.55%). Семь пунктов: 1) 2.857 — да; 2) 52 ≥ 20 — да; 3) 2.596 — да; 4) удвоенная комиссия 2.419 (реальный круг 0.106% < 0.2%, прецедент VSMO/MTLRP) — да; 5) 2024/2025/2026 в плюсе — да; 6) хвост 6 (вход с 2026-04-07) 14 сделок PF 4.433, хвост 12 (с 2025-10-07) 26 сделок PF 2.793; знак хвоста 6 совпадает со знаком фолдов 3+4 (PF 2.70) — да; 7) входов в выходные 0, через отсечку 2026-07-09 0 — да. Точка против дефолтов (тот же день): основная 2.857 против 1.335, контроль 2.596 против 1.123, комиссия 2.419 против 1.129, DD 6.76% против 14.97% — точка побеждает. Плато: EMAPeriod 30/38/50 → WF 6.505/29 (фолд 4 вырожден, 39 сделок за окно), 2.857/52, 1.715/71 — рельеф монотонный по длине EMA (короче — выше PF и тоньше пул), 38 — голосованное значение с полным пулом; DailyATRPeriod 4/5/6 → 2.648, 2.857, 2.901 (6 выше на 0.044 < 0.05: DD 6.64% против 6.76%, но в рублях 9 007 против 8 929 ₽ — ничья по просадке, убыточных полугодий нет у обоих → оставлено голосованное 5; плато плоское, сигнал ATR слабый). Риски: концентрация — топ-5 сделок 55.3% net, 2026-07…08 +27.9k ₽ = 50% net; фолд 3 (OOS 2025-10…2026-04) убыточен 0.849/12; редкий вход (≈2 сделки в месяц, фолд 1 — 9 сделок); режим — бумага −77% за окно (199 → 45.8 ₽, минимум 37.78), ликвидность падает (память rsi_pullback).",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          38
+        ],
+        "DailyATRPeriod": [
+          5
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ],
+        "EntryBlockFrom": [
+          1000
+        ],
+        "EntryBlockTo": [
+          1400
+        ],
+        "EntryBlockMonThu": [
+          1
+        ]
+      }
+    }
+  ]
+}
