@@ -1,0 +1,49 @@
+{
+  "_comment": "Точка первого круга (итоговая): RSIPeriod 2 и RSILower 5 — entry 4/4; гейт стохастика выключен проверкой §4.7 (point_stoch.json не лучше точки без него на 0.05); RSIUpper, EMA, стоп/ATR, STUCK, PROFIT — без большинства, дефолты ядра. Калибровка rsi_zone на SFIN по /rsi-zone-calibrate (2026-10-07, онбординг /rsi-zone-onboard, пакетный режим); окно запрета входа Пн–Чт 10:00–14:00 включено (общее правило вселенной с 2026-10-06, не ось). Окно 2023-10-07 … 2026-10-07, канон 36/12/6 (4 фолда), контроль 36/18/6, п.4 при -commission 0.001 (круг 0.153% при минимуме окна < 0.2%), дивидендные отсечки 2023-12-14, 2024-06-15, 2024-12-21, 2025-06-07, 2025-12-25 (≈−48%), 2026-05-15 — сделок через них 0 обязательно (п.7). Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker SFIN -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/sfin/point.json -out ./reports/SFIN_zone/r20261007/point_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker SFIN -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/sfin/point.json -out ./reports/SFIN_zone/r20261007/point_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker SFIN -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/sfin/point.json -out ./reports/SFIN_zone/r20261007/point_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; удвоенная комиссия — go run ./cmd/backtest -ticker SFIN -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/sfin/point.json -out ./reports/SFIN_zone/r20261007/point_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-07: ТОЧКА (итоговый литерал; дефолты ядра + RSIPeriod 2, RSILower 5; stoch/STUCK/PROFIT выключены; окно Пн–Чт 10–14 включено). WF 36/12/6 1.706/127, compounded +34.45% (фолды 2.976/33, 1.124/37, 1.847/27, 1.298/30 — все > 1); контроль 36/18/6 1.376/94; комиссия 0.001 1.324/127. Полное окно 162 сделки PF 1.987, net +77.9k ₽ (+77.91%), DD 19 198 ₽ (11.05%) против 38 137 ₽ (30.84%) у baseline — гейт просадки пройден; win 73.5%, expectancy 481 ₽; выходы RSI 158 (+102.6k) / SL 4 (−24.7k); удержание 5/12/24 бара, ночёвок 27.2% (baseline 14/37/85, 59.6%) — доля SL упала вместе с удержанием, капкана нет (стоп не менялся). Годы 2024 +49.2k, 2025 +17.5k, 2026 +9.3k (2023 огрызок +1.9k); полугодия все в плюс; хвост 6 мес 30 сделок PF 1.296, хвост 12 мес 58 PF 1.555; сверка знака хвоста 6: фолды 3+4 → PF 1.546, знаки совпадают. Сделок через отсечки 0 (ближайшие выходы — 2024-12-20 10:30 и 2025-06-06 22:30, в последний день с дивидендом), входов в выходные 0. Стоп-условие: все 7 пунктов пройдены. Плато: RSIPeriod 3 — обрыв до 28 сделок за окно (WF 1.223/24, 2026 −3.1k), RSILower 10 — WF 1.162/266, контроль 0.875, 2025 −9.2k; зонд за краем RSILower 2.5 — WF 3.516/54, DD 7.63%, но −58% сделок и net +44.6k против +77.9k: не голосовался, голос фолдов 5 не перевыбирается по OOS зонда (прецедент MTSS/SMLT). Пик узкий — главный риск. Точка против дефолтов: WF 1.706 против 0.967, контроль 1.376 против 0.845, комиссия 1.324 против 0.833, DD 11.05% против 30.84% — точка побеждает. Концентрация: февраль 2024 +25.0k (32% net). Дивидендный риск статистический, не структурный — ручной контроль.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          2
+        ],
+        "RSILower": [
+          5
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ],
+        "EntryBlockFrom": [
+          1000
+        ],
+        "EntryBlockTo": [
+          1400
+        ],
+        "EntryBlockMonThu": [
+          1
+        ]
+      }
+    }
+  ]
+}

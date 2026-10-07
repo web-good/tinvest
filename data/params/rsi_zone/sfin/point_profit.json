@@ -1,0 +1,49 @@
+{
+  "_comment": "Зонд PROFIT поверх точки (§4.1 б, §4.7): тема profit без большинства по ProfitExitPct (1/0.75/0.3/0) → общий зонд ProfitExitBars 3 · ProfitExitPct 0.5. Калибровка rsi_zone на SFIN по /rsi-zone-calibrate (2026-10-07, онбординг /rsi-zone-onboard, пакетный режим); окно запрета входа Пн–Чт 10:00–14:00 включено (общее правило вселенной с 2026-10-06, не ось). Окно 2023-10-07 … 2026-10-07, канон 36/12/6 (4 фолда), контроль 36/18/6, п.4 при -commission 0.001 (круг 0.153% при минимуме окна < 0.2%), дивидендные отсечки 2023-12-14, 2024-06-15, 2024-12-21, 2025-06-07, 2025-12-25 (≈−48%), 2026-05-15 — сделок через них 0 обязательно (п.7). Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker SFIN -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/sfin/point_profit.json -out ./reports/SFIN_zone/r20261007/point_profit_full -months 36 -min-trades 1 -metric profit_factor; walk-forward 36/12/6 — go run ./cmd/backtest -ticker SFIN -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/sfin/point_profit.json -out ./reports/SFIN_zone/r20261007/point_profit_wf -months 36 -train-months 12 -test-months 6 -min-trades 1 -metric profit_factor; контроль 36/18/6 — go run ./cmd/backtest -ticker SFIN -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/sfin/point_profit.json -out ./reports/SFIN_zone/r20261007/point_profit_ctrl -months 36 -train-months 18 -test-months 6 -min-trades 1 -metric profit_factor; удвоенная комиссия — go run ./cmd/backtest -ticker SFIN -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/sfin/point_profit.json -out ./reports/SFIN_zone/r20261007/point_profit_comm -months 36 -train-months 12 -test-months 6 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-07: зонд PROFIT 3·0.5 поверх точки: WF 1.722/128 (+36.06%), контроль 1.415/95 (+18.90%), комиссия 1.328, полное окно 163 сделки PF 2.223, net +90.9k, DD 17 998 ₽ (9.77%); выходов PROFIT 5. §4.7: pooled выше точки лишь на 0.016 < 0.05 → провален, ProfitExitBars/ProfitExitPct = 0.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          2
+        ],
+        "RSILower": [
+          5
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          3
+        ],
+        "ProfitExitPct": [
+          0.5
+        ],
+        "EntryBlockFrom": [
+          1000
+        ],
+        "EntryBlockTo": [
+          1400
+        ],
+        "EntryBlockMonThu": [
+          1
+        ]
+      }
+    }
+  ]
+}
