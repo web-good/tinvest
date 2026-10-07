@@ -1,0 +1,53 @@
+{
+  "_comment": "Тема trend2: EMAPeriod 30,40,50,60,75 (5 узлов); источник EMAPeriod. Голоса первого круга: 50/50/50/50. Второй круг калибровки rsi_zone на HEAD (2026-10-07, онбординг /rsi-zone-onboard, пакетный режим): первый круг провален — точка (дефолты + RSILower 15, RSIUpper 55, EMA 50, STUCK 2) дала 15 сделок за полное окно, пул OOS 6 (п.2), полное окно PF 0.713, 2024 в минусе; дефолты ядра + окно тоже провалены (п.5: 2025 −8.1k ₽; п.7: сделка через отсечку 2025-09-26). Зоны — по фактическим голосам фолдов первого круга, шаг — половина шага первого круга, каждое поле свипует ровно одна тема (связка забирает свои поля), четыре темы. Несвипуемые поля прибиты к дефолтам ядра + окно запрета входа Пн–Чт 10:00–14:00 (а не к провалившейся точке — прецедент DIAS 15m: связка голосов разных тем схлопывает сделки). Поля risk (StopDailyATR, DailyATRPeriod) во втором круге не свипуются: голоса первого круга 0.3/0.3/2.5/1.25 и 30/21/5/30 не дают зоны — остаются на дефолтах. Окно 2024-10-07 … 2026-10-07, схема 24/12/3 (4 фолда), -min-trades 20. Запуск: go run ./cmd/backtest -ticker HEAD -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/head/cal2_trend.json -out ./reports/HEAD_zone/r20261007/cal2_trend -months 24 -train-months 12 -test-months 3 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-07: pooled 3.141/31 (+15.01%); фолды 1.786/5, 8.542/5, 1.670/12, 20.066/9; EMAPeriod 40/50/50/40 — ничья 2/2 → 200 (дефолт).",
+  "phases": [
+    {
+      "name": "trend2",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          25
+        ],
+        "RSIUpper": [
+          75
+        ],
+        "EMAPeriod": [
+          30,
+          40,
+          50,
+          60,
+          75
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ],
+        "EntryBlockFrom": [
+          1000
+        ],
+        "EntryBlockTo": [
+          1400
+        ],
+        "EntryBlockMonThu": [
+          1
+        ]
+      }
+    }
+  ]
+}

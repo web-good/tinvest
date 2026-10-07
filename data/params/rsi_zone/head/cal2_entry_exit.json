@@ -1,0 +1,60 @@
+{
+  "_comment": "Тема entry_exit2: RSIPeriod 2,3,4 × RSILower 5–17.5 шаг 2.5 × RSIUpper 50–60 шаг 2.5 (90 узлов); источник RSIPeriod/RSILower/RSIUpper. Голоса первого круга: entry RSIPeriod 2/2/2/2, RSILower 10/5/5/5; entry_exit RSIPeriod 8/4/4/4, RSILower 35/15/15/15, RSIUpper 60/55/55/55; exit RSIUpper 55/50/55/50. Второй круг калибровки rsi_zone на HEAD (2026-10-07, онбординг /rsi-zone-onboard, пакетный режим): первый круг провален — точка (дефолты + RSILower 15, RSIUpper 55, EMA 50, STUCK 2) дала 15 сделок за полное окно, пул OOS 6 (п.2), полное окно PF 0.713, 2024 в минусе; дефолты ядра + окно тоже провалены (п.5: 2025 −8.1k ₽; п.7: сделка через отсечку 2025-09-26). Зоны — по фактическим голосам фолдов первого круга, шаг — половина шага первого круга, каждое поле свипует ровно одна тема (связка забирает свои поля), четыре темы. Несвипуемые поля прибиты к дефолтам ядра + окно запрета входа Пн–Чт 10:00–14:00 (а не к провалившейся точке — прецедент DIAS 15m: связка голосов разных тем схлопывает сделки). Поля risk (StopDailyATR, DailyATRPeriod) во втором круге не свипуются: голоса первого круга 0.3/0.3/2.5/1.25 и 30/21/5/30 не дают зоны — остаются на дефолтах. Окно 2024-10-07 … 2026-10-07, схема 24/12/3 (4 фолда), -min-trades 20. Запуск: go run ./cmd/backtest -ticker HEAD -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/head/cal2_entry_exit.json -out ./reports/HEAD_zone/r20261007/cal2_entry_exit -months 24 -train-months 12 -test-months 3 -min-trades 20 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-07: pooled 3.776/33 (+9.26%); фолды 5.678/4 (вырожден), 5.803/8, 0.545/5, 5.247/16; RSIPeriod 4 во всех фолдах, RSILower 17.5/15/15/15, RSIUpper 52.5/55/55/55 — три живых фолда единогласно 15 / 55 → RSILower 15, RSIUpper 55. Планка не взята (фолд 3 < 1).",
+  "phases": [
+    {
+      "name": "entry_exit2",
+      "grid": {
+        "RSIPeriod": [
+          2,
+          3,
+          4
+        ],
+        "RSILower": [
+          5,
+          7.5,
+          10,
+          12.5,
+          15,
+          17.5
+        ],
+        "RSIUpper": [
+          50,
+          52.5,
+          55,
+          57.5,
+          60
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ],
+        "EntryBlockFrom": [
+          1000
+        ],
+        "EntryBlockTo": [
+          1400
+        ],
+        "EntryBlockMonThu": [
+          1
+        ]
+      }
+    }
+  ]
+}

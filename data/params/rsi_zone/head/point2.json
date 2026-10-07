@@ -1,0 +1,49 @@
+{
+  "_comment": "ТОЧКА второго круга HEAD (итоговый литерал): дефолты ядра + RSILower 15, RSIUpper 55 (entry_exit2: фолд 1 вырожден — 4 сделки, три живых фолда единогласно 15/55; RSIPeriod 4 во всех фолдах = дефолт); EMAPeriod — trend2 40/50/50/40, ничья 2/2 → 200 (дефолт); risk не свипался (нет зоны) → стоп 1.0, ATR 14; STUCK (stuck2 3/4 за 2) выключен проверкой §4.7 (point2_stuck.json); PROFIT (profit2: ProfitExitBars 2 3/4, ProfitExitPct 0.4/0.3/0.3/0.4 — ничья → общий зонд 3·0.5) выключен проверкой §4.7 (point2_profit.json); stoch выключен (тема 1.619 ниже baseline 2.059). Калибровка rsi_zone на HEAD по /rsi-zone-calibrate (2026-10-07, онбординг /rsi-zone-onboard, пакетный режим); окно запрета входа Пн–Чт 10:00–14:00 включено (общее правило вселенной с 2026-10-06, не ось). Окно 2024-10-07 … 2026-10-07 (однородная история HEAD после редомициляции HHRU), схема 24/12/3 (4 фолда), контроль 24/15/3, п.4 при -commission 0.001 (круг 0.091% при минимуме окна < 0.2%), дивидендные отсечки 2024-12-17 (22.8%), 2025-09-26 (6.4%), 2026-05-12 (8.0%), 2026-09-26 (6.9%) — сделок через них 0 обязательно (п.7). Запуск (строго последовательно): полное окно — go run ./cmd/backtest -ticker HEAD -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/head/point2.json -out ./reports/HEAD_zone/r20261007/point2_full -months 24 -min-trades 1 -metric profit_factor; walk-forward 24/12/3 — go run ./cmd/backtest -ticker HEAD -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/head/point2.json -out ./reports/HEAD_zone/r20261007/point2_wf -months 24 -train-months 12 -test-months 3 -min-trades 1 -metric profit_factor; контроль 24/15/3 — go run ./cmd/backtest -ticker HEAD -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/head/point2.json -out ./reports/HEAD_zone/r20261007/point2_ctrl -months 24 -train-months 15 -test-months 3 -min-trades 1 -metric profit_factor; удвоенная комиссия — go run ./cmd/backtest -ticker HEAD -strategy rsi_zone -interval Minutes30 -calibrate data/params/rsi_zone/head/point2.json -out ./reports/HEAD_zone/r20261007/point2_comm -months 24 -train-months 12 -test-months 3 -min-trades 1 -commission 0.001 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-07: ТОЧКА (итоговый литерал; дефолты ядра + RSILower 15, RSIUpper 55; stoch/STUCK/PROFIT выключены; окно Пн–Чт 10–14 включено). WF 24/12/3 3.619/31, compounded +8.51% (фолды 3.454/2 вырожден, 5.803/8, 0.545/5, 5.247/16); контроль 24/15/3 3.605/29; комиссия 0.001 2.244/31. Полное окно 61 сделка PF 1.649, net +8.5k ₽ (+8.46%), DD 7 724 ₽ (7.70%) против 17 559 ₽ (16.71%) у baseline — гейт просадки пройден; win 73.8%, expectancy 139 ₽; выходы RSI 60 / SL 1; удержание 5/13/24 бара, ночёвок 18.0% (baseline 15/37/87, 58.5%) — доля SL упала вместе с удержанием, капкана нет (стоп не менялся). Годы 2024 −4.6k (огрызок окна: 4 сделки окт–дек 2024 — не пункт), 2025 +5.4k, 2026 +7.6k; полугодия с 2025 все в плюс; хвост 6 мес 21 сделка PF 3.068, хвост 12 мес 31 PF 3.610; сверка знака хвоста 6: фолды 3+4 → PF ≈ 3.06, знаки совпадают. Сделок через отсечки 0 (выход 2025-09-25 23:30 — в последний день с дивидендом), входов в выходные 0. Стоп-условие: все 7 пунктов пройдены (п.1 3.619, п.2 31, п.3 3.605, п.4 2.244, п.5 2025/2026 в плюс, п.6 3.068/21 и 3.610, п.7 0/0). Планка не взята (фолд 3 0.545). Точка против дефолтов: WF 3.619 против 2.059, контроль 3.605 против 2.206, комиссия 2.244 против 1.571, DD 7.70% против 16.71% — точка побеждает (дефолты к тому же провалены п.5, п.7). Плато: RSILower 12.5/17.5 держат, RSIUpper 52.5 держит, 57.5 обрыв (2025 −0.5k, сделка через отсечку). Риски: пул 31, абсолютный доход мал, крутой правый край RSIUpper, дивидендная защита статистическая.",
+  "phases": [
+    {
+      "name": "point",
+      "grid": {
+        "RSIPeriod": [
+          4
+        ],
+        "RSILower": [
+          15
+        ],
+        "RSIUpper": [
+          55
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "UseStoch": [
+          0
+        ],
+        "StuckExitBars": [
+          0
+        ],
+        "ProfitExitBars": [
+          0
+        ],
+        "ProfitExitPct": [
+          0
+        ],
+        "EntryBlockFrom": [
+          1000
+        ],
+        "EntryBlockTo": [
+          1400
+        ],
+        "EntryBlockMonThu": [
+          1
+        ]
+      }
+    }
+  ]
+}
