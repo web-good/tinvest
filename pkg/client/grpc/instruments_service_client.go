@@ -34,6 +34,7 @@ type InstrumentsServiceClient interface {
 	GetBondCoupons(instrumentID string, from time.Time, to time.Time) ([]*pkgmodel.BondCoupon, error)
 	GetDividends(ctx context.Context, instrumentID string, from, to time.Time) ([]*pkgmodel.Dividend, error)
 	GetAssetFundamentals(ctx context.Context, assetUIDs []string) ([]*model.Fundamentals, error)
+	IndicativeUIDByTicker(ctx context.Context, ticker string) (string, error)
 }
 
 type instrumentsServiceClient struct {
@@ -113,6 +114,24 @@ func (c *instrumentsServiceClient) Shares(ctx context.Context) ([]*model.Share, 
 	}
 
 	return converter.ConvertSharesFromPb(resp.Instruments), nil
+}
+
+// IndicativeUIDByTicker ищет UID индекса или товара (справочник Indicatives) по тикеру —
+// например, IMOEX для буста доли раннера rsi_pullback. Справочник небольшой, фильтра на
+// стороне API нет, поэтому перебор здесь.
+func (c *instrumentsServiceClient) IndicativeUIDByTicker(ctx context.Context, ticker string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, listTimeout)
+	defer cancel()
+	resp, err := c.instrumentsAPI.Indicatives(ctx, &investapi.IndicativesRequest{}, NewRPCCredential(c.auth))
+	if err != nil {
+		return "", fmt.Errorf("failed to request indicatives: %w", err)
+	}
+	for _, in := range resp.GetInstruments() {
+		if in.GetTicker() == ticker {
+			return in.GetUid(), nil
+		}
+	}
+	return "", fmt.Errorf("indicative %s not found", ticker)
 }
 
 func (c *instrumentsServiceClient) ShareByID(ctx context.Context, id string) (*share.Share, error) {
