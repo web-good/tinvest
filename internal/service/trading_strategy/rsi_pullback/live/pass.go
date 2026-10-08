@@ -3,6 +3,7 @@ package live
 import (
 	"context"
 	"fmt"
+	"math"
 	"slices"
 	"sort"
 	"strings"
@@ -66,6 +67,11 @@ type passCtx struct {
 	stopByInstrument map[string]stoporders.ActiveStop
 	listErr          error
 	now              time.Time
+	// index — дневные закрытия IMOEX для буста доли, загружаются не больше раза за пасс;
+	// indexErr кэшируется вместе с ними, чтобы второй вход пасса не повторял упавший запрос.
+	indexLoaded bool
+	index       []float64
+	indexErr    error
 }
 
 func (s *service) pass(ctx context.Context) error {
@@ -354,17 +360,26 @@ func (s *service) buy(ctx context.Context, pc *passCtx, sl *slot, ticker string,
 	// спросит следующую по приоритету, и её боевой вход на этом баре не потеряется. Так
 	// бумажный режим ничего не блокирует — ради этого он и не пишет стейт (см. ниже).
 	paper := s.paperBesideLive(sl)
-	lots, ok, reason := sizing.Lots(sl.strat.BuyPct(), total, cash, sig.Price, sh.Lot)
+	boost := s.lagBoost(ctx, pc, sl, ticker, md)
+	lots, ok, reason := sizing.Lots(sl.strat.BuyPct()*boost.Mult, total, cash, sig.Price, sh.Lot)
 	if !ok {
 		sl.strat.Notify(notifier.Skip(sl.strat.Label(), ticker, reason))
 		return !paper, nil
+	}
+	note := boost.Note(s.lag.Days)
+	if note != "" {
+		// Бюджет буста не влез в свободный кэш: sizing.Lots урезал лоты до доступных.
+		lotCost := sig.Price * float64(sh.Lot)
+		if want := int64(math.Floor(sl.strat.BuyPct() * boost.Mult / 100 * total / lotCost)); lots < want {
+			note += " (урезано кэшем)"
+		}
 	}
 
 	// Бумажный вход при боевой соседке — только уведомление. Запись в стейте заняла бы
 	// тикер до чистки по freshEntryGrace и заблокировала бы боевой вход другой стратегии.
 	// Когда боевых стратегий на счёте нет вовсе, работает прежний dry-run: стейт пишется.
 	if paper {
-		sl.strat.Notify(notifier.Entry(sl.strat.Label(), ticker, sig.Price, lots, lots*int64(sh.Lot), true))
+		sl.strat.Notify(withNote(notifier.Entry(sl.strat.Label(), ticker, sig.Price, lots, lots*int64(sh.Lot), true), note))
 		return false, nil
 	}
 
@@ -412,7 +427,7 @@ func (s *service) buy(ctx context.Context, pc *passCtx, sl *slot, ticker string,
 	if err := pc.store.Save(pc.state); err != nil {
 		return true, fmt.Errorf("%s: save state after buy %s: %w", sl.strat.Name(), ticker, err)
 	}
-	sl.strat.Notify(notifier.Entry(sl.strat.Label(), ticker, fillPrice, filledLots, qty, !res.Placed))
+	sl.strat.Notify(withNote(notifier.Entry(sl.strat.Label(), ticker, fillPrice, filledLots, qty, !res.Placed), note))
 
 	pc.state[ticker] = s.placeInitialStop(ctx, pc, sl, ticker, sh, pc.state[ticker])
 	return true, nil

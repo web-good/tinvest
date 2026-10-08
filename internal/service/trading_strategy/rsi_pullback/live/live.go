@@ -18,12 +18,14 @@ import (
 	"tinvest/internal/service/trading_strategy/livecore/adapter"
 	"tinvest/internal/service/trading_strategy/livecore/candles"
 	"tinvest/internal/service/trading_strategy/livecore/executor"
+	"tinvest/internal/service/trading_strategy/livecore/lagboost"
 	"tinvest/internal/service/trading_strategy/livecore/notifier"
 	"tinvest/internal/service/trading_strategy/livecore/statestore"
 	"tinvest/internal/service/trading_strategy/livecore/stoporders"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/live/dto"
 	grpcmodel "tinvest/pkg/client/grpc/model"
 	"tinvest/pkg/client/telegram"
+	"tinvest/pkg/logger"
 )
 
 // alertLabel — заголовок операционных уведомлений; пакет notifier общий, и по сообщению
@@ -32,6 +34,9 @@ const alertLabel = "RSI Pullback"
 
 type instrumentsClient interface {
 	Shares(ctx context.Context) ([]*imodel.Share, error)
+	// IndicativeUIDByTicker — UID индекса для буста доли (LAG_BOOST_*); зовётся лениво,
+	// только при включённой опции и сигнале на вход.
+	IndicativeUIDByTicker(ctx context.Context, ticker string) (string, error)
 }
 
 type operationsClient interface {
@@ -77,6 +82,11 @@ type service struct {
 	// воспроизвести переносимо: право на запись отбирается правами каталога, а под root
 	// они не действуют. nil означает обычный FileStore по statePath.
 	store statestore.Store
+	// lag — настройки буста доли (LAG_BOOST_*), провалидированные в NewService: неверные
+	// числа выключают опцию с ERROR, а не роняют приложение.
+	lag lagboost.Config
+	// imoexUID — UID IMOEX, резолвится при первом нужном входе; ошибка не кэшируется.
+	imoexUID string
 }
 
 // slot — стратегия счёта со своими исполнителями: TradeEnabled у каждой свой.
@@ -121,6 +131,12 @@ func NewService(
 		s.anyLive = s.anyLive || st.TradeEnabled()
 	}
 	s.accountStops = stoporders.New(stops, cfg.AccountID, s.anyLive)
+	s.lag = lagboost.Config{Enabled: cfg.LagBoostEnabled, Mult: cfg.LagBoostMult,
+		Pct: cfg.LagBoostPct, Days: cfg.LagBoostDays}
+	if err := s.lag.Validate(); err != nil {
+		logger.ErrorContext(context.Background(), fmt.Sprintf("rsi_pullback: LAG_BOOST выключен — неверная настройка: %v", err))
+		s.lag.Enabled = false
+	}
 	return s
 }
 

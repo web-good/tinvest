@@ -23,6 +23,63 @@ func (_m *MockinstrumentsClient) EXPECT() *MockinstrumentsClient_Expecter {
 	return &MockinstrumentsClient_Expecter{mock: &_m.Mock}
 }
 
+// IndicativeUIDByTicker provides a mock function with given fields: ctx, ticker
+func (_m *MockinstrumentsClient) IndicativeUIDByTicker(ctx context.Context, ticker string) (string, error) {
+	ret := _m.Called(ctx, ticker)
+
+	if len(ret) == 0 {
+		panic("no return value specified for IndicativeUIDByTicker")
+	}
+
+	var r0 string
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) (string, error)); ok {
+		return rf(ctx, ticker)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string) string); ok {
+		r0 = rf(ctx, ticker)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, ticker)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockinstrumentsClient_IndicativeUIDByTicker_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'IndicativeUIDByTicker'
+type MockinstrumentsClient_IndicativeUIDByTicker_Call struct {
+	*mock.Call
+}
+
+// IndicativeUIDByTicker is a helper method to define mock.On call
+//   - ctx context.Context
+//   - ticker string
+func (_e *MockinstrumentsClient_Expecter) IndicativeUIDByTicker(ctx interface{}, ticker interface{}) *MockinstrumentsClient_IndicativeUIDByTicker_Call {
+	return &MockinstrumentsClient_IndicativeUIDByTicker_Call{Call: _e.mock.On("IndicativeUIDByTicker", ctx, ticker)}
+}
+
+func (_c *MockinstrumentsClient_IndicativeUIDByTicker_Call) Run(run func(ctx context.Context, ticker string)) *MockinstrumentsClient_IndicativeUIDByTicker_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockinstrumentsClient_IndicativeUIDByTicker_Call) Return(_a0 string, _a1 error) *MockinstrumentsClient_IndicativeUIDByTicker_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockinstrumentsClient_IndicativeUIDByTicker_Call) RunAndReturn(run func(context.Context, string) (string, error)) *MockinstrumentsClient_IndicativeUIDByTicker_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Shares provides a mock function with given fields: ctx
 func (_m *MockinstrumentsClient) Shares(ctx context.Context) ([]*model.Share, error) {
 	ret := _m.Called(ctx)
