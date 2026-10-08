@@ -108,6 +108,9 @@ func TestLagBoostDoublesLaggingTicker(t *testing.T) {
 	if !anyContains(sent, "Размер ×2: отстал от IMOEX на 10.0% за 5д") {
 		t.Fatalf("нет пометки буста, отправлено: %q", sent)
 	}
+	if anyContains(sent, "(урезано кэшем)") {
+		t.Fatalf("пометка урезания при достаточном кэше: %q", sent)
+	}
 }
 
 // Индекс недоступен — вход обычным размером, вход состоялся.

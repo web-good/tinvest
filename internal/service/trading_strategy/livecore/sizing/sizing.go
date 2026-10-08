@@ -17,7 +17,7 @@ func Lots(buyPct, accountValue, cash, price float64, lot int32) (int64, bool, st
 	}
 	lotCost := price * float64(lot)
 	budget := buyPct / 100 * accountValue
-	lots := int64(math.Floor(budget / lotCost))
+	lots := BudgetLots(buyPct, accountValue, price, lot)
 	if lots <= 0 {
 		return 0, false, fmt.Sprintf("бюджета %.2f не хватает на 1 лот (%.2f)", budget, lotCost)
 	}
@@ -29,4 +29,13 @@ func Lots(buyPct, accountValue, cash, price float64, lot int32) (int64, bool, st
 		lots = affordable
 	}
 	return lots, true, ""
+}
+
+// BudgetLots — сколько лотов даёт бюджет buyPct% от accountValue без учёта кэша. Та же
+// арифметика, что внутри Lots; при некорректных price/lot — 0.
+func BudgetLots(buyPct, accountValue, price float64, lot int32) int64 {
+	if price <= 0 || lot <= 0 {
+		return 0
+	}
+	return int64(math.Floor(buyPct / 100 * accountValue / (price * float64(lot))))
 }

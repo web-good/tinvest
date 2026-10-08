@@ -35,3 +35,23 @@ func TestLots(t *testing.T) {
 		})
 	}
 }
+
+func TestBudgetLots(t *testing.T) {
+	cases := []struct {
+		name              string
+		pct, total, price float64
+		lot               int32
+		want              int64
+	}{
+		{"обычный", 5, 1_000_000, 100, 1, 500},
+		{"лот 10", 5, 1_000_000, 100, 10, 50},
+		{"меньше лота", 0.001, 1_000_000, 100, 1, 0},
+		{"нулевая цена", 5, 1_000_000, 0, 1, 0},
+		{"нулевой лот", 5, 1_000_000, 100, 0, 0},
+	}
+	for _, c := range cases {
+		if got := BudgetLots(c.pct, c.total, c.price, c.lot); got != c.want {
+			t.Errorf("%s: BudgetLots = %d, want %d", c.name, got, c.want)
+		}
+	}
+}

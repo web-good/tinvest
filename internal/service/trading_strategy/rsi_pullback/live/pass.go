@@ -3,7 +3,6 @@ package live
 import (
 	"context"
 	"fmt"
-	"math"
 	"slices"
 	"sort"
 	"strings"
@@ -369,8 +368,7 @@ func (s *service) buy(ctx context.Context, pc *passCtx, sl *slot, ticker string,
 	note := boost.Note(s.lag.Days)
 	if note != "" {
 		// Бюджет буста не влез в свободный кэш: sizing.Lots урезал лоты до доступных.
-		lotCost := sig.Price * float64(sh.Lot)
-		if want := int64(math.Floor(sl.strat.BuyPct() * boost.Mult / 100 * total / lotCost)); lots < want {
+		if want := sizing.BudgetLots(sl.strat.BuyPct()*boost.Mult, total, sig.Price, sh.Lot); lots < want {
 			note += " (урезано кэшем)"
 		}
 	}
