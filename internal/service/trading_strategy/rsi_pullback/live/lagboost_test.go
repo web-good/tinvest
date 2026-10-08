@@ -113,6 +113,30 @@ func TestLagBoostDoublesLaggingTicker(t *testing.T) {
 	}
 }
 
+// Окно считается в будних днях: тикер упал 100→90 в среду 4 марта, а sharedNow — вторник
+// 10-го. Пять будних закрытий назад от понедельника 9-го — понедельник 2-го (100), лаг −10%,
+// буст. Если бы субботу 7-го и воскресенье 8-го считали днями, окно начиналось бы со среды
+// (90), и буст не сработал бы.
+func TestLagBoostWindowSkipsWeekends(t *testing.T) {
+	c := make([]float64, 60)
+	for i := range c {
+		c[i] = 100
+		if i >= 54 { // 4–9 марта
+			c[i] = 90
+		}
+	}
+	e := newSharedEnv(t, sharedNow, []string{"GAZP"}, boostOn)
+	e.instruments.EXPECT().Shares(mock.Anything).Return(sharesOf("GAZP"), nil)
+	e.instruments.EXPECT().IndicativeUIDByTicker(mock.Anything, "IMOEX").Return("uid-imoex", nil).Once()
+	e.expectTickerCandles("GAZP", pullback30m(sharedLastBar, 400), closesDailies(sharedNow, c...))
+	e.market.EXPECT().GetCandles(mock.Anything, isUID("uid-imoex"), mock.MatchedBy(isDay1),
+		mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(flatIndex(sharedNow), nil).Once()
+	runPass(t, e)
+	if got := e.state(t)["GAZP"].Quantity; got != 1000 {
+		t.Fatalf("Quantity = %d, want 1000 (окно в будних днях)", got)
+	}
+}
+
 // Индекс недоступен — вход обычным размером, вход состоялся.
 func TestLagBoostIndexFailureKeepsBaseSize(t *testing.T) {
 	e := newSharedEnv(t, sharedNow, []string{"GAZP"}, boostOn)

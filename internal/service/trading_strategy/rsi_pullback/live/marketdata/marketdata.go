@@ -17,6 +17,7 @@ import (
 	"tinvest/internal/domain/backtest"
 	"tinvest/internal/enum"
 	"tinvest/internal/service/trading_strategy/livecore/candles"
+	"tinvest/internal/service/trading_strategy/livecore/lagboost"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 )
 
@@ -147,7 +148,8 @@ var mskZone = func() *time.Location {
 // IndexDailyCloses — закрытия завершённых дневных свечей индекса (IMOEX для буста доли)
 // до MSK-полуночи now, oldest-first. Окно запроса — days·2+20 календарных дней, не меньше
 // 30: хватает на days торговых дней с праздниками. Сегодняшняя свеча отбрасывается даже с
-// IsComplete — иначе отставание тикера сравнивалось бы с живым индексом.
+// IsComplete — иначе отставание тикера сравнивалось бы с живым индексом. Дневки выходных
+// сессий (API отдаёт их и у IMOEX) отбрасываются: окно буста считается в будних днях.
 func IndexDailyCloses(ctx context.Context, c candles.CandleClient, uid string, days int,
 	now time.Time) ([]float64, error) {
 
@@ -164,7 +166,7 @@ func IndexDailyCloses(ctx context.Context, c candles.CandleClient, uid string, d
 	bound := time.Date(n.Year(), n.Month(), n.Day(), 0, 0, 0, 0, mskZone)
 	out := make([]float64, 0, len(cs))
 	for _, cd := range cs {
-		if cd.Time.Before(bound) {
+		if cd.Time.Before(bound) && !lagboost.IsWeekend(cd.Time) {
 			out = append(out, cd.Close)
 		}
 	}

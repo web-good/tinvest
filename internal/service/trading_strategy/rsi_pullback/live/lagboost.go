@@ -37,7 +37,7 @@ func (s *service) lagBoost(ctx context.Context, pc *passCtx, sl *slot, ticker st
 	if pc.indexErr != nil {
 		return lagboost.Decision{Mult: 1}
 	}
-	d := lagboost.Decide(md.DailyCloses, pc.index, s.lag)
+	d := lagboost.Decide(lagboost.WeekdayCloses(md.DailyCloses, md.DailyTimes), pc.index, s.lag)
 	if !d.Applied {
 		logger.InfoContext(ctx, fmt.Sprintf("%s: %s LAG_BOOST не применён: %s", sl.strat.Name(), ticker, d.Reason))
 	}

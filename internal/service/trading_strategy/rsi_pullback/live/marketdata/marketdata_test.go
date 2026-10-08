@@ -265,7 +265,7 @@ func (errClient) GetCandles(context.Context, *string, int32, *timestamppb.Timest
 	return nil, errors.New("down")
 }
 
-// IndexDailyCloses не должна отдавать сегодняшнюю свечу индекса: на входе в 12:01 MSK
+// IndexDailyCloses не должна отдавать сегодняшнюю свечу индекса и дневки выходных: на входе в 12:01 MSK
 // дневная свеча IMOEX уже существует (IsComplete=false, а у некоторых ответов API и true
 // после клиринга), и с ней буст сравнивал бы живой индекс со вчерашним тикером.
 func TestIndexDailyClosesDropsToday(t *testing.T) {
@@ -281,6 +281,7 @@ func TestIndexDailyClosesDropsToday(t *testing.T) {
 		day(6, 2000, true), day(9, 2010, true), day(5, 1990, true), // порядок перемешан нарочно
 		day(10, 2050, true), // сегодня — отбросить, даже если IsComplete
 		day(8, 9999, false), // незавершённая — отбросить
+		day(7, 5555, true),  // суббота — выходная сессия, отбросить
 	}}
 
 	got, err := IndexDailyCloses(context.Background(), f, "uid-imoex", 5, now)

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"time"
 )
 
 // Config — настройки LAG_BOOST_* (общие для раннера счёта rsi_pullback).
@@ -66,6 +67,39 @@ func Decide(tickerCloses, indexCloses []float64, c Config) Decision {
 		return Decision{Mult: c.Mult, Lag: lag, Applied: true}
 	}
 	return Decision{Mult: 1, Lag: lag, Reason: fmt.Sprintf("отставание %.2f п.п. не дотягивает до %v", -lag, c.Pct)}
+}
+
+// msk — календарь MOEX: выходной определяется по дню недели в Москве.
+var msk = func() *time.Location {
+	loc, err := time.LoadLocation("Europe/Moscow")
+	if err != nil {
+		return time.FixedZone("MSK", 3*3600)
+	}
+	return loc
+}()
+
+// IsWeekend — суббота или воскресенье по MSK. API отдаёт дневки выходных сессий и у акций,
+// и у IMOEX; исследование считало окно в будних днях (ряд индекса с ISS без выходных),
+// поэтому оба ряда перед Decide чистятся от выходных — иначе окно Days баров покрывает
+// 3–4 торговых дня вместо Days.
+func IsWeekend(t time.Time) bool {
+	wd := t.In(msk).Weekday()
+	return wd == time.Saturday || wd == time.Sunday
+}
+
+// WeekdayCloses оставляет закрытия будних дней. times выровнены с closes индекс в индекс;
+// при несовпадении длин возвращает nil — Decide ответит «мало истории», буст не сработает.
+func WeekdayCloses(closes []float64, times []time.Time) []float64 {
+	if len(closes) != len(times) {
+		return nil
+	}
+	out := make([]float64, 0, len(closes))
+	for i, c := range closes {
+		if !IsWeekend(times[i]) {
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 // Note — строка для уведомления о входе; пустая, если буст не применён.

@@ -2,8 +2,10 @@ package lagboost
 
 import (
 	"math"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 // series строит ряд закрытий длиной days+1: первая цена base, последняя base·(1+ret/100),
@@ -96,5 +98,23 @@ func TestNote(t *testing.T) {
 	}
 	if got := (Decision{Mult: 1}).Note(5); got != "" {
 		t.Fatalf("Note без буста = %q, want пусто", got)
+	}
+}
+
+func TestWeekdayCloses(t *testing.T) {
+	msk := time.FixedZone("MSK", 3*3600)
+	day := func(d int) time.Time { return time.Date(2026, 10, d, 0, 0, 0, 0, msk) }
+	// 2026-10-02 пятница, 03–04 выходные, 05 понедельник.
+	closes := []float64{1, 2, 3, 4}
+	times := []time.Time{day(2), day(3), day(4), day(5)}
+	if got := WeekdayCloses(closes, times); !slices.Equal(got, []float64{1, 4}) {
+		t.Fatalf("WeekdayCloses = %v, want [1 4]", got)
+	}
+	// Полночь понедельника MSK — это воскресенье в UTC: день недели берётся по Москве.
+	if IsWeekend(day(5).UTC()) {
+		t.Fatal("понедельник 00:00 MSK признан выходным")
+	}
+	if got := WeekdayCloses(closes, times[:3]); got != nil {
+		t.Fatalf("при несовпадении длин = %v, want nil", got)
 	}
 }
