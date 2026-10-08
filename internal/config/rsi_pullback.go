@@ -16,6 +16,14 @@ type RSIPullbackConfig struct {
 	TradeEnabled  bool     `config:"RSI_PULLBACK_TRADE_ENABLED,backend=env"`
 	NotifyEnabled bool     `config:"RSI_PULLBACK_NOTIFY_ENABLED,backend=env"`
 	Schedule      string   `config:"RSI_PULLBACK_SCHEDULE,backend=env"`
+	// LAG_BOOST_* — увеличенная доля входа rsi_pullback/rsi_zone, когда тикер за LagBoostDays
+	// завершённых дней отстал от IMOEX на LagBoostPct п.п. и больше (docs/rsi_pullback/live.md,
+	// раздел «Буст доли»). Общая настройка счёта, gap_fade не касается. Без `required`:
+	// неверные числа выключают опцию в раннере, а не роняют InitApp.
+	LagBoostEnabled bool    `config:"LAG_BOOST_ENABLED,backend=env"`
+	LagBoostMult    float64 `config:"LAG_BOOST_MULT,backend=env"`
+	LagBoostPct     float64 `config:"LAG_BOOST_PCT,backend=env"`
+	LagBoostDays    int     `config:"LAG_BOOST_DAYS,backend=env"`
 }
 
 // NewRSIPullbackConfig returns the config pre-seeded with safe defaults. confita
@@ -602,9 +610,12 @@ type RSIPullbackConfig struct {
 // замер говорит, что стоп при этом просто перестаёт существовать.
 func NewRSIPullbackConfig() *RSIPullbackConfig {
 	return &RSIPullbackConfig{
-		Tickers:  []string{"UGLD", "T", "GAZP", "DOMRF", "FESH", "WUSH", "LENT", "RENI", "NVTK", "LSNGP", "IVAT", "SVAV", "SIBN", "ELFV", "DIAS", "BSPB", "YDEX", "BANEP", "ASTR", "SNGSP", "NKHP", "SOFL", "TGKA", "VSMO", "SPBE", "MVID", "CNRU", "AQUA", "MAGN", "IRKT", "X5", "SFIN", "SVCB", "RAGR", "MDMG"},
-		BuyPct:   5,
-		Schedule: "1,31 6-23 * * *",
+		Tickers:      []string{"UGLD", "T", "GAZP", "DOMRF", "FESH", "WUSH", "LENT", "RENI", "NVTK", "LSNGP", "IVAT", "SVAV", "SIBN", "ELFV", "DIAS", "BSPB", "YDEX", "BANEP", "ASTR", "SNGSP", "NKHP", "SOFL", "TGKA", "VSMO", "SPBE", "MVID", "CNRU", "AQUA", "MAGN", "IRKT", "X5", "SFIN", "SVCB", "RAGR", "MDMG"},
+		BuyPct:       5,
+		Schedule:     "1,31 6-23 * * *",
+		LagBoostMult: 2,
+		LagBoostPct:  5,
+		LagBoostDays: 5,
 	}
 }
 

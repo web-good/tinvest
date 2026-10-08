@@ -107,3 +107,35 @@ func TestNewRSIPullbackConfig_TokenHasNoDefault(t *testing.T) {
 		t.Fatalf("default Token = %q, want empty (must come from RSI_PULLBACK_TOKEN env)", tok)
 	}
 }
+
+// LAG_BOOST по умолчанию выключен: отсутствующая переменная не должна менять размер
+// позиций. Числа по умолчанию — те, на которых опция измерена (×2, 5 п.п., 5 дней).
+func TestRSIPullbackConfigLagBoostDefaults(t *testing.T) {
+	for _, k := range []string{"LAG_BOOST_ENABLED", "LAG_BOOST_MULT", "LAG_BOOST_PCT", "LAG_BOOST_DAYS"} {
+		t.Setenv(k, "")
+		os.Unsetenv(k)
+	}
+	cfg := NewRSIPullbackConfig()
+	if err := confita.NewLoader(env.NewBackend()).Load(context.Background(), cfg); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.LagBoostEnabled || cfg.LagBoostMult != 2 || cfg.LagBoostPct != 5 || cfg.LagBoostDays != 5 {
+		t.Fatalf("дефолты = %v/%v/%v/%v, want false/2/5/5",
+			cfg.LagBoostEnabled, cfg.LagBoostMult, cfg.LagBoostPct, cfg.LagBoostDays)
+	}
+}
+
+func TestRSIPullbackConfigLagBoostFromEnv(t *testing.T) {
+	t.Setenv("LAG_BOOST_ENABLED", "true")
+	t.Setenv("LAG_BOOST_MULT", "1.5")
+	t.Setenv("LAG_BOOST_PCT", "4")
+	t.Setenv("LAG_BOOST_DAYS", "7")
+	cfg := NewRSIPullbackConfig()
+	if err := confita.NewLoader(env.NewBackend()).Load(context.Background(), cfg); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.LagBoostEnabled || cfg.LagBoostMult != 1.5 || cfg.LagBoostPct != 4 || cfg.LagBoostDays != 7 {
+		t.Fatalf("из env = %v/%v/%v/%v, want true/1.5/4/7",
+			cfg.LagBoostEnabled, cfg.LagBoostMult, cfg.LagBoostPct, cfg.LagBoostDays)
+	}
+}
