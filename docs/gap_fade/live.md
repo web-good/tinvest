@@ -140,6 +140,9 @@ BUY-сигнала и до сайзинга.
 | `GAP_FADE_NOTIFY_ENABLED` | `false` | уведомления в Telegram |
 | `TELEGRAM_TOPIC_GAP_FADE` | — | тема форума; не задана — сообщения идут в General |
 
+Общая опция счёта `LAG_BOOST_*` на gap_fade не действует: доля `GAP_FADE_BUY_PCT` не умножается
+никогда (буст измерен только на rsi_pullback и rsi_zone).
+
 Сообщения гостя идут с префиксом «[Gap Fade] » в тему `TELEGRAM_TOPIC_GAP_FADE`.
 
 ## 10. Пауза

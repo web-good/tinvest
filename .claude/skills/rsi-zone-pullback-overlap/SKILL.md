@@ -29,6 +29,9 @@ zone может занять тикер раньше pullback и вытесни�
   `/rsi-zone-calibrate` (или весь путь — скилл `rsi-zone-onboard`). Тикер должен быть в
   `rsi_zone/live/registry.go`, иначе live торговать его не сможет.
 - Доли счёта — `RSI_PULLBACK_BUY_PCT` и `RSI_ZONE_BUY_PCT` из `env/prod.env` (не дефолты из кода).
+- Если в `env/prod.env` `LAG_BOOST_ENABLED=true`, живой раннер умножает долю отставших от IMOEX
+  тикеров (см. `docs/rsi_pullback/live.md`, «Буст доли»). Модель overlap буст не воспроизводит —
+  указать это в вердикте одной строкой.
 
 ### 2. Два одиночных прогона одного дня
 
