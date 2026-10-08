@@ -133,3 +133,40 @@ func fetchDaily(ctx context.Context, c candles.CandleClient, instrumentID string
 	sort.Slice(out, func(a, b int) bool { return out[a].Time.Before(out[b].Time) })
 	return out, nil
 }
+
+// mskZone — граница «сегодня» для дневного ряда индекса: та же MSK-полночь, по которой
+// visibleDaily режет дневки тикера в AssembleMarketData.
+var mskZone = func() *time.Location {
+	loc, err := time.LoadLocation("Europe/Moscow")
+	if err != nil {
+		return time.FixedZone("MSK", 3*3600)
+	}
+	return loc
+}()
+
+// IndexDailyCloses — закрытия завершённых дневных свечей индекса (IMOEX для буста доли)
+// до MSK-полуночи now, oldest-first. Окно запроса — days·2+20 календарных дней, не меньше
+// 30: хватает на days торговых дней с праздниками. Сегодняшняя свеча отбрасывается даже с
+// IsComplete — иначе отставание тикера сравнивалось бы с живым индексом.
+func IndexDailyCloses(ctx context.Context, c candles.CandleClient, uid string, days int,
+	now time.Time) ([]float64, error) {
+
+	span := max(days*2+20, 30)
+	from := now.AddDate(0, 0, -span)
+	raw, err := c.GetCandles(ctx, &uid, enum.Day1.ToNumberInvestAPI(),
+		timestamppb.New(from), timestamppb.New(now), nil, true)
+	if err != nil {
+		return nil, fmt.Errorf("rsi_pullback marketdata: index daily candles: %w", err)
+	}
+	cs := candles.ToCandles(raw, true)
+	sort.Slice(cs, func(a, b int) bool { return cs[a].Time.Before(cs[b].Time) })
+	n := now.In(mskZone)
+	bound := time.Date(n.Year(), n.Month(), n.Day(), 0, 0, 0, 0, mskZone)
+	out := make([]float64, 0, len(cs))
+	for _, cd := range cs {
+		if cd.Time.Before(bound) {
+			out = append(out, cd.Close)
+		}
+	}
+	return out, nil
+}

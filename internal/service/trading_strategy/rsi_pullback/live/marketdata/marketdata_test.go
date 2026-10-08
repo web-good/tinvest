@@ -2,6 +2,8 @@ package marketdata
 
 import (
 	"context"
+	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -252,5 +254,47 @@ func TestAssembleUsesLastBarTimeNotNowForDailyBoundary(t *testing.T) {
 			t.Fatalf("DailyTimes includes the 9 March daily (%v); want it excluded — "+
 				"the day is not closed as of the last completed bar (%v)", dt, lastBar)
 		}
+	}
+}
+
+// errClient — клиент, у которого любой запрос свечей падает.
+type errClient struct{}
+
+func (errClient) GetCandles(context.Context, *string, int32, *timestamppb.Timestamp,
+	*timestamppb.Timestamp, *int32, bool) ([]*imodel.CandleItemTechAnalyse, error) {
+	return nil, errors.New("down")
+}
+
+// IndexDailyCloses не должна отдавать сегодняшнюю свечу индекса: на входе в 12:01 MSK
+// дневная свеча IMOEX уже существует (IsComplete=false, а у некоторых ответов API и true
+// после клиринга), и с ней буст сравнивал бы живой индекс со вчерашним тикером.
+func TestIndexDailyClosesDropsToday(t *testing.T) {
+	now := time.Date(2026, 3, 10, 12, 1, 0, 0, msk)
+	day := func(d int, c int64, done bool) *imodel.CandleItemTechAnalyse {
+		return &imodel.CandleItemTechAnalyse{
+			Time: time.Date(2026, 3, d, 0, 0, 0, 0, msk),
+			Open: q(c), High: q(c), Low: q(c), Close: q(c),
+			IsComplete: done,
+		}
+	}
+	f := &fakeClient{day: []*imodel.CandleItemTechAnalyse{
+		day(6, 2000, true), day(9, 2010, true), day(5, 1990, true), // порядок перемешан нарочно
+		day(10, 2050, true), // сегодня — отбросить, даже если IsComplete
+		day(8, 9999, false), // незавершённая — отбросить
+	}}
+
+	got, err := IndexDailyCloses(context.Background(), f, "uid-imoex", 5, now)
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	want := []float64{1990, 2000, 2010}
+	if !slices.Equal(got, want) {
+		t.Fatalf("= %v, want %v", got, want)
+	}
+}
+
+func TestIndexDailyClosesError(t *testing.T) {
+	if _, err := IndexDailyCloses(context.Background(), errClient{}, "uid-imoex", 5, time.Now()); err == nil {
+		t.Fatal("err = nil, want ошибку")
 	}
 }
