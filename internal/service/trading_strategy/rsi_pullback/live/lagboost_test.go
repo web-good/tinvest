@@ -141,6 +141,22 @@ func TestLagBoostIndexFetchedOncePerPass(t *testing.T) {
 	}
 }
 
+// Два входа в одном пассе при доступном индексе — UID и свечи IMOEX грузятся один раз, оба ×2.
+func TestLagBoostIndexReusedWithinPass(t *testing.T) {
+	e := newSharedEnv(t, sharedNow, []string{"GAZP", "T"}, boostOn)
+	e.instruments.EXPECT().Shares(mock.Anything).Return(sharesOf("GAZP", "T"), nil)
+	e.instruments.EXPECT().IndicativeUIDByTicker(mock.Anything, "IMOEX").Return("uid-imoex", nil).Once()
+	e.expectTickerCandles("GAZP", pullback30m(sharedLastBar, 400), laggingTicker(sharedNow))
+	e.expectTickerCandles("T", pullback30m(sharedLastBar, 400), laggingTicker(sharedNow))
+	e.market.EXPECT().GetCandles(mock.Anything, isUID("uid-imoex"), mock.MatchedBy(isDay1),
+		mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(flatIndex(sharedNow), nil).Once()
+	runPass(t, e)
+	st := e.state(t)
+	if st["GAZP"].Quantity != 1000 || st["T"].Quantity != 1000 {
+		t.Fatalf("Quantity = %d/%d, want 1000/1000", st["GAZP"].Quantity, st["T"].Quantity)
+	}
+}
+
 // Кэша хватает только на базовую долю — лоты урезаны, уведомление это говорит.
 func TestLagBoostCappedByCashIsReported(t *testing.T) {
 	e := newSharedEnv(t, sharedNow, []string{"GAZP"}, boostOn)

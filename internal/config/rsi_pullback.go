@@ -19,7 +19,9 @@ type RSIPullbackConfig struct {
 	// LAG_BOOST_* — увеличенная доля входа rsi_pullback/rsi_zone, когда тикер за LagBoostDays
 	// завершённых дней отстал от IMOEX на LagBoostPct п.п. и больше (docs/rsi_pullback/live.md,
 	// раздел «Буст доли»). Общая настройка счёта, gap_fade не касается. Без `required`:
-	// неверные числа выключают опцию в раннере, а не роняют InitApp.
+	// числа вне допустимого диапазона выключают опцию в раннере с ERROR, а не роняют InitApp;
+	// непарсимое значение (например, LAG_BOOST_MULT=abc) роняет загрузку конфига, как любое
+	// типизированное поле.
 	LagBoostEnabled bool    `config:"LAG_BOOST_ENABLED,backend=env"`
 	LagBoostMult    float64 `config:"LAG_BOOST_MULT,backend=env"`
 	LagBoostPct     float64 `config:"LAG_BOOST_PCT,backend=env"`

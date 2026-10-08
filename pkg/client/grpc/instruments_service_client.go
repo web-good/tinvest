@@ -120,7 +120,7 @@ func (c *instrumentsServiceClient) Shares(ctx context.Context) ([]*model.Share, 
 // например, IMOEX для буста доли раннера rsi_pullback. Справочник небольшой, фильтра на
 // стороне API нет, поэтому перебор здесь.
 func (c *instrumentsServiceClient) IndicativeUIDByTicker(ctx context.Context, ticker string) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, listTimeout)
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 	resp, err := c.instrumentsAPI.Indicatives(ctx, &investapi.IndicativesRequest{}, NewRPCCredential(c.auth))
 	if err != nil {

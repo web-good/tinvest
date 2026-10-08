@@ -19,6 +19,9 @@ func series(days int, base, retPct float64) []float64 {
 
 var on = Config{Enabled: true, Mult: 2, Pct: 5, Days: 5}
 
+// exact25 — порог 25 п.п.: цена 4→3 при плоском индексе даёт лаг ровно −25 в двоичной арифметике.
+var exact25 = Config{Enabled: true, Mult: 2, Pct: 25, Days: 5}
+
 func TestDecide(t *testing.T) {
 	cases := []struct {
 		name        string
@@ -30,8 +33,9 @@ func TestDecide(t *testing.T) {
 		wantReason  string // подстрока; "" — не проверяется
 	}{
 		{"отстал на 6 п.п.", series(5, 100, -4), series(5, 2000, 2), on, 2, true, ""},
-		{"ровно на пороге — буст", series(5, 100, -5), series(5, 2000, 0), on, 2, true, ""},
+		{"ровно на пороге — буст", series(5, 4, -25), series(5, 2000, 0), exact25, 2, true, ""},
 		{"чуть не дотянул", series(5, 100, -4.99), series(5, 2000, 0), on, 1, false, ""},
+		{"рядом с порогом 25 — не дотянул", series(5, 4, -24), series(5, 2000, 0), exact25, 1, false, ""},
 		{"тикер обогнал индекс", series(5, 100, 3), series(5, 2000, -3), on, 1, false, ""},
 		{"выключено", series(5, 100, -10), series(5, 2000, 0), Config{Mult: 2, Pct: 5, Days: 5}, 1, false, "выключено"},
 		{"мало истории у тикера", series(3, 100, -10), series(5, 2000, 0), on, 1, false, "истории"},
