@@ -6,6 +6,7 @@ import (
 
 	"tinvest/internal/enum"
 	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/core"
+	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/gazp"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 )
 
@@ -27,9 +28,10 @@ func dropBounceBindingFor(ticker string, defaults func() core.Params) Binding {
 	}
 }
 
-// dropBounceRegistry maps tickers with their own package to their 15m literal. Empty until a
-// ticker is calibrated.
-var dropBounceRegistry = map[string]func() core.Params{}
+// dropBounceRegistry maps tickers with their own package to their 15m literal.
+var dropBounceRegistry = map[string]func() core.Params{
+	gazp.Ticker: gazp.DefaultParams,
+}
 
 // DropBounceLookupOrGeneric returns the binding for a ticker: the ticker package's literal, or
 // core.DefaultParams when there is none. Partial JSON overrides layer over whichever defaults

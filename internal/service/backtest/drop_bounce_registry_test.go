@@ -5,6 +5,7 @@ import (
 
 	"tinvest/internal/enum"
 	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/core"
+	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/gazp"
 )
 
 func TestDropBounceGenericTickerUsesCoreDefaults(t *testing.T) {
@@ -41,5 +42,15 @@ func TestDropBounceParseParamsLayersOverDefaults(t *testing.T) {
 	got := parsed.(core.Params)
 	if got.MinDropPct != 2.5 || got.StopPct != core.DefaultParams().StopPct {
 		t.Fatalf("got %+v", got)
+	}
+}
+
+func TestDropBounceGAZPUsesItsLiteral(t *testing.T) {
+	b, err := DropBounceLookupOrGeneric("GAZP", enum.Minutes15)
+	if err != nil {
+		t.Fatalf("lookup: %v", err)
+	}
+	if got := b.DefaultParams().(core.Params); got != gazp.DefaultParams() {
+		t.Fatalf("defaults = %+v, want gazp.DefaultParams()", got)
 	}
 }
