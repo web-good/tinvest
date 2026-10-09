@@ -157,7 +157,9 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	return sig
 }
 
-// manage exits in priority order: the stop below the fill price; Task 3 adds the rest.
+// manage exits in priority order: the stop below the fill price (intrabar, filled by the engine at
+// min(stop, open)), then at the bar's close the fill-bar profit, the MACD green→red flip, the RSI
+// cross and the stochastic cross. There is no end-of-day exit.
 func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal {
 	pos := md.Position
 	n := len(md.Closes)
@@ -165,14 +167,75 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 		return sig
 	}
 	i := n - 1
-	entry := pos.PurchasePrice
+	entry, closeP := pos.PurchasePrice, md.Closes[i]
+	sell := func(reason, why string) model.Signal {
+		sig.Kind, sig.Reason = model.SignalSell, reason
+		sig.ExitReason = fmt.Sprintf("%s: %s, выход по %.4f (вход %.4f)", reason, why, closeP, entry)
+		return sig
+	}
 	if s.p.StopPct > 0 {
 		stop := entry * (1 - s.p.StopPct/100)
+		// The tiny epsilon keeps a low of exactly the stop from slipping on float rounding.
 		if md.Lows[i] <= stop+1e-9 {
 			sig.Kind, sig.Reason, sig.StopLoss = model.SignalSell, "SL", stop
 			sig.ExitReason = fmt.Sprintf("SL: low %.4f ≤ стоп %.4f (вход %.4f, −%.2f%%)", md.Lows[i], stop, entry, s.p.StopPct)
 			return sig
 		}
 	}
+	if s.p.ProfitPct > 0 && len(md.Times) == n && md.Times[i].Equal(pos.EntryTime) &&
+		closeP >= entry*(1+s.p.ProfitPct/100)-1e-9 {
+		return sell("PROFIT", fmt.Sprintf("бар входа закрылся на +%.2f%%", (closeP/entry-1)*100))
+	}
+	if s.p.MACDExit != 0 {
+		if m, sg := indicators.MACD(md.Closes, s.p.MACDFast, s.p.MACDSlow, s.p.MACDSignal); m != nil {
+			h := make([]float64, n)
+			for j := range h {
+				h[j] = m[j] - sg[j]
+			}
+			if greenThenRed(h, md.Times, pos.EntryTime) {
+				return sell("MACD", fmt.Sprintf("гистограмма %.4f — первый красный бар после зелёного", h[i]))
+			}
+		}
+	}
+	if s.p.RSIExit > 0 && s.p.RSIPeriod > 0 && n >= s.p.RSIPeriod+2 {
+		r := indicators.RSISeries(md.Closes, s.p.RSIPeriod)
+		if crossUp(r[i-1], r[i], s.p.RSIExit) {
+			return sell("RSI", fmt.Sprintf("RSI(%d) %.1f → %.1f пересёк %.0f вверх", s.p.RSIPeriod, r[i-1], r[i], s.p.RSIExit))
+		}
+	}
+	if s.p.StochExit > 0 {
+		_, k := indicators.StochasticSeries(md.Highs, md.Lows, md.Closes, s.p.StochPeriod, s.p.StochSmooth)
+		if m := len(k); m >= 2 && crossUp(k[m-2], k[m-1], s.p.StochExit) {
+			return sell("STOCH", fmt.Sprintf("%%K %.1f → %.1f пересёк %.0f вверх", k[m-2], k[m-1], s.p.StochExit))
+		}
+	}
 	return sig
 }
+
+// greenThenRed reports whether the histogram's last bar is red (< 0) and the latest non-zero bar
+// before it, among bars at or after entry, is green (> 0). A still-open position has not yet
+// seen a red bar after a green one — it would have exited — so this is exactly "the first red
+// after a green during the trade". Bars before entry never count; with an unknown entry or
+// misaligned times the whole window counts.
+func greenThenRed(h []float64, times []time.Time, entry time.Time) bool {
+	last := len(h) - 1
+	if last < 1 || h[last] >= 0 {
+		return false
+	}
+	checkEntry := !entry.IsZero() && len(times) == len(h)
+	for j := last - 1; j >= 0; j-- {
+		if checkEntry && times[j].Before(entry) {
+			return false
+		}
+		if h[j] > 0 {
+			return true
+		}
+		if h[j] < 0 {
+			return false
+		}
+	}
+	return false
+}
+
+// crossUp reports whether a series moved from below level to at or above it.
+func crossUp(prev, cur, level float64) bool { return prev < level && cur >= level }
