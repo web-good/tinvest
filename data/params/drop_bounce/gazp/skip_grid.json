@@ -1,0 +1,12 @@
+{
+  "_comment": "GAZP drop_bounce, 2026-10-09: пауза сигналов в середине дня поверх литерала таймфрейма — SkipFromHour × SkipToHour (from ≥ to = выключено). Гипотеза из разбора отчётов 152111/152139: свечи падения 10:00–14:00 МСК слабые на обоих таймфреймах. Minutes5 и Minutes15, 24 и 36 мес + rolling walk-forward 12+6.",
+  "phases": [
+    {
+      "name": "skip",
+      "grid": {
+        "SkipFromHour": [0, 10, 11, 12],
+        "SkipToHour": [11, 12, 13, 14]
+      }
+    }
+  ]
+}

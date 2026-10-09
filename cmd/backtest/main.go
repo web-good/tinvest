@@ -38,7 +38,7 @@ func main() {
 	var (
 		ticker       = flag.String("ticker", "", "ticker, e.g. RUAL (required)")
 		intervalS    = flag.String("interval", "Hour1", "candle timeframe: Minutes5|Minutes15|Minutes30|Hour1|Hour4|Day1|Week1")
-		strategyName = flag.String("strategy", "scalping", "strategy engine: scalping|reversion|scalping_rsimacd|rsi_ema|vwap_rev|rsi_pullback|rsi_zone|gap_fade")
+		strategyName = flag.String("strategy", "scalping", "strategy engine: scalping|reversion|scalping_rsimacd|rsi_ema|vwap_rev|rsi_pullback|rsi_zone|gap_fade|drop_bounce")
 		months       = flag.Int("months", 12, "lookback period in months")
 		cash         = flag.Float64("cash", 100000, "starting mock cash")
 		fraction     = flag.Float64("fraction", 1.0, "fraction of cash per Buy")
@@ -169,8 +169,14 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 		binding = svc.RSIZoneLookupOrGeneric(ticker)
 	case "gap_fade":
 		binding = svc.GapFadeLookupOrGeneric(ticker)
+	case "drop_bounce":
+		b, err := svc.DropBounceLookupOrGeneric(ticker, interval)
+		if err != nil {
+			return err
+		}
+		binding = b
 	default:
-		return fmt.Errorf("unknown strategy %q (want scalping|reversion|scalping_rsimacd|rsi_ema|vwap_rev|rsi_pullback|rsi_zone|gap_fade)", strategyName)
+		return fmt.Errorf("unknown strategy %q (want scalping|reversion|scalping_rsimacd|rsi_ema|vwap_rev|rsi_pullback|rsi_zone|gap_fade|drop_bounce)", strategyName)
 	}
 
 	share, err := resolveShare(ctx, client, ticker)
@@ -218,8 +224,12 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 	}
 
 	cfg := domain.Config{InitialCash: cash, Fraction: fraction, Commission: commission, Lot: share.Lot, RiskFractionPct: riskPct, HTFInterval: htfInterval,
-		// gap_fade triggers on the opening-auction print itself; the first price an order can get is the next bar's open.
-		EntryAtNextOpen: strategyName == "gap_fade"}
+		// gap_fade triggers on the opening-auction print itself and drop_bounce on a bar's close;
+		// either way the first price an order can get is the next bar's open.
+		EntryAtNextOpen: strategyName == "gap_fade" || strategyName == "drop_bounce",
+		// drop_bounce buys a bounce: a fill bar that already opens at the target (or at the stop)
+		// leaves nothing to trade but commission.
+		SkipFillOutsideLevels: strategyName == "drop_bounce"}
 	periodDays := to.Sub(from).Hours() / 24
 
 	if explain != "" {

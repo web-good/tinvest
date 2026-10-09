@@ -228,7 +228,7 @@ func Run(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Candl
 	var pending *model.Signal
 	for i := l - 1; i < len(candles); i++ {
 		p.bar = i
-		pending = fillPending(p, pending, candles[i])
+		pending = fillPending(p, cfg, pending, candles[i])
 		md := buildMarketData(candles[i-l+1 : i+1])
 		md.DailyCloses, md.DailyHighs, md.DailyLows, md.DailyTimes = daily.visible(candles[i].Time)
 		md.HTFCloses, md.HTFHighs, md.HTFLows = htf.visible(candles[i].Time)
@@ -282,10 +282,11 @@ func Run(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Candl
 }
 
 // fillPending opens a Buy deferred by Config.EntryAtNextOpen at bar c's open, before the bar is
-// managed, and clears it. A pending Buy with a position already open is dropped. Returns the new
-// pending state (always nil).
-func fillPending(p *portfolio, pending *model.Signal, c Candle) *model.Signal {
-	if pending != nil && p.qty == 0 {
+// managed, and clears it. A pending Buy with a position already open is dropped, and so is one
+// whose open lies outside its levels under Config.SkipFillOutsideLevels. Returns the new pending
+// state (always nil).
+func fillPending(p *portfolio, cfg Config, pending *model.Signal, c Candle) *model.Signal {
+	if pending != nil && p.qty == 0 && !(cfg.SkipFillOutsideLevels && openOutsideLevels(pending, c.Open)) {
 		p.open(c.Open, c.Time, pending.Level, pending.TakeProfit, pending.ATR, pending.StopLoss, pending.EntryReason)
 	}
 	return nil
@@ -312,7 +313,7 @@ func Trace(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Can
 	var pending *model.Signal
 	for i := l - 1; i < len(candles); i++ {
 		p.bar = i
-		pending = fillPending(p, pending, candles[i])
+		pending = fillPending(p, cfg, pending, candles[i])
 		md := buildMarketData(candles[i-l+1 : i+1])
 		md.DailyCloses, md.DailyHighs, md.DailyLows, md.DailyTimes = daily.visible(candles[i].Time)
 		md.HTFCloses, md.HTFHighs, md.HTFLows = htf.visible(candles[i].Time)
@@ -419,4 +420,10 @@ func AssembleMarketDataWithHTFInterval(window, daily, htf []Candle, cur time.Tim
 	md.DailyCloses, md.DailyHighs, md.DailyLows, md.DailyTimes = visibleDaily(daily, cur, mskLoc)
 	md.HTFCloses, md.HTFHighs, md.HTFLows = visibleCompletedHTF(htf, cur, htfSpan)
 	return md
+}
+
+// openOutsideLevels reports whether a fill at open would already sit at or beyond the signal's
+// target or stop, each checked only when set.
+func openOutsideLevels(sig *model.Signal, open float64) bool {
+	return (sig.TakeProfit > 0 && open >= sig.TakeProfit) || (sig.StopLoss > 0 && open <= sig.StopLoss)
 }

@@ -1,0 +1,14 @@
+{
+  "_comment": "GAZP drop_bounce, 2026-10-09: окрестность лучшей точки exit_grid.json (серия выключена, цель 0.5 тела) — порог цели × стоп × выход по времени; та же сетка идёт в rolling walk-forward.",
+  "phases": [
+    {
+      "name": "exit",
+      "grid": {
+        "DropSeries": [0],
+        "MinTargetPct": [0, 0.4, 0.5, 0.6],
+        "StopBody": [0.75, 1.0, 2.0],
+        "TimeExitBars": [2, 3]
+      }
+    }
+  ]
+}

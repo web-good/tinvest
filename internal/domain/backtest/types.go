@@ -31,6 +31,11 @@ type Config struct {
 	// signal bar's close is itself the trigger (an opening-auction print). The signal's levels
 	// stay frozen as decided; the fill bar is then managed like any other bar.
 	EntryAtNextOpen bool
+
+	// SkipFillOutsideLevels (with EntryAtNextOpen) drops a pending Buy whose fill bar opens at or
+	// above its frozen TakeProfit or at or below its frozen StopLoss (each only when set): the
+	// move the signal traded on has already played out, and the fill would only pay commission.
+	SkipFillOutsideLevels bool
 }
 
 // htfSpan returns the configured higher-timeframe bar span, defaulting to 4 hours so
