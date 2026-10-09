@@ -226,10 +226,7 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 	cfg := domain.Config{InitialCash: cash, Fraction: fraction, Commission: commission, Lot: share.Lot, RiskFractionPct: riskPct, HTFInterval: htfInterval,
 		// gap_fade triggers on the opening-auction print itself and drop_bounce on a bar's close;
 		// either way the first price an order can get is the next bar's open.
-		EntryAtNextOpen: strategyName == "gap_fade" || strategyName == "drop_bounce",
-		// drop_bounce buys a bounce: a fill bar that already opens at the target (or at the stop)
-		// leaves nothing to trade but commission.
-		SkipFillOutsideLevels: strategyName == "drop_bounce"}
+		EntryAtNextOpen: strategyName == "gap_fade" || strategyName == "drop_bounce"}
 	periodDays := to.Sub(from).Hours() / 24
 
 	if explain != "" {

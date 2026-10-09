@@ -95,7 +95,7 @@ func TestEngineConfirmEntersAfterConfirmation(t *testing.T) {
 		bar{"2026-09-14 10:15", 99.2, 99.6, 99.1, 99.5},
 	)
 	res := bt.Run(NewWithParams("TEST", p), toCandles(bars), nil, nil,
-		bt.Config{InitialCash: 1e6, Fraction: 1, Commission: 0, Lot: 1, EntryAtNextOpen: true, SkipFillOutsideLevels: true})
+		bt.Config{InitialCash: 1e6, Fraction: 1, Commission: 0, Lot: 1, EntryAtNextOpen: true})
 	if len(res.Trades) != 1 {
 		t.Fatalf("trades = %d, want 1: %+v", len(res.Trades), res.Trades)
 	}
