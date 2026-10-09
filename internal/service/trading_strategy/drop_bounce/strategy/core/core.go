@@ -18,8 +18,8 @@ import (
 	"tinvest/pkg/indicators"
 )
 
-// BarStep is the only timeframe drop_bounce runs on. It matters only for the entry window: the
-// fill bar starts one step after the signal bar and must lie on the same MSK date.
+// BarStep is the only timeframe drop_bounce runs on. It matters only for the entry: the fill bar
+// starts one step after the signal bar, must lie on the same MSK date, and bounds Signal.FillBy.
 const BarStep = 15 * time.Minute
 
 // minLookback keeps 16 hours of 15m bars so the indicators converge and the MACD scan sees the
@@ -152,6 +152,9 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 		return sig
 	}
 	sig.Kind = model.SignalBuy
+	// The fill must be the very next 15m slot: if that candle is missing from the data, the engine
+	// drops the signal rather than buying at a later session's open.
+	sig.FillBy = md.Times[i].Add(BarStep)
 	sig.EntryReason = fmt.Sprintf("DROP: open %.4f → close %.4f, падение %.2f%%, RSI(%d) %.1f < %.0f",
 		o, c, dropPct, p.RSIPeriod, rsi, p.RSIEntry)
 	return sig

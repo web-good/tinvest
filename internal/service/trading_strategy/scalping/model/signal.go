@@ -1,5 +1,7 @@
 package model
 
+import "time"
+
 // SignalKind enumerates the possible decisions per instrument.
 type SignalKind int
 
@@ -24,6 +26,10 @@ type Signal struct {
 	Reason         string  // exit reason code, e.g. "TP", "SL", "TRAIL", "ATRSL", "OB", "RSI50"; drives backtest fill pricing (see IsStopReason); ignored for entries
 	EntryReason    string  // human-readable entry rationale (set on Buy); empty for sells
 	ExitReason     string  // human-readable exit rationale (set on Sell); empty for buys
+	// FillBy is, for a Buy deferred by backtest Config.EntryAtNextOpen, the latest candle open
+	// time at which it may still fill; a pending Buy whose next candle opens later is dropped.
+	// Zero means no expiry.
+	FillBy time.Time
 }
 
 // IsStopReason reports whether reason is a stop-style exit. The list is

@@ -18,45 +18,78 @@ func toCandles(bars []bar) []bt.Candle {
 	return out
 }
 
-// runAfterDrop runs the engine over the oversold drop at Monday 13:00 followed by after and
-// returns the single trade. 50 flat bars lead the downtrend: the engine decides only from bar
-// Lookback()−1 (63) on, so the drop must sit past it (71 bars, the drop at index 70).
-func runAfterDrop(t *testing.T, after func(entry float64) []bar) (bt.Trade, float64) {
-	t.Helper()
-	bars := path("2026-09-13 19:30", dropAfter(append(flatN(50, 100), downtrend()...), 0.6))
-	entry := bars[len(bars)-1].c
-	bars = append(bars, after(entry)...)
-	res := bt.Run(NewWithParams("TEST", DefaultParams()), toCandles(bars), nil, nil,
+// dropBars is the oversold drop at index 70 (the drop bar starts at dropAt) led by 50 flat bars
+// and a downtrend: the engine decides only from bar Lookback()−1 (63) on, so the drop must sit
+// past it.
+func dropBars(dropAt string) []bar {
+	return path(at(dropAt).Add(-70*BarStep).Format("2006-01-02 15:04"), dropAfter(append(flatN(50, 100), downtrend()...), 0.6))
+}
+
+// runEngine runs drop_bounce through the engine with entries at the next bar's open.
+func runEngine(bars []bar) bt.Result {
+	return bt.Run(NewWithParams("TEST", DefaultParams()), toCandles(bars), nil, nil,
 		bt.Config{InitialCash: 1e6, Fraction: 1, Commission: 0, Lot: 1, EntryAtNextOpen: true})
+}
+
+// runAfterDrop runs the engine over the oversold drop at Monday 13:00 followed by after(signal
+// close) and returns the single trade with its fill price. The fill bar (the first of after) must
+// open away from the signal close so the entry check tells the next open from the signal close.
+func runAfterDrop(t *testing.T, after func(close float64) []bar) (bt.Trade, float64) {
+	t.Helper()
+	bars := dropBars("2026-09-14 13:00")
+	next := after(bars[len(bars)-1].c)
+	fill := next[0].o
+	res := runEngine(append(bars, next...))
 	if len(res.Trades) != 1 {
 		t.Fatalf("trades = %d, want 1: %+v", len(res.Trades), res.Trades)
 	}
 	tr := res.Trades[0]
-	if math.Abs(tr.EntryPrice-entry) > eps || !tr.EntryTime.Equal(at("2026-09-14 13:15")) {
-		t.Fatalf("entry %v @ %v, want %v @ 13:15 (next bar's open)", tr.EntryPrice, tr.EntryTime, entry)
+	if math.Abs(tr.EntryPrice-fill) > eps || !tr.EntryTime.Equal(at("2026-09-14 13:15")) {
+		t.Fatalf("entry %v @ %v, want %v @ 13:15 (next bar's open)", tr.EntryPrice, tr.EntryTime, fill)
 	}
-	return tr, entry
+	return tr, fill
 }
 
 func TestEngineOvernightGapStop(t *testing.T) {
-	tr, entry := runAfterDrop(t, func(e float64) []bar {
-		gap := e * 0.97
+	var gap float64
+	tr, fill := runAfterDrop(t, func(c float64) []bar {
+		f := c * 1.001
+		gap = f * 0.97
 		return []bar{
-			{at("2026-09-14 13:15"), e, e, e, e},
+			{at("2026-09-14 13:15"), f, f, f, f},
 			{at("2026-09-15 07:00"), gap, gap, gap * 0.999, gap},
 		}
 	})
-	if tr.Reason != "SL" || math.Abs(tr.ExitPrice-entry*0.97) > 1e-6 || !tr.ExitTime.Equal(at("2026-09-15 07:00")) {
-		t.Fatalf("exit %q @ %v %v, want SL at the gap open %v next morning", tr.Reason, tr.ExitPrice, tr.ExitTime, entry*0.97)
+	if gap >= fill*0.99 {
+		t.Fatalf("fixture: gap open %v must be below the stop %v", gap, fill*0.99)
+	}
+	if tr.Reason != "SL" || math.Abs(tr.ExitPrice-gap) > 1e-6 || !tr.ExitTime.Equal(at("2026-09-15 07:00")) {
+		t.Fatalf("exit %q @ %v %v, want SL at the gap open %v next morning", tr.Reason, tr.ExitPrice, tr.ExitTime, gap)
 	}
 }
 
 func TestEngineProfitOnFillBar(t *testing.T) {
-	tr, entry := runAfterDrop(t, func(e float64) []bar {
-		c := e * 1.012
-		return []bar{{at("2026-09-14 13:15"), e, c, e, c}}
+	tr, fill := runAfterDrop(t, func(c float64) []bar {
+		f := c * 1.001
+		return []bar{{at("2026-09-14 13:15"), f, f * 1.012, f, f * 1.012}}
 	})
-	if tr.Reason != "PROFIT" || math.Abs(tr.ExitPrice-entry*1.012) > 1e-6 {
-		t.Fatalf("exit %q @ %v, want PROFIT at the fill bar's close %v", tr.Reason, tr.ExitPrice, entry*1.012)
+	if tr.Reason != "PROFIT" || math.Abs(tr.ExitPrice-fill*1.012) > 1e-6 {
+		t.Fatalf("exit %q @ %v, want PROFIT at the fill bar's close %v", tr.Reason, tr.ExitPrice, fill*1.012)
+	}
+}
+
+// TestEngineDropsSignalWhenNextSlotMissing pins entry rule 3 against gaps in the data: a signal
+// on the 23:30 bar may fill only at 23:45; when that candle is missing the next candle is the
+// next morning and the signal is dropped instead of carrying over.
+func TestEngineDropsSignalWhenNextSlotMissing(t *testing.T) {
+	bars := dropBars("2026-09-14 23:30")
+	c := bars[len(bars)-1].c
+	bars = append(bars,
+		bar{at("2026-09-15 07:00"), c, c, c, c},
+		bar{at("2026-09-15 07:15"), c, c, c, c},
+	)
+	res := runEngine(bars)
+	if len(res.Trades) != 0 || res.BarsInMarket != 0 {
+		t.Fatalf("trades = %d, barsInMarket = %d, want no position: %+v", len(res.Trades), res.BarsInMarket, res.Trades)
 	}
 }

@@ -99,9 +99,13 @@ func TestDefaultParams(t *testing.T) {
 }
 
 func TestEnterBuysOversoldDrop(t *testing.T) {
-	sig := decide(DefaultParams(), path("2026-09-14 08:00", dropAfter(downtrend(), 0.6)))
+	bars := path("2026-09-14 08:00", dropAfter(downtrend(), 0.6))
+	sig := decide(DefaultParams(), bars)
 	if sig.Kind != model.SignalBuy {
 		t.Fatalf("kind = %v, want Buy", sig.Kind)
+	}
+	if want := bars[len(bars)-1].t.Add(BarStep); !sig.FillBy.Equal(want) {
+		t.Fatalf("FillBy = %v, want %v: the fill must be the very next 15m slot", sig.FillBy, want)
 	}
 	if sig.StopLoss != 0 || sig.TakeProfit != 0 {
 		t.Fatalf("levels = %v/%v, want none: they are measured from the fill", sig.StopLoss, sig.TakeProfit)
