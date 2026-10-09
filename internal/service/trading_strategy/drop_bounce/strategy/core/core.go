@@ -2,7 +2,8 @@
 // closes oversold. A bar falling at least MinDropPct percent from its open to its close, with
 // RSI(RSIPeriod) at its close below RSIEntry, signals a buy; the backtest fills it at the next
 // bar's open (Config.EntryAtNextOpen). Signals are taken on Mon–Fri MSK bars starting at or after
-// StartHour whose fill bar lies on the same date. Exits, in order: a stop StopPct below the fill
+// StartHour whose fill bar lies on the same date; an optional trend filter also requires the
+// signal bar's close above EMA(EMAPeriod). Exits, in order: a stop StopPct below the fill
 // price, a ProfitPct profit at the fill bar's close, the first red MACD histogram bar after a
 // green one closed during the trade, RSI crossing RSIExit upward, the smoothed stochastic %K
 // crossing StochExit upward. There is no end-of-day exit: positions carry overnight. Pure,
@@ -13,6 +14,7 @@ import (
 	"fmt"
 	"time"
 
+	"tinvest/internal/domain/ema"
 	"tinvest/internal/service/trading_strategy/scalping/model"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 	"tinvest/pkg/indicators"
@@ -45,6 +47,7 @@ type Params struct {
 	ProfitPct   float64 // sell when the fill bar closes this percent above the fill; 0 = off (default 1)
 	StopPct     float64 // stop this percent below the fill price; 0 = off (default 1)
 	StartHour   int     // signal bars must start at/after StartHour:00 MSK (default 8)
+	EMAPeriod   int     // entry needs the signal bar's close above EMA(EMAPeriod); 0 = off (default 0)
 }
 
 // DefaultParams returns the owner's initial configuration.
@@ -81,9 +84,11 @@ func NewWithParams(ticker string, p Params) *Strategy {
 func (s *Strategy) Ticker() string { return s.ticker }
 
 // Lookback is enough history for every indicator to converge (Wilder RSI and the EMA-based MACD
-// need several periods) plus the previous bar each cross compares against.
+// need several periods) plus the previous bar each cross compares against. The trend EMA seeds on
+// an SMA over its first EMAPeriod closes, so it gets twice its period plus a margin.
 func (s *Strategy) Lookback() int {
-	return max(minLookback, 4*s.p.RSIPeriod+2, 3*s.p.MACDSlow+s.p.MACDSignal+2, s.p.StochPeriod+s.p.StochSmooth+2)
+	return max(minLookback, 4*s.p.RSIPeriod+2, 3*s.p.MACDSlow+s.p.MACDSignal+2, s.p.StochPeriod+s.p.StochSmooth+2,
+		2*s.p.EMAPeriod+20)
 }
 
 // mskLoc anchors every calendar rule to Moscow (UTC fallback).
@@ -151,12 +156,24 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	if rsi >= p.RSIEntry {
 		return sig
 	}
+	trend := ""
+	if p.EMAPeriod > 0 {
+		// ema.Compute zero-fills the warm-up: too little history means no signal.
+		if n < p.EMAPeriod {
+			return sig
+		}
+		e := ema.Compute(md.Closes, p.EMAPeriod)[i]
+		if e <= 0 || c <= e {
+			return sig
+		}
+		trend = fmt.Sprintf(", close > EMA(%d) %.4f", p.EMAPeriod, e)
+	}
 	sig.Kind = model.SignalBuy
 	// The fill must be the very next 15m slot: if that candle is missing from the data, the engine
 	// drops the signal rather than buying at a later session's open.
 	sig.FillBy = md.Times[i].Add(BarStep)
-	sig.EntryReason = fmt.Sprintf("DROP: open %.4f → close %.4f, падение %.2f%%, RSI(%d) %.1f < %.0f",
-		o, c, dropPct, p.RSIPeriod, rsi, p.RSIEntry)
+	sig.EntryReason = fmt.Sprintf("DROP: open %.4f → close %.4f, падение %.2f%%, RSI(%d) %.1f < %.0f%s",
+		o, c, dropPct, p.RSIPeriod, rsi, p.RSIEntry, trend)
 	return sig
 }
 

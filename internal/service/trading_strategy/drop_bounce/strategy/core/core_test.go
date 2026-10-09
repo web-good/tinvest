@@ -221,3 +221,35 @@ func TestNoEODExit(t *testing.T) {
 		t.Fatalf("kind = %v %q, want None: positions carry overnight", sig.Kind, sig.Reason)
 	}
 }
+
+func TestEnterEMAFilter(t *testing.T) {
+	// 40 rising closes put EMA(20) far below a short dip; a downtrend puts it above the dip.
+	above := dropAfter(append(steps(100, 40, 0.5), steps(100*math.Pow(1.005, 40), 6, -0.3)...), 0.6)
+	below := dropAfter(steps(100, 40, -0.1), 0.6)
+	p := DefaultParams()
+	p.RSIEntry = 100 // isolate the trend filter from RSI
+	p.EMAPeriod = 20
+	if sig := decide(p, path("2026-09-14 08:00", above)); sig.Kind != model.SignalBuy {
+		t.Fatalf("kind = %v, want Buy: close is above EMA(20)", sig.Kind)
+	} else if !strings.Contains(sig.EntryReason, "EMA(20)") {
+		t.Fatalf("reason = %q, want the EMA value", sig.EntryReason)
+	}
+	if sig := decide(p, path("2026-09-14 08:00", below)); sig.Kind != model.SignalNone {
+		t.Fatalf("kind = %v, want None: close is below EMA(20)", sig.Kind)
+	}
+	if sig := decide(p, path("2026-09-14 08:00", below[len(below)-10:])); sig.Kind != model.SignalNone {
+		t.Fatalf("kind = %v, want None on EMA warm-up", sig.Kind)
+	}
+	p.EMAPeriod = 0
+	if sig := decide(p, path("2026-09-14 08:00", below)); sig.Kind != model.SignalBuy {
+		t.Fatalf("kind = %v, want Buy with the filter off", sig.Kind)
+	}
+}
+
+func TestLookbackCoversEMA(t *testing.T) {
+	p := DefaultParams()
+	p.EMAPeriod = 200
+	if got := NewWithParams("TEST", p).Lookback(); got < 2*200 {
+		t.Fatalf("Lookback = %d, want ≥ 400 for EMA(200)", got)
+	}
+}

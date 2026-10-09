@@ -1,7 +1,8 @@
 // Package gazp supplies the ticker and the 15m drop_bounce Params for GAZP (ПАО «Газпром»).
 //
-// Заведён 2026-10-09 по просьбе владельца до калибровки: литерал повторяет дефолты ядра числами,
-// чтобы бэктест GAZP не уезжал вместе с правкой core.DefaultParams. Калибровка не делалась —
+// Заведён 2026-10-09 по просьбе владельца до калибровки: литерал — дефолты ядра плюс фильтр тренда
+// EMA(200) на входе (владелец, 2026-10-09). Числа выписаны явно, чтобы бэктест GAZP не уезжал
+// вместе с правкой core.DefaultParams. Калибровка не делалась —
 // после неё сюда пишутся замеры, а в data/params/drop_bounce/gazp/ — сетки с _comment.
 package gazp
 
@@ -26,5 +27,6 @@ func DefaultParams() core.Params {
 		ProfitPct:   1,
 		StopPct:     1,
 		StartHour:   8,
+		EMAPeriod:   200,
 	}
 }
