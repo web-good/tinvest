@@ -81,8 +81,8 @@ func TestEngineRSIExit(t *testing.T) {
 	}
 }
 
-// Without daily volumes the engine-fed strategy has no average and never enters.
-func TestEngineNoDailyVolumeNoTrade(t *testing.T) {
+// Zero-volume dailies leave no average (they are discarded), so the engine-fed strategy never enters.
+func TestEngineZeroDailyVolumeNoTrade(t *testing.T) {
 	bars := append(spikeBars("2026-09-14 13:00"), bar{at("2026-09-14 13:15"), 99.7, 99.7, 99.7, 99.7})
 	candles := toCandles(bars, fixtureDayVol) // every bar trades a whole average day — if one were known
 	res := bt.Run(NewWithParams("TEST", step15, DefaultParams()), candles,

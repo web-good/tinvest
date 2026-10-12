@@ -208,7 +208,7 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	// The fill must be the very next slot: if that candle is missing from the data, the engine
 	// drops the signal rather than buying at a later session's open.
 	sig.FillBy = md.Times[i].Add(s.step)
-	sig.EntryReason = fmt.Sprintf("VOLUME: open %.4f → close %.4f, объём %d = %.2f× среднего дня (%.0f за %d дн., порог %.2f), дневной ATR %.4f",
+	sig.EntryReason = fmt.Sprintf("VOLUME: open %.4f → close %.4f, объём %d = %.2f× среднего дня (VolAvg %.0f, Уайлдер %d, порог %.2f), дневной ATR %.4f",
 		o, c, md.Volumes[i], ratio, avg, p.VolAvgPeriod, p.VolDailyMult, atr)
 	return sig
 }
