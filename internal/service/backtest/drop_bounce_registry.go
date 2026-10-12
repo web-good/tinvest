@@ -6,11 +6,6 @@ import (
 
 	"tinvest/internal/enum"
 	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/core"
-	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/domrf"
-	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/gazp"
-	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/ivat"
-	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/tbank"
-	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/wush"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 )
 
@@ -59,14 +54,10 @@ func (l dropBounceLiterals) forInterval(interval enum.Interval) (func() core.Par
 var genericDropBounce = dropBounceLiterals{core.DefaultParams, core.DefaultParams, core.DefaultParams, core.DefaultParams}
 
 // dropBounceRegistry maps tickers with their own package to their literals, one per timeframe:
-// a literal is tuned for its own timeframe and never leaks into another.
-var dropBounceRegistry = map[string]dropBounceLiterals{
-	gazp.Ticker:  {gazp.ParamsMinutes5, gazp.ParamsMinutes15, gazp.ParamsMinutes30, gazp.ParamsHour1},
-	domrf.Ticker: {domrf.ParamsMinutes5, domrf.ParamsMinutes15, domrf.ParamsMinutes30, domrf.ParamsHour1},
-	tbank.Ticker: {tbank.ParamsMinutes5, tbank.ParamsMinutes15, tbank.ParamsMinutes30, tbank.ParamsHour1},
-	ivat.Ticker:  {ivat.ParamsMinutes5, ivat.ParamsMinutes15, ivat.ParamsMinutes30, ivat.ParamsHour1},
-	wush.Ticker:  {wush.ParamsMinutes5, wush.ParamsMinutes15, wush.ParamsMinutes30, wush.ParamsHour1},
-}
+// a literal is tuned for its own timeframe and never leaks into another. Empty since the
+// 2026-10-12 volume-spike rework: the packages calibrated on the old rules were deleted, and a
+// ticker comes back here only after a calibration on the new ones.
+var dropBounceRegistry = map[string]dropBounceLiterals{}
 
 // DropBounceLookupOrGeneric returns the binding for a ticker on a timeframe: the ticker package's
 // literal for that timeframe, or core.DefaultParams when the ticker has no package. Partial JSON
