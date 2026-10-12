@@ -103,9 +103,11 @@ bars on 15m (several thousand on 5m) and RSI recomputes over the whole window ea
 - First commit: the current uncommitted ticker packages (`drop_bounce/strategy/{domrf,gazp,ivat,
   tbank,wush}`) and their grids/results `data/params/drop_bounce/<ticker>/` as an archive, so the
   old calibration stays in git history.
-- Then delete them. `internal/service/backtest/drop_bounce_registry.go` drops the per-ticker
-  registry: every ticker on every supported timeframe runs on `core.DefaultParams`; partial JSON
-  overrides still layer over it. Unsupported intervals are still rejected.
+- Then delete them. `internal/service/backtest/drop_bounce_registry.go` keeps the registry
+  mechanism (`dropBounceLiterals`, `forInterval`) with an empty `dropBounceRegistry` map, because
+  the `drop-bounce-calibrate` skill registers a new ticker package there right after its
+  calibration: for now every ticker on every supported timeframe runs on `core.DefaultParams`;
+  partial JSON overrides still layer over it. Unsupported intervals are still rejected.
 - New ticker packages come back only after a calibration on the new rules (the
   "ticker package always" rule applies then).
 
