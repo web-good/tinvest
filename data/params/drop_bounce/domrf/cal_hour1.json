@@ -1,0 +1,75 @@
+{
+  "_comment": "drop_bounce DOMRF Hour1: калибровка 2026-10-11, фазы entry → risk → exits (keepTop 3), сетка глубины падения под масштаб свечи. Запуск: go run ./cmd/backtest -ticker DOMRF -strategy drop_bounce -interval Hour1 -calibrate data/params/drop_bounce/domrf/cal_hour1.json -months 11 -train-months 6 -test-months 2 -min-trades 8 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-11 (история с 2025-11-20, -months 11): walk-forward 11/6/2 (-min-trades 8) pooled OOS PF 1.707 на 10 сделках; фолды 1.090 (5) / 4.552 (5) — выборка мала. In-sample (-min-trades 15): #1 PF 13.83/19 без стопа; вписана лучшая точка со стопом #17 PF 3.046/24, DD 3169 ₽ — 0.6/RSI(3)<20/EMA200, стоп 3, профит 0.5, MACD 1, RSIExit 75, Stoch 0.",
+  "phases": [
+    {
+      "name": "entry",
+      "keepTop": 3,
+      "grid": {
+        "MinDropPct": [
+          0.6,
+          1.0,
+          1.4,
+          2.0
+        ],
+        "RSIPeriod": [
+          3,
+          6,
+          9
+        ],
+        "RSIEntry": [
+          20,
+          25,
+          30
+        ],
+        "EMAPeriod": [
+          0,
+          100,
+          200
+        ]
+      }
+    },
+    {
+      "name": "risk",
+      "keepTop": 3,
+      "grid": {
+        "StopPct": [
+          0,
+          0.7,
+          1.0,
+          1.5,
+          2.0,
+          3.0
+        ],
+        "ProfitPct": [
+          0,
+          0.5,
+          1.0,
+          1.5,
+          2.0,
+          3.0
+        ]
+      }
+    },
+    {
+      "name": "exits",
+      "keepTop": 3,
+      "grid": {
+        "MACDExit": [
+          0,
+          1
+        ],
+        "RSIExit": [
+          0,
+          65,
+          70,
+          75
+        ],
+        "StochExit": [
+          0,
+          80,
+          90
+        ]
+      }
+    }
+  ]
+}

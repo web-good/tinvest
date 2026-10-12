@@ -1,0 +1,75 @@
+{
+  "_comment": "drop_bounce T Minutes15: калибровка 2026-10-11, та же сетка, что у GAZP/DOMRF (фазы entry → risk → exits, keepTop 3, глубина падения под масштаб свечи). Запуск: go run ./cmd/backtest -ticker T -strategy drop_bounce -interval Minutes15 -calibrate data/params/drop_bounce/t/cal_minutes15.json -months 36 -train-months 12 -test-months 6 -min-trades 10 -metric profit_factor (in-sample: без -train/-test, -min-trades 30). РЕЗУЛЬТАТ 2026-10-11: walk-forward pooled OOS PF 3.238 на 27 сделках, +13.74%; фолды 8.386 (11) / 0.562 (2) / 1.085 (2) / 4.710 (12). In-sample: #1 PF 4.642/35 без стопа (весь топ-20 без стопа); стоп подобран stop_minutes15.json — 3% даёт 3.566/35, вписан в литерал.",
+  "phases": [
+    {
+      "name": "entry",
+      "keepTop": 3,
+      "grid": {
+        "MinDropPct": [
+          0.4,
+          0.6,
+          0.8,
+          1.0
+        ],
+        "RSIPeriod": [
+          3,
+          6,
+          9
+        ],
+        "RSIEntry": [
+          20,
+          25,
+          30
+        ],
+        "EMAPeriod": [
+          0,
+          100,
+          200
+        ]
+      }
+    },
+    {
+      "name": "risk",
+      "keepTop": 3,
+      "grid": {
+        "StopPct": [
+          0,
+          0.7,
+          1.0,
+          1.5,
+          2.0,
+          3.0
+        ],
+        "ProfitPct": [
+          0,
+          0.5,
+          1.0,
+          1.5,
+          2.0,
+          3.0
+        ]
+      }
+    },
+    {
+      "name": "exits",
+      "keepTop": 3,
+      "grid": {
+        "MACDExit": [
+          0,
+          1
+        ],
+        "RSIExit": [
+          0,
+          65,
+          70,
+          75
+        ],
+        "StochExit": [
+          0,
+          80,
+          90
+        ]
+      }
+    }
+  ]
+}

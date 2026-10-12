@@ -1,0 +1,75 @@
+{
+  "_comment": "drop_bounce GAZP Hour1: калибровка 2026-10-11, фазы entry → risk → exits (keepTop 3), сетка глубины падения под масштаб свечи. Запуск: go run ./cmd/backtest -ticker GAZP -strategy drop_bounce -interval Hour1 -calibrate data/params/drop_bounce/gazp/cal_hour1.json -months 36 -train-months 12 -test-months 6 -min-trades 10 -metric profit_factor. РЕЗУЛЬТАТ 2026-10-11: walk-forward 36/12/6 (-min-trades 10) pooled OOS PF 1.289 на 40 сделках, +6.02%; фолды 1.746 (19) / 0.826 (13) / 0 сделок / 1.136 (8). In-sample 36 мес (-min-trades 30): #1 PF 2.813/65 без стопа; в литерал вписана лучшая точка со стопом #4 PF 2.706/65, DD 8533 ₽ — 0.6/RSI(3)<20/EMA100, стоп 3, профит 1, MACD 0, RSIExit 65, Stoch 0.",
+  "phases": [
+    {
+      "name": "entry",
+      "keepTop": 3,
+      "grid": {
+        "MinDropPct": [
+          0.6,
+          1.0,
+          1.4,
+          2.0
+        ],
+        "RSIPeriod": [
+          3,
+          6,
+          9
+        ],
+        "RSIEntry": [
+          20,
+          25,
+          30
+        ],
+        "EMAPeriod": [
+          0,
+          100,
+          200
+        ]
+      }
+    },
+    {
+      "name": "risk",
+      "keepTop": 3,
+      "grid": {
+        "StopPct": [
+          0,
+          0.7,
+          1.0,
+          1.5,
+          2.0,
+          3.0
+        ],
+        "ProfitPct": [
+          0,
+          0.5,
+          1.0,
+          1.5,
+          2.0,
+          3.0
+        ]
+      }
+    },
+    {
+      "name": "exits",
+      "keepTop": 3,
+      "grid": {
+        "MACDExit": [
+          0,
+          1
+        ],
+        "RSIExit": [
+          0,
+          65,
+          70,
+          75
+        ],
+        "StochExit": [
+          0,
+          80,
+          90
+        ]
+      }
+    }
+  ]
+}

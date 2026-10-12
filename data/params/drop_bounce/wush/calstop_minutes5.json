@@ -1,0 +1,74 @@
+{
+  "_comment": "drop_bounce WUSH Minutes5: калибровка 2026-10-12, сетка GAZP/DOMRF/T/IVAT без StopPct=0 ( литерал всегда берёт точку со стопом). Запуск: go run ./cmd/backtest -ticker WUSH -strategy drop_bounce -interval Minutes5 -calibrate data/params/drop_bounce/wush/calstop_minutes5.json -months 36 -train-months 12 -test-months 6 -min-trades 10 -metric profit_factor (in-sample: без -train/-test, -min-trades 30). РЕЗУЛЬТАТ: прогон идёт. РЕЗУЛЬТАТ 2026-10-12: скилл drop-bounce-calibrate: WF 36/12/6 pooled OOS PF 1.082 на 29 сделках, +0.59%; фолды 8569(7, без убытка) / 2.266(5) / 1.231(9) / 0.170(8, DD 11.7%) — живых 3, выше 1 два. ПЛАНКА НЕ ВЗЯТА, 5m отвергнут, литерал — дефолты.",
+  "phases": [
+    {
+      "name": "entry",
+      "keepTop": 3,
+      "grid": {
+        "MinDropPct": [
+          0.3,
+          0.4,
+          0.5,
+          0.7
+        ],
+        "RSIPeriod": [
+          3,
+          6,
+          9
+        ],
+        "RSIEntry": [
+          20,
+          25,
+          30
+        ],
+        "EMAPeriod": [
+          0,
+          100,
+          200
+        ]
+      }
+    },
+    {
+      "name": "risk",
+      "keepTop": 3,
+      "grid": {
+        "StopPct": [
+          0.7,
+          1.0,
+          1.5,
+          2.0,
+          3.0
+        ],
+        "ProfitPct": [
+          0,
+          0.5,
+          1.0,
+          1.5,
+          2.0,
+          3.0
+        ]
+      }
+    },
+    {
+      "name": "exits",
+      "keepTop": 3,
+      "grid": {
+        "MACDExit": [
+          0,
+          1
+        ],
+        "RSIExit": [
+          0,
+          65,
+          70,
+          75
+        ],
+        "StochExit": [
+          0,
+          80,
+          90
+        ]
+      }
+    }
+  ]
+}

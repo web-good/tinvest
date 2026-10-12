@@ -1,0 +1,55 @@
+{
+  "_comment": "drop_bounce WUSH Minutes15: baseline — одна точка, дефолты ядра. Запуск: reports/drop_bounce_cal/backtest -ticker WUSH -strategy drop_bounce -interval Minutes15 -calibrate data/params/drop_bounce/wush/cal_minutes15_baseline.json -months 36 -metric profit_factor -train-months 12 -test-months 6 -min-trades 10. РЕЗУЛЬТАТ 2026-10-12: WF 36/12/6 pooled OOS PF 0.862, compounded -31.56% — дефолты убыточны.",
+  "phases": [
+    {
+      "name": "baseline",
+      "grid": {
+        "MinDropPct": [
+          0.6
+        ],
+        "RSIPeriod": [
+          6
+        ],
+        "RSIEntry": [
+          30
+        ],
+        "RSIExit": [
+          70
+        ],
+        "MACDExit": [
+          1
+        ],
+        "MACDFast": [
+          9
+        ],
+        "MACDSlow": [
+          14
+        ],
+        "MACDSignal": [
+          3
+        ],
+        "StochPeriod": [
+          14
+        ],
+        "StochSmooth": [
+          3
+        ],
+        "StochExit": [
+          80
+        ],
+        "ProfitPct": [
+          1
+        ],
+        "StopPct": [
+          1
+        ],
+        "StartHour": [
+          8
+        ],
+        "EMAPeriod": [
+          0
+        ]
+      }
+    }
+  ]
+}

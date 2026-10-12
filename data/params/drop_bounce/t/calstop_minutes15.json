@@ -1,0 +1,134 @@
+{
+  "_comment": "drop_bounce T Minutes15: фазовая калибровка entry → risk → exits (keepTop 3), стоп без нуля, все поля прибиты. Запуск WF: reports/drop_bounce_cal/backtest -ticker T -strategy drop_bounce -interval Minutes15 -calibrate data/params/drop_bounce/t/calstop_minutes15.json -months 36 -metric profit_factor -train-months 12 -test-months 6 -min-trades 10; in-sample: то же без -train/-test, -min-trades 30. ПРЕДЫДУЩАЯ СЕТКА: drop_bounce T Minutes15: walk-forward с обязательным стопом, 2026-10-12. Сетка cal_minutes15.json без StopPct=0 — проверка края литералов, которые всегда берут точку со стопом. Запуск: go run ./cmd/backtest -ticker T -strategy drop_bounce -interval Minutes15 -calibrate data/params/drop_bounce/t/calstop_minutes15.json -months 36 -train-months 12 -test-months 6 -min-trades 10 -metric profit_factor. РЕЗУЛЬТАТ: прогон идёт. РЕЗУЛЬТАТ 2026-10-12: WF pooled OOS PF 1.977 на 29, фолды 2.487(8) / 3614(2)* / 1.085(2)* / 1.365(17) — живых два. ПЛАНКА НЕ ВЗЯТА — 15m отвергнут.",
+  "phases": [
+    {
+      "name": "entry",
+      "keepTop": 3,
+      "grid": {
+        "MinDropPct": [
+          0.4,
+          0.6,
+          0.8,
+          1.0
+        ],
+        "RSIPeriod": [
+          3,
+          6,
+          9
+        ],
+        "RSIEntry": [
+          20,
+          25,
+          30
+        ],
+        "RSIExit": [
+          70
+        ],
+        "ExitInProfit": [
+          1
+        ],
+        "StochPeriod": [
+          14
+        ],
+        "StochSmooth": [
+          3
+        ],
+        "StochExit": [
+          80
+        ],
+        "ProfitPct": [
+          1
+        ],
+        "StopDailyATR": [
+          0.5
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "MaxDayRangeATR": [
+          0
+        ],
+        "VolMult": [
+          0
+        ],
+        "VolBars": [
+          20
+        ],
+        "StartHour": [
+          8
+        ]
+      }
+    },
+    {
+      "name": "risk",
+      "keepTop": 3,
+      "grid": {
+        "StopDailyATR": [
+          0.25,
+          0.4,
+          0.5,
+          0.75,
+          1.0
+        ],
+        "ProfitPct": [
+          0,
+          0.5,
+          1.0,
+          1.5,
+          2.0,
+          3.0
+        ]
+      }
+    },
+    {
+      "name": "day",
+      "keepTop": 3,
+      "grid": {
+        "MaxDayRangeATR": [
+          0,
+          0.5,
+          0.75,
+          1.0,
+          1.5
+        ]
+      }
+    },
+    {
+      "name": "volume",
+      "keepTop": 3,
+      "grid": {
+        "VolMult": [
+          0,
+          1.5,
+          2.0,
+          3.0
+        ],
+        "VolBars": [
+          20,
+          50
+        ]
+      }
+    },
+    {
+      "name": "exits",
+      "keepTop": 3,
+      "grid": {
+        "RSIExit": [
+          0,
+          65,
+          70,
+          75
+        ],
+        "ExitInProfit": [
+          0,
+          1
+        ],
+        "StochExit": [
+          0,
+          80,
+          90
+        ]
+      }
+    }
+  ]
+}

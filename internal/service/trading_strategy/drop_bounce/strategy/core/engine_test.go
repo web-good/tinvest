@@ -1,11 +1,12 @@
 // engine_test.go runs drop_bounce through the real backtest engine to pin the fills it relies on:
-// entry at the next bar's open, the stop from the fill price filled at the gap open overnight, and
+// entry at the next bar's open, the daily-ATR stop from the fill price filled at the gap open overnight, and
 // the fill-bar profit at the close.
 package core
 
 import (
 	"math"
 	"testing"
+	"time"
 
 	bt "tinvest/internal/domain/backtest"
 )
@@ -18,16 +19,17 @@ func toCandles(bars []bar) []bt.Candle {
 	return out
 }
 
-// dropBars is the oversold drop at index 70 (the drop bar starts at dropAt) led by 50 flat bars
-// and a downtrend: the engine decides only from bar Lookback()−1 (63) on, so the drop must sit
-// past it.
+// dropBars is the oversold drop (the drop bar starts at dropAt) led by flat bars and a downtrend:
+// the engine decides only from bar Lookback()−1 on, so the flat lead puts the drop past it.
 func dropBars(dropAt string) []bar {
-	return path(at(dropAt).Add(-70*BarStep).Format("2006-01-02 15:04"), dropAfter(append(flatN(50, 100), downtrend()...), 0.6))
+	closes := dropAfter(append(flatN(NewWithParams("TEST", step15, immediate()).Lookback(), 100), downtrend()...), 0.6)
+	return path(at(dropAt).Add(-time.Duration(len(closes)-1)*step15).Format("2006-01-02 15:04"), closes)
 }
 
-// runEngine runs drop_bounce through the engine with entries at the next bar's open.
+// runEngine runs drop_bounce through the engine with entries at the next bar's open and dailies
+// of range fixtureATR before the first bar, so the stop sits fixtureATR/2 below the fill.
 func runEngine(bars []bar) bt.Result {
-	return bt.Run(NewWithParams("TEST", DefaultParams()), toCandles(bars), nil, nil,
+	return bt.Run(NewWithParams("TEST", step15, immediate()), toCandles(bars), toCandles(dailies(bars[0].t, 20, fixtureATR)), nil,
 		bt.Config{InitialCash: 1e6, Fraction: 1, Commission: 0, Lot: 1, EntryAtNextOpen: true})
 }
 
@@ -60,8 +62,8 @@ func TestEngineOvernightGapStop(t *testing.T) {
 			{at("2026-09-15 07:00"), gap, gap, gap * 0.999, gap},
 		}
 	})
-	if gap >= fill*0.99 {
-		t.Fatalf("fixture: gap open %v must be below the stop %v", gap, fill*0.99)
+	if stop := fill - fixtureATR/2; gap >= stop {
+		t.Fatalf("fixture: gap open %v must be below the stop %v", gap, stop)
 	}
 	if tr.Reason != "SL" || math.Abs(tr.ExitPrice-gap) > 1e-6 || !tr.ExitTime.Equal(at("2026-09-15 07:00")) {
 		t.Fatalf("exit %q @ %v %v, want SL at the gap open %v next morning", tr.Reason, tr.ExitPrice, tr.ExitTime, gap)
@@ -78,7 +80,28 @@ func TestEngineProfitOnFillBar(t *testing.T) {
 	}
 }
 
-// TestEngineDropsSignalWhenNextSlotMissing pins entry rule 3 against gaps in the data: a signal
+// TestEngineFillsAfterFirstGreen: with the green confirmation on, the fill is the open of the bar
+// after the first green bar, not after the signal bar.
+func TestEngineFillsAfterFirstGreen(t *testing.T) {
+	bars := dropBars("2026-09-14 13:00")
+	c := bars[len(bars)-1].c
+	r, g, f := c*0.999, c*1.001, c*1.002
+	bars = append(bars,
+		bar{at("2026-09-14 13:15"), c, c, r, r},
+		bar{at("2026-09-14 13:30"), r, g, r, g},
+		bar{at("2026-09-14 13:45"), f, f * 1.012, f, f * 1.012}, // the fill bar closes the trade on PROFIT
+	)
+	res := bt.Run(NewWithParams("TEST", step15, DefaultParams()), toCandles(bars), toCandles(dailies(bars[0].t, 20, fixtureATR)), nil,
+		bt.Config{InitialCash: 1e6, Fraction: 1, Commission: 0, Lot: 1, EntryAtNextOpen: true})
+	if len(res.Trades) != 1 {
+		t.Fatalf("trades = %d, want 1: %+v", len(res.Trades), res.Trades)
+	}
+	if tr := res.Trades[0]; math.Abs(tr.EntryPrice-f) > eps || !tr.EntryTime.Equal(at("2026-09-14 13:45")) {
+		t.Fatalf("entry %v @ %v, want %v @ 13:45 (open after the green bar)", tr.EntryPrice, tr.EntryTime, f)
+	}
+}
+
+// TestEngineDropsSignalWhenNextSlotMissing pins entry rules 4 and 9 against gaps in the data: a signal
 // on the 23:30 bar may fill only at 23:45; when that candle is missing the next candle is the
 // next morning and the signal is dropped instead of carrying over.
 func TestEngineDropsSignalWhenNextSlotMissing(t *testing.T) {

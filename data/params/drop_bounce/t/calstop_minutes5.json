@@ -1,0 +1,74 @@
+{
+  "_comment": "drop_bounce T Minutes5: walk-forward с обязательным стопом, 2026-10-12. Сетка cal_minutes5.json без StopPct=0 — проверка края литералов, которые всегда берут точку со стопом. Запуск: go run ./cmd/backtest -ticker T -strategy drop_bounce -interval Minutes5 -calibrate data/params/drop_bounce/t/calstop_minutes5.json -months 36 -train-months 12 -test-months 6 -min-trades 10 -metric profit_factor. РЕЗУЛЬТАТ: прогон идёт.",
+  "phases": [
+    {
+      "name": "entry",
+      "keepTop": 3,
+      "grid": {
+        "MinDropPct": [
+          0.3,
+          0.4,
+          0.5,
+          0.7
+        ],
+        "RSIPeriod": [
+          3,
+          6,
+          9
+        ],
+        "RSIEntry": [
+          20,
+          25,
+          30
+        ],
+        "EMAPeriod": [
+          0,
+          100,
+          200
+        ]
+      }
+    },
+    {
+      "name": "risk",
+      "keepTop": 3,
+      "grid": {
+        "StopPct": [
+          0.7,
+          1.0,
+          1.5,
+          2.0,
+          3.0
+        ],
+        "ProfitPct": [
+          0,
+          0.5,
+          1.0,
+          1.5,
+          2.0,
+          3.0
+        ]
+      }
+    },
+    {
+      "name": "exits",
+      "keepTop": 3,
+      "grid": {
+        "MACDExit": [
+          0,
+          1
+        ],
+        "RSIExit": [
+          0,
+          65,
+          70,
+          75
+        ],
+        "StochExit": [
+          0,
+          80,
+          90
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "_comment": "drop_bounce IVAT Minutes15: baseline — одна точка, дефолты ядра. Запуск: reports/drop_bounce_cal/backtest -ticker IVAT -strategy drop_bounce -interval Minutes15 -calibrate data/params/drop_bounce/ivat/cal_minutes15_baseline.json -months 36 -metric profit_factor -train-months 12 -test-months 6 -min-trades 10. РЕЗУЛЬТАТ 2026-10-12: pooled OOS PF 0.928 на 336, фолды 1.165(81) / 1.002(108) / 1.369(31) / 0.744(116, просадка 38.9%). Планка не взята.",
+  "phases": [
+    {
+      "name": "baseline",
+      "grid": {
+        "MinDropPct": [
+          0.6
+        ],
+        "RSIPeriod": [
+          6
+        ],
+        "RSIEntry": [
+          30
+        ],
+        "RSIExit": [
+          70
+        ],
+        "ExitInProfit": [
+          1
+        ],
+        "StochPeriod": [
+          14
+        ],
+        "StochSmooth": [
+          3
+        ],
+        "StochExit": [
+          80
+        ],
+        "ProfitPct": [
+          1
+        ],
+        "StopDailyATR": [
+          0.5
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "MaxDayRangeATR": [
+          0
+        ],
+        "VolMult": [
+          0
+        ],
+        "VolBars": [
+          20
+        ],
+        "StartHour": [
+          8
+        ]
+      }
+    }
+  ]
+}
