@@ -34,12 +34,12 @@ func TestDropBounceParseParamsLayersOverDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("lookup: %v", err)
 	}
-	parsed, err := b.ParseParams([]byte(`{"MinDropPct": 2.5}`))
+	parsed, err := b.ParseParams([]byte(`{"VolDailyMult": 0.15}`))
 	if err != nil {
 		t.Fatalf("ParseParams: %v", err)
 	}
 	got := parsed.(core.Params)
-	if got.MinDropPct != 2.5 || got.StopDailyATR != core.DefaultParams().StopDailyATR {
+	if got.VolDailyMult != 0.15 || got.StopDailyATR != core.DefaultParams().StopDailyATR {
 		t.Fatalf("got %+v", got)
 	}
 }

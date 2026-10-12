@@ -1,258 +1,149 @@
 package core
 
 import (
-	"strings"
+	"math"
 	"testing"
+	"time"
 
 	"tinvest/internal/service/trading_strategy/scalping/model"
+	"tinvest/internal/service/trading_strategy/scalping/strategy"
 	"tinvest/pkg/indicators"
 )
 
-func TestProfitOnlyOnFillBar(t *testing.T) {
-	p := exitsOff()
-	p.ProfitPct = 1
-	bars := flatWithLast(100, 101, 100, 101)
-	fill := bars[len(bars)-1].t
-	if sig := held(p, bars, 100, fill); sig.Kind != model.SignalSell || sig.Reason != "PROFIT" {
-		t.Fatalf("fill bar +1%%: got %v %q, want PROFIT", sig.Kind, sig.Reason)
+// position is a held long bought at entry on the bar starting at entryTime with the frozen ATR.
+func position(entry float64, entryTime time.Time, atr float64) *strategy.Position {
+	return &strategy.Position{PurchasePrice: entry, Quantity: 1, EntryTime: entryTime, EntryATR: atr}
+}
+
+// stopOnly is the default params with the RSI exit off.
+func stopOnly() Params {
+	p := DefaultParams()
+	p.RSIExit = 0
+	return p
+}
+
+// flatWithLast is 30 flat bars at 100 and a last bar with the given open/high/low/close.
+func flatWithLast(o, h, l, c float64) []bar {
+	bars := path("2026-09-14 08:00", flatN(30, 100))
+	last := bars[len(bars)-1]
+	return append(bars, bar{last.t.Add(step15), o, h, l, c})
+}
+
+// The default stop is 1.0 daily ATR (fixtureATR 2) below the fill: 98 for a fill at 100.
+func TestStopFromFillPrice(t *testing.T) {
+	bars := flatWithLast(100, 100, 98.0, 99)
+	sig := held(stopOnly(), bars, 100, bars[20].t)
+	if sig.Kind != model.SignalSell || sig.Reason != "SL" || math.Abs(sig.StopLoss-98) > eps {
+		t.Fatalf("got %v %q stop %v, want SL at 98", sig.Kind, sig.Reason, sig.StopLoss)
 	}
-	bars = flatWithLast(100, 100.99, 100, 100.99)
-	if sig := held(p, bars, 100, bars[len(bars)-1].t); sig.Kind != model.SignalNone {
-		t.Fatalf("fill bar +0.99%%: kind = %v, want None", sig.Kind)
+	bars = flatWithLast(100, 100, 98.01, 99)
+	if sig := held(stopOnly(), bars, 100, bars[20].t); sig.Kind != model.SignalNone {
+		t.Fatalf("low 98.01: kind = %v, want None", sig.Kind)
 	}
-	bars = flatWithLast(100, 101, 100, 101)
-	if sig := held(p, bars, 100, bars[len(bars)-2].t); sig.Kind != model.SignalNone {
-		t.Fatalf("second bar +1%%: kind = %v, want None (only the fill bar counts)", sig.Kind)
+	p := stopOnly()
+	p.StopDailyATR = 0
+	bars = flatWithLast(100, 100, 50, 60)
+	if sig := held(p, bars, 100, bars[20].t); sig.Kind != model.SignalNone {
+		t.Fatalf("StopDailyATR 0: kind = %v, want None", sig.Kind)
 	}
 }
 
-func TestStopBeatsProfit(t *testing.T) {
-	p := exitsOff()
-	p.ProfitPct = 1
-	bars := flatWithLast(100, 101.5, 98.9, 101.2)
-	if sig := held(p, bars, 100, bars[len(bars)-1].t); sig.Reason != "SL" {
-		t.Fatalf("reason = %q, want SL first", sig.Reason)
+// Dailies that closed after the entry must not move the stop.
+func TestStopUsesATRFrozenAtEntry(t *testing.T) {
+	bars := flatWithLast(100, 100, 97.5, 99)
+	md := fixture(bars)
+	withDailies(&md, dailies(bars[0].t, 20, 4)) // today's ATR is 4: a live stop would sit at 96
+	md.Position = position(100, bars[20].t, fixtureATR)
+	sig := NewWithParams("TEST", step15, stopOnly()).Decide(md)
+	if sig.Reason != "SL" || math.Abs(sig.StopLoss-98) > eps {
+		t.Fatalf("got %q stop %v, want SL at 98 from the entry ATR", sig.Reason, sig.StopLoss)
+	}
+}
+
+// A position without a frozen ATR keeps a stop from today's ATR rather than running naked.
+func TestStopFallsBackToCurrentATR(t *testing.T) {
+	bars := flatWithLast(100, 100, 98, 99)
+	md := fixture(bars)
+	md.Position = position(100, bars[20].t, 0)
+	sig := NewWithParams("TEST", step15, stopOnly()).Decide(md)
+	if sig.Reason != "SL" || math.Abs(sig.StopLoss-98) > eps {
+		t.Fatalf("got %q stop %v, want SL at 98 from the current ATR", sig.Reason, sig.StopLoss)
 	}
 }
 
 func TestCrossUp(t *testing.T) {
-	if !crossUp(69.9, 70, 70) || !crossUp(10, 90, 70) {
-		t.Fatal("want cross")
+	if !crossUp(69, 70, 70) || !crossUp(10, 90, 70) {
+		t.Fatal("a move from below to at/above the level must cross")
 	}
-	if crossUp(70, 75, 70) || crossUp(60, 69.9, 70) {
-		t.Fatal("want no cross")
-	}
-}
-
-// firstSell walks the path bar by bar holding from bar entryIdx and returns the index and signal
-// of the first sell, or −1.
-func firstSell(p Params, bars []bar, entryIdx int) (int, model.Signal) {
-	for k := entryIdx; k < len(bars); k++ {
-		if sig := held(p, bars[:k+1], bars[entryIdx].o, bars[entryIdx].t); sig.Kind == model.SignalSell {
-			return k, sig
-		}
-	}
-	return -1, model.Signal{}
-}
-
-func TestDecideRSICross(t *testing.T) {
-	closes := append(flatN(30, 100), steps(100, 6, -0.3)...)
-	closes = append(closes, steps(closes[len(closes)-1], 10, 0.4)...)
-	bars := path("2026-09-14 08:00", closes)
-	p := exitsOff()
-	p.StopDailyATR, p.RSIExit = 0, 70
-	k, sig := firstSell(p, bars, 36)
-	if k < 0 || sig.Reason != "RSI" {
-		t.Fatalf("first sell at %d %q, want RSI", k, sig.Reason)
-	}
-	r := indicators.RSISeries(closes[:k+1], p.RSIPeriod)
-	if !(r[k-1] < 70 && r[k] >= 70) {
-		t.Fatalf("exit at %d: RSI %v → %v, want a cross of 70", k, r[k-1], r[k])
+	if crossUp(70, 75, 70) || crossUp(60, 69.9, 70) || crossUp(80, 60, 70) {
+		t.Fatal("no cross from at/above, below-to-below or downward")
 	}
 }
 
-func TestDecideStochCross(t *testing.T) {
-	closes := append(flatN(30, 100), steps(100, 6, -0.3)...)
-	closes = append(closes, steps(closes[len(closes)-1], 10, 0.4)...)
-	bars := path("2026-09-14 08:00", closes)
-	p := exitsOff()
-	p.StopDailyATR, p.StochExit = 0, 80
-	k, sig := firstSell(p, bars, 36)
-	if k < 0 || sig.Reason != "STOCH" {
-		t.Fatalf("first sell at %d %q, want STOCH", k, sig.Reason)
-	}
-	md := fixture(bars[:k+1])
-	_, ds := indicators.StochasticSeries(md.Highs, md.Lows, md.Closes, p.StochPeriod, p.StochSmooth)
-	if !(ds[len(ds)-2] < 80 && ds[len(ds)-1] >= 80) {
-		t.Fatalf("exit at %d: %%K %v → %v, want a cross of 80", k, ds[len(ds)-2], ds[len(ds)-1])
-	}
-}
-
-func TestDecideAllExitsOffHolds(t *testing.T) {
-	closes := append(flatN(30, 100), steps(100, 6, -0.3)...)
-	closes = append(closes, steps(closes[len(closes)-1], 10, 0.4)...)
-	p := exitsOff()
-	p.StopDailyATR = 0
-	if k, sig := firstSell(p, path("2026-09-14 08:00", closes), 36); k >= 0 {
-		t.Fatalf("sell at %d %q, want hold with every exit off", k, sig.Reason)
-	}
-}
-
-func TestDecideInvalidStochPeriodDoesNotPanic(t *testing.T) {
-	closes := append(flatN(30, 100), steps(100, 6, -0.3)...)
-	closes = append(closes, steps(closes[len(closes)-1], 10, 0.4)...)
-	bars := path("2026-09-14 08:00", closes)
-	p := DefaultParams()
-	p.StopDailyATR, p.ProfitPct = 0, 0
-	p.StochPeriod = 0
-	p.RSIExit = 0
-	if k, sig := firstSell(p, bars, 36); k >= 0 {
-		t.Fatalf("sell at %d %q, want hold: an invalid stochastic period disables that exit", k, sig.Reason)
-	}
-}
-
-// underwaterCross is a path whose RSI(6) crosses 70 upward while the price is still below an entry
-// at 100 on bar 30, then climbs back above it: flat at 100, an eight-bar slide, a steady recovery.
-func underwaterCross() []bar {
-	closes := append(flatN(30, 100), steps(100, 8, -0.5)...)
-	closes = append(closes, steps(closes[len(closes)-1], 20, 0.3)...)
+// slideAndRise is 30 flat bars at 100, 10 bars sliding 0.5% each (RSI(6) near 0), then 15 bars
+// rising 0.3% each, which carry RSI(6) up through 70.
+func slideAndRise() []bar {
+	closes := append(flatN(30, 100), steps(100, 10, -0.5)...)
+	closes = append(closes, steps(closes[len(closes)-1], 15, 0.3)...)
 	return path("2026-09-14 08:00", closes)
 }
 
-// rsiOnly leaves only the RSI exit on, with the stop off so the slide cannot stop the trade.
-func rsiOnly(inProfit int) Params {
-	p := exitsOff()
-	p.StopDailyATR, p.RSIExit, p.ExitInProfit = 0, 70, inProfit
-	return p
-}
-
-// stochOnly leaves only the stochastic exit on, with the stop off.
-func stochOnly(inProfit int) Params {
-	p := exitsOff()
-	p.StopDailyATR, p.StochExit, p.ExitInProfit = 0, 80, inProfit
-	return p
-}
-
-// firstStochCross returns the first bar at or after from whose smoothed %K crosses level upward,
-// or −1.
-func firstStochCross(bars []bar, level float64, from int) int {
-	md := fixture(bars)
-	p := DefaultParams()
-	_, k := indicators.StochasticSeries(md.Highs, md.Lows, md.Closes, p.StochPeriod, p.StochSmooth)
-	off := len(bars) - len(k)
-	for j := max(from-off, 1); j < len(k); j++ {
-		if crossUp(k[j-1], k[j], level) {
-			return off + j
-		}
-	}
-	return -1
-}
-
-func TestStochExitUnderwaterWaitsForProfit(t *testing.T) {
-	bars := underwaterCross()
-	cross := firstStochCross(bars, 80, 31)
-	if cross < 0 || bars[cross].c >= 100 {
-		t.Fatalf("fixture: %%K cross at %d, want one below the entry 100", cross)
-	}
-	if k, sig := firstSell(stochOnly(0), bars, 30); k != cross || sig.Reason != "STOCH" {
-		t.Fatalf("ExitInProfit 0: sell at %d %q, want STOCH at the cross %d", k, sig.Reason, cross)
-	}
-	want := -1
-	for k := cross + 1; k < len(bars); k++ {
-		if bars[k].c > 100 {
-			want = k
-			break
-		}
-	}
-	k, sig := firstSell(stochOnly(1), bars, 30)
-	if want < 0 || k != want || sig.Reason != "STOCH" || !strings.Contains(sig.ExitReason, "в плюс") {
-		t.Fatalf("ExitInProfit 1: sell at %d %q %q, want a deferred STOCH at %d", k, sig.Reason, sig.ExitReason, want)
-	}
-}
-
-// firstCross returns the first bar at or after from whose RSI crosses level upward, or −1.
+// firstCross returns the first bar index ≥ from whose RSI(period) crosses level upward, or −1.
 func firstCross(bars []bar, period int, level float64, from int) int {
 	closes := make([]float64, len(bars))
 	for i, b := range bars {
 		closes[i] = b.c
 	}
-	r := indicators.RSISeries(closes, period)
-	for k := max(from, 1); k < len(r); k++ {
-		if crossUp(r[k-1], r[k], level) {
+	rsi := indicators.RSISeries(closes, period)
+	for k := max(from, period+1); k < len(bars); k++ {
+		if crossUp(rsi[k-1], rsi[k], level) {
 			return k
 		}
 	}
 	return -1
 }
 
-func TestRSIExitUnderwaterWaitsForProfit(t *testing.T) {
-	bars := underwaterCross()
-	cross := firstCross(bars, 6, 70, 30)
-	if cross < 0 || bars[cross].c >= 100 {
-		t.Fatalf("fixture: cross at %d close %v, want an RSI cross below the entry 100", cross, bars[cross].c)
+// The RSI exit sells at the cross whatever the price: here far below the entry.
+func TestRSIExitSellsAtTheCross(t *testing.T) {
+	bars := slideAndRise()
+	k := firstCross(bars, 6, 70, 40)
+	if k < 0 {
+		t.Fatal("fixture: RSI(6) never crosses 70 on the rise")
 	}
-	if k, sig := firstSell(rsiOnly(0), bars, 30); k != cross || sig.Reason != "RSI" {
-		t.Fatalf("ExitInProfit 0: sell at %d %q, want RSI at the cross %d", k, sig.Reason, cross)
-	}
-	want := -1
-	for k := cross + 1; k < len(bars); k++ {
-		if bars[k].c > 100 {
-			want = k
-			break
-		}
-	}
-	if want < 0 {
-		t.Fatal("fixture: the price never recovers above the entry")
-	}
-	k, sig := firstSell(rsiOnly(1), bars, 30)
-	if k != want || sig.Reason != "RSI" {
-		t.Fatalf("ExitInProfit 1: sell at %d %q, want RSI at the first close above the entry %d", k, sig.Reason, want)
-	}
-	if !strings.Contains(sig.ExitReason, "в плюс") {
-		t.Fatalf("exit reason = %q, want the deferred-exit note", sig.ExitReason)
-	}
-}
-
-func TestExitInProfitSellsAtTheCross(t *testing.T) {
-	// TestDecideRSICross's path crosses above the entry: the rule does not delay that exit.
-	closes := append(flatN(30, 100), steps(100, 6, -0.3)...)
-	closes = append(closes, steps(closes[len(closes)-1], 10, 0.4)...)
-	bars := path("2026-09-14 08:00", closes)
-	cross := firstCross(bars, 6, 70, 36)
-	if k, sig := firstSell(rsiOnly(1), bars, 36); k != cross || sig.Reason != "RSI" {
-		t.Fatalf("sell at %d %q, want RSI at the cross %d", k, sig.Reason, cross)
-	}
-}
-
-func TestRSIExitIgnoresCrossBeforeEntry(t *testing.T) {
-	bars := underwaterCross()
-	cross := firstCross(bars, 6, 70, 30)
-	// Bought on the bar after the cross: RSI stays above 70 through the recovery, no new cross.
-	if k, sig := firstSell(rsiOnly(1), bars, cross+1); k >= 0 {
-		t.Fatalf("sell at %d %q, want hold: the only cross came before the entry", k, sig.Reason)
-	}
-}
-
-func TestStopBeatsDeferredRSIExit(t *testing.T) {
-	bars := underwaterCross()
-	cross := firstCross(bars, 6, 70, 30)
-	armed := bars[:cross+1]
-	last := armed[len(armed)-1]
-	armed = append(armed, bar{last.t.Add(step15), last.c, 101, 90, 100.5}) // above the entry, through the stop
-	p := rsiOnly(1)
-	p.StopDailyATR = 0.5
-	if sig := held(p, armed, 100, bars[30].t); sig.Reason != "SL" {
-		t.Fatalf("reason = %q, want SL first", sig.Reason)
-	}
-}
-
-func TestLookbackCoversDeferredRSIExit(t *testing.T) {
 	p := DefaultParams()
-	if got := NewWithParams("TEST", step15, p).Lookback(); got < 200 {
-		t.Fatalf("Lookback = %d, want ≥ 200 with ExitInProfit on", got)
+	p.StopDailyATR = 0
+	if sig := held(p, bars[:k], 200, bars[30].t); sig.Kind != model.SignalNone {
+		t.Fatalf("bar before the cross: kind = %v %q, want None", sig.Kind, sig.Reason)
 	}
-	p.ExitInProfit = 0
-	if got := NewWithParams("TEST", step15, p).Lookback(); got != minLookback {
-		t.Fatalf("Lookback = %d, want %d with the rule off", got, minLookback)
+	if sig := held(p, bars[:k+1], 200, bars[30].t); sig.Kind != model.SignalSell || sig.Reason != "RSI" {
+		t.Fatalf("cross bar: got %v %q, want Sell RSI below the entry", sig.Kind, sig.Reason)
+	}
+	p.RSIExit = 0
+	if sig := held(p, bars[:k+1], 200, bars[30].t); sig.Kind != model.SignalNone {
+		t.Fatalf("RSIExit 0: kind = %v, want None", sig.Kind)
+	}
+}
+
+// On a bar that both crosses RSI 70 and touches the stop, the stop wins.
+func TestStopBeatsRSIExit(t *testing.T) {
+	bars := slideAndRise()
+	k := firstCross(bars, 6, 70, 40)
+	if k < 0 {
+		t.Fatal("fixture: RSI(6) never crosses 70 on the rise")
+	}
+	bars = bars[:k+1]
+	entry := bars[k].c
+	bars[k].l = entry - 2.5 // stop = entry − 1.0 × fixtureATR
+	sig := held(DefaultParams(), bars, entry, bars[30].t)
+	if sig.Reason != "SL" || math.Abs(sig.StopLoss-(entry-2)) > eps {
+		t.Fatalf("got %q stop %v, want SL at %v", sig.Reason, sig.StopLoss, entry-2)
+	}
+}
+
+// Positions carry overnight: nothing sells the last evening bar on its own.
+func TestNoEODExit(t *testing.T) {
+	bars := path("2026-09-14 16:15", flatN(31, 100)) // last bar 23:45
+	if sig := held(DefaultParams(), bars, 100, bars[20].t); sig.Kind != model.SignalNone {
+		t.Fatalf("23:45 flat: kind = %v %q, want None", sig.Kind, sig.Reason)
 	}
 }

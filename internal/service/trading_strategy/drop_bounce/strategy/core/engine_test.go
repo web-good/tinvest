@@ -1,6 +1,6 @@
-// engine_test.go runs drop_bounce through the real backtest engine to pin the fills it relies on:
-// entry at the next bar's open, the daily-ATR stop from the fill price filled at the gap open overnight, and
-// the fill-bar profit at the close.
+// engine_test.go runs drop_bounce through the real backtest engine to pin what it relies on: daily
+// volumes reaching the strategy, entry at the next bar's open, the daily-ATR stop filled at the gap
+// open overnight, the RSI exit, and a signal dropped when the next slot is missing.
 package core
 
 import (
@@ -11,58 +11,52 @@ import (
 	bt "tinvest/internal/domain/backtest"
 )
 
-func toCandles(bars []bar) []bt.Candle {
+// toCandles converts bars to candles that all trade vol.
+func toCandles(bars []bar, vol int64) []bt.Candle {
 	out := make([]bt.Candle, len(bars))
 	for i, b := range bars {
-		out[i] = bt.Candle{Time: b.t, Open: b.o, High: b.h, Low: b.l, Close: b.c}
+		out[i] = bt.Candle{Time: b.t, Open: b.o, High: b.h, Low: b.l, Close: b.c, Volume: vol}
 	}
 	return out
 }
 
-// dropBars is the oversold drop (the drop bar starts at dropAt) led by flat bars and a downtrend:
-// the engine decides only from bar Lookback()−1 on, so the flat lead puts the drop past it.
-func dropBars(dropAt string) []bar {
-	closes := dropAfter(append(flatN(NewWithParams("TEST", step15, immediate()).Lookback(), 100), downtrend()...), 0.6)
-	return path(at(dropAt).Add(-time.Duration(len(closes)-1)*step15).Format("2006-01-02 15:04"), closes)
+// spikeBars is Lookback flat bars at 100 then a red bar 100 → 99.5 starting at t: the engine
+// decides only from bar Lookback()−1 on, so the lead puts the signal past it.
+func spikeBars(t string) []bar {
+	n := NewWithParams("TEST", step15, DefaultParams()).Lookback()
+	end := at(t)
+	bars := path(end.Add(-time.Duration(n)*step15).Format("2006-01-02 15:04"), flatN(n, 100))
+	return append(bars, bar{end, 100, 100, 99.5, 99.5})
 }
 
-// runEngine runs drop_bounce through the engine with entries at the next bar's open and dailies
-// of range fixtureATR before the first bar, so the stop sits fixtureATR/2 below the fill.
-func runEngine(bars []bar) bt.Result {
-	return bt.Run(NewWithParams("TEST", step15, immediate()), toCandles(bars), toCandles(dailies(bars[0].t, 20, fixtureATR)), nil,
+// runEngine runs the default drop_bounce over bars where the bar at spike trades 0.5 of an average
+// day (dailies of range fixtureATR and volume fixtureDayVol before the first bar).
+func runEngine(bars []bar, spike int) bt.Result {
+	candles := toCandles(bars, quietVol)
+	candles[spike].Volume = fixtureDayVol / 2
+	return bt.Run(NewWithParams("TEST", step15, DefaultParams()), candles,
+		toCandles(dailies(bars[0].t, 20, fixtureATR), fixtureDayVol), nil,
 		bt.Config{InitialCash: 1e6, Fraction: 1, Commission: 0, Lot: 1, EntryAtNextOpen: true})
 }
 
-// runAfterDrop runs the engine over the oversold drop at Monday 13:00 followed by after(signal
-// close) and returns the single trade with its fill price. The fill bar (the first of after) must
-// open away from the signal close so the entry check tells the next open from the signal close.
-func runAfterDrop(t *testing.T, after func(close float64) []bar) (bt.Trade, float64) {
-	t.Helper()
-	bars := dropBars("2026-09-14 13:00")
-	next := after(bars[len(bars)-1].c)
-	fill := next[0].o
-	res := runEngine(append(bars, next...))
+func TestEngineOvernightGapStop(t *testing.T) {
+	bars := spikeBars("2026-09-14 13:00")
+	sig := len(bars) - 1
+	f := 99.7 // the fill bar opens away from the signal close 99.5
+	gap := f * 0.97
+	bars = append(bars,
+		bar{at("2026-09-14 13:15"), f, f, f, f},
+		bar{at("2026-09-15 07:00"), gap, gap, gap * 0.999, gap},
+	)
+	res := runEngine(bars, sig)
 	if len(res.Trades) != 1 {
 		t.Fatalf("trades = %d, want 1: %+v", len(res.Trades), res.Trades)
 	}
 	tr := res.Trades[0]
-	if math.Abs(tr.EntryPrice-fill) > eps || !tr.EntryTime.Equal(at("2026-09-14 13:15")) {
-		t.Fatalf("entry %v @ %v, want %v @ 13:15 (next bar's open)", tr.EntryPrice, tr.EntryTime, fill)
+	if math.Abs(tr.EntryPrice-f) > eps || !tr.EntryTime.Equal(at("2026-09-14 13:15")) {
+		t.Fatalf("entry %v @ %v, want %v @ 13:15 (next bar's open)", tr.EntryPrice, tr.EntryTime, f)
 	}
-	return tr, fill
-}
-
-func TestEngineOvernightGapStop(t *testing.T) {
-	var gap float64
-	tr, fill := runAfterDrop(t, func(c float64) []bar {
-		f := c * 1.001
-		gap = f * 0.97
-		return []bar{
-			{at("2026-09-14 13:15"), f, f, f, f},
-			{at("2026-09-15 07:00"), gap, gap, gap * 0.999, gap},
-		}
-	})
-	if stop := fill - fixtureATR/2; gap >= stop {
+	if stop := f - fixtureATR; gap >= stop {
 		t.Fatalf("fixture: gap open %v must be below the stop %v", gap, stop)
 	}
 	if tr.Reason != "SL" || math.Abs(tr.ExitPrice-gap) > 1e-6 || !tr.ExitTime.Equal(at("2026-09-15 07:00")) {
@@ -70,48 +64,45 @@ func TestEngineOvernightGapStop(t *testing.T) {
 	}
 }
 
-func TestEngineProfitOnFillBar(t *testing.T) {
-	tr, fill := runAfterDrop(t, func(c float64) []bar {
-		f := c * 1.001
-		return []bar{{at("2026-09-14 13:15"), f, f * 1.012, f, f * 1.012}}
-	})
-	if tr.Reason != "PROFIT" || math.Abs(tr.ExitPrice-fill*1.012) > 1e-6 {
-		t.Fatalf("exit %q @ %v, want PROFIT at the fill bar's close %v", tr.Reason, tr.ExitPrice, fill*1.012)
+func TestEngineRSIExit(t *testing.T) {
+	bars := spikeBars("2026-09-14 13:00")
+	sig := len(bars) - 1
+	bars = append(bars, path("2026-09-14 13:15", steps(99.7, 15, 0.3))...)
+	k := firstCross(bars, 6, 70, sig+1)
+	if k < 0 {
+		t.Fatal("fixture: RSI(6) never crosses 70 after the fill")
 	}
-}
-
-// TestEngineFillsAfterFirstGreen: with the green confirmation on, the fill is the open of the bar
-// after the first green bar, not after the signal bar.
-func TestEngineFillsAfterFirstGreen(t *testing.T) {
-	bars := dropBars("2026-09-14 13:00")
-	c := bars[len(bars)-1].c
-	r, g, f := c*0.999, c*1.001, c*1.002
-	bars = append(bars,
-		bar{at("2026-09-14 13:15"), c, c, r, r},
-		bar{at("2026-09-14 13:30"), r, g, r, g},
-		bar{at("2026-09-14 13:45"), f, f * 1.012, f, f * 1.012}, // the fill bar closes the trade on PROFIT
-	)
-	res := bt.Run(NewWithParams("TEST", step15, DefaultParams()), toCandles(bars), toCandles(dailies(bars[0].t, 20, fixtureATR)), nil,
-		bt.Config{InitialCash: 1e6, Fraction: 1, Commission: 0, Lot: 1, EntryAtNextOpen: true})
+	res := runEngine(bars, sig)
 	if len(res.Trades) != 1 {
 		t.Fatalf("trades = %d, want 1: %+v", len(res.Trades), res.Trades)
 	}
-	if tr := res.Trades[0]; math.Abs(tr.EntryPrice-f) > eps || !tr.EntryTime.Equal(at("2026-09-14 13:45")) {
-		t.Fatalf("entry %v @ %v, want %v @ 13:45 (open after the green bar)", tr.EntryPrice, tr.EntryTime, f)
+	if tr := res.Trades[0]; tr.Reason != "RSI" || !tr.ExitTime.Equal(bars[k].t) {
+		t.Fatalf("exit %q @ %v, want RSI at %v", tr.Reason, tr.ExitTime, bars[k].t)
 	}
 }
 
-// TestEngineDropsSignalWhenNextSlotMissing pins entry rules 4 and 9 against gaps in the data: a signal
-// on the 23:30 bar may fill only at 23:45; when that candle is missing the next candle is the
-// next morning and the signal is dropped instead of carrying over.
+// Without daily volumes the engine-fed strategy has no average and never enters.
+func TestEngineNoDailyVolumeNoTrade(t *testing.T) {
+	bars := append(spikeBars("2026-09-14 13:00"), bar{at("2026-09-14 13:15"), 99.7, 99.7, 99.7, 99.7})
+	candles := toCandles(bars, fixtureDayVol) // every bar trades a whole average day — if one were known
+	res := bt.Run(NewWithParams("TEST", step15, DefaultParams()), candles,
+		toCandles(dailies(bars[0].t, 20, fixtureATR), 0), nil,
+		bt.Config{InitialCash: 1e6, Fraction: 1, Commission: 0, Lot: 1, EntryAtNextOpen: true})
+	if len(res.Trades) != 0 || res.BarsInMarket != 0 {
+		t.Fatalf("trades = %d, barsInMarket = %d, want no position", len(res.Trades), res.BarsInMarket)
+	}
+}
+
+// A signal on the 23:30 bar may fill only at 23:45; when that candle is missing the next candle
+// is the next morning and the signal is dropped instead of carrying over.
 func TestEngineDropsSignalWhenNextSlotMissing(t *testing.T) {
-	bars := dropBars("2026-09-14 23:30")
-	c := bars[len(bars)-1].c
+	bars := spikeBars("2026-09-14 23:30")
+	sig := len(bars) - 1
 	bars = append(bars,
-		bar{at("2026-09-15 07:00"), c, c, c, c},
-		bar{at("2026-09-15 07:15"), c, c, c, c},
+		bar{at("2026-09-15 07:00"), 99.5, 99.5, 99.5, 99.5},
+		bar{at("2026-09-15 07:15"), 99.5, 99.5, 99.5, 99.5},
 	)
-	res := runEngine(bars)
+	res := runEngine(bars, sig)
 	if len(res.Trades) != 0 || res.BarsInMarket != 0 {
 		t.Fatalf("trades = %d, barsInMarket = %d, want no position: %+v", len(res.Trades), res.BarsInMarket, res.Trades)
 	}
