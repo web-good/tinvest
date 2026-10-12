@@ -147,3 +147,57 @@ func TestNoEODExit(t *testing.T) {
 		t.Fatalf("23:45 flat: kind = %v %q, want None", sig.Kind, sig.Reason)
 	}
 }
+
+// An entry on the cross bar itself, above that bar's close, still sells: the RSI exit has no
+// deferral and no in-profit condition.
+func TestRSIExitOnFillBarBelowEntry(t *testing.T) {
+	bars := slideAndRise()
+	k := firstCross(bars, 6, 70, 40)
+	if k < 0 {
+		t.Fatal("fixture: RSI(6) never crosses 70 on the rise")
+	}
+	p := DefaultParams()
+	p.StopDailyATR = 0
+	if sig := held(p, bars[:k+1], 200, bars[k].t); sig.Kind != model.SignalSell || sig.Reason != "RSI" {
+		t.Fatalf("fill bar crossing below the entry: got %v %q, want Sell RSI", sig.Kind, sig.Reason)
+	}
+}
+
+// When the stop cannot be placed (no ATR anywhere, or the level would be at or below zero) there
+// is no SL sell and no panic, and the RSI exit still works.
+func TestStopUnplaceableLeavesRSIExit(t *testing.T) {
+	bars := slideAndRise()
+	k := firstCross(bars, 6, 70, 40)
+	if k < 0 {
+		t.Fatal("fixture: RSI(6) never crosses 70 on the rise")
+	}
+	s := NewWithParams("TEST", step15, DefaultParams())
+
+	// Frozen ATR and today's ATR both unknown.
+	md := fixture(bars[:k])
+	md.DailyHighs = nil
+	md.Position = position(200, bars[30].t, 0)
+	md.Lows[len(md.Lows)-1] = 1
+	if sig := s.Decide(md); sig.Kind != model.SignalNone {
+		t.Fatalf("ATR unknown, deep low: got %v %q, want None", sig.Kind, sig.Reason)
+	}
+	md = fixture(bars[:k+1])
+	md.DailyHighs = nil
+	md.Position = position(200, bars[30].t, 0)
+	if sig := s.Decide(md); sig.Kind != model.SignalSell || sig.Reason != "RSI" {
+		t.Fatalf("ATR unknown, cross bar: got %v %q, want Sell RSI", sig.Kind, sig.Reason)
+	}
+
+	// Stop level entry − 1.0×ATR ≤ 0.
+	md = fixture(bars[:k])
+	md.Position = position(1.5, bars[30].t, fixtureATR)
+	md.Lows[len(md.Lows)-1] = 0.1
+	if sig := s.Decide(md); sig.Kind != model.SignalNone {
+		t.Fatalf("stop below zero, deep low: got %v %q, want None", sig.Kind, sig.Reason)
+	}
+	md = fixture(bars[:k+1])
+	md.Position = position(1.5, bars[30].t, fixtureATR)
+	if sig := s.Decide(md); sig.Kind != model.SignalSell || sig.Reason != "RSI" {
+		t.Fatalf("stop below zero, cross bar: got %v %q, want Sell RSI", sig.Kind, sig.Reason)
+	}
+}
