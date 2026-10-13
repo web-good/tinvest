@@ -224,6 +224,10 @@
 //   - ВЫХОД: максимум полосы на 60 (1.817), рельеф выше монотонно падает до 0.929 на 85; сам
 //     RSI-выход критичен — при UseRSIExit 0 PF ниже единицы на всей оси цели. Трейл 0.5 даёт
 //     +0.144 PF над baseline, с 1.0 не срабатывает ни разу.
+//
+// Окно запрета покупок 2026-10-14: EntryBlockFrom/To = 1130/1600 — покупок нет с 11:30 до 16:00
+// MSK по закрытию сигнального бара. Общее решение для всей вселенной pullback, не калибровка
+// тикера: замер на 10 тикерах (24 мес) — PF пула 2.76 -> 3.38, сумма доходностей −5%.
 package sngsp
 
 import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
@@ -253,5 +257,7 @@ func DefaultParams() core.Params {
 		UseRSIExit:      1,
 		UseTrail:        1,
 		TrailDailyATR:   0.5,
+		EntryBlockFrom:  1130,
+		EntryBlockTo:    1600,
 	}
 }

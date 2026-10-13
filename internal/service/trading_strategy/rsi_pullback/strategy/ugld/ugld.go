@@ -128,6 +128,10 @@
 // видевший все тестовые окна. Сравнивать 3.627 с планкой 1.5 нельзя. Тикер остаётся в
 // RSI_PULLBACK_TICKERS (он там с самого начала), и перекалибровка — замена литерала внутри
 // уже принятого решения, а не новый ввод в прод.
+//
+// Окно запрета покупок 2026-10-14: EntryBlockFrom/To = 1130/1600 — покупок нет с 11:30 до 16:00
+// MSK по закрытию сигнального бара. Общее решение для всей вселенной pullback, не калибровка
+// тикера: замер на 10 тикерах (24 мес) — PF пула 2.76 -> 3.38, сумма доходностей −5%.
 package ugld
 
 import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
@@ -156,5 +160,7 @@ func DefaultParams() core.Params {
 		UseRSIExit:      1,
 		UseTrail:        1,
 		TrailDailyATR:   0.5,
+		EntryBlockFrom:  1130,
+		EntryBlockTo:    1600,
 	}
 }

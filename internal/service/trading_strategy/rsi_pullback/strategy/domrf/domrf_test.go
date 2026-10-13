@@ -32,6 +32,8 @@ func TestCalibratedLiteralIsPinned(t *testing.T) {
 		UseRSIExit:      1,
 		UseTrail:        0,
 		TrailDailyATR:   0,
+		EntryBlockFrom:  1130,
+		EntryBlockTo:    1600,
 	}
 	if got := DefaultParams(); got != want {
 		t.Fatalf("откалиброванный литерал DOMRF изменился:\n got: %+v\nwant: %+v", got, want)

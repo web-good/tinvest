@@ -31,6 +31,8 @@ func TestParamsAreTheAcceptedPoint(t *testing.T) {
 		TrailDailyATR:   0,
 		StopOnClose:     1,
 		CatStopMult:     2,
+		EntryBlockFrom:  1130,
+		EntryBlockTo:    1600,
 	}
 	if got := DefaultParams(); got != want {
 		t.Fatalf("литерал точки VSMO разошёлся со снимком:\n got: %+v\nwant: %+v", got, want)

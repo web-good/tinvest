@@ -354,7 +354,8 @@ func TestCrossHelpersBoundaries(t *testing.T) {
 // must not influence the entry decision at all. The three probes are the times the retired
 // 07:00-17:00 window used to reject — before the old open, exactly at the old close (which the
 // old `< SessionEndMin` excluded), and deep into the evening session. A reintroduced window of
-// any plausible shape fails at least one of them.
+// any plausible shape fails at least one of them. The opt-in EntryBlock window is covered by
+// TestEntryBlockWindow; with it off (the default) the hour never gates.
 func TestEnterHasNoTimeOfDayWindow(t *testing.T) {
 	// 2026-06-01 is a Monday, so every probe below is a weekday bar.
 	for _, at := range []time.Time{
@@ -370,6 +371,43 @@ func TestEnterHasNoTimeOfDayWindow(t *testing.T) {
 			if got := s.Decide(md); got.Kind != model.SignalBuy {
 				t.Fatalf("Kind = %v, want Buy: the hour of a weekday bar must not gate the entry",
 					got.Kind)
+			}
+		})
+	}
+}
+
+// TestEntryBlockWindow: the window reads the BUY time — the signal bar's close. With 1130-1600 the
+// bar opened 11:00 (buys 11:30) and the bar opened 15:00 (buys 15:30) are refused; the bar opened
+// 10:30 (buys 11:00) and the bar opened 15:30 (buys 16:00) may buy. With EntryBlockMonThu the
+// Friday bar stays open.
+func TestEntryBlockWindow(t *testing.T) {
+	p := entryParams()
+	p.EntryBlockFrom, p.EntryBlockTo = 1130, 1600
+	pMonThu := p
+	pMonThu.EntryBlockMonThu = 1
+	// 2026-06-01 is a Monday, 2026-06-05 a Friday; times are bar OPENS.
+	cases := []struct {
+		name string
+		p    Params
+		at   time.Time
+		buy  bool
+	}{
+		{"buys before From", p, time.Date(2026, 6, 1, 10, 30, 0, 0, msk), true},
+		{"buys at From", p, time.Date(2026, 6, 1, 11, 0, 0, 0, msk), false},
+		{"last blocked buy", p, time.Date(2026, 6, 1, 15, 0, 0, 0, msk), false},
+		{"buys at To", p, time.Date(2026, 6, 1, 15, 30, 0, 0, msk), true},
+		{"Friday, every weekday", p, time.Date(2026, 6, 5, 12, 0, 0, 0, msk), false},
+		{"Friday, Mon-Thu only", pMonThu, time.Date(2026, 6, 5, 12, 0, 0, 0, msk), true},
+		{"Monday, Mon-Thu only", pMonThu, time.Date(2026, 6, 1, 12, 0, 0, 0, msk), false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			md := entryFixture()
+			shiftTo(&md, c.at)
+			md = withDay(md, 10.0, 101, 100)
+			got := NewWithParams("T", c.p).Decide(md)
+			if (got.Kind == model.SignalBuy) != c.buy {
+				t.Fatalf("Kind = %v, want buy=%v", got.Kind, c.buy)
 			}
 		})
 	}

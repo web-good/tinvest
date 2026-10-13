@@ -30,6 +30,7 @@ func withRealGAZP(t *testing.T) core.Params {
 	if real.StopOnClose != 1 {
 		t.Fatalf("боевой GAZP без StopOnClose — тест режима потерял смысл: %+v", real)
 	}
+	real.EntryBlockFrom, real.EntryBlockTo, real.EntryBlockMonThu = 0, 0, 0 // фикстуры днём, см. TestMain
 	paramsByTicker[gazp.Ticker] = real
 	t.Cleanup(func() { paramsByTicker[gazp.Ticker] = pinned })
 	return real

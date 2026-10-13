@@ -151,6 +151,7 @@ func TestLagBoostIndexFailureKeepsBaseSize(t *testing.T) {
 
 // Два входа в одном пассе при упавших свечах индекса — один запрос, оба ×1.
 func TestLagBoostIndexFetchedOncePerPass(t *testing.T) {
+	withoutEntryWindow(t, "T") // фикстура днём, окно запрета боевого T её закрыло бы
 	e := newSharedEnv(t, sharedNow, []string{"GAZP", "T"}, boostOn)
 	e.instruments.EXPECT().Shares(mock.Anything).Return(sharesOf("GAZP", "T"), nil)
 	e.instruments.EXPECT().IndicativeUIDByTicker(mock.Anything, "IMOEX").Return("uid-imoex", nil).Once()
@@ -167,6 +168,7 @@ func TestLagBoostIndexFetchedOncePerPass(t *testing.T) {
 
 // Два входа в одном пассе при доступном индексе — UID и свечи IMOEX грузятся один раз, оба ×2.
 func TestLagBoostIndexReusedWithinPass(t *testing.T) {
+	withoutEntryWindow(t, "T") // фикстура днём, окно запрета боевого T её закрыло бы
 	e := newSharedEnv(t, sharedNow, []string{"GAZP", "T"}, boostOn)
 	e.instruments.EXPECT().Shares(mock.Anything).Return(sharesOf("GAZP", "T"), nil)
 	e.instruments.EXPECT().IndicativeUIDByTicker(mock.Anything, "IMOEX").Return("uid-imoex", nil).Once()

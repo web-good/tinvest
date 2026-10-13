@@ -21,7 +21,8 @@ import (
 // Поля режима стопа по закрытию (2026-10-13) — исключение из равенства: это не калибровка.
 func TestParamsStayAtTheCoreBaselineByDesign(t *testing.T) {
 	got, want := DefaultParams(), core.DefaultParams()
-	want.StopOnClose, want.CatStopMult = 1, 2 // режим стопа по закрытию — не калибровка
+	want.StopOnClose, want.CatStopMult = 1, 2           // режим стопа по закрытию — не калибровка
+	want.EntryBlockFrom, want.EntryBlockTo = 1130, 1600 // окно запрета покупок — не калибровка
 	if got != want {
 		t.Fatalf("TGKA торгует дефолты ядра по решению владельца 2026-09-03; параметры разошлись с baseline:\n got: %+v\nwant: %+v", got, want)
 	}

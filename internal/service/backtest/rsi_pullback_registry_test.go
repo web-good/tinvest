@@ -220,6 +220,8 @@ func TestRSIPullbackTBankKeepsItsOwnCalibratedLiteral(t *testing.T) {
 		TrailDailyATR:   0.5,
 		StopOnClose:     1,
 		CatStopMult:     2,
+		EntryBlockFrom:  1130,
+		EntryBlockTo:    1600,
 	}
 	tbRaw := RSIPullbackLookupOrGeneric("T").DefaultParams()
 	tb, ok := tbRaw.(core.Params)
@@ -961,7 +963,8 @@ func TestRSIPullbackTGKAServesTheCoreBaselineByDesign(t *testing.T) {
 		t.Fatalf("ParseParams: %v", err)
 	}
 	want := core.DefaultParams()
-	want.StopOnClose, want.CatStopMult = 1, 2 // режим стопа по закрытию (2026-10-13) — не калибровка
+	want.StopOnClose, want.CatStopMult = 1, 2           // режим стопа по закрытию (2026-10-13) — не калибровка
+	want.EntryBlockFrom, want.EntryBlockTo = 1130, 1600 // окно запрета покупок (2026-10-14) — не калибровка
 	if p != want {
 		t.Fatalf("реестр отдаёт не baseline:\n got: %+v\nwant: %+v", p, want)
 	}
@@ -1216,7 +1219,8 @@ func TestRSIPullbackCNRUServesTheCoreBaselineByDesign(t *testing.T) {
 		t.Fatalf("ParseParams: %v", err)
 	}
 	want := core.DefaultParams()
-	want.StopOnClose, want.CatStopMult = 1, 2 // режим стопа по закрытию (2026-10-13) — не калибровка
+	want.StopOnClose, want.CatStopMult = 1, 2           // режим стопа по закрытию (2026-10-13) — не калибровка
+	want.EntryBlockFrom, want.EntryBlockTo = 1130, 1600 // окно запрета покупок (2026-10-14) — не калибровка
 	if p != want {
 		t.Fatalf("реестр отдаёт не baseline:\n got: %+v\nwant: %+v", p, want)
 	}

@@ -47,10 +47,27 @@ func TestMain(m *testing.M) {
 	// защитном уровне, подтяжка трейла, продажа по SL). Боевой GAZP торгует стопом по
 	// закрытию — для механических тестов он подменён копией без режима; тесты режима
 	// возвращают боевой литерал хелпером withRealGAZP.
+	// Окно запрета покупок (EntryBlockFrom/To) боевого литерала закрывает дневные бары, на которых
+	// стоят фикстуры входа; механика раннера от окна не зависит (его пинит ядро), поэтому у
+	// копии оно тоже снято. realParams хранит литерал боевым.
 	p := paramsByTicker[gazp.Ticker]
 	p.StopOnClose, p.CatStopMult = 0, 0
+	p.EntryBlockFrom, p.EntryBlockTo, p.EntryBlockMonThu = 0, 0, 0
 	paramsByTicker[gazp.Ticker] = p
 	os.Exit(m.Run())
+}
+
+// withoutEntryWindow снимает на время теста окно запрета покупок у литералов тикеров: дневные
+// фикстуры раннера иначе попадают в окно, а механику окна пинит ядро.
+func withoutEntryWindow(t *testing.T, tickers ...string) {
+	t.Helper()
+	for _, ticker := range tickers {
+		pinned := paramsByTicker[ticker]
+		p := pinned
+		p.EntryBlockFrom, p.EntryBlockTo, p.EntryBlockMonThu = 0, 0, 0
+		paramsByTicker[ticker] = p
+		t.Cleanup(func() { paramsByTicker[ticker] = pinned })
+	}
 }
 
 var msk = func() *time.Location {

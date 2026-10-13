@@ -144,6 +144,10 @@
 // docs/superpowers/plans/2026-09-10-magn-rsi-pullback-prep.md, протокол замеров:
 // reports/_analysis/magn_pullback_prep_measurements.md, отчёт калибровки:
 // docs/superpowers/plans/task-12-report-magn.md.
+//
+// Окно запрета покупок 2026-10-14: EntryBlockFrom/To = 1130/1600 — покупок нет с 11:30 до 16:00
+// MSK по закрытию сигнального бара. Общее решение для всей вселенной pullback, не калибровка
+// тикера: замер на 10 тикерах (24 мес) — PF пула 2.76 -> 3.38, сумма доходностей −5%.
 package magn
 
 import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
@@ -173,5 +177,7 @@ func DefaultParams() core.Params {
 		UseRSIExit:      1,
 		UseTrail:        0,
 		TrailDailyATR:   0,
+		EntryBlockFrom:  1130,
+		EntryBlockTo:    1600,
 	}
 }

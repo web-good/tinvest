@@ -173,6 +173,10 @@
 //     против baseline 158/1.093. Это главный кандидат в точку и одновременно главный риск
 //     переподгонки: дефолтный уровень 30 стоит далеко от рабочей зоны, а рельеф измерен на
 //     полной истории, которую видел человек.
+//
+// Окно запрета покупок 2026-10-14: EntryBlockFrom/To = 1130/1600 — покупок нет с 11:30 до 16:00
+// MSK по закрытию сигнального бара. Общее решение для всей вселенной pullback, не калибровка
+// тикера: замер на 10 тикерах (24 мес) — PF пула 2.76 -> 3.38, сумма доходностей −5%.
 package astr
 
 import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
@@ -202,5 +206,7 @@ func DefaultParams() core.Params {
 		UseRSIExit:      1,
 		UseTrail:        0,
 		TrailDailyATR:   0,
+		EntryBlockFrom:  1130,
+		EntryBlockTo:    1600,
 	}
 }

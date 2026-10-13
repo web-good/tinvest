@@ -226,6 +226,10 @@
 // Замер на этом литерале, 24 месяца, in-sample: PF 1.91 → 2.65 (118 сделок).
 // Решение торговать дефолты ядра без калибровки не меняется: от core.DefaultParams() литерал отличается
 // только двумя полями режима.
+//
+// Окно запрета покупок 2026-10-14: EntryBlockFrom/To = 1130/1600 — покупок нет с 11:30 до 16:00
+// MSK по закрытию сигнального бара. Общее решение для всей вселенной pullback, не калибровка
+// тикера: замер на 10 тикерах (24 мес) — PF пула 2.76 -> 3.38, сумма доходностей −5%.
 package cnru
 
 import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
@@ -239,6 +243,7 @@ const Ticker = "CNRU"
 // field away from core.DefaultParams() — see the package doc comment.
 func DefaultParams() core.Params {
 	p := core.DefaultParams()
-	p.StopOnClose, p.CatStopMult = 1, 2 // стоп по закрытию бара, 2026-10-13 (см. doc пакета)
+	p.StopOnClose, p.CatStopMult = 1, 2           // стоп по закрытию бара, 2026-10-13 (см. doc пакета)
+	p.EntryBlockFrom, p.EntryBlockTo = 1130, 1600 // окно запрета покупок, 2026-10-14
 	return p
 }

@@ -40,9 +40,11 @@ func TestBaselineTrackingTickersStayOutOfTheDefaultUniverse(t *testing.T) {
 		if !ok {
 			continue // отсутствие в реестре ловит тест выше
 		}
-		// Поля режима стопа по закрытию — не калибровка: сравнение с baseline идёт без них.
+		// Поля режима стопа по закрытию и окно запрета покупок — не калибровка: сравнение с
+		// baseline идёт без них.
 		q := p
 		q.StopOnClose, q.CatStopMult = 0, 0
+		q.EntryBlockFrom, q.EntryBlockTo, q.EntryBlockMonThu = 0, 0, 0
 		if reason, allowed := baselineByDesignTickers[ticker]; allowed {
 			if q != baseline {
 				t.Errorf("%s стоит в списке исключений «торгуем дефолты осознанно», но его параметры от baseline ОТЛИЧАЮТСЯ: либо тикер откалиброван и исключение надо снять, либо литерал разошёлся с решением владельца (%s)", ticker, reason)

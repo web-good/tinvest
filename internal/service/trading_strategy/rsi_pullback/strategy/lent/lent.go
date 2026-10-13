@@ -161,6 +161,10 @@
 //
 // 2026-10-13: стоп по закрытию бара с аварийной биржевой заявкой (StopOnClose=1, CatStopMult=2).
 // Замер на этом литерале, 24 месяца, in-sample: PF 2.65 → 3.03 (113 сделок).
+//
+// Окно запрета покупок 2026-10-14: EntryBlockFrom/To = 1130/1600 — покупок нет с 11:30 до 16:00
+// MSK по закрытию сигнального бара. Общее решение для всей вселенной pullback, не калибровка
+// тикера: замер на 10 тикерах (24 мес) — PF пула 2.76 -> 3.38, сумма доходностей −5%.
 package lent
 
 import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
@@ -191,5 +195,7 @@ func DefaultParams() core.Params {
 		TrailDailyATR:   0,
 		StopOnClose:     1,
 		CatStopMult:     2,
+		EntryBlockFrom:  1130,
+		EntryBlockTo:    1600,
 	}
 }

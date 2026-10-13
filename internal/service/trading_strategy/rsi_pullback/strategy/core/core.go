@@ -57,6 +57,15 @@ type Params struct {
 	// entry - CatStopMult*StopDailyATR*dailyATR — the exchange order that protects the position
 	// while nobody watches the close. 0 disables it (default 0).
 	CatStopMult float64
+	// Entry block window, in BUY time: an entry is refused when the signal bar CLOSES — the moment
+	// the backtest fills and the live runner buys — inside [EntryBlockFrom, EntryBlockTo) MSK, HHMM.
+	// 1130-1600 refuses buys at 11:30 ... 15:30 (bars opened 11:00 ... 15:00); the bar closing at
+	// 16:00 may buy. Exits are never blocked. The window is off unless 0 <= From < To;
+	// DefaultParams leaves both zero. With EntryBlockMonThu != 0 the window applies Monday to
+	// Thursday only and Friday stays open. Unlike rsi_zone, whose window reads the bar OPEN.
+	EntryBlockFrom   int // HHMM, inclusive
+	EntryBlockTo     int // HHMM, exclusive
+	EntryBlockMonThu int // 0 = every weekday; non-zero = Monday to Thursday only
 }
 
 // DefaultParams returns the spec's baseline; swept values come from calibration.
@@ -173,8 +182,8 @@ func (s *Strategy) dailyATR(md strategy.MarketData) float64 {
 }
 
 // tradingDay reports whether an entry may be opened on bar-time t. The only calendar restriction
-// left is the weekday one: there is no time-of-day entry window, so any bar of a Mon-Fri MSK day
-// can open a trade. Weekend bars stay excluded because MOEX weekend sessions are 3-4x narrower
+// left is the weekday one: any bar of a Mon-Fri MSK day can open a trade unless the optional
+// entry block window (entryBlocked) refuses it. Weekend bars stay excluded because MOEX weekend sessions are 3-4x narrower
 // and 8-17x thinner than weekday ones — an entry priced off them is priced off a different market
 // than the daily ATR that sizes its stop. A zero time skips the gate — never block on missing
 // data.
@@ -183,6 +192,24 @@ func (s *Strategy) tradingDay(t time.Time) bool {
 		return true
 	}
 	return !isWeekend(t.In(mskLoc))
+}
+
+// barDuration is the strategy's bar: it runs on 30-minute candles only.
+const barDuration = 30 * time.Minute
+
+// entryBlocked reports whether the bar opened at t CLOSES — i.e. buys — inside the entry block
+// window. A zero time or a degenerate window never blocks.
+func (s *Strategy) entryBlocked(t time.Time) bool {
+	from, to := s.p.EntryBlockFrom, s.p.EntryBlockTo
+	if t.IsZero() || from < 0 || from >= to {
+		return false
+	}
+	tl := t.Add(barDuration).In(mskLoc)
+	if s.p.EntryBlockMonThu != 0 && tl.Weekday() == time.Friday {
+		return false
+	}
+	hhmm := tl.Hour()*100 + tl.Minute()
+	return hhmm >= from && hhmm < to
 }
 
 // dayStateOK reports whether the current day is in one of the two states this strategy trades.
@@ -389,8 +416,8 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	if n < 2 || len(md.Highs) != n || len(md.Lows) != n {
 		return sig
 	}
-	// 1. weekday: any time of a trading day will do, weekends will not.
-	if !s.tradingDay(s.barTime(md)) {
+	// 1. weekday, outside the entry block window (off by default); weekends never.
+	if barT := s.barTime(md); !s.tradingDay(barT) || s.entryBlocked(barT) {
 		return sig
 	}
 	i := n - 1
@@ -602,6 +629,10 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 	i := n - 1
 	barT := s.barTime(md)
 	fmt.Fprintf(&sb, "день: вход разрешён? %v (бар %v, выходные закрыты)\n", s.tradingDay(barT), barT)
+	if s.p.EntryBlockFrom >= 0 && s.p.EntryBlockFrom < s.p.EntryBlockTo {
+		fmt.Fprintf(&sb, "окно запрета покупок %04d–%04d MSK по закрытию бара (только Пн–Чт: %v): покупка в окне? %v\n",
+			s.p.EntryBlockFrom, s.p.EntryBlockTo, s.p.EntryBlockMonThu != 0, s.entryBlocked(barT))
+	}
 
 	rsi := indicators.RSISeries(md.Closes, s.p.RSIPeriod)
 	if len(rsi) == n {

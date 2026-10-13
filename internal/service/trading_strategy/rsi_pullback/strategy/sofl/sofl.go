@@ -229,6 +229,10 @@
 //     требуемых 3/4, и поле упало на дефолт ядра 0.5. На принятой точке доля SL-выходов упала
 //     втрое против baseline (30.7% -> 12.8%) при max DD 3.69% на окне B (6.16% на полной истории)
 //     против потолка риск-гейта B 18.15%.
+//
+// Окно запрета покупок 2026-10-14: EntryBlockFrom/To = 1130/1600 — покупок нет с 11:30 до 16:00
+// MSK по закрытию сигнального бара. Общее решение для всей вселенной pullback, не калибровка
+// тикера: замер на 10 тикерах (24 мес) — PF пула 2.76 -> 3.38, сумма доходностей −5%.
 package sofl
 
 import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
@@ -257,5 +261,7 @@ func DefaultParams() core.Params {
 		UseRSIExit:      1,
 		UseTrail:        0,
 		TrailDailyATR:   0,
+		EntryBlockFrom:  1130,
+		EntryBlockTo:    1600,
 	}
 }
