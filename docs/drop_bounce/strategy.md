@@ -49,7 +49,7 @@
 
 ## Пакеты тикеров
 
-Реестр `dropBounceRegistry` держит по одному литералу `Params()` на тикер, заведённый калибровкой на этих правилах; тикер без пакета работает на `core.DefaultParams()`; JSON `-params` / `-calibrate` ложится поверх. Поля прежних правил (`VolDailyMult`, `VolAvgPeriod`) в JSON молча игнорируются.
+Реестр `dropBounceRegistry` держит по одному литералу `Params()` на тикер, заведённый калибровкой на этих правилах; тикер без пакета работает на `core.DefaultParams()`; JSON `-params` / `-calibrate` ложится поверх. Поля прежних правил (`VolDailyMult`, `VolAvgPeriod`) в файле `-params` молча игнорируются (прогон идёт на дефолтах), а сетка `-calibrate` с таким полем падает с ошибкой `unknown grid field`.
 
 Кандидатов на калибровку подбирает скринер `cmd/dropscreen` — `docs/drop_bounce/screener.md`.
 

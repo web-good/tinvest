@@ -46,8 +46,9 @@ func TestDropBounceParseParamsLayersOverDefaults(t *testing.T) {
 	}
 }
 
-// json.Unmarshal ignores unknown fields: a grid or params file written for the volume-spike rules
-// runs on the defaults instead of failing. Pinned so nobody assumes the old fields still apply.
+// json.Unmarshal ignores unknown fields: a -params file written for the volume-spike rules runs on
+// the defaults instead of failing (a -calibrate grid with an old field is rejected by applyField).
+// Pinned so nobody assumes the old fields still apply.
 func TestDropBounceParseParamsIgnoresRemovedFields(t *testing.T) {
 	b, err := DropBounceLookupOrGeneric("ZZZZ", enum.Hour1)
 	if err != nil {
