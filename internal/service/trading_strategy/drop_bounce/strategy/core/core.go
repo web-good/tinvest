@@ -5,9 +5,10 @@
 // and is not above RSICap (CROSS); (3) the day's range so far, TodayHigh − TodayLow, is below
 // DaySpentATR daily ATRs (Wilder, DailyATRPeriod, completed weekday dailies). The backtest fills
 // at the next bar's open (Config.EntryAtNextOpen); the daily ATR is frozen for the trade. Exits,
-// in order: a stop StopDailyATR daily ATRs below the fill price, then RSI(RSIPeriod) crossing
-// RSIExit upward whatever the price. No end-of-day exit: positions carry overnight. Pure,
-// stateless between bars and ticker-agnostic. Run with `-strategy drop_bounce -interval Hour1`.
+// in order: a stop StopDailyATR daily ATRs below the fill price; then RSI(RSIPeriod) crossing
+// RSIExit upward whatever the price, which sells at once on a red MACD histogram and on a green one
+// arms an exit on the histogram's next green→red flip. No end-of-day exit: positions carry
+// overnight. Pure, stateless between bars and ticker-agnostic. Run with `-strategy drop_bounce -interval Hour1`.
 package core
 
 import (
@@ -38,8 +39,17 @@ type Params struct {
 	StopDailyATR float64
 	// DailyATRPeriod is the Wilder ATR length over completed weekday dailies (default 14).
 	DailyATRPeriod int
-	RSIExit        float64 // sell when RSI crosses this upward; 0 = off (default 70)
-	StartHour      int     // signal bars must start at/after StartHour:00 MSK (default 7)
+	// RSIExit is the RSI level whose upward cross triggers the exit logic: on a red MACD histogram
+	// the position is sold at once, on a green one the exit is armed for the histogram's next
+	// green→red flip; 0 = RSI and MACD exits off, only the stop remains (default 70).
+	RSIExit   float64
+	StartHour int // signal bars must start at/after StartHour:00 MSK (default 7)
+	// MACDFast, MACDSlow and MACDSignal are the MACD(12,26,9) periods whose histogram
+	// (MACD line − signal line) colours the RSI cross and times the armed exit. Invalid periods
+	// (fast ≥ slow, a non-positive one) leave no histogram: it then counts as red.
+	MACDFast   int
+	MACDSlow   int
+	MACDSignal int
 }
 
 // DefaultParams returns the owner's initial configuration.
@@ -54,6 +64,9 @@ func DefaultParams() Params {
 		DailyATRPeriod: 14,
 		RSIExit:        70,
 		StartHour:      7,
+		MACDFast:       12,
+		MACDSlow:       26,
+		MACDSignal:     9,
 	}
 }
 
@@ -74,10 +87,11 @@ func NewWithParams(ticker string, step time.Duration, p Params) *Strategy {
 
 func (s *Strategy) Ticker() string { return s.ticker }
 
-// Lookback is enough history for the EMA (three lengths: the SMA seed has faded) and the Wilder
-// RSI to converge, plus the previous bar the cross compares against.
+// Lookback is enough history for the EMA (three lengths: the SMA seed has faded), the Wilder RSI
+// and the MACD (three slow+signal lengths) to converge, plus the previous bar the cross compares
+// against.
 func (s *Strategy) Lookback() int {
-	return max(minLookback, 3*s.p.EMAPeriod, 4*s.p.RSIPeriod+2)
+	return max(minLookback, 3*s.p.EMAPeriod, 4*s.p.RSIPeriod+2, 3*(s.p.MACDSlow+s.p.MACDSignal))
 }
 
 // mskLoc anchors every calendar rule to Moscow (UTC fallback).
@@ -214,8 +228,8 @@ func trendUp(closeP, emaNow float64) bool {
 
 // manage exits in priority order: the stop StopDailyATR daily ATRs below the fill price (the ATR
 // frozen at entry, today's ATR when the position carries none; intrabar, filled by the engine at
-// min(stop, open)), then at the bar's close RSI(RSIPeriod) crossing RSIExit upward, whatever the
-// price. There is no end-of-day exit.
+// min(stop, open)), then at the bar's close the RSI/MACD exit (manageRSIMACD). There is no
+// end-of-day exit.
 func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal {
 	pos := md.Position
 	n := len(md.Closes)
@@ -237,16 +251,83 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 			return sig
 		}
 	}
-	// RSISeries is 0 up to index RSIPeriod−1, so the cross needs bars RSIPeriod and later.
-	if s.p.RSIExit > 0 && s.p.RSIPeriod > 0 && n >= s.p.RSIPeriod+2 {
-		rsi := indicators.RSISeries(md.Closes, s.p.RSIPeriod)
-		if prev, cur := rsi[i-1], rsi[i]; crossUp(prev, cur, s.p.RSIExit) {
-			sig.Kind, sig.Reason = model.SignalSell, "RSI"
-			sig.ExitReason = fmt.Sprintf("RSI: RSI(%d) %.1f → %.1f пересёк %.0f вверх, выход по %.4f (вход %.4f)",
-				s.p.RSIPeriod, prev, cur, s.p.RSIExit, md.Closes[i], entry)
+	if s.p.RSIExit > 0 && s.p.RSIPeriod > 0 {
+		return s.manageRSIMACD(md, sig)
+	}
+	return sig
+}
+
+// manageRSIMACD is the exit on the bar's close once the stop has not fired. RSI(RSIPeriod) crossing
+// RSIExit upward sells at once when the MACD histogram on that bar is red; on a green histogram it
+// only arms the exit, and the next green→red flip of the histogram sells with reason MACD. Arming is
+// recomputed from history on every call: a cross at bar j ≥ the fill bar with hist[j] ≥ 0 and j < i
+// arms. A cross on the fill bar counts. An EntryTime before the first bar (or zero) scans from the
+// first bar where the cross is evaluable. Without a histogram (invalid periods, too short history)
+// it counts as red: the cross sells at once and MACD never arms.
+func (s *Strategy) manageRSIMACD(md strategy.MarketData, sig model.Signal) model.Signal {
+	p := s.p
+	pos := md.Position
+	n := len(md.Closes)
+	i := n - 1
+	// RSISeries is 0 up to index RSIPeriod−1, so the cross needs bars RSIPeriod+1 and later.
+	if n < p.RSIPeriod+2 {
+		return sig
+	}
+	rsi := indicators.RSISeries(md.Closes, p.RSIPeriod)
+	hist := macdHistogram(md.Closes, p)
+	red := func(k int) bool { return hist == nil || hist[k] < 0 }
+	entry := pos.PurchasePrice
+	if prev, cur := rsi[i-1], rsi[i]; crossUp(prev, cur, p.RSIExit) && red(i) {
+		sig.Kind, sig.Reason = model.SignalSell, "RSI"
+		sig.ExitReason = fmt.Sprintf("RSI: RSI(%d) %.1f → %.1f пересёк %.0f вверх, гистограмма MACD %.4f < 0, выход по %.4f (вход %.4f)",
+			p.RSIPeriod, prev, cur, p.RSIExit, histAt(hist, i), md.Closes[i], entry)
+		return sig
+	}
+	if hist == nil || i < 1 || !(hist[i-1] >= 0 && hist[i] < 0) {
+		return sig
+	}
+	from := p.RSIPeriod + 1
+	if len(md.Times) == n && !pos.EntryTime.IsZero() {
+		fill := n // no bar at or after the entry time: nothing to scan
+		for k, t := range md.Times {
+			if !t.Before(pos.EntryTime) {
+				fill = k
+				break
+			}
+		}
+		from = max(from, fill)
+	}
+	for j := from; j < i; j++ {
+		if crossUp(rsi[j-1], rsi[j], p.RSIExit) && !red(j) {
+			sig.Kind, sig.Reason = model.SignalSell, "MACD"
+			sig.ExitReason = fmt.Sprintf("MACD: гистограмма %.4f → %.4f перекрасилась в красную после RSI ≥ %.0f (бар %s), выход по %.4f (вход %.4f)",
+				hist[i-1], hist[i], p.RSIExit, md.Times[j].In(mskLoc).Format("2006-01-02 15:04"), md.Closes[i], entry)
+			return sig
 		}
 	}
 	return sig
+}
+
+// macdHistogram is MACD line − signal line over closes, or nil when the periods are invalid or the
+// history is too short.
+func macdHistogram(closes []float64, p Params) []float64 {
+	m, sg := indicators.MACD(closes, p.MACDFast, p.MACDSlow, p.MACDSignal)
+	if m == nil {
+		return nil
+	}
+	h := make([]float64, len(m))
+	for k := range m {
+		h[k] = m[k] - sg[k]
+	}
+	return h
+}
+
+// histAt reads a histogram value, 0 when there is no histogram.
+func histAt(hist []float64, k int) float64 {
+	if hist == nil {
+		return 0
+	}
+	return hist[k]
 }
 
 // crossUp reports whether a series moved from below level to at or above it.

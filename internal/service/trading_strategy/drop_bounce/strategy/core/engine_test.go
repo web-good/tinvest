@@ -1,11 +1,12 @@
 // engine_test.go runs drop_bounce through the real backtest engine on 1h bars to pin what it
 // relies on: the day extent (the day gate) and dailies reaching the strategy, entry at the next bar's open, the
-// daily-ATR stop filled at the gap open overnight, the RSI exit, and a signal dropped when the
+// daily-ATR stop filled at the gap open overnight, the RSI exit on a red MACD histogram, the armed MACD exit, and a signal dropped when the
 // next slot is missing.
 package core
 
 import (
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -62,6 +63,65 @@ func TestEngineEntryAndRSIExit(t *testing.T) {
 	}
 	if tr.Reason != "RSI" {
 		t.Fatalf("exit reason %q, want RSI", tr.Reason)
+	}
+	// The steady +2% tail follows a drop: the histogram is still red at the cross, so it sells at once.
+	if !strings.Contains(tr.ExitReason, "гистограмма MACD") {
+		t.Fatalf("exit reason text %q lacks the histogram", tr.ExitReason)
+	}
+}
+
+// TestEngineArmedMACDExit buys the same dip, then climbs a zigzag (+0.8%, −0.4%: RSI(6) stays
+// below 70) until the histogram is green, spikes through RSI 70 (arming the exit, no sale) and
+// falls: the first green→red flip sells with reason MACD.
+func TestEngineArmedMACDExit(t *testing.T) {
+	bars := signalBars("2026-09-16 12:00")
+	last := bars[len(bars)-1].c
+	f := last * 1.001
+	bars = append(bars, bar{at("2026-09-16 13:00"), f, f, f, f})
+	entryIdx := len(bars) - 1
+	p := f
+	var tail []float64
+	for i := 0; i < 20; i++ {
+		if i%2 == 0 {
+			p *= 1.008
+		} else {
+			p *= 0.996
+		}
+		tail = append(tail, p)
+	}
+	tail = append(tail, steps(p, 3, 1.5)...)
+	tail = append(tail, steps(tail[len(tail)-1], 10, -0.7)...)
+	prev := f
+	for i, c := range tail {
+		bars = append(bars, bar{at("2026-09-16 14:00").Add(time.Duration(i) * stepH1), prev, max(prev, c), min(prev, c), c})
+		prev = c
+	}
+	// Premise: the first RSI cross of 70 after the fill has a green histogram, and a flip follows.
+	h := histOf(bars)
+	cross := firstCross(bars, 6, 70, entryIdx)
+	if cross < 0 || h[cross] < 0.05 {
+		t.Fatalf("fixture: first cross %d must carry a clearly green histogram, hist=%v", cross, h)
+	}
+	flip := -1
+	for k := cross + 1; k < len(bars); k++ {
+		if h[k-1] >= 0 && h[k] < 0 {
+			flip = k
+			break
+		}
+	}
+	if flip < 0 {
+		t.Fatal("fixture: no green→red flip after the cross")
+	}
+	res := runEngine(bars)
+	if len(res.Trades) != 1 {
+		t.Fatalf("trades = %d, want 1: %+v", len(res.Trades), res.Trades)
+	}
+	tr := res.Trades[0]
+	if !tr.EntryTime.Equal(at("2026-09-16 13:00")) || math.Abs(tr.EntryPrice-f) > eps {
+		t.Fatalf("entry %v @ %v, want %v @ 13:00", tr.EntryPrice, tr.EntryTime, f)
+	}
+	if tr.Reason != "MACD" || !tr.ExitTime.Equal(bars[flip].t) {
+		t.Fatalf("exit %q at %v, want MACD at the flip bar %v", tr.Reason, tr.ExitTime, bars[flip].t)
 	}
 }
 

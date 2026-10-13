@@ -14,7 +14,8 @@ Usage (from the repo root):
 import json, os, re, sys
 
 DEFAULTS = dict(RSIPeriod=6, RSIZone=30, RSICap=50, EMAPeriod=200, DaySpentATR=0.7,
-                StopDailyATR=1.0, DailyATRPeriod=14, RSIExit=70, StartHour=7)
+                StopDailyATR=1.0, DailyATRPeriod=14, RSIExit=70, StartHour=7,
+                MACDFast=12, MACDSlow=26, MACDSignal=9)
 ZONES = [25, 30, 35]
 CAPS = [40, 50, 60]
 DAY_SPENT = [0.3, 0.5, 0.7, 1.0]

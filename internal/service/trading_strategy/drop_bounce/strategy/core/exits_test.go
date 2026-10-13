@@ -2,6 +2,7 @@ package core
 
 import (
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -19,6 +20,13 @@ func position(entry float64, entryTime time.Time, atr float64) *strategy.Positio
 func stopOnly() Params {
 	p := DefaultParams()
 	p.RSIExit = 0
+	return p
+}
+
+// stopOnlyOff is the default params without the stop, so only RSI/MACD exits can fire.
+func stopOnlyOff() Params {
+	p := DefaultParams()
+	p.StopDailyATR = 0
 	return p
 }
 
@@ -103,13 +111,46 @@ func firstCross(bars []bar, period int, level float64, from int) int {
 	return -1
 }
 
-// The RSI exit sells at the cross whatever the price: here far below the entry.
-func TestRSIExitSellsAtTheCross(t *testing.T) {
-	bars := slideAndRise()
+// closesOf is the bar closes.
+func closesOf(bars []bar) []float64 {
+	out := make([]float64, len(bars))
+	for i, b := range bars {
+		out[i] = b.c
+	}
+	return out
+}
+
+// histOf is the MACD(12,26,9) histogram over the bars with the same function the strategy uses.
+func histOf(bars []bar) []float64 {
+	m, s := indicators.MACD(closesOf(bars), 12, 26, 9)
+	if m == nil {
+		return nil
+	}
+	h := make([]float64, len(m))
+	for i := range m {
+		h[i] = m[i] - s[i]
+	}
+	return h
+}
+
+// redCross is the first RSI(6) cross of 70 from bar 40 on, guarded: the histogram there must be
+// red, otherwise the fixture no longer proves an immediate RSI exit.
+func redCross(t *testing.T, bars []bar) int {
+	t.Helper()
 	k := firstCross(bars, 6, 70, 40)
 	if k < 0 {
 		t.Fatal("fixture: RSI(6) never crosses 70 on the rise")
 	}
+	if h := histOf(bars); h == nil || h[k] >= 0 {
+		t.Fatalf("fixture: MACD histogram at the cross bar must be red, got %v", h)
+	}
+	return k
+}
+
+// The RSI exit sells at a red-histogram cross whatever the price: here far below the entry.
+func TestRSIExitSellsAtTheCross(t *testing.T) {
+	bars := slideAndRise()
+	k := redCross(t, bars)
 	p := DefaultParams()
 	p.StopDailyATR = 0
 	if sig := held(p, bars[:k], 200, bars[30].t); sig.Kind != model.SignalNone {
@@ -127,10 +168,7 @@ func TestRSIExitSellsAtTheCross(t *testing.T) {
 // On a bar that both crosses RSI 70 and touches the stop, the stop wins.
 func TestStopBeatsRSIExit(t *testing.T) {
 	bars := slideAndRise()
-	k := firstCross(bars, 6, 70, 40)
-	if k < 0 {
-		t.Fatal("fixture: RSI(6) never crosses 70 on the rise")
-	}
+	k := redCross(t, bars)
 	bars = bars[:k+1]
 	entry := bars[k].c
 	bars[k].l = entry - 2.5 // stop = entry − 1.0 × fixtureATR
@@ -152,10 +190,7 @@ func TestNoEODExit(t *testing.T) {
 // deferral and no in-profit condition.
 func TestRSIExitOnFillBarBelowEntry(t *testing.T) {
 	bars := slideAndRise()
-	k := firstCross(bars, 6, 70, 40)
-	if k < 0 {
-		t.Fatal("fixture: RSI(6) never crosses 70 on the rise")
-	}
+	k := redCross(t, bars)
 	p := DefaultParams()
 	p.StopDailyATR = 0
 	if sig := held(p, bars[:k+1], 200, bars[k].t); sig.Kind != model.SignalSell || sig.Reason != "RSI" {
@@ -167,10 +202,7 @@ func TestRSIExitOnFillBarBelowEntry(t *testing.T) {
 // is no SL sell and no panic, and the RSI exit still works.
 func TestStopUnplaceableLeavesRSIExit(t *testing.T) {
 	bars := slideAndRise()
-	k := firstCross(bars, 6, 70, 40)
-	if k < 0 {
-		t.Fatal("fixture: RSI(6) never crosses 70 on the rise")
-	}
+	k := redCross(t, bars)
 	s := NewWithParams("TEST", stepH1, DefaultParams())
 
 	// Frozen ATR and today's ATR both unknown.
@@ -199,5 +231,210 @@ func TestStopUnplaceableLeavesRSIExit(t *testing.T) {
 	md.Position = position(1.5, bars[30].t, fixtureATR)
 	if sig := s.Decide(md); sig.Kind != model.SignalSell || sig.Reason != "RSI" {
 		t.Fatalf("stop below zero, cross bar: got %v %q, want Sell RSI", sig.Kind, sig.Reason)
+	}
+}
+
+// wobble is n closes alternating ±0.1% around 100: a quiet lead whose RSI hovers near 50 and
+// whose MACD histogram is ~0, so the MACD seeding bias is long gone by the interesting bars.
+func wobble(n int) []float64 {
+	out := make([]float64, n)
+	p := 100.0
+	for i := range out {
+		if i%2 == 0 {
+			p *= 1.001
+		} else {
+			p /= 1.001
+		}
+		out[i] = p
+	}
+	return out
+}
+
+// Indexes of the armedPath fixture (checked by guardArmed).
+const (
+	armedCross = 100 // RSI(6) crosses 70 here with a green histogram
+	armedFlip  = 111 // the histogram turns red here for the first time since the cross
+)
+
+// armedPath is 100 wobble bars, 5 bars of +1% (RSI(6) jumps through 70 on the first, histogram
+// green), then 12 bars of −0.4% which turn the histogram red at armedFlip.
+func armedPath() []bar {
+	c := wobble(armedCross)
+	c = append(c, steps(c[len(c)-1], 5, 1)...)
+	c = append(c, steps(c[len(c)-1], 12, -0.4)...)
+	return path("2026-09-01 08:00", c)
+}
+
+// guardArmed fails loudly unless bars carry exactly one RSI cross of 70 in [7, armedFlip] at
+// armedCross with a green histogram, and the histogram is green on armedFlip−1 and red on armedFlip.
+func guardArmed(t *testing.T, bars []bar) {
+	t.Helper()
+	h := histOf(bars)
+	if h == nil {
+		t.Fatal("fixture: MACD histogram unavailable")
+	}
+	if k := firstCross(bars, 6, 70, 7); k != armedCross {
+		t.Fatalf("fixture: first RSI cross of 70 at %d, want %d", k, armedCross)
+	}
+	if k := firstCross(bars, 6, 70, armedCross+1); k >= 0 && k <= armedFlip {
+		t.Fatalf("fixture: second RSI cross of 70 at %d before the flip", k)
+	}
+	if h[armedCross] < 0 {
+		t.Fatalf("fixture: histogram at the cross is %v, want green", h[armedCross])
+	}
+	for j := armedCross; j < armedFlip; j++ {
+		if h[j] < 0 {
+			t.Fatalf("fixture: histogram red at %d before the flip", j)
+		}
+	}
+	if h[armedFlip] >= 0 {
+		t.Fatalf("fixture: histogram at the flip is %v, want red", h[armedFlip])
+	}
+}
+
+// An RSI cross on a green histogram does not sell: it only arms the exit.
+func TestRSICrossOnGreenHistogramHolds(t *testing.T) {
+	bars := armedPath()
+	guardArmed(t, bars)
+	sig := held(stopOnlyOff(), bars[:armedCross+1], 100, bars[95].t)
+	if sig.Kind != model.SignalNone {
+		t.Fatalf("cross on green: got %v %q, want hold", sig.Kind, sig.Reason)
+	}
+}
+
+// Armed by a green-histogram cross, the first green→red flip sells with reason MACD.
+func TestMACDExitAfterArmedFlip(t *testing.T) {
+	bars := armedPath()
+	guardArmed(t, bars)
+	p := stopOnlyOff()
+	if sig := held(p, bars[:armedFlip], 100, bars[95].t); sig.Kind != model.SignalNone {
+		t.Fatalf("bar before the flip: got %v %q, want hold", sig.Kind, sig.Reason)
+	}
+	sig := held(p, bars[:armedFlip+1], 100, bars[95].t)
+	if sig.Kind != model.SignalSell || sig.Reason != "MACD" {
+		t.Fatalf("flip bar: got %v %q, want Sell MACD", sig.Kind, sig.Reason)
+	}
+	if !strings.HasPrefix(sig.ExitReason, "MACD: гистограмма ") || !strings.Contains(sig.ExitReason, "перекрасилась в красную после RSI ≥ 70") {
+		t.Fatalf("exit reason %q", sig.ExitReason)
+	}
+}
+
+// A cross that happened before the entry fill bar does not arm the exit.
+func TestCrossBeforeEntryDoesNotArm(t *testing.T) {
+	bars := armedPath()
+	guardArmed(t, bars)
+	sig := held(stopOnlyOff(), bars[:armedFlip+1], 100, bars[armedCross+1].t)
+	if sig.Kind != model.SignalNone {
+		t.Fatalf("entry after the cross: got %v %q, want hold", sig.Kind, sig.Reason)
+	}
+}
+
+// The cross on the fill bar itself counts (its close is a decision bar).
+func TestCrossOnFillBarArms(t *testing.T) {
+	bars := armedPath()
+	guardArmed(t, bars)
+	sig := held(stopOnlyOff(), bars[:armedFlip+1], 100, bars[armedCross].t)
+	if sig.Kind != model.SignalSell || sig.Reason != "MACD" {
+		t.Fatalf("entry on the cross bar: got %v %q, want Sell MACD", sig.Kind, sig.Reason)
+	}
+}
+
+// An entry older than the window (or without a time) scans from the first evaluable bar.
+func TestEntryOlderThanWindowScansFromStart(t *testing.T) {
+	bars := armedPath()
+	guardArmed(t, bars)
+	for name, et := range map[string]time.Time{"before window": bars[0].t.Add(-48 * time.Hour), "zero": {}} {
+		sig := held(stopOnlyOff(), bars[:armedFlip+1], 100, et)
+		if sig.Kind != model.SignalSell || sig.Reason != "MACD" {
+			t.Fatalf("%s: got %v %q, want Sell MACD", name, sig.Kind, sig.Reason)
+		}
+	}
+}
+
+// zigPath drifts up on a ±0.3% zigzag whose RSI(6) peaks at ~66 (never reaching 70) with a green
+// histogram, then falls 0.4% a bar: the histogram flips red at zigFlip without any RSI cross.
+func zigPath() []bar {
+	c := wobble(100)
+	p := c[len(c)-1]
+	for i := 0; i < 16; i++ {
+		if i%2 == 0 {
+			p *= 1.003
+		} else {
+			p *= 0.9975
+		}
+		c = append(c, p)
+	}
+	c = append(c, steps(p, 12, -0.4)...)
+	return path("2026-09-01 08:00", c)
+}
+
+const zigFlip = 116
+
+func TestRedFlipWithoutArmingHolds(t *testing.T) {
+	bars := zigPath()
+	h := histOf(bars)
+	if h == nil || h[zigFlip-1] < 0 || h[zigFlip] >= 0 {
+		t.Fatalf("fixture: histogram must flip green→red at %d: %v", zigFlip, h)
+	}
+	if k := firstCross(bars, 6, 70, 7); k >= 0 {
+		t.Fatalf("fixture: RSI(6) crosses 70 at %d, want no cross", k)
+	}
+	for i := zigFlip; i < len(bars); i++ {
+		if sig := held(stopOnlyOff(), bars[:i+1], 100, bars[95].t); sig.Kind != model.SignalNone {
+			t.Fatalf("bar %d: got %v %q, want hold (flip without arming)", i, sig.Kind, sig.Reason)
+		}
+	}
+}
+
+// RSIExit = 0 switches off both the RSI and the MACD exit.
+func TestRSIExitZeroDisablesMACDExit(t *testing.T) {
+	bars := armedPath()
+	guardArmed(t, bars)
+	p := stopOnly()
+	if sig := held(p, bars[:armedFlip+1], 100, bars[95].t); sig.Kind != model.SignalNone {
+		t.Fatalf("RSIExit 0, armed flip: got %v %q, want hold", sig.Kind, sig.Reason)
+	}
+}
+
+// Without a histogram (invalid MACD periods) it counts as red: an RSI cross sells at once, as RSI.
+func TestInvalidMACDTreatsHistogramAsRed(t *testing.T) {
+	bars := armedPath()
+	guardArmed(t, bars)
+	p := stopOnlyOff()
+	p.MACDFast, p.MACDSlow = 26, 26
+	if m, _ := indicators.MACD(closesOf(bars), p.MACDFast, p.MACDSlow, p.MACDSignal); m != nil {
+		t.Fatal("fixture: MACD must be unavailable")
+	}
+	sig := held(p, bars[:armedCross+1], 100, bars[95].t)
+	if sig.Kind != model.SignalSell || sig.Reason != "RSI" {
+		t.Fatalf("no histogram, cross: got %v %q, want Sell RSI", sig.Kind, sig.Reason)
+	}
+	if sig := held(p, bars[:armedFlip+1], 100, bars[95].t); sig.Reason == "MACD" {
+		t.Fatal("MACD must never arm without a histogram")
+	}
+}
+
+// The stop wins over the MACD exit on the flip bar.
+func TestStopBeatsMACDExit(t *testing.T) {
+	bars := armedPath()
+	guardArmed(t, bars)
+	bars = bars[:armedFlip+1]
+	entry := bars[armedFlip].c
+	bars[armedFlip].l = entry - 2.5
+	sig := held(DefaultParams(), bars, entry, bars[95].t)
+	if sig.Reason != "SL" || math.Abs(sig.StopLoss-(entry-2)) > eps {
+		t.Fatalf("got %q stop %v, want SL at %v", sig.Reason, sig.StopLoss, entry-2)
+	}
+}
+
+// RSI exit on a red histogram carries the histogram in its reason.
+func TestRSIExitReasonMentionsHistogram(t *testing.T) {
+	bars := slideAndRise()
+	k := redCross(t, bars)
+	p := DefaultParams()
+	p.StopDailyATR = 0
+	sig := held(p, bars[:k+1], 200, bars[30].t)
+	if sig.Reason != "RSI" || !strings.Contains(sig.ExitReason, "гистограмма MACD ") {
+		t.Fatalf("got %q / %q", sig.Reason, sig.ExitReason)
 	}
 }

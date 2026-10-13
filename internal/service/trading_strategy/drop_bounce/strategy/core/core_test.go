@@ -178,7 +178,8 @@ func emaAt(c []float64, period int) float64 { return ema.Compute(c, period)[len(
 
 func TestDefaultParams(t *testing.T) {
 	want := Params{RSIPeriod: 6, RSIZone: 30, RSICap: 50, EMAPeriod: 200, DaySpentATR: 0.7,
-		StopDailyATR: 1.0, DailyATRPeriod: 14, RSIExit: 70, StartHour: 7}
+		StopDailyATR: 1.0, DailyATRPeriod: 14, RSIExit: 70, StartHour: 7,
+		MACDFast: 12, MACDSlow: 26, MACDSignal: 9}
 	if got := DefaultParams(); got != want {
 		t.Fatalf("DefaultParams() = %+v, want %+v", got, want)
 	}
@@ -192,6 +193,7 @@ func TestLookback(t *testing.T) {
 		{DefaultParams(), 600},
 		{Params{RSIPeriod: 6, EMAPeriod: 10}, 64},
 		{Params{RSIPeriod: 20, EMAPeriod: 10}, 82},
+		{Params{RSIPeriod: 6, EMAPeriod: 10, MACDSlow: 26, MACDSignal: 9}, 105},
 	}
 	for _, c := range cases {
 		if got := NewWithParams("T", stepH1, c.p).Lookback(); got != c.want {

@@ -59,7 +59,7 @@ rsi_zone любого тикера (одна функция литерала + �
 
 ## 3. Фазовый walk-forward со стопом — судья
 
-`grids.py calstop <T> Hour1` → `calstop_hour1.json` (entry → filter → risk → exit, keepTop 3): entry — `RSIPeriod` (4, 5, 6, 7) × `RSIZone` (25, 30, 35) × `RSICap` (40, 50, 60); filter — `EMAPeriod` (100, 150, 200) × `DaySpentATR` (0.3, 0.5, 0.7, 1.0); risk — `StopDailyATR` (0.5, 0.7, 1.0, 1.5, 2.0) × `DailyATRPeriod` (7, 10, 14); exit — `RSIExit` (60, 65, 70, 75, 80). `StartHour` всегда 7. **Эти списки задал владелец 2026-10-13.** Сетка одна для всех тикеров: не меняй её без просьбы владельца.
+`grids.py calstop <T> Hour1` → `calstop_hour1.json` (entry → filter → risk → exit, keepTop 3): entry — `RSIPeriod` (4, 5, 6, 7) × `RSIZone` (25, 30, 35) × `RSICap` (40, 50, 60); filter — `EMAPeriod` (100, 150, 200) × `DaySpentATR` (0.3, 0.5, 0.7, 1.0); risk — `StopDailyATR` (0.5, 0.7, 1.0, 1.5, 2.0) × `DailyATRPeriod` (7, 10, 14); exit — `RSIExit` (60, 65, 70, 75, 80; крест RSI на красной гистограмме MACD(12,26,9) выходит сразу, на зелёной взводит выход по следующей смене зелёной гистограммы на красную). `StartHour` всегда 7. **Эти списки задал владелец 2026-10-13.** Сетка одна для всех тикеров: не меняй её без просьбы владельца.
 WF:
 ```
 ... -calibrate data/params/drop_bounce/<t>/calstop_hour1.json -train-months 12 -test-months 6 -min-trades 10 -out reports/<T>_drop_bounce/wf/Hour1
