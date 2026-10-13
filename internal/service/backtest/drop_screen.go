@@ -90,6 +90,7 @@ type DropRow struct {
 	TopHalf   float64 // median share of the best half in summed profitable halves; 0 = none profitable
 	SLShare   float64 // median share of stop exits (trading configurations only)
 	RSIShare  float64 // median share of RSI exits
+	MACDShare float64 // median share of MACD exits
 	HoldDays  float64 // median of per-configuration median holding time, calendar days
 
 	Best       dropcore.Params // configuration with the highest raw train PF (reference only)
@@ -108,7 +109,7 @@ func AggregateDrop(ticker, name string, results []DropConfigResult, split time.T
 	n := len(results)
 	pfs, pfsStress, counts := make([]float64, 0, n), make([]float64, 0, n), make([]float64, 0, n)
 	pfsHO, pfsStressHO, countsHO := make([]float64, 0, n), make([]float64, 0, n), make([]float64, 0, n)
-	var halvesPos, topHalf, sl, rsi, hold []float64
+	var halvesPos, topHalf, sl, rsi, macd, hold []float64
 	var plateau int
 	var haveBest bool
 	var bestTrain []backtest.Trade
@@ -163,6 +164,7 @@ func AggregateDrop(ticker, name string, results []DropConfigResult, split time.T
 		}
 		sl = append(sl, exitShare(train, "SL"))
 		rsi = append(rsi, exitShare(train, "RSI"))
+		macd = append(macd, exitShare(train, "MACD"))
 		hold = append(hold, medianHoldDays(train))
 	}
 
@@ -178,6 +180,7 @@ func AggregateDrop(ticker, name string, results []DropConfigResult, split time.T
 	row.TopHalf = medianF(topHalf)
 	row.SLShare = medianF(sl)
 	row.RSIShare = medianF(rsi)
+	row.MACDShare = medianF(macd)
 	row.HoldDays = medianF(hold)
 	if n > 0 {
 		row.Plateau = float64(plateau) / float64(n)

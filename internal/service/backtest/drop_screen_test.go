@@ -87,7 +87,7 @@ func TestAggregateDropMediansExitsAndSilence(t *testing.T) {
 			dropTrade(trainAt(2), 200, "RSI"), dropTrade(trainAt(3), -100, "SL"), dropTrade(holdoutAt(1), 50, "RSI"),
 		}},
 		{Params: grid[1], Trades: []backtest.Trade{
-			dropTrade(trainAt(4), 300, "EOD"), dropTrade(trainAt(5), -100, "SL"), dropTrade(trainAt(6), -100, "SL"),
+			dropTrade(trainAt(4), 300, "MACD"), dropTrade(trainAt(5), -100, "SL"), dropTrade(trainAt(6), -100, "SL"),
 		}},
 		{Params: grid[2]},
 	}
@@ -102,7 +102,8 @@ func TestAggregateDropMediansExitsAndSilence(t *testing.T) {
 	near("PFMed", row.PFMed, 1.5)       // PFs 2, 1.5, 0
 	near("TradesMed", row.TradesMed, 2) // 2, 3, 0
 	near("SLShare", row.SLShare, (0.5+2.0/3)/2)
-	near("RSIShare", row.RSIShare, 0.25) // 0.5 and 0 over trading configs
+	near("RSIShare", row.RSIShare, 0.25)    // 0.5 and 0 over trading configs
+	near("MACDShare", row.MACDShare, 1.0/6) // 0 and 1/3 over trading configs
 	near("HoldDays", row.HoldDays, 2.0/24)
 	near("PFMedHO", row.PFMedHO, 0) // holdout PFs: +Inf→10, 0, 0
 	near("TradesMedHO", row.TradesMedHO, 0)

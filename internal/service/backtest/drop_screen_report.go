@@ -159,8 +159,8 @@ func RenderDropScreenMarkdown(ranked, noSignals, tickRejected, rejected []DropRo
 	b.WriteString("`PFmed×2 HO` в сортировке не участвует: это красный флаг («работало и развалилось»), а не критерий отбора.\n\n")
 
 	b.WriteString("## Детали топа\n\n")
-	b.WriteString("| Ticker | SL% | RSI% | HoldD | TopHalf | Лучшая конфигурация | Полугодия лучшей конфигурации |\n")
-	b.WriteString("|---|---|---|---|---|---|---|\n")
+	b.WriteString("| Ticker | SL% | RSI% | MACD% | HoldD | TopHalf | Лучшая конфигурация | Полугодия лучшей конфигурации |\n")
+	b.WriteString("|---|---|---|---|---|---|---|---|\n")
 	for _, r := range top {
 		topHalf := "—"
 		if r.TopHalf > 0 {
@@ -175,10 +175,10 @@ func RenderDropScreenMarkdown(ranked, noSignals, tickRejected, rejected []DropRo
 			}
 			halves = append(halves, fmt.Sprintf("%s %+.1f%%", h.Label, share))
 		}
-		fmt.Fprintf(&b, "| %s | %s | %s | %.1f | %s | %s | %s |\n",
-			r.Ticker, pct0(r.SLShare), pct0(r.RSIShare), r.HoldDays, topHalf, best, strings.Join(halves, " · "))
+		fmt.Fprintf(&b, "| %s | %s | %s | %s | %.1f | %s | %s | %s |\n",
+			r.Ticker, pct0(r.SLShare), pct0(r.RSIShare), pct0(r.MACDShare), r.HoldDays, topHalf, best, strings.Join(halves, " · "))
 	}
-	b.WriteString("\n`SL%`/`RSI%` — доли выходов (остаток — закрытие в конце окна); `HoldD` — медианная длительность сделки, дней; ")
+	b.WriteString("\n`SL%`/`RSI%`/`MACD%` — доли выходов: стоп, немедленный выход по кресту RSI на красной гистограмме, выход по смене цвета гистограммы после взведения (остаток — закрытие в конце окна); `HoldD` — медианная длительность сделки, дней; ")
 	b.WriteString("`TopHalf` — доля лучшего полугодия в сумме прибыльных (100% — весь профит из одного отрезка, «—» — прибыльных нет). ")
 	b.WriteString("Полугодия лучшей конфигурации — train-сделки в процентах от стартового кэша.\n\n")
 

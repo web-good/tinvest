@@ -263,7 +263,9 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 // recomputed from history on every call: a cross at bar j ≥ the fill bar with hist[j] ≥ 0 and j < i
 // arms. A cross on the fill bar counts. An EntryTime before the first bar (or zero) scans from the
 // first bar where the cross is evaluable. Without a histogram (invalid periods, too short history)
-// it counts as red: the cross sells at once and MACD never arms.
+// it counts as red: the cross sells at once and MACD never arms. Arming is a function of the visible
+// window: a position held more than Lookback bars past its arming cross loses it, and a scan that
+// starts at the window's first bar reads MACD close to its warm-up.
 func (s *Strategy) manageRSIMACD(md strategy.MarketData, sig model.Signal) model.Signal {
 	p := s.p
 	pos := md.Position
@@ -275,15 +277,19 @@ func (s *Strategy) manageRSIMACD(md strategy.MarketData, sig model.Signal) model
 	}
 	rsi := indicators.RSISeries(md.Closes, p.RSIPeriod)
 	hist := macdHistogram(md.Closes, p)
-	red := func(k int) bool { return hist == nil || hist[k] < 0 }
+	red := func(k int) bool { return hist == nil || isRed(hist[k]) }
 	entry := pos.PurchasePrice
 	if prev, cur := rsi[i-1], rsi[i]; crossUp(prev, cur, p.RSIExit) && red(i) {
 		sig.Kind, sig.Reason = model.SignalSell, "RSI"
-		sig.ExitReason = fmt.Sprintf("RSI: RSI(%d) %.1f → %.1f пересёк %.0f вверх, гистограмма MACD %.4f < 0, выход по %.4f (вход %.4f)",
-			p.RSIPeriod, prev, cur, p.RSIExit, histAt(hist, i), md.Closes[i], entry)
+		histText := "нет (считается красной)"
+		if hist != nil {
+			histText = fmt.Sprintf("%.4f < 0", hist[i])
+		}
+		sig.ExitReason = fmt.Sprintf("RSI: RSI(%d) %.1f → %.1f пересёк %.0f вверх, гистограмма MACD %s, выход по %.4f (вход %.4f)",
+			p.RSIPeriod, prev, cur, p.RSIExit, histText, md.Closes[i], entry)
 		return sig
 	}
-	if hist == nil || i < 1 || !(hist[i-1] >= 0 && hist[i] < 0) {
+	if hist == nil || i < 1 || isRed(hist[i-1]) || !isRed(hist[i]) {
 		return sig
 	}
 	from := p.RSIPeriod + 1
@@ -300,8 +306,12 @@ func (s *Strategy) manageRSIMACD(md strategy.MarketData, sig model.Signal) model
 	for j := from; j < i; j++ {
 		if crossUp(rsi[j-1], rsi[j], p.RSIExit) && !red(j) {
 			sig.Kind, sig.Reason = model.SignalSell, "MACD"
+			armBar := fmt.Sprintf("индекс %d", j) // Times may be empty (live), then only the index is known
+			if j < len(md.Times) {
+				armBar = md.Times[j].In(mskLoc).Format("2006-01-02 15:04")
+			}
 			sig.ExitReason = fmt.Sprintf("MACD: гистограмма %.4f → %.4f перекрасилась в красную после RSI ≥ %.0f (бар %s), выход по %.4f (вход %.4f)",
-				hist[i-1], hist[i], p.RSIExit, md.Times[j].In(mskLoc).Format("2006-01-02 15:04"), md.Closes[i], entry)
+				hist[i-1], hist[i], p.RSIExit, armBar, md.Closes[i], entry)
 			return sig
 		}
 	}
@@ -322,13 +332,8 @@ func macdHistogram(closes []float64, p Params) []float64 {
 	return h
 }
 
-// histAt reads a histogram value, 0 when there is no histogram.
-func histAt(hist []float64, k int) float64 {
-	if hist == nil {
-		return 0
-	}
-	return hist[k]
-}
+// isRed reports whether a histogram value is red: strictly below zero, so exactly 0 is green.
+func isRed(h float64) bool { return h < 0 }
 
 // crossUp reports whether a series moved from below level to at or above it.
 func crossUp(prev, cur, level float64) bool { return prev < level && cur >= level }

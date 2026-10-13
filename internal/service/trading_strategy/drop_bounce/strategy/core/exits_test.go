@@ -425,6 +425,41 @@ func TestStopBeatsMACDExit(t *testing.T) {
 	if sig.Reason != "SL" || math.Abs(sig.StopLoss-(entry-2)) > eps {
 		t.Fatalf("got %q stop %v, want SL at %v", sig.Reason, sig.StopLoss, entry-2)
 	}
+	// Control: the same bars without the stop do sell by MACD, so the stop really beat it.
+	if sig := held(stopOnlyOff(), bars, entry, bars[95].t); sig.Kind != model.SignalSell || sig.Reason != "MACD" {
+		t.Fatalf("control without stop: got %v %q, want Sell MACD", sig.Kind, sig.Reason)
+	}
+}
+
+// Live data may carry no timestamps: the armed exit still works and names the bar by index.
+func TestMACDExitWithoutTimes(t *testing.T) {
+	bars := armedPath()
+	guardArmed(t, bars)
+	md := fixture(bars[:armedFlip+1])
+	md.Times = nil
+	md.Position = &strategy.Position{PurchasePrice: 100, Quantity: 1, EntryTime: bars[95].t, EntryATR: fixtureATR}
+	p := stopOnlyOff()
+	sig := NewWithParams("TEST", stepH1, p).Decide(md)
+	if sig.Kind != model.SignalSell || sig.Reason != "MACD" || !strings.Contains(sig.ExitReason, "индекс") {
+		t.Fatalf("got %v %q %q, want Sell MACD naming the bar index", sig.Kind, sig.Reason, sig.ExitReason)
+	}
+}
+
+func TestIsRedZeroIsGreen(t *testing.T) {
+	if isRed(0) || isRed(1e-12) || !isRed(-1e-12) {
+		t.Fatal("only a strictly negative histogram is red; exactly 0 is green")
+	}
+}
+
+// Without a histogram the RSI exit text says so.
+func TestRSIExitReasonWithoutHistogram(t *testing.T) {
+	bars := armedPath()
+	p := stopOnlyOff()
+	p.MACDFast, p.MACDSlow = 26, 26
+	sig := held(p, bars[:armedCross+1], 100, bars[95].t)
+	if sig.Reason != "RSI" || !strings.Contains(sig.ExitReason, "гистограмма MACD нет") {
+		t.Fatalf("got %q / %q", sig.Reason, sig.ExitReason)
+	}
 }
 
 // RSI exit on a red histogram carries the histogram in its reason.

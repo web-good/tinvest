@@ -97,6 +97,7 @@ func dropMeta() DropScreenMeta {
 func TestRenderDropScreenMarkdown(t *testing.T) {
 	ranked := []DropRow{dropRow("C", 2.0, 25, 100, 0.1), dropRow("B", 1.5, 40, 100, 0.1), dropRow("A", 1.5, 30, 100, 0.1)}
 	ranked[0].BestHalves = []HalfResult{{Label: "2024H1", PnL: 1500, Trades: 3}}
+	ranked[0].MACDShare = 0.4
 	md := RenderDropScreenMarkdown(ranked, []DropRow{{Ticker: "H", NoSignals: true}},
 		[]DropRow{dropRow("F", 3, 30, 100, 0.31)}, []DropRow{dropRow("D", 3, 30, 49.9, 0.1)}, dropMeta())
 	for _, want := range []string{
@@ -106,6 +107,9 @@ func TestRenderDropScreenMarkdown(t *testing.T) {
 		"## Рейтинг",
 		"## Детали топа",
 		"2024H1 +1.5%",
+		"| Ticker | SL% | RSI% | MACD% | HoldD |",
+		"`SL%`/`RSI%`/`MACD%`",
+		" 40% |",
 		"## Нет сигналов",
 		"## Отсеяно гейтом шага цены",
 		"## Отсеяно гейтами",
