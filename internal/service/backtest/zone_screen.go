@@ -137,18 +137,7 @@ func halvesStats(halves []HalfResult) (posShare, topShare float64, hasProfit boo
 }
 
 // slShare is the fraction of trades closed by the protective stop (exit reason "SL").
-func slShare(trades []backtest.Trade) float64 {
-	if len(trades) == 0 {
-		return 0
-	}
-	var n int
-	for _, t := range trades {
-		if t.Reason == "SL" {
-			n++
-		}
-	}
-	return float64(n) / float64(len(trades))
-}
+func slShare(trades []backtest.Trade) float64 { return exitShare(trades, "SL") }
 
 // medianHoldDays is the median trade duration in calendar days. Measured by wall clock,
 // not BarsHeld: evening sessions and weekends make the bar count per day uneven.
