@@ -660,7 +660,7 @@ func (s *service) manage(ctx context.Context, pc *passCtx, sl *slot, ticker stri
 		default:
 			entry = s.replaceStop(ctx, sl, ticker, sh, entry, level, reason)
 		}
-	case sizeMismatch, desired > current:
+	case sizeMismatch, desired > current, catModeChanged(entry.StopReason, reason):
 		if err := sl.stops.Cancel(ctx, entry.StopOrderID); err != nil {
 			sl.alert(ticker, "не удалось снять стоп для переноса: "+err.Error())
 			break // старая заявка продолжает защищать
@@ -675,6 +675,15 @@ func (s *service) manage(ctx context.Context, pc *passCtx, sl *slot, ticker stri
 		}
 	}
 	return nil
+}
+
+// catModeChanged — заявка выставлена в одном режиме стопа, а литерал требует другого: на бирже
+// внутрибарный SL/TRAIL, а тикер перевели на стоп по закрытию с аварийной заявкой (или
+// наоборот). Аварийный уровень ниже защитного, и правило «переносить только вверх» оставило
+// бы на бирже заявку не того режима — позиция шла бы со стопом, которого нет в бэктесте её
+// литерала. Пустая причина в стейте (запись старше этого поля) режимом не считается.
+func catModeChanged(placed, wanted string) bool {
+	return placed != "" && wanted != "" && (placed == catReason) != (wanted == catReason)
 }
 
 // sell closes the position on any SELL the core emits: the exchange stop comes off first,

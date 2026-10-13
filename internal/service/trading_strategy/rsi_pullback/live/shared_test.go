@@ -35,6 +35,7 @@ type fakeStrategy struct {
 	registered map[string]bool
 	sig        model.Signal // Kind/Reason/ATR; Price подставляется из md
 	stopLevel  float64
+	stopReason string // причина DesiredStop; "" — "SL"
 	trade      bool
 
 	decideCalls  int
@@ -60,6 +61,9 @@ func (f *fakeStrategy) Decider(ticker string) (adapter.Decider, bool) {
 func (f *fakeStrategy) DesiredStop(string, statestore.Entry) (float64, string) {
 	if f.stopLevel <= 0 {
 		return 0, ""
+	}
+	if f.stopReason != "" {
+		return f.stopLevel, f.stopReason
 	}
 	return f.stopLevel, "SL"
 }
@@ -832,4 +836,71 @@ func TestSignalStopLossIsFrozenAndPassedBack(t *testing.T) {
 	if held2.lastPosition == nil || held2.lastPosition.StopLoss != 77 {
 		t.Fatalf("Position.StopLoss = %+v, want 77", held2.lastPosition)
 	}
+}
+
+// modeSwitchEnv — открытая позиция гостя на GAZP с живой биржевой заявкой so-1 (уровень
+// placed, причина placedReason); гость теперь хочет заявку wantLevel/wantReason. Обе стратегии
+// боевые, чтобы заявки шли в мок, а не в dry-run.
+func modeSwitchEnv(t *testing.T, placed float64, placedReason string, wantLevel float64, wantReason string) (*env, *fakeStrategy) {
+	t.Helper()
+	zone := zoneFake(model.SignalNone, "GAZP")
+	zone.trade = true
+	zone.stopLevel, zone.stopReason = wantLevel, wantReason
+	e := newSharedEnv(t, sharedNow, []string{"GAZP"}, func(c *config.RSIPullbackConfig) { c.TradeEnabled = true }, zone)
+	e.seed(t, statestore.Entry{Ticker: "GAZP", Strategy: "rsi_zone", EntryPrice: 100,
+		EntryATR: 10, MaxFav: 100, Quantity: 100, EntryTime: sharedNow.Add(-48 * time.Hour),
+		StopOrderID: "so-1", StopPrice: placed, StopReason: placedReason})
+	e.instruments.EXPECT().Shares(mock.Anything).Return(sharesOf("GAZP"), nil)
+	e.expectCandles(flatAt30m(sharedLastBar, 400, 100), dailies(sharedNow, 60))
+	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return([]*grpcmodel.Position{held("GAZP", 100)}, nil)
+	e.stops.EXPECT().GetStopOrders(mock.Anything, mock.MatchedBy(statusIs(investapi.StopOrderStatusOption_STOP_ORDER_STATUS_ACTIVE))).
+		Return(activeList("uid-GAZP", "so-1", placed, 10), nil)
+	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
+	return e, zone
+}
+
+func expectRepost(e *env, level int64) {
+	e.stops.EXPECT().CancelStopOrder(mock.Anything, mock.MatchedBy(func(in *investapi.CancelStopOrderRequest) bool {
+		return in.GetStopOrderId() == "so-1"
+	})).Return(&investapi.CancelStopOrderResponse{}, nil).Once()
+	e.stops.EXPECT().PostStopOrder(mock.Anything, mock.MatchedBy(func(in *investapi.PostStopOrderRequest) bool {
+		return in.GetStopPrice().GetUnits() == level
+	})).Return(&investapi.PostStopOrderResponse{StopOrderId: "so-2"}, nil).Once()
+}
+
+// Литерал перевели в режим стопа по закрытию при открытой позиции: на бирже стоит SL 95,
+// нужен аварийный 80 — НИЖЕ. Обычное правило «только вверх» оставило бы тесную внутрибарную
+// заявку, о которой бэктест режима не знает. Заявка обязана перевыставиться.
+func TestStopModeSwitchToCatastropheReposts(t *testing.T) {
+	e, _ := modeSwitchEnv(t, 95, "SL", 80, "CATSL")
+	expectRepost(e, 80)
+	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	got := e.state(t)["GAZP"]
+	if got.StopOrderID != "so-2" || got.StopPrice != 80 || got.StopReason != "CATSL" {
+		t.Fatalf("заявка после смены режима: %q/%v/%q, want so-2/80/CATSL", got.StopOrderID, got.StopPrice, got.StopReason)
+	}
+}
+
+// Обратное переключение: на бирже аварийный 80, нужен SL 70 — тоже ниже; перевыставить.
+func TestStopModeSwitchFromCatastropheReposts(t *testing.T) {
+	e, _ := modeSwitchEnv(t, 80, "CATSL", 70, "SL")
+	expectRepost(e, 70)
+	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := e.state(t)["GAZP"]; got.StopOrderID != "so-2" || got.StopReason != "SL" {
+		t.Fatalf("заявка после смены режима: %q/%q, want so-2/SL", got.StopOrderID, got.StopReason)
+	}
+}
+
+// Контроль: режим тот же, уровень ниже — заявку не трогаем (стоп только подтягивается).
+func TestLowerStopInTheSameModeIsNotReposted(t *testing.T) {
+	e, _ := modeSwitchEnv(t, 95, "SL", 80, "SL")
+	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	e.stops.AssertNotCalled(t, "CancelStopOrder", mock.Anything, mock.Anything)
+	e.stops.AssertNotCalled(t, "PostStopOrder", mock.Anything, mock.Anything)
 }
