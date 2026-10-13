@@ -9,42 +9,37 @@ import (
 	"github.com/heetch/confita/backend/env"
 )
 
-// Без переменных drop_bounce конфиг грузится, все вселенные пусты.
-func TestDropBounceConfigLoadsWithoutItsEnvVars(t *testing.T) {
-	t.Setenv("DROP_BOUNCE_TICKERS_M15", "")
-	t.Setenv("DROP_BOUNCE_TICKERS_M30", "")
+// Без переменной drop_bounce конфиг грузится, вселенная пуста.
+func TestDropBounceConfigLoadsWithoutItsEnvVar(t *testing.T) {
 	t.Setenv("DROP_BOUNCE_TICKERS_H1", "")
 
 	cfg := NewDropBounceConfig()
 	if err := confita.NewLoader(env.NewBackend()).Load(context.Background(), cfg); err != nil {
-		t.Fatalf("Load без DROP_BOUNCE_* = %v, want nil", err)
+		t.Fatalf("Load без DROP_BOUNCE_TICKERS_H1 = %v, want nil", err)
 	}
 	if cfg.Enabled() {
-		t.Fatalf("без переменных cfg = %+v, want выключено", cfg)
+		t.Fatalf("без переменной cfg = %+v, want выключено", cfg)
 	}
 }
 
-// Каждая переменная попадает в вселенную своего таймфрейма.
-func TestDropBounceConfigLoadsPerTimeframe(t *testing.T) {
-	t.Setenv("DROP_BOUNCE_TICKERS_M15", "GAZP,T")
-	t.Setenv("DROP_BOUNCE_TICKERS_M30", "")
-	t.Setenv("DROP_BOUNCE_TICKERS_H1", "PLZL")
+func TestDropBounceConfigLoadsHour1(t *testing.T) {
+	t.Setenv("DROP_BOUNCE_TICKERS_H1", "GAZP,T")
 
 	cfg := NewDropBounceConfig()
 	if err := confita.NewLoader(env.NewBackend()).Load(context.Background(), cfg); err != nil {
 		t.Fatalf("Load = %v", err)
 	}
-	if !slices.Equal(cfg.TickersMinutes15, []string{"GAZP", "T"}) || !slices.Equal(cfg.TickersHour1, []string{"PLZL"}) {
-		t.Fatalf("cfg = %+v, want M15 [GAZP T], H1 [PLZL]", cfg)
+	if !slices.Equal(cfg.TickersHour1, []string{"GAZP", "T"}) {
+		t.Fatalf("cfg = %+v, want H1 [GAZP T]", cfg)
 	}
 	if !cfg.Enabled() {
-		t.Fatal("заданные вселенные не включили стратегию")
+		t.Fatal("заданная вселенная не включила стратегию")
 	}
 }
 
 func TestDropBounceEnabledIgnoresBlankTickers(t *testing.T) {
 	c := NewDropBounceConfig()
-	c.TickersMinutes30 = []string{"", " "}
+	c.TickersHour1 = []string{"", " "}
 	if c.Enabled() {
 		t.Fatal("вселенная из пустых строк включила стратегию")
 	}
