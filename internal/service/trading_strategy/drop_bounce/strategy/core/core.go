@@ -1,56 +1,58 @@
-// Package core implements drop_bounce: a long-only bounce after a red bar that trades a sizeable
-// share of an average day's volume. A bar closing below its open, whose volume reaches
-// VolDailyMult times the average weekday daily volume (Wilder over VolAvgPeriod completed
-// Mon–Fri dailies, zero-volume days left out), signals a buy; the backtest fills at the next
-// bar's open (Config.EntryAtNextOpen). Signals are taken on Mon–Fri MSK bars starting at or after
-// StartHour whose fill bar lies on the same date. The daily ATR (Wilder, DailyATRPeriod,
-// completed weekday dailies) is taken at the signal and frozen for the trade. Exits, in order: a
-// stop StopDailyATR daily ATRs below the fill price, then RSI(RSIPeriod) crossing RSIExit upward
-// whatever the price. There is no end-of-day exit: positions carry overnight. Pure, stateless
-// between bars and ticker-agnostic. The bar step (5m, 15m, 30m or 1h) is fixed at construction.
-// Run with `-strategy drop_bounce -interval Minutes5|Minutes15|Minutes30|Hour1`.
+// Package core implements drop_bounce: a long-only 1h buy of an oversold RSI inside an uptrend
+// while the day still has range left. On the close of a Mon–Fri MSK bar starting at or after
+// StartHour whose fill bar lies on the same date, it buys when (1) the close is strictly above
+// EMA(EMAPeriod); (2) RSI(RSIPeriod) is below RSIZone (ZONE), or has just crossed RSIZone upward
+// and is not above RSICap (CROSS); (3) the day's range so far, TodayHigh − TodayLow, is below
+// DaySpentATR daily ATRs (Wilder, DailyATRPeriod, completed weekday dailies). The backtest fills
+// at the next bar's open (Config.EntryAtNextOpen); the daily ATR is frozen for the trade. Exits,
+// in order: a stop StopDailyATR daily ATRs below the fill price, then RSI(RSIPeriod) crossing
+// RSIExit upward whatever the price. No end-of-day exit: positions carry overnight. Pure,
+// stateless between bars and ticker-agnostic. Run with `-strategy drop_bounce -interval Hour1`.
 package core
 
 import (
 	"fmt"
 	"time"
 
+	"tinvest/internal/domain/ema"
 	"tinvest/internal/service/trading_strategy/scalping/model"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 	"tinvest/pkg/indicators"
 )
 
-// minLookback keeps 64 bars (16 hours of 15m) so the RSI converges.
+// minLookback keeps 64 bars so the RSI converges even with a short EMA.
 const minLookback = 64
 
 // Params holds every tunable. All fields are int or float64 so reflection grid calibration can
 // sweep them.
 type Params struct {
-	// VolDailyMult is the share of the average weekday daily volume the signal bar must trade
-	// (default 0.4); 0 = no entries.
-	VolDailyMult float64
-	// VolAvgPeriod is the Wilder length of the average over completed weekday dailies with
-	// nonzero volume (default 14).
-	VolAvgPeriod int
-	RSIPeriod    int     // RSI length of the exit (default 6)
-	RSIExit      float64 // sell when RSI crosses this upward; 0 = off (default 70)
+	RSIPeriod int     // RSI length of the entry and the exit (default 6); 0 = no entries
+	RSIZone   float64 // oversold level: ZONE below it, CROSS through it upward (default 30)
+	RSICap    float64 // a CROSS counts only if RSI on the cross bar is ≤ this (default 50)
+	EMAPeriod int     // trend EMA on the bar closes (default 200); 0 = no entries
+	// DaySpentATR is the share of the daily ATR the day's range may have used before entry: entry
+	// needs TodayHigh − TodayLow < DaySpentATR · dailyATR (default 0.7); 0 = no entries.
+	DaySpentATR float64
 	// StopDailyATR is the stop distance below the fill price in daily ATRs frozen at the signal;
 	// 0 = off (default 1).
 	StopDailyATR float64
 	// DailyATRPeriod is the Wilder ATR length over completed weekday dailies (default 14).
 	DailyATRPeriod int
-	StartHour      int // signal bars must start at/after StartHour:00 MSK (default 7)
+	RSIExit        float64 // sell when RSI crosses this upward; 0 = off (default 70)
+	StartHour      int     // signal bars must start at/after StartHour:00 MSK (default 7)
 }
 
 // DefaultParams returns the owner's initial configuration.
 func DefaultParams() Params {
 	return Params{
-		VolDailyMult:   0.4,
-		VolAvgPeriod:   14,
 		RSIPeriod:      6,
-		RSIExit:        70,
+		RSIZone:        30,
+		RSICap:         50,
+		EMAPeriod:      200,
+		DaySpentATR:    0.7,
 		StopDailyATR:   1,
 		DailyATRPeriod: 14,
+		RSIExit:        70,
 		StartHour:      7,
 	}
 }
@@ -58,8 +60,7 @@ func DefaultParams() Params {
 // Strategy trades a single instrument with the drop_bounce rules. Ticker-agnostic and pure.
 type Strategy struct {
 	ticker string
-	// step is the bar timeframe. It matters only for the entry: the fill bar starts one step after
-	// the signal bar, must lie on the same MSK date, and bounds Signal.FillBy.
+	// step is the bar timeframe (1h in production; tests and the screener pass it). It bounds the fill: the fill bar starts one step after the signal bar, must lie on the same MSK date, and bounds Signal.FillBy.
 	step time.Duration
 	p    Params
 }
@@ -71,9 +72,11 @@ func NewWithParams(ticker string, step time.Duration, p Params) *Strategy {
 
 func (s *Strategy) Ticker() string { return s.ticker }
 
-// Lookback is enough history for the Wilder RSI to converge plus the previous bar its cross
-// compares against.
-func (s *Strategy) Lookback() int { return max(minLookback, 4*s.p.RSIPeriod+2) }
+// Lookback is enough history for the EMA (three lengths: the SMA seed has faded) and the Wilder
+// RSI to converge, plus the previous bar the cross compares against.
+func (s *Strategy) Lookback() int {
+	return max(minLookback, 3*s.p.EMAPeriod, 4*s.p.RSIPeriod+2)
+}
 
 // mskLoc anchors every calendar rule to Moscow (UTC fallback).
 var mskLoc = func() *time.Location {
@@ -128,36 +131,6 @@ func (s *Strategy) dailyATR(md strategy.MarketData) float64 {
 	return indicators.ATR(h, l, c, s.p.DailyATRPeriod)
 }
 
-// avgDailyVolume is the Wilder average of the completed weekday daily volumes: weekend sessions
-// and zero-volume days are left out (both would drag the yardstick down and fire the threshold on
-// nothing), the first VolAvgPeriod values seed it as a plain mean, each later one moves it by
-// (v − avg)/VolAvgPeriod. It is 0 — unknown — when the volumes are missing or not aligned with
-// DailyTimes, or fewer than VolAvgPeriod days are left.
-func (s *Strategy) avgDailyVolume(md strategy.MarketData) float64 {
-	n := s.p.VolAvgPeriod
-	if n <= 0 || len(md.DailyVolumes) == 0 || len(md.DailyVolumes) != len(md.DailyTimes) {
-		return 0
-	}
-	vols := make([]float64, 0, len(md.DailyVolumes))
-	for i, v := range md.DailyVolumes {
-		if v > 0 && !isWeekend(md.DailyTimes[i]) {
-			vols = append(vols, float64(v))
-		}
-	}
-	if len(vols) < n {
-		return 0
-	}
-	var avg float64
-	for _, v := range vols[:n] {
-		avg += v
-	}
-	avg /= float64(n)
-	for _, v := range vols[n:] {
-		avg += (v - avg) / float64(n)
-	}
-	return avg
-}
-
 // inWindow reports whether a signal on the bar starting at t may open a position: a weekday, at
 // or after StartHour, and the fill bar (one step later) on the same MSK date.
 func (s *Strategy) inWindow(t time.Time) bool {
@@ -175,32 +148,50 @@ func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 	return s.enter(md, sig)
 }
 
-// enter buys after a red bar whose volume reaches VolDailyMult average days. The signal carries no
-// levels: the stop is measured from the fill. It carries the daily ATR for the engine to freeze.
-// Without a known average daily volume there is no entry — the volume is the signal itself — and
-// neither is there one when the stop needs an unknown ATR or would land at or below zero.
+// enter buys an oversold RSI above the trend EMA while the day still has range left. The signal
+// carries no levels: the stop is measured from the fill. It carries the daily ATR for the engine
+// to freeze. Without a daily ATR or a sane day extent there is no entry — the day gate needs both.
 func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal {
 	p := s.p
 	n := len(md.Closes)
-	if n == 0 || len(md.Times) != n || len(md.Opens) != n || len(md.Volumes) != n || p.VolDailyMult <= 0 {
+	if p.RSIPeriod <= 0 || p.EMAPeriod <= 0 || p.DaySpentATR <= 0 || len(md.Times) != n {
+		return sig
+	}
+	// RSISeries is 0 up to index RSIPeriod−1: the cross needs bars RSIPeriod and later, and a
+	// warm-up zero must never read as "below the zone".
+	if n < p.RSIPeriod+2 {
 		return sig
 	}
 	i := n - 1
-	o, c := md.Opens[i], md.Closes[i]
-	if !s.inWindow(md.Times[i]) || o <= 0 || c >= o {
+	c := md.Closes[i]
+	if !s.inWindow(md.Times[i]) {
 		return sig
 	}
-	avg := s.avgDailyVolume(md)
-	if avg <= 0 {
+	trend := ema.Compute(md.Closes, p.EMAPeriod)[i]
+	if !trendUp(c, trend) {
 		return sig
 	}
-	ratio := float64(md.Volumes[i]) / avg
-	// The tiny epsilon keeps a volume of exactly the threshold from failing on float rounding.
-	if ratio < p.VolDailyMult-1e-9 {
+	rsi := indicators.RSISeries(md.Closes, p.RSIPeriod)
+	prev, cur := rsi[i-1], rsi[i]
+	var branch string
+	switch {
+	case cur < p.RSIZone:
+		branch = "ZONE"
+	case crossUp(prev, cur, p.RSIZone) && cur <= p.RSICap:
+		branch = "CROSS"
+	default:
 		return sig
 	}
 	atr := s.dailyATR(md)
-	if p.StopDailyATR > 0 && (atr <= 0 || c-p.StopDailyATR*atr <= 0) {
+	hi, lo := md.TodayHigh, md.TodayLow
+	if atr <= 0 || hi <= 0 || lo <= 0 || hi < lo {
+		return sig
+	}
+	used := hi - lo
+	if used >= p.DaySpentATR*atr {
+		return sig
+	}
+	if p.StopDailyATR > 0 && c-p.StopDailyATR*atr <= 0 {
 		return sig
 	}
 	sig.Kind = model.SignalBuy
@@ -208,9 +199,15 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	// The fill must be the very next slot: if that candle is missing from the data, the engine
 	// drops the signal rather than buying at a later session's open.
 	sig.FillBy = md.Times[i].Add(s.step)
-	sig.EntryReason = fmt.Sprintf("VOLUME: open %.4f → close %.4f, объём %d = %.2f× среднего дня (VolAvg %.0f, Уайлдер %d, порог %.2f), дневной ATR %.4f",
-		o, c, md.Volumes[i], ratio, avg, p.VolAvgPeriod, p.VolDailyMult, atr)
+	sig.EntryReason = fmt.Sprintf("%s: RSI(%d) %.1f → %.1f (зона %.0f, планка %.0f), close %.4f > EMA(%d) %.4f, ход дня %.4f = %.2f ATR < %.2f (ATR %.4f)",
+		branch, p.RSIPeriod, prev, cur, p.RSIZone, p.RSICap, c, p.EMAPeriod, trend, used, used/atr, p.DaySpentATR, atr)
 	return sig
+}
+
+// trendUp reports whether the close sits strictly above a warmed EMA. ema.Compute zero-fills
+// warm-up positions, so an unwarmed EMA must not pass as "price above zero".
+func trendUp(closeP, emaNow float64) bool {
+	return emaNow > 0 && closeP > emaNow
 }
 
 // manage exits in priority order: the stop StopDailyATR daily ATRs below the fill price (the ATR
