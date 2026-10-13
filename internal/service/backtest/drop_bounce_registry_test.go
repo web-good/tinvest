@@ -64,6 +64,12 @@ func TestDropBounceParseParamsIgnoresRemovedFields(t *testing.T) {
 
 // Every registered ticker resolves to its own literal on Hour1.
 func TestDropBounceTickerLiteral(t *testing.T) {
+	// The registry is empty today, so inject a test-only literal: otherwise the loop below asserts nothing.
+	lit := core.DefaultParams()
+	lit.RSIZone = 25
+	dropBounceRegistry["ZZTEST"] = func() core.Params { return lit }
+	t.Cleanup(func() { delete(dropBounceRegistry, "ZZTEST") })
+
 	for ticker, literal := range dropBounceRegistry {
 		b, err := DropBounceLookupOrGeneric(ticker, enum.Hour1)
 		if err != nil {
