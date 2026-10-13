@@ -28,7 +28,7 @@ import (
 
 func main() {
 	var (
-		intervalS     = flag.String("interval", "Minutes15", "timeframe: Minutes15|Minutes30|Hour1")
+		intervalS     = flag.String("interval", "Hour1", "timeframe: Hour1 (drop_bounce runs on 1h only)")
 		months        = flag.Int("months", 36, "lookback period in months")
 		holdoutMonths = flag.Int("holdout-months", 6, "trailing months held out of the ranking window")
 		minTurnoverM  = flag.Float64("min-turnover", 50, "gate: minimum mean daily turnover in millions of RUB")
@@ -80,14 +80,12 @@ type runCfg struct {
 	opts                                   svc.ScreenOpts
 }
 
-// parseInterval accepts exactly the timeframes the screener grids exist for.
+// parseInterval accepts the one timeframe drop_bounce runs on.
 func parseInterval(s string) (enum.Interval, error) {
-	for _, iv := range []enum.Interval{enum.Minutes15, enum.Minutes30, enum.Hour1} {
-		if strings.EqualFold(s, iv.String()) {
-			return iv, nil
-		}
+	if strings.EqualFold(s, enum.Hour1.String()) {
+		return enum.Hour1, nil
 	}
-	return 0, fmt.Errorf("unknown -interval %q (want Minutes15|Minutes30|Hour1; Minutes5 is never calibrated)", s)
+	return 0, fmt.Errorf("unknown -interval %q (want Hour1: drop_bounce runs on 1h only)", s)
 }
 
 // pregated reports whether the daily-candle turnover fails the gate; equality passes.

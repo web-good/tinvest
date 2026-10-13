@@ -2,7 +2,6 @@ package backtest
 
 import (
 	"math"
-	"reflect"
 	"testing"
 	"time"
 
@@ -11,66 +10,45 @@ import (
 	dropcore "tinvest/internal/service/trading_strategy/drop_bounce/strategy/core"
 )
 
-func TestDropGridPerTimeframe(t *testing.T) {
-	cases := []struct {
-		interval enum.Interval
-		vols     []float64
-	}{
-		{enum.Minutes15, []float64{0.05, 0.1, 0.2, 0.3}},
-		{enum.Minutes30, []float64{0.1, 0.2, 0.3, 0.5}},
-		{enum.Hour1, []float64{0.15, 0.25, 0.4, 0.6}},
+func TestDropGridHour1(t *testing.T) {
+	grid, err := DropGrid(enum.Hour1)
+	if err != nil {
+		t.Fatalf("DropGrid error: %v", err)
 	}
-	for _, c := range cases {
-		grid, err := DropGrid(c.interval)
-		if err != nil {
-			t.Fatalf("%s: DropGrid error: %v", c.interval, err)
+	if len(grid) != 16 {
+		t.Fatalf("len = %d, want 16", len(grid))
+	}
+	uniq := make(map[[4]float64]bool)
+	for _, p := range grid {
+		if p.RSIPeriod != 6 || p.EMAPeriod != 200 || p.StopDailyATR != 1.0 || p.DailyATRPeriod != 14 || p.StartHour != 7 {
+			t.Fatalf("pinned fields drifted: %+v", p)
 		}
-		if len(grid) != 16 {
-			t.Fatalf("%s: len = %d, want 16", c.interval, len(grid))
-		}
-		seen := make(map[float64]bool)
-		uniq := make(map[[3]float64]bool)
-		for _, p := range grid {
-			if p.StopDailyATR != 1.0 || p.DailyATRPeriod != 10 || p.VolAvgPeriod != 10 || p.StartHour != 7 {
-				t.Fatalf("%s: pinned fields drifted: %+v", c.interval, p)
-			}
-			seen[p.VolDailyMult] = true
-			uniq[[3]float64{p.VolDailyMult, float64(p.RSIPeriod), p.RSIExit}] = true
-		}
-		var got []float64
-		for _, v := range c.vols {
-			if seen[v] {
-				got = append(got, v)
-			}
-		}
-		if !reflect.DeepEqual(got, c.vols) || len(seen) != len(c.vols) {
-			t.Fatalf("%s: VolDailyMult set = %v, want %v", c.interval, seen, c.vols)
-		}
-		if len(uniq) != 16 {
-			t.Fatalf("%s: %d distinct configurations, want 16", c.interval, len(uniq))
-		}
+		uniq[[4]float64{p.RSIZone, p.RSICap, p.DaySpentATR, p.RSIExit}] = true
+	}
+	if len(uniq) != 16 {
+		t.Fatalf("%d distinct configurations, want 16", len(uniq))
 	}
 }
 
 func TestDropGridOrder(t *testing.T) {
-	grid, err := DropGrid(enum.Minutes15)
+	grid, err := DropGrid(enum.Hour1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	first, second, last := grid[0], grid[1], grid[15]
-	if first.VolDailyMult != 0.05 || first.RSIPeriod != 4 || first.RSIExit != 55 {
-		t.Fatalf("grid[0] = %+v, want vol 0.05 RSI(4)@55", first)
+	if first.RSIZone != 25 || first.RSICap != 40 || first.DaySpentATR != 0.5 || first.RSIExit != 60 {
+		t.Fatalf("grid[0] = %+v, want zone 25 cap 40 day 0.5 exit 60", first)
 	}
-	if second.RSIExit != 75 || second.RSIPeriod != 4 {
+	if second.RSIExit != 75 || second.DaySpentATR != 0.5 {
 		t.Fatalf("grid[1] = %+v, want RSIExit as the innermost axis", second)
 	}
-	if last.VolDailyMult != 0.3 || last.RSIPeriod != 6 || last.RSIExit != 75 {
-		t.Fatalf("grid[15] = %+v, want vol 0.3 RSI(6)@75", last)
+	if last.RSIZone != 35 || last.RSICap != 60 || last.DaySpentATR != 1.0 || last.RSIExit != 75 {
+		t.Fatalf("grid[15] = %+v, want zone 35 cap 60 day 1.0 exit 75", last)
 	}
 }
 
 func TestDropGridRejectsOtherTimeframes(t *testing.T) {
-	for _, iv := range []enum.Interval{enum.Minutes5, enum.Day1, enum.Hour4} {
+	for _, iv := range []enum.Interval{enum.Minutes5, enum.Minutes15, enum.Minutes30, enum.Day1, enum.Hour4} {
 		if _, err := DropGrid(iv); err == nil {
 			t.Fatalf("DropGrid(%s) = nil error, want an error", iv)
 		}
@@ -103,7 +81,7 @@ func trainAt(day int) time.Time { return time.Date(2026, 2, day, 10, 0, 0, 0, ti
 func holdoutAt(day int) time.Time { return time.Date(2026, 7, day, 10, 0, 0, 0, time.UTC) }
 
 func TestAggregateDropMediansExitsAndSilence(t *testing.T) {
-	grid, _ := DropGrid(enum.Minutes15)
+	grid, _ := DropGrid(enum.Hour1)
 	results := []DropConfigResult{
 		{Params: grid[0], Trades: []backtest.Trade{
 			dropTrade(trainAt(2), 200, "RSI"), dropTrade(trainAt(3), -100, "SL"), dropTrade(holdoutAt(1), 50, "RSI"),
@@ -140,7 +118,7 @@ func TestAggregateDropMediansExitsAndSilence(t *testing.T) {
 }
 
 func TestAggregateDropStressIgnoresHoldout(t *testing.T) {
-	grid, _ := DropGrid(enum.Minutes15)
+	grid, _ := DropGrid(enum.Hour1)
 	train := []backtest.Trade{dropTrade(trainAt(2), 200, "RSI"), dropTrade(trainAt(3), -100, "SL")}
 	opts := DefaultScreenOpts()
 
@@ -164,7 +142,7 @@ func TestAggregateDropStressIgnoresHoldout(t *testing.T) {
 }
 
 func TestAggregateDropAllSilent(t *testing.T) {
-	grid, _ := DropGrid(enum.Minutes15)
+	grid, _ := DropGrid(enum.Hour1)
 	row := AggregateDrop("XXXX", "", []DropConfigResult{{Params: grid[3]}, {Params: grid[4]}}, dropSplit, 0, DefaultScreenOpts())
 	if !row.NoSignals || row.SilentCfg != 2 || row.TradesMed != 0 {
 		t.Fatalf("NoSignals/SilentCfg/TradesMed = %v/%d/%v, want true/2/0", row.NoSignals, row.SilentCfg, row.TradesMed)
@@ -175,7 +153,7 @@ func TestAggregateDropAllSilent(t *testing.T) {
 }
 
 func TestAggregateDropCapsWinnersOnly(t *testing.T) {
-	grid, _ := DropGrid(enum.Minutes15)
+	grid, _ := DropGrid(enum.Hour1)
 	opts := DefaultScreenOpts()
 	row := AggregateDrop("GAZP", "", []DropConfigResult{
 		{Params: grid[0], Trades: []backtest.Trade{dropTrade(trainAt(2), 100, "RSI")}},
@@ -185,46 +163,49 @@ func TestAggregateDropCapsWinnersOnly(t *testing.T) {
 	}
 }
 
-// dropFixture is 15m bars over Monday 2026-03-09 and Tuesday 2026-03-10, 07:00–23:45 MSK, flat at
-// 100 with volume 10, except a red bar at Tuesday 10:00 (100 → 99, volume 100 = 0.1 of the 1000
-// daily volume) followed by a steady climb that pushes RSI back up. Monday gives the engine the 64
-// bars of lookback the strategy asks for before the signal.
+// dropFixture is 1h bars 07:00–22:00 MSK on every weekday from 2026-01-12 to 2026-03-31: a slow
+// uptrend (+0.03% a bar) with a dip at 10:00–12:00 (−0.25% each) and a rebound at 13:00–15:00
+// (+0.3% each). The 12:00 bar has RSI(6) ≈ 20 above EMA(200) with a day range ≈ 0.8 — under the
+// gate 0.5 · daily ATR 2 = 1.0 of grid[0] — and the rebound crosses RSI 60, so grid[0] trades
+// once a day after the EMA(200) lookback (600 bars) is filled.
 func dropFixture() []backtest.Candle {
 	msk, err := time.LoadLocation("Europe/Moscow")
 	if err != nil {
 		msk = time.UTC
 	}
 	var out []backtest.Candle
-	signal := time.Date(2026, 3, 10, 10, 0, 0, 0, msk)
-	for _, day := range []int{9, 10} {
-		for m := 7 * 60; m < 24*60; m += 15 {
-			ts := time.Date(2026, 3, day, 0, 0, 0, 0, msk).Add(time.Duration(m) * time.Minute)
-			c := backtest.Candle{Time: ts, Open: 100, High: 100.1, Low: 99.9, Close: 100, Volume: 10}
+	p := 100.0
+	for d := time.Date(2026, 1, 12, 0, 0, 0, 0, msk); d.Before(time.Date(2026, 4, 1, 0, 0, 0, 0, msk)); d = d.AddDate(0, 0, 1) {
+		if wd := d.Weekday(); wd == time.Saturday || wd == time.Sunday {
+			continue
+		}
+		for h := 7; h <= 22; h++ {
+			o := p
 			switch {
-			case ts.Equal(signal):
-				c = backtest.Candle{Time: ts, Open: 100, High: 100.05, Low: 98.95, Close: 99, Volume: 100}
-			case ts.After(signal):
-				k := float64(ts.Sub(signal) / (15 * time.Minute))
-				open := 99 + 0.2*(k-1)
-				c = backtest.Candle{Time: ts, Open: open, High: open + 0.25, Low: open - 0.05, Close: open + 0.2, Volume: 10}
+			case h >= 10 && h <= 12:
+				p *= 0.9975
+			case h >= 13 && h <= 15:
+				p *= 1.003
+			default:
+				p *= 1.0003
 			}
-			out = append(out, c)
+			out = append(out, backtest.Candle{Time: d.Add(time.Duration(h) * time.Hour),
+				Open: o, High: max(o, p), Low: min(o, p), Close: p, Volume: 10})
 		}
 	}
 	return out
 }
 
 func TestScreenDropTickerRunsTheGridParamsVerbatim(t *testing.T) {
-	// GAZP is a REGISTERED drop_bounce ticker with calibrated literals; the screener must grade it
-	// on the grid config like every other ticker, so one grid config through ScreenDropTicker must
-	// reproduce a direct engine run with that config.
+	// The screener must grade every ticker on the grid config, registered or not, so one grid
+	// config through ScreenDropTicker must reproduce a direct engine run with that config.
 	bars := dropFixture()
-	daily := dailyCandlesMSK(60, 100, 2)
+	daily := dailyCandlesMSK(100, 100, 2)
 	opts := DefaultScreenOpts()
-	grid, _ := DropGrid(enum.Minutes15)
-	cfg := grid[0] // vol 0.05, RSI(4)@55
+	grid, _ := DropGrid(enum.Hour1)
+	cfg := grid[0] // zone 25, cap 40, day 0.5, exit 60
 
-	want := backtest.Run(dropcore.NewWithParams("GAZP", 15*time.Minute, cfg), bars, daily, nil,
+	want := backtest.Run(dropcore.NewWithParams("GAZP", time.Hour, cfg), bars, daily, nil,
 		backtest.Config{InitialCash: opts.Cash, Fraction: opts.Fraction, Commission: opts.Commission, Lot: 1, EntryAtNextOpen: true})
 	train, _ := splitTrades(want.Trades, dropSplit)
 	wantPF, wantN := profitFactor(train)
@@ -234,7 +215,7 @@ func TestScreenDropTickerRunsTheGridParamsVerbatim(t *testing.T) {
 	wantPF, _ = clampPF(wantPF, opts.PFCap)
 
 	row := ScreenDropTicker(DropTickerInput{
-		Ticker: "GAZP", Name: "Газпром", Interval: enum.Minutes15, Bars: bars, Daily: daily, Lot: 1, MinPriceIncrement: 0.01,
+		Ticker: "GAZP", Name: "Газпром", Interval: enum.Hour1, Bars: bars, Daily: daily, Lot: 1, MinPriceIncrement: 0.01,
 	}, []dropcore.Params{cfg}, dropSplit, opts)
 
 	if row.PFMed != wantPF || row.TradesMed != float64(wantN) {
@@ -253,12 +234,12 @@ func TestScreenDropTickerFlatSeriesProducesNoSignals(t *testing.T) {
 	for i := range bars {
 		bars[i].Open, bars[i].High, bars[i].Low, bars[i].Close = 100, 100, 100, 100
 	}
-	grid, _ := DropGrid(enum.Minutes15)
+	grid, _ := DropGrid(enum.Hour1)
 	row := ScreenDropTicker(DropTickerInput{
-		Ticker: "XXXX", Interval: enum.Minutes15, Bars: bars, Daily: dailyCandlesMSK(60, 100, 2), Lot: 1,
+		Ticker: "XXXX", Interval: enum.Hour1, Bars: bars, Daily: dailyCandlesMSK(100, 100, 2), Lot: 1,
 	}, grid, dropSplit, DefaultScreenOpts())
 	if !row.NoSignals {
-		t.Fatalf("NoSignals = false on a flat series (no red bar), row = %+v", row)
+		t.Fatalf("NoSignals = false on a flat series (RSI pinned at 50, close on the EMA), row = %+v", row)
 	}
 	if !row.TickUnknown {
 		t.Fatal("TickUnknown = false with MinPriceIncrement 0, want true")

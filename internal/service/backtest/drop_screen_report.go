@@ -109,11 +109,6 @@ func RenderDropScreenMarkdown(ranked, noSignals, tickRejected, rejected []DropRo
 	var b strings.Builder
 	grid, _ := DropGrid(meta.Interval)
 	gridSize := len(grid)
-	vols, _ := dropGridVols(meta.Interval)
-	volStr := make([]string, 0, len(vols))
-	for _, v := range vols {
-		volStr = append(volStr, fmt.Sprintf("%g", v))
-	}
 	pfs := make([]float64, 0, len(ranked))
 	for _, r := range ranked {
 		pfs = append(pfs, r.PFMedStress)
@@ -123,8 +118,8 @@ func RenderDropScreenMarkdown(ranked, noSignals, tickRejected, rejected []DropRo
 	b.WriteString("# drop_bounce screener\n\n")
 	fmt.Fprintf(&b, "Таймфрейм: %s. Окно: %d мес., holdout: последние %d мес. (срез %s).\n",
 		meta.Interval, meta.Months, meta.HoldoutMonths, meta.Split.Format("2006-01-02"))
-	fmt.Fprintf(&b, "Сетка: %d конфигураций — VolDailyMult {%s} × RSIPeriod {4, 6} × RSIExit {55, 75}; "+
-		"прибито: стоп 1.0 дневного ATR(10), VolAvgPeriod 10, StartHour 7.\n", gridSize, strings.Join(volStr, ", "))
+	fmt.Fprintf(&b, "Сетка: %d конфигураций — RSIZone {25, 35} × RSICap {40, 60} × DaySpentATR {0.5, 1.0} × RSIExit {60, 75}; "+
+		"прибито: RSI(6), EMA(200), стоп 1.0 дневного ATR(14), StartHour 7.\n", gridSize)
 	fmt.Fprintf(&b, "Гейты: оборот >= %.0f млн ₽/день, медиана сделок на train >= %.0f, два шага цены <= %.2f%% цены (0 — гейт выключен). PF зажат сверху на %.1f.\n",
 		meta.Gates.MinTurnoverM, meta.Gates.MinTrades, meta.Gates.MaxTickPct, meta.PFCap)
 	fmt.Fprintf(&b, "Стресс издержек (`PFmed×2`, ключ рейтинга): к комиссии %.4f за сторону добавлена ещё одна такая же и два шага цены на круг.\n",
@@ -171,7 +166,7 @@ func RenderDropScreenMarkdown(ranked, noSignals, tickRejected, rejected []DropRo
 		if r.TopHalf > 0 {
 			topHalf = pct0(r.TopHalf)
 		}
-		best := fmt.Sprintf("vol %g, RSI(%d)@%.0f", r.Best.VolDailyMult, r.Best.RSIPeriod, r.Best.RSIExit)
+		best := fmt.Sprintf("зона %.0f, планка %.0f, день %g, выход %.0f", r.Best.RSIZone, r.Best.RSICap, r.Best.DaySpentATR, r.Best.RSIExit)
 		halves := make([]string, 0, len(r.BestHalves))
 		for _, h := range r.BestHalves {
 			share := 0.0
