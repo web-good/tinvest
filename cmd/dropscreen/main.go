@@ -140,7 +140,7 @@ func run(ctx context.Context, cfg runCfg) error {
 
 	to := time.Now()
 	from := to.AddDate(0, -cfg.months, 0)
-	// A year of lead-in warms the daily volume average and ATR, exactly as cmd/backtest does.
+	// A year of lead-in warms the daily ATR, exactly as cmd/backtest does.
 	dailyFrom := from.AddDate(-1, 0, 0)
 	split := to.AddDate(0, -cfg.holdoutMonths, 0)
 

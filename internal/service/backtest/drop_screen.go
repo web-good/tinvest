@@ -191,7 +191,7 @@ type DropTickerInput struct {
 	Name              string
 	Interval          enum.Interval     // timeframe of Bars; sets the strategy's bar step
 	Bars              []backtest.Candle // bars over the whole window (train + holdout)
-	Daily             []backtest.Candle // daily bars with a warm-up lead-in (volume average and ATR)
+	Daily             []backtest.Candle // daily bars with a warm-up lead-in (ATR)
 	Lot               int32
 	MinPriceIncrement float64 // 0 when unknown
 }

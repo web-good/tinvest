@@ -1,5 +1,5 @@
 // engine_test.go runs drop_bounce through the real backtest engine on 1h bars to pin what it
-// relies on: the day extent and dailies reaching the strategy, entry at the next bar's open, the
+// relies on: the day extent (the day gate) and dailies reaching the strategy, entry at the next bar's open, the
 // daily-ATR stop filled at the gap open overnight, the RSI exit, and a signal dropped when the
 // next slot is missing.
 package core
@@ -13,7 +13,8 @@ import (
 )
 
 // engineParams opens the day gate wide: the fixture's trend runs far beyond one daily ATR within
-// a day, and the gate itself is unit-tested in core_test.go.
+// a day, and the gate itself is unit-tested in core_test.go. TestEngineDayGateUsesEngineExtent
+// narrows it to prove the engine-supplied extent decides.
 func engineParams() Params {
 	p := entryParams()
 	p.DaySpentATR = 100
@@ -61,6 +62,35 @@ func TestEngineEntryAndRSIExit(t *testing.T) {
 	}
 	if tr.Reason != "RSI" {
 		t.Fatalf("exit reason %q, want RSI", tr.Reason)
+	}
+}
+
+// TestEngineDayGateUsesEngineExtent runs the TestEngineEntryAndRSIExit fixture twice: with the
+// gate wide it trades (control), with a tight gate the extent the engine builds from the day's
+// bars up to the signal bar already exceeds it, so no trade enters on 2026-09-16.
+func TestEngineDayGateUsesEngineExtent(t *testing.T) {
+	bars := signalBars("2026-09-16 12:00")
+	last := bars[len(bars)-1].c
+	f := last * 1.001
+	bars = append(bars, bar{at("2026-09-16 13:00"), f, f, f, f})
+	for i, c := range steps(f, 6, 2) {
+		bars = append(bars, bar{at("2026-09-16 14:00").Add(time.Duration(i) * stepH1), c / 1.02, c, c / 1.02, c})
+	}
+	run := func(spent float64) bt.Result {
+		p := engineParams()
+		p.DaySpentATR = spent
+		return bt.Run(NewWithParams("TEST", stepH1, p), toCandles(bars),
+			toCandles(dailies(bars[0].t, 20, fixtureATR)), nil,
+			bt.Config{InitialCash: 1e6, Fraction: 1, Commission: 0, Lot: 1, EntryAtNextOpen: true})
+	}
+	if n := len(run(100).Trades); n != 1 {
+		t.Fatalf("control (DaySpentATR=100) trades = %d, want 1", n)
+	}
+	res := run(0.05)
+	for _, tr := range res.Trades {
+		if tr.EntryTime.In(mskLoc).Format("2006-01-02") == "2026-09-16" {
+			t.Fatalf("tight day gate still entered on 2026-09-16: %+v", tr)
+		}
 	}
 }
 

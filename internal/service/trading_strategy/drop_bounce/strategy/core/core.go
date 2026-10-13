@@ -60,7 +60,9 @@ func DefaultParams() Params {
 // Strategy trades a single instrument with the drop_bounce rules. Ticker-agnostic and pure.
 type Strategy struct {
 	ticker string
-	// step is the bar timeframe (1h in production; tests and the screener pass it). It bounds the fill: the fill bar starts one step after the signal bar, must lie on the same MSK date, and bounds Signal.FillBy.
+	// step is the bar timeframe (1h in production; tests and the screener pass it). It bounds the
+	// fill: the fill bar starts one step after the signal bar, must lie on the same MSK date, and
+	// bounds Signal.FillBy.
 	step time.Duration
 	p    Params
 }
