@@ -1,0 +1,56 @@
+{
+  "_comment": "drop_bounce ENPG Hour1: плато точки по входу и фильтру (±1 шаг RSIZone × DaySpentATR), in-sample. Запуск: reports/drop_bounce_cal/backtest -ticker ENPG -strategy drop_bounce -interval Hour1 -calibrate data/params/drop_bounce/enpg/plateau_hour1_entry.json -months 36 -metric profit_factor -min-trades 1. РЕЗУЛЬТАТ 2026-10-13: точка 1.354/65, соседи 1.412(37) 1.011(25) 0.999(99) 0.998(84) 0.931(66) 0.926(123) 0.861(40) 0.775(53), медиана 0.964 (порог 0.948), минимум 0.775 < 1.0 — ОСТРЫЙ ПИК.",
+  "phases": [
+    {
+      "name": "plateau_entry",
+      "grid": {
+        "RSIPeriod": [
+          6
+        ],
+        "RSIZone": [
+          25,
+          30,
+          35
+        ],
+        "RSICap": [
+          50
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DaySpentATR": [
+          0.5,
+          0.7,
+          1.0
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "RSIExit": [
+          70
+        ],
+        "StartHour": [
+          7
+        ],
+        "MACDFast": [
+          12
+        ],
+        "MACDSlow": [
+          26
+        ],
+        "MACDSignal": [
+          9
+        ],
+        "StaleBars": [
+          10
+        ],
+        "StaleATR": [
+          0.3
+        ]
+      }
+    }
+  ]
+}

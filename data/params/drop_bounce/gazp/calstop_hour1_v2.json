@@ -1,0 +1,72 @@
+{
+  "_comment": "drop_bounce GAZP Hour1: фазовая калибровка (сетка v2) filter → risk → exit (keepTop 3), вход RSI на дефолтах, стоп без нуля, все поля прибиты. Запуск WF: reports/drop_bounce_cal/backtest -ticker GAZP -strategy drop_bounce -interval Hour1 -calibrate data/params/drop_bounce/gazp/calstop_hour1.json -months 36 -metric profit_factor -train-months 12 -test-months 6 -min-trades 10; in-sample: то же без -train/-test, -min-trades 30. РЕЗУЛЬТАТ 2026-10-13 (WF, сетка v2): pooled OOS PF 1.321 на 51 сделке, compounded +14.48%; фолды 1.900(12) / 0.584(18) / 3.128(8) / 1.858(13); A да, B да (+2.99%), C да (+12.43%), D нет (второй фолд 0.584) — ПЛАНКА НЕ ВЗЯТА. pick: подбор обошёл baseline (0.999/58, −0.79%) — литерал = консенсус (point_hour1.json): EMA 110, день 0.68, стоп 0.85, выход 66; за 36 мес 1.466/64, за 12 мес 3.958/19 (дефолты 1.713/27).",
+  "phases": [
+    {
+      "name": "filter",
+      "keepTop": 3,
+      "grid": {
+        "RSIPeriod": [
+          6
+        ],
+        "RSIZone": [
+          30
+        ],
+        "RSICap": [
+          50
+        ],
+        "EMAPeriod": [
+          100,
+          200
+        ],
+        "DaySpentATR": [
+          0.5,
+          0.7,
+          1.0
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "RSIExit": [
+          70
+        ],
+        "StartHour": [
+          7
+        ],
+        "MACDFast": [
+          12
+        ],
+        "MACDSlow": [
+          26
+        ],
+        "MACDSignal": [
+          9
+        ]
+      }
+    },
+    {
+      "name": "risk",
+      "keepTop": 3,
+      "grid": {
+        "StopDailyATR": [
+          0.7,
+          1.0,
+          1.5
+        ]
+      }
+    },
+    {
+      "name": "exit",
+      "keepTop": 3,
+      "grid": {
+        "RSIExit": [
+          65,
+          70,
+          75
+        ]
+      }
+    }
+  ]
+}

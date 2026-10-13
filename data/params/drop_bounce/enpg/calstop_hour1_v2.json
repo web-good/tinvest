@@ -1,0 +1,72 @@
+{
+  "_comment": "drop_bounce ENPG Hour1: фазовая калибровка (сетка v2) filter → risk → exit (keepTop 3), вход RSI на дефолтах, стоп без нуля, все поля прибиты. Запуск WF: reports/drop_bounce_cal/backtest -ticker ENPG -strategy drop_bounce -interval Hour1 -calibrate data/params/drop_bounce/enpg/calstop_hour1.json -months 36 -metric profit_factor -train-months 12 -test-months 6 -min-trades 10; in-sample: то же без -train/-test, -min-trades 30. РЕЗУЛЬТАТ 2026-10-13: WF pooled OOS PF 1.194 на 37 сделках, compounded +7.43%; фолды 2.633(15) / 0.600(9) / 0.959(2) / 1.009(11); выборы: EMA 200 везде, день 0.7/0.5/0.5/0.7, стоп 1/1.5/1/0.7, выход 65/75/65/65. report.py pick: ЛИТЕРАЛ: КОНСЕНСУС; ПЛАНКА НЕ ВЗЯТА — A нет (1.194 < 1.2), B нет (без лучшего фолда −6.83%), C да (+0.09%), D да. Консенсус (point_hour1.json) in-sample 36 мес: 46 сделок, PF 1.267, +11 708 ₽. Не торговать.",
+  "phases": [
+    {
+      "name": "filter",
+      "keepTop": 3,
+      "grid": {
+        "RSIPeriod": [
+          6
+        ],
+        "RSIZone": [
+          30
+        ],
+        "RSICap": [
+          50
+        ],
+        "EMAPeriod": [
+          100,
+          200
+        ],
+        "DaySpentATR": [
+          0.5,
+          0.7,
+          1.0
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "RSIExit": [
+          70
+        ],
+        "StartHour": [
+          7
+        ],
+        "MACDFast": [
+          12
+        ],
+        "MACDSlow": [
+          26
+        ],
+        "MACDSignal": [
+          9
+        ]
+      }
+    },
+    {
+      "name": "risk",
+      "keepTop": 3,
+      "grid": {
+        "StopDailyATR": [
+          0.7,
+          1.0,
+          1.5
+        ]
+      }
+    },
+    {
+      "name": "exit",
+      "keepTop": 3,
+      "grid": {
+        "RSIExit": [
+          65,
+          70,
+          75
+        ]
+      }
+    }
+  ]
+}

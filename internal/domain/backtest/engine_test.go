@@ -129,22 +129,26 @@ func TestVisibleDaily(t *testing.T) {
 	msk, _ := time.LoadLocation("Europe/Moscow")
 	day := func(y int, m time.Month, d int) Candle {
 		return Candle{
-			Time:  time.Date(y, m, d, 0, 0, 0, 0, time.UTC),
-			High:  float64(d) + 0.5,
-			Low:   float64(d) - 0.5,
-			Close: float64(d),
+			Time:   time.Date(y, m, d, 0, 0, 0, 0, time.UTC),
+			High:   float64(d) + 0.5,
+			Low:    float64(d) - 0.5,
+			Close:  float64(d),
+			Volume: int64(d) * 100,
 		}
 	}
 	daily := []Candle{day(2026, 1, 1), day(2026, 1, 2), day(2026, 1, 3)}
 
 	t3 := time.Date(2026, 1, 3, 12, 0, 0, 0, time.UTC)
-	closes, highs, lows, times := visibleDaily(daily, t3, msk)
+	closes, highs, lows, times, volumes := visibleDaily(daily, t3, msk)
 	if len(closes) != 2 || closes[0] != 1 || closes[1] != 2 {
 		t.Fatalf("closes on Jan 3 = %v, want [1 2]", closes)
 	}
-	if len(highs) != 2 || len(lows) != 2 || len(times) != 2 {
-		t.Fatalf("series not index-aligned: %d closes, %d highs, %d lows, %d times",
-			len(closes), len(highs), len(lows), len(times))
+	if len(highs) != 2 || len(lows) != 2 || len(times) != 2 || len(volumes) != 2 {
+		t.Fatalf("series not index-aligned: %d closes, %d highs, %d lows, %d times, %d volumes",
+			len(closes), len(highs), len(lows), len(times), len(volumes))
+	}
+	if volumes[0] != 100 || volumes[1] != 200 {
+		t.Fatalf("volumes on Jan 3 = %v, want [100 200]", volumes)
 	}
 	if highs[1] != 2.5 || lows[1] != 1.5 {
 		t.Fatalf("highs/lows on Jan 3 = %v/%v, want 2.5/1.5", highs[1], lows[1])
@@ -154,12 +158,12 @@ func TestVisibleDaily(t *testing.T) {
 	}
 
 	t1 := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
-	if closes, _, _, times := visibleDaily(daily, t1, msk); len(closes) != 0 || len(times) != 0 {
+	if closes, _, _, times, _ := visibleDaily(daily, t1, msk); len(closes) != 0 || len(times) != 0 {
 		t.Fatalf("visible on Jan 1 = %v / %v, want empty", closes, times)
 	}
 
 	t9 := time.Date(2026, 1, 9, 0, 0, 0, 0, time.UTC)
-	if closes, _, _, times := visibleDaily(daily, t9, msk); len(closes) != 3 || len(times) != 3 {
+	if closes, _, _, times, _ := visibleDaily(daily, t9, msk); len(closes) != 3 || len(times) != 3 {
 		t.Fatalf("visible on Jan 9 = %d closes / %d times, want 3/3", len(closes), len(times))
 	}
 }
@@ -173,14 +177,16 @@ func TestRunPopulatesDailyTimes(t *testing.T) {
 		})
 	}
 	daily := []Candle{
-		{Time: time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC), High: 102, Low: 98, Close: 100},
-		{Time: time.Date(2026, 1, 6, 0, 0, 0, 0, time.UTC), High: 103, Low: 97, Close: 101},
+		{Time: time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC), High: 102, Low: 98, Close: 100, Volume: 500},
+		{Time: time.Date(2026, 1, 6, 0, 0, 0, 0, time.UTC), High: 103, Low: 97, Close: 101, Volume: 600},
 	}
 	var seen []time.Time
 	var seenCloses []float64
+	var seenVols []int64
 	s := scriptedStrategy{lookback: 1, decide: func(md strategy.MarketData) model.Signal {
 		seen = md.DailyTimes
 		seenCloses = md.DailyCloses
+		seenVols = md.DailyVolumes
 		return model.Signal{Kind: model.SignalNone}
 	}}
 	Run(s, candles, daily, nil, Config{InitialCash: 1000, Fraction: 1.0, Lot: 1})
@@ -189,6 +195,9 @@ func TestRunPopulatesDailyTimes(t *testing.T) {
 	}
 	if len(seen) != 2 {
 		t.Fatalf("DailyTimes on the last bar = %d, want 2", len(seen))
+	}
+	if !reflect.DeepEqual(seenVols, []int64{500, 600}) {
+		t.Fatalf("DailyVolumes on the last bar = %v, want [500 600]", seenVols)
 	}
 }
 
@@ -743,10 +752,10 @@ func TestDailyCursorMatchesVisibleDaily(t *testing.T) {
 	msk := time.FixedZone("MSK", 3*60*60)
 	day := func(d int) time.Time { return time.Date(2026, 1, d, 0, 0, 0, 0, msk) }
 	daily := []Candle{
-		{Time: day(5), Close: 10, High: 11, Low: 9},
-		{Time: day(6), Close: 12, High: 13, Low: 11},
-		{Time: day(9), Close: 14, High: 15, Low: 13}, // пропуск 7-8 (выходные)
-		{Time: day(10), Close: 16, High: 17, Low: 15},
+		{Time: day(5), Close: 10, High: 11, Low: 9, Volume: 1000},
+		{Time: day(6), Close: 12, High: 13, Low: 11, Volume: 2000},
+		{Time: day(9), Close: 14, High: 15, Low: 13, Volume: 3000}, // пропуск 7-8 (выходные)
+		{Time: day(10), Close: 16, High: 17, Low: 15, Volume: 4000},
 	}
 	ts := []time.Time{
 		day(4).Add(23 * time.Hour), // пустой префикс
@@ -763,12 +772,12 @@ func TestDailyCursorMatchesVisibleDaily(t *testing.T) {
 
 	cur := newDailyCursor(daily, msk)
 	for _, at := range ts {
-		gotC, gotH, gotL, gotT := cur.visible(at)
-		wantC, wantH, wantL, wantT := visibleDaily(daily, at, msk)
+		gotC, gotH, gotL, gotT, gotV := cur.visible(at)
+		wantC, wantH, wantL, wantT, wantV := visibleDaily(daily, at, msk)
 		if !reflect.DeepEqual(gotC, wantC) || !reflect.DeepEqual(gotH, wantH) ||
-			!reflect.DeepEqual(gotL, wantL) || !reflect.DeepEqual(gotT, wantT) {
-			t.Fatalf("t=%v: курсор дал (%v %v %v %v), visibleDaily — (%v %v %v %v)",
-				at, gotC, gotH, gotL, gotT, wantC, wantH, wantL, wantT)
+			!reflect.DeepEqual(gotL, wantL) || !reflect.DeepEqual(gotT, wantT) || !reflect.DeepEqual(gotV, wantV) {
+			t.Fatalf("t=%v: курсор дал (%v %v %v %v %v), visibleDaily — (%v %v %v %v %v)",
+				at, gotC, gotH, gotL, gotT, gotV, wantC, wantH, wantL, wantT, wantV)
 		}
 	}
 }
@@ -779,8 +788,8 @@ func TestDailyCursorNilForEmptyDailies(t *testing.T) {
 	if cur != nil {
 		t.Fatalf("newDailyCursor(nil) = %v, want nil", cur)
 	}
-	if c, h, l, ts := cur.visible(time.Now()); c != nil || h != nil || l != nil || ts != nil {
-		t.Fatalf("nil-курсор вернул (%v %v %v %v), want все nil", c, h, l, ts)
+	if c, h, l, ts, v := cur.visible(time.Now()); c != nil || h != nil || l != nil || ts != nil || v != nil {
+		t.Fatalf("nil-курсор вернул (%v %v %v %v %v), want все nil", c, h, l, ts, v)
 	}
 }
 
@@ -794,10 +803,21 @@ func TestDailyCursorPrefixIsAppendSafe(t *testing.T) {
 		{Time: time.Date(2026, 1, 6, 0, 0, 0, 0, msk), Close: 12},
 	}
 	cur := newDailyCursor(daily, msk)
-	closes, _, _, _ := cur.visible(time.Date(2026, 1, 6, 12, 0, 0, 0, msk)) // виден только день 5
-	_ = append(closes, 999)                                                 //nolint:gocritic // намеренно: проверяем, что append не портит общий массив
-	gotC, _, _, _ := cur.visible(time.Date(2026, 1, 7, 12, 0, 0, 0, msk))
+	closes, _, _, _, _ := cur.visible(time.Date(2026, 1, 6, 12, 0, 0, 0, msk)) // виден только день 5
+	_ = append(closes, 999)                                                    //nolint:gocritic // намеренно: проверяем, что append не портит общий массив
+	gotC, _, _, _, _ := cur.visible(time.Date(2026, 1, 7, 12, 0, 0, 0, msk))
 	if len(gotC) != 2 || gotC[1] != 12 {
 		t.Fatalf("closes = %v, want [10 12] — append испортил общий массив", gotC)
+	}
+
+	vols := []Candle{
+		{Time: time.Date(2026, 1, 5, 0, 0, 0, 0, msk), Volume: 10},
+		{Time: time.Date(2026, 1, 6, 0, 0, 0, 0, msk), Volume: 12},
+	}
+	vc := newDailyCursor(vols, msk)
+	_, _, _, _, v := vc.visible(time.Date(2026, 1, 6, 12, 0, 0, 0, msk))
+	_ = append(v, 999) //nolint:gocritic // намеренно: append не должен портить общий массив
+	if _, _, _, _, got := vc.visible(time.Date(2026, 1, 7, 12, 0, 0, 0, msk)); len(got) != 2 || got[1] != 12 {
+		t.Fatalf("volumes = %v, want [10 12] — append испортил общий массив", got)
 	}
 }

@@ -32,10 +32,11 @@ WORKDIR /application
 COPY --from=builder /application/build ./build
 COPY --from=builder /application/env ./env
 
-# Reversion live runner persists per-ticker entry state here
-# (data/state/reversion_<account>.json). Mount a persistent volume so the
-# state survives container restarts/redeploys; otherwise it is lost and the
-# runner falls back to approximate reconstruct-from-API on the next tick.
+# Live runners persist open-position state here (data/state/reversion_<account>.json,
+# data/state/rsi_pullback_<account>.json shared with the rsi_zone and gap_fade guests).
+# The prod deploy mounts the named volume tinvest-state over this path
+# (.github/workflows/main.yaml), so the state survives container recreation on
+# redeploy. Without -v each container gets a fresh anonymous volume and the state is lost.
 VOLUME ["/application/data/state"]
 
 EXPOSE 50051

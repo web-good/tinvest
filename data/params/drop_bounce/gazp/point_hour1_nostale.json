@@ -1,0 +1,14 @@
+{
+  "RSIPeriod": 6,
+  "RSIZone": 30,
+  "RSICap": 50,
+  "EMAPeriod": 110,
+  "DaySpentATR": 0.68,
+  "StopDailyATR": 0.85,
+  "DailyATRPeriod": 14,
+  "RSIExit": 66,
+  "StartHour": 7,
+  "MACDFast": 12,
+  "MACDSlow": 26,
+  "MACDSignal": 9
+}

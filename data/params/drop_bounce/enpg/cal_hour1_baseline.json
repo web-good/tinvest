@@ -1,0 +1,52 @@
+{
+  "_comment": "drop_bounce ENPG Hour1: baseline — одна точка, дефолты ядра. Запуск: reports/drop_bounce_cal/backtest -ticker ENPG -strategy drop_bounce -interval Hour1 -calibrate data/params/drop_bounce/enpg/cal_hour1_baseline.json -months 36 -metric profit_factor -train-months 12 -test-months 6 -min-trades 10. РЕЗУЛЬТАТ 2026-10-13: pooled OOS PF 1.469 на 48 сделках, compounded +17.41%, фолды 1.615(18) / 1.722(15) / 0.200(6) / 1.675(9). pick: ЛИТЕРАЛ: ДЕФОЛТЫ, ПЛАНКА ВЗЯТА (A/B/C/D да). Оговорка: STALE 10/0.3 выведен из сделок ENPG — проверка не независимая.",
+  "phases": [
+    {
+      "name": "baseline",
+      "grid": {
+        "RSIPeriod": [
+          6
+        ],
+        "RSIZone": [
+          30
+        ],
+        "RSICap": [
+          50
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DaySpentATR": [
+          0.7
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "RSIExit": [
+          70
+        ],
+        "StartHour": [
+          7
+        ],
+        "MACDFast": [
+          12
+        ],
+        "MACDSlow": [
+          26
+        ],
+        "MACDSignal": [
+          9
+        ],
+        "StaleBars": [
+          10
+        ],
+        "StaleATR": [
+          0.3
+        ]
+      }
+    }
+  ]
+}

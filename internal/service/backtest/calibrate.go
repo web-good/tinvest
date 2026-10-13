@@ -277,8 +277,11 @@ func validateMetric(metric string) error {
 	return nil
 }
 
-// RenderCalibrationMarkdown renders the top-N combinations as a Markdown table.
+// RenderCalibrationMarkdown renders the top-N combinations as a Markdown table; topN <= 0 renders all.
 func RenderCalibrationMarkdown(metric string, results []CalibResult, topN int) string {
+	if topN <= 0 || topN > len(results) {
+		topN = len(results)
+	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Калибровка (ранжирование по %s)\n\n", metric)
 	fmt.Fprintf(&b, "Всего комбинаций: %d. Топ-%d:\n\n", len(results), topN)

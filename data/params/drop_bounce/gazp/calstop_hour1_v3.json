@@ -1,0 +1,89 @@
+{
+  "_comment": "drop_bounce GAZP Hour1: фазовая калибровка (сетка v3) filter → risk → exit → time (keepTop 3), вход RSI на дефолтах, стоп без нуля, все поля прибиты. Запуск WF: reports/drop_bounce_cal/backtest -ticker GAZP -strategy drop_bounce -interval Hour1 -calibrate data/params/drop_bounce/gazp/calstop_hour1.json -months 36 -metric profit_factor -train-months 12 -test-months 6 -min-trades 10; in-sample: то же без -train/-test, -min-trades 30. РЕЗУЛЬТАТ 2026-10-13 (v3): WF pooled 1.359/53, compounded +11.74%; фолды 3.193(13) / 0.505(18) / 1.715(8) / 1.390(14); StaleBars по фолдам 10/10/0/0. pick против v2 1.321/51 (+14.48%): PF выше, compounded ниже — не обошёл; ПЛАНКА НЕ ВЗЯТА (B, D нет).",
+  "phases": [
+    {
+      "name": "filter",
+      "keepTop": 3,
+      "grid": {
+        "RSIPeriod": [
+          6
+        ],
+        "RSIZone": [
+          30
+        ],
+        "RSICap": [
+          50
+        ],
+        "EMAPeriod": [
+          100,
+          200
+        ],
+        "DaySpentATR": [
+          0.5,
+          0.7,
+          1.0
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "RSIExit": [
+          70
+        ],
+        "StartHour": [
+          7
+        ],
+        "MACDFast": [
+          12
+        ],
+        "MACDSlow": [
+          26
+        ],
+        "MACDSignal": [
+          9
+        ],
+        "StaleBars": [
+          0
+        ],
+        "StaleATR": [
+          0.3
+        ]
+      }
+    },
+    {
+      "name": "risk",
+      "keepTop": 3,
+      "grid": {
+        "StopDailyATR": [
+          0.7,
+          1.0,
+          1.5
+        ]
+      }
+    },
+    {
+      "name": "exit",
+      "keepTop": 3,
+      "grid": {
+        "RSIExit": [
+          65,
+          70,
+          75
+        ]
+      }
+    },
+    {
+      "name": "time",
+      "keepTop": 3,
+      "grid": {
+        "StaleBars": [
+          0,
+          6,
+          10
+        ]
+      }
+    }
+  ]
+}

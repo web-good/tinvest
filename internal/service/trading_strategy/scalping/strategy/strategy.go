@@ -67,6 +67,10 @@ type MarketData struct {
 	// computing a daily ATR — must degrade gracefully when it is empty or not
 	// length-aligned with the price slices.
 	DailyTimes []time.Time
+	// DailyVolumes are the volumes (lots) of the same COMPLETED daily candles as DailyCloses
+	// (aligned index-for-index). Empty when no daily data is supplied. Consumers must degrade
+	// gracefully when it is empty or not length-aligned with DailyTimes.
+	DailyVolumes []int64
 	// HTFCloses are oldest-first closes of COMPLETED higher-timeframe candles, aligned so
 	// the last element is the most recent HTF bar fully closed at/before the current bar.
 	// The span is the runner's choice, not a fixed 4H: backtest.Config.HTFInterval selects

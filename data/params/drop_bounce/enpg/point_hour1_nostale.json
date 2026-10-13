@@ -1,0 +1,15 @@
+{
+  "_comment": "drop_bounce ENPG Hour1: точка = консенсус фолдов фазового WF calstop_hour1.json (вес k²). РЕЗУЛЬТАТ 2026-10-13: in-sample 36 мес — 46 сделок, PF 1.267, net +11 708 ₽; это не судья (WF pooled 1.194/37, планка не взята). Ушла в литерал пакета enpg.",
+  "RSIPeriod": 6,
+  "RSIZone": 30,
+  "RSICap": 50,
+  "EMAPeriod": 200,
+  "DaySpentATR": 0.6,
+  "StopDailyATR": 1.03,
+  "DailyATRPeriod": 14,
+  "RSIExit": 66,
+  "StartHour": 7,
+  "MACDFast": 12,
+  "MACDSlow": 26,
+  "MACDSignal": 9
+}

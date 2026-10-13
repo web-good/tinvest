@@ -332,3 +332,16 @@ func BenchmarkRunGrid(b *testing.B) {
 		}
 	}
 }
+
+func TestRenderCalibrationMarkdownAllCombos(t *testing.T) {
+	results := make([]CalibResult, 25)
+	for i := range results {
+		results[i] = CalibResult{Params: rusal.DefaultParams(), Metrics: backtest.Metrics{ProfitFactor: 1, TotalTrades: 1}}
+	}
+	for _, topN := range []int{0, 100} {
+		out := RenderCalibrationMarkdown("profit_factor", results, topN)
+		if got := strings.Count(out, "| Параметр | Значение |"); got != 25 {
+			t.Fatalf("topN %d: want all 25 combos rendered, got %d", topN, got)
+		}
+	}
+}

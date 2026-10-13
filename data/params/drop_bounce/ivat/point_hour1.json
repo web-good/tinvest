@@ -1,0 +1,17 @@
+{
+  "_comment": "drop_bounce IVAT Hour1: точка §4.1 = дефолты ядра (сетка v4, STALE 10/0.3), pick 2026-10-13: ЛИТЕРАЛ: ДЕФОЛТЫ. Замер in-sample 36 мес: PF 1.205 на 21 сделках, +4 731 ₽ (+4.73%). Планка не взята — тикер отвергнут для торговли, плато и издержки не гонялись.",
+  "RSIPeriod": 6,
+  "RSIZone": 30,
+  "RSICap": 50,
+  "EMAPeriod": 200,
+  "DaySpentATR": 0.7,
+  "StopDailyATR": 1.0,
+  "DailyATRPeriod": 14,
+  "RSIExit": 70,
+  "StartHour": 7,
+  "MACDFast": 12,
+  "MACDSlow": 26,
+  "MACDSignal": 9,
+  "StaleBars": 10,
+  "StaleATR": 0.3
+}

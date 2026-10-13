@@ -92,3 +92,44 @@ func TestEntryAtNextOpenDropsBuyOnLastBar(t *testing.T) {
 		t.Fatalf("got trades=%d barsInMarket=%d equity=%.2f, want no position", len(res.Trades), res.BarsInMarket, res.FinalEquity)
 	}
 }
+
+// TestEntryAtNextOpenFillByExpiry pins Signal.FillBy: a pending Buy whose next candle opens after
+// FillBy (a missing slot, a night or a weekend in between) is dropped; one at or before FillBy
+// fills; a zero FillBy never expires.
+func TestEntryAtNextOpenFillByExpiry(t *testing.T) {
+	base := time.Date(2026, 1, 5, 20, 0, 0, 0, time.UTC)
+	cases := []struct {
+		name      string
+		nextAfter time.Duration // gap between the signal bar and the next candle
+		fillBy    time.Duration // FillBy relative to the signal bar; 0 = zero FillBy
+		wantOpen  bool
+	}{
+		{"next candle after FillBy", 11 * time.Hour, 30 * time.Minute, false},
+		{"next candle at FillBy", 30 * time.Minute, 30 * time.Minute, true},
+		{"zero FillBy never expires", 11 * time.Hour, 0, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			sigTime := base.Add(30 * time.Minute)
+			candles := []Candle{
+				{Time: base, Open: 10, High: 10, Low: 10, Close: 10, Volume: 1},
+				{Time: sigTime, Open: 100, High: 100, Low: 100, Close: 100, Volume: 1},
+				{Time: sigTime.Add(c.nextAfter), Open: 105, High: 105, Low: 105, Close: 105, Volume: 1},
+			}
+			var fillBy time.Time
+			if c.fillBy != 0 {
+				fillBy = sigTime.Add(c.fillBy)
+			}
+			s := scriptedStrategy{lookback: 1, decide: func(md strategy.MarketData) model.Signal {
+				if md.Position == nil && md.Price == 100 {
+					return model.Signal{Kind: model.SignalBuy, FillBy: fillBy}
+				}
+				return model.Signal{}
+			}}
+			res := Run(s, candles, nil, nil, nextOpenCfg)
+			if opened := res.BarsInMarket > 0; opened != c.wantOpen {
+				t.Fatalf("opened = %v (barsInMarket %d), want %v", opened, res.BarsInMarket, c.wantOpen)
+			}
+		})
+	}
+}
