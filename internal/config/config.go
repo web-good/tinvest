@@ -12,5 +12,6 @@ type Config struct {
 	RSIPullback    *RSIPullbackConfig
 	RSIZone        *RSIZoneConfig
 	GapFade        *GapFadeConfig
+	DropBounce     *DropBounceConfig
 	News           *NewsConfig
 }

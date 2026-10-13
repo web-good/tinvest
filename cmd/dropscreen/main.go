@@ -1,6 +1,6 @@
 // Command dropscreen ranks the tradable RUB share universe by how well the drop_bounce strategy
 // fits each ticker on one timeframe. Like cmd/zonescreen it replays the real strategy engine over a
-// fixed grid (32 configurations) and ranks by the median profit factor under STRESSED costs
+// fixed grid (16 configurations) and ranks by the median profit factor under STRESSED costs
 // (double commission plus two price ticks). The report ends with a shortlist line — the queue for
 // the drop-bounce-calibrate skill. All gRPC/file I/O lives here; the scoring is pure
 // (internal/service/backtest/drop_screen*.go). See docs/drop_bounce/screener.md.
@@ -173,7 +173,7 @@ func run(ctx context.Context, cfg runCfg) error {
 			}
 
 			// Turnover is checked on the cheap daily series first: a ticker below the gate would be
-			// rejected after the full intraday download and 32-configuration replay anyway.
+			// rejected after the full intraday download and 16-configuration replay anyway.
 			if pre := svc.DropPregateRow(u.Ticker, u.Name, daily, from, to, u.Lot, u.MinPriceIncrement); pregated(pre.TurnoverM, cfg.minTurnoverM) {
 				n := atomic.AddInt32(&done, 1)
 				fmt.Printf("dropscreen [%d/%d] %s: pre-gated (turnover %.0fM < %.0fM by daily candles)\n",

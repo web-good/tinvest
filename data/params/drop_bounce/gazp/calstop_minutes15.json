@@ -1,0 +1,99 @@
+{
+  "_comment": "drop_bounce GAZP Minutes15: фазовая калибровка entry → risk → exits (keepTop 3), стоп без нуля, все поля прибиты. Широкая сетка 2026-10-12 по просьбе владельца (VolAvgPeriod 5/10/14, DailyATRPeriod 7/10/14, RSIPeriod 4/5/6, стоп 0.3–3, RSIExit 50–90, GreenVolExit 0–3; StartHour всегда 7); точка = консенсус фолдов. Прежние прогоны (узкая сетка): РЕЗУЛЬТАТ 2026-10-12: pooled OOS PF 0.692 на 16 сделках, фолды 1.610(6) / 0(0) / 0.364(7) / 0.105(3), живых 2, выше 1.0 один; гуляли VolDailyMult 0.2–0.3, StopDailyATR 0.75–2, RSIExit 70–80. ПЛАНКА НЕ ВЗЯТА — 15m отвергнут. РЕЗУЛЬТАТ 2026-10-12 (с выходом GREENVOL 1.0): pooled 1.881 на 15, фолды 3.425/4, 0/0, 1.633/8, 0.069/3 — живой один, ПЛАНКА НЕ ВЗЯТА; порог 0.2–0.3, стоп 0.75–1. | Запуск WF: reports/drop_bounce_cal/backtest -ticker GAZP -strategy drop_bounce -interval Minutes15 -calibrate data/params/drop_bounce/gazp/calstop_minutes15.json -months 36 -metric profit_factor -train-months 12 -test-months 6 -min-trades 10; in-sample: то же без -train/-test, -min-trades 30.  Сетка стоп 0.3–3/RSIExit 50–90/GreenVolExit 0–3 (без StartHour/DailyATRPeriod): РЕЗУЛЬТАТ 2026-10-12: pooled 1.078 на 14, фолды 3.425/4, 0/0, 1.483/7, 0.106/3 — ПЛАНКА НЕ ВЗЯТА. | Запуск WF: reports/drop_bounce_cal/backtest -ticker GAZP -strategy drop_bounce -interval Minutes15 -calibrate data/params/drop_bounce/gazp/calstop_minutes15.json -months 36 -metric profit_factor -train-months 12 -test-months 6 -min-trades 10; in-sample: то же без -train/-test, -min-trades 30.  Запуск WF: reports/drop_bounce_cal/backtest -ticker GAZP -strategy drop_bounce -interval Minutes15 -calibrate data/params/drop_bounce/gazp/calstop_minutes15.json -months 36 -metric profit_factor -train-months 12 -test-months 6 -min-trades 10; in-sample: то же без -train/-test, -min-trades 30.  Запуск WF: reports/drop_bounce_cal/backtest -ticker GAZP -strategy drop_bounce -interval Minutes15 -calibrate data/params/drop_bounce/gazp/calstop_minutes15.json -months 36 -metric profit_factor -train-months 12 -test-months 6 -min-trades 10; in-sample: то же без -train/-test, -min-trades 30. РЕЗУЛЬТАТ 2026-10-12 (широкая сетка владельца, StartHour 7): pooled 1.756 на 12, фолды 4.068/4, 0/0, 1.201/8, 0/0 — живой один, ПЛАНКА НЕ ВЗЯТА; консенсус фолдов → литерал (PF 36 мес 1.617/22).",
+  "phases": [
+    {
+      "name": "entry",
+      "keepTop": 3,
+      "grid": {
+        "VolDailyMult": [
+          0.05,
+          0.1,
+          0.15,
+          0.2,
+          0.25,
+          0.3,
+          0.4,
+          0.5,
+          0.6,
+          0.8
+        ],
+        "VolAvgPeriod": [
+          5,
+          10,
+          14
+        ],
+        "RSIPeriod": [
+          6
+        ],
+        "RSIExit": [
+          70
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StartHour": [
+          7
+        ],
+        "GreenVolExit": [
+          1.0
+        ]
+      }
+    },
+    {
+      "name": "risk",
+      "keepTop": 3,
+      "grid": {
+        "StopDailyATR": [
+          0.3,
+          0.5,
+          0.75,
+          1.0,
+          1.25,
+          1.5,
+          2.0,
+          2.5,
+          3.0
+        ],
+        "DailyATRPeriod": [
+          7,
+          10,
+          14
+        ]
+      }
+    },
+    {
+      "name": "exits",
+      "keepTop": 3,
+      "grid": {
+        "RSIPeriod": [
+          4,
+          5,
+          6
+        ],
+        "RSIExit": [
+          50,
+          55,
+          60,
+          65,
+          70,
+          75,
+          80,
+          85,
+          90
+        ],
+        "GreenVolExit": [
+          0,
+          0.5,
+          0.75,
+          1.0,
+          1.5,
+          2.0,
+          3.0
+        ]
+      }
+    }
+  ]
+}

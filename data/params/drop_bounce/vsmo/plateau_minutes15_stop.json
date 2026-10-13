@@ -1,0 +1,33 @@
+{
+  "_comment": "drop_bounce VSMO Minutes15: плато точки по стопу (±1 шаг StopDailyATR), in-sample. Запуск: reports/drop_bounce_cal/backtest -ticker VSMO -strategy drop_bounce -interval Minutes15 -calibrate data/params/drop_bounce/vsmo/plateau_minutes15_stop.json -months 36 -metric profit_factor -min-trades 1. РЕЗУЛЬТАТ 2026-10-13: 1.5 → 1.583/59, 1.88 → 1.357/58, 2.0 → 1.324/58 — ПЛАТО ЕСТЬ.",
+  "phases": [
+    {
+      "name": "plateau_stop",
+      "grid": {
+        "VolDailyMult": [
+          0.28
+        ],
+        "VolAvgPeriod": [
+          14
+        ],
+        "RSIPeriod": [
+          6
+        ],
+        "RSIExit": [
+          70
+        ],
+        "StopDailyATR": [
+          1.5,
+          1.88,
+          2.0
+        ],
+        "DailyATRPeriod": [
+          7
+        ],
+        "StartHour": [
+          7
+        ]
+      }
+    }
+  ]
+}

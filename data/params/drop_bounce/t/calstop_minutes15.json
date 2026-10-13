@@ -1,0 +1,99 @@
+{
+  "_comment": "drop_bounce T Minutes15: фазовая калибровка entry → risk → exits (keepTop 3), стоп без нуля, все поля прибиты. Запуск WF: reports/drop_bounce_cal/backtest -ticker T -strategy drop_bounce -interval Minutes15 -calibrate data/params/drop_bounce/t/calstop_minutes15.json -months 36 -metric profit_factor -train-months 12 -test-months 6 -min-trades 10; in-sample: то же без -train/-test, -min-trades 30. РЕЗУЛЬТАТ 2026-10-12: WF pooled 1.184 на 166 (1.015/121, 1.128/4, 11.718/12, 1.191/29), живых 3, выше 1 все три — ПЛАНКА НЕ ВЗЯТА (PF < 1.2). Точка-консенсус: порог 0.1, среднее 12, RSI(4)@51, стоп 1.02 ATR(8), GreenVolExit 1.63 — in-sample PF 1.512 на 167.",
+  "phases": [
+    {
+      "name": "entry",
+      "keepTop": 3,
+      "grid": {
+        "VolDailyMult": [
+          0.05,
+          0.1,
+          0.15,
+          0.2,
+          0.25,
+          0.3,
+          0.4,
+          0.5,
+          0.6,
+          0.8
+        ],
+        "VolAvgPeriod": [
+          5,
+          10,
+          14
+        ],
+        "RSIPeriod": [
+          6
+        ],
+        "RSIExit": [
+          70
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "StartHour": [
+          7
+        ],
+        "GreenVolExit": [
+          1.0
+        ]
+      }
+    },
+    {
+      "name": "risk",
+      "keepTop": 3,
+      "grid": {
+        "StopDailyATR": [
+          0.3,
+          0.5,
+          0.75,
+          1.0,
+          1.25,
+          1.5,
+          2.0,
+          2.5,
+          3.0
+        ],
+        "DailyATRPeriod": [
+          7,
+          10,
+          14
+        ]
+      }
+    },
+    {
+      "name": "exits",
+      "keepTop": 3,
+      "grid": {
+        "RSIPeriod": [
+          4,
+          5,
+          6,
+          7
+        ],
+        "RSIExit": [
+          50,
+          55,
+          60,
+          65,
+          70,
+          75,
+          80,
+          85,
+          90
+        ],
+        "GreenVolExit": [
+          0,
+          0.5,
+          0.75,
+          1.0,
+          1.5,
+          1.7
+        ]
+      }
+    }
+  ]
+}

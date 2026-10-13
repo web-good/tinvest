@@ -142,7 +142,7 @@ func held(p Params, bars []bar, entry float64, entryTime time.Time) model.Signal
 }
 
 func TestDefaultParams(t *testing.T) {
-	want := Params{VolDailyMult: 0.4, VolAvgPeriod: 14, RSIPeriod: 6, RSIExit: 70, StopDailyATR: 1.0, DailyATRPeriod: 14, StartHour: 8}
+	want := Params{VolDailyMult: 0.4, VolAvgPeriod: 14, RSIPeriod: 6, RSIExit: 70, StopDailyATR: 1.0, DailyATRPeriod: 14, StartHour: 7}
 	if got := DefaultParams(); got != want {
 		t.Fatalf("DefaultParams() = %+v, want %+v", got, want)
 	}
@@ -255,8 +255,8 @@ func TestEnterWindow(t *testing.T) {
 		at   string
 		want model.SignalKind
 	}{
-		{"2026-09-14 07:45", model.SignalNone}, // before StartHour 8
-		{"2026-09-14 08:00", model.SignalBuy},
+		{"2026-09-14 06:45", model.SignalNone}, // before StartHour 7
+		{"2026-09-14 07:00", model.SignalBuy},
 		{"2026-09-19 12:00", model.SignalNone}, // Saturday
 		{"2026-09-14 23:30", model.SignalBuy},  // fill at 23:45, same date
 		{"2026-09-14 23:45", model.SignalNone}, // fill would be tomorrow

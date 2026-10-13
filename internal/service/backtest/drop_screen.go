@@ -21,7 +21,6 @@ var (
 	}
 	dropGridRSIPeriods = []int{4, 6}
 	dropGridRSIExits   = []float64{55, 75}
-	dropGridGreenVols  = []float64{0, 1.5}
 )
 
 // dropGridVols returns the VolDailyMult axis of a timeframe; ok is false for an unscreened one.
@@ -30,8 +29,8 @@ func dropGridVols(interval enum.Interval) ([]float64, bool) {
 	return v, ok
 }
 
-// DropGrid returns the 32 configurations every ticker is screened on for one timeframe, in a
-// deterministic order (VolDailyMult outermost, GreenVolExit innermost). The stop is pinned at
+// DropGrid returns the 16 configurations every ticker is screened on for one timeframe, in a
+// deterministic order (VolDailyMult outermost, RSIExit innermost). The stop is pinned at
 // 1.0 daily ATR(10): a property of a tuned point, not of the paper, and the value walk-forward
 // folds picked on GAZP and T. Only Minutes15, Minutes30 and Hour1 are screened, matching the
 // timeframes drop-bounce-calibrate calibrates.
@@ -40,22 +39,19 @@ func DropGrid(interval enum.Interval) ([]dropcore.Params, error) {
 	if !ok {
 		return nil, fmt.Errorf("drop screener runs on Minutes15, Minutes30 or Hour1, not %s", interval)
 	}
-	out := make([]dropcore.Params, 0, len(vols)*len(dropGridRSIPeriods)*len(dropGridRSIExits)*len(dropGridGreenVols))
+	out := make([]dropcore.Params, 0, len(vols)*len(dropGridRSIPeriods)*len(dropGridRSIExits))
 	for _, vol := range vols {
 		for _, period := range dropGridRSIPeriods {
 			for _, exit := range dropGridRSIExits {
-				for _, gv := range dropGridGreenVols {
-					out = append(out, dropcore.Params{
-						VolDailyMult:   vol,
-						VolAvgPeriod:   10,
-						RSIPeriod:      period,
-						RSIExit:        exit,
-						StopDailyATR:   1.0,
-						DailyATRPeriod: 10,
-						StartHour:      7,
-						GreenVolExit:   gv,
-					})
-				}
+				out = append(out, dropcore.Params{
+					VolDailyMult:   vol,
+					VolAvgPeriod:   10,
+					RSIPeriod:      period,
+					RSIExit:        exit,
+					StopDailyATR:   1.0,
+					DailyATRPeriod: 10,
+					StartHour:      7,
+				})
 			}
 		}
 	}
@@ -104,12 +100,11 @@ type DropRow struct {
 	PFMedStressHO float64
 	TradesMedHO   float64
 
-	HalvesPos     float64 // median share of profitable half-years (trading configurations only)
-	TopHalf       float64 // median share of the best half in summed profitable halves; 0 = none profitable
-	SLShare       float64 // median share of stop exits (trading configurations only)
-	RSIShare      float64 // median share of RSI exits
-	GreenVolShare float64 // median share of GREENVOL exits
-	HoldDays      float64 // median of per-configuration median holding time, calendar days
+	HalvesPos float64 // median share of profitable half-years (trading configurations only)
+	TopHalf   float64 // median share of the best half in summed profitable halves; 0 = none profitable
+	SLShare   float64 // median share of stop exits (trading configurations only)
+	RSIShare  float64 // median share of RSI exits
+	HoldDays  float64 // median of per-configuration median holding time, calendar days
 
 	Best       dropcore.Params // configuration with the highest raw train PF (reference only)
 	BestPF     float64
@@ -121,13 +116,13 @@ type DropRow struct {
 
 // AggregateDrop reduces one ticker's per-configuration results to a report row. tick is the
 // instrument's price increment used by the cost stress (0 = unknown). It mirrors AggregateZone
-// and adds the RSI and GREENVOL exit shares.
+// and adds the RSI exit share.
 func AggregateDrop(ticker, name string, results []DropConfigResult, split time.Time, tick float64, opts ScreenOpts) DropRow {
 	row := DropRow{Ticker: ticker, Name: name, NoSignals: true}
 	n := len(results)
 	pfs, pfsStress, counts := make([]float64, 0, n), make([]float64, 0, n), make([]float64, 0, n)
 	pfsHO, pfsStressHO, countsHO := make([]float64, 0, n), make([]float64, 0, n), make([]float64, 0, n)
-	var halvesPos, topHalf, sl, rsi, gv, hold []float64
+	var halvesPos, topHalf, sl, rsi, hold []float64
 	var plateau int
 	var haveBest bool
 	var bestTrain []backtest.Trade
@@ -182,7 +177,6 @@ func AggregateDrop(ticker, name string, results []DropConfigResult, split time.T
 		}
 		sl = append(sl, exitShare(train, "SL"))
 		rsi = append(rsi, exitShare(train, "RSI"))
-		gv = append(gv, exitShare(train, "GREENVOL"))
 		hold = append(hold, medianHoldDays(train))
 	}
 
@@ -198,7 +192,6 @@ func AggregateDrop(ticker, name string, results []DropConfigResult, split time.T
 	row.TopHalf = medianF(topHalf)
 	row.SLShare = medianF(sl)
 	row.RSIShare = medianF(rsi)
-	row.GreenVolShare = medianF(gv)
 	row.HoldDays = medianF(hold)
 	if n > 0 {
 		row.Plateau = float64(plateau) / float64(n)

@@ -5,6 +5,16 @@ import (
 
 	"tinvest/internal/enum"
 	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/core"
+	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/enpg"
+	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/gazp"
+	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/magn"
+	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/moex"
+	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/nlmk"
+	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/nvtk"
+	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/plzl"
+	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/rual"
+	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/tbank"
+	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/vsmo"
 )
 
 func TestDropBounceGenericTickerUsesCoreDefaults(t *testing.T) {
@@ -57,16 +67,52 @@ func TestDropBounceGenericOnLongerTimeframes(t *testing.T) {
 	}
 }
 
-// No ticker has a package since the 2026-10-12 rework: every ticker on every supported timeframe
-// runs on the core defaults.
-func TestDropBounceEveryTimeframeUsesCoreDefaults(t *testing.T) {
-	for _, iv := range []enum.Interval{enum.Minutes5, enum.Minutes15, enum.Minutes30, enum.Hour1} {
-		b, err := DropBounceLookupOrGeneric("GAZP", iv)
-		if err != nil {
-			t.Fatalf("%s: %v", iv, err)
-		}
-		if got, ok := b.DefaultParams().(core.Params); !ok || got != core.DefaultParams() {
-			t.Fatalf("%s: defaults = %#v, want core.DefaultParams()", iv, b.DefaultParams())
+// Each ticker package supplies its own literal on every timeframe.
+func TestDropBounceTickerLiteralPerTimeframe(t *testing.T) {
+	cases := []struct {
+		ticker string
+		want   map[enum.Interval]func() core.Params
+	}{
+		{"ENPG", map[enum.Interval]func() core.Params{
+			enum.Minutes5: enpg.ParamsMinutes5, enum.Minutes15: enpg.ParamsMinutes15, enum.Minutes30: enpg.ParamsMinutes30, enum.Hour1: enpg.ParamsHour1,
+		}},
+		{"GAZP", map[enum.Interval]func() core.Params{
+			enum.Minutes5: gazp.ParamsMinutes5, enum.Minutes15: gazp.ParamsMinutes15, enum.Minutes30: gazp.ParamsMinutes30, enum.Hour1: gazp.ParamsHour1,
+		}},
+		{"MAGN", map[enum.Interval]func() core.Params{
+			enum.Minutes5: magn.ParamsMinutes5, enum.Minutes15: magn.ParamsMinutes15, enum.Minutes30: magn.ParamsMinutes30, enum.Hour1: magn.ParamsHour1,
+		}},
+		{"MOEX", map[enum.Interval]func() core.Params{
+			enum.Minutes5: moex.ParamsMinutes5, enum.Minutes15: moex.ParamsMinutes15, enum.Minutes30: moex.ParamsMinutes30, enum.Hour1: moex.ParamsHour1,
+		}},
+		{"NLMK", map[enum.Interval]func() core.Params{
+			enum.Minutes5: nlmk.ParamsMinutes5, enum.Minutes15: nlmk.ParamsMinutes15, enum.Minutes30: nlmk.ParamsMinutes30, enum.Hour1: nlmk.ParamsHour1,
+		}},
+		{"NVTK", map[enum.Interval]func() core.Params{
+			enum.Minutes5: nvtk.ParamsMinutes5, enum.Minutes15: nvtk.ParamsMinutes15, enum.Minutes30: nvtk.ParamsMinutes30, enum.Hour1: nvtk.ParamsHour1,
+		}},
+		{"PLZL", map[enum.Interval]func() core.Params{
+			enum.Minutes5: plzl.ParamsMinutes5, enum.Minutes15: plzl.ParamsMinutes15, enum.Minutes30: plzl.ParamsMinutes30, enum.Hour1: plzl.ParamsHour1,
+		}},
+		{"RUAL", map[enum.Interval]func() core.Params{
+			enum.Minutes5: rual.ParamsMinutes5, enum.Minutes15: rual.ParamsMinutes15, enum.Minutes30: rual.ParamsMinutes30, enum.Hour1: rual.ParamsHour1,
+		}},
+		{"T", map[enum.Interval]func() core.Params{
+			enum.Minutes5: tbank.ParamsMinutes5, enum.Minutes15: tbank.ParamsMinutes15, enum.Minutes30: tbank.ParamsMinutes30, enum.Hour1: tbank.ParamsHour1,
+		}},
+		{"VSMO", map[enum.Interval]func() core.Params{
+			enum.Minutes5: vsmo.ParamsMinutes5, enum.Minutes15: vsmo.ParamsMinutes15, enum.Minutes30: vsmo.ParamsMinutes30, enum.Hour1: vsmo.ParamsHour1,
+		}},
+	}
+	for _, c := range cases {
+		for iv, want := range c.want {
+			b, err := DropBounceLookupOrGeneric(c.ticker, iv)
+			if err != nil {
+				t.Fatalf("%s %s: lookup: %v", c.ticker, iv, err)
+			}
+			if got := b.DefaultParams().(core.Params); got != want() {
+				t.Fatalf("%s %s: defaults = %+v, want %+v", c.ticker, iv, got, want())
+			}
 		}
 	}
 }

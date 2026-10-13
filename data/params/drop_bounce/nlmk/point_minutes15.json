@@ -1,0 +1,10 @@
+{
+  "_comment": "drop_bounce NLMK Minutes15: точка = консенсус фолдов WF calstop_minutes15. РЕЗУЛЬТАТ 2026-10-13: in-sample 36 мес PF 0.756 на 55 сделках, net −7.93%, DD 11.53% — убыточна даже in-sample; планка WF не взята (0.812/102).",
+  "VolDailyMult": 0.15,
+  "VolAvgPeriod": 7,
+  "RSIPeriod": 6,
+  "RSIExit": 63,
+  "StopDailyATR": 0.82,
+  "DailyATRPeriod": 8,
+  "StartHour": 7
+}

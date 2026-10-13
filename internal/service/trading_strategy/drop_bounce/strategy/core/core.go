@@ -39,7 +39,7 @@ type Params struct {
 	StopDailyATR float64
 	// DailyATRPeriod is the Wilder ATR length over completed weekday dailies (default 14).
 	DailyATRPeriod int
-	StartHour      int // signal bars must start at/after StartHour:00 MSK (default 8)
+	StartHour      int // signal bars must start at/after StartHour:00 MSK (default 7)
 }
 
 // DefaultParams returns the owner's initial configuration.
@@ -51,7 +51,7 @@ func DefaultParams() Params {
 		RSIExit:        70,
 		StopDailyATR:   1,
 		DailyATRPeriod: 14,
-		StartHour:      8,
+		StartHour:      7,
 	}
 }
 

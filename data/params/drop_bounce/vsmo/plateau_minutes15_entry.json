@@ -1,0 +1,35 @@
+{
+  "_comment": "drop_bounce VSMO Minutes15: плато точки по входу и выходу (±1 шаг VolDailyMult × RSIExit), in-sample. Запуск: reports/drop_bounce_cal/backtest -ticker VSMO -strategy drop_bounce -interval Minutes15 -calibrate data/params/drop_bounce/vsmo/plateau_minutes15_entry.json -months 36 -metric profit_factor -min-trades 1. РЕЗУЛЬТАТ 2026-10-13: точка 1.357/58, соседи 1.320–1.903, медиана 1.444 — ПЛАТО ЕСТЬ.",
+  "phases": [
+    {
+      "name": "plateau_entry",
+      "grid": {
+        "VolDailyMult": [
+          0.25,
+          0.28,
+          0.3
+        ],
+        "VolAvgPeriod": [
+          14
+        ],
+        "RSIPeriod": [
+          6
+        ],
+        "RSIExit": [
+          65,
+          70,
+          75
+        ],
+        "StopDailyATR": [
+          1.88
+        ],
+        "DailyATRPeriod": [
+          7
+        ],
+        "StartHour": [
+          7
+        ]
+      }
+    }
+  ]
+}

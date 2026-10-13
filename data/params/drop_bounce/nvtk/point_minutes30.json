@@ -1,0 +1,11 @@
+{
+  "VolDailyMult": 0.27,
+  "VolAvgPeriod": 13,
+  "RSIPeriod": 4,
+  "RSIExit": 57,
+  "StopDailyATR": 0.88,
+  "DailyATRPeriod": 7,
+  "StartHour": 7,
+  "GreenVolExit": 1.17,
+  "_comment": "РЕЗУЛЬТАТ 2026-10-13: in-sample 36 мес PF 1.974 на 42 сделках, net +13284 (+13.28%), DD 4.72% — не судья; таймфрейм отвергнут WF."
+}

@@ -1,0 +1,10 @@
+{
+  "VolDailyMult": 0.21,
+  "VolAvgPeriod": 6,
+  "RSIPeriod": 4,
+  "RSIExit": 64,
+  "StopDailyATR": 1.0,
+  "DailyATRPeriod": 7,
+  "StartHour": 7,
+  "GreenVolExit": 1.25
+}

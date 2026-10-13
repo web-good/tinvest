@@ -25,17 +25,17 @@ func TestDropGridPerTimeframe(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: DropGrid error: %v", c.interval, err)
 		}
-		if len(grid) != 32 {
-			t.Fatalf("%s: len = %d, want 32", c.interval, len(grid))
+		if len(grid) != 16 {
+			t.Fatalf("%s: len = %d, want 16", c.interval, len(grid))
 		}
 		seen := make(map[float64]bool)
-		uniq := make(map[[4]float64]bool)
+		uniq := make(map[[3]float64]bool)
 		for _, p := range grid {
 			if p.StopDailyATR != 1.0 || p.DailyATRPeriod != 10 || p.VolAvgPeriod != 10 || p.StartHour != 7 {
 				t.Fatalf("%s: pinned fields drifted: %+v", c.interval, p)
 			}
 			seen[p.VolDailyMult] = true
-			uniq[[4]float64{p.VolDailyMult, float64(p.RSIPeriod), p.RSIExit, p.GreenVolExit}] = true
+			uniq[[3]float64{p.VolDailyMult, float64(p.RSIPeriod), p.RSIExit}] = true
 		}
 		var got []float64
 		for _, v := range c.vols {
@@ -46,8 +46,8 @@ func TestDropGridPerTimeframe(t *testing.T) {
 		if !reflect.DeepEqual(got, c.vols) || len(seen) != len(c.vols) {
 			t.Fatalf("%s: VolDailyMult set = %v, want %v", c.interval, seen, c.vols)
 		}
-		if len(uniq) != 32 {
-			t.Fatalf("%s: %d distinct configurations, want 32", c.interval, len(uniq))
+		if len(uniq) != 16 {
+			t.Fatalf("%s: %d distinct configurations, want 16", c.interval, len(uniq))
 		}
 	}
 }
@@ -57,15 +57,15 @@ func TestDropGridOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, second, last := grid[0], grid[1], grid[31]
-	if first.VolDailyMult != 0.05 || first.RSIPeriod != 4 || first.RSIExit != 55 || first.GreenVolExit != 0 {
-		t.Fatalf("grid[0] = %+v, want vol 0.05 RSI(4)@55 GV 0", first)
+	first, second, last := grid[0], grid[1], grid[15]
+	if first.VolDailyMult != 0.05 || first.RSIPeriod != 4 || first.RSIExit != 55 {
+		t.Fatalf("grid[0] = %+v, want vol 0.05 RSI(4)@55", first)
 	}
-	if second.GreenVolExit != 1.5 || second.RSIExit != 55 {
-		t.Fatalf("grid[1] = %+v, want GreenVolExit as the innermost axis", second)
+	if second.RSIExit != 75 || second.RSIPeriod != 4 {
+		t.Fatalf("grid[1] = %+v, want RSIExit as the innermost axis", second)
 	}
-	if last.VolDailyMult != 0.3 || last.RSIPeriod != 6 || last.RSIExit != 75 || last.GreenVolExit != 1.5 {
-		t.Fatalf("grid[31] = %+v, want vol 0.3 RSI(6)@75 GV 1.5", last)
+	if last.VolDailyMult != 0.3 || last.RSIPeriod != 6 || last.RSIExit != 75 {
+		t.Fatalf("grid[15] = %+v, want vol 0.3 RSI(6)@75", last)
 	}
 }
 
@@ -78,8 +78,8 @@ func TestDropGridRejectsOtherTimeframes(t *testing.T) {
 }
 
 func TestExitShare(t *testing.T) {
-	trades := []backtest.Trade{{Reason: "SL"}, {Reason: "RSI"}, {Reason: "SL"}, {Reason: "GREENVOL"}}
-	for reason, want := range map[string]float64{"SL": 0.5, "RSI": 0.25, "GREENVOL": 0.25, "EOD": 0} {
+	trades := []backtest.Trade{{Reason: "SL"}, {Reason: "RSI"}, {Reason: "SL"}, {Reason: "EOD"}}
+	for reason, want := range map[string]float64{"SL": 0.5, "RSI": 0.25, "EOD": 0.25, "TP": 0} {
 		if got := exitShare(trades, reason); got != want {
 			t.Fatalf("exitShare(%s) = %v, want %v", reason, got, want)
 		}
@@ -106,10 +106,10 @@ func TestAggregateDropMediansExitsAndSilence(t *testing.T) {
 	grid, _ := DropGrid(enum.Minutes15)
 	results := []DropConfigResult{
 		{Params: grid[0], Trades: []backtest.Trade{
-			dropTrade(trainAt(2), 200, "RSI"), dropTrade(trainAt(3), -100, "SL"), dropTrade(holdoutAt(1), 50, "GREENVOL"),
+			dropTrade(trainAt(2), 200, "RSI"), dropTrade(trainAt(3), -100, "SL"), dropTrade(holdoutAt(1), 50, "RSI"),
 		}},
 		{Params: grid[1], Trades: []backtest.Trade{
-			dropTrade(trainAt(4), 300, "GREENVOL"), dropTrade(trainAt(5), -100, "SL"), dropTrade(trainAt(6), -100, "SL"),
+			dropTrade(trainAt(4), 300, "EOD"), dropTrade(trainAt(5), -100, "SL"), dropTrade(trainAt(6), -100, "SL"),
 		}},
 		{Params: grid[2]},
 	}
@@ -124,8 +124,7 @@ func TestAggregateDropMediansExitsAndSilence(t *testing.T) {
 	near("PFMed", row.PFMed, 1.5)       // PFs 2, 1.5, 0
 	near("TradesMed", row.TradesMed, 2) // 2, 3, 0
 	near("SLShare", row.SLShare, (0.5+2.0/3)/2)
-	near("RSIShare", row.RSIShare, 0.25)            // 0.5 and 0 over trading configs
-	near("GreenVolShare", row.GreenVolShare, 1.0/6) // 0 and 1/3
+	near("RSIShare", row.RSIShare, 0.25) // 0.5 and 0 over trading configs
 	near("HoldDays", row.HoldDays, 2.0/24)
 	near("PFMedHO", row.PFMedHO, 0) // holdout PFs: +Inf→10, 0, 0
 	near("TradesMedHO", row.TradesMedHO, 0)
@@ -223,7 +222,7 @@ func TestScreenDropTickerRunsTheGridParamsVerbatim(t *testing.T) {
 	daily := dailyCandlesMSK(60, 100, 2)
 	opts := DefaultScreenOpts()
 	grid, _ := DropGrid(enum.Minutes15)
-	cfg := grid[0] // vol 0.05, RSI(4)@55, GREENVOL off
+	cfg := grid[0] // vol 0.05, RSI(4)@55
 
 	want := backtest.Run(dropcore.NewWithParams("GAZP", 15*time.Minute, cfg), bars, daily, nil,
 		backtest.Config{InitialCash: opts.Cash, Fraction: opts.Fraction, Commission: opts.Commission, Lot: 1, EntryAtNextOpen: true})
