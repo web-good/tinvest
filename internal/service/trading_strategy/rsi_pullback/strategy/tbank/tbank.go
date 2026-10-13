@@ -137,6 +137,9 @@
 //
 // Файлы сеток и полный разбор каждой темы — data/params/rsi_pullback/t/, отчёты лежат локально
 // (каталог reports/ в .gitignore).
+//
+// 2026-10-13: стоп по закрытию бара с аварийной биржевой заявкой (StopOnClose=1, CatStopMult=2).
+// Замер на этом литерале, 24 месяца, in-sample: PF 2.85 → 2.93 (30 сделок).
 package tbank
 
 import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
@@ -167,5 +170,7 @@ func DefaultParams() core.Params {
 		UseRSIExit:      1,
 		UseTrail:        1,
 		TrailDailyATR:   0.5,
+		StopOnClose:     1,
+		CatStopMult:     2,
 	}
 }

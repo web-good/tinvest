@@ -127,6 +127,11 @@
 //   - ТРЕЙЛ ТОЛЬКО ВРЕДИТ: ни одна дистанция не превысила baseline, с 1.0 трейл не срабатывает
 //     вовсе. RSI-выход поднимает PF и СНИЖАЕТ ПРОСАДКУ ВДВОЕ (1.967/10 388 против 1.741/18 443),
 //     ценой net (+75 401 против +106 667).
+//
+// 2026-10-13: стоп по закрытию бара с аварийной биржевой заявкой (StopOnClose=1, CatStopMult=2).
+// Замер на этом литерале, 24 месяца, in-sample: PF 2.21 → 2.46 (122 сделок).
+// Решение торговать дефолты ядра без калибровки не меняется: от core.DefaultParams() литерал отличается
+// только двумя полями режима.
 package tgka
 
 import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
@@ -137,4 +142,8 @@ const Ticker = "TGKA"
 // DefaultParams returns the rsi_pullback parameters for TGKA. Калибровка проведена и провалена
 // трижды (см. док-комментарий пакета), поэтому пакет отдаёт ровно baseline ядра, а тикер не заведён
 // в боевую вселенную. Менять это значение можно только вместе с новой калибровкой.
-func DefaultParams() core.Params { return core.DefaultParams() }
+func DefaultParams() core.Params {
+	p := core.DefaultParams()
+	p.StopOnClose, p.CatStopMult = 1, 2 // стоп по закрытию бара, 2026-10-13 (см. doc пакета)
+	return p
+}

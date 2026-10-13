@@ -31,6 +31,8 @@ func TestParamsMatchTheCalibratedSnapshot(t *testing.T) {
 		UseRSIExit:      1,
 		UseTrail:        0,
 		TrailDailyATR:   0,
+		StopOnClose:     1,
+		CatStopMult:     2,
 	}
 	if got := DefaultParams(); got != want {
 		t.Fatalf("литерал SVCB разошёлся со снимком калибровки:\n got: %+v\nwant: %+v", got, want)

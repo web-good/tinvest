@@ -134,6 +134,9 @@
 // Это принятый риск, зафиксированный сознательно, а не следствие того, что литерал технически
 // разблокировал ввод. Пересматривать при первом же расхождении живых сделок с бэктестом
 // (сверка — cmd/pullparity) и при выходе просадки за 15%, которую дала история.
+//
+// 2026-10-13: стоп по закрытию бара с аварийной биржевой заявкой (StopOnClose=1, CatStopMult=2).
+// Замер на этом литерале, 24 месяца, in-sample: PF 2.37 → 2.66 (133 сделок).
 package wush
 
 import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
@@ -162,5 +165,7 @@ func DefaultParams() core.Params {
 		UseRSIExit:      1,
 		UseTrail:        0,
 		TrailDailyATR:   0,
+		StopOnClose:     1,
+		CatStopMult:     2,
 	}
 }

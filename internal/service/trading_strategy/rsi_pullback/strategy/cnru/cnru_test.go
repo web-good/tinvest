@@ -13,8 +13,11 @@ import (
 // темой: из восемнадцати полей большинство набрали пять, три из них подтвердили дефолт, стоп
 // отвергнут риск-гейтом A и анатомией капкана, а VolMult инертен при выключенном объёмном гейте.
 // Разбор — doc-комментарий пакета и docs/superpowers/plans/task-11-report-cnru.md.
+// Поля режима стопа по закрытию (2026-10-13) — исключение из равенства: это не калибровка.
 func TestParamsAreTheCoreBaselineByDesign(t *testing.T) {
-	if got, want := DefaultParams(), core.DefaultParams(); got != want {
+	got, want := DefaultParams(), core.DefaultParams()
+	want.StopOnClose, want.CatStopMult = 1, 2 // режим стопа по закрытию — не калибровка
+	if got != want {
 		t.Fatalf("CNRU торгует дефолты ядра по решению 2026-09-10:\n got: %+v\nwant: %+v", got, want)
 	}
 }

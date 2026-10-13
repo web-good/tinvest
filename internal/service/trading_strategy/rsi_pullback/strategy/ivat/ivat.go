@@ -99,6 +99,9 @@
 // Сетки калибровки лежат в data/params/rsi_pullback/ivat/, их оси прибиты
 // internal/service/backtest/rsi_pullback_ivat_grid_test.go. Спека подготовки —
 // docs/superpowers/specs/2026-08-17-ivat-rsi-pullback-prep-design.md.
+//
+// 2026-10-13: стоп по закрытию бара с аварийной биржевой заявкой (StopOnClose=1, CatStopMult=2).
+// Замер на этом литерале, 24 месяца, in-sample: PF 2.05 → 2.32 (107 сделок).
 package ivat
 
 import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
@@ -127,5 +130,7 @@ func DefaultParams() core.Params {
 		UseRSIExit:      1,
 		UseTrail:        0,
 		TrailDailyATR:   0,
+		StopOnClose:     1,
+		CatStopMult:     2,
 	}
 }

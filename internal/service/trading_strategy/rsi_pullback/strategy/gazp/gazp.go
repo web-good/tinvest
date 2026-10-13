@@ -80,6 +80,9 @@
 //
 // Файлы сеток и полный разбор каждой темы — data/params/rsi_pullback/gazp/, отчёты лежат
 // локально (каталог reports/ в .gitignore).
+//
+// 2026-10-13: стоп по закрытию бара с аварийной биржевой заявкой (StopOnClose=1, CatStopMult=2).
+// Замер на этом литерале, 24 месяца, in-sample: PF 2.61 → 3.96 (42 сделок).
 package gazp
 
 import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
@@ -109,5 +112,7 @@ func DefaultParams() core.Params {
 		UseRSIExit:      1,
 		UseTrail:        0,
 		TrailDailyATR:   0,
+		StopOnClose:     1,
+		CatStopMult:     2,
 	}
 }

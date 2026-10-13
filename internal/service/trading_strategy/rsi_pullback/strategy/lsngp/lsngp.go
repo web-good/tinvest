@@ -218,6 +218,9 @@
 // дней тоньше гейта скринера; лот 10 при цене около 340 ₽) и характер сделки (RSIUpper 55 роняет
 // медиану удержания до 4 баров, то есть многодневная по замыслу стратегия работает здесь внутри
 // дня). Условия пересмотра — docs/rsi_pullback/live.md §10, риск 13.
+//
+// 2026-10-13: стоп по закрытию бара с аварийной биржевой заявкой (StopOnClose=1, CatStopMult=2).
+// Замер на этом литерале, 24 месяца, in-sample: PF 2.92 → 3.53 (264 сделок).
 package lsngp
 
 import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
@@ -246,5 +249,7 @@ func DefaultParams() core.Params {
 		UseRSIExit:      1,
 		UseTrail:        0,
 		TrailDailyATR:   0,
+		StopOnClose:     1,
+		CatStopMult:     2,
 	}
 }

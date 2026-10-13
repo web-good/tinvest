@@ -170,6 +170,9 @@
 // 26 790 баров, ноль расхождений (24 месяца, а не 25: живой сборщик тянет дневные свечи окном
 // dailyFetchDays = 730, см. maxDailyHorizonMonths в cmd/pullparity). Пересматривать при первом
 // расхождении живых сделок с бэктестом и при выходе просадки за пик-минимум истории (−36.2%).
+//
+// 2026-10-13: стоп по закрытию бара с аварийной биржевой заявкой (StopOnClose=1, CatStopMult=2).
+// Замер на этом литерале, 24 месяца, in-sample: PF 2.74 → 2.86 (110 сделок).
 package ydex
 
 import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
@@ -199,5 +202,7 @@ func DefaultParams() core.Params {
 		UseRSIExit:      1,
 		UseTrail:        0,
 		TrailDailyATR:   0,
+		StopOnClose:     1,
+		CatStopMult:     2,
 	}
 }

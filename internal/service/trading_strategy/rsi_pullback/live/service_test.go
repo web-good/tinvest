@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,6 +26,7 @@ import (
 	"tinvest/internal/service/trading_strategy/rsi_pullback/live/dto"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/live/marketdata"
 	livemocks "tinvest/internal/service/trading_strategy/rsi_pullback/live/mocks"
+	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/strategy/gazp"
 	"tinvest/internal/service/trading_strategy/scalping/model"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
@@ -34,8 +36,20 @@ import (
 	"tinvest/pkg/logger"
 )
 
+// realParams — реестр в боевом виде, снятый до подмены ниже; по нему сторожевые тесты судят
+// настоящие литералы.
+var realParams map[string]core.Params
+
 func TestMain(m *testing.M) {
 	logger.Init()
+	realParams = maps.Clone(paramsByTicker)
+	// Фикстуры этого пакета построены на GAZP и пинят механику ВНУТРИБАРНОГО стопа (заявка на
+	// защитном уровне, подтяжка трейла, продажа по SL). Боевой GAZP торгует стопом по
+	// закрытию — для механических тестов он подменён копией без режима; тесты режима
+	// возвращают боевой литерал хелпером withRealGAZP.
+	p := paramsByTicker[gazp.Ticker]
+	p.StopOnClose, p.CatStopMult = 0, 0
+	paramsByTicker[gazp.Ticker] = p
 	os.Exit(m.Run())
 }
 

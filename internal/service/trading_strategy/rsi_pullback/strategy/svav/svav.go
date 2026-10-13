@@ -141,6 +141,9 @@
 //
 // Сетки калибровки лежат в data/params/rsi_pullback/svav/, их оси прибиты
 // internal/service/backtest/rsi_pullback_svav_grid_test.go.
+//
+// 2026-10-13: стоп по закрытию бара с аварийной биржевой заявкой (StopOnClose=1, CatStopMult=2).
+// Замер на этом литерале, 24 месяца, in-sample: PF 3.01 → 3.92 (90 сделок).
 package svav
 
 import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
@@ -169,5 +172,7 @@ func DefaultParams() core.Params {
 		UseRSIExit:      1,
 		UseTrail:        0,
 		TrailDailyATR:   0,
+		StopOnClose:     1,
+		CatStopMult:     2,
 	}
 }

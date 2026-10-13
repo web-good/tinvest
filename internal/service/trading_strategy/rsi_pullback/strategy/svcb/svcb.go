@@ -182,6 +182,9 @@
 // task-13-report-svcb.md (история) и task-11r-report-svcb.md (действующая точка и вердикт).
 // Скрипт разбора журнала сделок: reports/_analysis/svcb_journal.py (не коммитится, reports/ в
 // .gitignore).
+//
+// 2026-10-13: стоп по закрытию бара с аварийной биржевой заявкой (StopOnClose=1, CatStopMult=2).
+// Замер на этом литерале, 24 месяца, in-sample: PF 1.39 → 1.71 (72 сделок).
 package svcb
 
 import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
@@ -212,5 +215,7 @@ func DefaultParams() core.Params {
 		UseRSIExit:      1,
 		UseTrail:        0,
 		TrailDailyATR:   0,
+		StopOnClose:     1,
+		CatStopMult:     2,
 	}
 }

@@ -119,6 +119,9 @@
 // docs/superpowers/plans/task-3-report-x5.md … task-10-report-x5.md (сборка точки, три риск-гейта,
 // соседи плато, три walk-forward, календарные годы — в task-10). Скрипт замера экспозиции в тонкую
 // сессию: reports/_analysis/x5_exposure.py (не коммитится, reports/ в .gitignore).
+//
+// 2026-10-13: стоп по закрытию бара с аварийной биржевой заявкой (StopOnClose=1, CatStopMult=2).
+// Замер на этом литерале, 24 месяца, in-sample: PF 2.21 → 3.48 (70 сделок).
 package x5
 
 import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
@@ -149,5 +152,7 @@ func DefaultParams() core.Params {
 		UseRSIExit:      1,
 		UseTrail:        0,
 		TrailDailyATR:   0,
+		StopOnClose:     1,
+		CatStopMult:     2,
 	}
 }

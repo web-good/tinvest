@@ -29,6 +29,8 @@ func TestParamsAreTheAcceptedPoint(t *testing.T) {
 		UseRSIExit:      1,
 		UseTrail:        1,
 		TrailDailyATR:   0.7,
+		StopOnClose:     1,
+		CatStopMult:     2,
 	}
 	if got := DefaultParams(); got != want {
 		t.Fatalf("литерал точки SPBE разошёлся со снимком:\n got: %+v\nwant: %+v", got, want)

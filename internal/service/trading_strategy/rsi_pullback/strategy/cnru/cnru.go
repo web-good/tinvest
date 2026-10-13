@@ -221,6 +221,11 @@
 // Спека: docs/superpowers/specs/2026-09-08-cnru-rsi-pullback-prep-design.md, план:
 // docs/superpowers/plans/2026-09-08-cnru-rsi-pullback-prep.md, протокол замеров:
 // reports/_analysis/cnru_pullback_prep_measurements.md.
+//
+// 2026-10-13: стоп по закрытию бара с аварийной биржевой заявкой (StopOnClose=1, CatStopMult=2).
+// Замер на этом литерале, 24 месяца, in-sample: PF 1.91 → 2.65 (118 сделок).
+// Решение торговать дефолты ядра без калибровки не меняется: от core.DefaultParams() литерал отличается
+// только двумя полями режима.
 package cnru
 
 import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
@@ -231,4 +236,8 @@ const Ticker = "CNRU"
 // DefaultParams returns the rsi_pullback parameters for CNRU: the CORE DEFAULTS, by decision of
 // 2026-09-10 and not for want of a calibration. Eleven themes were run and none moved a single
 // field away from core.DefaultParams() — see the package doc comment.
-func DefaultParams() core.Params { return core.DefaultParams() }
+func DefaultParams() core.Params {
+	p := core.DefaultParams()
+	p.StopOnClose, p.CatStopMult = 1, 2 // стоп по закрытию бара, 2026-10-13 (см. doc пакета)
+	return p
+}

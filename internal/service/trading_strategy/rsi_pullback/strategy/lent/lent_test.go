@@ -56,6 +56,8 @@ func TestCalibratedLiteralIsPinned(t *testing.T) {
 		UseRSIExit:      1,
 		UseTrail:        0,
 		TrailDailyATR:   0,
+		StopOnClose:     1,
+		CatStopMult:     2,
 	}
 	if got := DefaultParams(); got != want {
 		t.Fatalf("DefaultParams() = %+v, want %+v — литерал обязан совпадать с прогоном, на котором он принят (pooled PF 2.487 на 120 сделках, in-sample 153 сделки при PF 2.083)", got, want)

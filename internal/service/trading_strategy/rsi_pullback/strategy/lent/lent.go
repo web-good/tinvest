@@ -158,6 +158,9 @@
 // RSI_PULLBACK_TICKERS — это отдельное решение владельца, как было с domrf, fesh и wush. К
 // ликвидности это относится в первую очередь: 38 млн ₽ медианного дневного оборота — предел, на
 // который стоит смотреть до, а не после ввода в прод.
+//
+// 2026-10-13: стоп по закрытию бара с аварийной биржевой заявкой (StopOnClose=1, CatStopMult=2).
+// Замер на этом литерале, 24 месяца, in-sample: PF 2.65 → 3.03 (113 сделок).
 package lent
 
 import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
@@ -186,5 +189,7 @@ func DefaultParams() core.Params {
 		UseRSIExit:      1,
 		UseTrail:        0,
 		TrailDailyATR:   0,
+		StopOnClose:     1,
+		CatStopMult:     2,
 	}
 }

@@ -260,6 +260,9 @@
 // task-12 — второй круг и действующая точка, task-13 — выбор против дефолтов и флаг владельцу).
 // Скрипт разбора журнала сделок: reports/_analysis/mdmg_journal.py (не коммитится, reports/ в
 // .gitignore).
+//
+// 2026-10-13: стоп по закрытию бара с аварийной биржевой заявкой (StopOnClose=1, CatStopMult=2).
+// Замер на этом литерале, 24 месяца, in-sample: PF 2.00 → 2.35 (56 сделок).
 package mdmg
 
 import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
@@ -290,5 +293,7 @@ func DefaultParams() core.Params {
 		UseRSIExit:      1,
 		UseTrail:        0,
 		TrailDailyATR:   0,
+		StopOnClose:     1,
+		CatStopMult:     2,
 	}
 }

@@ -132,6 +132,9 @@
 // Сетки калибровки лежат в data/params/rsi_pullback/elfv/, их оси прибиты
 // internal/service/backtest/rsi_pullback_elfv_grid_test.go, результаты каждой темы — в _comment
 // её файла, принятая точка и её замеры — в plateau_point.json.
+//
+// 2026-10-13: стоп по закрытию бара с аварийной биржевой заявкой (StopOnClose=1, CatStopMult=2).
+// Замер на этом литерале, 24 месяца, in-sample: PF 2.85 → 4.50 (62 сделок).
 package elfv
 
 import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
@@ -161,5 +164,7 @@ func DefaultParams() core.Params {
 		UseRSIExit:      1,
 		UseTrail:        0,
 		TrailDailyATR:   0,
+		StopOnClose:     1,
+		CatStopMult:     2,
 	}
 }

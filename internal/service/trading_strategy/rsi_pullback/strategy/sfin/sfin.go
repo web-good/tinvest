@@ -205,6 +205,9 @@
 // task-12-report-sfin.md (первый круг и его отказ — task-11, второй круг, четыре риск-гейта, три
 // walk-forward, соседи плато и вердикт — task-12). Скрипт разбора журнала сделок:
 // reports/_analysis/sfin_journal.py (не коммитится, reports/ в .gitignore).
+//
+// 2026-10-13: стоп по закрытию бара с аварийной биржевой заявкой (StopOnClose=1, CatStopMult=2).
+// Замер на этом литерале, 24 месяца, in-sample: PF 1.54 → 1.94 (51 сделок).
 package sfin
 
 import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
@@ -235,5 +238,7 @@ func DefaultParams() core.Params {
 		UseRSIExit:      1,
 		UseTrail:        0,
 		TrailDailyATR:   0,
+		StopOnClose:     1,
+		CatStopMult:     2,
 	}
 }

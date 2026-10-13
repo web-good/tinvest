@@ -114,6 +114,9 @@
 //     baseline — +0.062 PF и на полном окне, и на pooled OOS. Основной вклад в результат делает
 //     сама стратегия, а не настройка под бумагу; обратная сторона того же факта — подгонки в точке
 //     почти нет, и переоптимизации бояться не приходится.
+//
+// 2026-10-13: стоп по закрытию бара с аварийной биржевой заявкой (StopOnClose=1, CatStopMult=2).
+// Замер на этом литерале, 24 месяца, in-sample: PF 1.83 → 2.14 (105 сделок).
 package vsmo
 
 import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
@@ -142,5 +145,7 @@ func DefaultParams() core.Params {
 		UseRSIExit:      1,
 		UseTrail:        0,
 		TrailDailyATR:   0,
+		StopOnClose:     1,
+		CatStopMult:     2,
 	}
 }

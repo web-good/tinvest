@@ -132,6 +132,9 @@
 //
 // Разбор целиком: docs/superpowers/plans/task-11-report-spbe.md; сетки и их замеры —
 // data/params/rsi_pullback/spbe/.
+//
+// 2026-10-13: стоп по закрытию бара с аварийной биржевой заявкой (StopOnClose=1, CatStopMult=2).
+// Замер на этом литерале, 24 месяца, in-sample: PF 1.64 → 1.83 (59 сделок).
 package spbe
 
 import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
@@ -160,5 +163,7 @@ func DefaultParams() core.Params {
 		UseRSIExit:      1,
 		UseTrail:        1,
 		TrailDailyATR:   0.7,
+		StopOnClose:     1,
+		CatStopMult:     2,
 	}
 }
