@@ -1,25 +1,9 @@
 {
-  "_comment": "drop_bounce (основной 15m; 5m, 30m, 1h тоже принимаются), стартовая сетка поверх core.DefaultParams(): порог объёма свечи-сигнала в долях среднего дневного объёма (VolDailyMult; среднее Уайлдера за VolAvgPeriod будних дней с ненулевым объёмом), стоп в дневных ATR (StopDailyATR, ATR заморожен на сигнале; нуля в сетке нет), выход по пересечению RSI(RSIPeriod) уровня RSIExit вверх.",
+  "_comment": "drop_bounce (только 1h), стартовая фазовая сетка поверх core.DefaultParams(): вход — RSI(RSIPeriod) ниже RSIZone или крест RSIZone вверх не выше RSICap; фильтр — close > EMA(EMAPeriod) и ход дня < DaySpentATR дневных ATR; риск — стоп StopDailyATR дневных ATR (нуля нет); выход — RSI пересёк RSIExit вверх. Боевая сетка калибровки — scripts/grids.py скилла drop-bounce-calibrate.",
   "phases": [
-    {
-      "name": "entry",
-      "grid": {
-        "VolDailyMult": [0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.6],
-        "VolAvgPeriod": [10, 14, 20]
-      }
-    },
-    {
-      "name": "risk",
-      "grid": {
-        "StopDailyATR": [0.5, 0.75, 1.0, 1.5, 2.0]
-      }
-    },
-    {
-      "name": "exits",
-      "grid": {
-        "RSIPeriod": [4, 6, 9],
-        "RSIExit": [60, 65, 70, 75, 80]
-      }
-    }
+    {"name": "entry", "keepTop": 3, "grid": {"RSIPeriod": [4, 5, 6, 7], "RSIZone": [25, 30, 35], "RSICap": [40, 50, 60]}},
+    {"name": "filter", "keepTop": 3, "grid": {"EMAPeriod": [100, 150, 200], "DaySpentATR": [0.3, 0.5, 0.7, 1.0]}},
+    {"name": "risk", "keepTop": 3, "grid": {"StopDailyATR": [0.5, 0.7, 1.0, 1.5, 2.0], "DailyATRPeriod": [7, 10, 14]}},
+    {"name": "exit", "keepTop": 3, "grid": {"RSIExit": [60, 65, 70, 75, 80]}}
   ]
 }
