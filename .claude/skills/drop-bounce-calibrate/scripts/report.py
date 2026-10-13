@@ -61,7 +61,7 @@ def plateau(md, point):
     cpf = centre[0][0]
     nb = [r for r in rows if r is not centre[0]]
     for pf, n, p in rows:
-        diff = {k: p[k] for k in ("VolDailyMult", "VolAvgPeriod", "RSIPeriod", "RSIExit", "StopDailyATR") if abs(p[k] - pt[k]) > 1e-9}
+        diff = {k: p[k] for k in ("RSIPeriod", "RSIZone", "RSICap", "EMAPeriod", "DaySpentATR", "StopDailyATR", "RSIExit") if abs(p[k] - pt[k]) > 1e-9}
         print(f"  PF {pf:.3f} / {n}  {diff or 'ТОЧКА'}")
     med = statistics.median(r[0] for r in nb)
     ok = all(r[0] >= 1.0 for r in nb) and med >= 0.7 * cpf

@@ -9,25 +9,23 @@ Usage (from the repo root):
   grids.py point    <ticker> <tf> <calib.md> [k]  -> point_<tf>.json (flat Params of combo #k, default 1)
   grids.py consensus <ticker> <tf> <walkforward.md> -> point_<tf>.json (weighted mean of the folds' picks)
   grids.py plateau  <ticker> <tf>                 -> plateau_<tf>_entry.json, plateau_<tf>_stop.json
-<tf> must be Minutes15: drop_bounce is traded on 15m only (owner, 2026-10-13).
+<tf> must be Hour1: drop_bounce runs on 1h only (owner, 2026-10-13).
 """
 import json, os, re, sys
 
-DEFAULTS = dict(VolDailyMult=0.4, VolAvgPeriod=14, RSIPeriod=6, RSIExit=70, StopDailyATR=1.0,
-                DailyATRPeriod=14, StartHour=7)
-# share of an average weekday daily volume traded by the signal bar
-VOL = {"Minutes5": [0.02, 0.04, 0.06, 0.1, 0.15, 0.2],
-       "Minutes15": [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.8],
-       "Minutes30": [0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.8, 1.0],
-       "Hour1": [0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.8, 1.0, 1.2]}
-# plateau step of VolDailyMult past the grid's edge
-VOL_STEP = {"Minutes5": 0.02, "Minutes15": 0.05, "Minutes30": 0.1, "Hour1": 0.1}
-STOPS = [0.3, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0]  # daily ATRs
-RSI_EXITS = [50, 55, 60, 65, 70, 75, 80, 85, 90]
-PHASES = lambda tf: [
-    ("entry", {"VolDailyMult": VOL[tf], "VolAvgPeriod": [5, 10, 14]}),
+DEFAULTS = dict(RSIPeriod=6, RSIZone=30, RSICap=50, EMAPeriod=200, DaySpentATR=0.7,
+                StopDailyATR=1.0, DailyATRPeriod=14, RSIExit=70, StartHour=7)
+ZONES = [25, 30, 35]
+CAPS = [40, 50, 60]
+DAY_SPENT = [0.3, 0.5, 0.7, 1.0]
+STOPS = [0.5, 0.7, 1.0, 1.5, 2.0]  # daily ATRs
+RSI_EXITS = [60, 65, 70, 75, 80]
+# owner's lists, 2026-10-13; do not change without a request
+PHASES = [
+    ("entry", {"RSIPeriod": [4, 5, 6, 7], "RSIZone": ZONES, "RSICap": CAPS}),
+    ("filter", {"EMAPeriod": [100, 150, 200], "DaySpentATR": DAY_SPENT}),
     ("risk", {"StopDailyATR": STOPS, "DailyATRPeriod": [7, 10, 14]}),
-    ("exits", {"RSIPeriod": [4, 5, 6, 7], "RSIExit": RSI_EXITS}),
+    ("exit", {"RSIExit": RSI_EXITS}),
 ]
 
 
@@ -105,20 +103,20 @@ def neighbours(values, x, step):
 
 def main():
     kind, t, tf = sys.argv[1], sys.argv[2].upper(), sys.argv[3]
-    if tf != "Minutes15":
-        sys.exit("калибруется только Minutes15: drop_bounce торгуем только на 15m (решение владельца 2026-10-13)")
+    if tf != "Hour1":
+        sys.exit("калибруется только Hour1: drop_bounce работает только на 1h (решение владельца 2026-10-13)")
     low = tf.lower()
     if kind == "baseline":
         dump(path(t, f"cal_{low}_baseline"), {
             "_comment": f"drop_bounce {t} {tf}: baseline — одна точка, дефолты ядра. Запуск: {cmd(t, tf, f'cal_{low}_baseline')}. РЕЗУЛЬТАТ: прогон не делался.",
             "phases": [{"name": "baseline", "grid": pinned({})}]})
     elif kind == "calstop":
-        phases = PHASES(tf)
+        phases = PHASES
         # the first phase pins every field, so fields swept later start from the core defaults
         doc = [{"name": phases[0][0], "keepTop": 3, "grid": pinned(phases[0][1])}]
         doc += [{"name": n, "keepTop": 3, "grid": g} for n, g in phases[1:]]
         dump(path(t, f"calstop_{low}"), {
-            "_comment": f"drop_bounce {t} {tf}: фазовая калибровка entry → risk → exits (keepTop 3), стоп без нуля, все поля прибиты. Запуск WF: {cmd(t, tf, f'calstop_{low}')}; in-sample: то же без -train/-test, -min-trades 30. РЕЗУЛЬТАТ: прогон не делался.",
+            "_comment": f"drop_bounce {t} {tf}: фазовая калибровка entry → filter → risk → exit (keepTop 3), стоп без нуля, все поля прибиты. Запуск WF: {cmd(t, tf, f'calstop_{low}')}; in-sample: то же без -train/-test, -min-trades 30. РЕЗУЛЬТАТ: прогон не делался.",
             "phases": doc})
     elif kind == "point":
         k = int(sys.argv[5]) if len(sys.argv) > 5 else 1
@@ -139,10 +137,10 @@ def main():
     elif kind == "plateau":
         p = json.load(open(path(t, f"point_{low}")))
         e = pinned({k: [v] for k, v in p.items()})
-        e["VolDailyMult"] = neighbours(VOL[tf], p["VolDailyMult"], VOL_STEP[tf])
-        e["RSIExit"] = neighbours(RSI_EXITS, p["RSIExit"], 5)
+        e["RSIZone"] = neighbours(ZONES, p["RSIZone"], 5)
+        e["DaySpentATR"] = neighbours(DAY_SPENT, p["DaySpentATR"], 0.1)
         dump(path(t, f"plateau_{low}_entry"), {
-            "_comment": f"drop_bounce {t} {tf}: плато точки по входу и выходу (±1 шаг VolDailyMult × RSIExit), in-sample. Запуск: {cmd(t, tf, f'plateau_{low}_entry', wf=False)}. РЕЗУЛЬТАТ: прогон не делался.",
+            "_comment": f"drop_bounce {t} {tf}: плато точки по входу и фильтру (±1 шаг RSIZone × DaySpentATR), in-sample. Запуск: {cmd(t, tf, f'plateau_{low}_entry', wf=False)}. РЕЗУЛЬТАТ: прогон не делался.",
             "phases": [{"name": "plateau_entry", "grid": e}]})
         s = pinned({k: [v] for k, v in p.items()})
         s["StopDailyATR"] = neighbours(STOPS, p["StopDailyATR"], 0.25)

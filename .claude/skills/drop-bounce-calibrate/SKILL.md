@@ -1,33 +1,30 @@
 ---
 name: drop-bounce-calibrate
-description: Калибровка стратегии drop_bounce под один тикер на 15m с решением, торговать ли его. Используй всегда, когда владелец просит «откалибровать drop_bounce», «прогнать тикер через drop_bounce», «подобрать параметры отскока», «торговать ли <тикер> в drop_bounce», «перекалибровать <тикер> в drop_bounce», «продолжи калибровку drop_bounce <тикер>» — даже если он назвал только тикер и стратегию.
+description: Калибровка стратегии drop_bounce под один тикер на 1h с решением, торговать ли его. Используй всегда, когда владелец просит «откалибровать drop_bounce», «прогнать тикер через drop_bounce», «подобрать параметры отскока», «торговать ли <тикер> в drop_bounce», «перекалибровать <тикер> в drop_bounce», «продолжи калибровку drop_bounce <тикер>» — даже если он назвал только тикер и стратегию.
 ---
 
-# drop_bounce: калибровка тикера на 15m и решение, торговать ли
+# drop_bounce: калибровка тикера на 1h и решение, торговать ли
 
 Аргументы: `<TICKER> [заметки владельца]`. Владелец передаёт тикер и ждёт вердикт, а не меню:
 сам гоняешь, сам решаешь, доводишь до пакета тикера и в конце задаёшь не больше одного вопроса.
 Механика стратегии — `docs/drop_bounce/strategy.md`. Скрипты — в `scripts/` рядом с этим файлом,
 запускай их как `python3 -I .claude/skills/drop-bounce-calibrate/scripts/<script>.py`.
-Кандидатов брать из шортлиста скринера `cmd/dropscreen -interval Minutes15` (`docs/drop_bounce/screener.md`).
+Кандидатов брать из шортлиста скринера `cmd/dropscreen -interval Hour1` (`docs/drop_bounce/screener.md`).
 
 **Нарушить букву правила — значит нарушить его дух.** Каждое правило ниже появилось из реального
 провала калибровки drop_bounce.
 
 ## 0. Правила каждого прогона
 
-- **Таймфрейм — только Minutes15** (решение владельца 2026-10-13: торговать drop_bounce будем
-  только на 15m). 30m и 1h не калибруй и не предлагай, даже если тикер «почти взял планку» на 15m:
-  другой таймфрейм — это ещё одна попытка найти случайную удачу. 5m не калибруется с 2026-10-12.
-  Литералы `ParamsMinutes5`, `ParamsMinutes30`, `ParamsHour1` скилл не трогает: у нового пакета это
-  дефолты ядра, у старого остаются прежние (они нужны только бэктесту на других интервалах).
-- **Окно 36 месяцев**, walk-forward 12/6 (4 фолда). Окно не сокращай: число сделок задают всплески
-  объёма, а не число баров, короче — фолды вырождаются.
+- **Таймфрейм — только Hour1** (решение владельца 2026-10-13: drop_bounce переписан под 1h — RSI-зона
+  над EMA при неизрасходованном дневном ходе). Другие таймфреймы ядро отвергает.
+- **Окно 36 месяцев**, walk-forward 12/6 (4 фолда). Окно не сокращай: на 1h сделок мало,
+  короче — фолды вырождаются.
 - **Одно ядро:** собранный бинарь, без `go run`:
   ```bash
   B=reports/drop_bounce_cal/backtest
   GOMAXPROCS=1 nice -n 19 go build -o $B ./cmd/backtest
-  taskset -c 0 nice -n 19 env GOMAXPROCS=1 $B -strategy drop_bounce -metric profit_factor -months 36 -ticker <T> -interval Minutes15 ...
+  taskset -c 0 nice -n 19 env GOMAXPROCS=1 $B -strategy drop_bounce -metric profit_factor -months 36 -ticker <T> -interval Hour1 ...
   ```
   Прогоны строго последовательно, в фоне (`run_in_background`), без двух бэктестов одновременно.
   Время на одном ядре (GAZP, широкая сетка): WF ≈ 7 мин, in-sample ≈ две трети WF.
@@ -39,44 +36,33 @@ description: Калибровка стратегии drop_bounce под один
 - **Стоп обязателен в каждой точке.** Стоп меряется в дневных ATR (`StopDailyATR`, ATR заморожен
   на сигнале), в сетках нет `StopDailyATR = 0`. Никогда не выбирай точку без стопа, чтобы потом
   «приклеить» стоп: walk-forward тогда мерит одну стратегию, а литерал — другую.
-- **Отчёты** — `reports/<T>_drop_bounce/<шаг>/Minutes15/` (вне git). По ним же продолжаешь после перерыва.
+- **Отчёты** — `reports/<T>_drop_bounce/<шаг>/Hour1/` (вне git). По ним же продолжаешь после перерыва.
 - **После каждого прогона** — строка `РЕЗУЛЬТАТ <дата>: ...` в `_comment` его сетки (pooled, фолды,
   вердикт скрипта). Вторая попытка — вторая строка `РЕЗУЛЬТАТ`, старые не стираются.
 
 ## 1. Пакет тикера
 
 Если `internal/service/trading_strategy/drop_bounce/strategy/<ticker>/` нет — заведи его сразу:
-четыре функции `ParamsMinutes5/15/30/Hour1`, все — явно выписанные `core.DefaultParams()`; тест
-`TestLiteralsArePinned` со снимком всех четырёх; строка в `dropBounceRegistry` и в
-`TestDropBounceTickerLiteralPerTimeframe`; тикер в списке drop_bounce в `CLAUDE.md`. Образец —
-пакет `tbank`. Имя пакета — латиницей без цифр в начале (`T` → `tbank`). `go test
+один литерал `Params()` — явно выписанные `core.DefaultParams()`; тест `TestLiteralIsPinned` со снимком;
+строка `"<TICKER>": <pkg>.Params` в `dropBounceRegistry` (`internal/service/backtest/drop_bounce_registry.go`;
+`TestDropBounceTickerLiteral` проверит сам); тикер в списке drop_bounce в `CLAUDE.md`. Образец — пакет
+rsi_zone любого тикера (одна функция литерала + снимок). Имя пакета — латиницей без цифр в начале (`T` → `tbank`). `go test
 ./internal/service/backtest/ ./internal/service/trading_strategy/drop_bounce/...` зелёный.
 
 ## 2. Baseline
 
-`grids.py baseline <T> Minutes15`, затем WF по `cal_minutes15_baseline.json`. Запиши pooled PF и
-число сделок. Меньше 20 сделок за окно — не стоп: дефолтный порог 0.4 дня одной свечой часто
-недостижим, baseline мерит порог, а не данные; сетка §3 начинается с меньших порогов. Запиши число
-сделок и иди дальше. Baseline не судья в обе стороны: ниже 1 — край есть только в связке полей,
+`grids.py baseline <T> Hour1`, затем WF по `cal_hour1_baseline.json`. Запиши pooled PF и
+число сделок. Baseline не судья в обе стороны: ниже 1 — край есть только в связке полей,
 поэтому дальше **фазовая** сетка, а не темы; выше планки — всё равно решает §3.
 
 **Тематическую калибровку по одной оси поверх дефолтов не делай.** На прежних правилах (до 2026-10-12) все темы на 15m были ниже 1, точки провалились: ось, полезная в связке, на убыточном baseline не видна.
 
 ## 3. Фазовый walk-forward со стопом — судья
 
-`grids.py calstop <T> Minutes15` → `calstop_minutes15.json` (entry → risk → exits, keepTop 3): entry —
-`VolDailyMult` (0.05–0.8, 10 значений) × `VolAvgPeriod` (5, 10, 14)
-(`StartHour` всегда 7 — решение владельца, не калибруется); risk — `StopDailyATR` (0.3–3.0, 9 значений) × `DailyATRPeriod` (7, 10, 14);
-exits — `RSIPeriod` (4, 5, 6, 7) × `RSIExit` (50–90, шаг 5), 36 комбо × keepTop 3.
-Выход GREENVOL (`GreenVolExit`) удалён из ядра 2026-10-13 по решению владельца — в сетки его не
-возвращай; литералы, откалиброванные с ним (GAZP, T, PLZL, NVTK, ENPG; VSMO перекалиброван), на текущем ядре не
-воспроизводятся и требуют перекалибровки.
-**Эти списки задал владелец 2026-10-12** (`RSIPeriod` 4/5/6/7 — 7 добавлен после первого прогона GAZP, `DailyATRPeriod` 7/10/14,
-`VolAvgPeriod` 5/10/14 — урезаны ради числа прогонов; остальные — как расширены им же). Сетка одна
-для всех тикеров: не меняй её без просьбы владельца.
+`grids.py calstop <T> Hour1` → `calstop_hour1.json` (entry → filter → risk → exit, keepTop 3): entry — `RSIPeriod` (4, 5, 6, 7) × `RSIZone` (25, 30, 35) × `RSICap` (40, 50, 60); filter — `EMAPeriod` (100, 150, 200) × `DaySpentATR` (0.3, 0.5, 0.7, 1.0); risk — `StopDailyATR` (0.5, 0.7, 1.0, 1.5, 2.0) × `DailyATRPeriod` (7, 10, 14); exit — `RSIExit` (60, 65, 70, 75, 80). `StartHour` всегда 7. **Эти списки задал владелец 2026-10-13.** Сетка одна для всех тикеров: не меняй её без просьбы владельца.
 WF:
 ```
-... -calibrate data/params/drop_bounce/<t>/calstop_minutes15.json -train-months 12 -test-months 6 -min-trades 10 -out reports/<T>_drop_bounce/wf/Minutes15
+... -calibrate data/params/drop_bounce/<t>/calstop_hour1.json -train-months 12 -test-months 6 -min-trades 10 -out reports/<T>_drop_bounce/wf/Hour1
 python3 -I .../scripts/report.py wf <walkforward.md>
 ```
 Каждый фолд заново проходит все фазы на своём train-окне, поэтому pooled OOS честный. Скрипт
@@ -90,7 +76,7 @@ python3 -I .../scripts/report.py wf <walkforward.md>
 | C | сумма OOS NetPnL% двух последних фолдов > 0 | край не затух в последние 12 месяцев |
 | D | каждый фолд с ≥ 10 сделками — PF ≥ 0.8 | большой фолд не ушёл глубоко в минус |
 
-Почему не счёт фолдов: сделок у drop_bounce мало (их задают всплески объёма), фолды по 4–10 сделок
+Почему не счёт фолдов: сделок у drop_bounce мало (на 1h их немного), фолды по 4–10 сделок
 обычны, а PF на 5 сделках — монетка: одна сделка переворачивает его через 1.0. Прежнее правило
 «≥ 3 живых фолда выше 1.0» мерило везение маленьких фолдов (VSMO 15m: пул 1.432/53, три фолда на
 5/4/10 сделках с PF 2.6–3.9 — отвергнут). Маленький фолд с огромным PF планку не поднимает: его
@@ -105,41 +91,40 @@ python3 -I .../scripts/report.py wf <walkforward.md>
 Шаги 1–2 — всегда, взята планка или нет. Шаги 3–4 — только если планка взята.
 
 1. **Точка = консенсус фолдов walk-forward** (правило владельца 2026-10-12): `grids.py consensus <T>
-   Minutes15 <walkforward.md>` → `point_minutes15.json`. По каждому полю берутся значения, выбранные фолдами
+   Hour1 <walkforward.md>` → `point_hour1.json`. По каждому полю берутся значения, выбранные фолдами
    на своих train-окнах, и считается взвешенное среднее: значение, выбранное k фолдами, весит k²
    (совпадения весят больше, чем в простом среднем). Целые поля округляются до целого, дробные —
    до 0.01; точка может лежать между узлами сетки. In-sample комбо #1 в литерал не идёт: на
    скачущих фолдах это острый пик под историю.
-2. Замер точки: обычный бэктест `-params point_minutes15.json -months 36 -out reports/<T>_drop_bounce/point/Minutes15` —
+2. Замер точки: обычный бэктест `-params point_hour1.json -months 36 -out reports/<T>_drop_bounce/point/Hour1` —
    PF и число сделок в doc-комментарий (это in-sample, не судья).
-3. **Плато:** `grids.py plateau <T> Minutes15`, затем in-sample прогоны `plateau_minutes15_entry.json`,
-   `plateau_minutes15_stop.json`. Все с `-min-trades 1`,
-   каждый — `report.py plateau <calibration.md> point_minutes15.json`, где `<calibration.md>` — отчёт
+3. **Плато** по входу и фильтру (±1 шаг RSIZone × DaySpentATR) и по стопу: `grids.py plateau <T> Hour1`, затем in-sample прогоны `plateau_hour1_entry.json`,
+   `plateau_hour1_stop.json`. Все с `-min-trades 1`,
+   каждый — `report.py plateau <calibration.md> point_hour1.json`, где `<calibration.md>` — отчёт
    этого прогона плато. Все должны дать **ПЛАТО ЕСТЬ** (все соседи ≥ 1.0, медиана соседей ≥ 0.7 ×
    PF точки). Острый пик → тикер отвергнут для торговли (литерал остаётся консенсусом).
-4. **Издержки:** `-params data/params/drop_bounce/<t>/point_minutes15.json -commission 0.001 -out reports/<T>_drop_bounce/cost/Minutes15`
+4. **Издержки:** `-params data/params/drop_bounce/<t>/point_hour1.json -commission 0.001 -out reports/<T>_drop_bounce/cost/Hour1`
    (обычный бэктест, без `-calibrate`), `report.py cost <отчёт.md>` → должно быть **ИЗДЕРЖКИ ВЫДЕРЖАНЫ**
    (PF ≥ 1.2 и net > 0). Нет → тикер отвергнут.
 
-Прошёл §3 и §4 целиком — торговать на 15m; иначе — не торговать.
+Прошёл §3 и §4 целиком — торговать на 1h; иначе — не торговать.
 
 ## 5. Литерал и запись
 
-- `ParamsMinutes15` = `point_minutes15.json` (консенсус фолдов §4.1), числа явно — и у принятого,
+- `Params()` = `point_hour1.json` (консенсус фолдов §4.1), числа явно — и у принятого,
   и у отвергнутого тикера. Торговать ли, записывает doc-комментарий, а не литерал.
-  Остальные три литерала — по §0.
 - Снимок в `<ticker>_test.go` обновлён, `go test` из §1 зелёный.
-- Doc-комментарий пакета: дата, сетка, baseline, pooled OOS (сделки, фолды), порог объёма, стоп в ATR,
+- Doc-комментарий пакета: дата, сетка, baseline, pooled OOS (сделки, фолды), параметры входа и фильтра, стоп в ATR,
   выход RSI, плато, издержки, решение. Это единственное место записи про тикер:
   `docs/drop_bounce/` описывает механику и не принимает калибровочные отчёты.
 - `РЕЗУЛЬТАТ` во всех сетках тикера.
-- **Вселенная live** — `DROP_BOUNCE_TICKERS_M15`:
+- **Вселенная live** — `DROP_BOUNCE_TICKERS_H1`:
   ```bash
-  python3 -I .claude/skills/drop-bounce-calibrate/scripts/live_env.py <T> Minutes15   # торговать
+  python3 -I .claude/skills/drop-bounce-calibrate/scripts/live_env.py <T> Hour1   # торговать
   python3 -I .claude/skills/drop-bounce-calibrate/scripts/live_env.py <T>             # не торговать
   ```
-  Скрипт ставит членство точно и заодно снимает тикер с `_M30` / `_H1`, если он там остался от
-  прежних правил (`env/prod.env`, `env/prod.env.example`, `env/local.env.example`). Запускай
+  Скрипт ставит членство точно и удаляет ключи прежних таймфреймов _M15/_M30, если найдёт
+  (`env/prod.env`, `env/prod.env.example`, `env/local.env.example`). Запускай
   **всегда**, в том числе при решении «не торговать» — перекалибровка, отвергнувшая тикер, должна
   снять его из списка. Затем `go test ./internal/service/backtest/` —
   `TestDropBounceLiveTickersAreRegistered` проверяет, что у каждого тикера списков есть пакет в реестре.
@@ -147,17 +132,17 @@ python3 -I .../scripts/report.py wf <walkforward.md>
 
 ## 6. Итог владельцу
 
-Одна строка таблицы 15m: baseline, pooled OOS PF/сделки, фолды, плато, издержки, решение. Под ней
-одна строка — торговать или нет и почему, и строка с итоговым `DROP_BOUNCE_TICKERS_M15` из вывода
+Одна строка таблицы 1h: baseline, pooled OOS PF/сделки, фолды, плато, издержки, решение. Под ней
+одна строка — торговать или нет и почему, и строка с итоговым `DROP_BOUNCE_TICKERS_H1` из вывода
 `live_env.py`. Не больше одного вопроса.
 
 ## Красные флаги — остановись
 
 | Мысль | Что на самом деле |
 |---|---|
-| «15m не взял, проверю 30m/1h» | Торгуем только 15m. Другой таймфрейм — подгонка, не калибруй. |
+| «1h не взял, проверю 15m/30m» | Ядро работает только на 1h. Другой таймфрейм — подгонка. |
 | «Лучшая точка без стопа, стоп добавлю потом» | WF мерил другую стратегию. Стоп только внутри сетки. |
-| «Давай по темам, как в rsi_zone» | Работает лишь над прибыльным baseline. Здесь baseline < 1. |
+| «Давай по темам, как в rsi_zone» | Темы меряют ось поверх дефолтов; фазовая сетка меряет связку. Судья — фазовый WF. |
 | «Baseline взял планку — значит торгуем дефолты» | Судья — фазовый WF §3, baseline не судья. |
 | «In-sample PF 4+, значит работает» | Судья — pooled OOS WF. In-sample только выбирает точку. |
 | «PF 3.8 на 25 сделках — отличный результат» | Меньше 30 сделок в пуле — планка не взята (A). |
@@ -166,5 +151,5 @@ python3 -I .../scripts/report.py wf <walkforward.md>
 | «Окно долгое, сокращу до 18 месяцев» | Сделок станет вдвое меньше, фолды выродятся. |
 | «Поправлю сетку, пока идёт очередь» | Таблица станет несравнимой. Правка → перезапуск всех её прогонов. |
 | «Запущу два бэктеста параллельно» | Одно ядро, строго последовательно. |
-| «Почти взял планку — впишу в DROP_BOUNCE_TICKERS_M15» | В env только прошедшие §3–§4. |
+| «Почти взял планку — впишу в DROP_BOUNCE_TICKERS_H1» | В env только прошедшие §3–§4. |
 | «Решение — не торговать, env трогать незачем» | `live_env.py <T>` всё равно: снимает тикер со всех списков. |
