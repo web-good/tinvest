@@ -1,0 +1,89 @@
+{
+  "_comment": "drop_bounce ENPG Hour1: фазовая калибровка (сетка v3) filter → risk → exit → time (keepTop 3), вход RSI на дефолтах, стоп без нуля, все поля прибиты. Запуск WF: reports/drop_bounce_cal/backtest -ticker ENPG -strategy drop_bounce -interval Hour1 -calibrate data/params/drop_bounce/enpg/calstop_hour1.json -months 36 -metric profit_factor -train-months 12 -test-months 6 -min-trades 10; in-sample: то же без -train/-test, -min-trades 30. РЕЗУЛЬТАТ 2026-10-13 (v3): WF pooled 1.125/46, compounded +4.92%; фолды 2.139(19) / 0.600(9) / 0.652(7) / 1.009(11); StaleBars по фолдам 10/0/6/0. pick против v2 1.194/37: v3 не обошёл; ПЛАНКА НЕ ВЗЯТА (A, B, C нет).",
+  "phases": [
+    {
+      "name": "filter",
+      "keepTop": 3,
+      "grid": {
+        "RSIPeriod": [
+          6
+        ],
+        "RSIZone": [
+          30
+        ],
+        "RSICap": [
+          50
+        ],
+        "EMAPeriod": [
+          100,
+          200
+        ],
+        "DaySpentATR": [
+          0.5,
+          0.7,
+          1.0
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "RSIExit": [
+          70
+        ],
+        "StartHour": [
+          7
+        ],
+        "MACDFast": [
+          12
+        ],
+        "MACDSlow": [
+          26
+        ],
+        "MACDSignal": [
+          9
+        ],
+        "StaleBars": [
+          0
+        ],
+        "StaleATR": [
+          0.3
+        ]
+      }
+    },
+    {
+      "name": "risk",
+      "keepTop": 3,
+      "grid": {
+        "StopDailyATR": [
+          0.7,
+          1.0,
+          1.5
+        ]
+      }
+    },
+    {
+      "name": "exit",
+      "keepTop": 3,
+      "grid": {
+        "RSIExit": [
+          65,
+          70,
+          75
+        ]
+      }
+    },
+    {
+      "name": "time",
+      "keepTop": 3,
+      "grid": {
+        "StaleBars": [
+          0,
+          6,
+          10
+        ]
+      }
+    }
+  ]
+}

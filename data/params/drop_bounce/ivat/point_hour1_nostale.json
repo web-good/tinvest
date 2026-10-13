@@ -1,0 +1,15 @@
+{
+  "_comment": "drop_bounce IVAT Hour1: точка = консенсус фолдов фазового WF calstop_hour1.json (вес k²). РЕЗУЛЬТАТ 2026-10-13: in-sample 36 мес — 29 сделок, PF 0.894, net −4 699 ₽, win 37.9%; это не судья (WF pooled 1.166/28). Ушла в литерал (pick: ЛИТЕРАЛ: КОНСЕНСУС). Тикер отвергнут для торговли, плато и издержки не гонялись (§4.3–4.4 только при взятой планке).",
+  "RSIPeriod": 6,
+  "RSIZone": 30,
+  "RSICap": 50,
+  "EMAPeriod": 200,
+  "DaySpentATR": 0.97,
+  "StopDailyATR": 0.88,
+  "DailyATRPeriod": 14,
+  "RSIExit": 66,
+  "StartHour": 7,
+  "MACDFast": 12,
+  "MACDSlow": 26,
+  "MACDSignal": 9
+}

@@ -179,7 +179,7 @@ func emaAt(c []float64, period int) float64 { return ema.Compute(c, period)[len(
 func TestDefaultParams(t *testing.T) {
 	want := Params{RSIPeriod: 6, RSIZone: 30, RSICap: 50, EMAPeriod: 200, DaySpentATR: 0.7,
 		StopDailyATR: 1.0, DailyATRPeriod: 14, RSIExit: 70, StartHour: 7,
-		MACDFast: 12, MACDSlow: 26, MACDSignal: 9}
+		MACDFast: 12, MACDSlow: 26, MACDSignal: 9, StaleBars: 10, StaleATR: 0.3}
 	if got := DefaultParams(); got != want {
 		t.Fatalf("DefaultParams() = %+v, want %+v", got, want)
 	}
@@ -365,12 +365,16 @@ func TestEnterWindow(t *testing.T) {
 		"2026-09-20 12:00", // Sunday
 		"2026-09-16 06:00", // before StartHour 7
 		"2026-09-16 23:00", // fill bar would be the next date
+		"2026-09-18 12:00", // Friday from 12:00
+		"2026-09-18 15:00", // Friday afternoon
 	} {
 		if sig := decide(entryParams(), end, c); sig.Kind != model.SignalNone {
 			t.Fatalf("%s: got %v, want none", end, sig.Kind)
 		}
 	}
-	if sig := decide(entryParams(), "2026-09-16 07:00", c); sig.Kind != model.SignalBuy {
-		t.Fatalf("07:00: got %v, want Buy", sig.Kind)
+	for _, end := range []string{"2026-09-16 07:00", "2026-09-16 15:00", "2026-09-18 11:00"} {
+		if sig := decide(entryParams(), end, c); sig.Kind != model.SignalBuy {
+			t.Fatalf("%s: got %v, want Buy", end, sig.Kind)
+		}
 	}
 }

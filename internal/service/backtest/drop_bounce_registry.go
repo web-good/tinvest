@@ -7,6 +7,8 @@ import (
 	"tinvest/internal/enum"
 	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/core"
 	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/enpg"
+	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/gazp"
+	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/ivat"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 )
 
@@ -35,6 +37,8 @@ func dropBounceBindingFor(ticker string, interval enum.Interval, defaults func()
 // (skill drop-bounce-calibrate).
 var dropBounceRegistry = map[string]func() core.Params{
 	"ENPG": enpg.Params,
+	"GAZP": gazp.Params,
+	"IVAT": ivat.Params,
 }
 
 // DropBounceLookupOrGeneric returns the binding for a ticker: the ticker package's literal, or

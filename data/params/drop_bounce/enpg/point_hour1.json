@@ -1,15 +1,17 @@
 {
-  "_comment": "drop_bounce ENPG Hour1: точка = консенсус фолдов фазового WF calstop_hour1.json (вес k²). РЕЗУЛЬТАТ 2026-10-13: in-sample 36 мес — 46 сделок, PF 1.267, net +11 708 ₽; это не судья (WF pooled 1.194/37, планка не взята). Ушла в литерал пакета enpg.",
+  "_comment": "drop_bounce ENPG Hour1: точка §4.1 = дефолты ядра (сетка v4, STALE 10/0.3), pick 2026-10-13: ЛИТЕРАЛ: ДЕФОЛТЫ. Замер in-sample 36 мес: PF 1.354 на 65 сделках, +16 630 ₽ (+16.63%). РЕЗУЛЬТАТ 2026-10-13: плато по входу — ОСТРЫЙ ПИК (сосед 0.775), по стопу — ПЛАТО ЕСТЬ; издержки (-commission 0.001): PF 1.189, net +9 281 ₽ на 65 сделках — ИЗДЕРЖКИ СЪЕДАЮТ КРАЙ. Тикер отвергнут для торговли.",
   "RSIPeriod": 6,
   "RSIZone": 30,
   "RSICap": 50,
   "EMAPeriod": 200,
-  "DaySpentATR": 0.6,
-  "StopDailyATR": 1.03,
+  "DaySpentATR": 0.7,
+  "StopDailyATR": 1.0,
   "DailyATRPeriod": 14,
-  "RSIExit": 66,
+  "RSIExit": 70,
   "StartHour": 7,
   "MACDFast": 12,
   "MACDSlow": 26,
-  "MACDSignal": 9
+  "MACDSignal": 9,
+  "StaleBars": 10,
+  "StaleATR": 0.3
 }

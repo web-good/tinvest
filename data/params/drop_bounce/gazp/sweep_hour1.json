@@ -1,0 +1,60 @@
+{
+  "_comment": "drop_bounce GAZP Hour1: in-sample перебор на первых 30 из 36 месяцев (последние 6 — hold-out), оси EMAPeriod [100, 120, 150, 200], StaleBars [10, 15, 25, 35], StopDailyATR [0.7, 1.0, 1.5], остальное — дефолты ядра, все поля прибиты. Запуск: reports/drop_bounce_cal/backtest -ticker GAZP -strategy drop_bounce -interval Hour1 -calibrate data/params/drop_bounce/gazp/sweep_hour1.json -months 36 -holdout-months 6 -metric profit_factor -min-trades 1 -combos 0. РЕЗУЛЬТАТ 2026-10-14: окно 2023-10-14 — 2026-04-14, 48 комбо. Центр (report.py center) #1 — EMA 100, стоп 0.7, STALE 10: PF 1.579 на 54 сделках, медиана окрестности 1.439, соседи стоп 1.0 → 1.470, STALE 15 → 1.408, EMA 120 → 1.377 — ПЛАТО ЕСТЬ (центр в углу сетки). Для сравнения: точка владельца EMA 120 / STALE 25 / стоп 1.0 — 1.182/55, дефолты — 0.959/71.",
+  "phases": [
+    {
+      "name": "sweep",
+      "grid": {
+        "RSIPeriod": [
+          6
+        ],
+        "RSIZone": [
+          30
+        ],
+        "RSICap": [
+          50
+        ],
+        "EMAPeriod": [
+          100,
+          120,
+          150,
+          200
+        ],
+        "DaySpentATR": [
+          0.7
+        ],
+        "StopDailyATR": [
+          0.7,
+          1.0,
+          1.5
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "RSIExit": [
+          70
+        ],
+        "StartHour": [
+          7
+        ],
+        "MACDFast": [
+          12
+        ],
+        "MACDSlow": [
+          26
+        ],
+        "MACDSignal": [
+          9
+        ],
+        "StaleBars": [
+          10,
+          15,
+          25,
+          35
+        ],
+        "StaleATR": [
+          0.3
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "_comment": "drop_bounce ENPG Hour1: проверка выхода STALE без подбора — дефолты ядра + StaleBars 10, StaleATR 0.3 (одна точка); сравнивать с baseline через report.py pick. Запуск: reports/drop_bounce_cal/backtest -ticker ENPG -strategy drop_bounce -interval Hour1 -calibrate data/params/drop_bounce/enpg/cal_hour1_stale.json -months 36 -metric profit_factor -train-months 12 -test-months 6 -min-trades 10. РЕЗУЛЬТАТ 2026-10-13: WF pooled 1.469/48, compounded +17.41%; фолды 1.615(18) / 1.722(15) / 0.200(6) / 1.675(9); A/B/C/D да — ПЛАНКА ВЗЯТА; против baseline 1.055/40. Оговорка: правило STALE 10/0.3 выведено из сделок ENPG (разбор 46 сделок точки), поэтому ENPG — не независимая проверка.",
+  "phases": [
+    {
+      "name": "stale",
+      "grid": {
+        "RSIPeriod": [
+          6
+        ],
+        "RSIZone": [
+          30
+        ],
+        "RSICap": [
+          50
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DaySpentATR": [
+          0.7
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "RSIExit": [
+          70
+        ],
+        "StartHour": [
+          7
+        ],
+        "MACDFast": [
+          12
+        ],
+        "MACDSlow": [
+          26
+        ],
+        "MACDSignal": [
+          9
+        ],
+        "StaleBars": [
+          10
+        ],
+        "StaleATR": [
+          0.3
+        ]
+      }
+    }
+  ]
+}

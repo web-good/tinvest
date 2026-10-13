@@ -1,14 +1,16 @@
 // Package core implements drop_bounce: a long-only 1h buy of an oversold RSI inside an uptrend
 // while the day still has range left. On the close of a Mon–Fri MSK bar starting at or after
-// StartHour whose fill bar lies on the same date, it buys when (1) the close is strictly above
+// StartHour (on Friday before 12:00) whose fill bar lies on the same date, it buys when (1) the close is strictly above
 // EMA(EMAPeriod); (2) RSI(RSIPeriod) is below RSIZone (ZONE), or has just crossed RSIZone upward
 // and is not above RSICap (CROSS); (3) the day's range so far, TodayHigh − TodayLow, is below
 // DaySpentATR daily ATRs (Wilder, DailyATRPeriod, completed weekday dailies). The backtest fills
 // at the next bar's open (Config.EntryAtNextOpen); the daily ATR is frozen for the trade. Exits,
 // in order: a stop StopDailyATR daily ATRs below the fill price; then RSI(RSIPeriod) crossing
 // RSIExit upward whatever the price, which sells at once on a red MACD histogram and on a green one
-// arms an exit on the histogram's next green→red flip. No end-of-day exit: positions carry
-// overnight. Pure, stateless between bars and ticker-agnostic. Run with `-strategy drop_bounce -interval Hour1`.
+// arms an exit on the histogram's next green→red flip; on Friday RSI at or above RSIExit sells at
+// once whatever the histogram (reason FRI). A time exit (StaleBars, on by default)
+// sells at the close of a position held StaleBars bars whose highs never reached StaleATR daily
+// ATRs above the fill (reason STALE). No end-of-day exit: positions carry overnight. Pure, stateless between bars and ticker-agnostic. Run with `-strategy drop_bounce -interval Hour1`.
 package core
 
 import (
@@ -50,6 +52,13 @@ type Params struct {
 	MACDFast   int
 	MACDSlow   int
 	MACDSignal int
+	// StaleBars is the time exit: once the position has been held this many bars (the fill bar
+	// counts) and no bar's high since the fill reached entry + StaleATR daily ATRs, it sells at the
+	// bar's close with reason STALE; 0 = off (default 10, owner 2026-10-13).
+	StaleBars int
+	// StaleATR is the favourable move in daily ATRs (frozen at entry) that keeps a position from the
+	// STALE exit (default 0.3; 0 means any high above the fill keeps it).
+	StaleATR float64
 }
 
 // DefaultParams returns the owner's initial configuration.
@@ -67,6 +76,8 @@ func DefaultParams() Params {
 		MACDFast:       12,
 		MACDSlow:       26,
 		MACDSignal:     9,
+		StaleBars:      10,
+		StaleATR:       0.3,
 	}
 }
 
@@ -147,10 +158,19 @@ func (s *Strategy) dailyATR(md strategy.MarketData) float64 {
 	return indicators.ATR(h, l, c, s.p.DailyATRPeriod)
 }
 
+// fridayLastEntryHour closes Friday entries: a Friday signal bar must start before 12:00 MSK, so
+// the latest Friday buy is at the 12:00 bar's open (owner, 2026-10-13).
+const fridayLastEntryHour = 12
+
+// isFriday reports whether t falls on Friday MSK.
+func isFriday(t time.Time) bool { return t.In(mskLoc).Weekday() == time.Friday }
+
 // inWindow reports whether a signal on the bar starting at t may open a position: a weekday, at
-// or after StartHour, and the fill bar (one step later) on the same MSK date.
+// or after StartHour (on Friday before fridayLastEntryHour), and the fill bar (one step later) on
+// the same MSK date.
 func (s *Strategy) inWindow(t time.Time) bool {
-	if isWeekend(t) || t.In(mskLoc).Hour() < s.p.StartHour {
+	h := t.In(mskLoc).Hour()
+	if isWeekend(t) || h < s.p.StartHour || (isFriday(t) && h >= fridayLastEntryHour) {
 		return false
 	}
 	return dayKey(t.Add(s.step)) == dayKey(t)
@@ -228,8 +248,8 @@ func trendUp(closeP, emaNow float64) bool {
 
 // manage exits in priority order: the stop StopDailyATR daily ATRs below the fill price (the ATR
 // frozen at entry, today's ATR when the position carries none; intrabar, filled by the engine at
-// min(stop, open)), then at the bar's close the RSI/MACD exit (manageRSIMACD). There is no
-// end-of-day exit.
+// min(stop, open)), then at the bar's close the RSI/MACD exit (manageRSIMACD), then the time exit
+// (manageStale). There is no end-of-day exit.
 func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal {
 	pos := md.Position
 	n := len(md.Closes)
@@ -252,8 +272,61 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 		}
 	}
 	if s.p.RSIExit > 0 && s.p.RSIPeriod > 0 {
-		return s.manageRSIMACD(md, sig)
+		if sig = s.manageRSIMACD(md, sig); sig.Kind == model.SignalSell {
+			return sig
+		}
 	}
+	return s.manageStale(md, sig)
+}
+
+// fillIndex is the index of the first bar at or after the entry time, or −1 when the entry time is
+// unknown (zero, no aligned times) or before the visible window (the fill bar is not in it).
+func fillIndex(md strategy.MarketData) int {
+	pos := md.Position
+	if pos.EntryTime.IsZero() || len(md.Times) != len(md.Closes) || len(md.Times) == 0 ||
+		md.Times[0].After(pos.EntryTime) {
+		return -1
+	}
+	for k, t := range md.Times {
+		if !t.Before(pos.EntryTime) {
+			return k
+		}
+	}
+	return -1
+}
+
+// manageStale is the time exit at the bar's close: StaleBars bars held (the fill bar counts) and no
+// high since the fill reached entry + StaleATR daily ATRs (frozen at entry, today's when the
+// position carries none). Without a known fill bar in the window it does not fire.
+func (s *Strategy) manageStale(md strategy.MarketData, sig model.Signal) model.Signal {
+	p := s.p
+	if p.StaleBars <= 0 || len(md.Highs) != len(md.Closes) {
+		return sig
+	}
+	fill := fillIndex(md)
+	i := len(md.Closes) - 1
+	if fill < 0 || i-fill+1 < p.StaleBars {
+		return sig
+	}
+	pos := md.Position
+	atr := pos.EntryATR
+	if atr <= 0 {
+		atr = s.dailyATR(md)
+	}
+	if atr <= 0 {
+		return sig
+	}
+	best := md.Highs[fill]
+	for _, h := range md.Highs[fill+1:] {
+		best = max(best, h)
+	}
+	target := pos.PurchasePrice + p.StaleATR*atr
+	if best >= target {
+		return sig
+	}
+	sig.Kind, sig.Reason = model.SignalSell, "STALE"
+	sig.ExitReason = fmt.Sprintf("STALE: %d баров, лучший high %.4f < вход %.4f + %.2f ATR %.4f = %.4f, выход по %.4f",
+		i-fill+1, best, pos.PurchasePrice, p.StaleATR, atr, target, md.Closes[i])
 	return sig
 }
 
@@ -287,6 +360,14 @@ func (s *Strategy) manageRSIMACD(md strategy.MarketData, sig model.Signal) model
 		}
 		sig.ExitReason = fmt.Sprintf("RSI: RSI(%d) %.1f → %.1f пересёк %.0f вверх, гистограмма MACD %s, выход по %.4f (вход %.4f)",
 			p.RSIPeriod, prev, cur, p.RSIExit, histText, md.Closes[i], entry)
+		return sig
+	}
+	// On Friday RSI at or above RSIExit sells at once whatever the histogram: no wait for a red
+	// flip into the weekend. Entries need RSI ≤ RSICap, so RSI up here means a cross after entry.
+	if len(md.Times) == n && isFriday(md.Times[i]) && rsi[i] >= p.RSIExit {
+		sig.Kind, sig.Reason = model.SignalSell, "FRI"
+		sig.ExitReason = fmt.Sprintf("FRI: пятница, RSI(%d) %.1f ≥ %.0f — выход без ожидания MACD по %.4f (вход %.4f)",
+			p.RSIPeriod, rsi[i], p.RSIExit, md.Closes[i], entry)
 		return sig
 	}
 	if hist == nil || i < 1 || isRed(hist[i-1]) || !isRed(hist[i]) {

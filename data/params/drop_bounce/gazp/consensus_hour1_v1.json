@@ -1,0 +1,15 @@
+{
+  "_comment": "drop_bounce GAZP Hour1: точка = консенсус фолдов фазового WF по сетке v1 calstop_hour1_v1.json (вес k²). РЕЗУЛЬТАТ 2026-10-13: in-sample 36 мес — 44 сделки, PF 1.323, net +8 851 ₽, просадка 10.32%, win 54.6%; это не судья (WF pooled 0.482/35). В литерал НЕ пошла: report.py pick — ЛИТЕРАЛ: ДЕФОЛТЫ (фазовый 0.482/35 против baseline 0.999/58); на последних 12 мес PF 0.562/12 против 1.713/27 у дефолтов. Тикер отвергнут для торговли, плато и издержки не гонялись (§4.3–4.4 только при взятой планке).",
+  "RSIPeriod": 4,
+  "RSIZone": 28,
+  "RSICap": 59,
+  "EMAPeriod": 125,
+  "DaySpentATR": 0.32,
+  "StopDailyATR": 0.87,
+  "DailyATRPeriod": 12,
+  "RSIExit": 65,
+  "StartHour": 7,
+  "MACDFast": 12,
+  "MACDSlow": 26,
+  "MACDSignal": 9
+}

@@ -1,0 +1,102 @@
+{
+  "_comment": "СЕТКА V1 (широкая, заменена v2 по просьбе владельца 2026-10-13). drop_bounce GAZP Hour1: фазовая калибровка entry → filter → risk → exit (keepTop 3), стоп без нуля, все поля прибиты. Запуск WF: reports/drop_bounce_cal/backtest -ticker GAZP -strategy drop_bounce -interval Hour1 -calibrate data/params/drop_bounce/gazp/calstop_hour1.json -months 36 -metric profit_factor -train-months 12 -test-months 6 -min-trades 10; in-sample: то же без -train/-test, -min-trades 30. РЕЗУЛЬТАТ 2026-10-13: pooled OOS PF 0.482 на 35 сделках, compounded −17.98%; фолды 0.134(8) / 0.314(12) / 0.113(4) / 1.521(11); A нет, B нет (−22.37%), C да (+2.42%), D нет — ПЛАНКА НЕ ВЗЯТА, тикер отвергнут для торговли. Фазовая подгонка хуже baseline (0.999/58): поля гуляют по фолдам, острые пики под train-окна.",
+  "phases": [
+    {
+      "name": "entry",
+      "keepTop": 3,
+      "grid": {
+        "RSIPeriod": [
+          4,
+          5,
+          6,
+          7
+        ],
+        "RSIZone": [
+          25,
+          30,
+          35
+        ],
+        "RSICap": [
+          40,
+          50,
+          60
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "DaySpentATR": [
+          0.7
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "RSIExit": [
+          70
+        ],
+        "StartHour": [
+          7
+        ],
+        "MACDFast": [
+          12
+        ],
+        "MACDSlow": [
+          26
+        ],
+        "MACDSignal": [
+          9
+        ]
+      }
+    },
+    {
+      "name": "filter",
+      "keepTop": 3,
+      "grid": {
+        "EMAPeriod": [
+          100,
+          150,
+          200
+        ],
+        "DaySpentATR": [
+          0.3,
+          0.5,
+          0.7,
+          1.0
+        ]
+      }
+    },
+    {
+      "name": "risk",
+      "keepTop": 3,
+      "grid": {
+        "StopDailyATR": [
+          0.5,
+          0.7,
+          1.0,
+          1.5,
+          2.0
+        ],
+        "DailyATRPeriod": [
+          7,
+          10,
+          14
+        ]
+      }
+    },
+    {
+      "name": "exit",
+      "keepTop": 3,
+      "grid": {
+        "RSIExit": [
+          60,
+          65,
+          70,
+          75,
+          80
+        ]
+      }
+    }
+  ]
+}
