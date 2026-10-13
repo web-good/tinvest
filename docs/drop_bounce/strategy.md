@@ -1,24 +1,29 @@
-# drop_bounce — красная свеча на всплеске дневного объёма
+# drop_bounce — RSI-зона над EMA при неизрасходованном дневном ходе
 
-Бэктест-стратегия, только лонг. Основной таймфрейм 15m; ядро от шага не зависит, поэтому cmd/backtest принимает и 5m, 30m, 1h (`-interval Minutes5|Minutes15|Minutes30|Hour1`, другие отклоняет). Порог объёма меряется в долях среднего дневного объёма, поэтому на другом таймфрейме то же число означает другое событие: доля дня в одной 5m-свече примерно втрое меньше, чем в 15m. Позиция может переноситься через ночь. Код: `internal/service/trading_strategy/drop_bounce/strategy/core`, привязка к бэктесту — `internal/service/backtest/drop_bounce_registry.go`. Спека: `docs/superpowers/specs/2026-10-12-drop-bounce-volume-spike-design.md`.
+Бэктест-стратегия, только лонг, таймфрейм **только 1h** (`-interval Hour1`, другие cmd/backtest отклоняет). Позиция может переноситься через ночь. Код: `internal/service/trading_strategy/drop_bounce/strategy/core`, привязка к бэктесту — `internal/service/backtest/drop_bounce_registry.go`. Спека: `docs/superpowers/specs/2026-10-13-drop-bounce-h1-rsi-ema-design.md`. Прежняя версия (красная свеча на всплеске объёма, 15m) заменена 2026-10-13, история — в git.
 
 ## Вход
 
-1. Свеча-сигнал красная: `close < open`.
-2. Объём свечи-сигнала не меньше `VolDailyMult` средних дневных объёмов: `Volume ≥ VolDailyMult · VolAvg`. Объём ровно на пороге проходит.
-3. `VolAvg` — средний дневной объём по Уайлдеру за `VolAvgPeriod` дней: завершённые дневки Пн–Пт (сессии выходного дня отброшены — они в разы тоньше), дни с нулевым объёмом отброшены (иначе среднее занижено и порог срабатывает на пустом месте). Первые `VolAvgPeriod` дней — простое среднее, каждый следующий сдвигает его на `(V − VolAvg) / VolAvgPeriod`. У объёма нет high/low, поэтому «ATR объёма» — это само среднее. Пока таких дней меньше `VolAvgPeriod` или дневных объёмов нет, сигнала нет: объём здесь и есть сигнал.
-4. Окно: свеча-сигнал — Пн–Пт МСК, начинается не раньше `StartHour:00`; свеча исполнения (через один шаг) лежит в ту же дату. Сигнал на последней свече дня на утро не переносится.
-5. Дневной ATR: Уайлдер `DailyATRPeriod` по завершённым дневкам Пн–Пт. Считается на свече-сигнале и уходит в сигнал (`Signal.ATR`); движок замораживает его на позицию (`Position.EntryATR`). Если стоп включён, а ATR посчитать нельзя или стоп от close сигнала ушёл бы в ноль и ниже — сигнала нет.
-6. Покупка по open следующей свечи (`Config.EntryAtNextOpen`). Сигнал несёт `FillBy = время свечи-сигнала + шаг`: если этой свечи в данных нет, движок сигнал отбрасывает, а не покупает по open следующей сессии.
+На закрытии часовой свечи, все условия вместе:
 
-Пока позиция открыта, новые сигналы игнорируются.
+1. **Окно:** свеча Пн–Пт МСК, начинается не раньше `StartHour:00`, свеча исполнения (через час) лежит в ту же дату. Сигнал на последней свече дня на утро не переносится.
+2. **Тренд:** `close > EMA(EMAPeriod)`, строго. Пока EMA не прогрелась (меньше `EMAPeriod` свечей), входа нет.
+3. **Зона RSI** (`RSI(RSIPeriod)`, Уайлдер), одна из веток:
+   - **ZONE** — `RSI < RSIZone`;
+   - **CROSS** — RSI пересёк `RSIZone` снизу вверх на этой свече (`prev < RSIZone ≤ cur`) и `cur ≤ RSICap`.
+4. **Дневной ход не израсходован:** `used = TodayHigh − TodayLow` (диапазон текущего дня МСК по эту свечу включительно); вход только при `used < DaySpentATR · ATR`. Ровно на пороге день считается израсходованным. Нет дневного ATR или битый экстент дня — входа нет.
+5. Стоп от close сигнала выше нуля.
+
+Дневной ATR — Уайлдер `DailyATRPeriod` по завершённым дневкам Пн–Пт (выходные сессии отброшены: они в разы уже и занижают ATR). Он уходит в сигнал (`Signal.ATR`), движок замораживает его на позицию (`Position.EntryATR`).
+
+Покупка по open следующей свечи (`Config.EntryAtNextOpen`), `FillBy = время сигнала + 1h`: нет этой свечи в данных — сигнал отброшен. Пока позиция открыта, сигналы игнорируются. Паузы после стопа нет: следующая свеча может войти снова, если условия держатся.
 
 ## Выход
 
 По приоритету на каждой свече:
 
 1. **SL** — внутри свечи: `low ≤ вход − StopDailyATR · ATR`, ATR замороженный на сигнале (если позиция его не несёт — сегодняшний). Движок исполняет по `min(стоп, open)`, так что ночной гэп ниже стопа закрывается по open. `StopDailyATR = 0` выключает стоп.
-2. **RSI** — на close: RSI(`RSIPeriod`) пересёк `RSIExit` снизу вверх (`prev < RSIExit ≤ cur`). Продаёт при любой цене, в том числе ниже входа. `RSIExit = 0` выключает выход.
+2. **RSI** — на close: RSI(`RSIPeriod`) пересёк `RSIExit` снизу вверх. Продаёт при любой цене. `RSIExit = 0` выключает выход.
 
 Выхода в конце дня нет.
 
@@ -26,35 +31,37 @@
 
 | поле | по умолчанию | смысл |
 |---|---|---|
-| `VolDailyMult` | 0.4 | объём свечи-сигнала ≥ это · `VolAvg`; 0 — входов нет |
-| `VolAvgPeriod` | 14 | длина среднего Уайлдера по будним дневным объёмам; 0 — входов нет |
-| `RSIPeriod` | 6 | длина RSI выхода |
-| `RSIExit` | 70 | выход при пересечении вверх; 0 — выключен |
+| `RSIPeriod` | 6 | длина RSI входа и выхода; 0 — входов нет |
+| `RSIZone` | 30 | уровень перепроданности: ZONE ниже, CROSS через него вверх |
+| `RSICap` | 50 | CROSS засчитывается, только если RSI на свече креста ≤ этого |
+| `EMAPeriod` | 200 | EMA тренда на часовых close; 0 — входов нет |
+| `DaySpentATR` | 0.7 | вход, пока ход дня < это · дневной ATR; 0 — входов нет |
 | `StopDailyATR` | 1.0 | стоп ниже цены входа в дневных ATR; 0 — выключен |
 | `DailyATRPeriod` | 14 | длина дневного ATR Уайлдера по будним дням |
+| `RSIExit` | 70 | выход при пересечении вверх; 0 — выключен |
 | `StartHour` | 7 | свеча-сигнал начинается не раньше этого часа МСК |
 
-`Lookback = max(64, 4 · RSIPeriod + 2)`.
+`Lookback = max(64, 3 · EMAPeriod, 4 · RSIPeriod + 2)` — при EMA 200 это 600 часовых свечей.
+
+## Калибровка
+
+Фазовая сетка (`keepTop 3`), каждая фаза перебирает свои оси поверх трёх лучших точек предыдущей: entry (`RSIPeriod` × `RSIZone` × `RSICap`) → filter (`EMAPeriod` × `DaySpentATR`) → risk (`StopDailyATR` × `DailyATRPeriod`) → exit (`RSIExit`). Списки значений и процедура — скилл `drop-bounce-calibrate`; стартовая сетка — `data/params/drop_bounce/grid_example.json`.
 
 ## Пакеты тикеров
 
-Пакеты, откалиброванные на прежних правилах, удалены 2026-10-12 (история — в git). Реестр `dropBounceRegistry` держит пакеты, заведённые калибровкой на этих правилах; тикер без пакета работает на `core.DefaultParams()` на любом из четырёх таймфреймов; JSON `-params` / `-calibrate` ложится поверх. Новый пакет заводится только по итогам калибровки на этих правилах (скилл `drop-bounce-calibrate`).
+Реестр `dropBounceRegistry` держит по одному литералу `Params()` на тикер, заведённый калибровкой на этих правилах; тикер без пакета работает на `core.DefaultParams()`; JSON `-params` / `-calibrate` ложится поверх. Поля прежних правил (`VolDailyMult`, `VolAvgPeriod`) в JSON молча игнорируются.
 
 Кандидатов на калибровку подбирает скринер `cmd/dropscreen` — `docs/drop_bounce/screener.md`.
 
-## Вселенные для live
+## Вселенная для live
 
-Живого раннера пока нет; вселенные под него уже заведены в env, по одной на таймфрейм:
-`DROP_BOUNCE_TICKERS_M15`, `DROP_BOUNCE_TICKERS_M30`, `DROP_BOUNCE_TICKERS_H1` (`config.DropBounceConfig`).
-Тикер стоит только в тех списках, чьи таймфреймы прошли калибровку; списки ведёт скилл
-`drop-bounce-calibrate` (`scripts/live_env.py`). Тест `TestDropBounceLiveTickersAreRegistered`
-требует, чтобы каждый тикер из `env/prod.env` имел пакет в `dropBounceRegistry`.
+Живого раннера пока нет; вселенная под него — `DROP_BOUNCE_TICKERS_H1` (`config.DropBounceConfig`). Список ведёт скилл `drop-bounce-calibrate` (`scripts/live_env.py`). Тест `TestDropBounceLiveTickersAreRegistered` требует, чтобы каждый тикер из `env/prod.env` имел пакет в `dropBounceRegistry`.
 
 ## Запуск
 
 ```bash
-go run ./cmd/backtest -strategy drop_bounce -interval Minutes15 -ticker GAZP -months 36
-go run ./cmd/backtest -strategy drop_bounce -interval Minutes15 -ticker GAZP -months 36 \
+go run ./cmd/backtest -strategy drop_bounce -interval Hour1 -ticker GAZP -months 36
+go run ./cmd/backtest -strategy drop_bounce -interval Hour1 -ticker GAZP -months 36 \
   -calibrate data/params/drop_bounce/grid_example.json -metric profit_factor
 ```
 Для калибровочных прогонов — собранный бинарь на одном ядре (см. скилл `drop-bounce-calibrate`).

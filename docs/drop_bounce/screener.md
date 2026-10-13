@@ -3,11 +3,11 @@
 Команда: `cmd/dropscreen`. Ядро: `internal/service/backtest/drop_screen.go`, отчёт —
 `drop_screen_report.go`, обвязка — `internal/service/backtest/screenrun` (общая с zonescreen).
 Спека: `docs/superpowers/specs/2026-10-12-drop-bounce-screener-design.md`.
+Правила стратегии с 2026-10-13: `docs/superpowers/specs/2026-10-13-drop-bounce-h1-rsi-ema-design.md`.
 
 ## Зачем
 
-Калибровка drop_bounce идёт по тикеру и стоит дорого (скилл `drop-bounce-calibrate`: три
-таймфрейма, фазовый walk-forward на одном ядре). Скринер отвечает на один вопрос: на какие тикеры
+Калибровка drop_bounce идёт по тикеру и стоит дорого (скилл `drop-bounce-calibrate`: фазовый walk-forward на одном ядре). Скринер отвечает на один вопрос: на какие тикеры
 потратить калибровку и в каком порядке. Это не доказательство края — судья остаётся прежним:
 pooled OOS walk-forward калибровки.
 
@@ -20,18 +20,9 @@ pooled OOS walk-forward калибровки.
 
 ## Сетка
 
-16 конфигураций: `VolDailyMult` × `RSIPeriod` {4, 6} × `RSIExit` {55, 75}.
+Только 1h. 16 конфигураций: `RSIZone` {25, 35} × `RSICap` {40, 60} × `DaySpentATR` {0.5, 1.0} × `RSIExit` {60, 75}.
 
-| таймфрейм | `VolDailyMult` |
-|---|---|
-| Minutes15 | 0.05, 0.1, 0.2, 0.3 |
-| Minutes30 | 0.1, 0.2, 0.3, 0.5 |
-| Hour1 | 0.15, 0.25, 0.4, 0.6 |
-
-Прибито: `StopDailyATR` 1.0, `DailyATRPeriod` 10, `VolAvgPeriod` 10, `StartHour` 7. Двигаются только
-оси, чей полезный диапазон зависит от бумаги: порог объёма (как часто бумага даёт всплеск) и выход по
-RSI — быстрый на откате и удерживающий. Стоп — свойство настроенной точки,
-поэтому в сетку не входит.
+Прибито: `RSIPeriod` 6, `EMAPeriod` 200, `StopDailyATR` 1.0, `DailyATRPeriod` 14, `StartHour` 7 (дефолты ядра). Двигаются только оси, чей полезный диапазон зависит от бумаги: глубина зоны перепроданности и высота креста, доля дневного хода, при которой ещё входим, и выход по RSI — быстрый на откате и удерживающий. Стоп и длины индикаторов — свойства настроенной точки, поэтому в сетку не входят.
 
 ## Метрики
 
@@ -70,10 +61,10 @@ RSI — быстрый на откате и удерживающий. Стоп �
 
 ```bash
 GOMAXPROCS=1 nice -n 19 go build -o reports/drop_screen/dropscreen ./cmd/dropscreen
-taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/drop_screen/dropscreen -interval Minutes15
+taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/drop_screen/dropscreen -interval Hour1
 ```
 
-Флаги: `-interval` (Minutes15 | Minutes30 | Hour1; 5m не скринится), `-months` (36),
+Флаги: `-interval` (`Hour1` — единственный), `-months` (36),
 `-holdout-months` (6), гейты выше, `-top` (50; 0 — все), `-shortlist` (10; 0 — весь рейтинг),
 `-workers` (1), `-pf-cap` (10), `-cash`, `-fraction`, `-commission` (0.0005), `-tickers` (пробный
 прогон по списку), `-pause`, `-refresh` (перекачать свечи; ограничивает `-workers` до 2), `-out`
@@ -85,5 +76,4 @@ taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/drop_screen/dropscreen -interva
 
 ## Дальше
 
-Тикеры шортлиста по очереди идут в `/drop-bounce-calibrate <TICKER>`. Скринер гоняется отдельно на
-каждом таймфрейме; тикер, попавший в шортлист хотя бы одного, — кандидат на калибровку.
+Тикеры шортлиста по очереди идут в `/drop-bounce-calibrate <TICKER>`.
