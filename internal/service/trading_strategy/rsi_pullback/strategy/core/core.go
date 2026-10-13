@@ -48,8 +48,10 @@ type Params struct {
 	TrailDailyATR   float64 // trail = maxFav - TrailDailyATR*dailyATR; 0 disables it (grid)
 	// StopOnClose 1 tests the protective level (SL or trail) against the bar CLOSE instead of its
 	// low and exits at the close ("SLC" / "TRAILC"): a wick through the level is ignored. Any other
-	// value keeps the intrabar stop. Backtest-only for now — the live runner always places an
-	// exchange stop at DesiredStop, so a live literal must keep 0 (default 0).
+	// value keeps the intrabar stop (default 0). Live under StopOnClose=1 the exchange holds only
+	// CatastropheStop (see live/adapter.go exchangeStop); the protective level is checked on bar
+	// close and sold by market (SLC/TRAILC). CatStopMult>0 is required live by
+	// live/stop_on_close_guard_test.go.
 	StopOnClose int
 	// CatStopMult arms, under StopOnClose=1, an intrabar catastrophe stop ("CATSL") at
 	// entry - CatStopMult*StopDailyATR*dailyATR — the exchange order that protects the position

@@ -140,8 +140,9 @@ import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 const Ticker = "TGKA"
 
 // DefaultParams returns the rsi_pullback parameters for TGKA. Калибровка проведена и провалена
-// трижды (см. док-комментарий пакета), поэтому пакет отдаёт ровно baseline ядра, а тикер не заведён
-// в боевую вселенную. Менять это значение можно только вместе с новой калибровкой.
+// трижды (см. док-комментарий пакета), поэтому пакет отдаёт baseline ядра плюс два поля стопа по
+// закрытию бара (StopOnClose=1, CatStopMult=2); тикер торгуется в боевой вселенной на этих значениях
+// по решению владельца без калибровки. Менять это значение можно только вместе с новой калибровкой.
 func DefaultParams() core.Params {
 	p := core.DefaultParams()
 	p.StopOnClose, p.CatStopMult = 1, 2 // стоп по закрытию бара, 2026-10-13 (см. doc пакета)

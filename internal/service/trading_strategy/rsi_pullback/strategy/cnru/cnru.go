@@ -233,8 +233,9 @@ import "tinvest/internal/service/trading_strategy/rsi_pullback/strategy/core"
 // Ticker is the instrument this package parameterises.
 const Ticker = "CNRU"
 
-// DefaultParams returns the rsi_pullback parameters for CNRU: the CORE DEFAULTS, by decision of
-// 2026-09-10 and not for want of a calibration. Eleven themes were run and none moved a single
+// DefaultParams returns the rsi_pullback parameters for CNRU: the core baseline plus the two
+// stop-on-close fields (StopOnClose=1, CatStopMult=2), by decision of 2026-09-10 (no calibration, on
+// defaults) and not for want of a calibration. Eleven themes were run and none moved a single
 // field away from core.DefaultParams() — see the package doc comment.
 func DefaultParams() core.Params {
 	p := core.DefaultParams()

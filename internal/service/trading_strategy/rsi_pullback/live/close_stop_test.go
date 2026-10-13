@@ -211,4 +211,7 @@ func TestReconstructedCloseStopPositionGetsTheCatastropheOrder(t *testing.T) {
 	if got.StopReason != "CATSL" || math.Abs(got.StopPrice-want) > 1e-9 {
 		t.Fatalf("заявка после реконструкции: %v/%q, want %v/CATSL (ориентир %v)", got.StopPrice, got.StopReason, want, cat)
 	}
+	if got.StopOrderID != "so-rec" {
+		t.Fatalf("StopOrderID = %q, want so-rec", got.StopOrderID)
+	}
 }

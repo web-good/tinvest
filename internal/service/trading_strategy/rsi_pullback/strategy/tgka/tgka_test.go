@@ -17,6 +17,7 @@ import (
 // НОВОЙ калибровкой, у которой есть проверка вне выборки, — и тогда же снимается именное исключение
 // baselineByDesignTickers в live/registry_test.go. Правка «на глазок» здесь опаснее обычного:
 // внешне TGKA выглядит как любой другой боевой тикер.
+//
 // Поля режима стопа по закрытию (2026-10-13) — исключение из равенства: это не калибровка.
 func TestParamsStayAtTheCoreBaselineByDesign(t *testing.T) {
 	got, want := DefaultParams(), core.DefaultParams()

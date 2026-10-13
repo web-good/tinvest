@@ -481,9 +481,10 @@ func (s *service) replaceStop(ctx context.Context, sl *slot, ticker string, sh *
 }
 
 // manage carries an open position: the core's exits (SL/TRAIL/TP/RSI) and the exchange
-// stop order that mirrors the protective level. The level is computed by core.DesiredStop —
-// the same function the backtest exits on, so prod and backtest cannot drift apart on the
-// most frequent exit mechanism.
+// stop order. The level comes from Strategy.DesiredStop (for pullback — exchangeStop: the
+// protective level, or the catastrophe stop under StopOnClose), built on the same core
+// functions the backtest exits on, so prod and backtest cannot drift apart on the most
+// frequent exit mechanism.
 func (s *service) manage(ctx context.Context, pc *passCtx, sl *slot, ticker string, sh *imodel.Share,
 	dec adapter.Decider, md strategy.MarketData, pos *grpcmodel.Position, isHeld bool) error {
 
