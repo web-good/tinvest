@@ -1,83 +1,151 @@
-"""Read drop_bounce backtest reports and apply the skill's gates.
+"""Read drop_bounce backtest reports and apply the skill's gates (hold-out scheme, owner 2026-10-14).
 
 Usage (from the repo root):
-  report.py wf <walkforward.md>                 pooled OOS, folds, gate verdict
-  report.py plateau <calib.md> <point.json>     every combo's PF vs the point, plateau verdict
-  report.py cost <backtest.md>                  PF and net under doubled commission, verdict
+  report.py center <sweep_calibration.md>        every combo scored by the median PF of itself and its
+                                                grid neighbours; prints the winner's #k and plateau verdict
+  report.py stress <dev.md>                      the point on the development window (-holdout-months 6):
+                                                PF, trades, without the best 1 / 3 trades, 6-month blocks
+  report.py cost <dev_cost.md>                   the same window with -commission 0.001
+  report.py holdout <dev.md> <full_trades.csv>   trades of the 36-month run entered after the development
+                                                window's end: opened once, after the point is fixed
 
-WF gate (owner, 2026-10-13), judged on the pooled trades, not on a count of folds:
-  A pooled OOS PF >= 1.2 and pooled trades >= 30;
-  B the folds' OOS NetPnL% summed without the best fold > 0 (no single half-year carries it);
-  C the last two folds' OOS NetPnL% summed > 0 (the edge has not faded in the last 12 months);
-  D every fold with >= 10 OOS trades has PF >= 0.8 (no big fold deep in the red).
-Plateau: every neighbour PF >= 1.0 and the neighbours' median PF >= 0.7 x the point's PF.
-Cost: PF >= 1.2 and net PnL > 0 with -commission 0.001.
+Gates on the development window (30 months):
+  plateau  every grid neighbour of the point (one step on one axis) has PF >= 1.0;
+  S1 PF >= 1.3 and trades >= 25 (about 10 a year is enough, owner 2026-10-14);
+  S2 PF without the best trade >= 1.15;
+  S3 PF without the three best trades >= 1.0;
+  S4 at least 4 of the 5 six-month blocks have net > 0;
+  cost PF >= 1.2 and net > 0 with -commission 0.001.
+Hold-out: net > 0 (6 months hold ~5–10 trades: a sanity check, not a PF measurement).
 """
-import json, re, statistics, sys
+import csv, re, statistics, sys
+from datetime import datetime, timezone
+
+MIN_TRADES = 25
+MIN_NEIGHBOUR_TRADES = 10
 
 
-def wf(md):
-    s = open(md).read()
-    pf = float(re.search(r"\| Profit factor \| ([\d.]+) \|", s).group(1))
-    n = int(re.search(r"\| Всего сделок \| (\d+) \|", s).group(1))
-    comp = re.search(r"\| Compounded return \| ([-\d.]+)% \|", s).group(1)
-    folds = re.findall(r"^\| \d \| [^|]+\| [^|]+\| [\d.]+ \| ([\d.]+) \| (\d+) \| ([-\d.]+)% \| ([\d.]+)% \|", s, re.M)
-    nets = [float(r) for _, _, r, _ in folds]
-    a = pf >= 1.2 and n >= 30
-    b = sum(nets) - max(nets) > 0
-    c = sum(nets[-2:]) > 0
-    big = [(float(p), int(t)) for p, t, _, _ in folds if int(t) >= 10]
-    d = all(p >= 0.8 for p, _ in big)
-    ok = a and b and c and d
-    fs = " / ".join(f"{float(p):.3f}({t}) net {r}% dd {dd}%" for p, t, r, dd in folds)
-    print(f"pooled PF {pf:.3f} на {n} сделках, compounded {comp}%")
-    print(f"фолды: {fs}")
-    print(f"A pooled PF ≥ 1.2 и ≥ 30 сделок: {'да' if a else 'нет'}")
-    print(f"B net без лучшего фолда {sum(nets) - max(nets):+.2f}% > 0: {'да' if b else 'нет'}")
-    print(f"C net двух последних фолдов {sum(nets[-2:]):+.2f}% > 0: {'да' if c else 'нет'}")
-    print(f"D фолды с ≥ 10 сделками PF ≥ 0.8 {[round(p, 3) for p, _ in big]}: {'да' if d else 'нет'}")
-    walk = re.findall(r"^- ([A-Za-z]+): (.+)$", s, re.M)
-    if walk:
-        print("гуляли: " + "; ".join(f"{k} {v}" for k, v in walk))
-    print("ПЛАНКА ВЗЯТА" if ok else "ПЛАНКА НЕ ВЗЯТА")
+def pf(v):
+    g = sum(x for x in v if x > 0)
+    l = -sum(x for x in v if x < 0)
+    return g / l if l else float("inf") if g else 0.0
 
 
 def combos(md):
     s = open(md).read()
-    for m in re.finditer(r"^### #\d+ — profit_factor ([\d.]+), сделок (\d+)\n(.*?)(?=^### #|\Z)", s, re.M | re.S):
-        p = {k: float(v) for k, v in re.findall(r"^\| (\w+) \| ([-\d.]+) \|", m.group(3), re.M)}
-        yield float(m.group(1)), int(m.group(2)), p
+    for m in re.finditer(r"^### #(\d+) — profit_factor ([\d.]+), сделок (\d+)\n(.*?)(?=^### #|\Z)", s, re.M | re.S):
+        p = {k: float(v) for k, v in re.findall(r"^\| (\w+) \| ([-\d.]+) \|", m.group(4), re.M)}
+        yield int(m.group(1)), float(m.group(2)), int(m.group(3)), p
 
 
-def plateau(md, point):
-    pt = {k: float(v) for k, v in json.load(open(point)).items()}
+def center(md):
     total = int(re.search(r"Всего комбинаций: (\d+)", open(md).read()).group(1))
     rows = list(combos(md))
     if len(rows) < total:
-        sys.exit(f"в отчёте {len(rows)} из {total} комбинаций — сетка плато должна быть ≤ 20")
-    centre = [r for r in rows if all(abs(r[2].get(k, v) - v) < 1e-9 for k, v in pt.items())]
-    if not centre:
-        sys.exit("точки нет в сетке плато")
-    cpf = centre[0][0]
-    nb = [r for r in rows if r is not centre[0]]
-    for pf, n, p in rows:
-        diff = {k: p[k] for k in ("RSIPeriod", "RSIZone", "RSICap", "EMAPeriod", "DaySpentATR", "StopDailyATR", "RSIExit") if abs(p[k] - pt[k]) > 1e-9}
-        print(f"  PF {pf:.3f} / {n}  {diff or 'ТОЧКА'}")
-    med = statistics.median(r[0] for r in nb)
-    ok = all(r[0] >= 1.0 for r in nb) and med >= 0.7 * cpf
-    print(f"точка {cpf:.3f}, медиана соседей {med:.3f} (порог {0.7 * cpf:.3f}), минимум {min(r[0] for r in nb):.3f}")
+        sys.exit(f"в отчёте {len(rows)} из {total} комбинаций — запусти перебор с -combos 0")
+    axes = {k: sorted({r[3][k] for r in rows}) for k in rows[0][3] if len({r[3][k] for r in rows}) > 1}
+
+    def neighbours(p):
+        out = []
+        for r in rows:
+            diff = [k for k in axes if r[3][k] != p[k]]
+            if len(diff) == 1:
+                k = diff[0]
+                if abs(axes[k].index(r[3][k]) - axes[k].index(p[k])) == 1:
+                    out.append(r)
+        return out
+
+    scored = []
+    for k, f, n, p in rows:
+        if n < MIN_TRADES:
+            continue
+        nb = neighbours(p)
+        scored.append((statistics.median([f] + [r[1] for r in nb]), k, f, n, p, nb))
+    if not scored:
+        sys.exit(f"ни одной комбинации с ≥ {MIN_TRADES} сделками")
+    scored.sort(key=lambda x: -x[0])
+    print("топ-5 по медиане окрестности:")
+    for med, k, f, n, p, _ in scored[:5]:
+        print(f"  #{k}: медиана {med:.3f}, PF {f:.3f}/{n}, " + ", ".join(f"{a} {p[a]:g}" for a in axes))
+    med, k, f, n, p, nb = scored[0]
+    print(f"ЦЕНТР: #{k} — " + ", ".join(f"{a} {p[a]:g}" for a in axes) + f", PF {f:.3f} на {n} сделках")
+    for r in nb:
+        d = next(a for a in axes if r[3][a] != p[a])
+        print(f"  сосед {d} {r[3][d]:g}: PF {r[1]:.3f}/{r[2]}")
+    weak = [r for r in nb if r[2] < MIN_NEIGHBOUR_TRADES]
+    if weak:
+        print(f"  (у {len(weak)} соседей < {MIN_NEIGHBOUR_TRADES} сделок — их PF шумный)")
+    ok = all(r[1] >= 1.0 for r in nb)
     print("ПЛАТО ЕСТЬ" if ok else "ОСТРЫЙ ПИК")
+    print(f"дальше: grids.py point <T> Hour1 {md} {k}")
+
+
+def period(md):
+    m = re.search(r"Период: (\d{4}-\d\d-\d\d \d\d:\d\d) — (\d{4}-\d\d-\d\d \d\d:\d\d)", open(md).read())
+    f = lambda s: datetime.strptime(s, "%Y-%m-%d %H:%M").astimezone()
+    return f(m.group(1)), f(m.group(2))
+
+
+def trades(csv_path):
+    out = []
+    with open(csv_path) as fh:
+        for r in csv.DictReader(fh):
+            t = datetime.strptime(r["entry_time"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            out.append((t, float(r["pnl"])))
+    return out
+
+
+def add_months(d, n):
+    y, m = divmod(d.month - 1 + n, 12)
+    return d.replace(year=d.year + y, month=m + 1, day=min(d.day, 28))
+
+
+def stress(md):
+    start, end = period(md)
+    tr = trades(md[:-3] + "_trades.csv")
+    p = [x for _, x in tr]
+    s = sorted(p, reverse=True)
+    f, f1, f3 = pf(p), pf(s[1:]), pf(s[3:])
+    print(f"окно разработки {start:%Y-%m-%d} — {end:%Y-%m-%d}: {len(p)} сделок, PF {f:.3f}, net {sum(p):+.0f} ₽")
+    blocks, b0 = [], start
+    while b0 < end:
+        b1 = min(add_months(b0, 6), end)
+        v = [x for t, x in tr if b0 <= t < b1]
+        blocks.append((b0, b1, v))
+        b0 = b1
+    for b0, b1, v in blocks:
+        print(f"  {b0:%Y-%m} — {b1:%Y-%m}: {len(v)} сделок, PF {pf(v):.3f}, net {sum(v):+.0f} ₽")
+    plus = sum(1 for *_, v in blocks if sum(v) > 0)
+    need = len(blocks) - 1
+    checks = [
+        (f"S1 PF {f:.3f} ≥ 1.3 и {len(p)} ≥ {MIN_TRADES} сделок", f >= 1.3 and len(p) >= MIN_TRADES),
+        (f"S2 без лучшей сделки ({s[0]:+.0f} ₽) PF {f1:.3f} ≥ 1.15", f1 >= 1.15),
+        (f"S3 без трёх лучших PF {f3:.3f} ≥ 1.0", f3 >= 1.0),
+        (f"S4 полугодий в плюсе {plus} из {len(blocks)} (нужно ≥ {need})", plus >= need),
+    ]
+    for t, ok in checks:
+        print(f"{t}: {'да' if ok else 'нет'}")
+    print("СТРЕСС ВЫДЕРЖАН" if all(ok for _, ok in checks) else "СТРЕСС НЕ ВЫДЕРЖАН")
 
 
 def cost(md):
     s = open(md).read()
-    pf = float(re.search(r"\| Profit factor \| ([\d.]+) \|", s).group(1))
+    f = float(re.search(r"\| Profit factor \| ([\d.]+) \|", s).group(1))
     net = float(re.search(r"\| Чистый PnL \| ([-\d.]+)", s).group(1))
     n = int(re.search(r"\| Всего сделок \| (\d+) \|", s).group(1))
-    print(f"удвоенная комиссия: PF {pf:.3f}, net {net:.0f} ₽ на {n} сделках")
-    print("ИЗДЕРЖКИ ВЫДЕРЖАНЫ" if pf >= 1.2 and net > 0 else "ИЗДЕРЖКИ СЪЕДАЮТ КРАЙ")
+    print(f"удвоенная комиссия: PF {f:.3f}, net {net:.0f} ₽ на {n} сделках")
+    print("ИЗДЕРЖКИ ВЫДЕРЖАНЫ" if f >= 1.2 and net > 0 else "ИЗДЕРЖКИ СЪЕДАЮТ КРАЙ")
+
+
+def holdout(md, csv_path):
+    _, end = period(md)
+    v = [x for t, x in trades(csv_path) if t >= end]
+    print(f"hold-out с {end:%Y-%m-%d}: {len(v)} сделок, PF {pf(v):.3f}, net {sum(v):+.0f} ₽, "
+          f"лучшая {max(v, default=0):+.0f}, худшая {min(v, default=0):+.0f}")
+    print("HOLD-OUT В ПЛЮСЕ" if sum(v) > 0 else "HOLD-OUT В МИНУСЕ")
 
 
 if __name__ == "__main__":
-    {"wf": lambda: wf(sys.argv[2]), "plateau": lambda: plateau(sys.argv[2], sys.argv[3]),
-     "cost": lambda: cost(sys.argv[2])}.get(sys.argv[1] if len(sys.argv) > 1 else "", lambda: sys.exit(__doc__))()
+    a = sys.argv
+    {"center": lambda: center(a[2]), "stress": lambda: stress(a[2]), "cost": lambda: cost(a[2]),
+     "holdout": lambda: holdout(a[2], a[3])}.get(a[1] if len(a) > 1 else "", lambda: sys.exit(__doc__))()

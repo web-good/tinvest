@@ -49,6 +49,8 @@ func main() {
 		minTrades    = flag.Int("min-trades", 15, "calibration: combos with fewer trades sink below qualified ones")
 		testMonths   = flag.Int("test-months", 0, "walk-forward: calibrate on the earlier window, report best on the last N months")
 		trainMonths  = flag.Int("train-months", 0, "rolling walk-forward (with -calibrate): fixed train window in months; step = -test-months")
+		holdout      = flag.Int("holdout-months", 0, "end the window N months before now: the last N months stay unseen (hold-out); the window still starts -months back")
+		combosN      = flag.Int("combos", 20, "calibration: combinations listed in the calibration report (0 = all)")
 		outDir       = flag.String("out", "reports", "report output directory")
 		refresh      = flag.Bool("refresh", false, "force candle refetch (ignore cache)")
 		explain      = flag.String("explain", "", "diagnose one bar: MSK time 'YYYY-MM-DD HH:MM'; prints why the strategy did/didn't enter")
@@ -75,7 +77,7 @@ func main() {
 	}
 
 	if err := run(*ticker, *strategyName, interval, *months, *cash, *fraction, *commission,
-		*paramsPath, *calibrate, *metric, *minTrades, *testMonths, *trainMonths, *outDir, *refresh, *explain,
+		*paramsPath, *calibrate, *metric, *minTrades, *testMonths, *trainMonths, *holdout, *combosN, *outDir, *refresh, *explain,
 		*riskPct, *screen,
 		*volRank, *minTurnover, *atrPeriod, *topN, *wRecov, *wFreq, *wLiq, *rsiPeriodS, *rsiOversold, *recoverBars, *recoverRSI); err != nil {
 		log.Fatalf("backtest: %v", err)
@@ -105,7 +107,7 @@ func parseInterval(s string) (enum.Interval, error) {
 }
 
 func run(ticker, strategyName string, interval enum.Interval, months int, cash, fraction, commission float64,
-	paramsPath, calibratePath, metric string, minTrades, testMonths, trainMonths int, outDir string, refresh bool, explain string,
+	paramsPath, calibratePath, metric string, minTrades, testMonths, trainMonths, holdoutMonths, combosN int, outDir string, refresh bool, explain string,
 	riskPct float64, screenCSV string,
 	volRank bool, minTurnoverM float64, atrPeriod, topN int, wRecov, wFreq, wLiq float64, rsiPeriodS int, rsiOversold float64, recoverBars int, recoverRSI float64,
 ) error {
@@ -114,6 +116,9 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 	}
 	if trainMonths > 0 && calibratePath == "" {
 		return fmt.Errorf("-train-months requires -calibrate (walk-forward re-calibrates each fold from a grid)")
+	}
+	if holdoutMonths < 0 || holdoutMonths >= months {
+		return fmt.Errorf("-holdout-months %d must be in [0, -months %d)", holdoutMonths, months)
 	}
 	if screenCSV != "" && (calibratePath != "" || explain != "") {
 		return fmt.Errorf("-screen is standalone (not combined with -calibrate/-explain)")
@@ -184,8 +189,9 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 		return err
 	}
 
-	to := time.Now()
-	from := to.AddDate(0, -months, 0)
+	now := time.Now()
+	from := now.AddDate(0, -months, 0)
+	to := now.AddDate(0, -holdoutMonths, 0)
 
 	provider := svc.NewCandleProvider(client.MarketDataServiceClient(), cacheDir)
 	candles, err := provider.Load(ctx, ticker, share.ID, interval, from, to, refresh)
@@ -253,7 +259,7 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 	base := filepath.Join(outDir, fmt.Sprintf("%s_%s_%s_%s", ticker, strategyName, interval.String(), stamp))
 
 	if calibratePath != "" {
-		return runCalibration(binding, calibratePath, candles, dailyCandles, htfCandles, cfg, metric, minTrades, testMonths, trainMonths, periodDays, base,
+		return runCalibration(binding, calibratePath, candles, dailyCandles, htfCandles, cfg, metric, minTrades, testMonths, trainMonths, combosN, periodDays, base,
 			metaCommon(ticker, interval, from, to, cfg), from, to)
 	}
 
@@ -312,7 +318,7 @@ func runSingle(b svc.Binding, paramsPath string, candles []domain.Candle, dailyC
 }
 
 func runCalibration(b svc.Binding, gridPath string, candles []domain.Candle, dailyCandles, htfCandles []domain.Candle,
-	cfg domain.Config, metric string, minTrades, testMonths, trainMonths int, periodDays float64, base string, meta domain.Meta, from, to time.Time,
+	cfg domain.Config, metric string, minTrades, testMonths, trainMonths, combosN int, periodDays float64, base string, meta domain.Meta, from, to time.Time,
 ) error {
 	if trainMonths > 0 {
 		raw, err := os.ReadFile(gridPath)
@@ -382,7 +388,7 @@ func runCalibration(b svc.Binding, gridPath string, candles []domain.Candle, dai
 		return err
 	}
 	calibPath := base + "_calibration.md"
-	if err := writeFile(calibPath, svc.RenderCalibrationMarkdown(metric, results, 20)); err != nil {
+	if err := writeFile(calibPath, svc.RenderCalibrationMarkdown(metric, results, combosN)); err != nil {
 		return err
 	}
 
