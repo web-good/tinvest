@@ -6,6 +6,7 @@ import (
 
 	"tinvest/internal/enum"
 	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/core"
+	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/enpg"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 )
 
@@ -32,7 +33,9 @@ func dropBounceBindingFor(ticker string, interval enum.Interval, defaults func()
 // calibrated on the volume-spike rules (15m) were deleted on 2026-10-13 with the rewrite to the
 // 1h RSI-zone rules; a ticker comes back here with a calibration on the new rules
 // (skill drop-bounce-calibrate).
-var dropBounceRegistry = map[string]func() core.Params{}
+var dropBounceRegistry = map[string]func() core.Params{
+	"ENPG": enpg.Params,
+}
 
 // DropBounceLookupOrGeneric returns the binding for a ticker: the ticker package's literal, or
 // core.DefaultParams when the ticker has no package. Partial JSON overrides layer over whichever
