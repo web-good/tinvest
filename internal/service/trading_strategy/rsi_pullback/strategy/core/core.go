@@ -46,6 +46,15 @@ type Params struct {
 	UseRSIExit      int     // 1 arms the RSI exit; any other value disables it (grid; default 1)
 	UseTrail        int     // 1 arms the ATR trailing stop; any other value disables it (grid; default 0)
 	TrailDailyATR   float64 // trail = maxFav - TrailDailyATR*dailyATR; 0 disables it (grid)
+	// StopOnClose 1 tests the protective level (SL or trail) against the bar CLOSE instead of its
+	// low and exits at the close ("SLC" / "TRAILC"): a wick through the level is ignored. Any other
+	// value keeps the intrabar stop. Backtest-only for now — the live runner always places an
+	// exchange stop at DesiredStop, so a live literal must keep 0 (default 0).
+	StopOnClose int
+	// CatStopMult arms, under StopOnClose=1, an intrabar catastrophe stop ("CATSL") at
+	// entry - CatStopMult*StopDailyATR*dailyATR — the exchange order that protects the position
+	// while nobody watches the close. 0 disables it (default 0).
+	CatStopMult float64
 }
 
 // DefaultParams returns the spec's baseline; swept values come from calibration.
@@ -467,6 +476,9 @@ func (s *Strategy) entryReason(rsiNow, fastNow, slowNow, entry, stop, target, at
 // via model.IsStopReason and the "TP" reason. The RSI exit fills at the bar close and can be
 // disabled with UseRSIExit=0. There is no time stop and no end-of-day close — the position is
 // held until one of the exits fires, across nights and weekends.
+//
+// StopOnClose=1 moves the protective level from the low to the close: the order becomes
+// CATSL (intrabar, only when CatStopMult arms it) → TP → SLC|TRAILC (close) → RSI.
 func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal {
 	pos := md.Position
 	n := len(md.Closes)
@@ -486,7 +498,17 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 	// may have happened after the low. Since MaxFavorablePrice >= PrevMaxFavorablePrice always,
 	// reading the former yields a level never below the honest one — it fires no less often and
 	// fills no worse, inflating the result in both directions at once.
-	if level, reason := DesiredStop(s.p, pos.PurchasePrice, pos.EntryATR, pos.PrevMaxFavorablePrice); level > 0 && low <= level {
+	level, reason := DesiredStop(s.p, pos.PurchasePrice, pos.EntryATR, pos.PrevMaxFavorablePrice)
+	if s.p.StopOnClose == 1 {
+		// Under the close-based stop the only intrabar protection is the catastrophe stop; it
+		// wins a same-bar tie with the target for the same reason the SL does below.
+		if cat := CatastropheStop(s.p, pos.PurchasePrice, pos.EntryATR); cat > 0 && low <= cat {
+			sig.Kind, sig.Reason = model.SignalSell, "CATSL"
+			sig.StopLoss = cat
+			sig.ExitReason = fmt.Sprintf("CATSL: low %.4f ≤ аварийный стоп %.4f (вход %.4f)", low, cat, pos.PurchasePrice)
+			return sig
+		}
+	} else if level > 0 && low <= level {
 		sig.Kind, sig.Reason = model.SignalSell, reason
 		sig.StopLoss = level
 		sig.ExitReason = fmt.Sprintf("%s: low %.4f ≤ уровень %.4f (вход %.4f)", reason, low, level, pos.PurchasePrice)
@@ -497,6 +519,14 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 		sig.Kind, sig.Reason = model.SignalSell, "TP"
 		sig.TakeProfit = pos.TakeProfit
 		sig.ExitReason = fmt.Sprintf("TP: high %.4f ≥ цель %.4f (вход %.4f)", high, pos.TakeProfit, pos.PurchasePrice)
+		return sig
+	}
+	// 2a. close-based stop: decided only once the bar is over, so a target touched during the
+	// bar has already filled. Not a stop-style reason — the engine fills it at the close.
+	if s.p.StopOnClose == 1 && level > 0 && closeP <= level {
+		sig.Kind, sig.Reason = model.SignalSell, reason+"C"
+		sig.StopLoss = level
+		sig.ExitReason = fmt.Sprintf("%sC: close %.4f ≤ уровень %.4f (вход %.4f)", reason, closeP, level, pos.PurchasePrice)
 		return sig
 	}
 	// 3. RSI crosses UP through the upper band — the bounce reached overbought.
@@ -541,6 +571,21 @@ func DesiredStop(p Params, entry, dailyATR, maxFav float64) (float64, string) {
 		return 0, ""
 	}
 	return level, reason
+}
+
+// CatastropheStop returns the intrabar safety-net level armed under StopOnClose=1:
+// entry - CatStopMult*StopDailyATR*dailyATR, i.e. CatStopMult times the fixed stop's distance.
+// It is 0 (no stop) in the intrabar stop mode, when either multiplier is non-positive, without a
+// daily ATR, or when the level would land at or below zero.
+func CatastropheStop(p Params, entry, dailyATR float64) float64 {
+	if p.StopOnClose != 1 || p.CatStopMult <= 0 || p.StopDailyATR <= 0 || dailyATR <= 0 {
+		return 0
+	}
+	level := entry - p.CatStopMult*p.StopDailyATR*dailyATR
+	if level <= 0 {
+		return 0
+	}
+	return level
 }
 
 // Explain returns a gate-by-gate verdict for one bar, consumed by the engine's Trace
@@ -598,7 +643,15 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 	}
 
 	if s.p.StopDailyATR > 0 && atr > 0 {
-		fmt.Fprintf(&sb, "стоп: вход − %.2f×ATR (%.4f)\n", s.p.StopDailyATR, s.p.StopDailyATR*atr)
+		fmt.Fprintf(&sb, "стоп: вход − %.2f×ATR (%.4f)", s.p.StopDailyATR, s.p.StopDailyATR*atr)
+		if s.p.StopOnClose == 1 {
+			sb.WriteString(", по закрытию бара")
+			if s.p.CatStopMult > 0 {
+				fmt.Fprintf(&sb, "; аварийный внутри бара: вход − %.2f×%.2f×ATR (%.4f)",
+					s.p.CatStopMult, s.p.StopDailyATR, s.p.CatStopMult*s.p.StopDailyATR*atr)
+			}
+		}
+		sb.WriteString("\n")
 	} else {
 		sb.WriteString("стоп: выключен\n")
 	}

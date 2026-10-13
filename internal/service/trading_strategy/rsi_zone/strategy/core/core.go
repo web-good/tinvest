@@ -61,6 +61,14 @@ type Params struct {
 	EntryBlockFrom   int // HHMM, inclusive (grid: window)
 	EntryBlockTo     int // HHMM, exclusive (grid: window)
 	EntryBlockMonThu int // 0 = every weekday; non-zero = Monday to Thursday only (grid: window)
+
+	// Close-based stop. StopOnClose=1 tests the stop level against the bar CLOSE instead of its
+	// low and exits at the close ("SLC"): a wick through the level is ignored. CatStopMult > 0
+	// then arms an intrabar catastrophe stop ("CATSL") at CatStopMult times the stop distance.
+	// Backtest-only for now — the live runner always places an exchange stop at StopLevel, so a
+	// live literal must keep both zero (DefaultParams does).
+	StopOnClose int
+	CatStopMult float64
 }
 
 // Defaults the stochastic gate falls back to when its knobs are left at zero.
@@ -319,6 +327,20 @@ func StopLevel(p Params, entry, entryATR float64) float64 {
 	return level
 }
 
+// CatastropheStop returns the intrabar safety-net level armed under StopOnClose=1:
+// entry - CatStopMult*StopDailyATR*entryATR. It is 0 (no stop) in the intrabar stop mode, when
+// either multiplier is non-positive, without the ATR, or when the level lands at or below zero.
+func CatastropheStop(p Params, entry, entryATR float64) float64 {
+	if p.StopOnClose != 1 || p.CatStopMult <= 0 || p.StopDailyATR <= 0 || entryATR <= 0 {
+		return 0
+	}
+	level := entry - p.CatStopMult*p.StopDailyATR*entryATR
+	if level <= 0 {
+		return 0
+	}
+	return level
+}
+
 // Decide routes to entry (flat) or position management (open).
 func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 	sig := model.Signal{Ticker: s.ticker, Price: md.Price}
@@ -441,8 +463,23 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 	i := n - 1
 	low, closeP := md.Lows[i], md.Closes[i]
 
-	// 1. protective stop, frozen at entry.
-	if level := StopLevel(s.p, pos.PurchasePrice, pos.EntryATR); level > 0 && low <= level {
+	// 1. protective stop, frozen at entry. Under StopOnClose=1 it is judged on the close and
+	// only the catastrophe stop stays intrabar.
+	level := StopLevel(s.p, pos.PurchasePrice, pos.EntryATR)
+	if s.p.StopOnClose == 1 {
+		if cat := CatastropheStop(s.p, pos.PurchasePrice, pos.EntryATR); cat > 0 && low <= cat {
+			sig.Kind, sig.Reason = model.SignalSell, "CATSL"
+			sig.StopLoss = cat
+			sig.ExitReason = fmt.Sprintf("CATSL: low %.4f ≤ аварийный стоп %.4f (вход %.4f)", low, cat, pos.PurchasePrice)
+			return sig
+		}
+		if level > 0 && closeP <= level {
+			sig.Kind, sig.Reason = model.SignalSell, "SLC"
+			sig.StopLoss = level
+			sig.ExitReason = fmt.Sprintf("SLC: close %.4f ≤ стоп %.4f (вход %.4f)", closeP, level, pos.PurchasePrice)
+			return sig
+		}
+	} else if level > 0 && low <= level {
 		sig.Kind, sig.Reason = model.SignalSell, "SL"
 		sig.StopLoss = level
 		sig.ExitReason = fmt.Sprintf("SL: low %.4f ≤ стоп %.4f (вход %.4f)", low, level, pos.PurchasePrice)

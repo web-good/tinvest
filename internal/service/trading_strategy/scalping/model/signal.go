@@ -35,7 +35,7 @@ type Signal struct {
 // understate gap/stop slippage.
 func IsStopReason(reason string) bool {
 	switch reason {
-	case "SL", "TRAIL", "ATRSL":
+	case "SL", "TRAIL", "ATRSL", "CATSL":
 		return true
 	}
 	return false
