@@ -48,3 +48,20 @@ func TestParseInterval(t *testing.T) {
 		}
 	}
 }
+
+func TestPregated(t *testing.T) {
+	cases := []struct {
+		turnover, gate float64
+		want           bool
+	}{
+		{49.9, 50, true},
+		{50, 50, false},
+		{50.1, 50, false},
+		{0, 0, false},
+	}
+	for _, c := range cases {
+		if got := pregated(c.turnover, c.gate); got != c.want {
+			t.Errorf("pregated(%v, %v) = %v, want %v", c.turnover, c.gate, got, c.want)
+		}
+	}
+}

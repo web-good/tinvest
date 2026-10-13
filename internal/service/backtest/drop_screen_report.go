@@ -23,6 +23,10 @@ type DropGates struct {
 
 // DropRejectReason names every turnover/trades gate the row fails, "" when it passes both.
 func DropRejectReason(r DropRow, g DropGates) string {
+	if r.Pregated {
+		// Only the turnover is known; the trades gate was never measured.
+		return fmt.Sprintf("оборот %.1f < %.0f млн ₽ (по дневным свечам, сетка не гонялась)", r.TurnoverM, g.MinTurnoverM)
+	}
 	var reasons []string
 	if r.TurnoverM < g.MinTurnoverM {
 		reasons = append(reasons, fmt.Sprintf("оборот %.1f < %.0f млн ₽", r.TurnoverM, g.MinTurnoverM))
@@ -33,13 +37,16 @@ func DropRejectReason(r DropRow, g DropGates) string {
 	return strings.Join(reasons, "; ")
 }
 
-// FilterAndRankDrop sends signal-less rows to their own bucket first (a silent ticker is not
+// FilterAndRankDrop sends pregated rows to rejected first (their PF was never measured), then
+// signal-less rows to their own bucket first (a silent ticker is not
 // "too few trades"), then applies the price-tick gate, then turnover and trades. Survivors rank by
 // the median STRESSED profit factor descending, then median trades descending, then ticker. A row
 // whose tick is unknown passes the tick gate: the report flags it instead of guessing a cost.
 func FilterAndRankDrop(rows []DropRow, g DropGates) (ranked, noSignals, tickRejected, rejected []DropRow) {
 	for _, r := range rows {
 		switch {
+		case r.Pregated:
+			rejected = append(rejected, r)
 		case r.NoSignals:
 			noSignals = append(noSignals, r)
 		case g.MaxTickPct > 0 && !r.TickUnknown && r.TickPct > g.MaxTickPct:
@@ -122,8 +129,14 @@ func RenderDropScreenMarkdown(ranked, noSignals, tickRejected, rejected []DropRo
 		meta.Gates.MinTurnoverM, meta.Gates.MinTrades, meta.Gates.MaxTickPct, meta.PFCap)
 	fmt.Fprintf(&b, "Стресс издержек (`PFmed×2`, ключ рейтинга): к комиссии %.4f за сторону добавлена ещё одна такая же и два шага цены на круг.\n",
 		meta.Commission)
-	fmt.Fprintf(&b, "Вселенная: scanned=%d ranked=%d no-signal=%d tick-rejected=%d rejected=%d skipped=%d.\n\n",
-		meta.Scanned, len(ranked), len(noSignals), len(tickRejected), len(rejected), meta.Skipped)
+	var pregated int
+	for _, r := range rejected {
+		if r.Pregated {
+			pregated++
+		}
+	}
+	fmt.Fprintf(&b, "Вселенная: scanned=%d ranked=%d no-signal=%d tick-rejected=%d rejected=%d pregated=%d skipped=%d.\n\n",
+		meta.Scanned, len(ranked), len(noSignals), len(tickRejected), len(rejected), pregated, meta.Skipped)
 
 	b.WriteString("## Распределение PFmed×2 по ранжированной вселенной\n\n")
 	fmt.Fprintf(&b, "min %.2f · Q1 %.2f · медиана %.2f · Q3 %.2f · max %.2f · доля PFmed×2 >= 1.5: %.0f%% (n=%d)\n\n",
@@ -193,7 +206,11 @@ func RenderDropScreenMarkdown(ranked, noSignals, tickRejected, rejected []DropRo
 		b.WriteString("## Отсеяно гейтами\n\n")
 		b.WriteString("| Ticker | Причина | PFmed×2 |\n|---|---|---|\n")
 		for _, r := range rejected {
-			fmt.Fprintf(&b, "| %s | %s | %.2f |\n", r.Ticker, DropRejectReason(r, meta.Gates), r.PFMedStress)
+			pf := fmt.Sprintf("%.2f", r.PFMedStress)
+			if r.Pregated {
+				pf = "—"
+			}
+			fmt.Fprintf(&b, "| %s | %s | %s |\n", r.Ticker, DropRejectReason(r, meta.Gates), pf)
 		}
 		b.WriteString("\n")
 	}

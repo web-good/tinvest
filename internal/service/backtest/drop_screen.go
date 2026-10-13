@@ -115,6 +115,8 @@ type DropRow struct {
 	BestPF     float64
 	BestHalves []HalfResult // half-year breakdown of Best's train trades
 	NoSignals  bool         // no configuration traded in either window
+	// Pregated: turnover failed on daily candles before the grid ran; PF/trade fields are unmeasured.
+	Pregated bool
 }
 
 // AggregateDrop reduces one ticker's per-configuration results to a report row. tick is the
@@ -245,5 +247,31 @@ func ScreenDropTicker(in DropTickerInput, cfgs []dropcore.Params, split time.Tim
 		lastClose = in.Bars[len(in.Bars)-1].Close
 	}
 	row.TickPct, row.TickUnknown = tickPct(in.MinPriceIncrement, lastClose)
+	return row
+}
+
+// DropPregateRow builds the row of a ticker rejected on daily turnover before any intraday load or
+// grid replay. Turnover is averaged over the daily candles inside [from, to] only (the lead-in year
+// is excluded); ATR runs over the whole daily slice and the tick comes from its last close, as in
+// ScreenDropTicker. The caller compares TurnoverM with the gate.
+func DropPregateRow(ticker, name string, daily []backtest.Candle, from, to time.Time, lot int32, minPriceIncrement float64) DropRow {
+	window := make([]backtest.Candle, 0, len(daily))
+	for _, c := range daily {
+		if !c.Time.Before(from) && !c.Time.After(to) {
+			window = append(window, c)
+		}
+	}
+	row := DropRow{
+		Ticker:      ticker,
+		Name:        name,
+		Pregated:    true,
+		TurnoverM:   backtest.MeanDailyTurnoverM(window, lot),
+		DailyATRPct: MeanDailyATRPct(daily, screenDailyATRPeriod),
+	}
+	var lastClose float64
+	if len(daily) > 0 {
+		lastClose = daily[len(daily)-1].Close
+	}
+	row.TickPct, row.TickUnknown = tickPct(minPriceIncrement, lastClose)
 	return row
 }

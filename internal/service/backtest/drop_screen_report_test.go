@@ -124,3 +124,34 @@ func TestRenderDropScreenMarkdownEmptyRanking(t *testing.T) {
 		t.Fatalf("empty ranking must still print the key with nothing after it:\n%s", md)
 	}
 }
+
+func pregatedRow() DropRow {
+	return DropRow{Ticker: "P", Pregated: true, TurnoverM: 3, TickPct: 5}
+}
+
+func TestFilterAndRankDropPregated(t *testing.T) {
+	g := DropGates{MinTurnoverM: 50, MaxTickPct: 0.3, MinTrades: 20}
+	p := pregatedRow()
+	p.NoSignals = true // zero trades and an expensive tick: still neither bucket
+	ranked, noSignals, tickRejected, rejected := FilterAndRankDrop([]DropRow{p}, g)
+	if len(ranked) != 0 || len(noSignals) != 0 || len(tickRejected) != 0 || tickers(rejected) != "P" {
+		t.Fatalf("ranked=%v noSignals=%v tickRejected=%v rejected=%v", ranked, noSignals, tickRejected, rejected)
+	}
+}
+
+func TestDropRejectReasonPregated(t *testing.T) {
+	got := DropRejectReason(pregatedRow(), DropGates{MinTurnoverM: 50, MinTrades: 20})
+	if !strings.Contains(got, "по дневным") || strings.Contains(got, "сделок") || !strings.Contains(got, "оборот 3.0 < 50") {
+		t.Fatalf("reason = %q", got)
+	}
+}
+
+func TestRenderDropScreenMarkdownPregated(t *testing.T) {
+	md := RenderDropScreenMarkdown(nil, nil, nil, []DropRow{pregatedRow()}, dropMeta())
+	if !strings.Contains(md, "| P | оборот 3.0 < 50 млн ₽ (по дневным свечам, сетка не гонялась) | — |") {
+		t.Fatalf("pregated row must show a dash in PFmed×2:\n%s", md)
+	}
+	if !strings.Contains(md, "pregated=1") {
+		t.Fatalf("header lacks pregated=1:\n%s", md)
+	}
+}

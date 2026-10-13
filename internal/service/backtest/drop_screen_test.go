@@ -265,3 +265,34 @@ func TestScreenDropTickerFlatSeriesProducesNoSignals(t *testing.T) {
 		t.Fatal("TickUnknown = false with MinPriceIncrement 0, want true")
 	}
 }
+
+func TestDropPregateRow(t *testing.T) {
+	from := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2025, 1, 10, 0, 0, 0, 0, time.UTC)
+	var daily []backtest.Candle
+	// Lead-in days before from carry a huge volume; they must not count toward turnover.
+	for d := 0; d < 3; d++ {
+		daily = append(daily, backtest.Candle{Time: from.AddDate(0, 0, -3+d), Open: 100, High: 101, Low: 99, Close: 100, Volume: 1_000_000_000})
+	}
+	// In-window days (edges included): 2 lots * 10 per lot... volume 10, lot 1, close 100 -> 1000 RUB/day.
+	for _, day := range []time.Time{from, from.AddDate(0, 0, 3), to} {
+		daily = append(daily, backtest.Candle{Time: day, Open: 100, High: 101, Low: 99, Close: 100, Volume: 10})
+	}
+	row := DropPregateRow("ABCD", "Abcd", daily, from, to, 1, 0)
+	if !row.Pregated {
+		t.Fatal("Pregated = false")
+	}
+	if want := 1000.0 / 1e6; math.Abs(row.TurnoverM-want) > 1e-12 {
+		t.Fatalf("TurnoverM = %v, want %v (lead-in must be excluded)", row.TurnoverM, want)
+	}
+	if !row.TickUnknown {
+		t.Fatal("TickUnknown = false for increment 0")
+	}
+	if row.Ticker != "ABCD" || row.Name != "Abcd" || row.PFMed != 0 || row.TradesMed != 0 {
+		t.Fatalf("unexpected row %+v", row)
+	}
+	row = DropPregateRow("ABCD", "Abcd", daily, from, to, 1, 0.5)
+	if row.TickUnknown || math.Abs(row.TickPct-1.0) > 1e-9 {
+		t.Fatalf("TickPct = %v unknown=%v, want 1.0 known", row.TickPct, row.TickUnknown)
+	}
+}

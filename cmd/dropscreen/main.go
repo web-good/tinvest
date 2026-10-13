@@ -90,6 +90,11 @@ func parseInterval(s string) (enum.Interval, error) {
 	return 0, fmt.Errorf("unknown -interval %q (want Minutes15|Minutes30|Hour1; Minutes5 is never calibrated)", s)
 }
 
+// pregated reports whether the daily-candle turnover fails the gate; equality passes.
+func pregated(turnoverM, minTurnoverM float64) bool {
+	return turnoverM < minTurnoverM
+}
+
 // validate rejects flag combinations that would silently produce a meaningless run.
 func validate(cfg runCfg) error {
 	if _, err := svc.DropGrid(cfg.interval); err != nil {
@@ -160,16 +165,30 @@ func run(ctx context.Context, cfg runCfg) error {
 			defer wg.Done()
 			defer sem.Release()
 
-			bars, err := provider.Load(ctx, u.Ticker, u.ID, cfg.interval, from, to, cfg.refresh)
-			if err != nil {
-				atomic.AddInt32(&skipped, 1)
-				fmt.Printf("dropscreen %s: skip (load %s: %v)\n", u.Ticker, cfg.interval, err)
-				return
-			}
 			daily, err := provider.Load(ctx, u.Ticker, u.ID, enum.Day1, dailyFrom, to, cfg.refresh)
 			if err != nil {
 				atomic.AddInt32(&skipped, 1)
 				fmt.Printf("dropscreen %s: skip (load daily: %v)\n", u.Ticker, err)
+				return
+			}
+
+			// Turnover is checked on the cheap daily series first: a ticker below the gate would be
+			// rejected after the full intraday download and 32-configuration replay anyway.
+			if pre := svc.DropPregateRow(u.Ticker, u.Name, daily, from, to, u.Lot, u.MinPriceIncrement); pregated(pre.TurnoverM, cfg.minTurnoverM) {
+				n := atomic.AddInt32(&done, 1)
+				fmt.Printf("dropscreen [%d/%d] %s: pre-gated (turnover %.0fM < %.0fM by daily candles)\n",
+					n, len(universe), u.Ticker, pre.TurnoverM, cfg.minTurnoverM)
+				mu.Lock()
+				rows = append(rows, pre)
+				mu.Unlock()
+				screenrun.PauseAfterTicker(ctx, cfg.pause)
+				return
+			}
+
+			bars, err := provider.Load(ctx, u.Ticker, u.ID, cfg.interval, from, to, cfg.refresh)
+			if err != nil {
+				atomic.AddInt32(&skipped, 1)
+				fmt.Printf("dropscreen %s: skip (load %s: %v)\n", u.Ticker, cfg.interval, err)
 				return
 			}
 
