@@ -36,8 +36,29 @@ func (p *pullbackStrategy) Decider(ticker string) (adapter.Decider, bool) {
 	return st, true
 }
 
+// DesiredStop — уровень БИРЖЕВОЙ заявки (контракт adapter.Strategy), см. exchangeStop.
 func (p *pullbackStrategy) DesiredStop(ticker string, e statestore.Entry) (float64, string) {
-	return core.DesiredStop(mustParams(ticker), e.EntryPrice, e.EntryATR, e.MaxFav)
+	return exchangeStop(mustParams(ticker), e)
+}
+
+// catReason — причина аварийной биржевой заявки, та же, что у ядра (core: CATSL).
+const catReason = "CATSL"
+
+// exchangeStop — уровень, который раннер держит на бирже. Обычно это защитный уровень ядра
+// (SL или трейл, core.DesiredStop). У литерала со StopOnClose=1 защитный уровень проверяет
+// ядро по закрытию бара (SLC/TRAILC, продажа рыночной заявкой на проходе), а на бирже стоит
+// только аварийный стоп core.CatastropheStop: он заморожен на входе, и трейл его не двигает.
+// Режим без аварийного уровня — заявки нет (reason ""); сторожевой тест реестра такой литерал
+// в бой не пускает.
+func exchangeStop(p core.Params, e statestore.Entry) (float64, string) {
+	if p.StopOnClose == 1 {
+		level := core.CatastropheStop(p, e.EntryPrice, e.EntryATR)
+		if level <= 0 {
+			return 0, ""
+		}
+		return level, catReason
+	}
+	return core.DesiredStop(p, e.EntryPrice, e.EntryATR, e.MaxFav)
 }
 
 func (p *pullbackStrategy) Reconstruct(ctx context.Context, in adapter.ReconstructInput) (statestore.Entry, error) {
