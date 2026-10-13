@@ -275,10 +275,21 @@ func TestEnterNoSignalWhenRSIAboveZoneWithoutCross(t *testing.T) {
 
 func TestEnterNeedsWarmRSI(t *testing.T) {
 	p := entryParams()
-	p.EMAPeriod = 2        // keep the EMA warm so only the RSI warm-up is under test
-	c := steps(100, 7, -1) // 7 closes: RSI(6) has one value, no previous one
+	p.EMAPeriod = 2 // keep the EMA warm so only the RSI warm-up is under test
+	p.RSICap = 100  // a false CROSS from the warm-up zero must not be stopped by the cap
+	// Rising tape: the close is above the EMA, so only the RSI guard can block. 7 closes: RSI(6)
+	// has one value and the previous one is the warm-up zero (0 -> cur would read as a CROSS).
+	c := steps(100, 7, +1)
 	if sig := decide(p, entryEnd, c); sig.Kind != model.SignalNone {
-		t.Fatalf("got %v, want none before RSI has two values", sig.Kind)
+		t.Fatalf("got %v %q, want none before RSI has two values", sig.Kind, sig.EntryReason)
+	}
+	// Contrast: same params, one more bar (warm RSI), a fall then a bounce -> a real ZONE entry.
+	warm := append(steps(100, 7, -1), 94.5)
+	if prev, cur := rsiAt(warm, 6); cur <= 0 || cur >= 30 || warm[len(warm)-1] <= emaAt(warm, 2) {
+		t.Fatalf("fixture: RSI %.2f -> %.2f must be warm (>0) and < 30, close above EMA", prev, cur)
+	}
+	if sig := decide(p, entryEnd, warm); sig.Kind != model.SignalBuy {
+		t.Fatalf("warm: got %v %q, want Buy", sig.Kind, sig.EntryReason)
 	}
 }
 
