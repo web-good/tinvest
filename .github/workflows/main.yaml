@@ -9,6 +9,7 @@ env:
   REGISTRY: "docker.io"
   IMAGE_NAME: "tinvest"
   CONTAINER_NAME: "tinvest-container"
+  STATE_VOLUME: "tinvest-state"
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
@@ -92,7 +93,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSHKEY }}
-          envs: IMAGE_NAME,REGISTRY,GITHUB_SHA,CONTAINER_NAME
+          envs: IMAGE_NAME,REGISTRY,GITHUB_SHA,CONTAINER_NAME,STATE_VOLUME
           script: |
             # Set up variables
             TAG_NAME=$(echo $GITHUB_SHA | head -c7)
@@ -103,6 +104,19 @@ jobs:
             # Stop running container
             docker stop $CONTAINER_NAME
 
+            # Live runners keep open-position state in /application/data/state. It lives
+            # in the named volume $STATE_VOLUME, which survives docker rm, so a redeploy
+            # with open positions keeps their state. One-time migration: on the first
+            # deploy that creates the volume, copy the state out of the old container's
+            # anonymous volume (the old container is stopped, so files are not mid-write).
+            if ! docker volume inspect $STATE_VOLUME >/dev/null 2>&1; then
+              docker volume create $STATE_VOLUME
+              docker run --rm --volumes-from $CONTAINER_NAME -v $STATE_VOLUME:/dst \
+                --entrypoint sh $REGISTRY/koshelevoleg/$IMAGE_NAME:$TAG_NAME \
+                -c 'cp -a /application/data/state/. /dst/ && ls -la /dst' \
+                || echo "state migration skipped: no old container or empty state"
+            fi
+
             # Remove old container
             docker rm $CONTAINER_NAME
 
@@ -110,4 +124,4 @@ jobs:
             # RSI_PULLBACK_TOKEN: пока секрет не заведён, подставится пустая строка — воркер
             # rsi_pullback не поднимется (config.RSIPullback.Ready()), остальное приложение
             # и оба воркера reversion работают как обычно.
-            docker run -e T_BANK=${{ secrets.T_BANK }} -e PORTFOLIO_YTD_START_VALUE=463402 -e PROFILES=${{ secrets.PROFILES }}  -e REVERSION_TOKEN=${{ secrets.REVERSION_TOKEN }} -e RSI_PULLBACK_TOKEN=${{ secrets.RSI_PULLBACK_TOKEN }} -e SCALPING_ACCOUNT_ID=1 -e TELEGRAM=${{ secrets.TELEGRAM }} -d -p 50051:50051 --name $CONTAINER_NAME -t $REGISTRY/koshelevoleg/$IMAGE_NAME:$TAG_NAME
+            docker run -e T_BANK=${{ secrets.T_BANK }} -e PORTFOLIO_YTD_START_VALUE=463402 -e PROFILES=${{ secrets.PROFILES }}  -e REVERSION_TOKEN=${{ secrets.REVERSION_TOKEN }} -e RSI_PULLBACK_TOKEN=${{ secrets.RSI_PULLBACK_TOKEN }} -e SCALPING_ACCOUNT_ID=1 -e TELEGRAM=${{ secrets.TELEGRAM }} -v $STATE_VOLUME:/application/data/state -d -p 50051:50051 --name $CONTAINER_NAME -t $REGISTRY/koshelevoleg/$IMAGE_NAME:$TAG_NAME
