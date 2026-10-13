@@ -26,7 +26,7 @@ func stopOnly() Params {
 func flatWithLast(o, h, l, c float64) []bar {
 	bars := path("2026-09-14 08:00", flatN(30, 100))
 	last := bars[len(bars)-1]
-	return append(bars, bar{last.t.Add(step15), o, h, l, c})
+	return append(bars, bar{last.t.Add(stepH1), o, h, l, c})
 }
 
 // The default stop is 1.0 daily ATR (fixtureATR 2) below the fill: 98 for a fill at 100.
@@ -54,7 +54,7 @@ func TestStopUsesATRFrozenAtEntry(t *testing.T) {
 	md := fixture(bars)
 	withDailies(&md, dailies(bars[0].t, 20, 4)) // today's ATR is 4: a live stop would sit at 96
 	md.Position = position(100, bars[20].t, fixtureATR)
-	sig := NewWithParams("TEST", step15, stopOnly()).Decide(md)
+	sig := NewWithParams("TEST", stepH1, stopOnly()).Decide(md)
 	if sig.Reason != "SL" || math.Abs(sig.StopLoss-98) > eps {
 		t.Fatalf("got %q stop %v, want SL at 98 from the entry ATR", sig.Reason, sig.StopLoss)
 	}
@@ -65,7 +65,7 @@ func TestStopFallsBackToCurrentATR(t *testing.T) {
 	bars := flatWithLast(100, 100, 98, 99)
 	md := fixture(bars)
 	md.Position = position(100, bars[20].t, 0)
-	sig := NewWithParams("TEST", step15, stopOnly()).Decide(md)
+	sig := NewWithParams("TEST", stepH1, stopOnly()).Decide(md)
 	if sig.Reason != "SL" || math.Abs(sig.StopLoss-98) > eps {
 		t.Fatalf("got %q stop %v, want SL at 98 from the current ATR", sig.Reason, sig.StopLoss)
 	}
@@ -171,7 +171,7 @@ func TestStopUnplaceableLeavesRSIExit(t *testing.T) {
 	if k < 0 {
 		t.Fatal("fixture: RSI(6) never crosses 70 on the rise")
 	}
-	s := NewWithParams("TEST", step15, DefaultParams())
+	s := NewWithParams("TEST", stepH1, DefaultParams())
 
 	// Frozen ATR and today's ATR both unknown.
 	md := fixture(bars[:k])
