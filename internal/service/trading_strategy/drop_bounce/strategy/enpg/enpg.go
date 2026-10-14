@@ -1,5 +1,17 @@
 // Package enpg supplies the drop_bounce Params for ENPG (ЭН+ ГРУП) on Minutes30.
 //
+// # Перекалибровка 2026-10-14 с -risk-pct 1
+//
+// Та же схема (перебор 45 точек на 30 из 36 мес., центр плато, стресс, hold-out), но размер позиции —
+// 1% капитала на стоп (-risk-pct 1), PrevCloseGate 0. Литерал — новый центр (point_minutes30.json);
+// разделы ниже — прежние замеры при фиксированной доле.
+//
+// Центр плато: RSI входа 6, RSI выхода 9, стоп 0.7 дневного ATR — PF 1.650 на 34 сделках (лучшая
+// точка перебора PF 1.65); соседи: стоп 0.5 → 1.605/35, RSI выхода 10 → 1.568/33, RSI выхода 8 →
+// 1.505/34, стоп 1 → 1.477/33, RSI входа 5 → 1.296/42 — ПЛАТО ЕСТЬ. Стресс S1–S4 выдержан (без
+// лучшей 1.459, без трёх лучших 1.222, полугодий в плюсе 5 из 5); комиссия 0.1%: PF 1.472, net 4947
+// ₽; hold-out: 5 сделок, PF 0.696, net -679 ₽ — В МИНУСЕ. Решение: не торговать.
+//
 // # Правила 2026-10-14: сигнал на 1h, подтверждение MACD на 30m
 //
 // Ядро переведено на 30m: часовой сигнал RSI над EMA собирается из 30-минутных свечей, вход — по
@@ -67,11 +79,11 @@ func Params() core.Params {
 		RSICap:         50,
 		ZoneEntry:      1,
 		EMAPeriod:      200,
-		StopDailyATR:   1,
+		StopDailyATR:   0.7,
 		BreakevenATR:   0.5,
 		TrailATR:       0,
 		DailyATRPeriod: 14,
-		RSIExitPeriod:  10,
+		RSIExitPeriod:  9,
 		RSIExit:        70,
 		MACDFast:       12,
 		MACDSlow:       26,
@@ -82,5 +94,7 @@ func Params() core.Params {
 		StaleATR:       0.3,
 		PrevCloseGate:  0,
 		PrevCloseATR:   0,
+		RSIFloor:       0,
+		SkipMonday:     0,
 	}
 }

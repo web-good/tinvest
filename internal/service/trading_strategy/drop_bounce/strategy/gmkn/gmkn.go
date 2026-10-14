@@ -50,5 +50,7 @@ func Params() core.Params {
 		StaleATR:       0.3,
 		PrevCloseGate:  0,
 		PrevCloseATR:   0,
+		RSIFloor:       0,
+		SkipMonday:     0,
 	}
 }

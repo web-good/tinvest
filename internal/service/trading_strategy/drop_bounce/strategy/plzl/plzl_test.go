@@ -19,7 +19,7 @@ func TestLiteralIsPinned(t *testing.T) {
 		BreakevenATR:   0.5,
 		TrailATR:       0,
 		DailyATRPeriod: 14,
-		RSIExitPeriod:  11,
+		RSIExitPeriod:  12,
 		RSIExit:        70,
 		MACDFast:       12,
 		MACDSlow:       26,
@@ -30,6 +30,8 @@ func TestLiteralIsPinned(t *testing.T) {
 		StaleATR:       0.3,
 		PrevCloseGate:  0,
 		PrevCloseATR:   0,
+		RSIFloor:       0,
+		SkipMonday:     0,
 	}
 	if got := Params(); got != want {
 		t.Fatalf("литерал PLZL изменился:\n got: %+v\nwant: %+v", got, want)

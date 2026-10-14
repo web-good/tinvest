@@ -1,0 +1,78 @@
+{
+  "_comment": "drop_bounce ENPG Minutes30: in-sample перебор на первых 30 из 36 месяцев (последние 6 — hold-out), оси RSIPeriod [4, 5, 6], RSIExitPeriod [8, 9, 10, 11, 12], StopDailyATR [0.5, 0.7, 1.0], остальное — дефолты ядра, все поля прибиты. Запуск: reports/drop_bounce_cal/backtest -ticker ENPG -strategy drop_bounce -interval Minutes30 -calibrate data/params/drop_bounce/enpg/sweep_minutes30.json -months 36 -holdout-months 6 -metric profit_factor -risk-pct 1 -min-trades 1 -combos 0. РЕЗУЛЬТАТ: прогон не делался. РЕЗУЛЬТАТ 2026-10-14 (перекалибровка с -risk-pct 1, PrevCloseGate 0): центр плато RSI входа 6, RSI выхода 9, стоп 0.7 дневного ATR — PF 1.650 на 34 сделках (лучшая точка перебора PF 1.65); соседи: стоп 0.5 → 1.605/35, RSI выхода 10 → 1.568/33, RSI выхода 8 → 1.505/34, стоп 1 → 1.477/33, RSI входа 5 → 1.296/42 — ПЛАТО ЕСТЬ. Стресс S1–S4 выдержан (без лучшей 1.459, без трёх лучших 1.222, полугодий в плюсе 5 из 5); комиссия 0.1%: PF 1.472, net 4947 ₽; hold-out: 5 сделок, PF 0.696, net -679 ₽ — В МИНУСЕ. Решение: не торговать.",
+  "phases": [
+    {
+      "name": "sweep",
+      "grid": {
+        "RSIPeriod": [
+          4,
+          5,
+          6
+        ],
+        "RSIZone": [
+          30
+        ],
+        "RSICap": [
+          50
+        ],
+        "ZoneEntry": [
+          1
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "StopDailyATR": [
+          0.5,
+          0.7,
+          1.0
+        ],
+        "BreakevenATR": [
+          0.5
+        ],
+        "TrailATR": [
+          0.0
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "RSIExitPeriod": [
+          8,
+          9,
+          10,
+          11,
+          12
+        ],
+        "RSIExit": [
+          70
+        ],
+        "MACDFast": [
+          12
+        ],
+        "MACDSlow": [
+          26
+        ],
+        "MACDSignal": [
+          9
+        ],
+        "ConfirmBars": [
+          3
+        ],
+        "FridayTo": [
+          11
+        ],
+        "StaleBars": [
+          0
+        ],
+        "StaleATR": [
+          0.3
+        ],
+        "PrevCloseGate": [
+          0
+        ],
+        "PrevCloseATR": [
+          0.0
+        ]
+      }
+    }
+  ]
+}

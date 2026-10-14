@@ -1,5 +1,15 @@
 // Package plzl supplies the drop_bounce Params for PLZL (Полюс) on Minutes30.
 //
+// # Перекалибровка 2026-10-14 с -risk-pct 1
+//
+// Та же схема (перебор 45 точек на 30 из 36 мес., центр плато, стресс, hold-out), но размер позиции —
+// 1% капитала на стоп (-risk-pct 1), PrevCloseGate 0. Литерал — новый центр (point_minutes30.json);
+// разделы ниже — прежние замеры при фиксированной доле.
+//
+// Центр плато: RSI входа 4, RSI выхода 12, стоп 0.5 дневного ATR — PF 1.238 на 53 сделках (лучшая
+// точка перебора PF 1.238); соседи: RSI выхода 11 → 1.183/54, стоп 0.7 → 0.966/52, RSI входа 5 →
+// 0.624/45 — ОСТРЫЙ ПИК. Стресс, издержки и hold-out не запускались. Решение: не торговать.
+//
 // # Калибровка 2026-10-14 (30m: сигнал на 1h, подтверждение MACD на 30m)
 //
 // Схема hold-out (скилл drop-bounce-calibrate): перебор RSIPeriod (4, 5, 6) × RSIExitPeriod (8–12) ×
@@ -34,7 +44,7 @@ func Params() core.Params {
 		BreakevenATR:   0.5,
 		TrailATR:       0,
 		DailyATRPeriod: 14,
-		RSIExitPeriod:  11,
+		RSIExitPeriod:  12,
 		RSIExit:        70,
 		MACDFast:       12,
 		MACDSlow:       26,
@@ -45,5 +55,7 @@ func Params() core.Params {
 		StaleATR:       0.3,
 		PrevCloseGate:  0,
 		PrevCloseATR:   0,
+		RSIFloor:       0,
+		SkipMonday:     0,
 	}
 }

@@ -1,0 +1,78 @@
+{
+  "_comment": "drop_bounce IVAT Minutes30: in-sample перебор на первых 30 из 36 месяцев (последние 6 — hold-out), оси RSIPeriod [4, 5, 6], RSIExitPeriod [8, 9, 10, 11, 12], StopDailyATR [0.5, 0.7, 1.0], остальное — дефолты ядра, все поля прибиты. Запуск: reports/drop_bounce_cal/backtest -ticker IVAT -strategy drop_bounce -interval Minutes30 -calibrate data/params/drop_bounce/ivat/sweep_minutes30.json -months 36 -holdout-months 6 -metric profit_factor -risk-pct 1 -min-trades 1 -combos 0. РЕЗУЛЬТАТ: прогон не делался. РЕЗУЛЬТАТ 2026-10-14 (перекалибровка с -risk-pct 1, PrevCloseGate 0): центр плато RSI входа 4, RSI выхода 8, стоп 0.5 дневного ATR — PF 0.552 на 27 сделках (лучшая точка перебора PF 1.188); соседи: RSI входа 5 → 0.742/19, RSI выхода 9 → 0.640/27, стоп 0.7 → 0.528/24 — ОСТРЫЙ ПИК. Стресс, издержки и hold-out не запускались. Решение: не торговать.",
+  "phases": [
+    {
+      "name": "sweep",
+      "grid": {
+        "RSIPeriod": [
+          4,
+          5,
+          6
+        ],
+        "RSIZone": [
+          30
+        ],
+        "RSICap": [
+          50
+        ],
+        "ZoneEntry": [
+          1
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "StopDailyATR": [
+          0.5,
+          0.7,
+          1.0
+        ],
+        "BreakevenATR": [
+          0.5
+        ],
+        "TrailATR": [
+          0.0
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "RSIExitPeriod": [
+          8,
+          9,
+          10,
+          11,
+          12
+        ],
+        "RSIExit": [
+          70
+        ],
+        "MACDFast": [
+          12
+        ],
+        "MACDSlow": [
+          26
+        ],
+        "MACDSignal": [
+          9
+        ],
+        "ConfirmBars": [
+          3
+        ],
+        "FridayTo": [
+          11
+        ],
+        "StaleBars": [
+          0
+        ],
+        "StaleATR": [
+          0.3
+        ],
+        "PrevCloseGate": [
+          0
+        ],
+        "PrevCloseATR": [
+          0.0
+        ]
+      }
+    }
+  ]
+}

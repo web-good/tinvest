@@ -1,0 +1,23 @@
+{
+  "_comment": "drop_bounce IVAT Minutes30: центр плато перебора sweep_minutes30.json. РЕЗУЛЬТАТ 2026-10-14 (перекалибровка с -risk-pct 1, PrevCloseGate 0): центр плато RSI входа 4, RSI выхода 8, стоп 0.5 дневного ATR — PF 0.552 на 27 сделках (лучшая точка перебора PF 1.188); соседи: RSI входа 5 → 0.742/19, RSI выхода 9 → 0.640/27, стоп 0.7 → 0.528/24 — ОСТРЫЙ ПИК. Стресс, издержки и hold-out не запускались. Решение: не торговать.",
+  "RSIPeriod": 4,
+  "RSIZone": 30,
+  "RSICap": 50,
+  "ZoneEntry": 1,
+  "EMAPeriod": 200,
+  "StopDailyATR": 0.5,
+  "BreakevenATR": 0.5,
+  "TrailATR": 0,
+  "DailyATRPeriod": 14,
+  "RSIExitPeriod": 8,
+  "RSIExit": 70,
+  "MACDFast": 12,
+  "MACDSlow": 26,
+  "MACDSignal": 9,
+  "ConfirmBars": 3,
+  "FridayTo": 11,
+  "StaleBars": 0,
+  "StaleATR": 0.3,
+  "PrevCloseGate": 0,
+  "PrevCloseATR": 0
+}

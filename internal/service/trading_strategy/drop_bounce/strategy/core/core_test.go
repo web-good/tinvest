@@ -191,7 +191,7 @@ func decideAt(p Params, bars []bar, i int) model.Signal {
 func TestDefaultParams(t *testing.T) {
 	want := Params{RSIPeriod: 6, RSIZone: 30, RSICap: 50, ZoneEntry: 1, EMAPeriod: 200,
 		StopDailyATR: 1.0, BreakevenATR: 0.5, TrailATR: 0, DailyATRPeriod: 14, RSIExitPeriod: 10, RSIExit: 70,
-		MACDFast: 12, MACDSlow: 26, MACDSignal: 9, ConfirmBars: 3, FridayTo: 11, StaleBars: 0, StaleATR: 0.3, PrevCloseGate: 0, PrevCloseATR: 0}
+		MACDFast: 12, MACDSlow: 26, MACDSignal: 9, ConfirmBars: 3, FridayTo: 11, StaleBars: 0, StaleATR: 0.3, PrevCloseGate: 0, PrevCloseATR: 0, RSIFloor: 0, SkipMonday: 0}
 	if got := DefaultParams(); got != want {
 		t.Fatalf("DefaultParams() = %+v, want %+v", got, want)
 	}
@@ -445,5 +445,52 @@ func TestEnterPrevCloseGate(t *testing.T) {
 	p.PrevCloseGate = 1
 	if sig := NewWithParams("TEST", stepM30, p).Decide(md); sig.Kind != model.SignalNone {
 		t.Fatalf("Saturday close above, Friday close below the price: got %v, want none", sig.Kind)
+	}
+}
+
+// RSIFloor drops a signal hour whose RSI is below the floor; 0 is off.
+func TestEnterRSIFloor(t *testing.T) {
+	bars, a := greenAfterSignal()
+	r := indicators.RSISeries(trendCloses(6), 6)
+	rsi := r[len(r)-1]
+	cases := []struct {
+		floor float64
+		want  model.SignalKind
+	}{
+		{0, model.SignalBuy},
+		{rsi - 0.1, model.SignalBuy},
+		{rsi + 0.1, model.SignalNone},
+	}
+	for _, c := range cases {
+		p := entryParams()
+		p.RSIFloor = c.floor
+		if sig := decideAt(p, bars, a+1); sig.Kind != c.want {
+			t.Fatalf("RSI %.2f, floor %.2f: got %v, want %v", rsi, c.floor, sig.Kind, c.want)
+		}
+	}
+}
+
+// SkipMonday drops fills on Monday MSK and leaves Tuesday alone.
+func TestEnterSkipMonday(t *testing.T) {
+	cases := []struct {
+		green string
+		skip  int
+		want  model.SignalKind
+	}{
+		{"2026-09-21 12:00", 0, model.SignalBuy},
+		{"2026-09-21 12:00", 1, model.SignalNone},
+		{"2026-09-22 12:00", 1, model.SignalBuy},
+	}
+	for _, c := range cases {
+		bars, a := greenAfterSignal()
+		shift := at(c.green).Sub(bars[a+1].t)
+		for i := range bars {
+			bars[i].t = bars[i].t.Add(shift)
+		}
+		p := entryParams()
+		p.SkipMonday = c.skip
+		if sig := decideAt(p, bars, a+1); sig.Kind != c.want {
+			t.Fatalf("green %s, SkipMonday %d: got %v, want %v", c.green, c.skip, sig.Kind, c.want)
+		}
 	}
 }

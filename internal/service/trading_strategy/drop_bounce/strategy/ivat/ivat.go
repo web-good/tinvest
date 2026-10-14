@@ -1,5 +1,15 @@
 // Package ivat supplies the drop_bounce Params for IVAT (ИВА Технолоджис) on Minutes30.
 //
+// # Перекалибровка 2026-10-14 с -risk-pct 1
+//
+// Та же схема (перебор 45 точек на 30 из 36 мес., центр плато, стресс, hold-out), но размер позиции —
+// 1% капитала на стоп (-risk-pct 1), PrevCloseGate 0. Литерал — новый центр (point_minutes30.json);
+// разделы ниже — прежние замеры при фиксированной доле.
+//
+// Центр плато: RSI входа 4, RSI выхода 8, стоп 0.5 дневного ATR — PF 0.552 на 27 сделках (лучшая
+// точка перебора PF 1.188); соседи: RSI входа 5 → 0.742/19, RSI выхода 9 → 0.640/27, стоп 0.7 →
+// 0.528/24 — ОСТРЫЙ ПИК. Стресс, издержки и hold-out не запускались. Решение: не торговать.
+//
 // # Правила 2026-10-14: сигнал на 1h, подтверждение MACD на 30m
 //
 // Ядро переведено на 30m: часовой сигнал RSI над EMA собирается из 30-минутных свечей, вход — по
@@ -55,16 +65,16 @@ const Ticker = "IVAT"
 // Params returns the IVAT literal for Minutes30.
 func Params() core.Params {
 	return core.Params{
-		RSIPeriod:      6,
+		RSIPeriod:      4,
 		RSIZone:        30,
 		RSICap:         50,
 		ZoneEntry:      1,
 		EMAPeriod:      200,
-		StopDailyATR:   1,
+		StopDailyATR:   0.5,
 		BreakevenATR:   0.5,
 		TrailATR:       0,
 		DailyATRPeriod: 14,
-		RSIExitPeriod:  10,
+		RSIExitPeriod:  8,
 		RSIExit:        70,
 		MACDFast:       12,
 		MACDSlow:       26,
@@ -75,5 +85,7 @@ func Params() core.Params {
 		StaleATR:       0.3,
 		PrevCloseGate:  0,
 		PrevCloseATR:   0,
+		RSIFloor:       0,
+		SkipMonday:     0,
 	}
 }

@@ -84,6 +84,13 @@ type Params struct {
 	// PrevCloseATR is the allowance above the previous weekday close in daily ATRs (default 0 =
 	// strictly not above it); negative values demand a drop of that size.
 	PrevCloseATR float64
+	// RSIFloor skips a signal hour whose RSI(RSIPeriod) is below it: a reading that deep marks a
+	// crash rather than a pullback; 0 = off (default 0). Owner 2026-10-14: on 10 tickers the signals
+	// below 20 lost (27 trades, PF 0.26 in R, in both halves of the window).
+	RSIFloor float64
+	// SkipMonday 1 makes no buys on Monday (the fill bar's MSK date): the weekend's news gaps the
+	// open and Monday buys lost on 7 of 10 tickers (107 trades, PF 0.68 in R); 0 = off (default 0).
+	SkipMonday int
 }
 
 // DefaultParams returns the owner's initial configuration.
@@ -109,6 +116,8 @@ func DefaultParams() Params {
 		StaleATR:       0.3,
 		PrevCloseGate:  0,
 		PrevCloseATR:   0,
+		RSIFloor:       0,
+		SkipMonday:     0,
 	}
 }
 
@@ -309,7 +318,7 @@ func confirmed(hist []float64, a, i int) bool {
 
 // enter buys at the next bar's open once an armed hourly signal is confirmed by a green 30m MACD
 // histogram, and, with PrevCloseGate, only at or below the previous weekday close (+ PrevCloseATR
-// ATRs). The exits measure the stop from the fill; Signal.StopLoss carries it off the signal close
+// ATRs). RSIFloor drops a signal hour whose RSI is below it; SkipMonday drops Monday fills. The exits measure the stop from the fill; Signal.StopLoss carries it off the signal close
 // only to size the position by risk. It carries the daily ATR for the engine to freeze; without a
 // daily ATR there is no entry.
 func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal {
@@ -322,6 +331,9 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	if !s.isWeekdayFill(md.Times[i]) {
 		return sig
 	}
+	if p.SkipMonday == 1 && md.Times[i].Add(s.step).In(mskLoc).Weekday() == time.Monday {
+		return sig
+	}
 	hs := s.hourBars(md)
 	if len(hs) < p.RSIPeriod+2 {
 		return sig
@@ -330,7 +342,7 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	trend := ema.Compute(closes, p.EMAPeriod)
 	rsi := indicators.RSISeries(closes, p.RSIPeriod)
 	k := s.armedBy(hs, closes, trend, rsi, i)
-	if k < 0 {
+	if k < 0 || (p.RSIFloor > 0 && rsi[k] < p.RSIFloor) {
 		return sig
 	}
 	hist := macdHistogram(md.Closes, p)
