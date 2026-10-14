@@ -11,7 +11,7 @@ import (
 
 // Pinned drop-screener axes. Like the zone screener, it answers "is this ticker worth
 // calibrating", so it sweeps the calibration axes at their ends: the entry RSI length, the exit
-// RSI length and the stop (rules of 2026-10-14: buy windows, RSI(RSIExitPeriod) exit).
+// RSI length and the stop (rules of 2026-10-14: hourly signal on 30m bars, 30m MACD confirmation).
 var (
 	dropGridRSIPeriods     = []int{4, 6}
 	dropGridRSIExitPeriods = []int{8, 12}
@@ -20,10 +20,11 @@ var (
 
 // DropGrid returns the 8 configurations every ticker is screened on, in a deterministic order
 // (RSIPeriod outermost, StopDailyATR innermost). The rest — the RSI zone 30/50, EMA(200), the exit
-// level 70, the buy windows — are the core defaults. drop_bounce runs on Hour1 only.
+// level 70, MACD(12,26,9) and the confirmation window — are the core defaults. drop_bounce runs on
+// Minutes30 only.
 func DropGrid(interval enum.Interval) ([]dropcore.Params, error) {
-	if interval != enum.Hour1 {
-		return nil, fmt.Errorf("drop screener runs on Hour1 only, not %s", interval)
+	if interval != enum.Minutes30 {
+		return nil, fmt.Errorf("drop screener runs on Minutes30 only, not %s", interval)
 	}
 	out := make([]dropcore.Params, 0, len(dropGridRSIPeriods)*len(dropGridRSIExitPeriods)*len(dropGridStops))
 	for _, rsi := range dropGridRSIPeriods {

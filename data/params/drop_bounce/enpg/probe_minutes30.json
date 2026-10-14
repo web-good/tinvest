@@ -1,0 +1,68 @@
+{
+  "_comment": "drop_bounce ENPG Minutes30: проба доработок 2026-10-14 (безубыток, ветка ZONE, уровень выхода) поверх дефолтов ядра; только окно разработки 30 мес., не калибровка. РЕЗУЛЬТАТ 2026-10-14: база 0.705/43; безубыток 0.5 → 0.974/43, 0.7 → 0.750/43; ZoneEntry 0 → 0.681/32; RSIExit 75 → 0.733/43; лучшее ZoneEntry 0 + безубыток 0.5 → 1.087/32 (+ RSIExit 75 → 1.050/32). Планке 1.3 не близко.",
+  "phases": [
+    {
+      "name": "probe",
+      "grid": {
+        "RSIPeriod": [
+          6
+        ],
+        "RSIZone": [
+          30
+        ],
+        "RSICap": [
+          50
+        ],
+        "ZoneEntry": [
+          0,
+          1
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "BreakevenATR": [
+          0,
+          0.5,
+          0.7
+        ],
+        "TrailATR": [
+          0.0
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "RSIExitPeriod": [
+          10
+        ],
+        "RSIExit": [
+          70,
+          75
+        ],
+        "MACDFast": [
+          12
+        ],
+        "MACDSlow": [
+          26
+        ],
+        "MACDSignal": [
+          9
+        ],
+        "ConfirmBars": [
+          4
+        ],
+        "FridayTo": [
+          11
+        ],
+        "StaleBars": [
+          0
+        ],
+        "StaleATR": [
+          0.3
+        ]
+      }
+    }
+  ]
+}

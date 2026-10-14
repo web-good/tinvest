@@ -1,0 +1,63 @@
+{
+  "_comment": "drop_bounce GAZP Minutes30: in-sample перебор на первых 30 из 36 месяцев (последние 6 — hold-out), оси RSIPeriod [4, 5, 6], RSIExitPeriod [8, 9, 10, 11, 12], StopDailyATR [0.5, 0.7, 1.0], остальное — дефолты ядра, все поля прибиты. Запуск: reports/drop_bounce_cal/backtest -ticker GAZP -strategy drop_bounce -interval Minutes30 -calibrate data/params/drop_bounce/gazp/sweep_minutes30.json -months 36 -holdout-months 6 -metric profit_factor -min-trades 1 -combos 0. РЕЗУЛЬТАТ 2026-10-14 (30m, сигнал 1h + MACD 30m, пятница до 11:00): все 45 точек PF < 1 (0.492–0.757, 45–66 сделок на 30 мес.); центр плато = #1 RSIPeriod 6 / RSIExitPeriod 9 / StopDailyATR 0.7, PF 0.757/50, медиана окрестности 0.728; соседи 0.616–0.755 — ОСТРЫЙ ПИК. Стресс и hold-out не запускались. Решение: не торговать.",
+  "phases": [
+    {
+      "name": "sweep",
+      "grid": {
+        "RSIPeriod": [
+          4,
+          5,
+          6
+        ],
+        "RSIZone": [
+          30
+        ],
+        "RSICap": [
+          50
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "StopDailyATR": [
+          0.5,
+          0.7,
+          1.0
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "RSIExitPeriod": [
+          8,
+          9,
+          10,
+          11,
+          12
+        ],
+        "RSIExit": [
+          70
+        ],
+        "MACDFast": [
+          12
+        ],
+        "MACDSlow": [
+          26
+        ],
+        "MACDSignal": [
+          9
+        ],
+        "ConfirmBars": [
+          4
+        ],
+        "FridayTo": [
+          11
+        ],
+        "StaleBars": [
+          0
+        ],
+        "StaleATR": [
+          0.3
+        ]
+      }
+    }
+  ]
+}

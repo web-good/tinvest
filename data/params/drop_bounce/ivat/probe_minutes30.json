@@ -1,0 +1,68 @@
+{
+  "_comment": "drop_bounce IVAT Minutes30: проба доработок 2026-10-14 (безубыток, ветка ZONE, уровень выхода) поверх дефолтов ядра; только окно разработки 30 мес., не калибровка. РЕЗУЛЬТАТ 2026-10-14: выборка мала (13–20 сделок за 30 мес.). База 0.334/19; безубыток 0.5 → 0.432/20, 0.7 → 0.353/20; ZoneEntry 0 → 0.476/13; RSIExit 75 → 0.524/18; лучшее ZoneEntry 0 + RSIExit 75 → 0.726/13. Всё PF < 1.",
+  "phases": [
+    {
+      "name": "probe",
+      "grid": {
+        "RSIPeriod": [
+          6
+        ],
+        "RSIZone": [
+          30
+        ],
+        "RSICap": [
+          50
+        ],
+        "ZoneEntry": [
+          0,
+          1
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "BreakevenATR": [
+          0,
+          0.5,
+          0.7
+        ],
+        "TrailATR": [
+          0.0
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "RSIExitPeriod": [
+          10
+        ],
+        "RSIExit": [
+          70,
+          75
+        ],
+        "MACDFast": [
+          12
+        ],
+        "MACDSlow": [
+          26
+        ],
+        "MACDSignal": [
+          9
+        ],
+        "ConfirmBars": [
+          4
+        ],
+        "FridayTo": [
+          11
+        ],
+        "StaleBars": [
+          0
+        ],
+        "StaleATR": [
+          0.3
+        ]
+      }
+    }
+  ]
+}

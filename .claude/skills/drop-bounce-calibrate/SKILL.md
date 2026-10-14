@@ -1,37 +1,39 @@
 ---
 name: drop-bounce-calibrate
-description: Калибровка стратегии drop_bounce под один тикер на 1h с решением, торговать ли его. Используй всегда, когда владелец просит «откалибровать drop_bounce», «прогнать тикер через drop_bounce», «подобрать параметры отскока», «торговать ли <тикер> в drop_bounce», «перекалибровать <тикер> в drop_bounce», «продолжи калибровку drop_bounce <тикер>» — даже если он назвал только тикер и стратегию.
+description: Калибровка стратегии drop_bounce под один тикер на 30m (сигнал 1h) с решением, торговать ли его. Используй всегда, когда владелец просит «откалибровать drop_bounce», «прогнать тикер через drop_bounce», «подобрать параметры отскока», «торговать ли <тикер> в drop_bounce», «перекалибровать <тикер> в drop_bounce», «продолжи калибровку drop_bounce <тикер>» — даже если он назвал только тикер и стратегию.
 ---
 
-# drop_bounce: калибровка тикера на 1h и решение, торговать ли
+# drop_bounce: калибровка тикера на 30m и решение, торговать ли
 
 Аргументы: `<TICKER> [заметки владельца]`. Владелец передаёт тикер и ждёт вердикт, а не меню:
 сам гоняешь, сам решаешь, доводишь до пакета тикера и в конце задаёшь не больше одного вопроса.
 Механика стратегии — `docs/drop_bounce/strategy.md`. Скрипты — в `scripts/` рядом с этим файлом,
 запускай их как `python3 -I .claude/skills/drop-bounce-calibrate/scripts/<script>.py`.
-Кандидатов брать из шортлиста скринера `cmd/dropscreen -interval Hour1` (`docs/drop_bounce/screener.md`).
+Кандидатов брать из шортлиста скринера `cmd/dropscreen -interval Minutes30` (`docs/drop_bounce/screener.md`).
 
 **Схема (владелец, 2026-10-14): перебор → центр плато → стресс → hold-out.** Прежняя схема (фазовый
 walk-forward 12/6 против baseline) не работала: в train-окне 12 месяцев ~20 сделок, фолды выбирали шум,
 `pick` на всех трёх тикерах (GAZP, IVAT, ENPG) вернул дефолты, а ручная точка владельца на GAZP
 (EMA 120, STALE 25) была лучше. Руками владелец калибровать не хочет — перебор автоматический.
 
-**Стратегия (правила 2026-10-14):** лонг 1h, покупка по open следующей свечи в окнах 07–11 и 17–24 MSK
-Пн–Чт, в пятницу только 07–11 (после 11:00 пятницы до понедельника входов нет), когда close > EMA(200) и RSI(`RSIPeriod`) < 30 или пересёк 30 вверх не выше 50; выход — стоп
-`StopDailyATR` дневных ATR от цены входа или RSI(`RSIExitPeriod`) пересёк 70 снизу вверх, в любое время.
+**Стратегия (правила 2026-10-14, вторая редакция):** лонг, прогон на 30m. Сигнал — на часе, который
+стратегия собирает из 30m свечей: close часа > EMA(200) часовых close и часовой RSI(`RSIPeriod`) < 30
+или пересёк 30 вверх не выше 50. Затем вход уточняется на 30m: первая зелёная гистограмма MACD(12,26,9)
+за `ConfirmBars` (4) бара, покупка по open следующей 30m свечи, только будни, в пятницу — до 11:00
+(`FridayTo`). Выход — стоп `StopDailyATR` дневных ATR от цены входа или часовой RSI(`RSIExitPeriod`) пересёк 70 снизу вверх.
 
 **Нарушить букву правила — значит нарушить его дух.**
 
 ## 0. Правила каждого прогона
 
-- **Таймфрейм — только Hour1.** Другие таймфреймы ядро отвергает.
+- **Таймфрейм — только Minutes30.** Другие таймфреймы ядро отвергает; часовой сигнал ядро строит само.
 - **Окно 36 месяцев:** первые 30 — разработка (`-months 36 -holdout-months 6`), последние 6 — hold-out.
   Hold-out не смотрят, пока точка не зафиксирована и стресс не пройден, и открывают один раз.
 - **Одно ядро:** собранный бинарь, без `go run`:
   ```bash
   B=reports/drop_bounce_cal/backtest
   GOMAXPROCS=1 nice -n 19 go build -o $B ./cmd/backtest
-  taskset -c 0 nice -n 19 env GOMAXPROCS=1 $B -strategy drop_bounce -metric profit_factor -months 36 -ticker <T> -interval Hour1 ...
+  taskset -c 0 nice -n 19 env GOMAXPROCS=1 $B -strategy drop_bounce -metric profit_factor -months 36 -ticker <T> -interval Minutes30 ...
   ```
   Прогоны строго последовательно, в фоне (`run_in_background`), без двух бэктестов одновременно.
 - **Бинарь пересобирай после каждой правки литерала или реестра** — литерал вшит в бинарь. Прогоны по
@@ -43,14 +45,16 @@ walk-forward 12/6 против baseline) не работала: в train-окн�
 - **Сетку не меняй без просьбы владельца.** Оси перебора (владелец, 2026-10-14) — `SWEEP` в
   `grids.py`: `RSIPeriod` (4, 5, 6) — RSI входа × `RSIExitPeriod` (8, 9, 10, 11, 12) — RSI выхода ×
   `StopDailyATR` (0.5, 0.7, 1.0) — стоп долей дневного ATR или целым, 45 точек. Остальное — дефолты
-  ядра: зона RSI 30 / планка CROSS 50, EMA 200, уровень выхода 70, окна покупки 07–11 и 17–24 MSK
-  (`MorningFrom/To`, `EveningFrom/To`), в пятницу покупки только до 11:00 (`FridayTo` 11), STALE
-  выключен (`StaleBars` 0).
-- **Правила ядра с 2026-10-14:** гейта хода дня, выхода MACD и пятничного выхода FRI нет — не ищи их в
-  отчётах и не предлагай вернуть. Калибровки до 2026-10-14 (GAZP, IVAT, ENPG) сняты на прежних
-  правилах и к новым не относятся.
+  ядра: зона RSI 30 / планка CROSS 50, EMA 200, уровень выхода 70, MACD 12/26/9 на 30m, ожидание
+  `ConfirmBars` 4, STALE выключен (`StaleBars` 0), в пятницу покупка до 11:00 (`FridayTo` 11).
+  Других ограничений по времени, кроме будней, нет.
+  Безубыток после +0.5 дневного ATR (`BreakevenATR` 0.5), трейлинг выключен (`TrailATR` 0), ветка ZONE
+  включена (`ZoneEntry` 1).
+- **Правила ядра с 2026-10-14:** гейта хода дня, окон покупки и выхода MACD нет —
+  не ищи их в отчётах и не предлагай вернуть. Калибровки на 1h (GAZP, IVAT, ENPG, включая перебор
+  GAZP 2026-10-14 в `sweep_hour1.json`) сняты на прежних правилах и к новым не относятся.
 - **Стоп обязателен в каждой точке** (в сетке нет `StopDailyATR = 0`).
-- **Отчёты** — `reports/<T>_drop_bounce/<шаг>/Hour1/` (вне git).
+- **Отчёты** — `reports/<T>_drop_bounce/<шаг>/Minutes30/` (вне git).
 - **После каждого прогона** — строка `РЕЗУЛЬТАТ <дата>: ...` в `_comment` его сетки или точки. Старые не
   стираются.
 
@@ -65,10 +69,10 @@ walk-forward 12/6 против baseline) не работала: в train-окн�
 ## 2. Перебор и центр плато
 
 ```bash
-grids.py sweep <T> Hour1        # -> sweep_hour1.json, команда запуска — в его _comment
-$B ... -calibrate data/params/drop_bounce/<t>/sweep_hour1.json -months 36 -holdout-months 6 -min-trades 1 -combos 0 -out reports/<T>_drop_bounce/sweep/Hour1
+grids.py sweep <T> Minutes30        # -> sweep_minutes30.json, команда запуска — в его _comment
+$B ... -calibrate data/params/drop_bounce/<t>/sweep_minutes30.json -months 36 -holdout-months 6 -min-trades 1 -combos 0 -out reports/<T>_drop_bounce/sweep/Minutes30
 report.py center <sweep calibration.md>
-grids.py point <T> Hour1 <sweep calibration.md> <k>   # k — из строки ЦЕНТР
+grids.py point <T> Minutes30 <sweep calibration.md> <k>   # k — из строки ЦЕНТР
 ```
 
 `center` берёт точки с ≥ 25 сделками (около 10 в год — владельцу хватает) и для каждой считает медиану
@@ -78,9 +82,9 @@ PF её самой и соседей по сетке (шаг по одной о�
 ## 3. Стресс точки на окне разработки
 
 ```bash
-$B ... -params data/params/drop_bounce/<t>/point_hour1.json -months 36 -holdout-months 6 -out reports/<T>_drop_bounce/dev/Hour1
+$B ... -params data/params/drop_bounce/<t>/point_minutes30.json -months 36 -holdout-months 6 -out reports/<T>_drop_bounce/dev/Minutes30
 report.py stress <dev.md>
-$B ... -params .../point_hour1.json -months 36 -holdout-months 6 -commission 0.001 -out reports/<T>_drop_bounce/cost/Hour1
+$B ... -params .../point_minutes30.json -months 36 -holdout-months 6 -commission 0.001 -out reports/<T>_drop_bounce/cost/Minutes30
 report.py cost <cost.md>
 ```
 
@@ -97,28 +101,28 @@ report.py cost <cost.md>
 
 ## 4. Hold-out — один раз
 
-Только после того, как §2–§3 пройдены и точка записана в `point_hour1.json`:
+Только после того, как §2–§3 пройдены и точка записана в `point_minutes30.json`:
 ```bash
-$B ... -params .../point_hour1.json -months 36 -out reports/<T>_drop_bounce/full/Hour1
+$B ... -params .../point_minutes30.json -months 36 -out reports/<T>_drop_bounce/full/Minutes30
 report.py holdout <dev.md> <full _trades.csv>
 ```
 Условие: net > 0 (**HOLD-OUT В ПЛЮСЕ**). За 6 месяцев 5–10 сделок — это проверка «не сломалось», а не
 замер PF. Минус — не торговать. После hold-out точку не трогать: второй заход на те же данные —
 подгонка.
 
-Прошёл §2–§4 — торговать на 1h; иначе — не торговать.
+Прошёл §2–§4 — торговать на 30m; иначе — не торговать.
 
 ## 5. Литерал и запись
 
-- `Params()` = `point_hour1.json` (центр плато §2) — и у принятого, и у отвергнутого тикера. Торговать
+- `Params()` = `point_minutes30.json` (центр плато §2) — и у принятого, и у отвергнутого тикера. Торговать
   ли, записывает doc-комментарий, а не литерал.
 - Снимок в `<ticker>_test.go` обновлён, `go test` из §1 зелёный, **бинарь пересобран**.
 - Doc-комментарий пакета: дата, схема, центр и его соседи, стресс S1–S4, издержки, hold-out, решение.
   Это единственное место записи про тикер: `docs/drop_bounce/` описывает механику.
-- `РЕЗУЛЬТАТ` в `sweep_hour1.json` и `_comment` в `point_hour1.json`.
-- **Вселенная live** — `DROP_BOUNCE_TICKERS_H1`, запускать **всегда**:
+- `РЕЗУЛЬТАТ` в `sweep_minutes30.json` и `_comment` в `point_minutes30.json`.
+- **Вселенная live** — `DROP_BOUNCE_TICKERS_M30`, запускать **всегда**:
   ```bash
-  python3 -I .claude/skills/drop-bounce-calibrate/scripts/live_env.py <T> Hour1   # торговать
+  python3 -I .claude/skills/drop-bounce-calibrate/scripts/live_env.py <T> Minutes30   # торговать
   python3 -I .claude/skills/drop-bounce-calibrate/scripts/live_env.py <T>             # не торговать
   ```
   Затем `go test ./internal/service/backtest/`.
@@ -127,7 +131,7 @@ report.py holdout <dev.md> <full _trades.csv>
 ## 6. Итог владельцу
 
 Одна строка таблицы: центр (RSI входа / RSI выхода / стоп), PF/сделки на разработке, плато, S1–S4, издержки,
-hold-out, решение. Под ней — торговать или нет и почему, и итоговый `DROP_BOUNCE_TICKERS_H1`.
+hold-out, решение. Под ней — торговать или нет и почему, и итоговый `DROP_BOUNCE_TICKERS_M30`.
 Не больше одного вопроса.
 
 ## Красные флаги — остановись
@@ -139,8 +143,9 @@ hold-out, решение. Под ней — торговать или нет и 
 | «Hold-out в минусе, сдвину RSI выхода и перемерю» | Второй заход на те же данные — подгонка. Не торговать. |
 | «PF 1.5, а без лучшей сделки 1.05 — ну и что» | S2: весь край в одной сделке. Не торговать. |
 | «Стресс не прошёл, добавлю ось» | Сетку меняет только владелец. |
-| «Верну гейт дня / MACD / окно 11–17» | Правила ядра задаёт владелец; окна — дефолты, в сетке их нет. |
-| «1h не взял, проверю 15m/30m» | Ядро только на 1h. |
+| «Верну гейт дня / окна покупки / выход MACD» | Правила ядра задаёт владелец; ConfirmBars и MACD — дефолты, в сетке их нет. |
+| «Пятничные вечера были в плюсе — сниму `FridayTo`» | Правило задал владелец (2026-10-14); в сетке его нет. |
+| «30m не взял, проверю 15m/1h» | Ядро только на 30m. |
 | «Сбой API — запишу как провал» | Перезапуск того же прогона. |
 | «Литерал поправил, проверю обычным бэктестом» | Сначала пересобери бинарь. |
 | «Запущу два бэктеста параллельно» | Одно ядро, строго последовательно. |

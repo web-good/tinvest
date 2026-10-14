@@ -22,44 +22,35 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 		return sb.String()
 	}
 	i := n - 1
-	c := md.Closes[i]
 	t := md.Times[i].In(mskLoc)
-
 	fill := md.Times[i].Add(s.step).In(mskLoc)
-	weekday := !isWeekend(fill)
-	sameDay := dayKey(fill) == dayKey(t)
-	hours := s.inBuyHours(fill.Hour())
-	fmt.Fprintf(&sb, "%s окно: сигнал %s %s, покупка в %s — будний %s, исполнение в ту же дату %s, часы покупки [%02d:00, %02d:00) или [%02d:00, %02d:00) %s, пятница до %02d:00 %s\n",
-		mark(s.inWindow(md.Times[i])), t.Weekday(), t.Format("15:04"), fill.Format("15:04"), mark(weekday), mark(sameDay),
-		p.MorningFrom, p.MorningTo, p.EveningFrom, p.EveningTo, mark(hours), p.FridayTo, mark(s.fridayOK(fill, fill.Hour())))
+	fmt.Fprintf(&sb, "%s будни: сигнал %s %s, покупка %s %s в ту же дату (в пятницу до %02d:00)\n",
+		mark(s.isWeekdayFill(md.Times[i])), t.Weekday(), t.Format("15:04"), fill.Weekday(), fill.Format("15:04"), p.FridayTo)
 
-	if p.EMAPeriod > 0 {
-		trend := ema.Compute(md.Closes, p.EMAPeriod)[i]
-		if trend > 0 {
-			fmt.Fprintf(&sb, "%s тренд: close %.4f > EMA(%d) %.4f\n", mark(trendUp(c, trend)), c, p.EMAPeriod, trend)
+	hs := s.hourBars(md)
+	if p.RSIPeriod > 0 && p.EMAPeriod > 0 && len(hs) >= p.RSIPeriod+2 {
+		closes := hourCloses(hs)
+		trend := ema.Compute(closes, p.EMAPeriod)
+		rsi := indicators.RSISeries(closes, p.RSIPeriod)
+		k := len(hs) - 1
+		fmt.Fprintf(&sb, "последний закрытый час %s (известен на баре %s): close %.4f, EMA(%d) %.4f, RSI(%d) %.1f → %.1f, сигнал %s\n",
+			hs[k].start.In(mskLoc).Format("01-02 15:04"), md.Times[hs[k].done].In(mskLoc).Format("15:04"),
+			closes[k], p.EMAPeriod, trend[k], p.RSIPeriod, rsi[k-1], rsi[k], orNone(s.hourSignal(closes, trend, rsi, k)))
+		if a := s.armedBy(hs, closes, trend, rsi, i); a >= 0 {
+			fmt.Fprintf(&sb, "✓ взведено часом %s (%s), бар %d из %d окна подтверждения\n",
+				hs[a].start.In(mskLoc).Format("01-02 15:04"), s.hourSignal(closes, trend, rsi, a), i-hs[a].done+1, p.ConfirmBars)
+			hist := macdHistogram(md.Closes, p)
+			if hist == nil {
+				sb.WriteString("✗ MACD 30m: гистограммы нет\n")
+			} else {
+				fmt.Fprintf(&sb, "%s MACD 30m: гистограмма %.4f → %.4f (зелёная ≥ 0, на взводе — сразу, дальше — перекраска)\n",
+					mark(confirmed(hist, hs[a].done, i)), hist[i-1], hist[i])
+			}
 		} else {
-			fmt.Fprintf(&sb, "✗ тренд: EMA(%d) не прогрета\n", p.EMAPeriod)
+			fmt.Fprintf(&sb, "✗ взвода нет: ни один час с сигналом не закрылся за последние %d бар(а)\n", p.ConfirmBars)
 		}
 	} else {
-		sb.WriteString("✗ тренд: EMAPeriod 0 — входы выключены\n")
-	}
-
-	if p.RSIPeriod > 0 && n >= p.RSIPeriod+2 {
-		rsi := indicators.RSISeries(md.Closes, p.RSIPeriod)
-		prev, cur := rsi[i-1], rsi[i]
-		zone := cur < p.RSIZone
-		cross := crossUp(prev, cur, p.RSIZone) && cur <= p.RSICap
-		branch := "нет"
-		switch {
-		case zone:
-			branch = "ZONE"
-		case cross:
-			branch = "CROSS"
-		}
-		fmt.Fprintf(&sb, "%s RSI(%d): %.1f → %.1f; ZONE (< %.0f) %s, CROSS (крест %.0f вверх, ≤ %.0f) %s; ветка %s\n",
-			mark(zone || cross), p.RSIPeriod, prev, cur, p.RSIZone, mark(zone), p.RSIZone, p.RSICap, mark(cross), branch)
-	} else {
-		fmt.Fprintf(&sb, "✗ RSI(%d): не прогрет\n", p.RSIPeriod)
+		sb.WriteString("✗ часовые RSI/EMA не прогреты или выключены\n")
 	}
 
 	atr := s.dailyATR(md)
@@ -69,16 +60,8 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 		fmt.Fprintf(&sb, "✗ дневной ATR(%d): не посчитан\n", p.DailyATRPeriod)
 	}
 
-	switch {
-	case p.StopDailyATR <= 0:
-		sb.WriteString("✓ стоп: выключен\n")
-	case atr > 0:
-		stop := c - p.StopDailyATR*atr
-		fmt.Fprintf(&sb, "%s стоп от close: %.4f − %.2f×ATR = %.4f > 0\n", mark(stop > 0), c, p.StopDailyATR, stop)
-	}
-
 	if md.Position != nil {
-		s.explainExits(&sb, md)
+		s.explainExits(&sb, md, hs)
 	}
 
 	sig := s.Decide(md)
@@ -97,13 +80,11 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 	return sb.String()
 }
 
-// explainExits reports the exit gates of a held position: the stop and the RSI(RSIExitPeriod)
-// cross.
-func (s *Strategy) explainExits(sb *strings.Builder, md strategy.MarketData) {
+// explainExits reports the exit gates of a held position: the stop and the hourly RSI cross.
+func (s *Strategy) explainExits(sb *strings.Builder, md strategy.MarketData, hs []hourBar) {
 	p := s.p
 	pos := md.Position
-	n := len(md.Closes)
-	i := n - 1
+	i := len(md.Closes) - 1
 	sb.WriteString("--- выходы ---\n")
 	if p.StopDailyATR > 0 {
 		atr := pos.EntryATR
@@ -114,13 +95,39 @@ func (s *Strategy) explainExits(sb *strings.Builder, md strategy.MarketData) {
 		fmt.Fprintf(sb, "стоп: вход %.4f − %.2f×ATR %.4f = %.4f; low %.4f, задет %s\n",
 			pos.PurchasePrice, p.StopDailyATR, atr, stop, md.Lows[i], mark(atr > 0 && stop > 0 && md.Lows[i] <= stop+1e-9))
 	}
-	if p.RSIExit <= 0 || p.RSIExitPeriod <= 0 || n < p.RSIExitPeriod+2 {
-		sb.WriteString("RSI-выход: выключен (RSIExit или RSIExitPeriod 0) или RSI не прогрет\n")
+	if p.BreakevenATR > 0 {
+		if fill := fillIndex(md); fill >= 0 && fill < i {
+			atr := pos.EntryATR
+			if atr <= 0 {
+				atr = s.dailyATR(md)
+			}
+			best := md.Highs[fill]
+			for _, h := range md.Highs[fill+1 : i] {
+				best = max(best, h)
+			}
+			fmt.Fprintf(sb, "безубыток: лучший high с покупки %.4f, порог вход + %.2f ATR = %.4f, взведён %s\n",
+				best, p.BreakevenATR, pos.PurchasePrice+p.BreakevenATR*atr, mark(atr > 0 && best >= pos.PurchasePrice+p.BreakevenATR*atr-1e-9))
+		} else {
+			sb.WriteString("безубыток: свеча покупки не в окне или ещё не закрыта\n")
+		}
+	}
+	k := len(hs) - 1
+	if p.RSIExit <= 0 || p.RSIExitPeriod <= 0 || k < p.RSIExitPeriod+1 {
+		sb.WriteString("RSI-выход: выключен (RSIExit или RSIExitPeriod 0) или часовой RSI не прогрет\n")
 		return
 	}
-	rsi := indicators.RSISeries(md.Closes, p.RSIExitPeriod)
-	fmt.Fprintf(sb, "RSI(%d) %.1f → %.1f, крест %.0f вверх %s\n",
-		p.RSIExitPeriod, rsi[i-1], rsi[i], p.RSIExit, mark(crossUp(rsi[i-1], rsi[i], p.RSIExit)))
+	rsi := indicators.RSISeries(hourCloses(hs), p.RSIExitPeriod)
+	fmt.Fprintf(sb, "час %s закрыт на этом баре %s; RSI(%d) %.1f → %.1f, крест %.0f вверх %s\n",
+		hs[k].start.In(mskLoc).Format("01-02 15:04"), mark(hs[k].done == i), p.RSIExitPeriod, rsi[k-1], rsi[k],
+		p.RSIExit, mark(crossUp(rsi[k-1], rsi[k], p.RSIExit)))
+}
+
+// orNone is s, or "нет" when empty.
+func orNone(s string) string {
+	if s == "" {
+		return "нет"
+	}
+	return s
 }
 
 // mark is ✓ for a passed gate and ✗ for a failed one.

@@ -88,7 +88,7 @@ func TestDropShortlist(t *testing.T) {
 
 func dropMeta() DropScreenMeta {
 	return DropScreenMeta{
-		Interval: enum.Hour1, Months: 36, HoldoutMonths: 6, TopN: 50, Shortlist: 2,
+		Interval: enum.Minutes30, Months: 36, HoldoutMonths: 6, TopN: 50, Shortlist: 2,
 		Split: time.Date(2026, 4, 12, 0, 0, 0, 0, time.UTC), Gates: DropGates{MinTurnoverM: 50, MaxTickPct: 0.3, MinTrades: 20},
 		PFCap: 10, Commission: 0.0005, Cash: 100000, Scanned: 5, Skipped: 1,
 	}
@@ -102,7 +102,7 @@ func TestRenderDropScreenMarkdown(t *testing.T) {
 		[]DropRow{dropRow("F", 3, 30, 100, 0.31)}, []DropRow{dropRow("D", 3, 30, 49.9, 0.1)}, dropMeta())
 	for _, want := range []string{
 		"# drop_bounce screener",
-		"Hour1",
+		"Minutes30",
 		"RSIPeriod {4, 6} × RSIExitPeriod {8, 12} × StopDailyATR {0.5, 1.0}",
 		"## Рейтинг",
 		"## Детали топа",

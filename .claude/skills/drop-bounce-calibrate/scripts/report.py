@@ -77,7 +77,7 @@ def center(md):
         print(f"  (у {len(weak)} соседей < {MIN_NEIGHBOUR_TRADES} сделок — их PF шумный)")
     ok = all(r[1] >= 1.0 for r in nb)
     print("ПЛАТО ЕСТЬ" if ok else "ОСТРЫЙ ПИК")
-    print(f"дальше: grids.py point <T> Hour1 {md} {k}")
+    print(f"дальше: grids.py point <T> Minutes30 {md} {k}")
 
 
 def period(md):

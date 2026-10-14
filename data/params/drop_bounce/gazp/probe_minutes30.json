@@ -1,0 +1,72 @@
+{
+  "_comment": "drop_bounce GAZP Minutes30: проба доработок 2026-10-14 (безубыток/трейлинг, ветка ZONE, уровень выхода) поверх точки point_minutes30.json; только окно разработки 30 мес. (-holdout-months 6), не калибровка. Запуск: reports/drop_bounce_cal/backtest -ticker GAZP -strategy drop_bounce -interval Minutes30 -calibrate data/params/drop_bounce/gazp/probe_minutes30.json -months 36 -holdout-months 6 -metric profit_factor -min-trades 1 -combos 0. РЕЗУЛЬТАТ 2026-10-14: все 72 точки PF < 1 (медиана 0.712). База 0.757/50. По одной: безубыток 0.5 → 0.800/51, 0.7 → 0.843/51, 1.0 → без изменений (ни одна сделка не дошла до +1 ATR до выхода); трейлинг 0.5 ATR не помог (0.836), 1.0 = безубыток; ZoneEntry 0 → 0.744/38; RSIExit 75 → 0.716, 80 → 0.582. Лучшая связка ZoneEntry 0 + безубыток 0.7 + трейлинг 0.5 → 0.968/38. Вывод: безубыток 0.7 — единственная идея с плюсом, края не создаёт; выход выше 70 вредит.",
+  "phases": [
+    {
+      "name": "probe",
+      "grid": {
+        "RSIPeriod": [
+          6
+        ],
+        "RSIZone": [
+          30
+        ],
+        "RSICap": [
+          50
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "StopDailyATR": [
+          0.7
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "RSIExitPeriod": [
+          9
+        ],
+        "RSIExit": [
+          70,
+          75,
+          80
+        ],
+        "MACDFast": [
+          12
+        ],
+        "MACDSlow": [
+          26
+        ],
+        "MACDSignal": [
+          9
+        ],
+        "ConfirmBars": [
+          4
+        ],
+        "FridayTo": [
+          11
+        ],
+        "StaleBars": [
+          0
+        ],
+        "StaleATR": [
+          0.3
+        ],
+        "ZoneEntry": [
+          0,
+          1
+        ],
+        "BreakevenATR": [
+          0,
+          0.5,
+          0.7,
+          1.0
+        ],
+        "TrailATR": [
+          0,
+          0.5,
+          1.0
+        ]
+      }
+    }
+  ]
+}

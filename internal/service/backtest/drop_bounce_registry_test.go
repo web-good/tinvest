@@ -9,7 +9,7 @@ import (
 )
 
 func TestDropBounceGenericTickerUsesCoreDefaults(t *testing.T) {
-	b, err := DropBounceLookupOrGeneric("ZZZZ", enum.Hour1)
+	b, err := DropBounceLookupOrGeneric("ZZZZ", enum.Minutes30)
 	if err != nil {
 		t.Fatalf("lookup: %v", err)
 	}
@@ -22,8 +22,8 @@ func TestDropBounceGenericTickerUsesCoreDefaults(t *testing.T) {
 	}
 }
 
-func TestDropBounceRunsOnHour1Only(t *testing.T) {
-	for _, iv := range []enum.Interval{enum.Minutes5, enum.Minutes15, enum.Minutes30, enum.Hour4, enum.Day1, enum.Week1} {
+func TestDropBounceRunsOnMinutes30Only(t *testing.T) {
+	for _, iv := range []enum.Interval{enum.Minutes5, enum.Minutes15, enum.Hour1, enum.Hour4, enum.Day1, enum.Week1} {
 		if _, err := DropBounceLookupOrGeneric("GAZP", iv); err == nil {
 			t.Fatalf("%s: want error", iv)
 		}
@@ -31,7 +31,7 @@ func TestDropBounceRunsOnHour1Only(t *testing.T) {
 }
 
 func TestDropBounceParseParamsLayersOverDefaults(t *testing.T) {
-	b, err := DropBounceLookupOrGeneric("ZZZZ", enum.Hour1)
+	b, err := DropBounceLookupOrGeneric("ZZZZ", enum.Minutes30)
 	if err != nil {
 		t.Fatalf("lookup: %v", err)
 	}
@@ -48,14 +48,14 @@ func TestDropBounceParseParamsLayersOverDefaults(t *testing.T) {
 }
 
 // json.Unmarshal ignores unknown fields: a -params file written for the volume-spike rules or for
-// the day-gate/MACD rules (before 2026-10-14) runs on the defaults instead of failing (a -calibrate grid with an old field is rejected by applyField).
+// the day-gate/MACD or buy-window rules (before 2026-10-14) runs on the defaults instead of failing (a -calibrate grid with an old field is rejected by applyField).
 // Pinned so nobody assumes the old fields still apply.
 func TestDropBounceParseParamsIgnoresRemovedFields(t *testing.T) {
-	b, err := DropBounceLookupOrGeneric("ZZZZ", enum.Hour1)
+	b, err := DropBounceLookupOrGeneric("ZZZZ", enum.Minutes30)
 	if err != nil {
 		t.Fatalf("lookup: %v", err)
 	}
-	parsed, err := b.ParseParams([]byte(`{"VolDailyMult": 0.15, "VolAvgPeriod": 10, "DaySpentATR": 0.5, "StartHour": 9, "MACDFast": 5}`))
+	parsed, err := b.ParseParams([]byte(`{"VolDailyMult": 0.15, "VolAvgPeriod": 10, "DaySpentATR": 0.5, "StartHour": 9, "MorningFrom": 3, "EveningTo": 20}`))
 	if err != nil {
 		t.Fatalf("ParseParams: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestDropBounceParseParamsIgnoresRemovedFields(t *testing.T) {
 	}
 }
 
-// Every registered ticker resolves to its own literal on Hour1.
+// Every registered ticker resolves to its own literal on Minutes30.
 func TestDropBounceTickerLiteral(t *testing.T) {
 	// The registry is empty today, so inject a test-only literal: otherwise the loop below asserts nothing.
 	lit := core.DefaultParams()
@@ -73,7 +73,7 @@ func TestDropBounceTickerLiteral(t *testing.T) {
 	t.Cleanup(func() { delete(dropBounceRegistry, "ZZTEST") })
 
 	for ticker, literal := range dropBounceRegistry {
-		b, err := DropBounceLookupOrGeneric(ticker, enum.Hour1)
+		b, err := DropBounceLookupOrGeneric(ticker, enum.Minutes30)
 		if err != nil {
 			t.Fatalf("%s: lookup: %v", ticker, err)
 		}

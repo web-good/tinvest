@@ -1,4 +1,11 @@
-// Package enpg supplies the drop_bounce Params for ENPG (ЭН+ ГРУП) on Hour1.
+// Package enpg supplies the drop_bounce Params for ENPG (ЭН+ ГРУП) on Minutes30.
+//
+// # Правила 2026-10-14: сигнал на 1h, подтверждение MACD на 30m
+//
+// Ядро переведено на 30m: часовой сигнал RSI над EMA собирается из 30-минутных свечей, вход — по
+// первой зелёной гистограмме MACD(12,26,9) на 30m за ConfirmBars баров, только будни (в пятницу покупка до 11:00); выход — стоп
+// в дневных ATR или часовой RSI(RSIExitPeriod) крест 70 вверх. Литерал сброшен на дефолты ядра до
+// калибровки на этих правилах; все замеры ниже сняты на прежних правилах (1h) и к ним не относятся.
 //
 // # Правила 2026-10-14
 //
@@ -52,21 +59,24 @@ import "tinvest/internal/service/trading_strategy/drop_bounce/strategy/core"
 // Ticker is the instrument this package configures.
 const Ticker = "ENPG"
 
-// Params returns the ENPG literal for Hour1.
+// Params returns the ENPG literal for Minutes30.
 func Params() core.Params {
 	return core.Params{
 		RSIPeriod:      6,
 		RSIZone:        30,
 		RSICap:         50,
+		ZoneEntry:      1,
 		EMAPeriod:      200,
 		StopDailyATR:   1,
+		BreakevenATR:   0.5,
+		TrailATR:       0,
 		DailyATRPeriod: 14,
 		RSIExitPeriod:  10,
 		RSIExit:        70,
-		MorningFrom:    7,
-		MorningTo:      11,
-		EveningFrom:    17,
-		EveningTo:      24,
+		MACDFast:       12,
+		MACDSlow:       26,
+		MACDSignal:     9,
+		ConfirmBars:    4,
 		FridayTo:       11,
 		StaleBars:      0,
 		StaleATR:       0.3,

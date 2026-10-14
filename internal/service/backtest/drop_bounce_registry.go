@@ -31,10 +31,11 @@ func dropBounceBindingFor(ticker string, interval enum.Interval, defaults func()
 	}
 }
 
-// dropBounceRegistry maps tickers with their own package to their Hour1 literal. The packages
+// dropBounceRegistry maps tickers with their own package to their Minutes30 literal. The packages
 // calibrated on the volume-spike rules (15m) were deleted on 2026-10-13 with the rewrite to the
-// 1h RSI-zone rules; a ticker comes back here with a calibration on the new rules
-// (skill drop-bounce-calibrate).
+// 1h RSI-zone rules; since 2026-10-14 the rules run on 30m (hourly signal, 30m MACD
+// confirmation) and a ticker comes back here with a calibration on them (skill
+// drop-bounce-calibrate).
 var dropBounceRegistry = map[string]func() core.Params{
 	"ENPG": enpg.Params,
 	"GAZP": gazp.Params,
@@ -43,10 +44,11 @@ var dropBounceRegistry = map[string]func() core.Params{
 
 // DropBounceLookupOrGeneric returns the binding for a ticker: the ticker package's literal, or
 // core.DefaultParams when the ticker has no package. Partial JSON overrides layer over whichever
-// defaults apply. drop_bounce runs on Hour1 only; other timeframes are rejected.
+// defaults apply. drop_bounce runs on Minutes30 only (hourly signal built from the 30m bars, 30m MACD
+// confirmation); other timeframes are rejected.
 func DropBounceLookupOrGeneric(ticker string, interval enum.Interval) (Binding, error) {
-	if interval != enum.Hour1 {
-		return Binding{}, fmt.Errorf("drop_bounce runs on Hour1 only, not %s", interval)
+	if interval != enum.Minutes30 {
+		return Binding{}, fmt.Errorf("drop_bounce runs on Minutes30 only, not %s", interval)
 	}
 	defaults, ok := dropBounceRegistry[ticker]
 	if !ok {

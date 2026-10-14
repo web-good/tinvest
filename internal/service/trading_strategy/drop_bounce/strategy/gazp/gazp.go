@@ -1,4 +1,25 @@
-// Package gazp supplies the drop_bounce Params for GAZP (Газпром) on Hour1.
+// Package gazp supplies the drop_bounce Params for GAZP (Газпром) on Minutes30.
+//
+// # Правила 2026-10-14: сигнал на 1h, подтверждение MACD на 30m
+//
+// Ядро переведено на 30m: часовой сигнал RSI над EMA собирается из 30-минутных свечей, вход — по
+// первой зелёной гистограмме MACD(12,26,9) на 30m за ConfirmBars баров, только будни (в пятницу покупка до 11:00); выход — стоп
+// в дневных ATR или часовой RSI(RSIExitPeriod) крест 70 вверх. Все замеры в разделах ниже этого
+// сняты на прежних правилах (1h) и к нему не относятся.
+//
+// Калибровка 2026-10-14 по схеме hold-out (скилл drop-bounce-calibrate): перебор RSIPeriod
+// (4, 5, 6) × RSIExitPeriod (8–12) × StopDailyATR (0.5, 0.7, 1.0), 45 точек, на первых 30 из 36
+// месяцев (sweep_minutes30.json), отчёты — reports/GAZP_drop_bounce/sweep/Minutes30/ (вне git).
+//
+//   - Все 45 точек в минусе: PF от 0.492 до 0.757, сделок 45–66 за 30 месяцев.
+//   - Центр плато совпал с максимумом PF: RSI входа 6, RSI выхода 9, стоп 0.7 дневного ATR —
+//     PF 0.757 на 50 сделках, медиана окрестности 0.728; соседи стоп 1.0 → 0.755, RSI выхода
+//     8 → 0.740, стоп 0.5 → 0.716, RSI входа 5 → 0.689, RSI выхода 10 → 0.616. ОСТРЫЙ ПИК.
+//   - Стресс, издержки и hold-out не гонялись: плато не пройдено.
+//
+// Решение: не торговать. Литерал — центр перебора (point_minutes30.json) с безубытком 0.5 ATR,
+// ставшим дефолтом ядра после перебора: проба probe_minutes30.json дала на окне разработки
+// PF 0.800/51 против 0.757/50 без него.
 //
 // # Правила 2026-10-14: окна покупки и RSI выхода
 //
@@ -17,7 +38,7 @@
 //   - Перебор снят до пятничного ограничения (FridayTo 11, добавлено позже 2026-10-14): в центре
 //     было 14 покупок вечером в пятницу, PF 1.408, +3 866 ₽ — с ограничением их нет.
 //
-// Решение: не торговать. Литерал — центр перебора. Всё ниже — замеры прежних правил.
+// Решение: не торговать. Литерал тогда был центром перебора (RSI 4 / выход 9 / стоп 0.7).
 //
 // Последняя калибровка 2026-10-14 по схеме hold-out (скилл drop-bounce-calibrate): перебор
 // EMAPeriod (100, 120, 150, 200) × StaleBars (10, 15, 25, 35) × StopDailyATR (0.7, 1.0, 1.5) на
@@ -61,21 +82,24 @@ import "tinvest/internal/service/trading_strategy/drop_bounce/strategy/core"
 // Ticker is the instrument this package configures.
 const Ticker = "GAZP"
 
-// Params returns the GAZP literal for Hour1.
+// Params returns the GAZP literal for Minutes30.
 func Params() core.Params {
 	return core.Params{
-		RSIPeriod:      4,
+		RSIPeriod:      6,
 		RSIZone:        30,
 		RSICap:         50,
+		ZoneEntry:      1,
 		EMAPeriod:      200,
 		StopDailyATR:   0.7,
+		BreakevenATR:   0.5,
+		TrailATR:       0,
 		DailyATRPeriod: 14,
 		RSIExitPeriod:  9,
 		RSIExit:        70,
-		MorningFrom:    7,
-		MorningTo:      11,
-		EveningFrom:    17,
-		EveningTo:      24,
+		MACDFast:       12,
+		MACDSlow:       26,
+		MACDSignal:     9,
+		ConfirmBars:    4,
 		FridayTo:       11,
 		StaleBars:      0,
 		StaleATR:       0.3,

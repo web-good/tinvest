@@ -20,9 +20,9 @@ pooled OOS walk-forward калибровки.
 
 ## Сетка
 
-Только 1h. 8 конфигураций: `RSIPeriod` {4, 6} × `RSIExitPeriod` {8, 12} × `StopDailyATR` {0.5, 1.0}.
+Только 30m (часовой сигнал стратегия строит сама). 8 конфигураций: `RSIPeriod` {4, 6} × `RSIExitPeriod` {8, 12} × `StopDailyATR` {0.5, 1.0}.
 
-Прибито: `RSIZone` 30, `RSICap` 50, `EMAPeriod` 200, `RSIExit` 70, `DailyATRPeriod` 14, окна покупки 07–11 и 17–24 МСК, в пятницу до 11:00 (дефолты ядра). Сетка — края осей калибровки: длина RSI входа, длина RSI выхода и стоп, чтобы скринер видел, держит ли бумага стратегию хоть на одном краю.
+Прибито: `RSIZone` 30, `RSICap` 50, `EMAPeriod` 200, `RSIExit` 70, MACD 12/26/9, `ConfirmBars` 4, `FridayTo` 11, `DailyATRPeriod` 14 (дефолты ядра). Сетка — края осей калибровки: длина RSI входа, длина RSI выхода и стоп, чтобы скринер видел, держит ли бумага стратегию хоть на одном краю.
 
 ## Метрики
 
@@ -61,10 +61,10 @@ pooled OOS walk-forward калибровки.
 
 ```bash
 GOMAXPROCS=1 nice -n 19 go build -o reports/drop_screen/dropscreen ./cmd/dropscreen
-taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/drop_screen/dropscreen -interval Hour1
+taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/drop_screen/dropscreen -interval Minutes30
 ```
 
-Флаги: `-interval` (`Hour1` — единственный), `-months` (36),
+Флаги: `-interval` (`Minutes30` — единственный), `-months` (36),
 `-holdout-months` (6), гейты выше, `-top` (50; 0 — все), `-shortlist` (10; 0 — весь рейтинг),
 `-workers` (1), `-pf-cap` (10), `-cash`, `-fraction`, `-commission` (0.0005), `-tickers` (пробный
 прогон по списку), `-pause`, `-refresh` (перекачать свечи; ограничивает `-workers` до 2), `-out`

@@ -1,0 +1,21 @@
+{
+  "_comment": "drop_bounce GAZP Minutes30: центр плато перебора sweep_minutes30.json (комбо #1). РЕЗУЛЬТАТ 2026-10-14 (30m, сигнал 1h + MACD 30m, пятница до 11:00): все 45 точек PF < 1 (0.492–0.757, 45–66 сделок на 30 мес.); центр плато = #1 RSIPeriod 6 / RSIExitPeriod 9 / StopDailyATR 0.7, PF 0.757/50, медиана окрестности 0.728; соседи 0.616–0.755 — ОСТРЫЙ ПИК. Стресс и hold-out не запускались. Решение: не торговать. Позже 2026-10-14: добавлены поля ZoneEntry 1, BreakevenATR 0.5 (новый дефолт ядра), TrailATR 0.",
+  "RSIPeriod": 6,
+  "RSIZone": 30,
+  "RSICap": 50,
+  "ZoneEntry": 1,
+  "EMAPeriod": 200,
+  "StopDailyATR": 0.7,
+  "BreakevenATR": 0.5,
+  "TrailATR": 0,
+  "DailyATRPeriod": 14,
+  "RSIExitPeriod": 9,
+  "RSIExit": 70,
+  "MACDFast": 12,
+  "MACDSlow": 26,
+  "MACDSignal": 9,
+  "ConfirmBars": 4,
+  "FridayTo": 11,
+  "StaleBars": 0,
+  "StaleATR": 0.3
+}
