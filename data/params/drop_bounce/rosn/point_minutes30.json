@@ -1,0 +1,21 @@
+{
+  "_comment": "drop_bounce ROSN Minutes30: центр плато перебора sweep_minutes30.json (комбо #1). РЕЗУЛЬТАТ 2026-10-14 (30m, сигнал 1h + MACD 30m, ConfirmBars 3, безубыток 0.5, пятница до 11:00): все 45 точек PF < 1 (0.239–0.944, 25–44 сделки на 30 мес.); центр плато = #1: RSI входа 6, RSI выхода 8, стоп 0.5 дневного ATR — PF 0.944 на 30 сделках, медиана окрестности 0.879; соседи: RSI входа 5 → 0.910, стоп 0.7 → 0.848, RSI выхода 9 → 0.797 — ОСТРЫЙ ПИК. Стресс, издержки и hold-out не запускались. Решение: не торговать.",
+  "RSIPeriod": 6,
+  "RSIZone": 30,
+  "RSICap": 50,
+  "ZoneEntry": 1,
+  "EMAPeriod": 200,
+  "StopDailyATR": 0.5,
+  "BreakevenATR": 0.5,
+  "TrailATR": 0,
+  "DailyATRPeriod": 14,
+  "RSIExitPeriod": 8,
+  "RSIExit": 70,
+  "MACDFast": 12,
+  "MACDSlow": 26,
+  "MACDSignal": 9,
+  "ConfirmBars": 3,
+  "FridayTo": 11,
+  "StaleBars": 0,
+  "StaleATR": 0.3
+}

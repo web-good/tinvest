@@ -1,0 +1,72 @@
+{
+  "_comment": "drop_bounce SBER Minutes30: in-sample перебор на первых 30 из 36 месяцев (последние 6 — hold-out), оси RSIPeriod [4, 5, 6], RSIExitPeriod [8, 9, 10, 11, 12], StopDailyATR [0.5, 0.7, 1.0], остальное — дефолты ядра, все поля прибиты. Запуск: reports/drop_bounce_cal/backtest -ticker SBER -strategy drop_bounce -interval Minutes30 -calibrate data/params/drop_bounce/sber/sweep_minutes30.json -months 36 -holdout-months 6 -metric profit_factor -min-trades 1 -combos 0. РЕЗУЛЬТАТ 2026-10-14 (30m, сигнал 1h + MACD 30m, ConfirmBars 3, безубыток 0.5, пятница до 11:00): все 45 точек PF < 1 (0.171–0.583, 30–47 сделок на 30 мес.); центр плато = #1: RSI входа 4, RSI выхода 11, стоп 1.0 дневного ATR — PF 0.583 на 45 сделках, медиана окрестности 0.564; соседи: стоп 0.7 → 0.574, RSI выхода 12 → 0.564, RSI выхода 10 → 0.494, RSI входа 5 → 0.409 — ОСТРЫЙ ПИК. Стресс, издержки и hold-out не запускались. Решение: не торговать.",
+  "phases": [
+    {
+      "name": "sweep",
+      "grid": {
+        "RSIPeriod": [
+          4,
+          5,
+          6
+        ],
+        "RSIZone": [
+          30
+        ],
+        "RSICap": [
+          50
+        ],
+        "ZoneEntry": [
+          1
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "StopDailyATR": [
+          0.5,
+          0.7,
+          1.0
+        ],
+        "BreakevenATR": [
+          0.5
+        ],
+        "TrailATR": [
+          0.0
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "RSIExitPeriod": [
+          8,
+          9,
+          10,
+          11,
+          12
+        ],
+        "RSIExit": [
+          70
+        ],
+        "MACDFast": [
+          12
+        ],
+        "MACDSlow": [
+          26
+        ],
+        "MACDSignal": [
+          9
+        ],
+        "ConfirmBars": [
+          3
+        ],
+        "FridayTo": [
+          11
+        ],
+        "StaleBars": [
+          0
+        ],
+        "StaleATR": [
+          0.3
+        ]
+      }
+    }
+  ]
+}

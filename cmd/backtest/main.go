@@ -54,7 +54,7 @@ func main() {
 		outDir       = flag.String("out", "reports", "report output directory")
 		refresh      = flag.Bool("refresh", false, "force candle refetch (ignore cache)")
 		explain      = flag.String("explain", "", "diagnose one bar: MSK time 'YYYY-MM-DD HH:MM'; prints why the strategy did/didn't enter")
-		riskPct      = flag.Float64("risk-pct", 0, "risk-based sizing: risk this %% of equity per trade off the entry stop (requires CatStopATRMult>0; 0 = fixed -fraction sizing)")
+		riskPct      = flag.Float64("risk-pct", 0, "risk-based sizing: risk this %% of equity per trade off the entry stop (needs a stop on the buy signal: reversion CatStopATRMult>0, drop_bounce StopDailyATR>0; 0 = fixed -fraction sizing)")
 		screen       = flag.String("screen", "", "screen mode: comma-separated tickers; ranks them by variance ratio (ignores -ticker/-strategy)")
 		volRank      = flag.Bool("volrank", false, "screener mode: rank the liquid RUB universe by Hour1 pullback-in-trend fitness (ignores -ticker/-strategy/-interval)")
 		minTurnover  = flag.Float64("min-turnover", 50, "volrank: minimum mean daily turnover in millions of RUB")

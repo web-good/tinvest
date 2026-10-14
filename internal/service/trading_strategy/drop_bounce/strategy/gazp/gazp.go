@@ -122,5 +122,7 @@ func Params() core.Params {
 		FridayTo:       11,
 		StaleBars:      0,
 		StaleATR:       0.3,
+		PrevCloseGate:  0,
+		PrevCloseATR:   0,
 	}
 }

@@ -28,6 +28,8 @@ func TestLiteralIsPinned(t *testing.T) {
 		FridayTo:       11,
 		StaleBars:      0,
 		StaleATR:       0.3,
+		PrevCloseGate:  0,
+		PrevCloseATR:   0,
 	}
 	if got := Params(); got != want {
 		t.Fatalf("литерал ENPG изменился:\n got: %+v\nwant: %+v", got, want)

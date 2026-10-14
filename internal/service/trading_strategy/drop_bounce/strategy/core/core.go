@@ -77,6 +77,13 @@ type Params struct {
 	// StaleATR is the favourable move in daily ATRs (frozen at entry) that keeps a position from the
 	// STALE exit (default 0.3; 0 means any high above the fill keeps it).
 	StaleATR float64
+	// PrevCloseGate 1 buys only after a real drop: the signal bar's close must be at or below the
+	// previous weekday's daily close + PrevCloseATR daily ATRs; 0 = off (default 0). Owner
+	// 2026-10-14: on 10 tickers the buys above yesterday's close carried the loss (PF 0.77 vs 1.24).
+	PrevCloseGate int
+	// PrevCloseATR is the allowance above the previous weekday close in daily ATRs (default 0 =
+	// strictly not above it); negative values demand a drop of that size.
+	PrevCloseATR float64
 }
 
 // DefaultParams returns the owner's initial configuration.
@@ -100,6 +107,8 @@ func DefaultParams() Params {
 		FridayTo:       11,
 		StaleBars:      0,
 		StaleATR:       0.3,
+		PrevCloseGate:  0,
+		PrevCloseATR:   0,
 	}
 }
 
@@ -232,6 +241,16 @@ func (s *Strategy) dailyATR(md strategy.MarketData) float64 {
 	return indicators.ATR(h, l, c, s.p.DailyATRPeriod)
 }
 
+// prevWeekdayClose is the close of the last completed weekday daily (Friday's on Monday: weekend
+// sessions are skipped like in the ATR), or 0 when there is none.
+func prevWeekdayClose(md strategy.MarketData) float64 {
+	_, _, c := weekdayDaily(md.DailyHighs, md.DailyLows, md.DailyCloses, md.DailyTimes)
+	if len(c) == 0 {
+		return 0
+	}
+	return c[len(c)-1]
+}
+
 // isWeekdayFill reports whether a signal on the bar starting at t may fill: the fill bar (one step
 // later) lies on the same MSK date, on a weekday and, on Friday, starts before FridayTo:00.
 func (s *Strategy) isWeekdayFill(t time.Time) bool {
@@ -289,8 +308,10 @@ func confirmed(hist []float64, a, i int) bool {
 }
 
 // enter buys at the next bar's open once an armed hourly signal is confirmed by a green 30m MACD
-// histogram. The signal carries no levels: the stop is measured from the fill. It carries the
-// daily ATR for the engine to freeze; without a daily ATR there is no entry.
+// histogram, and, with PrevCloseGate, only at or below the previous weekday close (+ PrevCloseATR
+// ATRs). The exits measure the stop from the fill; Signal.StopLoss carries it off the signal close
+// only to size the position by risk. It carries the daily ATR for the engine to freeze; without a
+// daily ATR there is no entry.
 func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal {
 	p := s.p
 	n := len(md.Closes)
@@ -324,15 +345,24 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	if p.StopDailyATR > 0 && c-p.StopDailyATR*atr <= 0 {
 		return sig
 	}
+	prev := prevWeekdayClose(md)
+	if p.PrevCloseGate == 1 && (prev <= 0 || c > prev+p.PrevCloseATR*atr+1e-9) {
+		return sig
+	}
 	sig.Kind = model.SignalBuy
 	sig.ATR = atr
+	// The stop off the signal close anchors risk sizing (-risk-pct): the real stop is measured from
+	// the fill at the next open, a gap of one bar's open-to-close at most.
+	if p.StopDailyATR > 0 {
+		sig.StopLoss = c - p.StopDailyATR*atr
+	}
 	// The fill must be the very next slot: if that candle is missing from the data, the engine
 	// drops the signal rather than buying at a later session's open.
 	sig.FillBy = md.Times[i].Add(s.step)
-	sig.EntryReason = fmt.Sprintf("%s: час %s RSI(%d) %.1f → %.1f (зона %.0f, планка %.0f), close %.4f > EMA(%d) %.4f; MACD 30m %.4f зелёная через %d бар(а), покупка в %s (ATR %.4f)",
+	sig.EntryReason = fmt.Sprintf("%s: час %s RSI(%d) %.1f → %.1f (зона %.0f, планка %.0f), close %.4f > EMA(%d) %.4f; MACD 30m %.4f зелёная через %d бар(а), покупка в %s (ATR %.4f, вчера close %.4f)",
 		s.hourSignal(closes, trend, rsi, k), hs[k].start.In(mskLoc).Format("01-02 15:04"), p.RSIPeriod, rsi[k-1], rsi[k],
 		p.RSIZone, p.RSICap, closes[k], p.EMAPeriod, trend[k], hist[i], i-hs[k].done,
-		sig.FillBy.In(mskLoc).Format("15:04"), atr)
+		sig.FillBy.In(mskLoc).Format("15:04"), atr, prev)
 	return sig
 }
 

@@ -1,0 +1,21 @@
+{
+  "_comment": "drop_bounce LKOH Minutes30: центр плато перебора sweep_minutes30.json (комбо #1). РЕЗУЛЬТАТ 2026-10-14 (30m, сигнал 1h + MACD 30m, ConfirmBars 3, безубыток 0.5, пятница до 11:00): все 45 точек PF < 1 (0.375–0.823, 29–51 сделка на 30 мес.); центр плато = #1: RSI входа 5, RSI выхода 8, стоп 0.7 дневного ATR — PF 0.823 на 39 сделках, медиана окрестности 0.752; соседи: RSI выхода 9 → 0.815, RSI входа 4 → 0.754, стоп 1.0 → 0.749, стоп 0.5 → 0.713, RSI входа 6 → 0.590 — ОСТРЫЙ ПИК. Стресс, издержки и hold-out не запускались. Решение: не торговать.",
+  "RSIPeriod": 5,
+  "RSIZone": 30,
+  "RSICap": 50,
+  "ZoneEntry": 1,
+  "EMAPeriod": 200,
+  "StopDailyATR": 0.7,
+  "BreakevenATR": 0.5,
+  "TrailATR": 0,
+  "DailyATRPeriod": 14,
+  "RSIExitPeriod": 8,
+  "RSIExit": 70,
+  "MACDFast": 12,
+  "MACDSlow": 26,
+  "MACDSignal": 9,
+  "ConfirmBars": 3,
+  "FridayTo": 11,
+  "StaleBars": 0,
+  "StaleATR": 0.3
+}

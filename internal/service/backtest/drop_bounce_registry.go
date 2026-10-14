@@ -8,7 +8,14 @@ import (
 	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/core"
 	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/enpg"
 	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/gazp"
+	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/gmkn"
 	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/ivat"
+	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/lkoh"
+	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/nvtk"
+	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/plzl"
+	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/rosn"
+	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/sber"
+	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/tatn"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 )
 
@@ -39,7 +46,14 @@ func dropBounceBindingFor(ticker string, interval enum.Interval, defaults func()
 var dropBounceRegistry = map[string]func() core.Params{
 	"ENPG": enpg.Params,
 	"GAZP": gazp.Params,
+	"GMKN": gmkn.Params,
 	"IVAT": ivat.Params,
+	"LKOH": lkoh.Params,
+	"NVTK": nvtk.Params,
+	"PLZL": plzl.Params,
+	"ROSN": rosn.Params,
+	"SBER": sber.Params,
+	"TATN": tatn.Params,
 }
 
 // DropBounceLookupOrGeneric returns the binding for a ticker: the ticker package's literal, or

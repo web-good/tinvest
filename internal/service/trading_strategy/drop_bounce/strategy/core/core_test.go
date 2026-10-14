@@ -191,7 +191,7 @@ func decideAt(p Params, bars []bar, i int) model.Signal {
 func TestDefaultParams(t *testing.T) {
 	want := Params{RSIPeriod: 6, RSIZone: 30, RSICap: 50, ZoneEntry: 1, EMAPeriod: 200,
 		StopDailyATR: 1.0, BreakevenATR: 0.5, TrailATR: 0, DailyATRPeriod: 14, RSIExitPeriod: 10, RSIExit: 70,
-		MACDFast: 12, MACDSlow: 26, MACDSignal: 9, ConfirmBars: 3, FridayTo: 11, StaleBars: 0, StaleATR: 0.3}
+		MACDFast: 12, MACDSlow: 26, MACDSignal: 9, ConfirmBars: 3, FridayTo: 11, StaleBars: 0, StaleATR: 0.3, PrevCloseGate: 0, PrevCloseATR: 0}
 	if got := DefaultParams(); got != want {
 		t.Fatalf("DefaultParams() = %+v, want %+v", got, want)
 	}
@@ -378,5 +378,72 @@ func TestEnterNeedsDailyATR(t *testing.T) {
 func TestTrendUpIsStrict(t *testing.T) {
 	if trendUp(100, 100) || trendUp(100, 0) || !trendUp(100.01, 100) {
 		t.Fatal("trendUp must need close strictly above a warmed (non-zero) EMA")
+	}
+}
+
+// The buy carries the stop off the signal close (StopDailyATR daily ATRs below it) for risk sizing.
+func TestEnterCarriesStopForSizing(t *testing.T) {
+	bars, a := greenAfterSignal()
+	p := entryParams()
+	sig := decideAt(p, bars, a+1)
+	if want := bars[a+1].c - p.StopDailyATR*fixtureATR; sig.Kind != model.SignalBuy || math.Abs(sig.StopLoss-want) > eps {
+		t.Fatalf("got %v stop %v, want Buy with stop %v", sig.Kind, sig.StopLoss, want)
+	}
+	p.StopDailyATR = 0
+	if sig := decideAt(p, bars, a+1); sig.Kind != model.SignalBuy || sig.StopLoss != 0 {
+		t.Fatalf("stop off: got %v stop %v, want Buy without a stop", sig.Kind, sig.StopLoss)
+	}
+}
+
+// dailiesAt is dailies(before, n, fixtureATR) moved to close at `close`, so the ATR stays fixtureATR.
+func dailiesAt(before time.Time, n int, close float64) []bar {
+	ds := dailies(before, n, fixtureATR)
+	for k := range ds {
+		ds[k].o, ds[k].c, ds[k].h, ds[k].l = close, close, close+fixtureATR/2, close-fixtureATR/2
+	}
+	return ds
+}
+
+// PrevCloseGate buys only at or below the previous weekday close + PrevCloseATR daily ATRs; a
+// weekend session after it does not count.
+func TestEnterPrevCloseGate(t *testing.T) {
+	bars, a := greenAfterSignal()
+	c := bars[a+1].c
+	cases := []struct {
+		gate      int
+		prevClose float64
+		allowance float64
+		want      model.SignalKind
+	}{
+		{0, c - 5, 0, model.SignalBuy},       // gate off
+		{1, c - 0.5, 0, model.SignalNone},    // above yesterday's close
+		{1, c, 0, model.SignalBuy},           // exactly at it
+		{1, c + 0.1, 0, model.SignalBuy},     // below it
+		{1, c - 0.5, 0.5, model.SignalBuy},   // within +0.5 ATR (1.0)
+		{1, c + 1.5, -0.5, model.SignalBuy},  // dropped more than the demanded 0.5 ATR
+		{1, c + 0.5, -0.5, model.SignalNone}, // dropped less
+	}
+	for _, k := range cases {
+		md := fixture(bars[:a+2])
+		withDailies(&md, dailiesAt(bars[0].t, 20, k.prevClose))
+		p := entryParams()
+		p.PrevCloseGate, p.PrevCloseATR = k.gate, k.allowance
+		if sig := NewWithParams("TEST", stepM30, p).Decide(md); sig.Kind != k.want {
+			t.Fatalf("gate %d, prev close %v, allowance %v, close %v: got %v, want %v", k.gate, k.prevClose, k.allowance, c, sig.Kind, k.want)
+		}
+	}
+	// The fixture starts on Monday: a Saturday session closing below the price does not replace
+	// Friday's close above it.
+	md := fixture(bars[:a+2])
+	ds := dailiesAt(bars[0].t, 20, c-1)
+	sat := ds[len(ds)-1].t.AddDate(0, 0, 1)
+	if sat.Weekday() != time.Saturday {
+		t.Fatalf("fixture: %v must be Saturday", sat)
+	}
+	withDailies(&md, append(ds, bar{sat, c + 1, c + 1.1, c + 0.9, c + 1}))
+	p := entryParams()
+	p.PrevCloseGate = 1
+	if sig := NewWithParams("TEST", stepM30, p).Decide(md); sig.Kind != model.SignalNone {
+		t.Fatalf("Saturday close above, Friday close below the price: got %v, want none", sig.Kind)
 	}
 }
