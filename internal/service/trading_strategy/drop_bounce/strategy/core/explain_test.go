@@ -8,7 +8,7 @@ import (
 func TestExplainConfirmedEntry(t *testing.T) {
 	bars, a := greenAfterSignal()
 	out := NewWithParams("TEST", stepM30, entryParams()).Explain(fixture(bars[:a+2]))
-	for _, want := range []string{"✓ будни", "✓ взведено часом", "(ZONE), бар 2 из 4", "✓ MACD 30m", "✓ дневной ATR(14)", "ИТОГ: ПОКУПКА"} {
+	for _, want := range []string{"✓ будни", "✓ взведено часом", "(ZONE), бар 2 из 3", "✓ MACD 30m", "✓ дневной ATR(14)", "ИТОГ: ПОКУПКА"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("missing %q in:\n%s", want, out)
 		}

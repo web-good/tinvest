@@ -65,7 +65,7 @@ type Params struct {
 	MACDSlow   int
 	MACDSignal int
 	// ConfirmBars is how many 30m bars, starting with the one that completed the signal hour, the
-	// entry waits for a green histogram (default 4 = two hours); 0 = no entries.
+	// entry waits for a green histogram (default 3 = an hour and a half); 0 = no entries.
 	ConfirmBars int
 	// FridayTo closes Friday buys: on Friday the fill bar must start before FridayTo:00 MSK
 	// (default 11, owner 2026-10-14); 24 = no Friday limit, 0 = no Friday buys.
@@ -96,7 +96,7 @@ func DefaultParams() Params {
 		MACDFast:       12,
 		MACDSlow:       26,
 		MACDSignal:     9,
-		ConfirmBars:    4,
+		ConfirmBars:    3,
 		FridayTo:       11,
 		StaleBars:      0,
 		StaleATR:       0.3,

@@ -167,8 +167,8 @@ func TestAggregateDropCapsWinnersOnly(t *testing.T) {
 
 // dropFixture is 30m bars 07:00–23:30 MSK on every weekday from 2026-01-12 to 2026-03-31: a slow
 // uptrend (+0.03% a bar) with a dip at 10:00–12:30 (−0.4% each: three hours of −0.8% put the hourly
-// RSI(4) deep in the zone above the hourly EMA(200)) and a rebound at 13:00–14:30 (+2% each),
-// which turns the 30m MACD histogram green, so grid[0] trades about once a day after the lookback
+// RSI(4) deep in the zone above the hourly EMA(200)) and a rebound at 13:00–14:30 (+5% each),
+// which turns the 30m MACD histogram green, so grid[0] trades every few days after the lookback
 // (1202 bars) is filled.
 func dropFixture() []backtest.Candle {
 	msk, err := time.LoadLocation("Europe/Moscow")
@@ -187,7 +187,7 @@ func dropFixture() []backtest.Candle {
 			case m >= 10*60 && m < 13*60:
 				p *= 0.996
 			case m >= 13*60 && m < 15*60:
-				p *= 1.02
+				p *= 1.05
 			default:
 				p *= 1.0003
 			}

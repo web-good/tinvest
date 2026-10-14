@@ -14,12 +14,12 @@ import json, os, re, sys
 DEFAULTS = dict(RSIPeriod=6, RSIZone=30, RSICap=50, ZoneEntry=1, EMAPeriod=200, StopDailyATR=1.0,
                 BreakevenATR=0.5, TrailATR=0.0,
                 DailyATRPeriod=14, RSIExitPeriod=10, RSIExit=70,
-                MACDFast=12, MACDSlow=26, MACDSignal=9, ConfirmBars=4, FridayTo=11, StaleBars=0, StaleATR=0.3)
+                MACDFast=12, MACDSlow=26, MACDSignal=9, ConfirmBars=3, FridayTo=11, StaleBars=0, StaleATR=0.3)
 # Hold-out scheme (owner, 2026-10-14): one in-sample sweep on the first 30 of 36 months, the point is
 # the centre of the best plateau, the last 6 months are opened once. Axes (owner, 2026-10-14; rules
 # on 30m: hourly RSI signal, 30m MACD confirmation, hourly RSI(RSIExitPeriod) exit): the entry RSI
 # length, the exit RSI length and the stop as a share of the daily ATR or a whole one — 3 × 5 × 3 = 45.
-# Fixed at the defaults: MACD 12/26/9, ConfirmBars 4, Friday buys before 11:00 (FridayTo 11).
+# Fixed at the defaults: MACD 12/26/9, ConfirmBars 3, Friday buys before 11:00 (FridayTo 11).
 # The previous axes (EMAPeriod × StaleBars × StopDailyATR) belonged to the rules with the day-range
 # gate and the MACD exit. Do not change without a request.
 SWEEP = {"RSIPeriod": [4, 5, 6], "RSIExitPeriod": [8, 9, 10, 11, 12], "StopDailyATR": [0.5, 0.7, 1.0]}

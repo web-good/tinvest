@@ -76,7 +76,7 @@ func Params() core.Params {
 		MACDFast:       12,
 		MACDSlow:       26,
 		MACDSignal:     9,
-		ConfirmBars:    4,
+		ConfirmBars:    3,
 		FridayTo:       11,
 		StaleBars:      0,
 		StaleATR:       0.3,
