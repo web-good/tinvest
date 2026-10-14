@@ -174,7 +174,7 @@ func emaAt(c []float64, period int) float64 { return ema.Compute(c, period)[len(
 func TestDefaultParams(t *testing.T) {
 	want := Params{RSIPeriod: 6, RSIZone: 30, RSICap: 50, EMAPeriod: 200,
 		StopDailyATR: 1.0, DailyATRPeriod: 14, RSIExitPeriod: 10, RSIExit: 70,
-		MorningFrom: 7, MorningTo: 11, EveningFrom: 17, EveningTo: 24, StaleBars: 0, StaleATR: 0.3}
+		MorningFrom: 7, MorningTo: 11, EveningFrom: 17, EveningTo: 24, FridayTo: 11, StaleBars: 0, StaleATR: 0.3}
 	if got := DefaultParams(); got != want {
 		t.Fatalf("DefaultParams() = %+v, want %+v", got, want)
 	}
@@ -359,11 +359,22 @@ func TestEnterWindow(t *testing.T) {
 			t.Fatalf("%s: got %v, want Buy", end, sig.Kind)
 		}
 	}
-	// Friday evening buys like any weekday: the position carries over the weekend.
-	for _, end := range []string{"2026-09-18 09:00", "2026-09-18 20:00"} {
-		if sig := decide(entryParams(), end, c); sig.Kind != model.SignalBuy {
-			t.Fatalf("Friday %s: got %v, want Buy", end, sig.Kind)
+	// Friday buys only before FridayTo (11:00): the morning window, no evening.
+	for end, want := range map[string]model.SignalKind{
+		"2026-09-18 06:00": model.SignalBuy,  // buy 07:00
+		"2026-09-18 09:00": model.SignalBuy,  // buy 10:00
+		"2026-09-18 16:00": model.SignalNone, // buy 17:00
+		"2026-09-18 20:00": model.SignalNone, // buy 21:00
+	} {
+		if sig := decide(entryParams(), end, c); sig.Kind != want {
+			t.Fatalf("Friday %s: got %v, want %v", end, sig.Kind, want)
 		}
+	}
+	// FridayTo 24 lifts the cutoff: a Friday evening buy then carries over the weekend.
+	p := entryParams()
+	p.FridayTo = 24
+	if sig := decide(p, "2026-09-18 20:00", c); sig.Kind != model.SignalBuy {
+		t.Fatalf("FridayTo 24, Friday 21:00: got %v, want Buy", sig.Kind)
 	}
 }
 

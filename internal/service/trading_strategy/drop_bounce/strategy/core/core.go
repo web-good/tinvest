@@ -2,7 +2,7 @@
 // within two daily buy windows. On the close of a bar whose fill bar (one step later, the next
 // bar's open — Config.EntryAtNextOpen) falls on a Mon–Fri MSK weekday, on the same date, and starts
 // inside the morning [MorningFrom, MorningTo) or the evening [EveningFrom, EveningTo) window
-// (default 07:00–11:00 and 17:00–24:00 MSK), it buys when (1) the close is strictly above
+// (default 07:00–11:00 and 17:00–24:00 MSK; on Friday only before FridayTo, default 11:00), it buys when (1) the close is strictly above
 // EMA(EMAPeriod); (2) RSI(RSIPeriod) is below RSIZone (ZONE), or has just crossed RSIZone upward
 // and is not above RSICap (CROSS). The daily ATR (Wilder, DailyATRPeriod, completed weekday
 // dailies) is frozen for the trade. Exits, in order: a stop StopDailyATR daily ATRs below the fill
@@ -10,7 +10,7 @@
 // (reason RSI) — at any hour, the windows bound only entries; then an optional time exit
 // (StaleBars, off by default) at the close of a position held StaleBars bars whose highs never
 // reached StaleATR daily ATRs above the fill (reason STALE). No end-of-day exit: positions carry
-// overnight and over weekends. Pure, stateless between bars and ticker-agnostic. Run with
+// overnight and over weekends (a Friday morning buy). Pure, stateless between bars and ticker-agnostic. Run with
 // `-strategy drop_bounce -interval Hour1`. Owner rewrite 2026-10-14: the day-range gate, the MACD
 // exit and the Friday rules were dropped.
 package core
@@ -52,6 +52,9 @@ type Params struct {
 	MorningTo   int
 	EveningFrom int
 	EveningTo   int
+	// FridayTo closes Friday buys: on Friday the fill bar must also start before FridayTo:00 MSK,
+	// so the default 11 leaves only the morning window (owner 2026-10-14); 24 = no Friday limit.
+	FridayTo int
 	// StaleBars is the time exit: once the position has been held this many bars (the fill bar
 	// counts) and no bar's high since the fill reached entry + StaleATR daily ATRs, it sells at the
 	// bar's close with reason STALE; 0 = off (default 0, owner 2026-10-14).
@@ -76,6 +79,7 @@ func DefaultParams() Params {
 		MorningTo:      11,
 		EveningFrom:    17,
 		EveningTo:      24,
+		FridayTo:       11,
 		StaleBars:      0,
 		StaleATR:       0.3,
 	}
@@ -158,14 +162,20 @@ func (s *Strategy) dailyATR(md strategy.MarketData) float64 {
 }
 
 // inWindow reports whether a signal on the bar starting at t may open a position: the fill bar
-// (one step later) lies on the same MSK date, on a weekday, and starts inside the morning or the
-// evening buy window.
+// (one step later) lies on the same MSK date, on a weekday, starts inside the morning or the
+// evening buy window and, on Friday, before FridayTo.
 func (s *Strategy) inWindow(t time.Time) bool {
 	fill := t.Add(s.step)
 	if isWeekend(fill) || dayKey(fill) != dayKey(t) {
 		return false
 	}
-	return s.inBuyHours(fill.In(mskLoc).Hour())
+	h := fill.In(mskLoc).Hour()
+	return s.inBuyHours(h) && s.fridayOK(fill, h)
+}
+
+// fridayOK reports whether a fill at MSK hour h on the fill's date passes the Friday cutoff.
+func (s *Strategy) fridayOK(fill time.Time, h int) bool {
+	return fill.In(mskLoc).Weekday() != time.Friday || h < s.p.FridayTo
 }
 
 // inBuyHours reports whether a fill at MSK hour h falls into either buy window.

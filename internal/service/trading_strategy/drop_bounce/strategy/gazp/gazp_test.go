@@ -10,18 +10,19 @@ import (
 // обосновывающие каждое поле, — в доке пакета и в _comment гридов data/params/drop_bounce/gazp/.
 func TestLiteralIsPinned(t *testing.T) {
 	want := core.Params{
-		RSIPeriod:      6,
+		RSIPeriod:      4,
 		RSIZone:        30,
 		RSICap:         50,
 		EMAPeriod:      200,
-		StopDailyATR:   1,
+		StopDailyATR:   0.7,
 		DailyATRPeriod: 14,
-		RSIExitPeriod:  10,
+		RSIExitPeriod:  9,
 		RSIExit:        70,
 		MorningFrom:    7,
 		MorningTo:      11,
 		EveningFrom:    17,
 		EveningTo:      24,
+		FridayTo:       11,
 		StaleBars:      0,
 		StaleATR:       0.3,
 	}

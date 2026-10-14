@@ -1,5 +1,5 @@
 {
-  "_comment": "drop_bounce (только 1h, правила 2026-10-14), одна фаза поверх core.DefaultParams(): вход — RSI(RSIPeriod) ниже 30 или крест 30 вверх не выше 50, close > EMA(200), покупка по open следующей свечи в окнах 07–11 и 17–24 MSK Пн–Пт; риск — стоп StopDailyATR дневных ATR (нуля нет); выход — RSI(RSIExitPeriod) пересёк 70 вверх. Боевая сетка калибровки — scripts/grids.py скилла drop-bounce-calibrate.",
+  "_comment": "drop_bounce (только 1h, правила 2026-10-14), одна фаза поверх core.DefaultParams(): вход — RSI(RSIPeriod) ниже 30 или крест 30 вверх не выше 50, close > EMA(200), покупка по open следующей свечи в окнах 07–11 и 17–24 MSK, в пятницу только до 11:00; риск — стоп StopDailyATR дневных ATR (нуля нет); выход — RSI(RSIExitPeriod) пересёк 70 вверх. Боевая сетка калибровки — scripts/grids.py скилла drop-bounce-calibrate.",
   "phases": [
     {"name": "sweep", "grid": {"RSIPeriod": [4, 5, 6], "RSIExitPeriod": [8, 9, 10, 11, 12], "StopDailyATR": [0.5, 0.7, 1.0]}}
   ]

@@ -49,3 +49,13 @@ func TestExplainHeldRSIExit(t *testing.T) {
 		}
 	}
 }
+
+// A Friday evening signal fails the Friday cutoff inside an open evening window.
+func TestExplainFridayEvening(t *testing.T) {
+	out := explainAt("2026-09-18 18:00", trendCloses(6))
+	for _, want := range []string{"✗ окно", "[17:00, 24:00) ✓", "пятница до 11:00 ✗", "ИТОГ: входа нет"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %q in:\n%s", want, out)
+		}
+	}
+}

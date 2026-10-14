@@ -29,9 +29,9 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 	weekday := !isWeekend(fill)
 	sameDay := dayKey(fill) == dayKey(t)
 	hours := s.inBuyHours(fill.Hour())
-	fmt.Fprintf(&sb, "%s окно: сигнал %s %s, покупка в %s — будний %s, исполнение в ту же дату %s, часы покупки [%02d:00, %02d:00) или [%02d:00, %02d:00) %s\n",
+	fmt.Fprintf(&sb, "%s окно: сигнал %s %s, покупка в %s — будний %s, исполнение в ту же дату %s, часы покупки [%02d:00, %02d:00) или [%02d:00, %02d:00) %s, пятница до %02d:00 %s\n",
 		mark(s.inWindow(md.Times[i])), t.Weekday(), t.Format("15:04"), fill.Format("15:04"), mark(weekday), mark(sameDay),
-		p.MorningFrom, p.MorningTo, p.EveningFrom, p.EveningTo, mark(hours))
+		p.MorningFrom, p.MorningTo, p.EveningFrom, p.EveningTo, mark(hours), p.FridayTo, mark(s.fridayOK(fill, fill.Hour())))
 
 	if p.EMAPeriod > 0 {
 		trend := ema.Compute(md.Closes, p.EMAPeriod)[i]

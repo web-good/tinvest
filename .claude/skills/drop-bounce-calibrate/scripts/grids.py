@@ -13,7 +13,7 @@ import json, os, re, sys
 
 DEFAULTS = dict(RSIPeriod=6, RSIZone=30, RSICap=50, EMAPeriod=200, StopDailyATR=1.0,
                 DailyATRPeriod=14, RSIExitPeriod=10, RSIExit=70,
-                MorningFrom=7, MorningTo=11, EveningFrom=17, EveningTo=24, StaleBars=0, StaleATR=0.3)
+                MorningFrom=7, MorningTo=11, EveningFrom=17, EveningTo=24, FridayTo=11, StaleBars=0, StaleATR=0.3)
 # Hold-out scheme (owner, 2026-10-14): one in-sample sweep on the first 30 of 36 months, the point is
 # the centre of the best plateau, the last 6 months are opened once. Axes (owner, 2026-10-14, rules
 # with buy windows 07–11/17–24 and the RSI(RSIExitPeriod) exit): the entry RSI length, the exit RSI

@@ -67,6 +67,7 @@ func Params() core.Params {
 		MorningTo:      11,
 		EveningFrom:    17,
 		EveningTo:      24,
+		FridayTo:       11,
 		StaleBars:      0,
 		StaleATR:       0.3,
 	}
