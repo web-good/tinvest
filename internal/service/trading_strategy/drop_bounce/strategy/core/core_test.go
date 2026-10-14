@@ -66,12 +66,8 @@ func flatN(n int, p float64) []float64 {
 // fixtureATR is the daily ATR every fixture carries: its dailies range exactly this much.
 const fixtureATR = 2.0
 
-// fixtureUsed is the day's range so far every fixture reports: well inside the default gate
-// (DaySpentATR 0.7 · fixtureATR 2 = 1.4).
-const fixtureUsed = 0.5
-
 // fixture builds the market data over bars with 20 weekday dailies of range fixtureATR before the
-// first bar, and a day extent of fixtureUsed around the last close.
+// first bar.
 func fixture(bars []bar) strategy.MarketData {
 	var md strategy.MarketData
 	for _, b := range bars {
@@ -83,8 +79,6 @@ func fixture(bars []bar) strategy.MarketData {
 		md.Volumes = append(md.Volumes, 10)
 	}
 	md.Price = md.Closes[len(md.Closes)-1]
-	md.TodayLow = md.Price - fixtureUsed/2
-	md.TodayHigh = md.Price + fixtureUsed/2
 	withDailies(&md, dailies(bars[0].t, 20, fixtureATR))
 	return md
 }
@@ -147,8 +141,9 @@ func withLast(c []float64, mult float64) []float64 {
 	return append(append([]float64(nil), c...), c[len(c)-1]*mult)
 }
 
-// entryEnd is the start of the decision bar: Wednesday 12:00 MSK, inside the window.
-const entryEnd = "2026-09-16 12:00"
+// entryEnd is the start of the decision bar: Wednesday 08:00 MSK, the buy at 09:00 is inside the
+// morning window.
+const entryEnd = "2026-09-16 08:00"
 
 // endingAt builds 1h bars over closes whose last bar starts at end (MSK).
 func endingAt(end string, closes []float64) []bar {
@@ -177,9 +172,9 @@ func rsiAt(c []float64, period int) (prev, cur float64) {
 func emaAt(c []float64, period int) float64 { return ema.Compute(c, period)[len(c)-1] }
 
 func TestDefaultParams(t *testing.T) {
-	want := Params{RSIPeriod: 6, RSIZone: 30, RSICap: 50, EMAPeriod: 200, DaySpentATR: 0.7,
-		StopDailyATR: 1.0, DailyATRPeriod: 14, RSIExit: 70, StartHour: 7,
-		MACDFast: 12, MACDSlow: 26, MACDSignal: 9, StaleBars: 10, StaleATR: 0.3}
+	want := Params{RSIPeriod: 6, RSIZone: 30, RSICap: 50, EMAPeriod: 200,
+		StopDailyATR: 1.0, DailyATRPeriod: 14, RSIExitPeriod: 10, RSIExit: 70,
+		MorningFrom: 7, MorningTo: 11, EveningFrom: 17, EveningTo: 24, StaleBars: 0, StaleATR: 0.3}
 	if got := DefaultParams(); got != want {
 		t.Fatalf("DefaultParams() = %+v, want %+v", got, want)
 	}
@@ -193,7 +188,7 @@ func TestLookback(t *testing.T) {
 		{DefaultParams(), 600},
 		{Params{RSIPeriod: 6, EMAPeriod: 10}, 64},
 		{Params{RSIPeriod: 20, EMAPeriod: 10}, 82},
-		{Params{RSIPeriod: 6, EMAPeriod: 10, MACDSlow: 26, MACDSignal: 9}, 105},
+		{Params{RSIPeriod: 6, EMAPeriod: 10, RSIExitPeriod: 20}, 82},
 	}
 	for _, c := range cases {
 		if got := NewWithParams("T", stepH1, c.p).Lookback(); got != c.want {
@@ -304,32 +299,11 @@ func TestEnterNeedsWarmEMA(t *testing.T) {
 	}
 }
 
-func TestEnterDayGate(t *testing.T) {
-	c := trendCloses(6)
-	p := entryParams()
-	p.DaySpentATR = 0.5 // threshold 0.5 · fixtureATR 2 = 1.0
-	run := func(hi, lo float64) model.Signal {
-		md := fixture(endingAt(entryEnd, c))
-		md.TodayHigh, md.TodayLow = hi, lo
-		return NewWithParams("TEST", stepH1, p).Decide(md)
-	}
-	if sig := run(100.99, 100); sig.Kind != model.SignalBuy {
-		t.Fatalf("used 0.99 < 1.0: got %v, want Buy", sig.Kind)
-	}
-	if sig := run(101, 100); sig.Kind != model.SignalNone {
-		t.Fatalf("used exactly 1.0: got %v, want none (spent)", sig.Kind)
-	}
-	if sig := run(103, 100); sig.Kind != model.SignalNone {
-		t.Fatalf("used 3.0: got %v, want none", sig.Kind)
-	}
-	for _, ext := range [][2]float64{{0, 0}, {101, 0}, {0, 100}, {100, 101}} {
-		if sig := run(ext[0], ext[1]); sig.Kind != model.SignalNone {
-			t.Fatalf("broken extent %v: got %v, want none", ext, sig.Kind)
-		}
-	}
-	md := fixture(endingAt(entryEnd, c))
+// Without a daily ATR there is no entry: the stop and the time exit are measured in it.
+func TestEnterNeedsDailyATR(t *testing.T) {
+	md := fixture(endingAt(entryEnd, trendCloses(6)))
 	md.DailyHighs, md.DailyLows, md.DailyCloses, md.DailyTimes = nil, nil, nil, nil
-	if sig := NewWithParams("TEST", stepH1, p).Decide(md); sig.Kind != model.SignalNone {
+	if sig := NewWithParams("TEST", stepH1, entryParams()).Decide(md); sig.Kind != model.SignalNone {
 		t.Fatalf("no daily ATR: got %v, want none", sig.Kind)
 	}
 }
@@ -337,9 +311,8 @@ func TestEnterDayGate(t *testing.T) {
 func TestEnterZeroParamsGiveNoEntries(t *testing.T) {
 	c := trendCloses(6)
 	for name, mut := range map[string]func(*Params){
-		"DaySpentATR": func(p *Params) { p.DaySpentATR = 0 },
-		"EMAPeriod":   func(p *Params) { p.EMAPeriod = 0 },
-		"RSIPeriod":   func(p *Params) { p.RSIPeriod = 0 },
+		"EMAPeriod": func(p *Params) { p.EMAPeriod = 0 },
+		"RSIPeriod": func(p *Params) { p.RSIPeriod = 0 },
 	} {
 		p := entryParams()
 		mut(&p)
@@ -358,23 +331,54 @@ func TestEnterStopGuard(t *testing.T) {
 	}
 }
 
+// The windows bound the buy (the next bar's open), not the signal bar: with the defaults a buy
+// may open at 07:00–10:00 and 17:00–23:00 MSK, Mon–Fri, on the signal bar's date.
 func TestEnterWindow(t *testing.T) {
 	c := trendCloses(6)
 	for _, end := range []string{
-		"2026-09-19 12:00", // Saturday
-		"2026-09-20 12:00", // Sunday
-		"2026-09-16 06:00", // before StartHour 7
-		"2026-09-16 23:00", // fill bar would be the next date
-		"2026-09-18 12:00", // Friday from 12:00
-		"2026-09-18 15:00", // Friday afternoon
+		"2026-09-16 05:00", // buy 06:00, before the morning window
+		"2026-09-16 10:00", // buy 11:00, the morning window is half-open
+		"2026-09-16 12:00", // buy 13:00, midday
+		"2026-09-16 15:00", // buy 16:00, before the evening window
+		"2026-09-16 23:00", // buy 00:00, the next date
+		"2026-09-19 08:00", // Saturday
+		"2026-09-20 18:00", // Sunday
+		"2026-09-20 23:00", // Sunday 23:00 → buy Monday 00:00: another date
 	} {
 		if sig := decide(entryParams(), end, c); sig.Kind != model.SignalNone {
 			t.Fatalf("%s: got %v, want none", end, sig.Kind)
 		}
 	}
-	for _, end := range []string{"2026-09-16 07:00", "2026-09-16 15:00", "2026-09-18 11:00"} {
+	for _, end := range []string{
+		"2026-09-16 06:00", // buy 07:00
+		"2026-09-16 09:00", // buy 10:00
+		"2026-09-16 16:00", // buy 17:00
+		"2026-09-16 22:00", // buy 23:00
+	} {
 		if sig := decide(entryParams(), end, c); sig.Kind != model.SignalBuy {
 			t.Fatalf("%s: got %v, want Buy", end, sig.Kind)
+		}
+	}
+	// Friday evening buys like any weekday: the position carries over the weekend.
+	for _, end := range []string{"2026-09-18 09:00", "2026-09-18 20:00"} {
+		if sig := decide(entryParams(), end, c); sig.Kind != model.SignalBuy {
+			t.Fatalf("Friday %s: got %v, want Buy", end, sig.Kind)
+		}
+	}
+}
+
+// Custom windows move the hours; From ≥ To empties a window.
+func TestEnterWindowParams(t *testing.T) {
+	c := trendCloses(6)
+	p := entryParams()
+	p.MorningFrom, p.MorningTo = 12, 14 // buy 12:00–13:00
+	p.EveningFrom, p.EveningTo = 0, 0   // evening off
+	if sig := decide(p, "2026-09-16 12:00", c); sig.Kind != model.SignalBuy {
+		t.Fatalf("buy 13:00 in [12, 14): got %v, want Buy", sig.Kind)
+	}
+	for _, end := range []string{"2026-09-16 08:00", "2026-09-16 18:00"} {
+		if sig := decide(p, end, c); sig.Kind != model.SignalNone {
+			t.Fatalf("%s outside the custom windows: got %v, want none", end, sig.Kind)
 		}
 	}
 }

@@ -1,9 +1,6 @@
 {
-  "_comment": "drop_bounce (только 1h), стартовая фазовая сетка поверх core.DefaultParams(): вход — RSI(RSIPeriod) ниже RSIZone или крест RSIZone вверх не выше RSICap; фильтр — close > EMA(EMAPeriod) и ход дня < DaySpentATR дневных ATR; риск — стоп StopDailyATR дневных ATR (нуля нет); выход — RSI пересёк RSIExit вверх. Боевая сетка калибровки — scripts/grids.py скилла drop-bounce-calibrate.",
+  "_comment": "drop_bounce (только 1h, правила 2026-10-14), одна фаза поверх core.DefaultParams(): вход — RSI(RSIPeriod) ниже 30 или крест 30 вверх не выше 50, close > EMA(200), покупка по open следующей свечи в окнах 07–11 и 17–24 MSK Пн–Пт; риск — стоп StopDailyATR дневных ATR (нуля нет); выход — RSI(RSIExitPeriod) пересёк 70 вверх. Боевая сетка калибровки — scripts/grids.py скилла drop-bounce-calibrate.",
   "phases": [
-    {"name": "entry", "keepTop": 3, "grid": {"RSIPeriod": [4, 5, 6, 7], "RSIZone": [25, 30, 35], "RSICap": [40, 50, 60]}},
-    {"name": "filter", "keepTop": 3, "grid": {"EMAPeriod": [100, 150, 200], "DaySpentATR": [0.3, 0.5, 0.7, 1.0]}},
-    {"name": "risk", "keepTop": 3, "grid": {"StopDailyATR": [0.5, 0.7, 1.0, 1.5, 2.0], "DailyATRPeriod": [7, 10, 14]}},
-    {"name": "exit", "keepTop": 3, "grid": {"RSIExit": [60, 65, 70, 75, 80]}}
+    {"name": "sweep", "grid": {"RSIPeriod": [4, 5, 6], "RSIExitPeriod": [8, 9, 10, 11, 12], "StopDailyATR": [0.5, 0.7, 1.0]}}
   ]
 }

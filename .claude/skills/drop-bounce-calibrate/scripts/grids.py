@@ -11,15 +11,16 @@ Usage (from the repo root):
 """
 import json, os, re, sys
 
-DEFAULTS = dict(RSIPeriod=6, RSIZone=30, RSICap=50, EMAPeriod=200, DaySpentATR=0.7,
-                StopDailyATR=1.0, DailyATRPeriod=14, RSIExit=70, StartHour=7,
-                MACDFast=12, MACDSlow=26, MACDSignal=9, StaleBars=10, StaleATR=0.3)
+DEFAULTS = dict(RSIPeriod=6, RSIZone=30, RSICap=50, EMAPeriod=200, StopDailyATR=1.0,
+                DailyATRPeriod=14, RSIExitPeriod=10, RSIExit=70,
+                MorningFrom=7, MorningTo=11, EveningFrom=17, EveningTo=24, StaleBars=0, StaleATR=0.3)
 # Hold-out scheme (owner, 2026-10-14): one in-sample sweep on the first 30 of 36 months, the point is
-# the centre of the best plateau, the last 6 months are opened once. The axes are the ones the owner
-# tuned by hand on GAZP (EMA 120, STALE 25 beat the walk-forward picks) plus the stop.
-# Earlier grids (v1–v4) were phased walk-forward: 12-month train windows held ~20 trades, folds
-# picked noise and report.py pick returned the defaults on every ticker. Do not change without a request.
-SWEEP = {"EMAPeriod": [100, 120, 150, 200], "StaleBars": [10, 15, 25, 35], "StopDailyATR": [0.7, 1.0, 1.5]}
+# the centre of the best plateau, the last 6 months are opened once. Axes (owner, 2026-10-14, rules
+# with buy windows 07–11/17–24 and the RSI(RSIExitPeriod) exit): the entry RSI length, the exit RSI
+# length and the stop as a share of the daily ATR or a whole one — 3 × 5 × 3 = 45 points.
+# The previous axes (EMAPeriod × StaleBars × StopDailyATR) belonged to the rules with the day-range
+# gate and the MACD exit. Do not change without a request.
+SWEEP = {"RSIPeriod": [4, 5, 6], "RSIExitPeriod": [8, 9, 10, 11, 12], "StopDailyATR": [0.5, 0.7, 1.0]}
 HOLDOUT_MONTHS = 6
 
 

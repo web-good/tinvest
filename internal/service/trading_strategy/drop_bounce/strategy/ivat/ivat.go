@@ -1,5 +1,12 @@
 // Package ivat supplies the drop_bounce Params for IVAT (ИВА Технолоджис) on Hour1.
 //
+// # Правила 2026-10-14
+//
+// Ядро переписано (окна покупки 07–11 и 17–24 MSK, выход по RSI(RSIExitPeriod), без гейта хода
+// дня, MACD-выхода и пятничных правил). Все замеры ниже сняты на прежних правилах и к новым не
+// относятся; литерал сброшен на дефолты ядра до калибровки на новых правилах (скилл
+// drop-bounce-calibrate, перебор RSIPeriod × RSIExitPeriod × StopDailyATR).
+//
 // Откалиброван 2026-10-13 на правилах 1h RSI-зоны с выходом RSI+MACD (скилл
 // drop-bounce-calibrate), дважды: без выхода по времени (сетка v2) и с выходом STALE 10 баров /
 // 0.3 ATR в дефолтах ядра (сетка v4). Гриды и итоги каждого прогона — в _comment файлов
@@ -45,15 +52,15 @@ func Params() core.Params {
 		RSIZone:        30,
 		RSICap:         50,
 		EMAPeriod:      200,
-		DaySpentATR:    0.7,
-		StopDailyATR:   1.0,
+		StopDailyATR:   1,
 		DailyATRPeriod: 14,
+		RSIExitPeriod:  10,
 		RSIExit:        70,
-		StartHour:      7,
-		MACDFast:       12,
-		MACDSlow:       26,
-		MACDSignal:     9,
-		StaleBars:      10,
+		MorningFrom:    7,
+		MorningTo:      11,
+		EveningFrom:    17,
+		EveningTo:      24,
+		StaleBars:      0,
 		StaleATR:       0.3,
 	}
 }

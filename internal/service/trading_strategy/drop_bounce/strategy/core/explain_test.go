@@ -12,17 +12,17 @@ func explainAt(end string, closes []float64) string {
 
 func TestExplainEntryBar(t *testing.T) {
 	out := explainAt("2026-09-16 07:00", trendCloses(6))
-	for _, want := range []string{"✓ окно", "✓ тренд", "✓ RSI(6)", "ветка ZONE", "✓ ход дня", "ИТОГ: ПОКУПКА"} {
+	for _, want := range []string{"✓ окно", "✓ тренд", "✓ RSI(6)", "ветка ZONE", "✓ дневной ATR(14)", "ИТОГ: ПОКУПКА"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("missing %q in:\n%s", want, out)
 		}
 	}
 }
 
-// The Friday cutoff shows up as the failed window gate and the verdict agrees with Decide.
-func TestExplainFridayAfternoon(t *testing.T) {
-	out := explainAt("2026-09-18 15:00", trendCloses(6))
-	for _, want := range []string{"✗ окно", "пятница до 12:00 ✗", "ИТОГ: входа нет"} {
+// A midday signal fails the buy-hours gate and the verdict agrees with Decide.
+func TestExplainMidday(t *testing.T) {
+	out := explainAt("2026-09-16 12:00", trendCloses(6))
+	for _, want := range []string{"✗ окно", "покупка в 13:00", "[07:00, 11:00) или [17:00, 24:00) ✗", "ИТОГ: входа нет"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("missing %q in:\n%s", want, out)
 		}
@@ -36,13 +36,14 @@ func TestExplainTrendFails(t *testing.T) {
 	}
 }
 
-// A held position lists the exits; the Friday green-histogram cross ends in a FRI sale.
-func TestExplainHeldFriday(t *testing.T) {
-	bars := armedPathFriday()
-	md := fixture(bars[:armedCross+1])
-	md.Position = position(100, bars[95].t, fixtureATR)
+// A held position lists the exits; the RSI(10) cross ends in an RSI sale.
+func TestExplainHeldRSIExit(t *testing.T) {
+	bars := slideAndRise()
+	k := exitCross(t, bars)
+	md := fixture(bars[:k+1])
+	md.Position = position(200, bars[30].t, fixtureATR)
 	out := NewWithParams("TEST", stepH1, stopOnlyOff()).Explain(md)
-	for _, want := range []string{"--- выходы ---", "пятница и RSI ≥ 70 (FRI) ✓", "ИТОГ: ПРОДАЖА FRI"} {
+	for _, want := range []string{"--- выходы ---", "крест 70 вверх ✓", "ИТОГ: ПРОДАЖА RSI"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("missing %q in:\n%s", want, out)
 		}

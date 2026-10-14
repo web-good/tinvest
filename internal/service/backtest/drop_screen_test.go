@@ -15,18 +15,20 @@ func TestDropGridHour1(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DropGrid error: %v", err)
 	}
-	if len(grid) != 16 {
-		t.Fatalf("len = %d, want 16", len(grid))
+	if len(grid) != 8 {
+		t.Fatalf("len = %d, want 8", len(grid))
 	}
-	uniq := make(map[[4]float64]bool)
+	uniq := make(map[[3]float64]bool)
 	for _, p := range grid {
-		if p.RSIPeriod != 6 || p.EMAPeriod != 200 || p.StopDailyATR != 1.0 || p.DailyATRPeriod != 14 || p.StartHour != 7 {
+		pinned := dropcore.DefaultParams()
+		pinned.RSIPeriod, pinned.RSIExitPeriod, pinned.StopDailyATR = p.RSIPeriod, p.RSIExitPeriod, p.StopDailyATR
+		if p != pinned {
 			t.Fatalf("pinned fields drifted: %+v", p)
 		}
-		uniq[[4]float64{p.RSIZone, p.RSICap, p.DaySpentATR, p.RSIExit}] = true
+		uniq[[3]float64{float64(p.RSIPeriod), float64(p.RSIExitPeriod), p.StopDailyATR}] = true
 	}
-	if len(uniq) != 16 {
-		t.Fatalf("%d distinct configurations, want 16", len(uniq))
+	if len(uniq) != 8 {
+		t.Fatalf("%d distinct configurations, want 8", len(uniq))
 	}
 }
 
@@ -35,15 +37,15 @@ func TestDropGridOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, second, last := grid[0], grid[1], grid[15]
-	if first.RSIZone != 25 || first.RSICap != 40 || first.DaySpentATR != 0.5 || first.RSIExit != 60 {
-		t.Fatalf("grid[0] = %+v, want zone 25 cap 40 day 0.5 exit 60", first)
+	first, second, last := grid[0], grid[1], grid[7]
+	if first.RSIPeriod != 4 || first.RSIExitPeriod != 8 || first.StopDailyATR != 0.5 {
+		t.Fatalf("grid[0] = %+v, want RSI 4 exit 8 stop 0.5", first)
 	}
-	if second.RSIExit != 75 || second.DaySpentATR != 0.5 {
-		t.Fatalf("grid[1] = %+v, want RSIExit as the innermost axis", second)
+	if second.StopDailyATR != 1.0 || second.RSIExitPeriod != 8 {
+		t.Fatalf("grid[1] = %+v, want StopDailyATR as the innermost axis", second)
 	}
-	if last.RSIZone != 35 || last.RSICap != 60 || last.DaySpentATR != 1.0 || last.RSIExit != 75 {
-		t.Fatalf("grid[15] = %+v, want zone 35 cap 60 day 1.0 exit 75", last)
+	if last.RSIPeriod != 6 || last.RSIExitPeriod != 12 || last.StopDailyATR != 1.0 {
+		t.Fatalf("grid[7] = %+v, want RSI 6 exit 12 stop 1.0", last)
 	}
 }
 
@@ -87,7 +89,7 @@ func TestAggregateDropMediansExitsAndSilence(t *testing.T) {
 			dropTrade(trainAt(2), 200, "RSI"), dropTrade(trainAt(3), -100, "SL"), dropTrade(holdoutAt(1), 50, "RSI"),
 		}},
 		{Params: grid[1], Trades: []backtest.Trade{
-			dropTrade(trainAt(4), 300, "MACD"), dropTrade(trainAt(5), -100, "SL"), dropTrade(trainAt(6), -100, "SL"),
+			dropTrade(trainAt(4), 300, "EOW"), dropTrade(trainAt(5), -100, "SL"), dropTrade(trainAt(6), -100, "SL"),
 		}},
 		{Params: grid[2]},
 	}
@@ -102,8 +104,7 @@ func TestAggregateDropMediansExitsAndSilence(t *testing.T) {
 	near("PFMed", row.PFMed, 1.5)       // PFs 2, 1.5, 0
 	near("TradesMed", row.TradesMed, 2) // 2, 3, 0
 	near("SLShare", row.SLShare, (0.5+2.0/3)/2)
-	near("RSIShare", row.RSIShare, 0.25)    // 0.5 and 0 over trading configs
-	near("MACDShare", row.MACDShare, 1.0/6) // 0 and 1/3 over trading configs
+	near("RSIShare", row.RSIShare, 0.25) // 0.5 and 0 over trading configs
 	near("HoldDays", row.HoldDays, 2.0/24)
 	near("PFMedHO", row.PFMedHO, 0) // holdout PFs: +Inf→10, 0, 0
 	near("TradesMedHO", row.TradesMedHO, 0)
@@ -165,10 +166,10 @@ func TestAggregateDropCapsWinnersOnly(t *testing.T) {
 }
 
 // dropFixture is 1h bars 07:00–22:00 MSK on every weekday from 2026-01-12 to 2026-03-31: a slow
-// uptrend (+0.03% a bar) with a dip at 10:00–12:00 (−0.25% each) and a rebound at 13:00–15:00
-// (+0.3% each). The 12:00 bar has RSI(6) ≈ 20 above EMA(200) with a day range ≈ 0.8 — under the
-// gate 0.5 · daily ATR 2 = 1.0 of grid[0] — and the rebound crosses RSI 60, so grid[0] trades
-// once a day after the EMA(200) lookback (600 bars) is filled.
+// uptrend (+0.03% a bar) with a dip at 07:00–09:00 (−0.25% each) and a rebound at 10:00–12:00
+// (+0.3% each). The 09:00 bar has RSI(4) deep in the zone above EMA(200) and buys at 10:00 inside
+// the morning window, and the rebound carries RSI(8) through 70, so grid[0] trades once a day
+// after the EMA(200) lookback (600 bars) is filled.
 func dropFixture() []backtest.Candle {
 	msk, err := time.LoadLocation("Europe/Moscow")
 	if err != nil {
@@ -183,9 +184,9 @@ func dropFixture() []backtest.Candle {
 		for h := 7; h <= 22; h++ {
 			o := p
 			switch {
-			case h >= 10 && h <= 12:
+			case h >= 7 && h <= 9:
 				p *= 0.9975
-			case h >= 13 && h <= 15:
+			case h >= 10 && h <= 12:
 				p *= 1.003
 			default:
 				p *= 1.0003
@@ -204,7 +205,7 @@ func TestScreenDropTickerRunsTheGridParamsVerbatim(t *testing.T) {
 	daily := dailyCandlesMSK(100, 100, 2)
 	opts := DefaultScreenOpts()
 	grid, _ := DropGrid(enum.Hour1)
-	cfg := grid[0] // zone 25, cap 40, day 0.5, exit 60
+	cfg := grid[0] // RSI 4, exit RSI 8, stop 0.5
 
 	want := backtest.Run(dropcore.NewWithParams("GAZP", time.Hour, cfg), bars, daily, nil,
 		backtest.Config{InitialCash: opts.Cash, Fraction: opts.Fraction, Commission: opts.Commission, Lot: 1, EntryAtNextOpen: true})

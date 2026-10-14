@@ -1,5 +1,12 @@
 // Package gazp supplies the drop_bounce Params for GAZP (Газпром) on Hour1.
 //
+// # Правила 2026-10-14
+//
+// Ядро переписано (окна покупки 07–11 и 17–24 MSK, выход по RSI(RSIExitPeriod), без гейта хода
+// дня, MACD-выхода и пятничных правил). Все замеры ниже сняты на прежних правилах и к новым не
+// относятся; литерал сброшен на дефолты ядра до калибровки на новых правилах (скилл
+// drop-bounce-calibrate, перебор RSIPeriod × RSIExitPeriod × StopDailyATR).
+//
 // Последняя калибровка 2026-10-14 по схеме hold-out (скилл drop-bounce-calibrate): перебор
 // EMAPeriod (100, 120, 150, 200) × StaleBars (10, 15, 25, 35) × StopDailyATR (0.7, 1.0, 1.5) на
 // первых 30 из 36 месяцев (sweep_hour1.json), точка — центр плато, затем стресс и hold-out.
@@ -33,7 +40,7 @@
 // # Решение
 //
 // Не торговать: весь край GAZP — одна сделка февраля 2025, без неё PF около 1.0 при любых
-// параметрах (и на walk-forward, и в переборе). Литерал — центр плато. Тикер не входит в
+// параметрах (и на walk-forward, и в переборе). Литерал был центром плато (сброшен 2026-10-14, см. выше). Тикер не входит в
 // DROP_BOUNCE_TICKERS_H1.
 package gazp
 
@@ -48,16 +55,16 @@ func Params() core.Params {
 		RSIPeriod:      6,
 		RSIZone:        30,
 		RSICap:         50,
-		EMAPeriod:      100,
-		DaySpentATR:    0.7,
-		StopDailyATR:   0.7,
+		EMAPeriod:      200,
+		StopDailyATR:   1,
 		DailyATRPeriod: 14,
+		RSIExitPeriod:  10,
 		RSIExit:        70,
-		StartHour:      7,
-		MACDFast:       12,
-		MACDSlow:       26,
-		MACDSignal:     9,
-		StaleBars:      10,
+		MorningFrom:    7,
+		MorningTo:      11,
+		EveningFrom:    17,
+		EveningTo:      24,
+		StaleBars:      0,
 		StaleATR:       0.3,
 	}
 }
