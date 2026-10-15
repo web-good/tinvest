@@ -3,6 +3,8 @@
 Usage (from the repo root):
   report.py center <sweep_calibration.md>        every combo scored by the median PF of itself and its
                                                 grid neighbours; prints the winner's #k and plateau verdict
+  report.py recent <dev1.md> [dev2.md ...]       the tie-break among CANDIDATES: each candidate's dev run,
+                                                PF and net over the last 12 and 6 months of the dev window
   report.py stress <dev.md>                      the point on the development window (-holdout-months 6):
                                                 PF, trades, without the best 1 / 3 trades, 6-month blocks
   report.py cost <dev_cost.md>                   the same window with -commission 0.001
@@ -16,6 +18,10 @@ Gates on the development window (30 months):
   S3 PF without the three best trades >= 1.0;
   S4 at least 4 of the 5 six-month blocks have net > 0;
   cost PF >= 1.2 and net > 0 with -commission 0.001.
+Tie-break (owner 2026-10-15: price behaviour drifts and the ticker is recalibrated often): combos whose
+neighbourhood median is within TIE_SHARE of the best, with a plateau, are CANDIDATES; among them the one
+with the highest PF over the last RECENT_MONTHS of the development window wins if its net there is > 0.
+The hold-out is never used for it.
 Hold-out: net > 0 (6 months hold ~5–10 trades: a sanity check, not a PF measurement).
 """
 import csv, re, statistics, sys
@@ -23,6 +29,9 @@ from datetime import datetime, timezone
 
 MIN_TRADES = 25
 MIN_NEIGHBOUR_TRADES = 10
+TIE_SHARE = 0.10
+MAX_CANDIDATES = 5
+RECENT_MONTHS = 12
 
 
 def pf(v):
@@ -77,7 +86,15 @@ def center(md):
         print(f"  (у {len(weak)} соседей < {MIN_NEIGHBOUR_TRADES} сделок — их PF шумный)")
     ok = all(r[1] >= 1.0 for r in nb)
     print("ПЛАТО ЕСТЬ" if ok else "ОСТРЫЙ ПИК")
-    print(f"дальше: grids.py point <T> Minutes30 {md} {k}")
+    cands = [x for x in scored if x[0] >= med * (1 - TIE_SHARE) and all(r[1] >= 1.0 for r in x[5])][:MAX_CANDIDATES]
+    if ok and len(cands) > 1:
+        print(f"КАНДИДАТЫ (медиана в пределах {TIE_SHARE:.0%} от лучшей, с плато): " + " ".join(f"#{x[1]}" for x in cands))
+        print("спорная ситуация: прогони каждого кандидата на окне разработки и выбери по свежим месяцам:")
+        for x in cands:
+            print(f"  grids.py cand <T> Minutes30 {md} {x[1]}")
+        print("  report.py recent <dev каждого кандидата, центр первым>")
+    else:
+        print(f"дальше: grids.py point <T> Minutes30 {md} {k}")
 
 
 def period(md):
@@ -128,6 +145,25 @@ def stress(md):
     print("СТРЕСС ВЫДЕРЖАН" if all(ok for _, ok in checks) else "СТРЕСС НЕ ВЫДЕРЖАН")
 
 
+def recent(mds):
+    rows = []
+    for md in mds:
+        start, end = period(md)
+        tr = trades(md[:-3] + "_trades.csv")
+        from12, from6 = add_months(end, -RECENT_MONTHS), add_months(end, -6)
+        v12 = [x for t, x in tr if t >= from12]
+        v6 = [x for t, x in tr if t >= from6]
+        rows.append((md, pf([x for _, x in tr]), len(tr), pf(v12), sum(v12), len(v12), pf(v6), sum(v6), len(v6)))
+        print(f"{md}: всё окно PF {rows[-1][1]:.3f}/{len(tr)}; последние {RECENT_MONTHS} мес PF {pf(v12):.3f}, "
+              f"net {sum(v12):+.0f} ₽, {len(v12)} сделок; последние 6 мес PF {pf(v6):.3f}, net {sum(v6):+.0f} ₽, {len(v6)} сделок")
+    live = [r for r in rows if r[4] > 0]
+    if not live:
+        print(f"СВЕЖИЕ МЕСЯЦЫ В МИНУСЕ У ВСЕХ — остаётся центр: {rows[0][0]}")
+        return
+    best = max(live, key=lambda r: (r[3], r[7]))
+    print(f"ВЫБОР ПО СВЕЖИМ МЕСЯЦАМ: {best[0]}")
+
+
 def cost(md):
     s = open(md).read()
     f = float(re.search(r"\| Profit factor \| ([\d.]+) \|", s).group(1))
@@ -148,4 +184,4 @@ def holdout(md, csv_path):
 if __name__ == "__main__":
     a = sys.argv
     {"center": lambda: center(a[2]), "stress": lambda: stress(a[2]), "cost": lambda: cost(a[2]),
-     "holdout": lambda: holdout(a[2], a[3])}.get(a[1] if len(a) > 1 else "", lambda: sys.exit(__doc__))()
+     "holdout": lambda: holdout(a[2], a[3]), "recent": lambda: recent(a[2:])}.get(a[1] if len(a) > 1 else "", lambda: sys.exit(__doc__))()

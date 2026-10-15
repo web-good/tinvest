@@ -6,6 +6,7 @@ its own literal, so an unlisted field would silently come from the old literal.
 Usage (from the repo root):
   grids.py sweep    <ticker> <tf>                 -> sweep_<tf>.json (one-phase grid over SWEEP)
   grids.py point    <ticker> <tf> <calib.md> [k]  -> point_<tf>.json (flat Params of combo #k, default 1)
+  grids.py cand     <ticker> <tf> <calib.md> <k>    -> cand<k>_<tf>.json (a tie-break candidate, see report.py center)
   grids.py defaults <ticker> <tf>                 -> point_<tf>.json (core defaults)
 <tf> must be Minutes30: drop_bounce runs on 30m only (owner, 2026-10-14: hourly signal, 30m MACD).
 """
@@ -73,13 +74,13 @@ def main():
         dump(path(t, f"sweep_{low}"), {
             "_comment": f"drop_bounce {t} {tf}: in-sample перебор на первых 30 из 36 месяцев (последние {HOLDOUT_MONTHS} — hold-out), оси {axes}, остальное — дефолты ядра, все поля прибиты. Запуск: {cmd(t, tf, f'sweep_{low}')}. РЕЗУЛЬТАТ: прогон не делался.",
             "phases": [{"name": "sweep", "grid": g}]})
-    elif kind == "point":
+    elif kind in ("point", "cand"):
         k = int(sys.argv[5]) if len(sys.argv) > 5 else 1
         p = dict(DEFAULTS)
         p.update(parse_combo(sys.argv[4], k))
         if p["StopDailyATR"] <= 0:
             sys.exit("точка без стопа — недопустимо")
-        dump(path(t, f"point_{low}"), p)
+        dump(path(t, f"point_{low}" if kind == "point" else f"cand{k}_{low}"), p)
     elif kind == "defaults":
         dump(path(t, f"point_{low}"), dict(DEFAULTS))
     else:
