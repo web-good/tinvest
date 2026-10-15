@@ -1,0 +1,72 @@
+{
+  "_comment": "drop_bounce GAZP Minutes15: in-sample перебор на первых 30 из 36 месяцев (последние 6 — hold-out), пара MACD h8-26-5_m8-17-9 (шаг MACD), оси RSIPeriod [4, 5, 6], RSIExitPeriod [8, 9, 10, 11, 12], StopDailyATR [0.5, 0.7, 1.0], остальное — дефолты ядра, все поля прибиты. Запуск: reports/drop_bounce_cal/backtest -ticker GAZP -strategy drop_bounce -interval Minutes15 -calibrate data/params/drop_bounce/gazp/sweep_minutes15.json -months 36 -holdout-months 6 -metric profit_factor -risk-pct 1 -min-trades 1 -combos 0 -out reports/GAZP_drop_bounce/sweep/Minutes15. РЕЗУЛЬТАТ 2026-10-15 (шаг MACD → пара 1h 8/26/5 + 15m 8/17/9): все 45 точек в минусе, PF 0.552–0.768, 68–126 сделок; центр #4 — RSI входа 6, RSI выхода 11, стоп 0.5 ATR, PF 0.748/84, соседи 0.688/0.688/0.685/0.679 — ОСТРЫЙ ПИК. Стресс: S1–S4 нет (полугодий в плюсе 1 из 5). Издержки 0.1%: PF 0.641, net -16228 ₽. Hold-out не открывался. Решение: не торговать. Отчёты reports/GAZP_drop_bounce/m15/. ПРЕЖНИЕ ЗАПИСИ: drop_bounce GAZP Minutes15: in-sample перебор на первых 30 из 36 месяцев (последние 6 — hold-out), оси RSIPeriod [4, 5, 6], RSIExitPeriod [8, 9, 10, 11, 12], StopDailyATR [0.5, 0.7, 1.0], остальное — дефолты ядра, все поля прибиты. Запуск: reports/drop_bounce_cal/backtest -ticker GAZP -strategy drop_bounce -interval Minutes15 -calibrate data/params/drop_bounce/gazp/sweep_minutes15.json -months 36 -holdout-months 6 -metric profit_factor -risk-pct 1 -min-trades 1 -combos 0. РЕЗУЛЬТАТ 2026-10-15: все 45 точек в минусе, PF 0.543–0.733, 69–128 сделок; центр #2 — RSI входа 6, RSI выхода 11, стоп 0.5 ATR, PF 0.731/85, соседи 0.677/0.674/0.667/0.660 — ОСТРЫЙ ПИК. Стресс: S1–S4 нет (полугодий в плюсе 1 из 5). Издержки 0.1%: PF 0.627, net -17088 ₽. Hold-out не открывался. Решение: не торговать. Отчёты reports/GAZP_drop_bounce/m15/.",
+  "phases": [
+    {
+      "name": "sweep",
+      "grid": {
+        "RSIPeriod": [
+          4,
+          5,
+          6
+        ],
+        "RSIZone": [
+          30
+        ],
+        "RSICap": [
+          50
+        ],
+        "ZoneEntry": [
+          1
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "StopDailyATR": [
+          0.5,
+          0.7,
+          1.0
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "RSIExitPeriod": [
+          8,
+          9,
+          10,
+          11,
+          12
+        ],
+        "RSIExit": [
+          70
+        ],
+        "HourMACDFast": [
+          8
+        ],
+        "HourMACDSlow": [
+          26
+        ],
+        "HourMACDSignal": [
+          5
+        ],
+        "HourMACDHours": [
+          20
+        ],
+        "MACDFast": [
+          8
+        ],
+        "MACDSlow": [
+          17
+        ],
+        "MACDSignal": [
+          9
+        ],
+        "ConfirmBars": [
+          6
+        ],
+        "FridayTo": [
+          11
+        ]
+      }
+    }
+  ]
+}

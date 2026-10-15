@@ -36,18 +36,28 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 		fmt.Fprintf(&sb, "последний закрытый час %s (известен на баре %s): close %.4f, EMA(%d) %.4f, RSI(%d) %.1f → %.1f, сигнал %s\n",
 			hs[k].start.In(mskLoc).Format("01-02 15:04"), md.Times[hs[k].done].In(mskLoc).Format("15:04"),
 			closes[k], p.EMAPeriod, trend[k], p.RSIPeriod, rsi[k-1], rsi[k], orNone(s.hourSignal(closes, trend, rsi, k)))
-		if a := s.armedBy(hs, closes, trend, rsi, i); a >= 0 {
-			fmt.Fprintf(&sb, "✓ взведено часом %s (%s), бар %d из %d окна подтверждения\n",
-				hs[a].start.In(mskLoc).Format("01-02 15:04"), s.hourSignal(closes, trend, rsi, a), i-hs[a].done+1, p.ConfirmBars)
+		hh := hourHistogram(closes, p)
+		if hh == nil {
+			sb.WriteString("✗ MACD 1h: гистограммы нет\n")
+		} else {
+			fmt.Fprintf(&sb, "MACD 1h(%d,%d,%d) последнего часа: %.4f (%s)\n", p.HourMACDFast, p.HourMACDSlow, p.HourMACDSignal,
+				hh[k], map[bool]string{true: "красная", false: "зелёная"}[isRed(hh[k])])
+		}
+		signal := func(j int) bool { return s.hourSignal(closes, trend, rsi, j) != "" }
+		if h, sk := s.armedBy(hs, signal, hh, i); h >= 0 {
+			fmt.Fprintf(&sb, "✓ взведено: сигнал час %s (%s), MACD 1h зелёная на часе %s (через %d ч), бар %d из %d окна подтверждения\n",
+				hs[sk].start.In(mskLoc).Format("01-02 15:04"), s.hourSignal(closes, trend, rsi, sk),
+				hs[h].start.In(mskLoc).Format("01-02 15:04"), h-sk, i-hs[h].done+1, p.ConfirmBars)
 			hist := macdHistogram(md.Closes, p)
 			if hist == nil {
-				sb.WriteString("✗ MACD 30m: гистограммы нет\n")
+				sb.WriteString("✗ MACD 15m: гистограммы нет\n")
 			} else {
-				fmt.Fprintf(&sb, "%s MACD 30m: гистограмма %.4f → %.4f (зелёная ≥ 0, на взводе — сразу, дальше — перекраска)\n",
-					mark(confirmed(hist, hs[a].done, i)), hist[i-1], hist[i])
+				fmt.Fprintf(&sb, "%s MACD 15m: гистограмма %.4f → %.4f (зелёная ≥ 0, на взводе — сразу, дальше — перекраска)\n",
+					mark(confirmed(hist, hs[h].done, i)), hist[i-1], hist[i])
 			}
 		} else {
-			fmt.Fprintf(&sb, "✗ взвода нет: ни один час с сигналом не закрылся за последние %d бар(а)\n", p.ConfirmBars)
+			fmt.Fprintf(&sb, "✗ взвода нет: за последние %d бар(а) не закрылся зелёный по MACD 1h час, отвечающий сигналу не старше %d ч\n",
+				p.ConfirmBars, p.HourMACDHours)
 		}
 	} else {
 		sb.WriteString("✗ часовые RSI/EMA не прогреты или выключены\n")
@@ -94,22 +104,6 @@ func (s *Strategy) explainExits(sb *strings.Builder, md strategy.MarketData, hs 
 		stop := pos.PurchasePrice - p.StopDailyATR*atr
 		fmt.Fprintf(sb, "стоп: вход %.4f − %.2f×ATR %.4f = %.4f; low %.4f, задет %s\n",
 			pos.PurchasePrice, p.StopDailyATR, atr, stop, md.Lows[i], mark(atr > 0 && stop > 0 && md.Lows[i] <= stop+1e-9))
-	}
-	if p.BreakevenATR > 0 {
-		if fill := fillIndex(md); fill >= 0 && fill < i {
-			atr := pos.EntryATR
-			if atr <= 0 {
-				atr = s.dailyATR(md)
-			}
-			best := md.Highs[fill]
-			for _, h := range md.Highs[fill+1 : i] {
-				best = max(best, h)
-			}
-			fmt.Fprintf(sb, "безубыток: лучший high с покупки %.4f, порог вход + %.2f ATR = %.4f, взведён %s\n",
-				best, p.BreakevenATR, pos.PurchasePrice+p.BreakevenATR*atr, mark(atr > 0 && best >= pos.PurchasePrice+p.BreakevenATR*atr-1e-9))
-		} else {
-			sb.WriteString("безубыток: свеча покупки не в окне или ещё не закрыта\n")
-		}
 	}
 	k := len(hs) - 1
 	if p.RSIExit <= 0 || p.RSIExitPeriod <= 0 || k < p.RSIExitPeriod+1 {

@@ -28,17 +28,20 @@ type bar struct {
 	o, h, l, c float64
 }
 
-// stepM30 is the timeframe drop_bounce runs on.
-const stepM30 = 30 * time.Minute
+// stepBar is the timeframe drop_bounce runs on; perHour bars make an hour.
+const (
+	stepBar = 15 * time.Minute
+	perHour = 4
+)
 
-// path builds consecutive 30m bars from start (MSK): each bar opens at the previous close (the
+// path builds consecutive 15m bars from start (MSK): each bar opens at the previous close (the
 // first at its own close) and its high/low span the open and the close.
 func path(start string, closes []float64) []bar {
 	t0 := at(start)
 	out := make([]bar, len(closes))
 	prev := closes[0]
 	for i, c := range closes {
-		out[i] = bar{t0.Add(time.Duration(i) * stepM30), prev, max(prev, c), min(prev, c), c}
+		out[i] = bar{t0.Add(time.Duration(i) * stepBar), prev, max(prev, c), min(prev, c), c}
 		prev = c
 	}
 	return out
@@ -63,13 +66,15 @@ func flatN(n int, p float64) []float64 {
 	return out
 }
 
-// halfHours expands hourly closes into 30m closes: the first half-hour goes halfway from the
-// previous hourly close, the second ends on the hourly close.
-func halfHours(hourly []float64) []float64 {
-	out := make([]float64, 0, 2*len(hourly))
+// quarterHours expands hourly closes into 15m closes stepping evenly from the previous hourly close
+// to this one, the fourth ending on the hourly close.
+func quarterHours(hourly []float64) []float64 {
+	out := make([]float64, 0, perHour*len(hourly))
 	prev := hourly[0]
 	for _, c := range hourly {
-		out = append(out, (prev+c)/2, c)
+		for q := 1; q <= perHour; q++ {
+			out = append(out, prev+(c-prev)*float64(q)/perHour)
+		}
 		prev = c
 	}
 	return out
@@ -126,7 +131,7 @@ func withDailies(md *strategy.MarketData, ds []bar) {
 func held(p Params, bars []bar, entry float64, entryTime time.Time) model.Signal {
 	md := fixture(bars)
 	md.Position = &strategy.Position{PurchasePrice: entry, Quantity: 1, EntryTime: entryTime, EntryATR: fixtureATR}
-	return NewWithParams("TEST", stepM30, p).Decide(md)
+	return NewWithParams("TEST", stepBar, p).Decide(md)
 }
 
 // trendCloses is 60 zigzag hours (+2%, −0.5%) from 100, then `drops` hours of −1% each. With
@@ -155,26 +160,34 @@ func entryParams() Params {
 }
 
 // signalStart is the first bar of the entry fixture: Monday 00:00 MSK, so the 67 hours end on
-// Wednesday 18:30 and the confirmation bars stay on Wednesday.
+// Wednesday 18:45 and the confirmation bars stay on Wednesday.
 const signalStart = "2026-09-14 00:00"
 
-// entryFixture is the hourly trendCloses(drops) as 30m bars from start, plus `after` extra 30m
+// entryFixture is the hourly trendCloses(drops) as 15m bars from start, plus `after` extra 15m
 // closes. The signal hour (the last of trendCloses) completes on bar armBar.
 func entryFixture(start string, drops int, after ...float64) (bars []bar, armBar int) {
-	c := halfHours(trendCloses(drops))
+	c := quarterHours(trendCloses(drops))
 	armBar = len(c) - 1
 	return path(start, append(c, after...)), armBar
 }
 
-// greenAfterSignal is the entry fixture with one +15% 30m bar after the signal hour: the histogram
-// is red on the arming bar a and green on a+1.
-func greenAfterSignal() (bars []bar, a int) {
+// signalThenGreenHour is the entry fixture followed by one hour of four 15m bars at +15% over the
+// signal hour's close: the 15m histogram turns green on a+1, the hourly MACD(8,26,5) histogram is
+// red on the signal hour (done on a) and green on the next hour (done on g = a+4).
+func signalThenGreenHour() (bars []bar, a, g int) {
 	base, a := entryFixture(signalStart, 6)
-	bars, _ = entryFixture(signalStart, 6, base[a].c*1.15)
-	return bars, a
+	j := base[a].c * 1.15
+	bars, _ = entryFixture(signalStart, 6, j, j, j, j)
+	return bars, a, a + perHour
 }
 
-// histOf is the 30m MACD(12,26,9) histogram over the bars, as the strategy computes it.
+// greenAfterSignal is signalThenGreenHour for tests that need only the buying bar g.
+func greenAfterSignal() (bars []bar, g int) {
+	bars, _, g = signalThenGreenHour()
+	return bars, g
+}
+
+// histOf is the 15m MACD(12,26,9) histogram over the bars, as the strategy computes it.
 func histOf(bars []bar) []float64 {
 	cl := make([]float64, len(bars))
 	for i, b := range bars {
@@ -185,14 +198,14 @@ func histOf(bars []bar) []float64 {
 
 // decideAt runs a fresh strategy over bars[:i+1].
 func decideAt(p Params, bars []bar, i int) model.Signal {
-	return NewWithParams("TEST", stepM30, p).Decide(fixture(bars[:i+1]))
+	return NewWithParams("TEST", stepBar, p).Decide(fixture(bars[:i+1]))
 }
 
 func TestDefaultParams(t *testing.T) {
 	want := Params{RSIPeriod: 6, RSIZone: 30, RSICap: 50, ZoneEntry: 1, EMAPeriod: 200,
-		StopDailyATR: 1.0, BreakevenATR: 0.5, TrailATR: 0, DailyATRPeriod: 14, RSIExitPeriod: 10, RSIExit: 70,
-		MACDFast: 12, MACDSlow: 26, MACDSignal: 9, ConfirmBars: 3, FridayTo: 11, StaleBars: 0, StaleATR: 0.3, PrevCloseGate: 0, PrevCloseATR: 0, RSIFloor: 0, SkipMonday: 0,
-		EMAGapATR: 0, MACDGreenOnly: 0, BreakevenPct: 0.1, MACDConfirm: 1, ConfirmMoveBars: 0, ConfirmMoveATR: 0.1}
+		StopDailyATR: 1.0, DailyATRPeriod: 14, RSIExitPeriod: 10, RSIExit: 70,
+		HourMACDFast: 8, HourMACDSlow: 26, HourMACDSignal: 5, HourMACDHours: 20,
+		MACDFast: 12, MACDSlow: 26, MACDSignal: 9, ConfirmBars: 6, FridayTo: 11}
 	if got := DefaultParams(); got != want {
 		t.Fatalf("DefaultParams() = %+v, want %+v", got, want)
 	}
@@ -203,24 +216,25 @@ func TestLookback(t *testing.T) {
 		p    Params
 		want int
 	}{
-		{DefaultParams(), 1202},                    // 2 × (600 hours + 1)
-		{Params{RSIPeriod: 6, EMAPeriod: 10}, 130}, // 2 × (64 + 1)
-		{Params{RSIPeriod: 6, EMAPeriod: 10, RSIExitPeriod: 20}, 166},
+		{DefaultParams(), 2484},                    // 4 × (600 + 20 hours + 1)
+		{Params{RSIPeriod: 6, EMAPeriod: 10}, 260}, // 4 × (64 + 1)
+		{Params{RSIPeriod: 6, EMAPeriod: 10, RSIExitPeriod: 20}, 332},
+		{Params{RSIPeriod: 6, EMAPeriod: 10, HourMACDSlow: 26, HourMACDSignal: 5, HourMACDHours: 20}, 456}, // 4 × (93 + 20 + 1)
 		{Params{RSIPeriod: 6, EMAPeriod: 10, MACDSlow: 100, MACDSignal: 9, ConfirmBars: 4}, 332},
-		{Params{RSIPeriod: 6, EMAPeriod: 10, ConfirmMoveBars: 4}, 134}, // the delayed check looks back 4 more bars
 	}
 	for _, c := range cases {
-		if got := NewWithParams("T", stepM30, c.p).Lookback(); got != c.want {
+		if got := NewWithParams("T", stepBar, c.p).Lookback(); got != c.want {
 			t.Fatalf("Lookback(%+v) = %d, want %d", c.p, got, c.want)
 		}
 	}
 }
 
 func TestHourBars(t *testing.T) {
-	bars := path("2026-09-16 10:00", []float64{1, 2, 3, 4, 5})
-	// The 11:30 bar is missing: 11:00 is completed by the 12:00 bar.
-	bars = append(bars[:3], bar{at("2026-09-16 12:00"), 4, 4, 4, 4}, bar{at("2026-09-16 12:30"), 5, 5, 5, 5}, bar{at("2026-09-16 13:00"), 6, 6, 6, 6})
-	hs := NewWithParams("T", stepM30, DefaultParams()).hourBars(fixture(bars))
+	bars := path("2026-09-16 10:00", []float64{1, 2, 3, 4, 5, 6})
+	// The 11:30 and 11:45 bars are missing: 11:00 is completed by the 12:00 bar.
+	bars = append(bars, bar{at("2026-09-16 12:00"), 7, 7, 7, 7}, bar{at("2026-09-16 12:15"), 8, 8, 8, 8},
+		bar{at("2026-09-16 12:30"), 9, 9, 9, 9}, bar{at("2026-09-16 12:45"), 10, 10, 10, 10}, bar{at("2026-09-16 13:00"), 11, 11, 11, 11})
+	hs := NewWithParams("T", stepBar, DefaultParams()).hourBars(fixture(bars))
 	if len(hs) != 3 {
 		t.Fatalf("hours = %+v, want 3 completed (13:00 still forming)", hs)
 	}
@@ -228,7 +242,7 @@ func TestHourBars(t *testing.T) {
 		start      string
 		close      float64
 		last, done int
-	}{{"2026-09-16 10:00", 2, 1, 1}, {"2026-09-16 11:00", 3, 2, 3}, {"2026-09-16 12:00", 5, 4, 4}}
+	}{{"2026-09-16 10:00", 4, 3, 3}, {"2026-09-16 11:00", 6, 5, 6}, {"2026-09-16 12:00", 10, 9, 9}}
 	for k, w := range want {
 		if !hs[k].start.Equal(at(w.start)) || hs[k].close != w.close || hs[k].last != w.last || hs[k].done != w.done {
 			t.Fatalf("hour %d = %+v, want %+v", k, hs[k], w)
@@ -236,33 +250,98 @@ func TestHourBars(t *testing.T) {
 	}
 }
 
-// The armed signal waits for the 30m histogram: red on the arming bar holds, the jump that turns it
-// green buys at the next bar's open.
-func TestEnterWaitsForGreenHistogram(t *testing.T) {
-	bars, a := greenAfterSignal()
-	h := histOf(bars)
-	if h == nil || !isRed(h[a]) || isRed(h[a+1]) {
-		t.Fatalf("fixture: histogram must be red on the arming bar and green after the jump: %v / %v", h[a], h[a+1])
-	}
+// The signal hour waits for the hourly MACD: the 15m histogram is already green on a+1, but nothing
+// buys until the next hour completes green on g; then the 15m histogram, green on the arming bar,
+// buys at the next bar's open.
+func TestEnterWaitsForHourlyThen15m(t *testing.T) {
+	bars, a, g := signalThenGreenHour()
+	p := entryParams()
 	cl := trendCloses(6)
 	if r := indicators.RSISeries(cl, 6); r[len(r)-1] >= 30 || cl[len(cl)-1] <= ema.Compute(cl, 30)[len(cl)-1] {
 		t.Fatal("fixture: the last hour must have RSI(6) < 30 above EMA(30)")
 	}
-	p := entryParams()
-	if sig := decideAt(p, bars, a); sig.Kind != model.SignalNone {
-		t.Fatalf("arming bar with a red histogram: got %v %q, want none", sig.Kind, sig.EntryReason)
+	s := NewWithParams("TEST", stepBar, p)
+	hs := s.hourBars(fixture(bars))
+	hh := hourHistogram(hourCloses(hs), p)
+	h := histOf(bars)
+	if k := len(hs) - 1; hh == nil || hs[k].done != g || isRed(hh[k]) || !isRed(hh[k-1]) || isRed(h[a+1]) || isRed(h[g]) {
+		t.Fatal("fixture: hourly histogram red on the signal hour and green on the hour done at g, 15m green from a+1")
 	}
-	sig := decideAt(p, bars, a+1)
-	if sig.Kind != model.SignalBuy || !strings.HasPrefix(sig.EntryReason, "ZONE: час ") || !strings.Contains(sig.EntryReason, "MACD 30m") {
-		t.Fatalf("green bar: got %v %q, want Buy ZONE", sig.Kind, sig.EntryReason)
+	for i := a; i < g; i++ {
+		if sig := decideAt(p, bars, i); sig.Kind != model.SignalNone {
+			t.Fatalf("bar %d before the hourly MACD is green: got %v %q, want none", i, sig.Kind, sig.EntryReason)
+		}
 	}
-	if want := bars[a+1].t.Add(stepM30); !sig.FillBy.Equal(want) || math.Abs(sig.ATR-fixtureATR) > eps {
+	sig := decideAt(p, bars, g)
+	if sig.Kind != model.SignalBuy || !strings.HasPrefix(sig.EntryReason, "ZONE: час ") ||
+		!strings.Contains(sig.EntryReason, "MACD 1h") || !strings.Contains(sig.EntryReason, "MACD 15m") {
+		t.Fatalf("green hour: got %v %q, want Buy ZONE with both MACDs", sig.Kind, sig.EntryReason)
+	}
+	if want := bars[g].t.Add(stepBar); !sig.FillBy.Equal(want) || math.Abs(sig.ATR-fixtureATR) > eps {
 		t.Fatalf("FillBy/ATR = %v/%v, want %v/%v", sig.FillBy, sig.ATR, want, fixtureATR)
 	}
-	// Outside the confirmation window the same green bar no longer buys.
-	p.ConfirmBars = 1
-	if sig := decideAt(p, bars, a+1); sig.Kind != model.SignalNone {
-		t.Fatalf("ConfirmBars 1, green on the second bar: got %v, want none", sig.Kind)
+	// A green hour later than HourMACDHours after the signal does not arm.
+	p.HourMACDHours = 0
+	if sig := decideAt(p, bars, g); sig.Kind != model.SignalNone {
+		t.Fatalf("HourMACDHours 0, green one hour after the signal: got %v, want none", sig.Kind)
+	}
+}
+
+// armedBy: the first green hourly histogram at most HourMACDHours after the latest signal hour arms
+// the 15m window; later green hours do not re-arm, a stale signal does not arm.
+func TestArmedBy(t *testing.T) {
+	hours := func(n int) []hourBar {
+		hs := make([]hourBar, n)
+		for k := range hs {
+			hs[k].done = perHour*k + perHour - 1
+		}
+		return hs
+	}
+	sigAt := func(ks ...int) func(int) bool {
+		return func(k int) bool {
+			for _, x := range ks {
+				if x == k {
+					return true
+				}
+			}
+			return false
+		}
+	}
+	redUntil := func(n, green int) []float64 { // red before `green`, green from it on
+		hh := make([]float64, n)
+		for k := range hh {
+			hh[k] = -1
+			if k >= green {
+				hh[k] = 1
+			}
+		}
+		return hh
+	}
+	p := DefaultParams()
+	p.ConfirmBars, p.HourMACDHours = 6, 20
+	s := NewWithParams("T", stepBar, p)
+	hs := hours(40)
+	cases := []struct {
+		name         string
+		signal       func(int) bool
+		hh           []float64
+		i            int
+		wantH, wantK int
+	}{
+		{"green after the signal", sigAt(2), redUntil(40, 4), hs[4].done, 4, 2},
+		{"window still open", sigAt(2), redUntil(40, 4), hs[4].done + 5, 4, 2},
+		{"window over", sigAt(2), redUntil(40, 4), hs[4].done + 6, -1, -1},
+		{"signal hour already green", sigAt(5), redUntil(40, 0), hs[5].done, 5, 5},
+		{"green before the signal: later green hours do not arm", sigAt(5), redUntil(40, 0), hs[7].done, -1, -1},
+		{"signal 22 hours before the green hour", sigAt(0), redUntil(40, 22), hs[22].done, -1, -1},
+		{"a later signal restarts the wait", sigAt(0, 5), redUntil(40, 22), hs[22].done, 22, 5},
+		{"no signal", sigAt(), redUntil(40, 4), hs[4].done, -1, -1},
+		{"no hourly histogram", sigAt(2), nil, hs[4].done, -1, -1},
+	}
+	for _, c := range cases {
+		if h, k := s.armedBy(hs, c.signal, c.hh, c.i); h != c.wantH || k != c.wantK {
+			t.Fatalf("%s: armedBy = %d, %d, want %d, %d", c.name, h, k, c.wantH, c.wantK)
+		}
 	}
 }
 
@@ -288,91 +367,93 @@ func TestConfirmed(t *testing.T) {
 	}
 }
 
+// An hour with RSI deep in the zone but its close below the EMA is no signal.
 func TestEnterBelowEMANoSignal(t *testing.T) {
-	bars, a := entryFixture(signalStart, 12)
-	bars = append(bars, path(bars[a].t.Add(stepM30).Format("2006-01-02 15:04"), []float64{bars[a].c * 1.15})...)
-	if isRed(histOf(bars)[a+1]) {
-		t.Fatal("fixture: histogram must be green after the jump")
+	cl := trendCloses(12)
+	k := len(cl) - 1
+	trend := ema.Compute(cl, 30)
+	rsi := indicators.RSISeries(cl, 6)
+	if rsi[k] >= 30 || cl[k] >= trend[k] {
+		t.Fatal("fixture: the last hour must have RSI(6) < 30 below EMA(30)")
 	}
-	for i := a; i <= a+1; i++ {
-		if sig := decideAt(entryParams(), bars, i); sig.Kind != model.SignalNone {
-			t.Fatalf("below EMA, bar %d: got %v %q, want none", i, sig.Kind, sig.EntryReason)
-		}
+	if got := NewWithParams("T", stepBar, entryParams()).hourSignal(cl, trend, rsi, k); got != "" {
+		t.Fatalf("below EMA: hourSignal = %q, want none", got)
 	}
 }
 
-// Only weekdays: the same signal shifted so the green bar falls on Saturday does not buy.
+// Only weekdays: the same signal shifted so the buying bar falls on Saturday does not buy.
 func TestEnterWeekdaysOnly(t *testing.T) {
-	bars, a := greenAfterSignal()
-	shift := at("2026-09-19 12:00").Sub(bars[a+1].t)
+	bars, g := greenAfterSignal()
+	shift := at("2026-09-19 12:45").Sub(bars[g].t)
 	for i := range bars {
 		bars[i].t = bars[i].t.Add(shift)
 	}
-	if sig := decideAt(entryParams(), bars, a+1); sig.Kind != model.SignalNone {
+	if sig := decideAt(entryParams(), bars, g); sig.Kind != model.SignalNone {
 		t.Fatalf("Saturday: got %v, want none", sig.Kind)
 	}
 }
 
-// On Friday the fill bar must start before FridayTo: a 10:30 fill buys, an 11:00 fill does not;
-// FridayTo 24 lifts the limit, 0 closes Friday entirely.
+// On Friday the fill bar must start before FridayTo: a 10:00 fill buys, an 11:00 fill does not;
+// FridayTo 24 lifts the limit, 0 closes Friday entirely. The buying bar completes an hour (:45).
 func TestEnterFridayBeforeCutoff(t *testing.T) {
 	cases := []struct {
 		green    string
 		fridayTo int
 		want     model.SignalKind
 	}{
-		{"2026-09-18 10:00", 11, model.SignalBuy},
-		{"2026-09-18 10:30", 11, model.SignalNone},
-		{"2026-09-18 17:00", 11, model.SignalNone},
-		{"2026-09-18 17:00", 24, model.SignalBuy},
-		{"2026-09-18 07:00", 0, model.SignalNone},
-		{"2026-09-17 17:00", 11, model.SignalBuy}, // Thursday evening is unaffected
+		{"2026-09-18 09:45", 11, model.SignalBuy},
+		{"2026-09-18 10:45", 11, model.SignalNone},
+		{"2026-09-18 17:45", 11, model.SignalNone},
+		{"2026-09-18 17:45", 24, model.SignalBuy},
+		{"2026-09-18 07:45", 0, model.SignalNone},
+		{"2026-09-17 17:45", 11, model.SignalBuy}, // Thursday evening is unaffected
 	}
 	for _, c := range cases {
-		bars, a := greenAfterSignal()
-		shift := at(c.green).Sub(bars[a+1].t)
+		bars, g := greenAfterSignal()
+		shift := at(c.green).Sub(bars[g].t)
 		for i := range bars {
 			bars[i].t = bars[i].t.Add(shift)
 		}
 		p := entryParams()
 		p.FridayTo = c.fridayTo
-		if sig := decideAt(p, bars, a+1); sig.Kind != c.want {
-			t.Fatalf("green bar %s, FridayTo %d: got %v, want %v", c.green, c.fridayTo, sig.Kind, c.want)
+		if sig := decideAt(p, bars, g); sig.Kind != c.want {
+			t.Fatalf("buying bar %s, FridayTo %d: got %v, want %v", c.green, c.fridayTo, sig.Kind, c.want)
 		}
 	}
 }
 
-// ZoneEntry 0 leaves only CROSS: the ZONE signal of greenAfterSignal no longer buys.
+// ZoneEntry 0 leaves only CROSS: the ZONE signal of the fixture no longer buys.
 func TestZoneEntryOff(t *testing.T) {
-	bars, a := greenAfterSignal()
+	bars, g := greenAfterSignal()
 	p := entryParams()
 	p.ZoneEntry = 0
-	if sig := decideAt(p, bars, a+1); sig.Kind != model.SignalNone {
+	if sig := decideAt(p, bars, g); sig.Kind != model.SignalNone {
 		t.Fatalf("ZoneEntry 0, ZONE signal: got %v %q, want none", sig.Kind, sig.EntryReason)
 	}
 }
 
 func TestEnterZeroParamsGiveNoEntries(t *testing.T) {
-	bars, a := greenAfterSignal()
+	bars, g := greenAfterSignal()
 	for name, mut := range map[string]func(*Params){
 		"EMAPeriod":   func(p *Params) { p.EMAPeriod = 0 },
 		"RSIPeriod":   func(p *Params) { p.RSIPeriod = 0 },
 		"ConfirmBars": func(p *Params) { p.ConfirmBars = 0 },
 		"MACD":        func(p *Params) { p.MACDFast = p.MACDSlow },
+		"HourMACD":    func(p *Params) { p.HourMACDFast = p.HourMACDSlow },
 	} {
 		p := entryParams()
 		mut(&p)
-		if sig := decideAt(p, bars, a+1); sig.Kind != model.SignalNone {
+		if sig := decideAt(p, bars, g); sig.Kind != model.SignalNone {
 			t.Fatalf("%s off: got %v, want none", name, sig.Kind)
 		}
 	}
 }
 
 func TestEnterNeedsDailyATR(t *testing.T) {
-	bars, a := greenAfterSignal()
-	md := fixture(bars[:a+2])
+	bars, g := greenAfterSignal()
+	md := fixture(bars[:g+1])
 	md.DailyHighs, md.DailyLows, md.DailyCloses, md.DailyTimes = nil, nil, nil, nil
-	if sig := NewWithParams("TEST", stepM30, entryParams()).Decide(md); sig.Kind != model.SignalNone {
+	if sig := NewWithParams("TEST", stepBar, entryParams()).Decide(md); sig.Kind != model.SignalNone {
 		t.Fatalf("no daily ATR: got %v, want none", sig.Kind)
 	}
 }
@@ -385,204 +466,14 @@ func TestTrendUpIsStrict(t *testing.T) {
 
 // The buy carries the stop off the signal close (StopDailyATR daily ATRs below it) for risk sizing.
 func TestEnterCarriesStopForSizing(t *testing.T) {
-	bars, a := greenAfterSignal()
+	bars, g := greenAfterSignal()
 	p := entryParams()
-	sig := decideAt(p, bars, a+1)
-	if want := bars[a+1].c - p.StopDailyATR*fixtureATR; sig.Kind != model.SignalBuy || math.Abs(sig.StopLoss-want) > eps {
+	sig := decideAt(p, bars, g)
+	if want := bars[g].c - p.StopDailyATR*fixtureATR; sig.Kind != model.SignalBuy || math.Abs(sig.StopLoss-want) > eps {
 		t.Fatalf("got %v stop %v, want Buy with stop %v", sig.Kind, sig.StopLoss, want)
 	}
 	p.StopDailyATR = 0
-	if sig := decideAt(p, bars, a+1); sig.Kind != model.SignalBuy || sig.StopLoss != 0 {
+	if sig := decideAt(p, bars, g); sig.Kind != model.SignalBuy || sig.StopLoss != 0 {
 		t.Fatalf("stop off: got %v stop %v, want Buy without a stop", sig.Kind, sig.StopLoss)
-	}
-}
-
-// dailiesAt is dailies(before, n, fixtureATR) moved to close at `close`, so the ATR stays fixtureATR.
-func dailiesAt(before time.Time, n int, close float64) []bar {
-	ds := dailies(before, n, fixtureATR)
-	for k := range ds {
-		ds[k].o, ds[k].c, ds[k].h, ds[k].l = close, close, close+fixtureATR/2, close-fixtureATR/2
-	}
-	return ds
-}
-
-// PrevCloseGate buys only at or below the previous weekday close + PrevCloseATR daily ATRs; a
-// weekend session after it does not count.
-func TestEnterPrevCloseGate(t *testing.T) {
-	bars, a := greenAfterSignal()
-	c := bars[a+1].c
-	cases := []struct {
-		gate      int
-		prevClose float64
-		allowance float64
-		want      model.SignalKind
-	}{
-		{0, c - 5, 0, model.SignalBuy},       // gate off
-		{1, c - 0.5, 0, model.SignalNone},    // above yesterday's close
-		{1, c, 0, model.SignalBuy},           // exactly at it
-		{1, c + 0.1, 0, model.SignalBuy},     // below it
-		{1, c - 0.5, 0.5, model.SignalBuy},   // within +0.5 ATR (1.0)
-		{1, c + 1.5, -0.5, model.SignalBuy},  // dropped more than the demanded 0.5 ATR
-		{1, c + 0.5, -0.5, model.SignalNone}, // dropped less
-	}
-	for _, k := range cases {
-		md := fixture(bars[:a+2])
-		withDailies(&md, dailiesAt(bars[0].t, 20, k.prevClose))
-		p := entryParams()
-		p.PrevCloseGate, p.PrevCloseATR = k.gate, k.allowance
-		if sig := NewWithParams("TEST", stepM30, p).Decide(md); sig.Kind != k.want {
-			t.Fatalf("gate %d, prev close %v, allowance %v, close %v: got %v, want %v", k.gate, k.prevClose, k.allowance, c, sig.Kind, k.want)
-		}
-	}
-	// The fixture starts on Monday: a Saturday session closing below the price does not replace
-	// Friday's close above it.
-	md := fixture(bars[:a+2])
-	ds := dailiesAt(bars[0].t, 20, c-1)
-	sat := ds[len(ds)-1].t.AddDate(0, 0, 1)
-	if sat.Weekday() != time.Saturday {
-		t.Fatalf("fixture: %v must be Saturday", sat)
-	}
-	withDailies(&md, append(ds, bar{sat, c + 1, c + 1.1, c + 0.9, c + 1}))
-	p := entryParams()
-	p.PrevCloseGate = 1
-	if sig := NewWithParams("TEST", stepM30, p).Decide(md); sig.Kind != model.SignalNone {
-		t.Fatalf("Saturday close above, Friday close below the price: got %v, want none", sig.Kind)
-	}
-}
-
-// RSIFloor drops a signal hour whose RSI is below the floor; 0 is off.
-func TestEnterRSIFloor(t *testing.T) {
-	bars, a := greenAfterSignal()
-	r := indicators.RSISeries(trendCloses(6), 6)
-	rsi := r[len(r)-1]
-	cases := []struct {
-		floor float64
-		want  model.SignalKind
-	}{
-		{0, model.SignalBuy},
-		{rsi - 0.1, model.SignalBuy},
-		{rsi + 0.1, model.SignalNone},
-	}
-	for _, c := range cases {
-		p := entryParams()
-		p.RSIFloor = c.floor
-		if sig := decideAt(p, bars, a+1); sig.Kind != c.want {
-			t.Fatalf("RSI %.2f, floor %.2f: got %v, want %v", rsi, c.floor, sig.Kind, c.want)
-		}
-	}
-}
-
-// EMAGapATR demands the signal hour's close at least that many daily ATRs above the hourly EMA;
-// 0 is off.
-func TestEnterEMAGapATR(t *testing.T) {
-	bars, a := greenAfterSignal()
-	cl := trendCloses(6)
-	last := len(cl) - 1
-	gap := (cl[last] - ema.Compute(cl, 30)[last]) / fixtureATR
-	cases := []struct {
-		min  float64
-		want model.SignalKind
-	}{
-		{0, model.SignalBuy},
-		{gap - 0.01, model.SignalBuy},
-		{gap + 0.01, model.SignalNone},
-	}
-	for _, c := range cases {
-		p := entryParams()
-		p.EMAGapATR = c.min
-		if sig := decideAt(p, bars, a+1); sig.Kind != c.want {
-			t.Fatalf("gap %.3f ATR, EMAGapATR %.3f: got %v, want %v", gap, c.min, sig.Kind, c.want)
-		}
-	}
-}
-
-// MACDGreenOnly 1 buys only when the histogram is already green on the arming bar: the red→green
-// flip on a later bar no longer buys.
-func TestEnterMACDGreenOnly(t *testing.T) {
-	bars, a := greenAfterSignal()
-	p := entryParams()
-	p.MACDGreenOnly = 1
-	if sig := decideAt(p, bars, a+1); sig.Kind != model.SignalNone {
-		t.Fatalf("flip after the arming bar: got %v %q, want none", sig.Kind, sig.EntryReason)
-	}
-	// MACDSignal 1 makes the signal line the MACD line itself: the histogram is 0, green on every bar.
-	p.MACDSignal = 1
-	if sig := decideAt(p, bars, a); sig.Kind != model.SignalBuy {
-		t.Fatalf("green on the arming bar: got %v, want Buy", sig.Kind)
-	}
-}
-
-// MACDConfirm 0 buys on the arming bar itself, red histogram or not, and never on a later bar.
-func TestEnterMACDConfirmOff(t *testing.T) {
-	bars, a := greenAfterSignal()
-	p := entryParams()
-	if sig := decideAt(p, bars, a); sig.Kind != model.SignalNone {
-		t.Fatalf("MACDConfirm 1, red arming bar: got %v, want none", sig.Kind)
-	}
-	p.MACDConfirm = 0
-	if sig := decideAt(p, bars, a); sig.Kind != model.SignalBuy {
-		t.Fatalf("MACDConfirm 0, arming bar: got %v, want Buy", sig.Kind)
-	}
-	if sig := decideAt(p, bars, a+1); sig.Kind != model.SignalNone {
-		t.Fatalf("MACDConfirm 0, the bar after: got %v, want none", sig.Kind)
-	}
-}
-
-// moveBars is greenAfterSignal plus the would-be fill bar a+2 opening at 100 and the bar a+3
-// closing at c: the base entry fires on a+1 and would buy at a+2's open.
-func moveBars(c float64) (bars []bar, a int) {
-	bars, a = greenAfterSignal()
-	t := bars[a+1].t
-	return append(bars, bar{t.Add(stepM30), 100, 100, 100, 100}, bar{t.Add(2 * stepM30), 100, max(100, c), min(100, c), c}), a
-}
-
-// ConfirmMoveBars delays the buy: the close of the ConfirmMoveBars-th bar from the would-be fill
-// must be above that bar's open + ConfirmMoveATR daily ATRs; then it buys at the next open with
-// the stop off the confirming close. The base bar itself no longer buys.
-func TestEnterConfirmMove(t *testing.T) {
-	p := entryParams()
-	p.ConfirmMoveBars, p.ConfirmMoveATR = 2, 0.1 // 100 + 0.1 × fixtureATR 2 = 100.2
-	bars, a := moveBars(100.3)
-	if sig := decideAt(p, bars, a+1); sig.Kind != model.SignalNone {
-		t.Fatalf("base bar with ConfirmMoveBars: got %v, want none", sig.Kind)
-	}
-	if sig := decideAt(p, bars, a+2); sig.Kind != model.SignalNone {
-		t.Fatalf("first bar of the move: got %v, want none", sig.Kind)
-	}
-	sig := decideAt(p, bars, a+3)
-	if sig.Kind != model.SignalBuy || !strings.Contains(sig.EntryReason, "движение") {
-		t.Fatalf("close 100.3 > 100.2: got %v %q, want Buy with the move", sig.Kind, sig.EntryReason)
-	}
-	if want := bars[a+3].t.Add(stepM30); !sig.FillBy.Equal(want) || math.Abs(sig.StopLoss-(100.3-2)) > eps {
-		t.Fatalf("FillBy/StopLoss = %v/%v, want %v/%v", sig.FillBy, sig.StopLoss, want, 98.3)
-	}
-	bars, a = moveBars(100.2)
-	if sig := decideAt(p, bars, a+3); sig.Kind != model.SignalNone {
-		t.Fatalf("close 100.2 not above 100.2: got %v, want none", sig.Kind)
-	}
-}
-
-// SkipMonday drops fills on Monday MSK and leaves Tuesday alone.
-func TestEnterSkipMonday(t *testing.T) {
-	cases := []struct {
-		green string
-		skip  int
-		want  model.SignalKind
-	}{
-		{"2026-09-21 12:00", 0, model.SignalBuy},
-		{"2026-09-21 12:00", 1, model.SignalNone},
-		{"2026-09-22 12:00", 1, model.SignalBuy},
-	}
-	for _, c := range cases {
-		bars, a := greenAfterSignal()
-		shift := at(c.green).Sub(bars[a+1].t)
-		for i := range bars {
-			bars[i].t = bars[i].t.Add(shift)
-		}
-		p := entryParams()
-		p.SkipMonday = c.skip
-		if sig := decideAt(p, bars, a+1); sig.Kind != c.want {
-			t.Fatalf("green %s, SkipMonday %d: got %v, want %v", c.green, c.skip, sig.Kind, c.want)
-		}
 	}
 }

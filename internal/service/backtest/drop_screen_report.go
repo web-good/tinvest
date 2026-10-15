@@ -119,7 +119,7 @@ func RenderDropScreenMarkdown(ranked, noSignals, tickRejected, rejected []DropRo
 	fmt.Fprintf(&b, "Таймфрейм: %s. Окно: %d мес., holdout: последние %d мес. (срез %s).\n",
 		meta.Interval, meta.Months, meta.HoldoutMonths, meta.Split.Format("2006-01-02"))
 	fmt.Fprintf(&b, "Сетка: %d конфигураций — RSIPeriod {4, 6} × RSIExitPeriod {8, 12} × StopDailyATR {0.5, 1.0}; "+
-		"прибито: часовые зона RSI 30/50, EMA(200), выход RSI 70; MACD(12,26,9) на 30m, ожидание 4 бара; дневной ATR(14), безубыток 0.5 ATR; только будни, в пятницу до 11:00.\n", gridSize)
+		"прибито: часовые зона RSI 30/50, EMA(200), выход RSI 70; MACD 1h(8,26,5) до 20 ч, затем MACD(12,26,9) на 15m, ожидание 6 баров; дневной ATR(14), стоп не переносится; только будни, в пятницу до 11:00.\n", gridSize)
 	fmt.Fprintf(&b, "Гейты: оборот >= %.0f млн ₽/день, медиана сделок на train >= %.0f, два шага цены <= %.2f%% цены (0 — гейт выключен). PF зажат сверху на %.1f.\n",
 		meta.Gates.MinTurnoverM, meta.Gates.MinTrades, meta.Gates.MaxTickPct, meta.PFCap)
 	fmt.Fprintf(&b, "Стресс издержек (`PFmed×2`, ключ рейтинга): к комиссии %.4f за сторону добавлена ещё одна такая же и два шага цены на круг.\n",

@@ -1,6 +1,5 @@
 {
-  "_comment": "drop_bounce ENPG Minutes30: центр плато перебора sweep_minutes30.json. РЕЗУЛЬТАТ 2026-10-14 (перекалибровка с -risk-pct 1, PrevCloseGate 0): центр плато RSI входа 6, RSI выхода 9, стоп 0.7 дневного ATR — PF 1.650 на 34 сделках (лучшая точка перебора PF 1.65); соседи: стоп 0.5 → 1.605/35, RSI выхода 10 → 1.568/33, RSI выхода 8 → 1.505/34, стоп 1 → 1.477/33, RSI входа 5 → 1.296/42 — ПЛАТО ЕСТЬ. Стресс S1–S4 выдержан (без лучшей 1.459, без трёх лучших 1.222, полугодий в плюсе 5 из 5); комиссия 0.1%: PF 1.472, net 4947 ₽; hold-out: 5 сделок, PF 0.696, net -679 ₽ — В МИНУСЕ. Решение: не торговать.",
-  "RSIPeriod": 6,
+  "RSIPeriod": 4,
   "RSIZone": 30,
   "RSICap": 50,
   "ZoneEntry": 1,
@@ -9,7 +8,7 @@
   "BreakevenATR": 0.5,
   "TrailATR": 0,
   "DailyATRPeriod": 14,
-  "RSIExitPeriod": 9,
+  "RSIExitPeriod": 12,
   "RSIExit": 70,
   "MACDFast": 12,
   "MACDSlow": 26,
@@ -19,5 +18,18 @@
   "StaleBars": 0,
   "StaleATR": 0.3,
   "PrevCloseGate": 0,
-  "PrevCloseATR": 0
+  "PrevCloseATR": 0,
+  "RSIFloor": 0,
+  "SkipMonday": 0,
+  "EMAGapATR": 0,
+  "MACDGreenOnly": 0,
+  "BreakevenPct": 0.1,
+  "MACDConfirm": 1,
+  "ConfirmMoveBars": 0,
+  "ConfirmMoveATR": 0.1,
+  "HourMACD": 1,
+  "HourMACDFast": 8,
+  "HourMACDSlow": 26,
+  "HourMACDSignal": 5,
+  "HourMACDHours": 20
 }

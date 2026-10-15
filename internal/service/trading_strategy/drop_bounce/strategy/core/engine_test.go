@@ -1,7 +1,7 @@
-// engine_test.go runs drop_bounce through the real backtest engine on 30m bars to pin what it
-// relies on: dailies reaching the strategy, entry at the next bar's open after the 30m MACD
-// confirms the hourly signal, the hourly RSI exit on the bar that completes the hour, and a signal
-// dropped when the next slot is missing.
+// engine_test.go runs drop_bounce through the real backtest engine on 15m bars to pin what it
+// relies on: dailies reaching the strategy, entry at the next bar's open after the hourly and the
+// 15m MACD confirm the hourly signal, the stop measured from the fill, and a signal dropped when the
+// next slot is missing.
 package core
 
 import (
@@ -21,36 +21,32 @@ func toCandles(bars []bar) []bt.Candle {
 	return out
 }
 
-// engineBars is Lookback flat bars at 100 (whole hours) followed by the greenAfterSignal fixture
-// scaled from 100; it returns the bars and the index of the confirming (green) bar.
+// engineBars is Lookback flat bars at 100 (whole hours) followed by the signalThenGreenHour
+// fixture; it returns the bars and the index of the buying bar.
 func engineBars() ([]bar, int) {
-	lead := NewWithParams("TEST", stepM30, entryParams()).Lookback()
-	lead += lead % 2
-	sig, a := greenAfterSignal()
+	lead := NewWithParams("TEST", stepBar, entryParams()).Lookback()
+	lead += (perHour - lead%perHour) % perHour
+	sig, g := greenAfterSignal()
 	closes := flatN(lead, 100)
 	for _, b := range sig {
 		closes = append(closes, b.c)
 	}
 	// Keep the fixture's clock: the lead runs before its first bar.
-	bars := path(sig[0].t.Add(-time.Duration(lead)*stepM30).Format("2006-01-02 15:04"), closes)
-	return bars, lead + a + 1
+	bars := path(sig[0].t.Add(-time.Duration(lead)*stepBar).Format("2006-01-02 15:04"), closes)
+	return bars, lead + g
 }
 
 func runEngine(bars []bar) bt.Result {
-	return bt.Run(NewWithParams("TEST", stepM30, entryParams()), toCandles(bars),
+	return bt.Run(NewWithParams("TEST", stepBar, entryParams()), toCandles(bars),
 		toCandles(dailies(bars[0].t, 20, fixtureATR)), nil,
 		bt.Config{InitialCash: 1e6, Fraction: 1, Commission: 0, Lot: 1, EntryAtNextOpen: true})
 }
 
 func TestEngineEntryOnConfirmation(t *testing.T) {
 	bars, g := engineBars()
-	if h := histOf(bars); isRed(h[g]) || !isRed(h[g-1]) {
-		t.Fatalf("fixture: histogram must flip green at %d", g)
-	}
 	f := bars[g].c
-	// The fill bar completes the hour of the +15% jump: the hourly RSI(10) crosses 70 on it, so the
-	// position sells at that bar's close.
-	bars = append(bars, bar{bars[g].t.Add(stepM30), f, f, f, f})
+	// The fill bar opens at f; the next bar dips below the stop f − 1 ATR (fixtureATR 2).
+	bars = append(bars, bar{bars[g].t.Add(stepBar), f, f, f, f}, bar{bars[g].t.Add(2 * stepBar), f, f, f - 3, f - 3})
 	res := runEngine(bars)
 	if len(res.Trades) != 1 {
 		t.Fatalf("trades = %d, want 1: %+v", len(res.Trades), res.Trades)
@@ -59,15 +55,15 @@ func TestEngineEntryOnConfirmation(t *testing.T) {
 	if math.Abs(tr.EntryPrice-f) > eps || !tr.EntryTime.Equal(bars[g+1].t) {
 		t.Fatalf("entry %v @ %v, want %v @ %v (next bar's open)", tr.EntryPrice, tr.EntryTime, f, bars[g+1].t)
 	}
-	if tr.Reason != "RSI" || !tr.ExitTime.Equal(bars[g+1].t) {
-		t.Fatalf("exit %q @ %v, want RSI at the fill bar %v", tr.Reason, tr.ExitTime, bars[g+1].t)
+	if tr.Reason != "SL" || math.Abs(tr.ExitPrice-(f-fixtureATR)) > eps || !tr.ExitTime.Equal(bars[g+2].t) {
+		t.Fatalf("exit %q %v @ %v, want SL at %v on %v", tr.Reason, tr.ExitPrice, tr.ExitTime, f-fixtureATR, bars[g+2].t)
 	}
 }
 
 func TestEngineDropsSignalWhenNextSlotMissing(t *testing.T) {
 	bars, g := engineBars()
 	f := bars[g].c
-	bars = append(bars, bar{bars[g].t.Add(2 * stepM30), f, f, f, f})
+	bars = append(bars, bar{bars[g].t.Add(2 * stepBar), f, f, f, f})
 	if res := runEngine(bars); len(res.Trades) != 0 {
 		t.Fatalf("trades = %d, want 0 (fill slot missing): %+v", len(res.Trades), res.Trades)
 	}

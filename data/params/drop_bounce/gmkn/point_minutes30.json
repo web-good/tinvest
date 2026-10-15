@@ -1,6 +1,5 @@
 {
-  "_comment": "drop_bounce GMKN Minutes30: центр плато перебора sweep_minutes30.json (комбо #8). РЕЗУЛЬТАТ 2026-10-14 (30m, сигнал 1h + MACD 30m, ConfirmBars 3, безубыток 0.5, пятница до 11:00): все 45 точек PF > 1 (1.178–2.271, 29–41 сделка на 30 мес.); центр плато = #8: RSI входа 4, RSI выхода 11, стоп 1.0 дневного ATR — PF 1.931 на 38 сделках, медиана окрестности 1.931; соседи: RSI входа 5 → 2.096, стоп 0.7 → 1.979, RSI выхода 10 → 1.842, RSI выхода 12 → 1.812 — ПЛАТО ЕСТЬ; стресс S1–S4 выдержан, издержки выдержаны, hold-out +898 ₽ на 12 сделках (PF 1.043). Решение: торговать на 30m.",
-  "RSIPeriod": 4,
+  "RSIPeriod": 6,
   "RSIZone": 30,
   "RSICap": 50,
   "ZoneEntry": 1,
@@ -9,7 +8,7 @@
   "BreakevenATR": 0.5,
   "TrailATR": 0,
   "DailyATRPeriod": 14,
-  "RSIExitPeriod": 11,
+  "RSIExitPeriod": 9,
   "RSIExit": 70,
   "MACDFast": 12,
   "MACDSlow": 26,
@@ -17,5 +16,20 @@
   "ConfirmBars": 3,
   "FridayTo": 11,
   "StaleBars": 0,
-  "StaleATR": 0.3
+  "StaleATR": 0.3,
+  "PrevCloseGate": 0,
+  "PrevCloseATR": 0,
+  "RSIFloor": 0,
+  "SkipMonday": 0,
+  "EMAGapATR": 0,
+  "MACDGreenOnly": 0,
+  "BreakevenPct": 0.1,
+  "MACDConfirm": 1,
+  "ConfirmMoveBars": 0,
+  "ConfirmMoveATR": 0.1,
+  "HourMACD": 1,
+  "HourMACDFast": 8,
+  "HourMACDSlow": 26,
+  "HourMACDSignal": 5,
+  "HourMACDHours": 20
 }

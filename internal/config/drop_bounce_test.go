@@ -11,25 +11,25 @@ import (
 
 // Без переменной drop_bounce конфиг грузится, вселенная пуста.
 func TestDropBounceConfigLoadsWithoutItsEnvVar(t *testing.T) {
-	t.Setenv("DROP_BOUNCE_TICKERS_M30", "")
+	t.Setenv("DROP_BOUNCE_TICKERS_M15", "")
 
 	cfg := NewDropBounceConfig()
 	if err := confita.NewLoader(env.NewBackend()).Load(context.Background(), cfg); err != nil {
-		t.Fatalf("Load без DROP_BOUNCE_TICKERS_M30 = %v, want nil", err)
+		t.Fatalf("Load без DROP_BOUNCE_TICKERS_M15 = %v, want nil", err)
 	}
 	if cfg.Enabled() {
 		t.Fatalf("без переменной cfg = %+v, want выключено", cfg)
 	}
 }
 
-func TestDropBounceConfigLoadsMinutes30(t *testing.T) {
-	t.Setenv("DROP_BOUNCE_TICKERS_M30", "GAZP,T")
+func TestDropBounceConfigLoadsMinutes15(t *testing.T) {
+	t.Setenv("DROP_BOUNCE_TICKERS_M15", "GAZP,T")
 
 	cfg := NewDropBounceConfig()
 	if err := confita.NewLoader(env.NewBackend()).Load(context.Background(), cfg); err != nil {
 		t.Fatalf("Load = %v", err)
 	}
-	if !slices.Equal(cfg.TickersMinutes30, []string{"GAZP", "T"}) {
+	if !slices.Equal(cfg.TickersMinutes15, []string{"GAZP", "T"}) {
 		t.Fatalf("cfg = %+v, want H1 [GAZP T]", cfg)
 	}
 	if !cfg.Enabled() {
@@ -39,7 +39,7 @@ func TestDropBounceConfigLoadsMinutes30(t *testing.T) {
 
 func TestDropBounceEnabledIgnoresBlankTickers(t *testing.T) {
 	c := NewDropBounceConfig()
-	c.TickersMinutes30 = []string{"", " "}
+	c.TickersMinutes15 = []string{"", " "}
 	if c.Enabled() {
 		t.Fatal("вселенная из пустых строк включила стратегию")
 	}

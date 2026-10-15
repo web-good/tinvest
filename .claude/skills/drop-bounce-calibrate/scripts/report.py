@@ -1,8 +1,10 @@
 """Read drop_bounce backtest reports and apply the skill's gates (hold-out scheme, owner 2026-10-14).
 
 Usage (from the repo root):
-  report.py center <sweep_calibration.md>        every combo scored by the median PF of itself and its
-                                                grid neighbours; prints the winner's #k and plateau verdict
+  report.py macd <macd_calibration.md ×9>       the MACD step: each pair's run at the core defaults, the pair
+                                                with the highest PF (>= MIN_TRADES trades) wins; prints its tag
+  report.py center <sweep_calibration.md>        every combo scored by the median PF of itself and its grid
+                                                neighbours; prints the winner's #k and plateau verdict
   report.py recent <dev1.md> [dev2.md ...]       the tie-break among CANDIDATES: each candidate's dev run,
                                                 PF and net over the last 12 and 6 months of the dev window
   report.py stress <dev.md>                      the point on the development window (-holdout-months 6):
@@ -12,7 +14,8 @@ Usage (from the repo root):
                                                 window's end: opened once, after the point is fixed
 
 Gates on the development window (30 months):
-  plateau  every grid neighbour of the point (one step on one axis) has PF >= 1.0;
+  plateau  every grid neighbour of the point (one step on one axis of SWEEP, the same MACD pair) has
+           PF >= 1.0; the MACD pair is fixed by the MACD step before the sweep and is never a neighbour;
   S1 PF >= 1.3 and trades >= 25 (about 10 a year is enough, owner 2026-10-14);
   S2 PF without the best trade >= 1.15;
   S3 PF without the three best trades >= 1.0;
@@ -32,6 +35,8 @@ MIN_NEIGHBOUR_TRADES = 10
 TIE_SHARE = 0.10
 MAX_CANDIDATES = 5
 RECENT_MONTHS = 12
+# The MACD setup of a combo: a category (owner, 2026-10-15), never a neighbour step.
+MACD_FIELDS = ("HourMACDFast", "HourMACDSlow", "HourMACDSignal", "MACDFast", "MACDSlow", "MACDSignal")
 
 
 def pf(v):
@@ -47,16 +52,53 @@ def combos(md):
         yield int(m.group(1)), float(m.group(2)), int(m.group(3)), p
 
 
-def center(md):
-    total = int(re.search(r"Всего комбинаций: (\d+)", open(md).read()).group(1))
-    rows = list(combos(md))
-    if len(rows) < total:
-        sys.exit(f"в отчёте {len(rows)} из {total} комбинаций — запусти перебор с -combos 0")
-    axes = {k: sorted({r[3][k] for r in rows}) for k in rows[0][3] if len({r[3][k] for r in rows}) > 1}
+def pair_tag(p):
+    return (f"h{p['HourMACDFast']:g}-{p['HourMACDSlow']:g}-{p['HourMACDSignal']:g}"
+            f"_m{p['MACDFast']:g}-{p['MACDSlow']:g}-{p['MACDSignal']:g}")
+
+
+def macd_step(mds):
+    """MACD step (owner, 2026-10-15): one pair per file, one point (the core defaults) per pair; the pair
+    with the highest PF wins, a pair with fewer than MIN_TRADES trades is out."""
+    rows = []
+    for md in mds:
+        part = list(combos(md))
+        p = part[0][3]
+        med = statistics.median(f for _, f, _, _ in part)
+        n = statistics.median(n for _, _, n, _ in part)
+        rows.append((med, n, pair_tag(p), macd_tag(p), md, sorted((x[3]["StopDailyATR"], x[1], x[2]) for x in part)))
+    rows.sort(key=lambda r: -r[0])
+    for med, n, tg, name, md, pts in rows:
+        print(f"  {name}: PF {med:.3f}, сделок {n:g}"
+              + ("" if n >= MIN_TRADES else f" — меньше {MIN_TRADES} сделок, вне выбора"))
+    ok = [r for r in rows if r[1] >= MIN_TRADES]
+    if not ok:
+        sys.exit(f"ни у одной пары медианная точка не набрала {MIN_TRADES} сделок")
+    print(f"ПАРА MACD: {ok[0][2]} ({ok[0][3]}), PF {ok[0][0]:.3f}")
+    print(f"дальше: grids.py sweep <T> Minutes15 {ok[0][2]}")
+
+
+def macd_tag(p):
+    return (f"MACD 1h {p['HourMACDFast']:g}/{p['HourMACDSlow']:g}/{p['HourMACDSignal']:g}, "
+            f"MACD 15m {p['MACDFast']:g}/{p['MACDSlow']:g}/{p['MACDSignal']:g}")
+
+
+def center(mds):
+    rows = []  # (k, pf, trades, params, md)
+    for md in mds:
+        total = int(re.search(r"Всего комбинаций: (\d+)", open(md).read()).group(1))
+        part = [(k, f, n, p, md) for k, f, n, p in combos(md)]
+        if len(part) < total:
+            sys.exit(f"{md}: в отчёте {len(part)} из {total} комбинаций — запусти перебор с -combos 0")
+        rows += part
+    axes = {k: sorted({r[3][k] for r in rows}) for k in rows[0][3]
+            if k not in MACD_FIELDS and len({r[3][k] for r in rows}) > 1}
 
     def neighbours(p):
         out = []
         for r in rows:
+            if any(r[3][k] != p[k] for k in MACD_FIELDS):
+                continue
             diff = [k for k in axes if r[3][k] != p[k]]
             if len(diff) == 1:
                 k = diff[0]
@@ -65,19 +107,25 @@ def center(md):
         return out
 
     scored = []
-    for k, f, n, p in rows:
+    for k, f, n, p, md in rows:
         if n < MIN_TRADES:
             continue
         nb = neighbours(p)
-        scored.append((statistics.median([f] + [r[1] for r in nb]), k, f, n, p, nb))
+        scored.append((statistics.median([f] + [r[1] for r in nb]), k, f, n, p, nb, md))
     if not scored:
         sys.exit(f"ни одной комбинации с ≥ {MIN_TRADES} сделками")
     scored.sort(key=lambda x: -x[0])
     print("топ-5 по медиане окрестности:")
-    for med, k, f, n, p, _ in scored[:5]:
-        print(f"  #{k}: медиана {med:.3f}, PF {f:.3f}/{n}, " + ", ".join(f"{a} {p[a]:g}" for a in axes))
-    med, k, f, n, p, nb = scored[0]
-    print(f"ЦЕНТР: #{k} — " + ", ".join(f"{a} {p[a]:g}" for a in axes) + f", PF {f:.3f} на {n} сделках")
+    for med, k, f, n, p, _, md in scored[:5]:
+        print(f"  {md} #{k}: медиана {med:.3f}, PF {f:.3f}/{n}, {macd_tag(p)}, " + ", ".join(f"{a} {p[a]:g}" for a in axes))
+    if len(mds) > 1:
+        print("лучшая медиана окрестности по парам MACD:")
+        for md in mds:
+            best = next((x for x in scored if x[6] == md), None)
+            if best:
+                print(f"  {macd_tag(best[4])}: медиана {best[0]:.3f}, PF {best[2]:.3f}/{best[3]}")
+    med, k, f, n, p, nb, md = scored[0]
+    print(f"ЦЕНТР: {md} #{k} — {macd_tag(p)}, " + ", ".join(f"{a} {p[a]:g}" for a in axes) + f", PF {f:.3f} на {n} сделках")
     for r in nb:
         d = next(a for a in axes if r[3][a] != p[a])
         print(f"  сосед {d} {r[3][d]:g}: PF {r[1]:.3f}/{r[2]}")
@@ -88,13 +136,13 @@ def center(md):
     print("ПЛАТО ЕСТЬ" if ok else "ОСТРЫЙ ПИК")
     cands = [x for x in scored if x[0] >= med * (1 - TIE_SHARE) and all(r[1] >= 1.0 for r in x[5])][:MAX_CANDIDATES]
     if ok and len(cands) > 1:
-        print(f"КАНДИДАТЫ (медиана в пределах {TIE_SHARE:.0%} от лучшей, с плато): " + " ".join(f"#{x[1]}" for x in cands))
+        print(f"КАНДИДАТЫ (медиана в пределах {TIE_SHARE:.0%} от лучшей, с плато): " + " ".join(f"{x[6]} #{x[1]}" for x in cands))
         print("спорная ситуация: прогони каждого кандидата на окне разработки и выбери по свежим месяцам:")
         for x in cands:
-            print(f"  grids.py cand <T> Minutes30 {md} {x[1]}")
+            print(f"  grids.py cand <T> Minutes15 {x[6]} {x[1]}")
         print("  report.py recent <dev каждого кандидата, центр первым>")
     else:
-        print(f"дальше: grids.py point <T> Minutes30 {md} {k}")
+        print(f"дальше: grids.py point <T> Minutes15 {md} {k}")
 
 
 def period(md):
@@ -183,5 +231,5 @@ def holdout(md, csv_path):
 
 if __name__ == "__main__":
     a = sys.argv
-    {"center": lambda: center(a[2]), "stress": lambda: stress(a[2]), "cost": lambda: cost(a[2]),
-     "holdout": lambda: holdout(a[2], a[3]), "recent": lambda: recent(a[2:])}.get(a[1] if len(a) > 1 else "", lambda: sys.exit(__doc__))()
+    {"center": lambda: center(a[2:]), "stress": lambda: stress(a[2]), "cost": lambda: cost(a[2]),
+     "holdout": lambda: holdout(a[2], a[3]), "recent": lambda: recent(a[2:]), "macd": lambda: macd_step(a[2:])}.get(a[1] if len(a) > 1 else "", lambda: sys.exit(__doc__))()

@@ -1,4 +1,56 @@
-// Package gazp supplies the drop_bounce Params for GAZP (Газпром) on Minutes30.
+// Package gazp supplies the drop_bounce Params for GAZP (Газпром) on Minutes15.
+//
+// # Калибровка на 15m с шагом MACD (2026-10-15)
+//
+// Вторая калибровка на 15m по просьбе владельца: сначала шаг выбора пары MACD (9 пар час × 15m, по
+// прогону на дефолтах ядра RSI 6 / выход 10 / стоп 1.0), затем перебор 45 точек на выбранной паре.
+// Отчёты reports/GAZP_drop_bounce/m15/{macd,sweep,dev,cost}/ (вне git).
+//
+//   - Шаг MACD (PF/сделки): 1h 8/26/5 + 15m 8/17/9 → 0.637/73 (выбрана); 8/26/5 + 3/10/16 →
+//     0.634/73; 12/26/9 + 12/26/9 → 0.629/63; 8/26/5 + 12/26/9 → 0.622/74; 12/26/9 + 8/17/9 →
+//     0.621/62; 12/26/9 + 3/10/16 → 0.620/60; 5/35/5 с любой 15m → 0.567/74. Разброс пар мал:
+//     MACD края не даёт.
+//   - Перебор на паре: все 45 точек в минусе, PF 0.552–0.768, сделок 68–126.
+//   - Центр: #4 — RSI входа 6, RSI выхода 11, стоп 0.5 ATR, PF 0.748 на 84 сделках, net −10 926 ₽;
+//     соседи RSI входа 5 → 0.688/103, RSI выхода 12 → 0.688/80, RSI выхода 10 → 0.685/84, стоп
+//     0.7 → 0.679/77. ОСТРЫЙ ПИК.
+//   - Стресс: S1 нет, S2 без лучшей сделки (+2 034 ₽) PF 0.701 — нет, S3 0.622 — нет, S4 полугодий
+//     в плюсе 1 из 5 — нет.
+//   - Издержки 0.1%: PF 0.641, net −16 228 ₽.
+//   - Hold-out не открывался.
+//
+// Решение: не торговать. Литерал — центр перебора с парой MACD 1h 8/26/5 + 15m 8/17/9
+// (point_minutes15.json).
+//
+// # Калибровка на 15m (2026-10-15)
+//
+// Первая калибровка на правилах 15m (сигнал на часе, зелёный часовой MACD(8,26,5) не позже 20 часов,
+// затем MACD(12,26,9) на 15m за 6 баров; без безубытка и фильтров) по просьбе владельца: схема
+// hold-out, 45 точек, -risk-pct 1, отчёты reports/GAZP_drop_bounce/m15/ (вне git).
+//
+//   - Все 45 точек в минусе: PF от 0.543 до 0.733, сделок 69–128 за 30 месяцев.
+//   - Центр: #2 — RSI входа 6, RSI выхода 11, стоп 0.5 дневного ATR, PF 0.731 на 85 сделках, net
+//     −11 835 ₽; соседи RSI выхода 12 → 0.677/81, RSI входа 5 → 0.674/104, RSI выхода 10 →
+//     0.667/85, стоп 0.7 → 0.660/78. ОСТРЫЙ ПИК.
+//   - Стресс: S1 нет, S2 без лучшей сделки (+2 034 ₽) PF 0.685 — нет, S3 без трёх лучших 0.608 —
+//     нет, S4 полугодий в плюсе 1 из 5 — нет.
+//   - Издержки 0.1%: PF 0.627, net −17 088 ₽.
+//   - Hold-out не открывался.
+//
+// Решение: не торговать. Литерал — центр перебора (point_minutes15.json). Сделок вдвое больше, чем
+// на 30m (85 против 39), а PF ниже (0.731 против 0.961).
+//
+// # Перекалибровка 2026-10-15 (30m)
+//
+// Перекалибровка 2026-10-15 по просьбе владельца (схема hold-out, 45 точек, -risk-pct 1, BreakevenPct
+// 0.1, выбор по свежим месяцам при ничьей; отчёты reports/GAZP_drop_bounce/r1015/). Центр: #1 —
+// RSIPeriod 6, StopDailyATR 0.5, RSIExitPeriod 9, PF 0.961 на 39 сделках; соседи: RSIExitPeriod 8: PF
+// 0.902/39; RSIExitPeriod 10: PF 0.871/39; RSIPeriod 5: PF 0.860/43; StopDailyATR 0.7: PF 0.808/36;
+// ОСТРЫЙ ПИК. Точка: RSI входа 6, RSI выхода 9, стоп 0.5 ATR. Разработка: 39 сделок, PF 0.961, net
+// -678 ₽. Стресс: S1 PF 0.961 ≥ 1.3 и 39 ≥ 25 сделок: нет; S2 без лучшей сделки (+2454 ₽) PF 0.822 ≥
+// 1.15: нет; S3 без трёх лучших PF 0.629 ≥ 1.0: нет; S4 полугодий в плюсе 2 из 5 (нужно ≥ 4): нет.
+// Издержки 0.1%: PF 0.821, net -3345 ₽ на 39 сделках. hold-out не открывался. Решение: не торговать
+// (острый пик).
 //
 // # Перекалибровка 2026-10-14 с -risk-pct 1
 //
@@ -105,6 +157,12 @@
 // Не торговать: весь край GAZP — одна сделка февраля 2025, без неё PF около 1.0 при любых
 // параметрах (и на walk-forward, и в переборе). Литерал тогда был центром плато. Тикер не входит в
 // DROP_BOUNCE_TICKERS_H1.
+//
+// # Переход на 15m (2026-10-15)
+//
+// Владелец перевёл стратегию на 15m: сигнал на часе, затем зелёная гистограмма часового MACD(8,26,5)
+// не позже 20 часов, затем MACD(12,26,9) на 15m за 6 баров; безубыток, трейлинг и выключенные фильтры
+// удалены из ядра. Все замеры выше раздела «Калибровка на 15m» сняты на прежних правилах.
 package gazp
 
 import "tinvest/internal/service/trading_strategy/drop_bounce/strategy/core"
@@ -112,36 +170,26 @@ import "tinvest/internal/service/trading_strategy/drop_bounce/strategy/core"
 // Ticker is the instrument this package configures.
 const Ticker = "GAZP"
 
-// Params returns the GAZP literal for Minutes30.
+// Params returns the GAZP literal for Minutes15.
 func Params() core.Params {
 	return core.Params{
-		RSIPeriod:       6,
-		RSIZone:         30,
-		RSICap:          50,
-		ZoneEntry:       1,
-		EMAPeriod:       200,
-		StopDailyATR:    0.5,
-		BreakevenATR:    0.5,
-		TrailATR:        0,
-		DailyATRPeriod:  14,
-		RSIExitPeriod:   9,
-		RSIExit:         70,
-		MACDFast:        12,
-		MACDSlow:        26,
-		MACDSignal:      9,
-		ConfirmBars:     3,
-		FridayTo:        11,
-		StaleBars:       0,
-		StaleATR:        0.3,
-		PrevCloseGate:   0,
-		PrevCloseATR:    0,
-		RSIFloor:        0,
-		SkipMonday:      0,
-		EMAGapATR:       0,
-		MACDGreenOnly:   0,
-		BreakevenPct:    0.1,
-		MACDConfirm:     1,
-		ConfirmMoveBars: 0,
-		ConfirmMoveATR:  0.1,
+		RSIPeriod:      6,
+		RSIZone:        30,
+		RSICap:         50,
+		ZoneEntry:      1,
+		EMAPeriod:      200,
+		StopDailyATR:   0.5,
+		DailyATRPeriod: 14,
+		RSIExitPeriod:  11,
+		RSIExit:        70,
+		HourMACDFast:   8,
+		HourMACDSlow:   26,
+		HourMACDSignal: 5,
+		HourMACDHours:  20,
+		MACDFast:       8,
+		MACDSlow:       17,
+		MACDSignal:     9,
+		ConfirmBars:    6,
+		FridayTo:       11,
 	}
 }

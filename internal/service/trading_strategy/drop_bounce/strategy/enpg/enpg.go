@@ -1,4 +1,19 @@
-// Package enpg supplies the drop_bounce Params for ENPG (ЭН+ ГРУП) on Minutes30.
+// Package enpg supplies the drop_bounce Params for ENPG (ЭН+ ГРУП) on Minutes15.
+//
+// # Перекалибровка 2026-10-15
+//
+// Перекалибровка 2026-10-15 по просьбе владельца (схема hold-out, 45 точек, -risk-pct 1, BreakevenPct
+// 0.1, выбор по свежим месяцам при ничьей; отчёты reports/ENPG_drop_bounce/r1015/). Центр: #1 —
+// RSIPeriod 6, StopDailyATR 0.7, RSIExitPeriod 9, PF 1.650 на 34 сделках; соседи: StopDailyATR 0.5: PF
+// 1.605/35; RSIExitPeriod 10: PF 1.568/33; RSIExitPeriod 8: PF 1.505/34; StopDailyATR 1: PF 1.477/33;
+// RSIPeriod 5: PF 1.296/42; ПЛАТО ЕСТЬ. Спорная ситуация (кандидаты #1 #2 #4 #3 #5): по последним 12
+// мес окна разработки выбран #2 — всё окно PF 1.605/35; последние 12 мес PF 1.250, net +1797 ₽, 16
+// сделок; последние 6 мес PF 1.153, net +696 ₽, 9 сделок. Точка: RSI входа 6, RSI выхода 9, стоп 0.5
+// ATR. Разработка: 35 сделок, PF 1.605, net +8559 ₽. Стресс: S1 PF 1.605 ≥ 1.3 и 35 ≥ 25 сделок: да;
+// S2 без лучшей сделки (+2692 ₽) PF 1.415 ≥ 1.15: да; S3 без трёх лучших PF 1.178 ≥ 1.0: да; S4
+// полугодий в плюсе 5 из 5 (нужно ≥ 4): да. Издержки 0.1%: PF 1.426, net 6359 ₽ на 35 сделках. hold-
+// out с 2026-04-15: 5 сделок, PF 0.951, net -114 ₽, лучшая +1184, худшая -1172 (hold-out этого тикера
+// уже открывался 2026-10-14 — проверка не слепая). Решение: не торговать (hold-out в минусе).
 //
 // # Перекалибровка 2026-10-14 с -risk-pct 1
 //
@@ -64,6 +79,13 @@
 // Не торговать: walk-forward планку взял, но §4 провален — плато по входу острое (соседи по
 // зоне RSI и ходу дня ниже 1.0), удвоенная комиссия опускает PF до 1.189. Тикер не входит в
 // DROP_BOUNCE_TICKERS_H1.
+//
+// # Переход на 15m (2026-10-15)
+//
+// Владелец перевёл стратегию на 15m: сигнал на часе, затем зелёная гистограмма часового MACD(8,26,5)
+// не позже 20 часов, затем MACD(12,26,9) на 15m за 6 баров; безубыток, трейлинг и выключенные фильтры
+// удалены из ядра. Точка ниже (RSI входа, RSI выхода, стоп) снята на прежних правилах (30m, безубыток
+// 0.5 ATR) и на новых не проверена: тикер ждёт перекалибровки скиллом drop-bounce-calibrate.
 package enpg
 
 import "tinvest/internal/service/trading_strategy/drop_bounce/strategy/core"
@@ -71,36 +93,26 @@ import "tinvest/internal/service/trading_strategy/drop_bounce/strategy/core"
 // Ticker is the instrument this package configures.
 const Ticker = "ENPG"
 
-// Params returns the ENPG literal for Minutes30.
+// Params returns the ENPG literal for Minutes15.
 func Params() core.Params {
 	return core.Params{
-		RSIPeriod:       6,
-		RSIZone:         30,
-		RSICap:          50,
-		ZoneEntry:       1,
-		EMAPeriod:       200,
-		StopDailyATR:    0.7,
-		BreakevenATR:    0.5,
-		TrailATR:        0,
-		DailyATRPeriod:  14,
-		RSIExitPeriod:   9,
-		RSIExit:         70,
-		MACDFast:        12,
-		MACDSlow:        26,
-		MACDSignal:      9,
-		ConfirmBars:     3,
-		FridayTo:        11,
-		StaleBars:       0,
-		StaleATR:        0.3,
-		PrevCloseGate:   0,
-		PrevCloseATR:    0,
-		RSIFloor:        0,
-		SkipMonday:      0,
-		EMAGapATR:       0,
-		MACDGreenOnly:   0,
-		BreakevenPct:    0.1,
-		MACDConfirm:     1,
-		ConfirmMoveBars: 0,
-		ConfirmMoveATR:  0.1,
+		RSIPeriod:      6,
+		RSIZone:        30,
+		RSICap:         50,
+		ZoneEntry:      1,
+		EMAPeriod:      200,
+		StopDailyATR:   0.5,
+		DailyATRPeriod: 14,
+		RSIExitPeriod:  9,
+		RSIExit:        70,
+		HourMACDFast:   8,
+		HourMACDSlow:   26,
+		HourMACDSignal: 5,
+		HourMACDHours:  20,
+		MACDFast:       12,
+		MACDSlow:       26,
+		MACDSignal:     9,
+		ConfirmBars:    6,
+		FridayTo:       11,
 	}
 }

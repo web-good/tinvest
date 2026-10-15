@@ -1,4 +1,15 @@
-// Package rosn supplies the drop_bounce Params for ROSN (Роснефть) on Minutes30.
+// Package rosn supplies the drop_bounce Params for ROSN (Роснефть) on Minutes15.
+//
+// # Перекалибровка 2026-10-15
+//
+// Перекалибровка 2026-10-15 по просьбе владельца (схема hold-out, 45 точек, -risk-pct 1, BreakevenPct
+// 0.1, выбор по свежим месяцам при ничьей; отчёты reports/ROSN_drop_bounce/r1015/). Центр: #1 —
+// RSIPeriod 6, StopDailyATR 0.5, RSIExitPeriod 8, PF 0.832 на 30 сделках; соседи: RSIPeriod 5: PF
+// 0.815/36; RSIExitPeriod 9: PF 0.729/30; StopDailyATR 0.7: PF 0.724/29; ОСТРЫЙ ПИК. Точка: RSI входа
+// 6, RSI выхода 8, стоп 0.5 ATR. Разработка: 30 сделок, PF 0.832, net -2860 ₽. Стресс: S1 PF 0.832 ≥
+// 1.3 и 30 ≥ 25 сделок: нет; S2 без лучшей сделки (+2939 ₽) PF 0.660 ≥ 1.15: нет; S3 без трёх лучших
+// PF 0.459 ≥ 1.0: нет; S4 полугодий в плюсе 3 из 5 (нужно ≥ 4): нет. Издержки 0.1%: PF 0.720, net
+// -5056 ₽ на 30 сделках. hold-out не открывался. Решение: не торговать (острый пик).
 //
 // # Перекалибровка 2026-10-14 с -risk-pct 1
 //
@@ -25,6 +36,13 @@
 //   - Стресс, издержки и hold-out не гонялись: плато не пройдено.
 //
 // Решение: не торговать. Литерал — центр перебора (point_minutes30.json).
+//
+// # Переход на 15m (2026-10-15)
+//
+// Владелец перевёл стратегию на 15m: сигнал на часе, затем зелёная гистограмма часового MACD(8,26,5)
+// не позже 20 часов, затем MACD(12,26,9) на 15m за 6 баров; безубыток, трейлинг и выключенные фильтры
+// удалены из ядра. Точка ниже (RSI входа, RSI выхода, стоп) снята на прежних правилах (30m, безубыток
+// 0.5 ATR) и на новых не проверена: тикер ждёт перекалибровки скиллом drop-bounce-calibrate.
 package rosn
 
 import "tinvest/internal/service/trading_strategy/drop_bounce/strategy/core"
@@ -32,36 +50,26 @@ import "tinvest/internal/service/trading_strategy/drop_bounce/strategy/core"
 // Ticker is the instrument this package configures.
 const Ticker = "ROSN"
 
-// Params returns the ROSN literal for Minutes30.
+// Params returns the ROSN literal for Minutes15.
 func Params() core.Params {
 	return core.Params{
-		RSIPeriod:       6,
-		RSIZone:         30,
-		RSICap:          50,
-		ZoneEntry:       1,
-		EMAPeriod:       200,
-		StopDailyATR:    0.5,
-		BreakevenATR:    0.5,
-		TrailATR:        0,
-		DailyATRPeriod:  14,
-		RSIExitPeriod:   8,
-		RSIExit:         70,
-		MACDFast:        12,
-		MACDSlow:        26,
-		MACDSignal:      9,
-		ConfirmBars:     3,
-		FridayTo:        11,
-		StaleBars:       0,
-		StaleATR:        0.3,
-		PrevCloseGate:   0,
-		PrevCloseATR:    0,
-		RSIFloor:        0,
-		SkipMonday:      0,
-		EMAGapATR:       0,
-		MACDGreenOnly:   0,
-		BreakevenPct:    0.1,
-		MACDConfirm:     1,
-		ConfirmMoveBars: 0,
-		ConfirmMoveATR:  0.1,
+		RSIPeriod:      6,
+		RSIZone:        30,
+		RSICap:         50,
+		ZoneEntry:      1,
+		EMAPeriod:      200,
+		StopDailyATR:   0.5,
+		DailyATRPeriod: 14,
+		RSIExitPeriod:  8,
+		RSIExit:        70,
+		HourMACDFast:   8,
+		HourMACDSlow:   26,
+		HourMACDSignal: 5,
+		HourMACDHours:  20,
+		MACDFast:       12,
+		MACDSlow:       26,
+		MACDSignal:     9,
+		ConfirmBars:    8,
+		FridayTo:       11,
 	}
 }

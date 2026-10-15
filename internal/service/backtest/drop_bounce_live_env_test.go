@@ -8,8 +8,8 @@ import (
 	"testing"
 )
 
-// dropBounceLiveKeys — вселенная drop_bounce в env/prod.env (стратегия только на 30m).
-var dropBounceLiveKeys = []string{"DROP_BOUNCE_TICKERS_M30"}
+// dropBounceLiveKeys — вселенная drop_bounce в env/prod.env (стратегия только на 15m).
+var dropBounceLiveKeys = []string{"DROP_BOUNCE_TICKERS_M15"}
 
 // dropBounceLiveTickers читает вселенные drop_bounce из env/prod.env: ключ — переменная.
 func dropBounceLiveTickers(t *testing.T) map[string][]string {
@@ -60,13 +60,14 @@ func TestDropBounceLiveTickersAreRegistered(t *testing.T) {
 	}
 }
 
-// Ключи прежних таймфреймов удалены: с 2026-10-14 drop_bounce идёт на 30m (сигнал 1h), и
-// возвращение _M15/_H1 в env значило бы, что кто-то торгует его на старых правилах.
+// Ключи прежних таймфреймов удалены: с 2026-10-15 drop_bounce идёт на 15m (сигнал и MACD 1h,
+// подтверждение MACD 15m), и возвращение _M30/_H1 в env значило бы, что кто-то торгует его на
+// старых правилах.
 func TestDropBounceNoLegacyTimeframeKeys(t *testing.T) {
 	lists := dropBounceLiveTickers(t)
-	for _, key := range []string{"DROP_BOUNCE_TICKERS_M15", "DROP_BOUNCE_TICKERS_H1"} {
+	for _, key := range []string{"DROP_BOUNCE_TICKERS_M30", "DROP_BOUNCE_TICKERS_H1"} {
 		if _, ok := lists[key]; ok {
-			t.Errorf("%s есть в env/prod.env, drop_bounce работает только на 30m", key)
+			t.Errorf("%s есть в env/prod.env, drop_bounce работает только на 15m", key)
 		}
 	}
 }
