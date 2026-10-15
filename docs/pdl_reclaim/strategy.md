@@ -75,10 +75,10 @@ RSI в `pkg/indicators` на отрезке без единого падения
 ## Запуск
 
 ```bash
-go run ./cmd/backtest -strategy pdl_reclaim -interval Minutes5 -ticker GAZP -months 36
-go run ./cmd/backtest -strategy pdl_reclaim -interval Minutes5 -ticker GAZP -months 36 \
+go run ./cmd/backtest -strategy pdl_reclaim -interval Minutes5 -ticker GAZP -months 12
+go run ./cmd/backtest -strategy pdl_reclaim -interval Minutes5 -ticker GAZP -months 12 \
   -calibrate data/params/pdl_reclaim/grid_example.json -metric profit_factor
 # почему на свече был (или не был) вход/выход
-go run ./cmd/backtest -strategy pdl_reclaim -interval Minutes5 -ticker GAZP -months 36 -explain "2026-09-03 10:00"
+go run ./cmd/backtest -strategy pdl_reclaim -interval Minutes5 -ticker GAZP -months 12 -explain "2026-09-03 10:00"
 ```
-Для калибровочных прогонов — собранный бинарь на одном ядре.
+Окно бэктеста и калибровки — 12 месяцев (`-months 12`); три года не нужны. Для калибровочных прогонов — собранный бинарь на одном ядре.
