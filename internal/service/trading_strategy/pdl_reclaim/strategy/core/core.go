@@ -244,5 +244,123 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	return sig
 }
 
-// manage is filled in by Task 2.
-func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal { return sig }
+// manage exits in priority order: stop, target, RSI, MACD, end of day.
+func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal {
+	pos := md.Position
+	n := len(md.Closes)
+	if n == 0 || len(md.Highs) != n || len(md.Lows) != n {
+		return sig
+	}
+	i := n - 1
+	low, high, closeP := md.Lows[i], md.Highs[i], md.Closes[i]
+	if stop := s.stop(md, pos); stop > 0 && low <= stop {
+		sig.Kind, sig.Reason, sig.StopLoss = model.SignalSell, "SL", stop
+		sig.ExitReason = fmt.Sprintf("SL: low %.4f ≤ стоп %.4f (вход %.4f)", low, stop, pos.PurchasePrice)
+		return sig
+	}
+	if pos.TakeProfit > 0 && high >= pos.TakeProfit {
+		sig.Kind, sig.Reason, sig.TakeProfit = model.SignalSell, "TP", pos.TakeProfit
+		sig.ExitReason = fmt.Sprintf("TP: high %.4f ≥ PDH %.4f (вход %.4f)", high, pos.TakeProfit, pos.PurchasePrice)
+		return sig
+	}
+	if s.p.RSIPeriod > 0 && s.p.RSIExit > 0 && n > s.p.RSIPeriod {
+		if rsi := indicators.RSISeries(md.Closes, s.p.RSIPeriod)[i]; rsi >= s.p.RSIExit {
+			sig.Kind, sig.Reason = model.SignalSell, "RSI"
+			sig.ExitReason = fmt.Sprintf("RSI: RSI(%d) %.1f ≥ %.0f, выход по %.4f (вход %.4f)", s.p.RSIPeriod, rsi, s.p.RSIExit, closeP, pos.PurchasePrice)
+			return sig
+		}
+	}
+	if hist := histogram(md.Closes, s.p); hist != nil && len(md.Times) == n {
+		if macdExit(hist, entryIndex(md.Times, pos.EntryTime), i) {
+			sig.Kind, sig.Reason = model.SignalSell, "MACD"
+			sig.ExitReason = fmt.Sprintf("MACD: гистограмма %.4f красная после зелёной в сделке, выход по %.4f (вход %.4f)", hist[i], closeP, pos.PurchasePrice)
+			return sig
+		}
+	}
+	if why := s.eodReason(md, pos); why != "" {
+		sig.Kind, sig.Reason = model.SignalSell, "EOD"
+		sig.ExitReason = fmt.Sprintf("EOD: %s, выход по %.4f (вход %.4f)", why, closeP, pos.PurchasePrice)
+	}
+	return sig
+}
+
+// stop is StopDailyATR daily ATRs below the fill, with the ATR frozen at entry (today's when the
+// position carries none). 0 — no stop.
+func (s *Strategy) stop(md strategy.MarketData, pos *strategy.Position) float64 {
+	if s.p.StopDailyATR <= 0 {
+		return 0
+	}
+	atr := pos.EntryATR
+	if atr <= 0 {
+		atr = s.dailyATR(md)
+	}
+	if atr <= 0 {
+		return 0
+	}
+	return max(pos.PurchasePrice-s.p.StopDailyATR*atr, 0)
+}
+
+// histogram is MACD line minus signal line over closes; nil for invalid periods or short history.
+func histogram(closes []float64, p Params) []float64 {
+	m, sg := indicators.MACD(closes, p.MACDFast, p.MACDSlow, p.MACDSignal)
+	if m == nil {
+		return nil
+	}
+	h := make([]float64, len(m))
+	for k := range m {
+		h[k] = m[k] - sg[k]
+	}
+	return h
+}
+
+// entryIndex is the index of the bar that opened at entry, or -1 when entry is unset or not in
+// the window.
+func entryIndex(times []time.Time, entry time.Time) int {
+	if entry.IsZero() {
+		return -1
+	}
+	for j := len(times) - 1; j >= 0; j-- {
+		if times[j].Equal(entry) {
+			return j
+		}
+		if times[j].Before(entry) {
+			return -1
+		}
+	}
+	return -1
+}
+
+// macdExit: the histogram is red on bar i and was green (≥ 0) on some bar from the entry bar e
+// up to i-1.
+func macdExit(hist []float64, e, i int) bool {
+	if e < 0 || e >= i || hist[i] >= 0 {
+		return false
+	}
+	for k := e; k < i; k++ {
+		if hist[k] >= 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// eodReason explains why the position must close on the current bar, or returns "" when it may
+// stay. It fails closed: no bar times, the first bar of a new MSK date, a bar of a later date
+// than the entry, or a bar starting at/after Exit MSK.
+func (s *Strategy) eodReason(md strategy.MarketData, pos *strategy.Position) string {
+	n := len(md.Closes)
+	if n < 2 || len(md.Times) != n {
+		return "нет времени свечей — выход по безопасности"
+	}
+	now := md.Times[n-1]
+	if dayKey(now) != dayKey(md.Times[n-2]) {
+		return "первая свеча новой даты — позиция не переносится через ночь"
+	}
+	if !pos.EntryTime.IsZero() && dayKey(now) != dayKey(pos.EntryTime) {
+		return "свеча следующего дня — позиция не переносится через ночь"
+	}
+	if minuteOf(now) >= s.p.ExitHour*60+s.p.ExitMinute {
+		return fmt.Sprintf("свеча %s не раньше %02d:%02d MSK", now.In(mskLoc).Format("15:04"), s.p.ExitHour, s.p.ExitMinute)
+	}
+	return ""
+}
