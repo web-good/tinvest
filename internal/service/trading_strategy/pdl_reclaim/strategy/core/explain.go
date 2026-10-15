@@ -20,35 +20,42 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 		return "недостаточно свечей или нет времени/open свечей\n"
 	}
 	i := n - 1
-	t := md.Times[i].In(mskLoc)
-	fmt.Fprintf(&sb, "%s окно: сигнал %s %s, покупка %s (сигнал с %02d:%02d, покупка до %02d:%02d, Пн–Пт)\n",
-		mark(s.inEntryWindow(md.Times[i])), t.Weekday(), t.Format("15:04"), md.Times[i].Add(s.step).In(mskLoc).Format("15:04"),
-		p.EntryFromHour, p.EntryFromMinute, p.EntryToHour, p.EntryToMinute)
-
-	o, h, l, c := md.Opens[i], md.Highs[i], md.Lows[i], md.Closes[i]
-	fmt.Fprintf(&sb, "свеча: open %.4f high %.4f low %.4f close %.4f\n", o, h, l, c)
-	if pdl, pdh, ok := s.levels(md); ok {
-		fmt.Fprintf(&sb, "уровни вчера: PDL %.4f, PDH %.4f\n", pdl, pdh)
-		fmt.Fprintf(&sb, "%s A (включён %d): зелёная %s, low < PDL %s, close > PDL %s\n",
-			mark(isA(md, i, pdl)), p.EntryA, mark(c > o), mark(l < pdl), mark(c > pdl))
-		po, pc, pl := md.Opens[i-1], md.Closes[i-1], md.Lows[i-1]
-		fmt.Fprintf(&sb, "%s B (включён %d): одна дата %s, пред. красная %s, её close %.4f < PDL %s, текущая зелёная %s, close > open пред. %.4f %s, low < low пред. %.4f %s\n",
-			mark(isB(md, i, pdl)), p.EntryB, mark(dayKey(md.Times[i]) == dayKey(md.Times[i-1])), mark(pc < po), pc, mark(pc < pdl),
-			mark(c > o), po, mark(c > po), pl, mark(l < pl))
-		if p.TakeProfitPDH > 0 {
-			fmt.Fprintf(&sb, "%s цель: close %.4f < PDH %.4f\n", mark(c < pdh), c, pdh)
+	ser, k, tf, ok := s.signalBar(md)
+	if !ok {
+		fmt.Fprintf(&sb, "✗ таймфрейм 30m (с %02d:%02d): на свече %s получас не закрылся — сигнала нет\n",
+			p.SwitchHour, p.SwitchMinute, md.Times[i].In(mskLoc).Format("15:04"))
+	} else {
+		t := ser.t[k].In(mskLoc)
+		fmt.Fprintf(&sb, "%s окно: сигнал %s %s %s, покупка %s (сигнал с %02d:%02d, покупка до %02d:%02d, 30m с %02d:%02d, Пн–Пт)\n",
+			mark(s.entryAllowed(md, ser, k, tf)), tf, t.Weekday(), t.Format("15:04"), md.Times[i].Add(s.step).In(mskLoc).Format("15:04"),
+			p.EntryFromHour, p.EntryFromMinute, p.EntryToHour, p.EntryToMinute, p.SwitchHour, p.SwitchMinute)
+		o, h, l, c := ser.o[k], ser.h[k], ser.l[k], ser.c[k]
+		fmt.Fprintf(&sb, "свеча %s: open %.4f high %.4f low %.4f close %.4f\n", tf, o, h, l, c)
+		if pdl, pdh, ok := s.levels(md); ok {
+			fmt.Fprintf(&sb, "уровни вчера: PDL %.4f, PDH %.4f\n", pdl, pdh)
+			fmt.Fprintf(&sb, "%s A (включён %d): зелёная %s, low < PDL %s, close > PDL %s\n",
+				mark(isA(ser, k, pdl)), p.EntryA, mark(c > o), mark(l < pdl), mark(c > pdl))
+			if k >= 1 {
+				po, pc, pl := ser.o[k-1], ser.c[k-1], ser.l[k-1]
+				fmt.Fprintf(&sb, "%s B (включён %d): одна дата %s, пред. красная %s, её close %.4f < PDL %s, текущая зелёная %s, close > open пред. %.4f %s, low < low пред. %.4f %s\n",
+					mark(isB(ser, k, pdl)), p.EntryB, mark(dayKey(ser.t[k]) == dayKey(ser.t[k-1])), mark(pc < po), pc, mark(pc < pdl),
+					mark(c > o), po, mark(c > po), pl, mark(l < pl))
+			}
+			if p.TakeProfitPDH > 0 {
+				fmt.Fprintf(&sb, "%s цель: close %.4f < PDH %.4f\n", mark(c < pdh), c, pdh)
+			}
+		} else {
+			sb.WriteString("✗ уровни: нет будней дневки\n")
 		}
-	} else {
-		sb.WriteString("✗ уровни: нет будней дневки\n")
-	}
-	if p.RSIEntryMax > 0 && p.RSIPeriod > 0 {
-		rsi, ok := s.entryRSI(md)
-		fmt.Fprintf(&sb, "%s RSI(%d) сигнальной свечи %.1f ≤ %.0f\n", mark(ok), p.RSIPeriod, rsi, p.RSIEntryMax)
-	} else {
-		sb.WriteString("RSI-фильтр входа: выключен\n")
+		if p.RSIEntryMax > 0 && p.RSIPeriod > 0 {
+			rsi, ok := s.entryRSI(ser.c[:k+1])
+			fmt.Fprintf(&sb, "%s RSI(%d) сигнальной свечи %.1f ≤ %.0f\n", mark(ok), p.RSIPeriod, rsi, p.RSIEntryMax)
+		} else {
+			sb.WriteString("RSI-фильтр входа: выключен\n")
+		}
 	}
 	if atr := s.dailyATR(md); atr > 0 {
-		fmt.Fprintf(&sb, "✓ дневной ATR(%d): %.4f, стоп от close %.4f\n", p.DailyATRPeriod, atr, c-p.StopDailyATR*atr)
+		fmt.Fprintf(&sb, "✓ дневной ATR(%d): %.4f, стоп %.2f ATR\n", p.DailyATRPeriod, atr, p.StopDailyATR)
 	} else {
 		fmt.Fprintf(&sb, "✗ дневной ATR(%d): не посчитан\n", p.DailyATRPeriod)
 	}
@@ -86,17 +93,21 @@ func (s *Strategy) explainExits(sb *strings.Builder, md strategy.MarketData) {
 	} else {
 		sb.WriteString("цель: нет\n")
 	}
-	if p.RSIPeriod > 0 && p.RSIExit > 0 && len(md.Closes) > p.RSIPeriod {
-		rsi := indicators.RSISeries(md.Closes, p.RSIPeriod)[i]
-		fmt.Fprintf(sb, "%s RSI(%d) %.1f ≥ %.0f\n", mark(rsi >= p.RSIExit), p.RSIPeriod, rsi, p.RSIExit)
+	closes, k, e, tf, ok := s.exitSeries(md, pos)
+	if !ok {
+		fmt.Fprintf(sb, "RSI/MACD %s: получас не закрылся на этой свече\n", tf)
 	} else {
-		sb.WriteString("RSI-выход: выключен или не прогрет\n")
-	}
-	if hist := histogram(md.Closes, p); hist != nil {
-		e := entryIndex(md.Times, pos.EntryTime)
-		fmt.Fprintf(sb, "%s MACD: гистограмма %.4f, свеча входа в окне %s\n", mark(macdExit(hist, e, i)), hist[i], mark(e >= 0))
-	} else {
-		sb.WriteString("MACD-выход: выключен\n")
+		if p.RSIPeriod > 0 && p.RSIExit > 0 && len(closes) > p.RSIPeriod {
+			rsi := indicators.RSISeries(closes, p.RSIPeriod)[k]
+			fmt.Fprintf(sb, "%s RSI %s(%d) %.1f ≥ %.0f\n", mark(rsi >= p.RSIExit), tf, p.RSIPeriod, rsi, p.RSIExit)
+		} else {
+			sb.WriteString("RSI-выход: выключен или не прогрет\n")
+		}
+		if hist := histogram(closes, p); hist != nil {
+			fmt.Fprintf(sb, "%s MACD %s: гистограмма %.4f, свеча входа в окне %s\n", mark(macdExit(hist, e, k)), tf, hist[k], mark(e >= 0))
+		} else {
+			sb.WriteString("MACD-выход: выключен\n")
+		}
 	}
 	why := s.eodReason(md, pos)
 	fmt.Fprintf(sb, "%s конец дня: %s\n", mark(why != ""), orNone(why))

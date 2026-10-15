@@ -70,6 +70,13 @@ func fixture(bars []bar) strategy.MarketData {
 	return md
 }
 
+// m5 is the defaults with the switch to 30m turned off: the whole day trades on 5m bars.
+func m5() Params {
+	p := DefaultParams()
+	p.SwitchHour = 24
+	return p
+}
+
 func newS(p Params) *Strategy { return NewWithParams("TEST", 5*time.Minute, p) }
 
 // warm prepends 12 flat bars at 102 ending 5 minutes before bars[0]: RSI is warm and every
@@ -94,7 +101,7 @@ var (
 )
 
 func TestEntryA(t *testing.T) {
-	sig := decide(DefaultParams(), []bar{pre, barA})
+	sig := decide(m5(), []bar{pre, barA})
 	if sig.Kind != model.SignalBuy {
 		t.Fatalf("Kind = %v, want Buy", sig.Kind)
 	}
@@ -116,14 +123,14 @@ func TestEntryANeedsEveryCondition(t *testing.T) {
 		"close at PDL":    {"2026-09-14 10:00", 98.9, 99.5, 98.8, 99.0},
 		"close below PDL": {"2026-09-14 10:00", 98.85, 99.5, 98.8, 98.95},
 	} {
-		if sig := decide(DefaultParams(), []bar{pre, b}); sig.Kind != model.SignalNone {
+		if sig := decide(m5(), []bar{pre, b}); sig.Kind != model.SignalNone {
 			t.Errorf("%s: Kind = %v, want None", name, sig.Kind)
 		}
 	}
 }
 
 func TestEntryB(t *testing.T) {
-	sig := decide(DefaultParams(), []bar{redB, greenB})
+	sig := decide(m5(), []bar{redB, greenB})
 	if sig.Kind != model.SignalBuy {
 		t.Fatalf("Kind = %v, want Buy", sig.Kind)
 	}
@@ -144,7 +151,7 @@ func TestEntryBNeedsEveryCondition(t *testing.T) {
 		"current is red":        {redB, {"2026-09-14 10:00", 98.95, 98.95, 98.4, 98.92}},
 		"different dates":       {{"2026-09-11 23:55", 98.9, 98.95, 98.5, 98.6}, {"2026-09-14 07:00", 98.55, 98.95, 98.4, 98.92}},
 	} {
-		if sig := decide(DefaultParams(), pair[:]); sig.Kind != model.SignalNone {
+		if sig := decide(m5(), pair[:]); sig.Kind != model.SignalNone {
 			t.Errorf("%s: Kind = %v, want None", name, sig.Kind)
 		}
 	}
@@ -152,10 +159,10 @@ func TestEntryBNeedsEveryCondition(t *testing.T) {
 
 func TestEntryBothPatternsReportA(t *testing.T) {
 	both := []bar{{"2026-09-14 09:55", 99.2, 99.2, 98.7, 98.8}, {"2026-09-14 10:00", 98.75, 99.4, 98.6, 99.3}}
-	if sig := decide(DefaultParams(), both); sig.Kind != model.SignalBuy || !strings.HasPrefix(sig.EntryReason, "A") {
+	if sig := decide(m5(), both); sig.Kind != model.SignalBuy || !strings.HasPrefix(sig.EntryReason, "A") {
 		t.Fatalf("both: %v %q, want Buy with reason A", sig.Kind, sig.EntryReason)
 	}
-	p := DefaultParams()
+	p := m5()
 	p.EntryA = 0
 	if sig := decide(p, both); sig.Kind != model.SignalBuy || !strings.HasPrefix(sig.EntryReason, "B") {
 		t.Fatalf("EntryA off: %v %q, want Buy with reason B", sig.Kind, sig.EntryReason)
@@ -163,12 +170,12 @@ func TestEntryBothPatternsReportA(t *testing.T) {
 }
 
 func TestEntrySwitches(t *testing.T) {
-	p := DefaultParams()
+	p := m5()
 	p.EntryA = 0
 	if sig := decide(p, []bar{pre, barA}); sig.Kind != model.SignalNone {
 		t.Errorf("EntryA off: Kind = %v, want None", sig.Kind)
 	}
-	p = DefaultParams()
+	p = m5()
 	p.EntryB = 0
 	if sig := decide(p, []bar{redB, greenB}); sig.Kind != model.SignalNone {
 		t.Errorf("EntryB off: Kind = %v, want None", sig.Kind)
@@ -187,7 +194,7 @@ func TestEntryWindow(t *testing.T) {
 		b.t = ts
 		p := pre
 		p.t = at(ts).Add(-5 * time.Minute).Format("2006-01-02 15:04")
-		if got := decide(DefaultParams(), []bar{p, b}).Kind == model.SignalBuy; got != want {
+		if got := decide(m5(), []bar{p, b}).Kind == model.SignalBuy; got != want {
 			t.Errorf("%s: buy = %v, want %v", ts, got, want)
 		}
 	}
@@ -196,7 +203,7 @@ func TestEntryWindow(t *testing.T) {
 // Review focus 1: with the window widened to midnight the fill bar of a 23:55 signal is the next
 // date — no entry.
 func TestEntryFillMustBeSameDate(t *testing.T) {
-	p := DefaultParams()
+	p := m5()
 	p.EntryToHour = 24
 	b := barA
 	b.t = "2026-09-14 23:55"
@@ -213,10 +220,10 @@ func TestEntryFillMustBeSameDate(t *testing.T) {
 
 func TestEntryCloseAtPDH(t *testing.T) {
 	wide := bar{"2026-09-14 10:00", 99.2, 101.2, 98.8, 101.0}
-	if sig := decide(DefaultParams(), []bar{pre, wide}); sig.Kind != model.SignalNone {
+	if sig := decide(m5(), []bar{pre, wide}); sig.Kind != model.SignalNone {
 		t.Fatalf("target on: Kind = %v, want None", sig.Kind)
 	}
-	p := DefaultParams()
+	p := m5()
 	p.TakeProfitPDH = 0
 	sig := decide(p, []bar{pre, wide})
 	if sig.Kind != model.SignalBuy || sig.TakeProfit != 0 {
@@ -227,7 +234,7 @@ func TestEntryCloseAtPDH(t *testing.T) {
 // Review focus 4: Sunday's daily (99.9..100.1) is not the reference day; Friday's (99..101) is.
 func TestEntryIgnoresWeekendDaily(t *testing.T) {
 	b := bar{"2026-09-14 10:00", 99.6, 99.97, 99.5, 99.95} // a reclaim of 99.9, not of 99
-	if sig := decide(DefaultParams(), []bar{pre, b}); sig.Kind != model.SignalNone {
+	if sig := decide(m5(), []bar{pre, b}); sig.Kind != model.SignalNone {
 		t.Fatalf("Kind = %v, want None", sig.Kind)
 	}
 }
@@ -235,10 +242,10 @@ func TestEntryIgnoresWeekendDaily(t *testing.T) {
 func TestEntryNeedsDailiesAndStop(t *testing.T) {
 	md := fixture(warm([]bar{pre, barA}))
 	md.DailyHighs, md.DailyLows, md.DailyCloses, md.DailyTimes = nil, nil, nil, nil
-	if sig := newS(DefaultParams()).Decide(md); sig.Kind != model.SignalNone {
+	if sig := newS(m5()).Decide(md); sig.Kind != model.SignalNone {
 		t.Errorf("no dailies: Kind = %v, want None", sig.Kind)
 	}
-	p := DefaultParams()
+	p := m5()
 	p.StopDailyATR = 0
 	if sig := decide(p, []bar{pre, barA}); sig.Kind != model.SignalNone {
 		t.Errorf("no stop: Kind = %v, want None", sig.Kind)
@@ -246,8 +253,12 @@ func TestEntryNeedsDailiesAndStop(t *testing.T) {
 }
 
 func TestLookbackCoversWarmupAndDay(t *testing.T) {
-	if got := newS(DefaultParams()).Lookback(); got != 3*(26+9)+dayBars {
-		t.Fatalf("Lookback = %d, want %d", got, 3*(26+9)+dayBars)
+	warm := 3 * (26 + 8) // MACD 9/26/8
+	if got := newS(m5()).Lookback(); got != warm+dayBars {
+		t.Fatalf("5m only: Lookback = %d, want %d", got, warm+dayBars)
+	}
+	if got := newS(DefaultParams()).Lookback(); got != 6*warm+dayBars {
+		t.Fatalf("with 30m: Lookback = %d, want %d", got, 6*warm+dayBars)
 	}
 }
 
@@ -263,10 +274,10 @@ func rally() []bar {
 }
 
 func TestEntryBlockedWhenRSIAbove(t *testing.T) {
-	if sig := newS(DefaultParams()).Decide(fixture(rally())); sig.Kind != model.SignalNone {
+	if sig := newS(m5()).Decide(fixture(rally())); sig.Kind != model.SignalNone {
 		t.Fatalf("RSI above 50: Kind = %v, want None", sig.Kind)
 	}
-	p := DefaultParams()
+	p := m5()
 	p.RSIEntryMax = 0
 	if sig := newS(p).Decide(fixture(rally())); sig.Kind != model.SignalBuy {
 		t.Fatalf("gate off: Kind = %v, want Buy", sig.Kind)
@@ -275,7 +286,7 @@ func TestEntryBlockedWhenRSIAbove(t *testing.T) {
 
 // Without enough closes to compute RSI the gate refuses the entry.
 func TestEntryRSIGateNeedsHistory(t *testing.T) {
-	if sig := newS(DefaultParams()).Decide(fixture([]bar{pre, barA})); sig.Kind != model.SignalNone {
+	if sig := newS(m5()).Decide(fixture([]bar{pre, barA})); sig.Kind != model.SignalNone {
 		t.Fatalf("Kind = %v, want None", sig.Kind)
 	}
 }

@@ -12,7 +12,7 @@ import (
 
 // quiet switches off the RSI and MACD exits so stop/target/EOD are tested alone.
 func quiet() Params {
-	p := DefaultParams()
+	p := m5()
 	p.RSIPeriod, p.MACDFast = 0, 0
 	return p
 }
@@ -85,7 +85,7 @@ func TestExitNextDate(t *testing.T) {
 }
 
 func TestExitRSI(t *testing.T) {
-	p := DefaultParams()
+	p := m5()
 	p.MACDFast = 0
 	// up 0.1, back 0.02: Wilder RSI with no losses at all is 50 in pkg/indicators, so the path
 	// needs small pullbacks to read high.
@@ -132,7 +132,8 @@ func firstRed(t *testing.T, bars []bar) (int, []float64) {
 	for k, b := range bars {
 		closes[k] = b.c
 	}
-	m, s := indicators.MACD(closes, 12, 26, 9)
+	d := DefaultParams()
+	m, s := indicators.MACD(closes, d.MACDFast, d.MACDSlow, d.MACDSignal)
 	h := make([]float64, len(m))
 	for k := range m {
 		h[k] = m[k] - s[k]
@@ -154,7 +155,7 @@ func macdPos(entry bar) strategy.Position {
 }
 
 func TestExitMACDAfterGreen(t *testing.T) {
-	p := DefaultParams()
+	p := m5()
 	p.RSIPeriod = 0
 	bars := macdPath()
 	r, _ := firstRed(t, bars)
@@ -176,7 +177,7 @@ func TestExitMACDAfterGreen(t *testing.T) {
 
 // Review focus 2: no entry time, or an entry time outside the window — MACD exit stays off.
 func TestExitMACDWithoutEntryBar(t *testing.T) {
-	p := DefaultParams()
+	p := m5()
 	p.RSIPeriod = 0
 	bars := macdPath()
 	r, _ := firstRed(t, bars)

@@ -98,3 +98,41 @@ func TestEngineReentersSameDayAndExitsAtEOD(t *testing.T) {
 		t.Fatalf("second exit %q @ %v, want EOD @ 18:30", tr.Reason, tr.ExitTime)
 	}
 }
+
+// longHistory is Tuesday–Friday 07:00–23:55 flat at 100: 816 bars, more than the lookback with
+// half-hours on (6·102 + 139 = 751).
+func longHistory() []bar {
+	var out []bar
+	for _, d := range []string{"2026-09-08", "2026-09-09", "2026-09-10", "2026-09-11"} {
+		out = append(out, flat(d+" 07:00", d+" 23:55", 100)...)
+	}
+	return out
+}
+
+// Morning trade on 5m (A at 09:00, target), then a trade on half-hours (A on 10:00–10:30, bought
+// at 10:30, sold at EOD).
+func TestEngineMorning5mThenHalfHour(t *testing.T) {
+	p := quiet()
+	p.SwitchHour = 10
+	mon := flat("2026-09-14 07:00", "2026-09-14 08:55", 100)
+	mon = append(mon,
+		bar{"2026-09-14 09:00", 99.2, 99.5, 98.8, 99.3},
+		bar{"2026-09-14 09:05", 99.35, 99.6, 99.3, 99.5},
+		bar{"2026-09-14 09:10", 99.5, 101.2, 99.5, 101.0})
+	mon = append(mon, flat("2026-09-14 09:15", "2026-09-14 09:55", 101)...)
+	mon = append(mon, halfA()...)
+	mon = append(mon, flat("2026-09-14 10:30", "2026-09-14 18:30", 99.3)...)
+	bars := append(longHistory(), mon...)
+	res := bt.Run(NewWithParams("TEST", 5*time.Minute, p), toCandles(bars), engineDaily(), nil,
+		bt.Config{InitialCash: 1e6, Fraction: 1, Commission: 0, Lot: 1, EntryAtNextOpen: true})
+	if len(res.Trades) != 2 {
+		t.Fatalf("trades = %d, want 2: %+v", len(res.Trades), res.Trades)
+	}
+	if tr := res.Trades[0]; !tr.EntryTime.Equal(at("2026-09-14 09:05")) || tr.Reason != "TP" {
+		t.Fatalf("first trade %v %q, want 09:05 TP", tr.EntryTime, tr.Reason)
+	}
+	tr := res.Trades[1]
+	if !tr.EntryTime.Equal(at("2026-09-14 10:30")) || math.Abs(tr.EntryPrice-99.3) > eps || tr.Reason != "EOD" {
+		t.Fatalf("second trade %v @ %v %q, want 10:30 @ 99.3 EOD", tr.EntryTime, tr.EntryPrice, tr.Reason)
+	}
+}
