@@ -66,17 +66,17 @@ func TestExitHoldsInsideRange(t *testing.T) {
 }
 
 func TestExitEndOfDay(t *testing.T) {
-	bars := append([]bar{fillBar}, flat("2026-09-14 10:10", "2026-09-14 18:25", 99.5)...)
+	bars := append([]bar{fillBar}, flat("2026-09-14 10:10", "2026-09-14 23:40", 99.5)...)
 	if sig := held(quiet(), bars, pos0()); sig.Kind != model.SignalNone {
-		t.Fatalf("18:25: Kind = %v, want None", sig.Kind)
+		t.Fatalf("23:40: Kind = %v, want None", sig.Kind)
 	}
-	bars = append(bars, bar{"2026-09-14 18:30", 99.5, 99.5, 99.5, 99.5})
+	bars = append(bars, bar{"2026-09-14 23:45", 99.5, 99.5, 99.5, 99.5})
 	if sig := held(quiet(), bars, pos0()); sig.Reason != "EOD" {
-		t.Fatalf("18:30: Reason = %q, want EOD", sig.Reason)
+		t.Fatalf("23:45: Reason = %q, want EOD", sig.Reason)
 	}
 }
 
-// Review focus 3: no 18:30 bar in the data — the first bar of the next date closes the position.
+// Review focus 3: no 23:45 bar in the data — the first bar of the next date closes the position.
 func TestExitNextDate(t *testing.T) {
 	bars := []bar{fillBar, {"2026-09-14 16:00", 99.5, 99.5, 99.5, 99.5}, {"2026-09-15 07:00", 99.5, 99.5, 99.5, 99.5}}
 	if sig := held(quiet(), bars, pos0()); sig.Reason != "EOD" {

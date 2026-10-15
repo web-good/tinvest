@@ -1,6 +1,6 @@
 // engine_test.go runs pdl_reclaim through the real backtest engine to pin the fills the strategy
 // relies on: entry at the next bar's open, TP at max(target, open), SL at min(stop from the fill,
-// open), EOD at the 18:30 bar's close, and a second trade on the same day after an exit.
+// open), EOD at the 23:45 bar's close, and a second trade on the same day after an exit.
 package core
 
 import (
@@ -28,9 +28,9 @@ func engineDaily() []bt.Candle {
 	return out
 }
 
-// history is Thursday and Friday 07:00–18:30 flat at 100: 278 bars, more than the 244-bar lookback.
+// history is Thursday and Friday 07:00–23:45 flat at 100: 404 bars, more than the 304-bar lookback.
 func history() []bar {
-	return append(flat("2026-09-10 07:00", "2026-09-10 18:30", 100), flat("2026-09-11 07:00", "2026-09-11 18:30", 100)...)
+	return append(flat("2026-09-10 07:00", "2026-09-10 23:45", 100), flat("2026-09-11 07:00", "2026-09-11 23:45", 100)...)
 }
 
 func run(t *testing.T, monday []bar) []bt.Trade {
@@ -85,7 +85,7 @@ func TestEngineReentersSameDayAndExitsAtEOD(t *testing.T) {
 		bar{"2026-09-14 11:00", 98.9, 98.95, 98.5, 98.6},   // red under PDL
 		bar{"2026-09-14 11:05", 98.55, 98.95, 98.4, 98.92}, // engulfing — entry B
 		bar{"2026-09-14 11:10", 98.9, 98.95, 98.85, 98.9})
-	mon = append(mon, flat("2026-09-14 11:15", "2026-09-14 18:30", 98.9)...)
+	mon = append(mon, flat("2026-09-14 11:15", "2026-09-14 23:45", 98.9)...)
 	trades := run(t, mon)
 	if len(trades) != 2 {
 		t.Fatalf("trades = %d, want 2: %+v", len(trades), trades)
@@ -94,13 +94,13 @@ func TestEngineReentersSameDayAndExitsAtEOD(t *testing.T) {
 	if !tr.EntryTime.Equal(at("2026-09-14 11:10")) || math.Abs(tr.EntryPrice-98.9) > eps {
 		t.Fatalf("second entry %v @ %v, want 98.9 @ 11:10", tr.EntryPrice, tr.EntryTime)
 	}
-	if tr.Reason != "EOD" || !tr.ExitTime.Equal(at("2026-09-14 18:30")) {
-		t.Fatalf("second exit %q @ %v, want EOD @ 18:30", tr.Reason, tr.ExitTime)
+	if tr.Reason != "EOD" || !tr.ExitTime.Equal(at("2026-09-14 23:45")) {
+		t.Fatalf("second exit %q @ %v, want EOD @ 23:45", tr.Reason, tr.ExitTime)
 	}
 }
 
 // longHistory is Tuesday–Friday 07:00–23:55 flat at 100: 816 bars, more than the lookback with
-// half-hours on (6·102 + 139 = 751).
+// half-hours on (6·102 + 202 = 814).
 func longHistory() []bar {
 	var out []bar
 	for _, d := range []string{"2026-09-08", "2026-09-09", "2026-09-10", "2026-09-11"} {
@@ -121,7 +121,7 @@ func TestEngineMorning5mThenHalfHour(t *testing.T) {
 		bar{"2026-09-14 09:10", 99.5, 101.2, 99.5, 101.0})
 	mon = append(mon, flat("2026-09-14 09:15", "2026-09-14 09:55", 101)...)
 	mon = append(mon, halfA()...)
-	mon = append(mon, flat("2026-09-14 10:30", "2026-09-14 18:30", 99.3)...)
+	mon = append(mon, flat("2026-09-14 10:30", "2026-09-14 23:45", 99.3)...)
 	bars := append(longHistory(), mon...)
 	res := bt.Run(NewWithParams("TEST", 5*time.Minute, p), toCandles(bars), engineDaily(), nil,
 		bt.Config{InitialCash: 1e6, Fraction: 1, Commission: 0, Lot: 1, EntryAtNextOpen: true})

@@ -19,9 +19,10 @@ import (
 	"tinvest/pkg/indicators"
 )
 
-// dayBars is the number of 5-minute bars from 07:00 to the 18:30 exit bar inclusive: an open
-// position is never older than that, so the window always reaches back to its entry bar.
-const dayBars = 139
+// dayBars is the number of 5-minute bars from 07:00 to the 23:45 exit bar (the last bar of the
+// evening session) inclusive: an open position is never older than that, so the window always
+// reaches back to its entry bar.
+const dayBars = 202
 
 // barsPerHalf is the number of 5-minute bars in a half-hour.
 const barsPerHalf = 6
@@ -71,8 +72,8 @@ func DefaultParams() Params {
 		EntryFromMinute: 0,
 		EntryToHour:     18,
 		EntryToMinute:   0,
-		ExitHour:        18,
-		ExitMinute:      30,
+		ExitHour:        23,
+		ExitMinute:      45,
 		SwitchHour:      10,
 		SwitchMinute:    0,
 	}
