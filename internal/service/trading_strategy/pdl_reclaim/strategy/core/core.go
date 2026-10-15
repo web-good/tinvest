@@ -173,15 +173,16 @@ func (s *Strategy) dailyATR(md strategy.MarketData) float64 {
 }
 
 // entryAllowed reports whether signal bar k of ser may buy at the next 5m open: a weekday, the
-// bar starts at/after EntryFrom (a half-hour also at/after Switch and on today's date), and the
-// buy bar starts before EntryTo on the signal's date.
+// bar starts at/after EntryFrom (a half-hour also at/after Switch, on today's date and closed no
+// later than the half-hour after it), and the buy bar starts before EntryTo on the signal's date.
 func (s *Strategy) entryAllowed(md strategy.MarketData, ser series, k int, tf string) bool {
 	t := ser.t[k]
 	if isWeekend(t.In(mskLoc)) || minuteOf(t) < s.p.EntryFromHour*60+s.p.EntryFromMinute {
 		return false
 	}
 	now := md.Times[len(md.Times)-1]
-	if tf == "30m" && (minuteOf(t) < s.switchMinute() || dayKey(t) != dayKey(now)) {
+	// a half-hour closed late by a gap bar (now beyond the half-hour right after it) is stale
+	if tf == "30m" && (minuteOf(t) < s.switchMinute() || dayKey(t) != dayKey(now) || halfStart(now).After(t.Add(halfHour))) {
 		return false
 	}
 	fill := now.Add(s.step)
@@ -308,18 +309,23 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 		sig.ExitReason = fmt.Sprintf("TP: high %.4f ≥ PDH %.4f (вход %.4f)", high, pos.TakeProfit, pos.PurchasePrice)
 		return sig
 	}
-	if closes, k, e, tf, ok := s.exitSeries(md, pos); ok {
+	if closes, from, k, e, tf, ok := s.exitSeries(md, pos); ok {
+		var rsi, hist []float64
 		if s.p.RSIPeriod > 0 && s.p.RSIExit > 0 && len(closes) > s.p.RSIPeriod {
-			if rsi := indicators.RSISeries(closes, s.p.RSIPeriod)[k]; rsi >= s.p.RSIExit {
+			rsi = indicators.RSISeries(closes, s.p.RSIPeriod)
+		}
+		hist = histogram(closes, s.p)
+		for j := from; j <= k; j++ {
+			if rsi != nil && rsi[j] >= s.p.RSIExit {
 				sig.Kind, sig.Reason = model.SignalSell, "RSI"
-				sig.ExitReason = fmt.Sprintf("RSI %s: RSI(%d) %.1f ≥ %.0f, выход по %.4f (вход %.4f)", tf, s.p.RSIPeriod, rsi, s.p.RSIExit, closeP, pos.PurchasePrice)
+				sig.ExitReason = fmt.Sprintf("RSI %s: RSI(%d) %.1f ≥ %.0f, выход по %.4f (вход %.4f)", tf, s.p.RSIPeriod, rsi[j], s.p.RSIExit, closeP, pos.PurchasePrice)
 				return sig
 			}
-		}
-		if hist := histogram(closes, s.p); hist != nil && macdExit(hist, e, k) {
-			sig.Kind, sig.Reason = model.SignalSell, "MACD"
-			sig.ExitReason = fmt.Sprintf("MACD %s: гистограмма %.4f красная после зелёной в сделке, выход по %.4f (вход %.4f)", tf, hist[k], closeP, pos.PurchasePrice)
-			return sig
+			if hist != nil && macdExit(hist, e, j) {
+				sig.Kind, sig.Reason = model.SignalSell, "MACD"
+				sig.ExitReason = fmt.Sprintf("MACD %s: гистограмма %.4f красная после зелёной в сделке, выход по %.4f (вход %.4f)", tf, hist[j], closeP, pos.PurchasePrice)
+				return sig
+			}
 		}
 	}
 	if why := s.eodReason(md, pos); why != "" {

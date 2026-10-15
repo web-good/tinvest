@@ -70,35 +70,40 @@ func (s *Strategy) halves(md strategy.MarketData) (series, []int) {
 	return hs, done
 }
 
-// closedHalf returns the half-hours and the index of the one that closed on the current bar, or
-// ok=false when no half-hour closed on it. The cheap time test runs first, so the half-hours are
-// built about once per half-hour instead of on every 5m bar.
-func (s *Strategy) closedHalf(md strategy.MarketData) (series, int, bool) {
+// closedHalf returns the half-hours and the indexes of the first and the last one that closed on
+// the current bar (a gap bar can close two), or ok=false when none closed on it. The cheap time
+// test runs first, so the half-hours are built about once per half-hour instead of on every 5m bar.
+func (s *Strategy) closedHalf(md strategy.MarketData) (hs series, first, k int, ok bool) {
 	n := len(md.Closes)
 	if n == 0 || len(md.Times) != n || len(md.Opens) != n || len(md.Highs) != n || len(md.Lows) != n {
-		return series{}, -1, false
+		return series{}, -1, -1, false
 	}
 	t := md.Times[n-1]
 	gap := n > 1 && !halfStart(t).Equal(halfStart(md.Times[n-2])) && !s.lastOfHalf(md.Times[n-2])
 	if !s.lastOfHalf(t) && !gap {
-		return series{}, -1, false
+		return series{}, -1, -1, false
 	}
 	hs, done := s.halves(md)
-	k := len(done) - 1
+	k = len(done) - 1
 	if k < 0 || done[k] != n-1 {
-		return series{}, -1, false
+		return series{}, -1, -1, false
 	}
-	return hs, k, true
+	first = k
+	for first > 0 && done[first-1] == n-1 {
+		first--
+	}
+	return hs, first, k, true
 }
 
 // signalBar picks the bar the entry rules read on the current 5m bar: the 5m bar itself before
-// Switch, the half-hour that just closed from Switch on (ok=false when none closed).
+// Switch, the latest half-hour that just closed from Switch on (ok=false when none closed). When a
+// gap bar closes two half-hours, the earlier one is not a signal: its buy would come a half-hour late.
 func (s *Strategy) signalBar(md strategy.MarketData) (ser series, k int, tf string, ok bool) {
 	n := len(md.Closes)
 	if !s.switchOn() || minuteOf(md.Times[n-1]) < s.switchMinute() {
 		return fiveMin(md), n - 1, "5m", true
 	}
-	hs, k, ok := s.closedHalf(md)
+	hs, _, k, ok := s.closedHalf(md)
 	return hs, k, "30m", ok
 }
 
@@ -124,20 +129,21 @@ func halfIndex(times []time.Time, entry time.Time) int {
 	return -1
 }
 
-// exitSeries returns the closes the RSI and MACD exits read for a held position, the current
-// index on them and the entry's index: 5m bars for a 5m position, half-hours for a 30m one
-// (ok=false when no half-hour closed on this bar).
-func (s *Strategy) exitSeries(md strategy.MarketData, pos *strategy.Position) (closes []float64, i, e int, tf string, ok bool) {
+// exitSeries returns the closes the RSI and MACD exits read for a held position, the range of
+// indexes on them to check on this bar (from..i, one bar unless a gap bar closed two half-hours)
+// and the entry's index: 5m bars for a 5m position, half-hours for a 30m one (ok=false when no
+// half-hour closed on this bar).
+func (s *Strategy) exitSeries(md strategy.MarketData, pos *strategy.Position) (closes []float64, from, i, e int, tf string, ok bool) {
 	if s.on30m(pos) {
-		hs, k, ok := s.closedHalf(md)
+		hs, first, k, ok := s.closedHalf(md)
 		if !ok {
-			return nil, -1, -1, "30m", false
+			return nil, -1, -1, -1, "30m", false
 		}
-		return hs.c, k, halfIndex(hs.t, pos.EntryTime), "30m", true
+		return hs.c, first, k, halfIndex(hs.t, pos.EntryTime), "30m", true
 	}
 	n := len(md.Closes)
 	if len(md.Times) != n {
-		return md.Closes, n - 1, -1, "5m", true
+		return md.Closes, n - 1, n - 1, -1, "5m", true
 	}
-	return md.Closes, n - 1, entryIndex(md.Times, pos.EntryTime), "5m", true
+	return md.Closes, n - 1, n - 1, entryIndex(md.Times, pos.EntryTime), "5m", true
 }

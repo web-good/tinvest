@@ -93,10 +93,13 @@ func (s *Strategy) explainExits(sb *strings.Builder, md strategy.MarketData) {
 	} else {
 		sb.WriteString("цель: нет\n")
 	}
-	closes, k, e, tf, ok := s.exitSeries(md, pos)
+	closes, from, k, e, tf, ok := s.exitSeries(md, pos)
 	if !ok {
 		fmt.Fprintf(sb, "RSI/MACD %s: получас не закрылся на этой свече\n", tf)
 	} else {
+		if from < k {
+			fmt.Fprintf(sb, "разрыв: на этой свече закрылись %d получаса, выход проверен на каждом, ниже — последний\n", k-from+1)
+		}
 		if p.RSIPeriod > 0 && p.RSIExit > 0 && len(closes) > p.RSIPeriod {
 			rsi := indicators.RSISeries(closes, p.RSIPeriod)[k]
 			fmt.Fprintf(sb, "%s RSI %s(%d) %.1f ≥ %.0f\n", mark(rsi >= p.RSIExit), tf, p.RSIPeriod, rsi, p.RSIExit)

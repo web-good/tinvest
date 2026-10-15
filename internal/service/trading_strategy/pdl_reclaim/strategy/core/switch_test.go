@@ -158,3 +158,40 @@ func TestHalfIndex(t *testing.T) {
 		t.Error("zero entry time must be -1")
 	}
 }
+
+// Review: a half-hour closed hours late by a gap bar must not buy — only the half-hour that ends
+// at the current bar or right before its own half-hour may signal.
+func TestNoStaleHalfEntry(t *testing.T) {
+	bars := append(morning(), flat("2026-09-14 10:00", "2026-09-14 10:25", 102)...)
+	bars = append(bars, half("2026-09-14 10:30", 99.2, 99.5, 98.8, 99.3)[:4]...) // 10:30..10:45, then silence
+	if sig := newS(DefaultParams()).Decide(fixture(append(bars, bar{"2026-09-14 11:00", 99.3, 99.3, 99.3, 99.3}))); sig.Kind != model.SignalBuy {
+		t.Fatalf("closed by the next half's first bar: Kind = %v, want Buy", sig.Kind)
+	}
+	if sig := newS(DefaultParams()).Decide(fixture(append(bars, bar{"2026-09-14 13:10", 99.3, 99.3, 99.3, 99.3}))); sig.Kind != model.SignalNone {
+		t.Fatalf("closed at 13:10: Kind = %v, want None", sig.Kind)
+	}
+}
+
+// Review: one gap bar closing two half-hours reads the exits on both — RSI high on the earlier one exits.
+func TestExit30mTwoHalvesOneBar(t *testing.T) {
+	p := DefaultParams()
+	p.MACDFast = 0
+	bars := flat("2026-09-14 06:00", "2026-09-14 10:25", 100)
+	c := 100.0
+	for k := 0; k < 6; k++ { // half-hours 10:30..13:00 zigzag up, RSI high on the 13:00 one
+		o := c
+		if k%2 == 0 {
+			c += 0.3
+		} else {
+			c -= 0.05
+		}
+		bars = append(bars, half(at("2026-09-14 10:30").Add(time.Duration(k)*30*time.Minute).Format("2006-01-02 15:04"), o, c+0.01, o-0.01, c)...)
+	}
+	bars = bars[:len(bars)-1] // 13:00 half-hour loses its 13:25 bar
+	// 13:55 bar: closes the 13:00 half-hour (gap) and its own 13:30 half-hour, which drops hard
+	bars = append(bars, bar{"2026-09-14 13:55", c, c, c - 3, c - 3})
+	pos := strategy.Position{PurchasePrice: 100, EntryATR: 100, EntryTime: at("2026-09-14 10:30")}
+	if sig := heldAt(p, bars, pos); sig.Reason != "RSI" {
+		t.Fatalf("Reason = %q, want RSI from the 13:00 half-hour", sig.Reason)
+	}
+}
