@@ -192,7 +192,7 @@ func TestDefaultParams(t *testing.T) {
 	want := Params{RSIPeriod: 6, RSIZone: 30, RSICap: 50, ZoneEntry: 1, EMAPeriod: 200,
 		StopDailyATR: 1.0, BreakevenATR: 0.5, TrailATR: 0, DailyATRPeriod: 14, RSIExitPeriod: 10, RSIExit: 70,
 		MACDFast: 12, MACDSlow: 26, MACDSignal: 9, ConfirmBars: 3, FridayTo: 11, StaleBars: 0, StaleATR: 0.3, PrevCloseGate: 0, PrevCloseATR: 0, RSIFloor: 0, SkipMonday: 0,
-		EMAGapATR: 0, MACDGreenOnly: 0, BreakevenPct: 0.1}
+		EMAGapATR: 0, MACDGreenOnly: 0, BreakevenPct: 0.1, MACDConfirm: 1, ConfirmMoveBars: 0, ConfirmMoveATR: 0.1}
 	if got := DefaultParams(); got != want {
 		t.Fatalf("DefaultParams() = %+v, want %+v", got, want)
 	}
@@ -207,6 +207,7 @@ func TestLookback(t *testing.T) {
 		{Params{RSIPeriod: 6, EMAPeriod: 10}, 130}, // 2 × (64 + 1)
 		{Params{RSIPeriod: 6, EMAPeriod: 10, RSIExitPeriod: 20}, 166},
 		{Params{RSIPeriod: 6, EMAPeriod: 10, MACDSlow: 100, MACDSignal: 9, ConfirmBars: 4}, 332},
+		{Params{RSIPeriod: 6, EMAPeriod: 10, ConfirmMoveBars: 4}, 134}, // the delayed check looks back 4 more bars
 	}
 	for _, c := range cases {
 		if got := NewWithParams("T", stepM30, c.p).Lookback(); got != c.want {
@@ -508,6 +509,56 @@ func TestEnterMACDGreenOnly(t *testing.T) {
 	p.MACDSignal = 1
 	if sig := decideAt(p, bars, a); sig.Kind != model.SignalBuy {
 		t.Fatalf("green on the arming bar: got %v, want Buy", sig.Kind)
+	}
+}
+
+// MACDConfirm 0 buys on the arming bar itself, red histogram or not, and never on a later bar.
+func TestEnterMACDConfirmOff(t *testing.T) {
+	bars, a := greenAfterSignal()
+	p := entryParams()
+	if sig := decideAt(p, bars, a); sig.Kind != model.SignalNone {
+		t.Fatalf("MACDConfirm 1, red arming bar: got %v, want none", sig.Kind)
+	}
+	p.MACDConfirm = 0
+	if sig := decideAt(p, bars, a); sig.Kind != model.SignalBuy {
+		t.Fatalf("MACDConfirm 0, arming bar: got %v, want Buy", sig.Kind)
+	}
+	if sig := decideAt(p, bars, a+1); sig.Kind != model.SignalNone {
+		t.Fatalf("MACDConfirm 0, the bar after: got %v, want none", sig.Kind)
+	}
+}
+
+// moveBars is greenAfterSignal plus the would-be fill bar a+2 opening at 100 and the bar a+3
+// closing at c: the base entry fires on a+1 and would buy at a+2's open.
+func moveBars(c float64) (bars []bar, a int) {
+	bars, a = greenAfterSignal()
+	t := bars[a+1].t
+	return append(bars, bar{t.Add(stepM30), 100, 100, 100, 100}, bar{t.Add(2 * stepM30), 100, max(100, c), min(100, c), c}), a
+}
+
+// ConfirmMoveBars delays the buy: the close of the ConfirmMoveBars-th bar from the would-be fill
+// must be above that bar's open + ConfirmMoveATR daily ATRs; then it buys at the next open with
+// the stop off the confirming close. The base bar itself no longer buys.
+func TestEnterConfirmMove(t *testing.T) {
+	p := entryParams()
+	p.ConfirmMoveBars, p.ConfirmMoveATR = 2, 0.1 // 100 + 0.1 × fixtureATR 2 = 100.2
+	bars, a := moveBars(100.3)
+	if sig := decideAt(p, bars, a+1); sig.Kind != model.SignalNone {
+		t.Fatalf("base bar with ConfirmMoveBars: got %v, want none", sig.Kind)
+	}
+	if sig := decideAt(p, bars, a+2); sig.Kind != model.SignalNone {
+		t.Fatalf("first bar of the move: got %v, want none", sig.Kind)
+	}
+	sig := decideAt(p, bars, a+3)
+	if sig.Kind != model.SignalBuy || !strings.Contains(sig.EntryReason, "движение") {
+		t.Fatalf("close 100.3 > 100.2: got %v %q, want Buy with the move", sig.Kind, sig.EntryReason)
+	}
+	if want := bars[a+3].t.Add(stepM30); !sig.FillBy.Equal(want) || math.Abs(sig.StopLoss-(100.3-2)) > eps {
+		t.Fatalf("FillBy/StopLoss = %v/%v, want %v/%v", sig.FillBy, sig.StopLoss, want, 98.3)
+	}
+	bars, a = moveBars(100.2)
+	if sig := decideAt(p, bars, a+3); sig.Kind != model.SignalNone {
+		t.Fatalf("close 100.2 not above 100.2: got %v, want none", sig.Kind)
 	}
 }
 

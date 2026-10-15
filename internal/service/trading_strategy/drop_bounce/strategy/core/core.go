@@ -105,36 +105,50 @@ type Params struct {
 	// the round-trip commission (default 0.1 = 2 × 0.05%; 0 = exactly the entry). Owner 2026-10-15:
 	// at the entry price the 53 BE exits of 10 tickers lost 0.10% each.
 	BreakevenPct float64
+	// MACDConfirm 1 waits for the 30m MACD histogram (green on the arming bar, else the red→green
+	// flip inside ConfirmBars); 0 buys on the arming bar itself without the MACD (default 1).
+	MACDConfirm int
+	// ConfirmMoveBars delays the buy until the bounce shows: the base entry no longer buys; instead,
+	// ConfirmMoveBars bars after the would-be fill bar's start, the close of that bar must be above the
+	// would-be fill bar's open + ConfirmMoveATR daily ATRs, and then it buys at the next open; 0 = off
+	// (default 0). Owner 2026-10-15: trades whose close was in profit after 4 bars made PF 1.85 / 1.43
+	// on two samples of 10 tickers, the rest 0.53 / 0.52.
+	ConfirmMoveBars int
+	// ConfirmMoveATR is the move the ConfirmMoveBars check demands, in daily ATRs (default 0.1).
+	ConfirmMoveATR float64
 }
 
 // DefaultParams returns the owner's initial configuration.
 func DefaultParams() Params {
 	return Params{
-		RSIPeriod:      6,
-		RSIZone:        30,
-		RSICap:         50,
-		ZoneEntry:      1,
-		EMAPeriod:      200,
-		StopDailyATR:   1,
-		BreakevenATR:   0.5,
-		TrailATR:       0,
-		DailyATRPeriod: 14,
-		RSIExitPeriod:  10,
-		RSIExit:        70,
-		MACDFast:       12,
-		MACDSlow:       26,
-		MACDSignal:     9,
-		ConfirmBars:    3,
-		FridayTo:       11,
-		StaleBars:      0,
-		StaleATR:       0.3,
-		PrevCloseGate:  0,
-		PrevCloseATR:   0,
-		RSIFloor:       0,
-		SkipMonday:     0,
-		EMAGapATR:      0,
-		MACDGreenOnly:  0,
-		BreakevenPct:   0.1,
+		RSIPeriod:       6,
+		RSIZone:         30,
+		RSICap:          50,
+		ZoneEntry:       1,
+		EMAPeriod:       200,
+		StopDailyATR:    1,
+		BreakevenATR:    0.5,
+		TrailATR:        0,
+		DailyATRPeriod:  14,
+		RSIExitPeriod:   10,
+		RSIExit:         70,
+		MACDFast:        12,
+		MACDSlow:        26,
+		MACDSignal:      9,
+		ConfirmBars:     3,
+		FridayTo:        11,
+		StaleBars:       0,
+		StaleATR:        0.3,
+		PrevCloseGate:   0,
+		PrevCloseATR:    0,
+		RSIFloor:        0,
+		SkipMonday:      0,
+		EMAGapATR:       0,
+		MACDGreenOnly:   0,
+		BreakevenPct:    0.1,
+		MACDConfirm:     1,
+		ConfirmMoveBars: 0,
+		ConfirmMoveATR:  0.1,
 	}
 }
 
@@ -164,11 +178,12 @@ func (s *Strategy) barsPerHour() int {
 }
 
 // Lookback is enough 30m bars for the hourly EMA (three lengths) and both hourly Wilder RSIs to
-// converge, plus the 30m MACD (three slow+signal lengths) and the confirmation window.
+// converge, plus the 30m MACD (three slow+signal lengths) and the confirmation window, plus the
+// ConfirmMoveBars the delayed entry looks back.
 func (s *Strategy) Lookback() int {
 	p := s.p
 	hours := max(minLookback, 3*p.EMAPeriod, 4*p.RSIPeriod+2, 4*p.RSIExitPeriod+2)
-	return max(s.barsPerHour()*(hours+1), 3*(p.MACDSlow+p.MACDSignal)+p.ConfirmBars+1)
+	return max(s.barsPerHour()*(hours+1), 3*(p.MACDSlow+p.MACDSignal)+p.ConfirmBars+1) + max(p.ConfirmMoveBars, 0)
 }
 
 // hourBar is one hour aggregated from the strategy's bars.
@@ -341,6 +356,94 @@ func confirmed(hist []float64, a, i int) bool {
 // only to size the position by risk. It carries the daily ATR for the engine to freeze; without a
 // daily ATR there is no entry.
 func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal {
+	if s.p.ConfirmMoveBars > 0 {
+		return s.enterOnMove(md, sig)
+	}
+	return s.trigger(md, sig)
+}
+
+// enterOnMove is the delayed buy (ConfirmMoveBars): the base entry must have fired on bar
+// c = i − ConfirmMoveBars, so it would have bought at the open of c+1; the close of the current bar i
+// must be above that open + ConfirmMoveATR daily ATRs. It buys at the next open under the same
+// calendar rules as the base entry, with the stop for sizing off the current close.
+func (s *Strategy) enterOnMove(md strategy.MarketData, sig model.Signal) model.Signal {
+	p := s.p
+	n := len(md.Closes)
+	i := n - 1
+	c := i - p.ConfirmMoveBars
+	if c < 1 || len(md.Times) != n || len(md.Opens) != n || !s.isWeekdayFill(md.Times[i]) {
+		return sig
+	}
+	if p.SkipMonday == 1 && md.Times[i].Add(s.step).In(mskLoc).Weekday() == time.Monday {
+		return sig
+	}
+	base := s.trigger(truncate(md, c), sig)
+	if base.Kind != model.SignalBuy {
+		return sig
+	}
+	atr := s.dailyATR(md)
+	ref := md.Opens[c+1]
+	cl := md.Closes[i]
+	if atr <= 0 || cl <= ref+p.ConfirmMoveATR*atr+1e-9 {
+		return sig
+	}
+	if p.StopDailyATR > 0 && cl-p.StopDailyATR*atr <= 0 {
+		return sig
+	}
+	sig.Kind, sig.ATR = model.SignalBuy, atr
+	if p.StopDailyATR > 0 {
+		sig.StopLoss = cl - p.StopDailyATR*atr
+	}
+	sig.FillBy = md.Times[i].Add(s.step)
+	sig.EntryReason = fmt.Sprintf("%s; движение: close %.4f > open %.4f + %.2f ATR через %d свеч(и), покупка в %s",
+		base.EntryReason, cl, ref, p.ConfirmMoveATR, p.ConfirmMoveBars, sig.FillBy.In(mskLoc).Format("15:04"))
+	return sig
+}
+
+// truncate is md as it stood at the close of bar c: the bars up to c and the dailies completed
+// before c's MSK date.
+func truncate(md strategy.MarketData, c int) strategy.MarketData {
+	out := md
+	out.Position = nil
+	out.Price = md.Closes[c]
+	out.Closes = md.Closes[:c+1]
+	if len(md.Opens) > c {
+		out.Opens = md.Opens[:c+1]
+	}
+	if len(md.Highs) > c {
+		out.Highs = md.Highs[:c+1]
+	}
+	if len(md.Lows) > c {
+		out.Lows = md.Lows[:c+1]
+	}
+	if len(md.Volumes) > c {
+		out.Volumes = md.Volumes[:c+1]
+	}
+	if len(md.Times) > c {
+		out.Times = md.Times[:c+1]
+	}
+	if d := len(md.DailyTimes); d > 0 && d == len(md.DailyCloses) && len(md.Times) > c {
+		day := dayKey(md.Times[c])
+		m := d
+		for m > 0 && dayKey(md.DailyTimes[m-1]) >= day {
+			m--
+		}
+		out.DailyTimes, out.DailyCloses = md.DailyTimes[:m], md.DailyCloses[:m]
+		if len(md.DailyHighs) == d {
+			out.DailyHighs = md.DailyHighs[:m]
+		}
+		if len(md.DailyLows) == d {
+			out.DailyLows = md.DailyLows[:m]
+		}
+		if len(md.DailyVolumes) == d {
+			out.DailyVolumes = md.DailyVolumes[:m]
+		}
+	}
+	return out
+}
+
+// trigger is the base entry on the current bar.
+func (s *Strategy) trigger(md strategy.MarketData, sig model.Signal) model.Signal {
 	p := s.p
 	n := len(md.Closes)
 	if p.RSIPeriod <= 0 || p.EMAPeriod <= 0 || p.ConfirmBars <= 0 || n < 2 || len(md.Times) != n {
@@ -365,8 +468,16 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 		return sig
 	}
 	hist := macdHistogram(md.Closes, p)
-	if !confirmed(hist, hs[k].done, i) || (p.MACDGreenOnly == 1 && i != hs[k].done) {
+	if p.MACDConfirm == 0 {
+		if i != hs[k].done {
+			return sig
+		}
+	} else if !confirmed(hist, hs[k].done, i) || (p.MACDGreenOnly == 1 && i != hs[k].done) {
 		return sig
+	}
+	h := 0.0
+	if hist != nil {
+		h = hist[i]
 	}
 	atr := s.dailyATR(md)
 	if atr <= 0 || closes[k] < trend[k]+p.EMAGapATR*atr-1e-9 {
@@ -392,7 +503,7 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	sig.FillBy = md.Times[i].Add(s.step)
 	sig.EntryReason = fmt.Sprintf("%s: час %s RSI(%d) %.1f → %.1f (зона %.0f, планка %.0f), close %.4f > EMA(%d) %.4f; MACD 30m %.4f зелёная через %d бар(а), покупка в %s (ATR %.4f, вчера close %.4f)",
 		s.hourSignal(closes, trend, rsi, k), hs[k].start.In(mskLoc).Format("01-02 15:04"), p.RSIPeriod, rsi[k-1], rsi[k],
-		p.RSIZone, p.RSICap, closes[k], p.EMAPeriod, trend[k], hist[i], i-hs[k].done,
+		p.RSIZone, p.RSICap, closes[k], p.EMAPeriod, trend[k], h, i-hs[k].done,
 		sig.FillBy.In(mskLoc).Format("15:04"), atr, prev)
 	return sig
 }
