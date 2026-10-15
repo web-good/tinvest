@@ -1,7 +1,8 @@
 // Package core implements pdl_reclaim: a long-only intraday strategy on 5-minute bars around
 // yesterday's range. Yesterday's low (PDL) is support, yesterday's high (PDH) the target. It buys
 // the next bar's open after a green bar that dipped below PDL and closed back above it (entry A),
-// or after a bullish engulfing whose red bar closed below PDL (entry B). Exits, in priority order:
+// or after a bullish engulfing whose red bar closed below PDL (entry B), while RSI(RSIPeriod) of the
+// signal bar is at most RSIEntryMax. Exits, in priority order:
 // a stop StopDailyATR daily ATRs below the fill, PDH, RSI(RSIPeriod) at or above RSIExit, the
 // first red MACD histogram bar after a green one inside the trade, and the end of day. Pure,
 // stateless between bars and ticker-agnostic. Run with `-strategy pdl_reclaim -interval Minutes5`.
@@ -33,6 +34,7 @@ type Params struct {
 	TakeProfitPDH   int     // 1 — target at yesterday's high; 0 — no target
 	RSIPeriod       int     // 5m RSI for the exit; 0 — RSI exit off
 	RSIExit         float64 // RSI at/above this sells; 0 — RSI exit off
+	RSIEntryMax     float64 // RSI(RSIPeriod) of the signal bar above this blocks the entry; 0 or RSIPeriod 0 — gate off
 	MACDFast        int     // 5m MACD for the exit; invalid periods — MACD exit off
 	MACDSlow        int
 	MACDSignal      int
@@ -54,6 +56,7 @@ func DefaultParams() Params {
 		TakeProfitPDH:   1,
 		RSIPeriod:       6,
 		RSIExit:         70,
+		RSIEntryMax:     50,
 		MACDFast:        12,
 		MACDSlow:        26,
 		MACDSignal:      9,
@@ -225,6 +228,10 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	if s.p.TakeProfitPDH > 0 && closeP >= pdh {
 		return sig
 	}
+	rsi, ok := s.entryRSI(md)
+	if !ok {
+		return sig
+	}
 	atr := s.dailyATR(md)
 	if atr <= 0 {
 		return sig
@@ -239,9 +246,25 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 		sig.TakeProfit = pdh
 	}
 	sig.FillBy = md.Times[i].Add(s.step)
-	sig.EntryReason = fmt.Sprintf("%s: PDL %.4f, PDH %.4f, сигнал по close %.4f, дневной ATR %.4f, стоп %.4f",
-		kind, pdl, pdh, closeP, atr, stop)
+	sig.RSI = rsi
+	sig.EntryReason = fmt.Sprintf("%s: PDL %.4f, PDH %.4f, сигнал по close %.4f, RSI(%d) %.1f, дневной ATR %.4f, стоп %.4f",
+		kind, pdl, pdh, closeP, s.p.RSIPeriod, rsi, atr, stop)
 	return sig
+}
+
+// entryRSI is RSI(RSIPeriod) on the current bar and whether the entry gate passes: RSI at or
+// below RSIEntryMax. The gate is off (always passes) when RSIEntryMax or RSIPeriod is 0; without
+// enough closes for the RSI it fails, rather than letting a cold 0 through.
+func (s *Strategy) entryRSI(md strategy.MarketData) (float64, bool) {
+	if s.p.RSIEntryMax <= 0 || s.p.RSIPeriod <= 0 {
+		return 0, true
+	}
+	n := len(md.Closes)
+	if n <= s.p.RSIPeriod {
+		return 0, false
+	}
+	rsi := indicators.RSISeries(md.Closes, s.p.RSIPeriod)[n-1]
+	return rsi, rsi <= s.p.RSIEntryMax
 }
 
 // manage exits in priority order: stop, target, RSI, MACD, end of day.

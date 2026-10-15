@@ -72,7 +72,18 @@ func fixture(bars []bar) strategy.MarketData {
 
 func newS(p Params) *Strategy { return NewWithParams("TEST", 5*time.Minute, p) }
 
-func decide(p Params, bars []bar) model.Signal { return newS(p).Decide(fixture(bars)) }
+// warm prepends 12 flat bars at 102 ending 5 minutes before bars[0]: RSI is warm and every
+// entry fixture comes off a drop, so the RSI entry gate (≤ 50) passes unless a test wants it not to.
+func warm(bars []bar) []bar {
+	var out []bar
+	for k := 12; k >= 1; k-- {
+		ts := at(bars[0].t).Add(-time.Duration(k) * 5 * time.Minute).Format("2006-01-02 15:04")
+		out = append(out, bar{ts, 102, 102, 102, 102})
+	}
+	return append(out, bars...)
+}
+
+func decide(p Params, bars []bar) model.Signal { return newS(p).Decide(fixture(warm(bars))) }
 
 // Monday 2026-09-14. PDL 99, PDH 101 (Friday's daily), daily ATR 2.
 var (
@@ -222,7 +233,7 @@ func TestEntryIgnoresWeekendDaily(t *testing.T) {
 }
 
 func TestEntryNeedsDailiesAndStop(t *testing.T) {
-	md := fixture([]bar{pre, barA})
+	md := fixture(warm([]bar{pre, barA}))
 	md.DailyHighs, md.DailyLows, md.DailyCloses, md.DailyTimes = nil, nil, nil, nil
 	if sig := newS(DefaultParams()).Decide(md); sig.Kind != model.SignalNone {
 		t.Errorf("no dailies: Kind = %v, want None", sig.Kind)
@@ -237,5 +248,34 @@ func TestEntryNeedsDailiesAndStop(t *testing.T) {
 func TestLookbackCoversWarmupAndDay(t *testing.T) {
 	if got := newS(DefaultParams()).Lookback(); got != 3*(26+9)+dayBars {
 		t.Fatalf("Lookback = %d, want %d", got, 3*(26+9)+dayBars)
+	}
+}
+
+// rally is a rise into the entry-A bar with small pullbacks: RSI(6) on the signal bar is well above 50.
+func rally() []bar {
+	closes := []float64{98.6, 98.8, 98.7, 98.9, 99.1, 99.0, 99.2, 99.25}
+	var out []bar
+	for k, c := range closes {
+		ts := at("2026-09-14 09:20").Add(time.Duration(k) * 5 * time.Minute).Format("2006-01-02 15:04")
+		out = append(out, bar{ts, c, c, c, c})
+	}
+	return append(out, barA)
+}
+
+func TestEntryBlockedWhenRSIAbove(t *testing.T) {
+	if sig := newS(DefaultParams()).Decide(fixture(rally())); sig.Kind != model.SignalNone {
+		t.Fatalf("RSI above 50: Kind = %v, want None", sig.Kind)
+	}
+	p := DefaultParams()
+	p.RSIEntryMax = 0
+	if sig := newS(p).Decide(fixture(rally())); sig.Kind != model.SignalBuy {
+		t.Fatalf("gate off: Kind = %v, want Buy", sig.Kind)
+	}
+}
+
+// Without enough closes to compute RSI the gate refuses the entry.
+func TestEntryRSIGateNeedsHistory(t *testing.T) {
+	if sig := newS(DefaultParams()).Decide(fixture([]bar{pre, barA})); sig.Kind != model.SignalNone {
+		t.Fatalf("Kind = %v, want None", sig.Kind)
 	}
 }
