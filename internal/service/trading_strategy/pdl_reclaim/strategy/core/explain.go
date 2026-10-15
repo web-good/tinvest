@@ -29,10 +29,27 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 		fmt.Fprintf(&sb, "%s окно: сигнал %s %s %s, покупка %s (сигнал с %02d:%02d, покупка до %02d:%02d, 30m с %02d:%02d, Пн–Пт)\n",
 			mark(s.entryAllowed(md, ser, k, tf)), tf, t.Weekday(), t.Format("15:04"), md.Times[i].Add(s.step).In(mskLoc).Format("15:04"),
 			p.EntryFromHour, p.EntryFromMinute, p.EntryToHour, p.EntryToMinute, p.SwitchHour, p.SwitchMinute)
-		o, h, l, c := ser.o[k], ser.h[k], ser.l[k], ser.c[k]
-		fmt.Fprintf(&sb, "свеча %s: open %.4f high %.4f low %.4f close %.4f\n", tf, o, h, l, c)
+		fmt.Fprintf(&sb, "свеча %s: open %.4f high %.4f low %.4f close %.4f\n", tf, ser.o[k], ser.h[k], ser.l[k], ser.c[k])
+		closeSig, pb := ser.c[k], k
 		if pdl, pdh, ok := s.levels(md); ok {
 			fmt.Fprintf(&sb, "уровни вчера: PDL %.4f, PDH %.4f\n", pdl, pdh)
+			if p.GapOnly > 0 {
+				fmt.Fprintf(&sb, "%s гэп: день открылся ниже PDL\n", mark(s.gapDown(md, pdl)))
+			}
+			if p.Confirm > 0 {
+				var okc bool
+				pb, okc = s.patternBar(ser, k, tf, pdl)
+				fmt.Fprintf(&sb, "%s подтверждение: свеча закрылась %.4f > PDL, паттерн на предыдущей свече той же даты\n", mark(okc), ser.c[k])
+				if !okc {
+					pb = k - 1
+				}
+			}
+		} else {
+			sb.WriteString("✗ уровни: нет будней дневки\n")
+		}
+		if pdl, pdh, ok := s.levels(md); ok && pb >= 0 {
+			k := pb // the bar the pattern is read on (the signal bar, or the one before it with Confirm)
+			o, l, c := ser.o[k], ser.l[k], ser.c[k]
 			fmt.Fprintf(&sb, "%s A (включён %d): зелёная %s, low < PDL %s, close > PDL %s\n",
 				mark(isA(ser, k, pdl)), p.EntryA, mark(c > o), mark(l < pdl), mark(c > pdl))
 			if k >= 1 {
@@ -41,14 +58,12 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 					mark(isB(ser, k, pdl)), p.EntryB, mark(dayKey(ser.t[k]) == dayKey(ser.t[k-1])), mark(pc < po), pc, mark(pc < pdl),
 					mark(c > o), po, mark(c > po), pl, mark(l < pl))
 			}
-			if p.TakeProfitPDH > 0 {
-				fmt.Fprintf(&sb, "%s цель: close %.4f < PDH %.4f\n", mark(c < pdh), c, pdh)
+			if tg := s.target(pdl, pdh); tg > 0 {
+				fmt.Fprintf(&sb, "%s цель: close %.4f < цели %.4f\n", mark(closeSig < tg), closeSig, tg)
 			}
-		} else {
-			sb.WriteString("✗ уровни: нет будней дневки\n")
 		}
-		if p.RSIEntryMax > 0 && p.RSIPeriod > 0 {
-			rsi, ok := s.entryRSI(ser.c[:k+1])
+		if p.RSIEntryMax > 0 && p.RSIPeriod > 0 && pb >= 0 {
+			rsi, ok := s.entryRSI(ser.c[:pb+1])
 			fmt.Fprintf(&sb, "%s RSI(%d) сигнальной свечи %.1f ≤ %.0f\n", mark(ok), p.RSIPeriod, rsi, p.RSIEntryMax)
 		} else {
 			sb.WriteString("RSI-фильтр входа: выключен\n")

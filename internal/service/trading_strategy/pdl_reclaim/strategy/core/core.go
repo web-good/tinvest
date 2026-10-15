@@ -52,6 +52,9 @@ type Params struct {
 	ExitMinute      int
 	SwitchHour      int // from Switch MSK signals are read on half-hours instead of 5m bars; 24 — 5m all day
 	SwitchMinute    int
+	GapOnly         int // 1 — entries only on a day whose first 5m bar opened below PDL
+	Confirm         int // 1 — the pattern bar must be followed by a bar of its timeframe, same date, closing above PDL; buy after that bar
+	TargetMid       int // 1 — the target is the middle of yesterday's range instead of PDH (with TakeProfitPDH 1)
 }
 
 // DefaultParams returns the owner's rules.
@@ -243,15 +246,23 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	if !ok {
 		return sig
 	}
-	kind := s.pattern(ser, k, pdl)
+	if s.p.GapOnly > 0 && !s.gapDown(md, pdl) {
+		return sig
+	}
+	pb, ok := s.patternBar(ser, k, tf, pdl)
+	if !ok {
+		return sig
+	}
+	kind := s.pattern(ser, pb, pdl)
 	if kind == "" {
 		return sig
 	}
 	closeP := ser.c[k]
-	if s.p.TakeProfitPDH > 0 && closeP >= pdh {
+	target := s.target(pdl, pdh)
+	if target > 0 && closeP >= target {
 		return sig
 	}
-	rsi, ok := s.entryRSI(ser.c[:k+1])
+	rsi, ok := s.entryRSI(ser.c[:pb+1])
 	if !ok {
 		return sig
 	}
@@ -265,14 +276,55 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	}
 	sig.Kind = model.SignalBuy
 	sig.StopLoss, sig.ATR, sig.Level = stop, atr, pdl
-	if s.p.TakeProfitPDH > 0 {
-		sig.TakeProfit = pdh
-	}
+	sig.TakeProfit = target
 	sig.FillBy = md.Times[n-1].Add(s.step)
 	sig.RSI = rsi
 	sig.EntryReason = fmt.Sprintf("%s %s: PDL %.4f, PDH %.4f, сигнал по close %.4f, RSI(%d) %.1f, дневной ATR %.4f, стоп %.4f",
 		kind, tf, pdl, pdh, closeP, s.p.RSIPeriod, rsi, atr, stop)
 	return sig
+}
+
+// gapDown reports whether today's first 5m bar in md opened below pdl. A window that does not
+// reach back to the day's start fails closed.
+func (s *Strategy) gapDown(md strategy.MarketData, pdl float64) bool {
+	n := len(md.Times)
+	day := dayKey(md.Times[n-1])
+	j := n - 1
+	for j > 0 && dayKey(md.Times[j-1]) == day {
+		j--
+	}
+	if j == 0 {
+		return false
+	}
+	return md.Opens[j] < pdl
+}
+
+// patternBar is the bar the A/B pattern is read on: the signal bar itself, or with Confirm the
+// one before it — same date, also a valid signal time — when the signal bar closed above pdl.
+func (s *Strategy) patternBar(ser series, k int, tf string, pdl float64) (int, bool) {
+	if s.p.Confirm <= 0 {
+		return k, true
+	}
+	pb := k - 1
+	if pb < 0 || dayKey(ser.t[pb]) != dayKey(ser.t[k]) || ser.c[k] <= pdl {
+		return -1, false
+	}
+	m := minuteOf(ser.t[pb])
+	if m < s.p.EntryFromHour*60+s.p.EntryFromMinute || (tf == "30m" && m < s.switchMinute()) {
+		return -1, false
+	}
+	return pb, true
+}
+
+// target is the take-profit level: PDH, the middle of yesterday's range with TargetMid, 0 — none.
+func (s *Strategy) target(pdl, pdh float64) float64 {
+	switch {
+	case s.p.TakeProfitPDH <= 0:
+		return 0
+	case s.p.TargetMid > 0:
+		return (pdl + pdh) / 2
+	}
+	return pdh
 }
 
 // entryRSI is RSI(RSIPeriod) on the last of closes (the signal bar) and whether the entry gate passes: RSI at or
