@@ -13,5 +13,6 @@ type Config struct {
 	RSIZone        *RSIZoneConfig
 	GapFade        *GapFadeConfig
 	DropBounce     *DropBounceConfig
+	PDLReclaim     *PDLReclaimConfig
 	News           *NewsConfig
 }

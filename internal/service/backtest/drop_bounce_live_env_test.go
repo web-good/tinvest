@@ -11,8 +11,8 @@ import (
 // dropBounceLiveKeys — вселенная drop_bounce в env/prod.env (стратегия только на 15m).
 var dropBounceLiveKeys = []string{"DROP_BOUNCE_TICKERS_M15"}
 
-// dropBounceLiveTickers читает вселенные drop_bounce из env/prod.env: ключ — переменная.
-func dropBounceLiveTickers(t *testing.T) map[string][]string {
+// prodEnvTickerLists читает списки тикеров из env/prod.env: ключ — переменная.
+func prodEnvTickerLists(t *testing.T) map[string][]string {
 	t.Helper()
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
@@ -45,7 +45,7 @@ func dropBounceLiveTickers(t *testing.T) map[string][]string {
 // Каждая вселенная drop_bounce есть в env/prod.env, и каждый её тикер имеет пакет с литералом:
 // тикер без пакета торговал бы на дефолтах ядра, которые никто не калибровал.
 func TestDropBounceLiveTickersAreRegistered(t *testing.T) {
-	lists := dropBounceLiveTickers(t)
+	lists := prodEnvTickerLists(t)
 	for _, key := range dropBounceLiveKeys {
 		tickers, ok := lists[key]
 		if !ok {
@@ -64,7 +64,7 @@ func TestDropBounceLiveTickersAreRegistered(t *testing.T) {
 // подтверждение MACD 15m), и возвращение _M30/_H1 в env значило бы, что кто-то торгует его на
 // старых правилах.
 func TestDropBounceNoLegacyTimeframeKeys(t *testing.T) {
-	lists := dropBounceLiveTickers(t)
+	lists := prodEnvTickerLists(t)
 	for _, key := range []string{"DROP_BOUNCE_TICKERS_M30", "DROP_BOUNCE_TICKERS_H1"} {
 		if _, ok := lists[key]; ok {
 			t.Errorf("%s есть в env/prod.env, drop_bounce работает только на 15m", key)
