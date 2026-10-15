@@ -235,10 +235,10 @@ func TestStopBeatsStaleExit(t *testing.T) {
 }
 
 // breakevenOn is the stop-only params with the breakeven armed at +0.5 daily ATR (101 for a fill at
-// 100 with fixtureATR 2).
+// 100 with fixtureATR 2) and the stop exactly at the entry (BreakevenPct 0).
 func breakevenOn() Params {
 	p := stopOnly()
-	p.BreakevenATR = 0.5
+	p.BreakevenATR, p.BreakevenPct = 0.5, 0
 	return p
 }
 
@@ -279,6 +279,29 @@ func TestBreakevenNeedsACompletedBarSinceTheFill(t *testing.T) {
 	p.BreakevenATR = 0
 	if sig := held(p, bars, 100, bars[20].t); sig.Kind != model.SignalNone {
 		t.Fatalf("BreakevenATR 0: kind = %v, want None", sig.Kind)
+	}
+}
+
+// BreakevenPct lifts the breakeven stop that many percent above the entry so a BE exit covers the
+// round-trip commission: 100 → 100.1 at 0.1%.
+func TestBreakevenAboveEntryByPct(t *testing.T) {
+	bars := flatWithLast(100.2, 100.2, 100.05, 100.1)
+	bars[25].h = 101.2
+	p := breakevenOn()
+	p.BreakevenPct = 0.1
+	sig := held(p, bars, 100, bars[20].t)
+	if sig.Kind != model.SignalSell || sig.Reason != "BE" || math.Abs(sig.StopLoss-100.1) > eps {
+		t.Fatalf("got %v %q stop %v, want BE at 100.1", sig.Kind, sig.Reason, sig.StopLoss)
+	}
+	bars[len(bars)-1].l = 100.15
+	if sig := held(p, bars, 100, bars[20].t); sig.Kind != model.SignalNone {
+		t.Fatalf("low above 100.1: kind = %v, want None", sig.Kind)
+	}
+	// A trail below the lifted stop leaves it at entry + BreakevenPct.
+	bars[len(bars)-1].l = 100.05
+	p.TrailATR = 0.55 // 101.2 − 1.1 = 100.1 is not above 100.1
+	if sig := held(p, bars, 100, bars[20].t); sig.Reason != "BE" || math.Abs(sig.StopLoss-100.1) > eps {
+		t.Fatalf("trail at the lifted stop: got %q stop %v, want BE at 100.1", sig.Reason, sig.StopLoss)
 	}
 }
 

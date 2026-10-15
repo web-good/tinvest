@@ -45,8 +45,9 @@ type Params struct {
 	// 0 = off (default 1).
 	StopDailyATR float64
 	// BreakevenATR raises the stop once a completed bar since the fill had its high at entry +
-	// BreakevenATR daily ATRs: to the entry price, or, with TrailATR > 0, to the best such high −
-	// TrailATR ATRs when that is higher (reason BE / TRAIL); 0 = off (default 0.5, owner 2026-10-14).
+	// BreakevenATR daily ATRs: to the entry price lifted by BreakevenPct, or, with TrailATR > 0, to the
+	// best such high − TrailATR ATRs when that is higher (reason BE / TRAIL); 0 = off (default 0.5,
+	// owner 2026-10-14).
 	BreakevenATR float64
 	// TrailATR is the trailing distance below the best high after BreakevenATR fired; 0 = the
 	// stop stays at the entry price (default 0).
@@ -91,6 +92,19 @@ type Params struct {
 	// SkipMonday 1 makes no buys on Monday (the fill bar's MSK date): the weekend's news gaps the
 	// open and Monday buys lost on 7 of 10 tickers (107 trades, PF 0.68 in R); 0 = off (default 0).
 	SkipMonday int
+	// EMAGapATR demands the signal hour's close at least this many daily ATRs above the hourly EMA:
+	// a close hugging the EMA is a trend breaking down, not a pullback in it; 0 = off (default 0).
+	// Owner 2026-10-15: on 10 tickers the buys within 0.5 ATR of the EMA lost in both halves of the
+	// 36 months (304 trades, PF 0.87 / 0.83).
+	EMAGapATR float64
+	// MACDGreenOnly 1 buys only when the 30m histogram is already green on the arming bar, never on a
+	// later red→green flip; 0 = either (default 0). Owner 2026-10-15: flips lost (PF 0.77 / 0.96
+	// after 1 / 2 bars) where green at once made 1.56.
+	MACDGreenOnly int
+	// BreakevenPct lifts the breakeven stop this many percent above the entry price so a BE exit pays
+	// the round-trip commission (default 0.1 = 2 × 0.05%; 0 = exactly the entry). Owner 2026-10-15:
+	// at the entry price the 53 BE exits of 10 tickers lost 0.10% each.
+	BreakevenPct float64
 }
 
 // DefaultParams returns the owner's initial configuration.
@@ -118,6 +132,9 @@ func DefaultParams() Params {
 		PrevCloseATR:   0,
 		RSIFloor:       0,
 		SkipMonday:     0,
+		EMAGapATR:      0,
+		MACDGreenOnly:  0,
+		BreakevenPct:   0.1,
 	}
 }
 
@@ -318,7 +335,9 @@ func confirmed(hist []float64, a, i int) bool {
 
 // enter buys at the next bar's open once an armed hourly signal is confirmed by a green 30m MACD
 // histogram, and, with PrevCloseGate, only at or below the previous weekday close (+ PrevCloseATR
-// ATRs). RSIFloor drops a signal hour whose RSI is below it; SkipMonday drops Monday fills. The exits measure the stop from the fill; Signal.StopLoss carries it off the signal close
+// ATRs). RSIFloor drops a signal hour whose RSI is below it; SkipMonday drops Monday fills;
+// EMAGapATR drops a signal hour closing too close to the EMA; MACDGreenOnly drops red→green flips.
+// The exits measure the stop from the fill; Signal.StopLoss carries it off the signal close
 // only to size the position by risk. It carries the daily ATR for the engine to freeze; without a
 // daily ATR there is no entry.
 func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal {
@@ -346,11 +365,11 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 		return sig
 	}
 	hist := macdHistogram(md.Closes, p)
-	if !confirmed(hist, hs[k].done, i) {
+	if !confirmed(hist, hs[k].done, i) || (p.MACDGreenOnly == 1 && i != hs[k].done) {
 		return sig
 	}
 	atr := s.dailyATR(md)
-	if atr <= 0 {
+	if atr <= 0 || closes[k] < trend[k]+p.EMAGapATR*atr-1e-9 {
 		return sig
 	}
 	c := md.Closes[i]
@@ -437,9 +456,9 @@ func (s *Strategy) manageBreakeven(md strategy.MarketData, sig model.Signal, atr
 	if best < entry+p.BreakevenATR*atr-1e-9 {
 		return sig
 	}
-	stop, reason := entry, "BE"
+	stop, reason := entry*(1+p.BreakevenPct/100), "BE"
 	if p.TrailATR > 0 {
-		if t := best - p.TrailATR*atr; t > entry {
+		if t := best - p.TrailATR*atr; t > stop+1e-9 {
 			stop, reason = t, "TRAIL"
 		}
 	}

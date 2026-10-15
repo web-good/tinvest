@@ -15,7 +15,8 @@ DEFAULTS = dict(RSIPeriod=6, RSIZone=30, RSICap=50, ZoneEntry=1, EMAPeriod=200, 
                 BreakevenATR=0.5, TrailATR=0.0,
                 DailyATRPeriod=14, RSIExitPeriod=10, RSIExit=70,
                 MACDFast=12, MACDSlow=26, MACDSignal=9, ConfirmBars=3, FridayTo=11, StaleBars=0, StaleATR=0.3,
-                PrevCloseGate=0, PrevCloseATR=0.0, RSIFloor=0.0, SkipMonday=0)
+                PrevCloseGate=0, PrevCloseATR=0.0, RSIFloor=0.0, SkipMonday=0,
+                EMAGapATR=0.0, MACDGreenOnly=0, BreakevenPct=0.1)
 # Hold-out scheme (owner, 2026-10-14): one in-sample sweep on the first 30 of 36 months, the point is
 # the centre of the best plateau, the last 6 months are opened once. Axes (owner, 2026-10-14; rules
 # on 30m: hourly RSI signal, 30m MACD confirmation, hourly RSI(RSIExitPeriod) exit): the entry RSI

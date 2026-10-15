@@ -191,7 +191,8 @@ func decideAt(p Params, bars []bar, i int) model.Signal {
 func TestDefaultParams(t *testing.T) {
 	want := Params{RSIPeriod: 6, RSIZone: 30, RSICap: 50, ZoneEntry: 1, EMAPeriod: 200,
 		StopDailyATR: 1.0, BreakevenATR: 0.5, TrailATR: 0, DailyATRPeriod: 14, RSIExitPeriod: 10, RSIExit: 70,
-		MACDFast: 12, MACDSlow: 26, MACDSignal: 9, ConfirmBars: 3, FridayTo: 11, StaleBars: 0, StaleATR: 0.3, PrevCloseGate: 0, PrevCloseATR: 0, RSIFloor: 0, SkipMonday: 0}
+		MACDFast: 12, MACDSlow: 26, MACDSignal: 9, ConfirmBars: 3, FridayTo: 11, StaleBars: 0, StaleATR: 0.3, PrevCloseGate: 0, PrevCloseATR: 0, RSIFloor: 0, SkipMonday: 0,
+		EMAGapATR: 0, MACDGreenOnly: 0, BreakevenPct: 0.1}
 	if got := DefaultParams(); got != want {
 		t.Fatalf("DefaultParams() = %+v, want %+v", got, want)
 	}
@@ -467,6 +468,46 @@ func TestEnterRSIFloor(t *testing.T) {
 		if sig := decideAt(p, bars, a+1); sig.Kind != c.want {
 			t.Fatalf("RSI %.2f, floor %.2f: got %v, want %v", rsi, c.floor, sig.Kind, c.want)
 		}
+	}
+}
+
+// EMAGapATR demands the signal hour's close at least that many daily ATRs above the hourly EMA;
+// 0 is off.
+func TestEnterEMAGapATR(t *testing.T) {
+	bars, a := greenAfterSignal()
+	cl := trendCloses(6)
+	last := len(cl) - 1
+	gap := (cl[last] - ema.Compute(cl, 30)[last]) / fixtureATR
+	cases := []struct {
+		min  float64
+		want model.SignalKind
+	}{
+		{0, model.SignalBuy},
+		{gap - 0.01, model.SignalBuy},
+		{gap + 0.01, model.SignalNone},
+	}
+	for _, c := range cases {
+		p := entryParams()
+		p.EMAGapATR = c.min
+		if sig := decideAt(p, bars, a+1); sig.Kind != c.want {
+			t.Fatalf("gap %.3f ATR, EMAGapATR %.3f: got %v, want %v", gap, c.min, sig.Kind, c.want)
+		}
+	}
+}
+
+// MACDGreenOnly 1 buys only when the histogram is already green on the arming bar: the red→green
+// flip on a later bar no longer buys.
+func TestEnterMACDGreenOnly(t *testing.T) {
+	bars, a := greenAfterSignal()
+	p := entryParams()
+	p.MACDGreenOnly = 1
+	if sig := decideAt(p, bars, a+1); sig.Kind != model.SignalNone {
+		t.Fatalf("flip after the arming bar: got %v %q, want none", sig.Kind, sig.EntryReason)
+	}
+	// MACDSignal 1 makes the signal line the MACD line itself: the histogram is 0, green on every bar.
+	p.MACDSignal = 1
+	if sig := decideAt(p, bars, a); sig.Kind != model.SignalBuy {
+		t.Fatalf("green on the arming bar: got %v, want Buy", sig.Kind)
 	}
 }
 
