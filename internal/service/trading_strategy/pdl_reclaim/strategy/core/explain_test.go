@@ -7,7 +7,7 @@ import (
 
 func TestExplainEntryA(t *testing.T) {
 	out := newS(m5()).Explain(fixture(warm([]bar{pre, barA})))
-	for _, want := range []string{"✓ окно", "PDL 99.0000", "✓ A", "✓ RSI(6) сигнальной свечи", "ИТОГ: ПОКУПКА"} {
+	for _, want := range []string{"✓ окно", "PDL 99.0000", "✓ A", "формация A пересекла PDL", "RSI-фильтр входа: не нужен", "ИТОГ: ПОКУПКА"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in:\n%s", want, out)
 		}
@@ -22,6 +22,15 @@ func TestExplainOutsideWindow(t *testing.T) {
 	out := newS(m5()).Explain(fixture([]bar{q, b}))
 	if !strings.Contains(out, "✗ окно") || !strings.Contains(out, "ИТОГ: входа нет") {
 		t.Fatalf("got:\n%s", out)
+	}
+}
+
+func TestExplainReversalRSI(t *testing.T) {
+	out := newS(m5()).Explain(fixture(warm([]bar{redB, greenB})))
+	for _, want := range []string{"формация B — разворот вне уровней", "✓ RSI(6) свечи перед разворотом"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
 	}
 }
 

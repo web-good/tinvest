@@ -67,6 +67,16 @@ func TestEntryCWinsOverA(t *testing.T) {
 	}
 }
 
+// A signal closing above PDH is a breakout: without EntryC no formation may buy there.
+func TestCloseAbovePDHNeedsEntryC(t *testing.T) {
+	p := m5()
+	p.TakeProfitPDH = 0
+	wide := bar{"2026-09-14 10:00", 99.5, 101.5, 98.8, 101.4} // A crossing both levels
+	if sig := decide(p, []bar{preC, wide}); sig.Kind != model.SignalNone {
+		t.Fatalf("EntryC 0, close above PDH: Kind = %v, want None", sig.Kind)
+	}
+}
+
 func TestEntryC30m(t *testing.T) {
 	bars := append(flat("2026-09-14 00:00", "2026-09-14 09:55", 100.5), half("2026-09-14 10:00", 100.6, 101.5, 100.5, 101.4)...)
 	p := withC(DefaultParams())
@@ -104,8 +114,13 @@ func TestBodyATR(t *testing.T) {
 	if sig := decide(p, []bar{pre, shallowA}); sig.Kind != model.SignalNone {
 		t.Fatalf("A 0.15 past PDL: Kind = %v, want None", sig.Kind)
 	}
-	if sig := decide(p, []bar{redB, greenB}); sig.Kind != model.SignalNone {
-		t.Fatalf("B closed under PDL: Kind = %v, want None", sig.Kind)
+	// a reversal away from the levels: only the body counts
+	if sig := decide(p, []bar{redB, greenB}); sig.Kind != model.SignalBuy {
+		t.Fatalf("B body 0.37 away from the levels: Kind = %v, want Buy", sig.Kind)
+	}
+	weak := []bar{{"2026-09-14 09:55", 98.7, 98.75, 98.5, 98.6}, {"2026-09-14 10:00", 98.58, 98.8, 98.45, 98.72}}
+	if sig := decide(p, weak); sig.Kind != model.SignalNone {
+		t.Fatalf("B body 0.14: Kind = %v, want None", sig.Kind)
 	}
 	p = withC(p)
 	if sig := decide(p, []bar{preC, barC}); sig.Kind != model.SignalBuy {
@@ -135,7 +150,7 @@ func TestExplainC(t *testing.T) {
 	p := withC(m5())
 	p.BodyATR = 0.1
 	out := newS(p).Explain(fixture(warm([]bar{preC, barC})))
-	for _, want := range []string{"✓ C (включён 1)", "✓ сила свечи: тело 0.80 > 0.20, отрыв от PDH 0.40 > 0.20", "RSI-фильтр входа: не для C"} {
+	for _, want := range []string{"✓ C (включён 1)", "✓ сила свечи: тело 0.80 > 0.20, отрыв от PDH 0.40 > 0.20", "RSI-фильтр входа: не нужен — формация у уровня"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("Explain misses %q:\n%s", want, out)
 		}

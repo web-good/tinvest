@@ -8,6 +8,7 @@ import (
 
 	"tinvest/internal/service/trading_strategy/scalping/model"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
+	"tinvest/pkg/indicators"
 )
 
 const eps = 1e-9
@@ -144,7 +145,6 @@ func TestEntryB(t *testing.T) {
 
 func TestEntryBNeedsEveryCondition(t *testing.T) {
 	for name, pair := range map[string][2]bar{
-		"red closes above PDL":  {{"2026-09-14 09:55", 99.4, 99.4, 99.05, 99.1}, {"2026-09-14 10:00", 99.05, 99.45, 99.0, 99.42}},
 		"close equals red open": {redB, {"2026-09-14 10:00", 98.55, 98.95, 98.4, 98.9}},
 		"low equals red low":    {redB, {"2026-09-14 10:00", 98.55, 98.95, 98.5, 98.92}},
 		"previous is a doji":    {{"2026-09-14 09:55", 98.6, 98.95, 98.5, 98.6}, greenB},
@@ -154,6 +154,19 @@ func TestEntryBNeedsEveryCondition(t *testing.T) {
 		if sig := decide(m5(), pair[:]); sig.Kind != model.SignalNone {
 			t.Errorf("%s: Kind = %v, want None", name, sig.Kind)
 		}
+	}
+}
+
+// The engulfing is a reversal anywhere: away from the levels (here around 100) it only needs the RSI
+// of the red bar below 50.
+func TestEntryBAnywhere(t *testing.T) {
+	away := []bar{{"2026-09-14 09:55", 100.4, 100.45, 100.05, 100.1}, {"2026-09-14 10:00", 100.05, 100.5, 100.0, 100.45}}
+	sig := decide(m5(), away)
+	if sig.Kind != model.SignalBuy || !strings.Contains(sig.EntryReason, "разворот вне уровней, RSI(6) 5m") {
+		t.Fatalf("got %v %q, want Buy B away from the levels", sig.Kind, sig.EntryReason)
+	}
+	if math.Abs(sig.Level-99) > eps || math.Abs(sig.TakeProfit-101) > eps {
+		t.Fatalf("Level/TP = %v/%v, want 99/101", sig.Level, sig.TakeProfit)
 	}
 }
 
@@ -262,31 +275,71 @@ func TestLookbackCoversWarmupAndDay(t *testing.T) {
 	}
 }
 
-// rally is a rise into the entry-A bar with small pullbacks: RSI(6) on the signal bar is well above 50.
-func rally() []bar {
+// rallyUp is 09:20–09:55 rising with small pullbacks to 99.25.
+func rallyUp() []bar {
 	closes := []float64{98.6, 98.8, 98.7, 98.9, 99.1, 99.0, 99.2, 99.25}
 	var out []bar
 	for k, c := range closes {
 		ts := at("2026-09-14 09:20").Add(time.Duration(k) * 5 * time.Minute).Format("2006-01-02 15:04")
 		out = append(out, bar{ts, c, c, c, c})
 	}
-	return append(out, barA)
+	return out
+}
+
+// rally is a rise into the entry-A bar: RSI(6) is well above 50.
+func rally() []bar { return append(rallyUp(), barA) }
+
+// rallyB is the rise, then a small red bar (RSI stays above 50) and an engulfing that stays above
+// PDL 99 — a reversal away from the levels.
+func rallyB() []bar {
+	return append(rallyUp(), bar{"2026-09-14 10:00", 99.3, 99.3, 99.1, 99.2}, bar{"2026-09-14 10:05", 99.15, 99.4, 99.05, 99.35})
 }
 
 func TestEntryBlockedWhenRSIAbove(t *testing.T) {
-	if sig := newS(m5()).Decide(fixture(rally())); sig.Kind != model.SignalNone {
-		t.Fatalf("RSI above 50: Kind = %v, want None", sig.Kind)
+	if sig := newS(m5()).Decide(fixture(rallyB())); sig.Kind != model.SignalNone {
+		t.Fatalf("reversal, RSI above 50: Kind = %v, want None", sig.Kind)
 	}
 	p := m5()
 	p.RSIEntryMax = 0
-	if sig := newS(p).Decide(fixture(rally())); sig.Kind != model.SignalBuy {
+	if sig := newS(p).Decide(fixture(rallyB())); sig.Kind != model.SignalBuy {
 		t.Fatalf("gate off: Kind = %v, want Buy", sig.Kind)
+	}
+	// A crosses PDL: no RSI gate even after the rally
+	if sig := newS(m5()).Decide(fixture(rally())); sig.Kind != model.SignalBuy {
+		t.Fatalf("A after the rally: Kind = %v, want Buy", sig.Kind)
 	}
 }
 
-// Without enough closes to compute RSI the gate refuses the entry.
+// The gate is strict and reads the red bar before the engulfing: RSI equal to RSIEntryMax blocks.
+func TestEntryRSIGateStrict(t *testing.T) {
+	md := fixture(rallyB())
+	n := len(md.Closes)
+	rsi := indicators.RSISeries(md.Closes[:n-1], 6)[n-2]
+	p := m5()
+	p.RSIEntryMax = rsi
+	if sig := newS(p).Decide(md); sig.Kind != model.SignalNone {
+		t.Fatalf("red-bar RSI %.2f = max: Kind = %v, want None", rsi, sig.Kind)
+	}
+	p.RSIEntryMax = rsi + 0.01
+	if sig := newS(p).Decide(md); sig.Kind != model.SignalBuy {
+		t.Fatalf("red-bar RSI %.2f < max: Kind = %v, want Buy", rsi, sig.Kind)
+	}
+}
+
+// An engulfing crossing PDL upward is a level formation: no RSI gate.
+func TestEntryBAtLevelSkipsRSI(t *testing.T) {
+	p := m5()
+	p.EntryA = 0
+	bars := append(rallyUp(), bar{"2026-09-14 10:00", 99.3, 99.3, 98.9, 99.2}, bar{"2026-09-14 10:05", 99.15, 99.4, 98.85, 99.4})
+	sig := newS(p).Decide(fixture(bars))
+	if sig.Kind != model.SignalBuy || !strings.Contains(sig.EntryReason, "пересечение PDL") {
+		t.Fatalf("got %v %q, want Buy B at PDL", sig.Kind, sig.EntryReason)
+	}
+}
+
+// Without enough closes to compute RSI the gate refuses a reversal.
 func TestEntryRSIGateNeedsHistory(t *testing.T) {
-	if sig := newS(m5()).Decide(fixture([]bar{pre, barA})); sig.Kind != model.SignalNone {
+	if sig := newS(m5()).Decide(fixture([]bar{redB, greenB})); sig.Kind != model.SignalNone {
 		t.Fatalf("Kind = %v, want None", sig.Kind)
 	}
 }

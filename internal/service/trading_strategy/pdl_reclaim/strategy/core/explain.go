@@ -31,72 +31,7 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 			p.EntryFromHour, p.EntryFromMinute, p.EntryToHour, p.EntryToMinute, p.SwitchHour, p.SwitchMinute)
 		fmt.Fprintf(&sb, "%s входы по %s включены (Entry5m %d, Entry30m %d)\n", mark(s.tfEnabled(tf)), tf, p.Entry5m, p.Entry30m)
 		fmt.Fprintf(&sb, "свеча %s: open %.4f high %.4f low %.4f close %.4f\n", tf, ser.o[k], ser.h[k], ser.l[k], ser.c[k])
-		closeSig, pb, isBreakout := ser.c[k], k, false
-		if pdl, pdh, ok := s.levels(md); ok {
-			fmt.Fprintf(&sb, "уровни вчера: PDL %.4f, PDH %.4f\n", pdl, pdh)
-			if p.GapOnly > 0 {
-				fmt.Fprintf(&sb, "%s гэп: день открылся ниже PDL\n", mark(s.gapDown(md, pdl)))
-			}
-			if p.Confirm > 0 {
-				var okc bool
-				pb, okc = s.patternBar(ser, k, tf, pdl)
-				fmt.Fprintf(&sb, "%s подтверждение: свеча закрылась %.4f > PDL, паттерн на предыдущей свече той же даты\n", mark(okc), ser.c[k])
-				if !okc {
-					pb = k - 1
-				}
-			}
-		} else {
-			sb.WriteString("✗ уровни: нет будней дневки\n")
-		}
-		if pdl, pdh, ok := s.levels(md); ok && pb >= 0 {
-			k := pb // the bar the pattern is read on (the signal bar, or the one before it with Confirm)
-			o, l, c := ser.o[k], ser.l[k], ser.c[k]
-			fmt.Fprintf(&sb, "%s A (включён %d): зелёная %s, low < PDL %s, close > PDL %s\n",
-				mark(isA(ser, k, pdl)), p.EntryA, mark(c > o), mark(l < pdl), mark(c > pdl))
-			if k >= 1 {
-				po, pc, pl := ser.o[k-1], ser.c[k-1], ser.l[k-1]
-				fmt.Fprintf(&sb, "%s B (включён %d): одна дата %s, пред. красная %s, её close %.4f < PDL %s, текущая зелёная %s, close > open пред. %.4f %s, low < low пред. %.4f %s\n",
-					mark(isB(ser, k, pdl)), p.EntryB, mark(dayKey(ser.t[k]) == dayKey(ser.t[k-1])), mark(pc < po), pc, mark(pc < pdl),
-					mark(c > o), po, mark(c > po), pl, mark(l < pl))
-			}
-			if k >= 1 {
-				fmt.Fprintf(&sb, "%s C (включён %d): одна дата %s, зелёная %s, close %.4f > PDH %s, пред. close %.4f ≤ PDH %s\n",
-					mark(isC(ser, k, pdh)), p.EntryC, mark(dayKey(ser.t[k]) == dayKey(ser.t[k-1])), mark(c > o), c, mark(c > pdh),
-					ser.c[k-1], mark(ser.c[k-1] <= pdh))
-			}
-			kind := s.pattern(ser, k, pdl, pdh)
-			if p.BodyATR > 0 {
-				level, name := pdl, "PDL"
-				if kind == "C" {
-					level, name = pdh, "PDH"
-				}
-				atr := s.dailyATR(md)
-				body, past, okb := s.strength(ser, k, level, atr)
-				fmt.Fprintf(&sb, "%s сила свечи: тело %.2f > %.2f, отрыв от %s %.2f > %.2f (BodyATR %.2f × ATR)\n",
-					mark(okb), body, p.BodyATR*atr, name, past, p.BodyATR*atr, p.BodyATR)
-			}
-			if s.volumeOn() {
-				vol, avg, okv := s.volumeOK(ser, k)
-				fmt.Fprintf(&sb, "%s объём свечи паттерна %.0f > %.2f × среднее слота %s за %d будних дней %.0f\n",
-					mark(okv), vol, p.VolumeMult, ser.t[k].In(mskLoc).Format("15:04"), p.VolDays, avg)
-			}
-			if tg := s.target(pdl, pdh); tg > 0 && kind != "C" {
-				fmt.Fprintf(&sb, "%s цель: close %.4f < цели %.4f\n", mark(closeSig < tg), closeSig, tg)
-			}
-			isBreakout = kind == "C"
-		}
-		switch {
-		case isBreakout:
-			sb.WriteString("RSI-фильтр входа: не для C (пробой PDH), цели нет\n")
-		case pb >= 0 && tf == "30m" && s.hourRSIOn():
-			rsi, label, ok := s.signalRSI(md, ser, pb, tf)
-			fmt.Fprintf(&sb, "%s %s часа до закрытия получаса паттерна %.1f < %.0f\n", mark(ok), label, rsi, p.HourRSIMax)
-		case p.RSIEntryMax > 0 && p.RSIPeriod > 0 && pb >= 0:
-			rsi, ok := s.entryRSI(ser.c[:pb+1])
-			fmt.Fprintf(&sb, "%s RSI(%d) сигнальной свечи %.1f ≤ %.0f\n", mark(ok), p.RSIPeriod, rsi, p.RSIEntryMax)
-		default:
-			sb.WriteString("RSI-фильтр входа: выключен\n")
-		}
+		s.explainEntry(&sb, md, ser, k, tf)
 	}
 	if atr := s.dailyATR(md); atr > 0 {
 		fmt.Fprintf(&sb, "✓ дневной ATR(%d): %.4f, стоп %.2f ATR\n", p.DailyATRPeriod, atr, p.StopDailyATR)
@@ -122,6 +57,83 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 		}
 	}
 	return sb.String()
+}
+
+// explainEntry reports the entry gates of signal bar k of ser: levels, gap, Confirm, the
+// formations, strength, volume, target and the reversal RSI gate.
+func (s *Strategy) explainEntry(sb *strings.Builder, md strategy.MarketData, ser series, k int, tf string) {
+	p := s.p
+	pdl, pdh, ok := s.levels(md)
+	if !ok {
+		sb.WriteString("✗ уровни: нет будней дневки\n")
+		return
+	}
+	fmt.Fprintf(sb, "уровни вчера: PDL %.4f, PDH %.4f\n", pdl, pdh)
+	if p.GapOnly > 0 {
+		fmt.Fprintf(sb, "%s гэп: день открылся ниже PDL\n", mark(s.gapDown(md, pdl)))
+	}
+	pb, okp := s.patternBar(ser, k, tf)
+	if p.Confirm > 0 {
+		fmt.Fprintf(sb, "%s подтверждение: паттерн на предыдущей свече той же даты\n", mark(okp))
+	}
+	if !okp {
+		return
+	}
+	o, l, c := ser.o[pb], ser.l[pb], ser.c[pb]
+	fmt.Fprintf(sb, "%s A (включён %d): зелёная %s, low < PDL %s, close > PDL %s\n",
+		mark(isA(ser, pb, pdl)), p.EntryA, mark(c > o), mark(l < pdl), mark(c > pdl))
+	if pb >= 1 {
+		po, pc, pl := ser.o[pb-1], ser.c[pb-1], ser.l[pb-1]
+		same := mark(dayKey(ser.t[pb]) == dayKey(ser.t[pb-1]))
+		fmt.Fprintf(sb, "%s B (включён %d): одна дата %s, пред. красная %s, текущая зелёная %s, close > open пред. %.4f %s, low < low пред. %.4f %s\n",
+			mark(isB(ser, pb)), p.EntryB, same, mark(pc < po), mark(c > o), po, mark(c > po), pl, mark(l < pl))
+		fmt.Fprintf(sb, "%s C (включён %d): одна дата %s, зелёная %s, close %.4f > PDH %s, пред. close %.4f ≤ PDH %s\n",
+			mark(isC(ser, pb, pdh)), p.EntryC, same, mark(c > o), c, mark(c > pdh), pc, mark(pc <= pdh))
+	}
+	f, okf := s.pattern(ser, pb, pdl, pdh)
+	if !okf {
+		return
+	}
+	if f.level > 0 {
+		fmt.Fprintf(sb, "формация %s пересекла %s %.4f вверх\n", f.kind, f.name, f.level)
+	} else {
+		fmt.Fprintf(sb, "формация %s — разворот вне уровней\n", f.kind)
+	}
+	if pb != k {
+		fmt.Fprintf(sb, "%s подтверждающая свеча закрылась %.4f выше уровня формации\n", mark(s.confirmed(ser, k, pb, f)), ser.c[k])
+	}
+	if p.BodyATR > 0 {
+		atr := s.dailyATR(md)
+		body, past, okb := s.strength(ser, pb, f.level, atr)
+		fmt.Fprintf(sb, "%s сила свечи: тело %.2f > %.2f", mark(okb), body, p.BodyATR*atr)
+		if f.level > 0 {
+			fmt.Fprintf(sb, ", отрыв от %s %.2f > %.2f", f.name, past, p.BodyATR*atr)
+		}
+		fmt.Fprintf(sb, " (BodyATR %.2f × ATR)\n", p.BodyATR)
+	}
+	if s.volumeOn() {
+		vol, avg, okv := s.volumeOK(ser, pb)
+		fmt.Fprintf(sb, "%s объём свечи паттерна %.0f > %.2f × среднее слота %s за %d будних дней %.0f\n",
+			mark(okv), vol, p.VolumeMult, ser.t[pb].In(mskLoc).Format("15:04"), p.VolDays, avg)
+	}
+	closeSig := ser.c[k]
+	if tg, okt := s.signalTarget(closeSig, pdl, pdh); closeSig > pdh {
+		fmt.Fprintf(sb, "%s пробой PDH: close %.4f > PDH, цели нет (EntryC %d)\n", mark(okt), closeSig, p.EntryC)
+	} else if tg > 0 {
+		fmt.Fprintf(sb, "%s цель: close %.4f < цели %.4f\n", mark(okt), closeSig, tg)
+	}
+	switch {
+	case f.level > 0:
+		sb.WriteString("RSI-фильтр входа: не нужен — формация у уровня\n")
+	case tf == "30m" && s.hourRSIOn():
+		rsi, label, ok := s.signalRSI(md, ser, f.rsiBar, tf)
+		fmt.Fprintf(sb, "%s %s часа до закрытия получаса перед разворотом %.1f < %.0f\n", mark(ok), label, rsi, p.HourRSIMax)
+	case p.RSIEntryMax > 0 && p.RSIPeriod > 0:
+		rsi, ok := s.entryRSI(ser.c[:f.rsiBar+1])
+		fmt.Fprintf(sb, "%s RSI(%d) свечи перед разворотом %.1f < %.0f\n", mark(ok), p.RSIPeriod, rsi, p.RSIEntryMax)
+	default:
+		sb.WriteString("RSI-фильтр входа: выключен\n")
+	}
 }
 
 // explainExits reports every exit gate of a held position in priority order.

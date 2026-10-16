@@ -35,17 +35,17 @@ func hourCloses(md strategy.MarketData, end time.Time) []float64 {
 	return closes
 }
 
-// signalRSI is the RSI the entry gate reads on pattern bar pb of ser, its label and whether the
-// gate passes. A half-hour signal with the hourly gate on reads RSI(HourRSIPeriod) of the hour up to
-// the pattern half-hour's close and needs it strictly below HourRSIMax; too few hours fail. Any
-// other signal reads entryRSI on its own timeframe.
-func (s *Strategy) signalRSI(md strategy.MarketData, ser series, pb int, tf string) (float64, string, bool) {
+// signalRSI is the RSI the reversal gate reads on bar r of ser (the bar before the reversal), its
+// label and whether the gate passes. A half-hour signal with the hourly gate on reads
+// RSI(HourRSIPeriod) of the hour up to half-hour r's close and needs it strictly below HourRSIMax;
+// too few hours fail. Any other signal reads entryRSI on its own timeframe.
+func (s *Strategy) signalRSI(md strategy.MarketData, ser series, r int, tf string) (float64, string, bool) {
 	if tf != "30m" || !s.hourRSIOn() {
-		rsi, ok := s.entryRSI(ser.c[:pb+1])
+		rsi, ok := s.entryRSI(ser.c[:r+1])
 		return rsi, fmt.Sprintf("RSI(%d) %s", s.p.RSIPeriod, tf), ok
 	}
 	label := fmt.Sprintf("RSI(%d) 1h", s.p.HourRSIPeriod)
-	closes := hourCloses(md, ser.t[pb].Add(halfHour))
+	closes := hourCloses(md, ser.t[r].Add(halfHour))
 	n := len(closes)
 	if n <= s.p.HourRSIPeriod {
 		return 0, label, false

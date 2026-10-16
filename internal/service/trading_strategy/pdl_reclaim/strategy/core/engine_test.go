@@ -114,7 +114,6 @@ func longHistory() []bar {
 func TestEngineMorning5mThenHalfHour(t *testing.T) {
 	p := quiet()
 	p.SwitchHour = 10
-	p.HourRSIMax = 0 // the flat history leaves the hourly RSI at 50: the test is about the timeframes
 	mon := flat("2026-09-14 07:00", "2026-09-14 08:55", 100)
 	mon = append(mon,
 		bar{"2026-09-14 09:00", 99.2, 99.5, 98.8, 99.3},

@@ -46,8 +46,14 @@ func slide() []bar {
 	return out
 }
 
+// halfB is a red half-hour 10:00–10:30 and an engulfing green one 10:30–11:00, both above PDL 99:
+// a reversal away from the levels, read on the hour up to the red half-hour's close (10:30).
+func halfB() []bar {
+	return append(half("2026-09-14 10:00", 99.6, 99.65, 99.3, 99.4), half("2026-09-14 10:30", 99.35, 99.8, 99.2, 99.7)...)
+}
+
 func TestHourRSIGate(t *testing.T) {
-	bars := append(slide(), halfA()...)
+	bars := append(slide(), halfB()...)
 	rsi := hourRSIAt(bars, "2026-09-14 10:30", 6)
 	if rsi <= 0 || rsi >= 50 {
 		t.Fatalf("fixture hourly RSI %v, want inside (0, 50)", rsi)
@@ -64,11 +70,20 @@ func TestHourRSIGate(t *testing.T) {
 	}
 }
 
+// A half-hour formation crossing PDL needs no hourly RSI.
+func TestHourRSISkipsLevelFormation(t *testing.T) {
+	p := DefaultParams()
+	p.HourRSIMax = 0.001
+	if sig := newS(p).Decide(fixture(append(slide(), halfA()...))); sig.Kind != model.SignalBuy {
+		t.Fatalf("30m A, hourly max tiny: Kind = %v, want Buy", sig.Kind)
+	}
+}
+
 // The hourly gate replaces the half-hour one: RSIEntryMax no longer matters after the switch.
 func TestHourRSIReplaces30mGate(t *testing.T) {
 	p := DefaultParams()
 	p.RSIEntryMax, p.HourRSIMax = 0.001, 50 // slide's half-hour RSI is above 0.001, its hourly below 50
-	bars := append(slide(), halfA()...)
+	bars := append(slide(), halfB()...)
 	if sig := newS(p).Decide(fixture(bars)); sig.Kind != model.SignalBuy {
 		t.Fatalf("RSIEntryMax tiny, hourly gate on: Kind = %v, want Buy", sig.Kind)
 	}
@@ -82,28 +97,28 @@ func TestHourRSIReplaces30mGate(t *testing.T) {
 func TestHourRSIKeeps5mGate(t *testing.T) {
 	p := m5()
 	p.HourRSIMax = 0.001
-	if sig := decide(p, []bar{pre, barA}); sig.Kind != model.SignalBuy {
+	if sig := decide(p, []bar{redB, greenB}); sig.Kind != model.SignalBuy {
 		t.Fatalf("5m signal, hourly max tiny: Kind = %v, want Buy", sig.Kind)
 	}
-	if sig := newS(p).Decide(fixture(rally())); sig.Kind != model.SignalNone {
+	if sig := newS(p).Decide(fixture(rallyB())); sig.Kind != model.SignalNone {
 		t.Fatalf("5m RSI above 50: Kind = %v, want None", sig.Kind)
 	}
 }
 
 func TestHourRSINeedsHistory(t *testing.T) {
-	bars := append(flat("2026-09-14 07:00", "2026-09-14 09:55", 102), halfA()...) // four hours
+	bars := append(flat("2026-09-14 07:00", "2026-09-14 09:55", 102), halfB()...) // four hours
 	if sig := newS(DefaultParams()).Decide(fixture(bars)); sig.Kind != model.SignalNone {
 		t.Fatalf("four hours for RSI(6): Kind = %v, want None", sig.Kind)
 	}
 }
 
-// With Confirm the hour is read when the pattern half-hour closed: the confirming half-hour's rally
-// in the same hour does not count.
+// With Confirm the hour is still read when the red half-hour before the reversal closed: the
+// engulfing and confirming half-hours' rally does not count.
 func TestHourRSIConfirmReadsPatternTime(t *testing.T) {
-	bars := append(slide(), halfA()...)
-	bars = append(bars, half("2026-09-14 10:30", 99.3, 100.5, 99.3, 100.4)...)
+	bars := append(slide(), halfB()...)
+	bars = append(bars, half("2026-09-14 11:00", 99.7, 100.6, 99.7, 100.5)...)
 	atPattern := hourRSIAt(bars, "2026-09-14 10:30", 6)
-	full := hourRSIAt(bars, "2026-09-14 11:00", 6)
+	full := hourRSIAt(bars, "2026-09-14 11:30", 6)
 	if full <= atPattern+1 {
 		t.Fatalf("fixture: full hour RSI %v must be above pattern-time %v", full, atPattern)
 	}
@@ -116,7 +131,7 @@ func TestHourRSIConfirmReadsPatternTime(t *testing.T) {
 }
 
 func TestExplainHourRSI(t *testing.T) {
-	out := newS(DefaultParams()).Explain(fixture(append(slide(), halfA()...)))
+	out := newS(DefaultParams()).Explain(fixture(append(slide(), halfB()...)))
 	if !strings.Contains(out, "RSI(6) 1h") {
 		t.Fatalf("Explain misses the hourly RSI:\n%s", out)
 	}

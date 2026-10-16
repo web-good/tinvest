@@ -14,14 +14,18 @@ func isC(ser series, i int, pdh float64) bool {
 }
 
 // strength reports the body of bar i of ser, how far it closed past level, and whether both are
-// strictly above BodyATR daily ATRs. The filter is off (always passes) when BodyATR is 0.
+// strictly above BodyATR daily ATRs; with level 0 (a reversal away from the levels) only the body
+// counts. The filter is off (always passes) when BodyATR is 0.
 func (s *Strategy) strength(ser series, i int, level, atr float64) (body, past float64, ok bool) {
-	body, past = ser.c[i]-ser.o[i], ser.c[i]-level
+	body = ser.c[i] - ser.o[i]
+	if level > 0 {
+		past = ser.c[i] - level
+	}
 	if s.p.BodyATR <= 0 {
 		return body, past, true
 	}
 	limit := s.p.BodyATR * atr
-	return body, past, atr > 0 && body > limit && past > limit
+	return body, past, atr > 0 && body > limit && (level <= 0 || past > limit)
 }
 
 // breakoutHeld reports whether the held position is a PDH breakout (entry C): with EntryC on, it
