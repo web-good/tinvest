@@ -75,6 +75,13 @@ type Params struct {
 	// BodyATR > 0: the pattern bar's body and its close past the level (PDL for A/B, PDH for C)
 	// must both be strictly above BodyATR daily ATRs; 0 — off
 	BodyATR float64
+	// LevelsOnly 1: entries only at yesterday's levels — a reversal crossing PDL upward (A, the
+	// engulfing) or the breakout of PDH (C); reversals away from the levels and an engulfing that
+	// only retested PDH from above do not enter
+	LevelsOnly int
+	// LevelTolATR > 0: a formation whose lowest low is within LevelTolATR daily ATRs above a level
+	// counts as reaching it (the close must still be above the level); 0 — the low must pierce it
+	LevelTolATR float64
 }
 
 // DefaultParams returns the owner's rules.
@@ -252,8 +259,8 @@ type formation struct {
 }
 
 // pattern is the formation bar i completes ("C" wins over "A", "A" over "B"). A and C are level
-// formations by definition; B is one when it crossed a level.
-func (s *Strategy) pattern(ser series, i int, pdl, pdh float64) (formation, bool) {
+// formations by definition; B is one when it reached a level within tol and closed above it.
+func (s *Strategy) pattern(ser series, i int, pdl, pdh, tol float64) (formation, bool) {
 	switch {
 	case s.p.EntryC > 0 && isC(ser, i, pdh):
 		return formation{kind: "C", level: pdh, name: "PDH", rsiBar: i - 1}, true
@@ -261,26 +268,44 @@ func (s *Strategy) pattern(ser series, i int, pdl, pdh float64) (formation, bool
 		return formation{kind: "A", level: pdl, name: "PDL", rsiBar: i - 1}, true
 	case s.p.EntryB > 0 && isB(ser, i):
 		f := formation{kind: "B", rsiBar: i - 1}
-		f.level, f.name = crossed(ser, i-1, i, pdl, pdh)
+		f.level, f.name = crossed(ser, i-1, i, pdl, pdh, tol)
 		return f, true
 	}
 	return formation{}, false
 }
 
-// crossed is the level bars from..i crossed upward — their lowest low below it and bar i closed
-// above it — PDH checked first; 0 and "" when they crossed neither.
-func crossed(ser series, from, i int, pdl, pdh float64) (float64, string) {
+// crossed is the level bars from..i crossed upward — their lowest low below it (or within tol
+// above it) and bar i closed above it — PDH checked first; 0 and "" when they crossed neither.
+func crossed(ser series, from, i int, pdl, pdh, tol float64) (float64, string) {
 	low := ser.l[i]
 	for j := from; j < i; j++ {
 		low = min(low, ser.l[j])
 	}
 	switch {
-	case low < pdh && ser.c[i] > pdh:
+	case low < pdh+tol && ser.c[i] > pdh:
 		return pdh, "PDH"
-	case low < pdl && ser.c[i] > pdl:
+	case low < pdl+tol && ser.c[i] > pdl:
 		return pdl, "PDL"
 	}
 	return 0, ""
+}
+
+// levelTol is LevelTolATR daily ATRs (0 when off) and whether it could be computed.
+func (s *Strategy) levelTol(md strategy.MarketData) (float64, bool) {
+	if s.p.LevelTolATR <= 0 {
+		return 0, true
+	}
+	atr := s.dailyATR(md)
+	return s.p.LevelTolATR * atr, atr > 0
+}
+
+// levelsAllowed reports whether formation f may enter under LevelsOnly: a reversal at PDL or the
+// PDH breakout C. Without LevelsOnly every formation may.
+func (s *Strategy) levelsAllowed(f formation) bool {
+	if s.p.LevelsOnly <= 0 {
+		return true
+	}
+	return f.kind == "C" || f.name == "PDL"
 }
 
 func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
@@ -316,8 +341,12 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	if !ok {
 		return sig
 	}
-	f, ok := s.pattern(ser, pb, pdl, pdh)
-	if !ok || !s.confirmed(ser, k, pb, f) {
+	tol, ok := s.levelTol(md)
+	if !ok {
+		return sig
+	}
+	f, ok := s.pattern(ser, pb, pdl, pdh, tol)
+	if !ok || !s.levelsAllowed(f) || !s.confirmed(ser, k, pb, f) {
 		return sig
 	}
 	vol, avg, ok := s.volumeOK(ser, pb)

@@ -90,14 +90,18 @@ func (s *Strategy) explainEntry(sb *strings.Builder, md strategy.MarketData, ser
 		fmt.Fprintf(sb, "%s C (включён %d): одна дата %s, зелёная %s, close %.4f > PDH %s, пред. close %.4f ≤ PDH %s\n",
 			mark(isC(ser, pb, pdh)), p.EntryC, same, mark(c > o), c, mark(c > pdh), pc, mark(pc <= pdh))
 	}
-	f, okf := s.pattern(ser, pb, pdl, pdh)
+	tol, _ := s.levelTol(md)
+	f, okf := s.pattern(ser, pb, pdl, pdh, tol)
 	if !okf {
 		return
 	}
 	if f.level > 0 {
-		fmt.Fprintf(sb, "формация %s пересекла %s %.4f вверх\n", f.kind, f.name, f.level)
+		fmt.Fprintf(sb, "формация %s пересекла %s %.4f вверх (допуск low %.4f)\n", f.kind, f.name, f.level, tol)
 	} else {
 		fmt.Fprintf(sb, "формация %s — разворот вне уровней\n", f.kind)
+	}
+	if p.LevelsOnly > 0 {
+		fmt.Fprintf(sb, "%s только уровни (LevelsOnly %d): отскок от PDL или пробой PDH (C)\n", mark(s.levelsAllowed(f)), p.LevelsOnly)
 	}
 	if pb != k {
 		fmt.Fprintf(sb, "%s подтверждающая свеча закрылась %.4f выше уровня формации\n", mark(s.confirmed(ser, k, pb, f)), ser.c[k])
