@@ -66,6 +66,12 @@ type Params struct {
 	// the half-hour RSI gate RSIEntryMax; either 0 — the half-hour gate. 5m signals keep RSIEntryMax.
 	HourRSIPeriod int
 	HourRSIMax    float64
+	// EntryC 1: a green bar closing above PDH after a bar of the same date closed at or below it
+	// enters (breakout); no target, no RSI gate on the entry and no RSI exit on the position.
+	EntryC int
+	// BodyATR > 0: the pattern bar's body and its close past the level (PDL for A/B, PDH for C)
+	// must both be strictly above BodyATR daily ATRs; 0 — off
+	BodyATR float64
 }
 
 // DefaultParams returns the owner's rules.
@@ -232,9 +238,11 @@ func isB(ser series, i int, pdl float64) bool {
 	return c0 < o0 && c0 < pdl && c1 > o1 && c1 > o0 && l1 < l0
 }
 
-// pattern names the entry bar i matches ("A" wins over "B"), or "" for none.
-func (s *Strategy) pattern(ser series, i int, pdl float64) string {
+// pattern names the entry bar i matches ("C" wins over "A", "A" over "B"), or "" for none.
+func (s *Strategy) pattern(ser series, i int, pdl, pdh float64) string {
 	switch {
+	case s.p.EntryC > 0 && isC(ser, i, pdh):
+		return "C"
 	case s.p.EntryA > 0 && isA(ser, i, pdl):
 		return "A"
 	case s.p.EntryB > 0 && isB(ser, i, pdl):
@@ -251,7 +259,7 @@ func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 	return s.enter(md, sig)
 }
 
-// enter buys the next 5m open on entry A or B of the signal bar (5m before Switch, the half-hour
+// enter buys the next 5m open on entry A, B or C of the signal bar (5m before Switch, the half-hour
 // that just closed after it). The cheap bar gates run before the daily ATR.
 func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal {
 	n := len(md.Closes)
@@ -276,9 +284,16 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	if !ok {
 		return sig
 	}
-	kind := s.pattern(ser, pb, pdl)
+	kind := s.pattern(ser, pb, pdl, pdh)
 	if kind == "" {
 		return sig
+	}
+	level := pdl
+	if kind == "C" {
+		level = pdh
+		if pb != k && ser.c[k] <= pdh { // with Confirm the breakout is confirmed above PDH
+			return sig
+		}
 	}
 	vol, avg, ok := s.volumeOK(ser, pb)
 	if !ok {
@@ -286,10 +301,16 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	}
 	closeP := ser.c[k]
 	target := s.target(pdl, pdh)
+	if kind == "C" {
+		target = 0
+	}
 	if target > 0 && closeP >= target {
 		return sig
 	}
-	rsi, rsiTF, ok := s.signalRSI(md, ser, pb, tf)
+	rsi, rsiTF, ok := 0.0, "", true
+	if kind != "C" {
+		rsi, rsiTF, ok = s.signalRSI(md, ser, pb, tf)
+	}
 	if !ok {
 		return sig
 	}
@@ -297,17 +318,28 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	if atr <= 0 {
 		return sig
 	}
+	body, past, ok := s.strength(ser, pb, level, atr)
+	if !ok {
+		return sig
+	}
 	stop := closeP - s.p.StopDailyATR*atr
 	if stop <= 0 {
 		return sig
 	}
 	sig.Kind = model.SignalBuy
-	sig.StopLoss, sig.ATR, sig.Level = stop, atr, pdl
+	sig.StopLoss, sig.ATR, sig.Level = stop, atr, level
 	sig.TakeProfit = target
 	sig.FillBy = md.Times[n-1].Add(s.step)
 	sig.RSI = rsi
-	sig.EntryReason = fmt.Sprintf("%s %s: PDL %.4f, PDH %.4f, сигнал по close %.4f, %s %.1f, дневной ATR %.4f, стоп %.4f",
-		kind, tf, pdl, pdh, closeP, rsiTF, rsi, atr, stop)
+	gate := fmt.Sprintf("%s %.1f", rsiTF, rsi)
+	if kind == "C" {
+		gate = "без RSI-фильтра"
+	}
+	sig.EntryReason = fmt.Sprintf("%s %s: PDL %.4f, PDH %.4f, сигнал по close %.4f, %s, дневной ATR %.4f, стоп %.4f",
+		kind, tf, pdl, pdh, closeP, gate, atr, stop)
+	if s.p.BodyATR > 0 {
+		sig.EntryReason += fmt.Sprintf(", тело %.2f и отрыв %.2f > %.2f", body, past, s.p.BodyATR*atr)
+	}
 	if s.volumeOn() {
 		sig.EntryReason += fmt.Sprintf(", объём %.0f > %.2f × среднее слота %.0f", vol, s.p.VolumeMult, avg)
 	}
@@ -394,7 +426,7 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 	}
 	if closes, from, k, e, tf, ok := s.exitSeries(md, pos); ok {
 		var rsi, hist []float64
-		if s.p.RSIPeriod > 0 && s.p.RSIExit > 0 && len(closes) > s.p.RSIPeriod {
+		if s.p.RSIPeriod > 0 && s.p.RSIExit > 0 && len(closes) > s.p.RSIPeriod && !s.breakoutHeld(md, pos) {
 			rsi = indicators.RSISeries(closes, s.p.RSIPeriod)
 		}
 		hist = histogram(closes, s.p)

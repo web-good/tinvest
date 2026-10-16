@@ -30,6 +30,8 @@ func TestLiteralIsPinned(t *testing.T) {
 		VolDays:        20,
 		HourRSIPeriod:  6,
 		HourRSIMax:     30,
+		EntryC:         1,
+		BodyATR:        0.1,
 	}
 	if got := Params(); got != want {
 		t.Fatalf("литерал GAZP изменился:\n got: %+v\nwant: %+v", got, want)

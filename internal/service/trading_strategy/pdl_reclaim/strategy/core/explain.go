@@ -31,7 +31,7 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 			p.EntryFromHour, p.EntryFromMinute, p.EntryToHour, p.EntryToMinute, p.SwitchHour, p.SwitchMinute)
 		fmt.Fprintf(&sb, "%s входы по %s включены (Entry5m %d, Entry30m %d)\n", mark(s.tfEnabled(tf)), tf, p.Entry5m, p.Entry30m)
 		fmt.Fprintf(&sb, "свеча %s: open %.4f high %.4f low %.4f close %.4f\n", tf, ser.o[k], ser.h[k], ser.l[k], ser.c[k])
-		closeSig, pb := ser.c[k], k
+		closeSig, pb, isBreakout := ser.c[k], k, false
 		if pdl, pdh, ok := s.levels(md); ok {
 			fmt.Fprintf(&sb, "уровни вчера: PDL %.4f, PDH %.4f\n", pdl, pdh)
 			if p.GapOnly > 0 {
@@ -59,16 +59,35 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 					mark(isB(ser, k, pdl)), p.EntryB, mark(dayKey(ser.t[k]) == dayKey(ser.t[k-1])), mark(pc < po), pc, mark(pc < pdl),
 					mark(c > o), po, mark(c > po), pl, mark(l < pl))
 			}
+			if k >= 1 {
+				fmt.Fprintf(&sb, "%s C (включён %d): одна дата %s, зелёная %s, close %.4f > PDH %s, пред. close %.4f ≤ PDH %s\n",
+					mark(isC(ser, k, pdh)), p.EntryC, mark(dayKey(ser.t[k]) == dayKey(ser.t[k-1])), mark(c > o), c, mark(c > pdh),
+					ser.c[k-1], mark(ser.c[k-1] <= pdh))
+			}
+			kind := s.pattern(ser, k, pdl, pdh)
+			if p.BodyATR > 0 {
+				level, name := pdl, "PDL"
+				if kind == "C" {
+					level, name = pdh, "PDH"
+				}
+				atr := s.dailyATR(md)
+				body, past, okb := s.strength(ser, k, level, atr)
+				fmt.Fprintf(&sb, "%s сила свечи: тело %.2f > %.2f, отрыв от %s %.2f > %.2f (BodyATR %.2f × ATR)\n",
+					mark(okb), body, p.BodyATR*atr, name, past, p.BodyATR*atr, p.BodyATR)
+			}
 			if s.volumeOn() {
 				vol, avg, okv := s.volumeOK(ser, k)
 				fmt.Fprintf(&sb, "%s объём свечи паттерна %.0f > %.2f × среднее слота %s за %d будних дней %.0f\n",
 					mark(okv), vol, p.VolumeMult, ser.t[k].In(mskLoc).Format("15:04"), p.VolDays, avg)
 			}
-			if tg := s.target(pdl, pdh); tg > 0 {
+			if tg := s.target(pdl, pdh); tg > 0 && kind != "C" {
 				fmt.Fprintf(&sb, "%s цель: close %.4f < цели %.4f\n", mark(closeSig < tg), closeSig, tg)
 			}
+			isBreakout = kind == "C"
 		}
 		switch {
+		case isBreakout:
+			sb.WriteString("RSI-фильтр входа: не для C (пробой PDH), цели нет\n")
 		case pb >= 0 && tf == "30m" && s.hourRSIOn():
 			rsi, label, ok := s.signalRSI(md, ser, pb, tf)
 			fmt.Fprintf(&sb, "%s %s часа до закрытия получаса паттерна %.1f < %.0f\n", mark(ok), label, rsi, p.HourRSIMax)
@@ -125,10 +144,13 @@ func (s *Strategy) explainExits(sb *strings.Builder, md strategy.MarketData) {
 		if from < k {
 			fmt.Fprintf(sb, "разрыв: на этой свече закрылись %d получаса, выход проверен на каждом, ниже — последний\n", k-from+1)
 		}
-		if p.RSIPeriod > 0 && p.RSIExit > 0 && len(closes) > p.RSIPeriod {
+		switch {
+		case s.breakoutHeld(md, pos):
+			sb.WriteString("RSI-выход: не для пробоя PDH (вход выше PDH)\n")
+		case p.RSIPeriod > 0 && p.RSIExit > 0 && len(closes) > p.RSIPeriod:
 			rsi := indicators.RSISeries(closes, p.RSIPeriod)[k]
 			fmt.Fprintf(sb, "%s RSI %s(%d) %.1f ≥ %.0f\n", mark(rsi >= p.RSIExit), tf, p.RSIPeriod, rsi, p.RSIExit)
-		} else {
+		default:
 			sb.WriteString("RSI-выход: выключен или не прогрет\n")
 		}
 		if hist := histogram(closes, p); hist != nil {
