@@ -29,6 +29,7 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 		fmt.Fprintf(&sb, "%s окно: сигнал %s %s %s, покупка %s (сигнал с %02d:%02d, покупка до %02d:%02d, 30m с %02d:%02d, Пн–Пт)\n",
 			mark(s.entryAllowed(md, ser, k, tf)), tf, t.Weekday(), t.Format("15:04"), md.Times[i].Add(s.step).In(mskLoc).Format("15:04"),
 			p.EntryFromHour, p.EntryFromMinute, p.EntryToHour, p.EntryToMinute, p.SwitchHour, p.SwitchMinute)
+		fmt.Fprintf(&sb, "%s входы по %s включены (Entry5m %d, Entry30m %d)\n", mark(s.tfEnabled(tf)), tf, p.Entry5m, p.Entry30m)
 		fmt.Fprintf(&sb, "свеча %s: open %.4f high %.4f low %.4f close %.4f\n", tf, ser.o[k], ser.h[k], ser.l[k], ser.c[k])
 		closeSig, pb := ser.c[k], k
 		if pdl, pdh, ok := s.levels(md); ok {
@@ -58,14 +59,23 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 					mark(isB(ser, k, pdl)), p.EntryB, mark(dayKey(ser.t[k]) == dayKey(ser.t[k-1])), mark(pc < po), pc, mark(pc < pdl),
 					mark(c > o), po, mark(c > po), pl, mark(l < pl))
 			}
+			if s.volumeOn() {
+				vol, avg, okv := s.volumeOK(ser, k)
+				fmt.Fprintf(&sb, "%s объём свечи паттерна %.0f > %.2f × среднее слота %s за %d будних дней %.0f\n",
+					mark(okv), vol, p.VolumeMult, ser.t[k].In(mskLoc).Format("15:04"), p.VolDays, avg)
+			}
 			if tg := s.target(pdl, pdh); tg > 0 {
 				fmt.Fprintf(&sb, "%s цель: close %.4f < цели %.4f\n", mark(closeSig < tg), closeSig, tg)
 			}
 		}
-		if p.RSIEntryMax > 0 && p.RSIPeriod > 0 && pb >= 0 {
+		switch {
+		case pb >= 0 && tf == "30m" && s.hourRSIOn():
+			rsi, label, ok := s.signalRSI(md, ser, pb, tf)
+			fmt.Fprintf(&sb, "%s %s часа до закрытия получаса паттерна %.1f < %.0f\n", mark(ok), label, rsi, p.HourRSIMax)
+		case p.RSIEntryMax > 0 && p.RSIPeriod > 0 && pb >= 0:
 			rsi, ok := s.entryRSI(ser.c[:pb+1])
 			fmt.Fprintf(&sb, "%s RSI(%d) сигнальной свечи %.1f ≤ %.0f\n", mark(ok), p.RSIPeriod, rsi, p.RSIEntryMax)
-		} else {
+		default:
 			sb.WriteString("RSI-фильтр входа: выключен\n")
 		}
 	}

@@ -20,9 +20,9 @@ func half(start string, o, h, l, c float64) []bar {
 	return out
 }
 
-// morning is Monday 06:00–09:55 flat at 102: eight completed half-hours, enough to warm RSI(6)
-// on the half-hour series, and every entry fixture after it comes off a drop (RSI gate passes).
-func morning() []bar { return flat("2026-09-14 06:00", "2026-09-14 09:55", 102) }
+// morning is Monday 00:00–09:55 flat at 102: ten hours, enough to warm RSI(6) on half-hours and
+// on hours, and every entry fixture after it comes off a drop (the RSI gates pass).
+func morning() []bar { return flat("2026-09-14 00:00", "2026-09-14 09:55", 102) }
 
 func TestHalvesAggregateAndClose(t *testing.T) {
 	bars := append(half("2026-09-14 09:30", 99, 99.8, 98.7, 99.5), half("2026-09-14 10:00", 99.5, 100, 99.4, 99.9)...)
@@ -75,7 +75,7 @@ func TestEntryA30m(t *testing.T) {
 }
 
 func TestEntryB30m(t *testing.T) {
-	bars := append(flat("2026-09-14 06:00", "2026-09-14 09:25", 102), half("2026-09-14 09:30", 98.9, 98.95, 98.5, 98.6)...)
+	bars := append(flat("2026-09-14 00:00", "2026-09-14 09:25", 102), half("2026-09-14 09:30", 98.9, 98.95, 98.5, 98.6)...)
 	bars = append(bars, half("2026-09-14 10:00", 98.55, 98.95, 98.4, 98.92)...)
 	sig := newS(DefaultParams()).Decide(fixture(bars))
 	if sig.Kind != model.SignalBuy || !strings.HasPrefix(sig.EntryReason, "B 30m") {
@@ -85,7 +85,7 @@ func TestEntryB30m(t *testing.T) {
 
 // The 09:30 half-hour is before the switch: its close at 09:55 is a 5m decision, never a 30m one.
 func TestNo30mSignalBeforeSwitch(t *testing.T) {
-	bars := append(flat("2026-09-14 06:00", "2026-09-14 09:25", 102), half("2026-09-14 09:30", 99.2, 99.5, 98.8, 99.3)...)
+	bars := append(flat("2026-09-14 00:00", "2026-09-14 09:25", 102), half("2026-09-14 09:30", 99.2, 99.5, 98.8, 99.3)...)
 	if sig := newS(DefaultParams()).Decide(fixture(bars)); sig.Kind != model.SignalNone {
 		t.Fatalf("Kind = %v, want None (09:55 bar itself is flat, no 5m pattern)", sig.Kind)
 	}

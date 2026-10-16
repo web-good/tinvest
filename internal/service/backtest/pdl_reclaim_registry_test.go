@@ -5,6 +5,7 @@ import (
 
 	"tinvest/internal/enum"
 	"tinvest/internal/service/trading_strategy/pdl_reclaim/strategy/core"
+	"tinvest/internal/service/trading_strategy/pdl_reclaim/strategy/gazp"
 )
 
 func TestPDLReclaimGenericTickerUsesCoreDefaults(t *testing.T) {
@@ -45,8 +46,17 @@ func TestPDLReclaimParseParamsLayersOverDefaults(t *testing.T) {
 	}
 }
 
-// A registered ticker resolves to its own literal. The registry is empty until the first
-// calibration, so the test injects one.
+func TestPDLReclaimGAZPUsesItsPackage(t *testing.T) {
+	b, err := PDLReclaimLookupOrGeneric("GAZP", enum.Minutes5)
+	if err != nil {
+		t.Fatalf("lookup: %v", err)
+	}
+	if got := b.DefaultParams().(core.Params); got != gazp.Params() {
+		t.Fatalf("got %+v, want gazp.Params()", got)
+	}
+}
+
+// A registered ticker resolves to its own literal; the test injects one of its own.
 func TestPDLReclaimTickerLiteral(t *testing.T) {
 	lit := core.DefaultParams()
 	lit.RSIExit = 77

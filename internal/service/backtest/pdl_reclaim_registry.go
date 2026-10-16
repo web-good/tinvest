@@ -6,6 +6,7 @@ import (
 
 	"tinvest/internal/enum"
 	"tinvest/internal/service/trading_strategy/pdl_reclaim/strategy/core"
+	"tinvest/internal/service/trading_strategy/pdl_reclaim/strategy/gazp"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 )
 
@@ -29,8 +30,11 @@ func pdlReclaimBindingFor(ticker string, interval enum.Interval, defaults func()
 }
 
 // pdlReclaimRegistry maps tickers with their own package to their Minutes5 literal. A ticker
-// comes here with its calibration; GAZP, SBER and NVTK are the first in line.
-var pdlReclaimRegistry = map[string]func() core.Params{}
+// comes here with its calibration; GAZP is here before it, so its timeframe switches and volume
+// filter can be set per ticker.
+var pdlReclaimRegistry = map[string]func() core.Params{
+	"GAZP": gazp.Params,
+}
 
 // PDLReclaimLookupOrGeneric returns the binding for a ticker: the ticker package's literal, or
 // core.DefaultParams when the ticker has no package. Partial JSON overrides layer over whichever

@@ -55,6 +55,17 @@ type Params struct {
 	GapOnly         int // 1 — entries only on a day whose first 5m bar opened below PDL
 	Confirm         int // 1 — the pattern bar must be followed by a bar of its timeframe, same date, closing above PDL; buy after that bar
 	TargetMid       int // 1 — the target is the middle of yesterday's range instead of PDH (with TakeProfitPDH 1)
+	Entry5m         int // 1 — entries on 5m signals (before Switch; all day with SwitchHour 24); 0 — none
+	Entry30m        int // 1 — entries on half-hour signals from Switch on; 0 — no entries after Switch
+	// VolumeMult > 0: the pattern bar's volume must be above VolumeMult × the average volume of the
+	// bars of its timeframe starting at the same MSK time on the previous VolDays weekdays; 0 — off
+	VolumeMult float64
+	VolDays    int
+	// HourRSIPeriod and HourRSIMax > 0: a half-hour signal needs RSI(HourRSIPeriod) of hourly closes,
+	// the hour read up to the close of the pattern half-hour, strictly below HourRSIMax — instead of
+	// the half-hour RSI gate RSIEntryMax; either 0 — the half-hour gate. 5m signals keep RSIEntryMax.
+	HourRSIPeriod int
+	HourRSIMax    float64
 }
 
 // DefaultParams returns the owner's rules.
@@ -79,6 +90,11 @@ func DefaultParams() Params {
 		ExitMinute:      45,
 		SwitchHour:      10,
 		SwitchMinute:    0,
+		Entry5m:         1,
+		Entry30m:        1,
+		VolDays:         20,
+		HourRSIPeriod:   6,
+		HourRSIMax:      30,
 	}
 }
 
@@ -97,11 +113,18 @@ func NewWithParams(ticker string, step time.Duration, p Params) *Strategy {
 func (s *Strategy) Ticker() string { return s.ticker }
 
 // Lookback warms MACD and RSI before the oldest possible entry bar of a held position — on
-// half-hours (six 5m bars each) when the switch is on.
+// half-hours (six 5m bars each) when the switch is on — and, with the volume filter, reaches back
+// VolDays weekdays (weekend sessions in between included).
 func (s *Strategy) Lookback() int {
 	warm := max(minWarmup, 3*(s.p.MACDSlow+s.p.MACDSignal), 4*s.p.RSIPeriod+2)
 	if s.switchOn() {
 		warm *= barsPerHalf
+		if s.hourRSIOn() {
+			warm = max(warm, (4*s.p.HourRSIPeriod+2)*barsPerHour)
+		}
+	}
+	if s.volumeOn() {
+		warm = max(warm, (s.p.VolDays*7/5+3)*dayBars)
 	}
 	return warm + dayBars
 }
@@ -239,7 +262,7 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 		return sig
 	}
 	ser, k, tf, ok := s.signalBar(md)
-	if !ok || !s.entryAllowed(md, ser, k, tf) {
+	if !ok || !s.tfEnabled(tf) || !s.entryAllowed(md, ser, k, tf) {
 		return sig
 	}
 	pdl, pdh, ok := s.levels(md)
@@ -257,12 +280,16 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	if kind == "" {
 		return sig
 	}
+	vol, avg, ok := s.volumeOK(ser, pb)
+	if !ok {
+		return sig
+	}
 	closeP := ser.c[k]
 	target := s.target(pdl, pdh)
 	if target > 0 && closeP >= target {
 		return sig
 	}
-	rsi, ok := s.entryRSI(ser.c[:pb+1])
+	rsi, rsiTF, ok := s.signalRSI(md, ser, pb, tf)
 	if !ok {
 		return sig
 	}
@@ -279,8 +306,11 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	sig.TakeProfit = target
 	sig.FillBy = md.Times[n-1].Add(s.step)
 	sig.RSI = rsi
-	sig.EntryReason = fmt.Sprintf("%s %s: PDL %.4f, PDH %.4f, сигнал по close %.4f, RSI(%d) %.1f, дневной ATR %.4f, стоп %.4f",
-		kind, tf, pdl, pdh, closeP, s.p.RSIPeriod, rsi, atr, stop)
+	sig.EntryReason = fmt.Sprintf("%s %s: PDL %.4f, PDH %.4f, сигнал по close %.4f, %s %.1f, дневной ATR %.4f, стоп %.4f",
+		kind, tf, pdl, pdh, closeP, rsiTF, rsi, atr, stop)
+	if s.volumeOn() {
+		sig.EntryReason += fmt.Sprintf(", объём %.0f > %.2f × среднее слота %.0f", vol, s.p.VolumeMult, avg)
+	}
 	return sig
 }
 

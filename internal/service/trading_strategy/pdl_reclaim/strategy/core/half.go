@@ -9,15 +9,17 @@ import (
 // halfHour is the timeframe the strategy trades on from Switch on.
 const halfHour = 30 * time.Minute
 
-// series is one timeframe's bars, oldest-first: opens, highs, lows, closes and start times.
+// series is one timeframe's bars, oldest-first: opens, highs, lows, closes, volumes and start
+// times. v is nil when the bars carry no volumes.
 type series struct {
 	o, h, l, c []float64
+	v          []int64
 	t          []time.Time
 }
 
 // fiveMin is the engine's own 5m bars as a series (no copy).
 func fiveMin(md strategy.MarketData) series {
-	return series{o: md.Opens, h: md.Highs, l: md.Lows, c: md.Closes, t: md.Times}
+	return series{o: md.Opens, h: md.Highs, l: md.Lows, c: md.Closes, v: md.Volumes, t: md.Times}
 }
 
 // halfStart is the start of the MSK half-hour holding t. MSK is UTC+3 in whole hours, so
@@ -41,7 +43,12 @@ func (s *Strategy) switchOn() bool { return s.switchMinute() < 24*60 }
 func (s *Strategy) halves(md strategy.MarketData) (series, []int) {
 	var hs series
 	var done []int
+	withVol := len(md.Volumes) == len(md.Closes)
 	for j := range md.Closes {
+		var v int64
+		if withVol {
+			v = md.Volumes[j]
+		}
 		st := halfStart(md.Times[j])
 		k := len(hs.t) - 1
 		if k < 0 || !hs.t[k].Equal(st) {
@@ -53,19 +60,24 @@ func (s *Strategy) halves(md strategy.MarketData) (series, []int) {
 			hs.h = append(hs.h, md.Highs[j])
 			hs.l = append(hs.l, md.Lows[j])
 			hs.c = append(hs.c, md.Closes[j])
+			hs.v = append(hs.v, v)
 			done = append(done, -1)
 		} else {
 			hs.h[k] = max(hs.h[k], md.Highs[j])
 			hs.l[k] = min(hs.l[k], md.Lows[j])
 			hs.c[k] = md.Closes[j]
+			hs.v[k] += v
 		}
 		if s.lastOfHalf(md.Times[j]) {
 			done[len(done)-1] = j
 		}
 	}
 	if k := len(done) - 1; k >= 0 && done[k] < 0 {
-		hs = series{o: hs.o[:k], h: hs.h[:k], l: hs.l[:k], c: hs.c[:k], t: hs.t[:k]}
+		hs = series{o: hs.o[:k], h: hs.h[:k], l: hs.l[:k], c: hs.c[:k], v: hs.v[:k], t: hs.t[:k]}
 		done = done[:k]
+	}
+	if !withVol {
+		hs.v = nil
 	}
 	return hs, done
 }
