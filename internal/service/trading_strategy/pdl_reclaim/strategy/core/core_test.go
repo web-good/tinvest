@@ -8,10 +8,12 @@ import (
 
 	"tinvest/internal/service/trading_strategy/scalping/model"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
-	"tinvest/pkg/indicators"
 )
 
 const eps = 1e-9
+
+// step is the bar length the strategy trades on.
+const step = 15 * time.Minute
 
 // at parses "2006-01-02 15:04" as MSK.
 func at(s string) time.Time {
@@ -22,16 +24,31 @@ func at(s string) time.Time {
 	return t
 }
 
+// ts formats t like at parses it.
+func ts(t time.Time) string { return t.In(mskLoc).Format("2006-01-02 15:04") }
+
 type bar struct {
 	t          string
 	o, h, l, c float64
 }
 
-// flat returns flat bars (o=h=l=c=p) every 5 minutes over [from, to], both MSK.
+// flat returns flat bars (o=h=l=c=p) every 15 minutes over [from, to], both MSK.
 func flat(from, to string, p float64) []bar {
 	var out []bar
-	for t := at(from); !t.After(at(to)); t = t.Add(5 * time.Minute) {
-		out = append(out, bar{t.Format("2006-01-02 15:04"), p, p, p, p})
+	for t := at(from); !t.After(at(to)); t = t.Add(step) {
+		out = append(out, bar{ts(t), p, p, p, p})
+	}
+	return out
+}
+
+// path chains bars every 15 minutes from MSK `from`: each opens at the previous close (the first
+// at o0) and closes at the next value; highs and lows hug the bodies.
+func path(from string, o0 float64, closes ...float64) []bar {
+	var out []bar
+	o := o0
+	for k, c := range closes {
+		out = append(out, bar{ts(at(from).Add(time.Duration(k) * step)), o, max(o, c), min(o, c), c})
+		o = c
 	}
 	return out
 }
@@ -71,275 +88,313 @@ func fixture(bars []bar) strategy.MarketData {
 	return md
 }
 
-// m5 is the defaults with the switch to 30m turned off: the whole day trades on 5m bars.
-func m5() Params {
-	p := DefaultParams()
-	p.SwitchHour = 24
-	return p
-}
+func newS(p Params) *Strategy { return NewWithParams("TEST", step, p) }
 
-func newS(p Params) *Strategy { return NewWithParams("TEST", 5*time.Minute, p) }
+// warmBars is how many flat bars warm prepends: history before the day under test.
+const warmBars = 150
 
-// warm prepends 12 flat bars at 102 ending 5 minutes before bars[0]: RSI is warm and every
-// entry fixture comes off a drop, so the RSI entry gate (≤ 50) passes unless a test wants it not to.
+// warm prepends warmBars flat bars at 100 ending one bar before bars[0].
 func warm(bars []bar) []bar {
 	var out []bar
-	for k := 12; k >= 1; k-- {
-		ts := at(bars[0].t).Add(-time.Duration(k) * 5 * time.Minute).Format("2006-01-02 15:04")
-		out = append(out, bar{ts, 102, 102, 102, 102})
+	for k := warmBars; k >= 1; k-- {
+		t := ts(at(bars[0].t).Add(-time.Duration(k) * step))
+		out = append(out, bar{t, 100, 100, 100, 100})
 	}
 	return append(out, bars...)
+}
+
+// withVolumes sets the volume of every bar to base and of bar i to spike.
+func withVolumes(md strategy.MarketData, base int64, i int, spike int64) strategy.MarketData {
+	md.Volumes = make([]int64, len(md.Times))
+	for j := range md.Volumes {
+		md.Volumes[j] = base
+	}
+	md.Volumes[i] = spike
+	return md
 }
 
 func decide(p Params, bars []bar) model.Signal { return newS(p).Decide(fixture(warm(bars))) }
 
 // Monday 2026-09-14. PDL 99, PDH 101 (Friday's daily), daily ATR 2.
+//
+// pdlDay: 09:30 drifts to 99.5, 09:45 and 10:00 are red closes below PDL, 10:15 is the green
+// reclaim (99.2) — the buy trigger — then the price climbs.
+func pdlDay() []bar {
+	return path("2026-09-14 09:30", 100, 99.5, 98.7, 98.6, 99.2, 99.3, 99.4, 99.5, 99.6, 99.7)
+}
+
+const reclaimAt = 3 // index of the reclaim bar in pdlDay
+
+// upTo is pdlDay up to and including bar i.
+func upTo(i int) []bar { return pdlDay()[:i+1] }
+
+func TestReclaimEntry(t *testing.T) {
+	sig := decide(DefaultParams(), upTo(reclaimAt))
+	if sig.Kind != model.SignalBuy {
+		t.Fatalf("Kind = %v, want Buy", sig.Kind)
+	}
+	if math.Abs(sig.StopLoss-98.2) > eps || math.Abs(sig.TakeProfit-100) > eps || math.Abs(sig.ATR-2) > eps || math.Abs(sig.Level-99) > eps {
+		t.Fatalf("SL/TP/ATR/Level = %v/%v/%v/%v, want 98.2/100/2/99", sig.StopLoss, sig.TakeProfit, sig.ATR, sig.Level)
+	}
+	if !sig.FillBy.Equal(at("2026-09-14 10:30")) {
+		t.Fatalf("FillBy = %v, want 10:30", sig.FillBy)
+	}
+	if !strings.HasPrefix(sig.EntryReason, "PDL 15m: возврат над PDL на свече 10:15, покупка сразу") {
+		t.Fatalf("EntryReason = %q", sig.EntryReason)
+	}
+}
+
+// Only the reclaim bar buys: not the bars before it, not the climb after it.
+func TestReclaimBuysOnReclaimBarOnly(t *testing.T) {
+	for i := 0; i < len(pdlDay()); i++ {
+		if got := decide(DefaultParams(), upTo(i)).Kind == model.SignalBuy; got != (i == reclaimAt) {
+			t.Errorf("bar %d: buy = %v, want %v", i, got, i == reclaimAt)
+		}
+	}
+}
+
+// series builds a series from bars without warm-up.
+func seriesOf(bars []bar) series { return barsOf(fixture(bars)) }
+
+func TestIsReclaim(t *testing.T) {
+	for name, tc := range map[string]struct {
+		bars []bar
+		want bool
+	}{
+		"red below, then green above":      {path("2026-09-14 10:00", 99.5, 98.7, 99.2), true},
+		"red below, green below, green up": {path("2026-09-14 10:00", 99.5, 98.7, 98.9, 99.2), true},
+		"dip only, no red close below":     {[]bar{{"2026-09-14 10:00", 99.5, 99.5, 98.5, 99.4}, {"2026-09-14 10:15", 99.4, 99.6, 99.3, 99.5}}, false},
+		"green close below, no red":        {path("2026-09-14 10:00", 98.5, 98.7, 99.2), false},
+		"close above PDL in between":       {path("2026-09-14 10:00", 99.5, 98.7, 99.1, 99.0, 99.2), false},
+		"close at PDL":                     {path("2026-09-14 10:00", 99.5, 98.7, 99.0), false},
+		"reclaim bar is red":               {[]bar{{"2026-09-14 10:00", 99.5, 99.5, 98.7, 98.7}, {"2026-09-14 10:15", 99.4, 99.4, 99.1, 99.2}}, false},
+		"red below on the previous date":   {[]bar{{"2026-09-11 23:45", 99.5, 99.5, 98.7, 98.7}, {"2026-09-14 07:00", 98.8, 99.3, 98.8, 99.2}}, false},
+	} {
+		ser := seriesOf(tc.bars)
+		if got := isReclaim(ser, len(tc.bars)-1, 99); got != tc.want {
+			t.Errorf("%s: %v, want %v", name, got, tc.want)
+		}
+	}
+}
+
+func TestIsBreakout(t *testing.T) {
+	for name, tc := range map[string]struct {
+		bars []bar
+		want bool
+	}{
+		"first green close above":   {[]bar{preC, barC}, true},
+		"previous closed above PDH": {[]bar{{"2026-09-14 09:45", 101, 101.2, 100.9, 101.1}, barC}, false},
+		"red bar":                   {[]bar{preC, {"2026-09-14 10:00", 101.5, 101.6, 101.2, 101.3}}, false},
+		"close at PDH":              {[]bar{preC, {"2026-09-14 10:00", 100.6, 101.2, 100.5, 101}}, false},
+		"previous of another date":  {[]bar{{"2026-09-11 23:45", 100.5, 100.5, 100.5, 100.5}, {"2026-09-14 07:00", 100.6, 101.5, 100.5, 101.4}}, false},
+	} {
+		if got := isBreakout(seriesOf(tc.bars), 1, 101); got != tc.want {
+			t.Errorf("%s: %v, want %v", name, got, tc.want)
+		}
+	}
+}
+
+// PDH 101, daily ATR 2: preC closes under PDH, barC is green and closes 0.4 above it, holdC is
+// the next bar and closes above PDH too.
 var (
-	pre    = bar{"2026-09-14 09:55", 99.5, 99.5, 99.5, 99.5}
-	barA   = bar{"2026-09-14 10:00", 99.2, 99.5, 98.8, 99.3}    // green, low < PDL, close > PDL
-	redB   = bar{"2026-09-14 09:55", 98.9, 98.95, 98.5, 98.6}   // red, close < PDL
-	greenB = bar{"2026-09-14 10:00", 98.55, 98.95, 98.4, 98.92} // close > red open, low < red low, close < PDL (not A)
+	preC  = bar{"2026-09-14 09:45", 100.4, 100.6, 100.3, 100.5}
+	barC  = bar{"2026-09-14 10:00", 100.6, 101.5, 100.5, 101.4}
+	holdC = bar{"2026-09-14 10:15", 101.4, 101.6, 101.2, 101.5}
 )
 
-func TestEntryA(t *testing.T) {
-	sig := decide(m5(), []bar{pre, barA})
-	if sig.Kind != model.SignalBuy {
-		t.Fatalf("Kind = %v, want Buy", sig.Kind)
+// pdhMD is preC, the breakout barC and the bars after it, with the volume of barC at spike against
+// 100 on every other bar. The warm-up reaches back only to Saturday, so Friday's main session goes
+// first: the volume average needs main-session bars.
+func pdhMD(spike int64, after ...bar) strategy.MarketData {
+	friday := flat("2026-09-11 10:00", "2026-09-11 18:30", 100)
+	md := fixture(append(friday, warm(append([]bar{preC, barC}, after...))...))
+	return withVolumes(md, 100, len(friday)+warmBars+1, spike)
+}
+
+func TestBreakoutEntry(t *testing.T) {
+	sig := newS(DefaultParams()).Decide(pdhMD(151, holdC))
+	if sig.Kind != model.SignalBuy || !strings.HasPrefix(sig.EntryReason, "PDH 15m: пробой PDH на свече 10:00, держится над PDH 1 св. (мин. close 101.4000)") {
+		t.Fatalf("got %v %q, want Buy PDH", sig.Kind, sig.EntryReason)
 	}
-	if math.Abs(sig.StopLoss-98.3) > eps || math.Abs(sig.TakeProfit-101) > eps || math.Abs(sig.ATR-2) > eps || math.Abs(sig.Level-99) > eps {
-		t.Fatalf("SL/TP/ATR/Level = %v/%v/%v/%v, want 98.3/101/2/99", sig.StopLoss, sig.TakeProfit, sig.ATR, sig.Level)
+	if math.Abs(sig.TakeProfit-102) > eps || math.Abs(sig.StopLoss-100.5) > eps || math.Abs(sig.Level-101) > eps {
+		t.Fatalf("TP/SL/Level = %v/%v/%v, want 102/100.5/101", sig.TakeProfit, sig.StopLoss, sig.Level)
 	}
-	if !sig.FillBy.Equal(at("2026-09-14 10:05")) {
-		t.Fatalf("FillBy = %v, want 10:05", sig.FillBy)
+	if !sig.FillBy.Equal(at("2026-09-14 10:30")) {
+		t.Fatalf("FillBy = %v, want 10:30", sig.FillBy)
 	}
-	if !strings.HasPrefix(sig.EntryReason, "A") {
-		t.Fatalf("EntryReason = %q, want prefix A", sig.EntryReason)
+	if !strings.Contains(sig.EntryReason, "объём пробоя 151 > 1.50 × среднее 20 дневных свечей 100") {
+		t.Fatalf("EntryReason misses the volume: %q", sig.EntryReason)
 	}
 }
 
-func TestEntryANeedsEveryCondition(t *testing.T) {
-	for name, b := range map[string]bar{
-		"red":             {"2026-09-14 10:00", 99.4, 99.5, 98.8, 99.3},
-		"low at PDL":      {"2026-09-14 10:00", 99.2, 99.5, 99.0, 99.3},
-		"close at PDL":    {"2026-09-14 10:00", 98.9, 99.5, 98.8, 99.0},
-		"close below PDL": {"2026-09-14 10:00", 98.85, 99.5, 98.8, 98.95},
-	} {
-		if sig := decide(m5(), []bar{pre, b}); sig.Kind != model.SignalNone {
-			t.Errorf("%s: Kind = %v, want None", name, sig.Kind)
-		}
+// The breakout buys only on the bar that completes the hold: not on the breakout bar, not after.
+func TestBreakoutBuysAfterHold(t *testing.T) {
+	later := bar{"2026-09-14 10:30", 101.5, 101.7, 101.4, 101.6}
+	s := newS(DefaultParams())
+	if sig := s.Decide(pdhMD(151)); sig.Kind != model.SignalNone {
+		t.Errorf("breakout bar, hold 1: Kind = %v, want None", sig.Kind)
+	}
+	if sig := s.Decide(pdhMD(151, holdC, later)); sig.Kind != model.SignalNone {
+		t.Errorf("bar after the hold: Kind = %v, want None", sig.Kind)
+	}
+	p := DefaultParams()
+	p.HoldBars = 0
+	if sig := newS(p).Decide(pdhMD(151)); sig.Kind != model.SignalBuy || !strings.Contains(sig.EntryReason, "держится над PDH 0 св.") {
+		t.Errorf("hold 0, breakout bar: got %v %q, want Buy", sig.Kind, sig.EntryReason)
+	}
+	p.HoldBars = 2
+	if sig := newS(p).Decide(pdhMD(151, holdC)); sig.Kind != model.SignalNone {
+		t.Errorf("hold 2, one bar held: Kind = %v, want None", sig.Kind)
+	}
+	if sig := newS(p).Decide(pdhMD(151, holdC, later)); sig.Kind != model.SignalBuy {
+		t.Errorf("hold 2, two bars held: Kind = %v, want Buy", sig.Kind)
+	}
+	p.HoldBars = -1
+	if sig := newS(p).Decide(pdhMD(151)); sig.Kind != model.SignalNone {
+		t.Errorf("hold -1: Kind = %v, want None", sig.Kind)
 	}
 }
 
-func TestEntryB(t *testing.T) {
-	sig := decide(m5(), []bar{redB, greenB})
-	if sig.Kind != model.SignalBuy {
-		t.Fatalf("Kind = %v, want Buy", sig.Kind)
+// A close below PDH during the hold cancels the breakout; a close exactly at PDH does not.
+func TestBreakoutHoldCancelledBelowPDH(t *testing.T) {
+	below := bar{"2026-09-14 10:15", 101.4, 101.4, 100.8, 100.9}
+	back := bar{"2026-09-14 10:30", 100.9, 101.4, 100.9, 101.3}
+	p := DefaultParams()
+	p.HoldBars = 2
+	if sig := newS(p).Decide(pdhMD(151, below, back)); sig.Kind != model.SignalNone {
+		t.Errorf("hold 2, close below PDH: Kind = %v, want None", sig.Kind)
 	}
-	if math.Abs(sig.StopLoss-97.92) > eps || math.Abs(sig.TakeProfit-101) > eps {
-		t.Fatalf("SL/TP = %v/%v, want 97.92/101", sig.StopLoss, sig.TakeProfit)
+	if sig := newS(DefaultParams()).Decide(pdhMD(151, below)); sig.Kind != model.SignalNone {
+		t.Errorf("hold 1, close below PDH: Kind = %v, want None", sig.Kind)
 	}
-	if !strings.HasPrefix(sig.EntryReason, "B") {
-		t.Fatalf("EntryReason = %q, want prefix B", sig.EntryReason)
-	}
-}
-
-func TestEntryBNeedsEveryCondition(t *testing.T) {
-	for name, pair := range map[string][2]bar{
-		"close equals red open": {redB, {"2026-09-14 10:00", 98.55, 98.95, 98.4, 98.9}},
-		"low equals red low":    {redB, {"2026-09-14 10:00", 98.55, 98.95, 98.5, 98.92}},
-		"previous is a doji":    {{"2026-09-14 09:55", 98.6, 98.95, 98.5, 98.6}, greenB},
-		"current is red":        {redB, {"2026-09-14 10:00", 98.95, 98.95, 98.4, 98.92}},
-		"different dates":       {{"2026-09-11 23:55", 98.9, 98.95, 98.5, 98.6}, {"2026-09-14 07:00", 98.55, 98.95, 98.4, 98.92}},
-	} {
-		if sig := decide(m5(), pair[:]); sig.Kind != model.SignalNone {
-			t.Errorf("%s: Kind = %v, want None", name, sig.Kind)
-		}
+	atPDH := bar{"2026-09-14 10:15", 101.4, 101.4, 100.9, 101}
+	if sig := newS(DefaultParams()).Decide(pdhMD(151, atPDH)); sig.Kind != model.SignalBuy || !strings.Contains(sig.EntryReason, "мин. close 101.0000") {
+		t.Errorf("hold 1, close at PDH: got %v %q, want Buy", sig.Kind, sig.EntryReason)
 	}
 }
 
-// The engulfing is a reversal anywhere: away from the levels (here around 100) it only needs the RSI
-// of the red bar below 50.
-func TestEntryBAnywhere(t *testing.T) {
-	away := []bar{{"2026-09-14 09:55", 100.4, 100.45, 100.05, 100.1}, {"2026-09-14 10:00", 100.05, 100.5, 100.0, 100.45}}
-	sig := decide(m5(), away)
-	if sig.Kind != model.SignalBuy || !strings.Contains(sig.EntryReason, "разворот вне уровней, RSI(6) 5m") {
-		t.Fatalf("got %v %q, want Buy B away from the levels", sig.Kind, sig.EntryReason)
+// The hold does not cross midnight: a breakout on the last bar of Friday is not held on Monday.
+func TestBreakoutHoldSameDate(t *testing.T) {
+	bars := []bar{
+		{"2026-09-11 23:30", 100.4, 100.6, 100.3, 100.5},
+		{"2026-09-11 23:45", 100.6, 101.5, 100.5, 101.4},
+		{"2026-09-14 07:00", 101.4, 101.6, 101.2, 101.5},
 	}
-	if math.Abs(sig.Level-99) > eps || math.Abs(sig.TakeProfit-101) > eps {
-		t.Fatalf("Level/TP = %v/%v, want 99/101", sig.Level, sig.TakeProfit)
+	md := withVolumes(fixture(warm(bars)), 100, warmBars+1, 151)
+	if sig := newS(DefaultParams()).Decide(md); sig.Kind != model.SignalNone {
+		t.Fatalf("Kind = %v, want None", sig.Kind)
 	}
 }
 
-func TestEntryBothPatternsReportA(t *testing.T) {
-	both := []bar{{"2026-09-14 09:55", 99.2, 99.2, 98.7, 98.8}, {"2026-09-14 10:00", 98.75, 99.4, 98.6, 99.3}}
-	if sig := decide(m5(), both); sig.Kind != model.SignalBuy || !strings.HasPrefix(sig.EntryReason, "A") {
-		t.Fatalf("both: %v %q, want Buy with reason A", sig.Kind, sig.EntryReason)
+func TestBreakoutNeedsVolume(t *testing.T) {
+	if sig := newS(DefaultParams()).Decide(pdhMD(150, holdC)); sig.Kind != model.SignalNone {
+		t.Fatalf("volume 150 = 1.5 × 100: Kind = %v, want None", sig.Kind)
 	}
-	p := m5()
-	p.EntryA = 0
-	if sig := decide(p, both); sig.Kind != model.SignalBuy || !strings.HasPrefix(sig.EntryReason, "B") {
-		t.Fatalf("EntryA off: %v %q, want Buy with reason B", sig.Kind, sig.EntryReason)
+	if sig := decide(DefaultParams(), []bar{preC, barC, holdC}); sig.Kind != model.SignalNone {
+		t.Fatalf("no volumes: Kind = %v, want None", sig.Kind)
+	}
+	p := DefaultParams()
+	p.VolumeMult = 0
+	if sig := decide(p, []bar{preC, barC, holdC}); sig.Kind != model.SignalBuy {
+		t.Fatalf("volume filter off: Kind = %v, want Buy", sig.Kind)
 	}
 }
 
 func TestEntrySwitches(t *testing.T) {
-	p := m5()
-	p.EntryA = 0
-	if sig := decide(p, []bar{pre, barA}); sig.Kind != model.SignalNone {
-		t.Errorf("EntryA off: Kind = %v, want None", sig.Kind)
+	p := DefaultParams()
+	p.EntryPDL = 0
+	if sig := decide(p, upTo(reclaimAt)); sig.Kind != model.SignalNone {
+		t.Errorf("EntryPDL off: Kind = %v, want None", sig.Kind)
 	}
-	p = m5()
-	p.EntryB = 0
-	if sig := decide(p, []bar{redB, greenB}); sig.Kind != model.SignalNone {
-		t.Errorf("EntryB off: Kind = %v, want None", sig.Kind)
+	p = DefaultParams()
+	p.EntryPDH = 0
+	if sig := newS(p).Decide(pdhMD(151, holdC)); sig.Kind != model.SignalNone {
+		t.Errorf("EntryPDH off: Kind = %v, want None", sig.Kind)
 	}
 }
 
+// The window gates the trigger bar: the reclaim shifted so it lands at the given time.
 func TestEntryWindow(t *testing.T) {
-	for ts, want := range map[string]bool{
-		"2026-09-14 06:55": false,
+	for trig, want := range map[string]bool{
+		"2026-09-14 06:45": false,
 		"2026-09-14 07:00": true,
-		"2026-09-14 17:50": true,  // buy at 17:55
-		"2026-09-14 17:55": false, // buy at 18:00 is too late
+		"2026-09-14 17:30": true,  // buy at 17:45
+		"2026-09-14 17:45": false, // buy at 18:00 is too late
 		"2026-09-12 10:00": false, // Saturday
 	} {
-		b := barA
-		b.t = ts
-		p := pre
-		p.t = at(ts).Add(-5 * time.Minute).Format("2006-01-02 15:04")
-		if got := decide(m5(), []bar{p, b}).Kind == model.SignalBuy; got != want {
-			t.Errorf("%s: buy = %v, want %v", ts, got, want)
+		from := ts(at(trig).Add(-reclaimAt * step))
+		bars := path(from, 100, 99.5, 98.7, 98.6, 99.2)
+		if got := decide(DefaultParams(), bars).Kind == model.SignalBuy; got != want {
+			t.Errorf("%s: buy = %v, want %v", trig, got, want)
 		}
 	}
 }
 
-// Review focus 1: with the window widened to midnight the fill bar of a 23:55 signal is the next
-// date — no entry.
+// With the window widened to midnight the fill bar of a 23:45 trigger is the next date — no entry.
 func TestEntryFillMustBeSameDate(t *testing.T) {
-	p := m5()
+	p := DefaultParams()
 	p.EntryToHour = 24
-	b := barA
-	b.t = "2026-09-14 23:55"
-	q := pre
-	q.t = "2026-09-14 23:50"
-	if sig := decide(p, []bar{q, b}); sig.Kind != model.SignalNone {
-		t.Fatalf("Kind = %v, want None", sig.Kind)
+	bars := path("2026-09-14 23:00", 100, 99.5, 98.7, 98.6, 99.2)
+	if sig := decide(p, bars); sig.Kind != model.SignalNone {
+		t.Fatalf("23:45: Kind = %v, want None", sig.Kind)
 	}
-	b.t, q.t = "2026-09-14 23:50", "2026-09-14 23:45"
-	if sig := decide(p, []bar{q, b}); sig.Kind != model.SignalBuy {
-		t.Fatalf("23:50: Kind = %v, want Buy", sig.Kind)
+	bars = path("2026-09-14 22:45", 100, 99.5, 98.7, 98.6, 99.2)
+	if sig := decide(p, bars); sig.Kind != model.SignalBuy {
+		t.Fatalf("23:30: Kind = %v, want Buy", sig.Kind)
 	}
 }
 
-func TestEntryCloseAtPDH(t *testing.T) {
-	wide := bar{"2026-09-14 10:00", 99.2, 101.2, 98.8, 101.0}
-	if sig := decide(m5(), []bar{pre, wide}); sig.Kind != model.SignalNone {
-		t.Fatalf("target on: Kind = %v, want None", sig.Kind)
+func TestTargetOf(t *testing.T) {
+	if got := targetOf(setup{name: "PDL", level: 99}, 99, 101); math.Abs(got-100) > eps {
+		t.Errorf("PDL target = %v, want 100", got)
 	}
-	p := m5()
-	p.TakeProfitPDH = 0
-	sig := decide(p, []bar{pre, wide})
-	if sig.Kind != model.SignalBuy || sig.TakeProfit != 0 {
-		t.Fatalf("target off: %v TP %v, want Buy with no target", sig.Kind, sig.TakeProfit)
+	if got := targetOf(setup{name: "PDH", level: 101}, 99, 101); math.Abs(got-102) > eps {
+		t.Errorf("PDH target = %v, want 102", got)
 	}
 }
 
-// Review focus 4: Sunday's daily (99.9..100.1) is not the reference day; Friday's (99..101) is.
-func TestEntryIgnoresWeekendDaily(t *testing.T) {
-	b := bar{"2026-09-14 10:00", 99.6, 99.97, 99.5, 99.95} // a reclaim of 99.9, not of 99
-	if sig := decide(m5(), []bar{pre, b}); sig.Kind != model.SignalNone {
+// A trigger closing at/above the target does not buy: the reclaim shoots straight to 100.
+func TestEntryCloseBelowTarget(t *testing.T) {
+	bars := path("2026-09-14 09:30", 100, 99.5, 98.7, 98.6, 100.2)
+	if sig := decide(DefaultParams(), bars); sig.Kind != model.SignalNone {
 		t.Fatalf("Kind = %v, want None", sig.Kind)
+	}
+}
+
+// Sunday's daily (99.9..100.1) is not the reference day; Friday's (99..101) is.
+func TestLevelsIgnoreWeekendDaily(t *testing.T) {
+	pdl, pdh, ok := newS(DefaultParams()).levels(fixture(pdlDay()))
+	if !ok || pdl != 99 || pdh != 101 {
+		t.Fatalf("levels = %v %v %v, want 99 101 true", pdl, pdh, ok)
 	}
 }
 
 func TestEntryNeedsDailiesAndStop(t *testing.T) {
-	md := fixture(warm([]bar{pre, barA}))
+	md := fixture(warm(upTo(reclaimAt)))
 	md.DailyHighs, md.DailyLows, md.DailyCloses, md.DailyTimes = nil, nil, nil, nil
-	if sig := newS(m5()).Decide(md); sig.Kind != model.SignalNone {
+	if sig := newS(DefaultParams()).Decide(md); sig.Kind != model.SignalNone {
 		t.Errorf("no dailies: Kind = %v, want None", sig.Kind)
 	}
-	p := m5()
+	p := DefaultParams()
 	p.StopDailyATR = 0
-	if sig := decide(p, []bar{pre, barA}); sig.Kind != model.SignalNone {
+	if sig := decide(p, upTo(reclaimAt)); sig.Kind != model.SignalNone {
 		t.Errorf("no stop: Kind = %v, want None", sig.Kind)
 	}
 }
 
-func TestLookbackCoversWarmupAndDay(t *testing.T) {
-	warm := 3 * (26 + 8) // MACD 9/26/8
-	if got := newS(m5()).Lookback(); got != warm+dayBars {
-		t.Fatalf("5m only: Lookback = %d, want %d", got, warm+dayBars)
+func TestLookbackCoversDayAndVolume(t *testing.T) {
+	p := DefaultParams()
+	p.VolumeMult = 0
+	if got := newS(p).Lookback(); got != dayBars {
+		t.Fatalf("Lookback = %d, want %d", got, dayBars)
 	}
-	if got := newS(DefaultParams()).Lookback(); got != 6*warm+dayBars {
-		t.Fatalf("with 30m: Lookback = %d, want %d", got, 6*warm+dayBars)
+	// VolBars 20 fit one main session; a weekend may lie between: three days of bars.
+	if got := newS(DefaultParams()).Lookback(); got != 3*dayBars+dayBars {
+		t.Fatalf("Lookback = %d, want %d", got, 4*dayBars)
 	}
-}
-
-// rallyUp is 09:20–09:55 rising with small pullbacks to 99.25.
-func rallyUp() []bar {
-	closes := []float64{98.6, 98.8, 98.7, 98.9, 99.1, 99.0, 99.2, 99.25}
-	var out []bar
-	for k, c := range closes {
-		ts := at("2026-09-14 09:20").Add(time.Duration(k) * 5 * time.Minute).Format("2006-01-02 15:04")
-		out = append(out, bar{ts, c, c, c, c})
-	}
-	return out
-}
-
-// rally is a rise into the entry-A bar: RSI(6) is well above 50.
-func rally() []bar { return append(rallyUp(), barA) }
-
-// rallyB is the rise, then a small red bar (RSI stays above 50) and an engulfing that stays above
-// PDL 99 — a reversal away from the levels.
-func rallyB() []bar {
-	return append(rallyUp(), bar{"2026-09-14 10:00", 99.3, 99.3, 99.1, 99.2}, bar{"2026-09-14 10:05", 99.15, 99.4, 99.05, 99.35})
-}
-
-func TestEntryBlockedWhenRSIAbove(t *testing.T) {
-	if sig := newS(m5()).Decide(fixture(rallyB())); sig.Kind != model.SignalNone {
-		t.Fatalf("reversal, RSI above 50: Kind = %v, want None", sig.Kind)
-	}
-	p := m5()
-	p.RSIEntryMax = 0
-	if sig := newS(p).Decide(fixture(rallyB())); sig.Kind != model.SignalBuy {
-		t.Fatalf("gate off: Kind = %v, want Buy", sig.Kind)
-	}
-	// A crosses PDL: no RSI gate even after the rally
-	if sig := newS(m5()).Decide(fixture(rally())); sig.Kind != model.SignalBuy {
-		t.Fatalf("A after the rally: Kind = %v, want Buy", sig.Kind)
-	}
-}
-
-// The gate is strict and reads the red bar before the engulfing: RSI equal to RSIEntryMax blocks.
-func TestEntryRSIGateStrict(t *testing.T) {
-	md := fixture(rallyB())
-	n := len(md.Closes)
-	rsi := indicators.RSISeries(md.Closes[:n-1], 6)[n-2]
-	p := m5()
-	p.RSIEntryMax = rsi
-	if sig := newS(p).Decide(md); sig.Kind != model.SignalNone {
-		t.Fatalf("red-bar RSI %.2f = max: Kind = %v, want None", rsi, sig.Kind)
-	}
-	p.RSIEntryMax = rsi + 0.01
-	if sig := newS(p).Decide(md); sig.Kind != model.SignalBuy {
-		t.Fatalf("red-bar RSI %.2f < max: Kind = %v, want Buy", rsi, sig.Kind)
-	}
-}
-
-// An engulfing crossing PDL upward is a level formation: no RSI gate.
-func TestEntryBAtLevelSkipsRSI(t *testing.T) {
-	p := m5()
-	p.EntryA = 0
-	bars := append(rallyUp(), bar{"2026-09-14 10:00", 99.3, 99.3, 98.9, 99.2}, bar{"2026-09-14 10:05", 99.15, 99.4, 98.85, 99.4})
-	sig := newS(p).Decide(fixture(bars))
-	if sig.Kind != model.SignalBuy || !strings.Contains(sig.EntryReason, "пересечение PDL") {
-		t.Fatalf("got %v %q, want Buy B at PDL", sig.Kind, sig.EntryReason)
-	}
-}
-
-// Without enough closes to compute RSI the gate refuses a reversal.
-func TestEntryRSIGateNeedsHistory(t *testing.T) {
-	if sig := newS(m5()).Decide(fixture([]bar{redB, greenB})); sig.Kind != model.SignalNone {
-		t.Fatalf("Kind = %v, want None", sig.Kind)
+	p = DefaultParams()
+	p.VolBars = 500
+	if l, need := newS(p).Lookback(), (500/sessionBars+1)*dayBars; l < need {
+		t.Fatalf("Lookback %d with VolBars 500, want ≥ %d", l, need)
 	}
 }

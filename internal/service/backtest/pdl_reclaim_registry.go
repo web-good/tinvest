@@ -29,19 +29,19 @@ func pdlReclaimBindingFor(ticker string, interval enum.Interval, defaults func()
 	}
 }
 
-// pdlReclaimRegistry maps tickers with their own package to their Minutes5 literal. A ticker
-// comes here with its calibration; GAZP is here before it, so its timeframe switches and volume
-// filter can be set per ticker.
+// pdlReclaimRegistry maps tickers with their own package to their Minutes15 literal. A ticker
+// comes here with its calibration; GAZP is here before it, so its formations and filters can be
+// set per ticker.
 var pdlReclaimRegistry = map[string]func() core.Params{
 	"GAZP": gazp.Params,
 }
 
 // PDLReclaimLookupOrGeneric returns the binding for a ticker: the ticker package's literal, or
 // core.DefaultParams when the ticker has no package. Partial JSON overrides layer over whichever
-// defaults apply. pdl_reclaim runs on Minutes5 only; other timeframes are rejected.
+// defaults apply. pdl_reclaim runs on Minutes15 only; other timeframes are rejected.
 func PDLReclaimLookupOrGeneric(ticker string, interval enum.Interval) (Binding, error) {
-	if interval != enum.Minutes5 {
-		return Binding{}, fmt.Errorf("pdl_reclaim runs on Minutes5 only, not %s", interval)
+	if interval != enum.Minutes15 {
+		return Binding{}, fmt.Errorf("pdl_reclaim runs on Minutes15 only, not %s", interval)
 	}
 	defaults, ok := pdlReclaimRegistry[ticker]
 	if !ok {

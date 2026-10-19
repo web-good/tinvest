@@ -1,0 +1,18 @@
+{
+  "_comment": "GAZP pdl_reclaim: центр плато sweep_pdl_wide.json (медиана PF точки и соседей 1.611, минимум соседа 1.461). РЕЗУЛЬТАТ 2026-10-19: разработка PF 1.775/33, без лучшей 1.362, без трёх лучших 1.092, комиссия 0.1% PF 1.489; hold-out 11 сделок net +3737 PF 1.48; год PF 1.667/44 net +14213. Записано в литерал gazp. 2026-10-19: MACD удалён из стратегии — поля MACD*/PDLMACD этого файла устарели, файл — запись прогона, а не сетка для повтора.",
+  "EntryPDL": 1,
+  "EntryPDH": 0,
+  "HoldBars": 1,
+  "MACDWaitBars": 5,
+  "StopDailyATR": 0.85,
+  "DailyATRPeriod": 14,
+  "MACDFast": 9,
+  "MACDSlow": 26,
+  "MACDSignal": 8,
+  "EntryFromHour": 10,
+  "EntryFromMinute": 0,
+  "EntryToHour": 18,
+  "EntryToMinute": 0,
+  "VolumeMult": 1.5,
+  "VolBars": 20
+}

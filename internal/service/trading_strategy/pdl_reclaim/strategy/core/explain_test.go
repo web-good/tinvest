@@ -5,9 +5,38 @@ import (
 	"testing"
 )
 
-func TestExplainEntryA(t *testing.T) {
-	out := newS(m5()).Explain(fixture(warm([]bar{pre, barA})))
-	for _, want := range []string{"✓ окно", "PDL 99.0000", "✓ A", "формация A пересекла PDL", "RSI-фильтр входа: не нужен", "ИТОГ: ПОКУПКА"} {
+func TestExplainReclaimEntry(t *testing.T) {
+	out := newS(DefaultParams()).Explain(fixture(warm(upTo(reclaimAt))))
+	for _, want := range []string{"✓ окно: сигнал 15m", "PDL 99.0000", "✓ возврат над PDL на этой свече",
+		"✓ цель 100.0000", "ИТОГ: ПОКУПКА"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+}
+
+// The bar after the reclaim is no trigger: the buy came on the reclaim bar.
+func TestExplainAfterReclaim(t *testing.T) {
+	out := newS(DefaultParams()).Explain(fixture(warm(upTo(reclaimAt + 1))))
+	for _, want := range []string{"✗ возврат над PDL на этой свече", "ИТОГ: входа нет"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+}
+
+func TestExplainBreakoutVolume(t *testing.T) {
+	out := newS(DefaultParams()).Explain(pdhMD(150))
+	for _, want := range []string{"✓ пробой PDH на этой свече", "✗ объём пробоя 150 > 1.50 × среднее 20", "✗ пробоя PDH 1 св. назад", "ИТОГ: входа нет"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+}
+
+func TestExplainBreakoutHeld(t *testing.T) {
+	out := newS(DefaultParams()).Explain(pdhMD(151, holdC))
+	for _, want := range []string{"✓ пробой PDH на свече 10:00 держится над PDH 1 св. (мин. close 101.4000)", "✓ цель 102.0000", "ИТОГ: ПОКУПКА"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in:\n%s", want, out)
 		}
@@ -15,46 +44,20 @@ func TestExplainEntryA(t *testing.T) {
 }
 
 func TestExplainOutsideWindow(t *testing.T) {
-	b := barA
-	b.t = "2026-09-14 06:55"
-	q := pre
-	q.t = "2026-09-14 06:50"
-	out := newS(m5()).Explain(fixture([]bar{q, b}))
+	out := newS(DefaultParams()).Explain(fixture(path("2026-09-14 06:30", 100, 99.5, 99.4)))
 	if !strings.Contains(out, "✗ окно") || !strings.Contains(out, "ИТОГ: входа нет") {
 		t.Fatalf("got:\n%s", out)
 	}
 }
 
-func TestExplainReversalRSI(t *testing.T) {
-	out := newS(m5()).Explain(fixture(warm([]bar{redB, greenB})))
-	for _, want := range []string{"формация B — разворот вне уровней", "✓ RSI(6) свечи перед разворотом"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("missing %q in:\n%s", want, out)
-		}
-	}
-}
-
 func TestExplainHeldStop(t *testing.T) {
-	md := fixture([]bar{fillBar, {"2026-09-14 10:10", 99.4, 99.5, 98.4, 98.6}})
+	md := fixture([]bar{fillBar, {"2026-09-14 10:30", 99.4, 99.5, 98.4, 98.6}})
 	pos := pos0()
 	md.Position = &pos
-	out := newS(quiet()).Explain(md)
+	out := newS(DefaultParams()).Explain(md)
 	for _, want := range []string{"--- выходы ---", "стоп", "ИТОГ: ПРОДАЖА SL"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in:\n%s", want, out)
 		}
-	}
-}
-
-func TestExplainHalfHourEntry(t *testing.T) {
-	out := newS(DefaultParams()).Explain(fixture(append(morning(), halfA()...)))
-	for _, want := range []string{"✓ окно: сигнал 30m", "свеча 30m", "✓ A", "ИТОГ: ПОКУПКА"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("missing %q in:\n%s", want, out)
-		}
-	}
-	mid := append(morning(), halfA()[:3]...)
-	if out := newS(DefaultParams()).Explain(fixture(mid)); !strings.Contains(out, "получас не закрылся") {
-		t.Errorf("mid half-hour:\n%s", out)
 	}
 }

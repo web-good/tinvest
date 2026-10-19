@@ -1,15 +1,17 @@
-// Package core implements pdl_reclaim: a long-only intraday strategy around yesterday's range,
-// read on 5-minute bars before Switch (10:00 MSK) and on half-hours built from them after it. Yesterday's low (PDL) is support, yesterday's high (PDH) the target. It buys
-// the next bar's open after a formation: a green bar that dipped below PDL and closed back above it
-// (entry A), a first green close above PDH (entry C, off by default) or a bullish engulfing (entry
-// B). A formation crossing PDL or PDH upward enters without an RSI gate; a reversal away from the
-// levels needs RSI(RSIPeriod) of the bar before it below RSIEntryMax (on half-hours the hourly RSI
-// below HourRSIMax). A position keeps the timeframe it was opened on: its RSI and
-// MACD exits read 5m bars or half-hours; the stop and target are checked on every 5m bar. Exits,
-// in priority order:
-// a stop StopDailyATR daily ATRs below the fill, PDH, RSI(RSIPeriod) at or above RSIExit, the
-// first red MACD histogram bar after a green one inside the trade, and the end of day. Pure,
-// stateless between bars and ticker-agnostic. Run with `-strategy pdl_reclaim -interval Minutes5`.
+// Package core implements pdl_reclaim: a long-only strategy around yesterday's range on
+// 15-minute bars. Yesterday's low (PDL) and high (PDH) are the levels. Two entries:
+//   - at PDL the reclaim: a green bar closes above PDL after a red bar of the same date closed
+//     below it, with no close above PDL in between; the buy comes at the next bar's open right
+//     after the reclaim bar;
+//   - at PDH the breakout: the first green close above PDH, on volume above VolumeMult × the
+//     average volume of the VolBars main-session bars before it (10:00–18:30 MSK, weekdays); the
+//     buy comes at the next bar's open once the HoldBars bars after the breakout bar, on its date,
+//     all closed at or above PDH.
+//
+// The target is the setup level plus half of yesterday's range: the middle of the range at PDL,
+// PDH + half the range at PDH. Exits, in priority order: a stop StopDailyATR daily ATRs below the
+// fill and the target; the position carries overnight until one of them. Pure, stateless between
+// bars and ticker-agnostic. Run with `-strategy pdl_reclaim -interval Minutes15`.
 package core
 
 import (
@@ -21,96 +23,44 @@ import (
 	"tinvest/pkg/indicators"
 )
 
-// dayBars is the number of 5-minute bars from 07:00 to the 23:45 exit bar (the last bar of the
-// evening session) inclusive: an open position is never older than that, so the window always
-// reaches back to its entry bar.
-const dayBars = 202
-
-// barsPerHalf is the number of 5-minute bars in a half-hour.
-const barsPerHalf = 6
-
-// minWarmup keeps the indicator warm-up sane when the periods are tiny.
-const minWarmup = 64
+// dayBars is the number of 15-minute bars from 07:00 to 23:45 (the last bar of the evening session)
+// inclusive: a setup is never older than that.
+const dayBars = 68
 
 // Params holds every tunable. All fields are int or float64 so reflection grid calibration can
 // sweep them.
 type Params struct {
-	EntryA          int     // 1 — false break of PDL (green bar, low < PDL < close) enters
-	EntryB          int     // 1 — bullish engulfing enters (anywhere; away from the levels only with RSI below RSIEntryMax)
+	EntryPDL int // 1 — the reclaim of PDL (green close above it after a red close below it) arms an entry
+	EntryPDH int // 1 — the breakout of PDH (first green close above it on raised volume) arms an entry
+	// HoldBars: the PDH breakout buys once the HoldBars bars after it all closed at or above PDH; a
+	// close below PDH among them cancels it; 0 — buy right after the breakout bar; < 0 — no PDH entries
+	HoldBars        int
 	StopDailyATR    float64 // stop below the fill in daily ATR; 0 — no entries (no risk unit)
 	DailyATRPeriod  int     // Wilder period over completed weekday dailies
-	TakeProfitPDH   int     // 1 — target at yesterday's high; 0 — no target
-	RSIPeriod       int     // RSI for the entry gate and the exit, on the signal's timeframe; 0 — both off
-	RSIExit         float64 // RSI at/above this sells; 0 — RSI exit off
-	RSIEntryMax     float64 // a reversal away from the levels needs RSI(RSIPeriod) of the bar before it strictly below this; 0 or RSIPeriod 0 — gate off
-	MACDFast        int     // MACD for the exit, on the position's timeframe; invalid periods — MACD exit off
-	MACDSlow        int
-	MACDSignal      int
-	EntryFromHour   int // the signal bar starts at/after EntryFrom MSK
+	EntryFromHour   int     // the buy-trigger bar starts at/after EntryFrom MSK
 	EntryFromMinute int
-	EntryToHour     int // the buy bar starts before EntryTo MSK, on the signal's date
+	EntryToHour     int // the buy bar starts before EntryTo MSK, on the trigger's date
 	EntryToMinute   int
-	ExitHour        int // the first bar starting at/after Exit MSK sells at its close
-	ExitMinute      int
-	SwitchHour      int // from Switch MSK signals are read on half-hours instead of 5m bars; 24 — 5m all day
-	SwitchMinute    int
-	GapOnly         int // 1 — entries only on a day whose first 5m bar opened below PDL
-	Confirm         int // 1 — the pattern bar must be followed by a bar of its timeframe, same date, closing above PDL; buy after that bar
-	TargetMid       int // 1 — the target is the middle of yesterday's range instead of PDH (with TakeProfitPDH 1)
-	Entry5m         int // 1 — entries on 5m signals (before Switch; all day with SwitchHour 24); 0 — none
-	Entry30m        int // 1 — entries on half-hour signals from Switch on; 0 — no entries after Switch
-	// VolumeMult > 0: the pattern bar's volume must be above VolumeMult × the average volume of the
-	// bars of its timeframe starting at the same MSK time on the previous VolDays weekdays; 0 — off
+	// VolumeMult > 0: the PDH breakout bar's volume must be above VolumeMult × the average volume of
+	// the VolBars main-session bars (10:00–18:30 MSK, weekdays) before it; 0 — off
 	VolumeMult float64
-	VolDays    int
-	// HourRSIPeriod and HourRSIMax > 0: a half-hour signal needs RSI(HourRSIPeriod) of hourly closes,
-	// the hour read up to the close of the pattern half-hour, strictly below HourRSIMax — instead of
-	// the half-hour RSI gate RSIEntryMax; either 0 — the half-hour gate. 5m signals keep RSIEntryMax.
-	HourRSIPeriod int
-	HourRSIMax    float64
-	// EntryC 1: a green bar closing above PDH after a bar of the same date closed at or below it
-	// enters (breakout). It also allows any formation whose signal closes above PDH. Such entries
-	// have no target and their positions no RSI exit.
-	EntryC int
-	// BodyATR > 0: the pattern bar's body and its close past the level (PDL for A/B, PDH for C)
-	// must both be strictly above BodyATR daily ATRs; 0 — off
-	BodyATR float64
-	// LevelsOnly 1: entries only at yesterday's levels — a reversal crossing PDL upward (A, the
-	// engulfing) or the breakout of PDH (C); reversals away from the levels and an engulfing that
-	// only retested PDH from above do not enter
-	LevelsOnly int
-	// LevelTolATR > 0: a formation whose lowest low is within LevelTolATR daily ATRs above a level
-	// counts as reaching it (the close must still be above the level); 0 — the low must pierce it
-	LevelTolATR float64
+	VolBars    int
 }
 
 // DefaultParams returns the owner's rules.
 func DefaultParams() Params {
 	return Params{
-		EntryA:          1,
-		EntryB:          1,
+		EntryPDL:        1,
+		EntryPDH:        1,
+		HoldBars:        1,
 		StopDailyATR:    0.5,
 		DailyATRPeriod:  14,
-		TakeProfitPDH:   1,
-		RSIPeriod:       6,
-		RSIExit:         70,
-		RSIEntryMax:     50,
-		MACDFast:        9,
-		MACDSlow:        26,
-		MACDSignal:      8,
 		EntryFromHour:   7,
 		EntryFromMinute: 0,
 		EntryToHour:     18,
 		EntryToMinute:   0,
-		ExitHour:        23,
-		ExitMinute:      45,
-		SwitchHour:      10,
-		SwitchMinute:    0,
-		Entry5m:         1,
-		Entry30m:        1,
-		VolDays:         20,
-		HourRSIPeriod:   6,
-		HourRSIMax:      30,
+		VolumeMult:      1.5,
+		VolBars:         20,
 	}
 }
 
@@ -121,26 +71,24 @@ type Strategy struct {
 	p      Params
 }
 
-// NewWithParams returns the strategy for a ticker; step is the bar length (5m).
+// NewWithParams returns the strategy for a ticker; step is the bar length (15m).
 func NewWithParams(ticker string, step time.Duration, p Params) *Strategy {
 	return &Strategy{ticker: ticker, step: step, p: p}
 }
 
 func (s *Strategy) Ticker() string { return s.ticker }
 
-// Lookback warms MACD and RSI before the oldest possible entry bar of a held position — on
-// half-hours (six 5m bars each) when the switch is on — and, with the volume filter, reaches back
-// VolDays weekdays (weekend sessions in between included).
+// tf labels the bars in reasons ("15m").
+func (s *Strategy) tf() string { return fmt.Sprintf("%dm", int(s.step.Minutes())) }
+
+// Lookback covers the bars of the day the setups look back over and the VolBars main-session bars
+// the volume filter averages before a breakout early in the day: whole days of bars, plus a
+// weekend in between.
 func (s *Strategy) Lookback() int {
-	warm := max(minWarmup, 3*(s.p.MACDSlow+s.p.MACDSignal), 4*s.p.RSIPeriod+2)
-	if s.switchOn() {
-		warm *= barsPerHalf
-		if s.hourRSIOn() {
-			warm = max(warm, (4*s.p.HourRSIPeriod+2)*barsPerHour)
-		}
-	}
+	warm := 0
 	if s.volumeOn() {
-		warm = max(warm, (s.p.VolDays*7/5+3)*dayBars)
+		days := (s.p.VolBars + sessionBars - 1) / sessionBars
+		warm = max(warm, (days+2)*dayBars)
 	}
 	return warm + dayBars
 }
@@ -170,6 +118,19 @@ func dayKey(t time.Time) int {
 func minuteOf(t time.Time) int {
 	tl := t.In(mskLoc)
 	return tl.Hour()*60 + tl.Minute()
+}
+
+// series is the bars, oldest-first: opens, highs, lows, closes, volumes and start times. v is nil
+// when the bars carry no volumes.
+type series struct {
+	o, h, l, c []float64
+	v          []int64
+	t          []time.Time
+}
+
+// barsOf is the engine's bars as a series (no copy).
+func barsOf(md strategy.MarketData) series {
+	return series{o: md.Opens, h: md.Highs, l: md.Lows, c: md.Closes, v: md.Volumes, t: md.Times}
 }
 
 // weekdayDaily drops weekend (Sat/Sun MSK) dailies, keeping the price slices aligned. When times
@@ -215,98 +176,19 @@ func (s *Strategy) dailyATR(md strategy.MarketData) float64 {
 	return indicators.ATR(h, l, c, s.p.DailyATRPeriod)
 }
 
-// entryAllowed reports whether signal bar k of ser may buy at the next 5m open: a weekday, the
-// bar starts at/after EntryFrom (a half-hour also at/after Switch, on today's date and closed no
-// later than the half-hour after it), and the buy bar starts before EntryTo on the signal's date.
-func (s *Strategy) entryAllowed(md strategy.MarketData, ser series, k int, tf string) bool {
-	t := ser.t[k]
-	if isWeekend(t.In(mskLoc)) || minuteOf(t) < s.p.EntryFromHour*60+s.p.EntryFromMinute {
+// entryAllowed reports whether the current bar may buy at the next open: a weekday, the bar
+// starts at/after EntryFrom, and the buy bar starts before EntryTo on the trigger's date.
+func (s *Strategy) entryAllowed(md strategy.MarketData) bool {
+	t := md.Times[len(md.Times)-1]
+	if isWeekend(t.In(mskLoc)) || minuteOf(t) < s.entryFrom() {
 		return false
 	}
-	now := md.Times[len(md.Times)-1]
-	// a half-hour closed late by a gap bar (now beyond the half-hour right after it) is stale
-	if tf == "30m" && (minuteOf(t) < s.switchMinute() || dayKey(t) != dayKey(now) || halfStart(now).After(t.Add(halfHour))) {
-		return false
-	}
-	fill := now.Add(s.step)
+	fill := t.Add(s.step)
 	return dayKey(fill) == dayKey(t) && minuteOf(fill) < s.p.EntryToHour*60+s.p.EntryToMinute
 }
 
-// isA: bar i is green, dipped below PDL and closed back above it.
-func isA(ser series, i int, pdl float64) bool {
-	return ser.c[i] > ser.o[i] && ser.l[i] < pdl && ser.c[i] > pdl
-}
-
-// isB: a bullish engulfing anywhere — bar i-1 is red; bar i, on the same date, is green, closes
-// above the red bar's open and trades below its low.
-func isB(ser series, i int) bool {
-	if i < 1 || dayKey(ser.t[i]) != dayKey(ser.t[i-1]) {
-		return false
-	}
-	o0, c0, l0 := ser.o[i-1], ser.c[i-1], ser.l[i-1]
-	o1, c1, l1 := ser.o[i], ser.c[i], ser.l[i]
-	return c0 < o0 && c1 > o1 && c1 > o0 && l1 < l0
-}
-
-// formation is the entry pattern completed on a bar. One crossing yesterday's low or high upward
-// (level > 0) enters without the RSI gate; a reversal away from the levels needs the RSI of bar
-// rsiBar below the gate.
-type formation struct {
-	kind   string  // "A", "B" or "C"
-	level  float64 // the level crossed upward (PDL or PDH); 0 — away from the levels
-	name   string  // "PDL", "PDH" or ""
-	rsiBar int     // the bar before the reversal the RSI gate reads
-}
-
-// pattern is the formation bar i completes ("C" wins over "A", "A" over "B"). A and C are level
-// formations by definition; B is one when it reached a level within tol and closed above it.
-func (s *Strategy) pattern(ser series, i int, pdl, pdh, tol float64) (formation, bool) {
-	switch {
-	case s.p.EntryC > 0 && isC(ser, i, pdh):
-		return formation{kind: "C", level: pdh, name: "PDH", rsiBar: i - 1}, true
-	case s.p.EntryA > 0 && isA(ser, i, pdl):
-		return formation{kind: "A", level: pdl, name: "PDL", rsiBar: i - 1}, true
-	case s.p.EntryB > 0 && isB(ser, i):
-		f := formation{kind: "B", rsiBar: i - 1}
-		f.level, f.name = crossed(ser, i-1, i, pdl, pdh, tol)
-		return f, true
-	}
-	return formation{}, false
-}
-
-// crossed is the level bars from..i crossed upward — their lowest low below it (or within tol
-// above it) and bar i closed above it — PDH checked first; 0 and "" when they crossed neither.
-func crossed(ser series, from, i int, pdl, pdh, tol float64) (float64, string) {
-	low := ser.l[i]
-	for j := from; j < i; j++ {
-		low = min(low, ser.l[j])
-	}
-	switch {
-	case low < pdh+tol && ser.c[i] > pdh:
-		return pdh, "PDH"
-	case low < pdl+tol && ser.c[i] > pdl:
-		return pdl, "PDL"
-	}
-	return 0, ""
-}
-
-// levelTol is LevelTolATR daily ATRs (0 when off) and whether it could be computed.
-func (s *Strategy) levelTol(md strategy.MarketData) (float64, bool) {
-	if s.p.LevelTolATR <= 0 {
-		return 0, true
-	}
-	atr := s.dailyATR(md)
-	return s.p.LevelTolATR * atr, atr > 0
-}
-
-// levelsAllowed reports whether formation f may enter under LevelsOnly: a reversal at PDL or the
-// PDH breakout C. Without LevelsOnly every formation may.
-func (s *Strategy) levelsAllowed(f formation) bool {
-	if s.p.LevelsOnly <= 0 {
-		return true
-	}
-	return f.kind == "C" || f.name == "PDL"
-}
+// entryFrom is the MSK minute of the day from which a bar may trigger a buy.
+func (s *Strategy) entryFrom() int { return s.p.EntryFromHour*60 + s.p.EntryFromMinute }
 
 func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 	sig := model.Signal{Ticker: s.ticker, Price: md.Price}
@@ -316,61 +198,32 @@ func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 	return s.enter(md, sig)
 }
 
-// enter buys the next 5m open on entry A, B or C of the signal bar (5m before Switch, the half-hour
-// that just closed after it). The cheap bar gates run before the daily ATR.
+// enter buys the next open when the current bar completes the hold of a PDH breakout or is a PDL
+// reclaim. The cheap bar gates run before the daily ATR.
 func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal {
 	n := len(md.Closes)
 	if n < 2 || len(md.Times) != n || len(md.Opens) != n || len(md.Highs) != n || len(md.Lows) != n {
 		return sig
 	}
-	if s.p.StopDailyATR <= 0 {
+	if s.p.StopDailyATR <= 0 || !s.entryAllowed(md) {
 		return sig
 	}
-	ser, k, tf, ok := s.signalBar(md)
-	if !ok || !s.tfEnabled(tf) || !s.entryAllowed(md, ser, k, tf) {
-		return sig
-	}
+	ser, k := barsOf(md), n-1
 	pdl, pdh, ok := s.levels(md)
 	if !ok {
 		return sig
 	}
-	if s.p.GapOnly > 0 && !s.gapDown(md, pdl) {
-		return sig
-	}
-	pb, ok := s.patternBar(ser, k, tf)
-	if !ok {
-		return sig
-	}
-	tol, ok := s.levelTol(md)
-	if !ok {
-		return sig
-	}
-	f, ok := s.pattern(ser, pb, pdl, pdh, tol)
-	if !ok || !s.levelsAllowed(f) || !s.confirmed(ser, k, pb, f) {
-		return sig
-	}
-	vol, avg, ok := s.volumeOK(ser, pb)
+	st, why, ok := s.trigger(ser, k, pdl, pdh)
 	if !ok {
 		return sig
 	}
 	closeP := ser.c[k]
-	target, ok := s.signalTarget(closeP, pdl, pdh)
-	if !ok {
-		return sig
-	}
-	rsi, rsiTF, ok := 0.0, "", true
-	if f.level == 0 {
-		rsi, rsiTF, ok = s.signalRSI(md, ser, f.rsiBar, tf)
-	}
-	if !ok {
+	target := targetOf(st, pdl, pdh)
+	if closeP >= target {
 		return sig
 	}
 	atr := s.dailyATR(md)
 	if atr <= 0 {
-		return sig
-	}
-	body, past, ok := s.strength(ser, pb, f.level, atr)
-	if !ok {
 		return sig
 	}
 	stop := closeP - s.p.StopDailyATR*atr
@@ -378,116 +231,23 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 		return sig
 	}
 	sig.Kind = model.SignalBuy
-	sig.StopLoss, sig.ATR, sig.Level = stop, atr, pdl
-	if f.level > 0 {
-		sig.Level = f.level
-	}
+	sig.StopLoss, sig.ATR, sig.Level = stop, atr, st.level
 	sig.TakeProfit = target
-	sig.FillBy = md.Times[n-1].Add(s.step)
-	sig.RSI = rsi
-	gate := fmt.Sprintf("пересечение %s, без RSI-фильтра", f.name)
-	if f.level == 0 {
-		gate = fmt.Sprintf("разворот вне уровней, %s %.1f", rsiTF, rsi)
-	}
-	sig.EntryReason = fmt.Sprintf("%s %s: PDL %.4f, PDH %.4f, сигнал по close %.4f, %s, дневной ATR %.4f, стоп %.4f",
-		f.kind, tf, pdl, pdh, closeP, gate, atr, stop)
-	if s.p.BodyATR > 0 {
-		sig.EntryReason += fmt.Sprintf(", тело %.2f", body)
-		if f.level > 0 {
-			sig.EntryReason += fmt.Sprintf(" и отрыв %.2f", past)
-		}
-		sig.EntryReason += fmt.Sprintf(" > %.2f", s.p.BodyATR*atr)
-	}
-	if s.volumeOn() {
-		sig.EntryReason += fmt.Sprintf(", объём %.0f > %.2f × среднее слота %.0f", vol, s.p.VolumeMult, avg)
+	sig.FillBy = md.Times[k].Add(s.step)
+	sig.EntryReason = fmt.Sprintf("%s %s: %s на свече %s, %s, PDL %.4f, PDH %.4f, сигнал по close %.4f, цель %.4f, дневной ATR %.4f, стоп %.4f",
+		st.name, s.tf(), st.what(), ser.t[st.bar].In(mskLoc).Format("15:04"), why, pdl, pdh, closeP, target, atr, stop)
+	if st.name == "PDH" && s.volumeOn() {
+		vol, avg, _ := s.volumeOK(ser, st.bar)
+		sig.EntryReason += fmt.Sprintf(", объём пробоя %.0f > %.2f × среднее %d дневных свечей %.0f", vol, s.p.VolumeMult, s.p.VolBars, avg)
 	}
 	return sig
 }
 
-// gapDown reports whether today's first 5m bar in md opened below pdl. A window that does not
-// reach back to the day's start fails closed.
-func (s *Strategy) gapDown(md strategy.MarketData, pdl float64) bool {
-	n := len(md.Times)
-	day := dayKey(md.Times[n-1])
-	j := n - 1
-	for j > 0 && dayKey(md.Times[j-1]) == day {
-		j--
-	}
-	if j == 0 {
-		return false
-	}
-	return md.Opens[j] < pdl
-}
+// targetOf is the target of setup st: its level plus half of yesterday's range — the middle of
+// the range for the PDL reclaim, PDH + half the range for the PDH breakout.
+func targetOf(st setup, pdl, pdh float64) float64 { return st.level + (pdh-pdl)/2 }
 
-// patternBar is the bar the formation is read on: the signal bar itself, or with Confirm the one
-// before it — same date, also a valid signal time.
-func (s *Strategy) patternBar(ser series, k int, tf string) (int, bool) {
-	if s.p.Confirm <= 0 {
-		return k, true
-	}
-	pb := k - 1
-	if pb < 0 || dayKey(ser.t[pb]) != dayKey(ser.t[k]) {
-		return -1, false
-	}
-	m := minuteOf(ser.t[pb])
-	if m < s.p.EntryFromHour*60+s.p.EntryFromMinute || (tf == "30m" && m < s.switchMinute()) {
-		return -1, false
-	}
-	return pb, true
-}
-
-// confirmed reports whether signal bar k confirms formation f read on bar pb: without Confirm
-// (pb == k) always; with it bar k closed above the level f crossed, or above the pattern bar's
-// close for a reversal away from the levels.
-func (s *Strategy) confirmed(ser series, k, pb int, f formation) bool {
-	if pb == k {
-		return true
-	}
-	if f.level > 0 {
-		return ser.c[k] > f.level
-	}
-	return ser.c[k] > ser.c[pb]
-}
-
-// signalTarget is the target of a signal closing at closeP and whether it may enter. A close
-// above PDH is a breakout: it needs EntryC and has no target. Otherwise the close must be below
-// the target.
-func (s *Strategy) signalTarget(closeP, pdl, pdh float64) (float64, bool) {
-	if closeP > pdh {
-		return 0, s.p.EntryC > 0
-	}
-	target := s.target(pdl, pdh)
-	return target, target <= 0 || closeP < target
-}
-
-// target is the take-profit level: PDH, the middle of yesterday's range with TargetMid, 0 — none.
-func (s *Strategy) target(pdl, pdh float64) float64 {
-	switch {
-	case s.p.TakeProfitPDH <= 0:
-		return 0
-	case s.p.TargetMid > 0:
-		return (pdl + pdh) / 2
-	}
-	return pdh
-}
-
-// entryRSI is RSI(RSIPeriod) on the last of closes and whether the reversal gate passes: RSI
-// strictly below RSIEntryMax. The gate is off (always passes) when RSIEntryMax or RSIPeriod is 0; without
-// enough closes for the RSI it fails, rather than letting a cold 0 through.
-func (s *Strategy) entryRSI(closes []float64) (float64, bool) {
-	if s.p.RSIEntryMax <= 0 || s.p.RSIPeriod <= 0 {
-		return 0, true
-	}
-	n := len(closes)
-	if n <= s.p.RSIPeriod {
-		return 0, false
-	}
-	rsi := indicators.RSISeries(closes, s.p.RSIPeriod)[n-1]
-	return rsi, rsi < s.p.RSIEntryMax
-}
-
-// manage exits in priority order: stop and target on every 5m bar, RSI and MACD on the position's
-// timeframe, end of day.
+// manage exits in priority order: stop, target. The position carries overnight.
 func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal {
 	pos := md.Position
 	n := len(md.Closes)
@@ -495,7 +255,7 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 		return sig
 	}
 	i := n - 1
-	low, high, closeP := md.Lows[i], md.Highs[i], md.Closes[i]
+	low, high := md.Lows[i], md.Highs[i]
 	if stop := s.stop(md, pos); stop > 0 && low <= stop {
 		sig.Kind, sig.Reason, sig.StopLoss = model.SignalSell, "SL", stop
 		sig.ExitReason = fmt.Sprintf("SL: low %.4f ≤ стоп %.4f (вход %.4f)", low, stop, pos.PurchasePrice)
@@ -503,31 +263,7 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 	}
 	if pos.TakeProfit > 0 && high >= pos.TakeProfit {
 		sig.Kind, sig.Reason, sig.TakeProfit = model.SignalSell, "TP", pos.TakeProfit
-		sig.ExitReason = fmt.Sprintf("TP: high %.4f ≥ PDH %.4f (вход %.4f)", high, pos.TakeProfit, pos.PurchasePrice)
-		return sig
-	}
-	if closes, from, k, e, tf, ok := s.exitSeries(md, pos); ok {
-		var rsi, hist []float64
-		if s.p.RSIPeriod > 0 && s.p.RSIExit > 0 && len(closes) > s.p.RSIPeriod && !s.breakoutHeld(md, pos) {
-			rsi = indicators.RSISeries(closes, s.p.RSIPeriod)
-		}
-		hist = histogram(closes, s.p)
-		for j := from; j <= k; j++ {
-			if rsi != nil && rsi[j] >= s.p.RSIExit {
-				sig.Kind, sig.Reason = model.SignalSell, "RSI"
-				sig.ExitReason = fmt.Sprintf("RSI %s: RSI(%d) %.1f ≥ %.0f, выход по %.4f (вход %.4f)", tf, s.p.RSIPeriod, rsi[j], s.p.RSIExit, closeP, pos.PurchasePrice)
-				return sig
-			}
-			if hist != nil && macdExit(hist, e, j) {
-				sig.Kind, sig.Reason = model.SignalSell, "MACD"
-				sig.ExitReason = fmt.Sprintf("MACD %s: гистограмма %.4f красная после зелёной в сделке, выход по %.4f (вход %.4f)", tf, hist[j], closeP, pos.PurchasePrice)
-				return sig
-			}
-		}
-	}
-	if why := s.eodReason(md, pos); why != "" {
-		sig.Kind, sig.Reason = model.SignalSell, "EOD"
-		sig.ExitReason = fmt.Sprintf("EOD: %s, выход по %.4f (вход %.4f)", why, closeP, pos.PurchasePrice)
+		sig.ExitReason = fmt.Sprintf("TP: high %.4f ≥ цели %.4f (вход %.4f)", high, pos.TakeProfit, pos.PurchasePrice)
 	}
 	return sig
 }
@@ -546,69 +282,4 @@ func (s *Strategy) stop(md strategy.MarketData, pos *strategy.Position) float64 
 		return 0
 	}
 	return max(pos.PurchasePrice-s.p.StopDailyATR*atr, 0)
-}
-
-// histogram is MACD line minus signal line over closes; nil for invalid periods or short history.
-func histogram(closes []float64, p Params) []float64 {
-	m, sg := indicators.MACD(closes, p.MACDFast, p.MACDSlow, p.MACDSignal)
-	if m == nil {
-		return nil
-	}
-	h := make([]float64, len(m))
-	for k := range m {
-		h[k] = m[k] - sg[k]
-	}
-	return h
-}
-
-// entryIndex is the index of the bar that opened at entry, or -1 when entry is unset or not in
-// the window.
-func entryIndex(times []time.Time, entry time.Time) int {
-	if entry.IsZero() {
-		return -1
-	}
-	for j := len(times) - 1; j >= 0; j-- {
-		if times[j].Equal(entry) {
-			return j
-		}
-		if times[j].Before(entry) {
-			return -1
-		}
-	}
-	return -1
-}
-
-// macdExit: the histogram is red on bar i and was green (≥ 0) on some bar from the entry bar e
-// up to i-1.
-func macdExit(hist []float64, e, i int) bool {
-	if e < 0 || e >= i || hist[i] >= 0 {
-		return false
-	}
-	for k := e; k < i; k++ {
-		if hist[k] >= 0 {
-			return true
-		}
-	}
-	return false
-}
-
-// eodReason explains why the position must close on the current bar, or returns "" when it may
-// stay. It fails closed: no bar times, the first bar of a new MSK date, a bar of a later date
-// than the entry, or a bar starting at/after Exit MSK.
-func (s *Strategy) eodReason(md strategy.MarketData, pos *strategy.Position) string {
-	n := len(md.Closes)
-	if n < 2 || len(md.Times) != n {
-		return "нет времени свечей — выход по безопасности"
-	}
-	now := md.Times[n-1]
-	if dayKey(now) != dayKey(md.Times[n-2]) {
-		return "первая свеча новой даты — позиция не переносится через ночь"
-	}
-	if !pos.EntryTime.IsZero() && dayKey(now) != dayKey(pos.EntryTime) {
-		return "свеча следующего дня — позиция не переносится через ночь"
-	}
-	if minuteOf(now) >= s.p.ExitHour*60+s.p.ExitMinute {
-		return fmt.Sprintf("свеча %s не раньше %02d:%02d MSK", now.In(mskLoc).Format("15:04"), s.p.ExitHour, s.p.ExitMinute)
-	}
-	return ""
 }

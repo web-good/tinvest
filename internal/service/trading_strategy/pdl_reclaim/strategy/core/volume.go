@@ -1,49 +1,55 @@
 package core
 
-// tfEnabled reports whether entries on signals of timeframe tf are switched on (Entry5m, Entry30m).
-func (s *Strategy) tfEnabled(tf string) bool {
-	if tf == "30m" {
-		return s.p.Entry30m > 0
-	}
-	return s.p.Entry5m > 0
-}
+// The main session's 15-minute bars, MSK: from the 10:00 bar to the 18:30 one inclusive. The
+// volume average skips the morning and evening sessions, the closing auction bar and weekends.
+const (
+	sessionFrom = 10 * 60
+	sessionTo   = 18*60 + 45
+	sessionBars = (sessionTo - sessionFrom) / 15
+)
 
 // volumeOn reports whether the volume filter is in play.
-func (s *Strategy) volumeOn() bool { return s.p.VolumeMult > 0 && s.p.VolDays > 0 }
+func (s *Strategy) volumeOn() bool { return s.p.VolumeMult > 0 && s.p.VolBars > 0 }
 
-// volumeOK reports the volume of bar i of ser, the average of its slot and whether the volume
-// filter passes: the volume is above VolumeMult × the slot average. The filter is off (always
-// passes) when volumeOn is false; without volumes it fails closed.
+// volumeOK reports the volume of bar i of ser (the PDH breakout bar), the average of the VolBars
+// main-session bars before it and whether the volume filter passes: the volume is above VolumeMult
+// × that average. The filter is off (always passes) when volumeOn is false; without volumes it
+// fails closed.
 func (s *Strategy) volumeOK(ser series, i int) (vol, avg float64, ok bool) {
 	if !s.volumeOn() {
 		return 0, 0, true
 	}
-	if len(ser.v) != len(ser.c) {
+	if len(ser.v) != len(ser.c) || len(ser.t) != len(ser.c) {
 		return 0, 0, false
 	}
-	avg, ok = slotAverage(ser, i, s.p.VolDays)
+	avg, ok = averageVolume(ser, i, s.p.VolBars)
 	vol = float64(ser.v[i])
 	return vol, avg, ok && avg > 0 && vol > s.p.VolumeMult*avg
 }
 
-// slotAverage is the average volume of the bars of ser starting at the same MSK minute as bar i on
-// the days previous weekdays before its date (one bar per date, weekend sessions skipped), and
-// whether the window held that many. Only bars before i are read.
-func slotAverage(ser series, i, days int) (float64, bool) {
-	m, day := minuteOf(ser.t[i]), dayKey(ser.t[i])
+// averageVolume is the average volume of the n main-session bars of ser before bar i, and whether
+// there are that many.
+func averageVolume(ser series, i, n int) (float64, bool) {
 	var sum int64
-	found, last := 0, day
-	for j := i - 1; j >= 0 && found < days; j-- {
-		d := dayKey(ser.t[j])
-		if d == last || minuteOf(ser.t[j]) != m || isWeekend(ser.t[j].In(mskLoc)) {
+	got := 0
+	for j := i - 1; j >= 0 && got < n; j-- {
+		if !inSession(ser, j) {
 			continue
 		}
 		sum += ser.v[j]
-		found++
-		last = d
+		got++
 	}
-	if found < days {
+	if got < n {
 		return 0, false
 	}
-	return float64(sum) / float64(days), true
+	return float64(sum) / float64(n), true
+}
+
+// inSession reports whether bar j of ser is a weekday main-session bar.
+func inSession(ser series, j int) bool {
+	if isWeekend(ser.t[j].In(mskLoc)) {
+		return false
+	}
+	m := minuteOf(ser.t[j])
+	return m >= sessionFrom && m < sessionTo
 }

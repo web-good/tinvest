@@ -9,7 +9,7 @@ import (
 )
 
 func TestPDLReclaimGenericTickerUsesCoreDefaults(t *testing.T) {
-	b, err := PDLReclaimLookupOrGeneric("ZZZZ", enum.Minutes5)
+	b, err := PDLReclaimLookupOrGeneric("ZZZZ", enum.Minutes15)
 	if err != nil {
 		t.Fatalf("lookup: %v", err)
 	}
@@ -22,8 +22,8 @@ func TestPDLReclaimGenericTickerUsesCoreDefaults(t *testing.T) {
 	}
 }
 
-func TestPDLReclaimRunsOnMinutes5Only(t *testing.T) {
-	for _, iv := range []enum.Interval{enum.Minutes15, enum.Minutes30, enum.Hour1, enum.Hour4, enum.Day1, enum.Week1} {
+func TestPDLReclaimRunsOnMinutes15Only(t *testing.T) {
+	for _, iv := range []enum.Interval{enum.Minutes5, enum.Minutes30, enum.Hour1, enum.Hour4, enum.Day1, enum.Week1} {
 		if _, err := PDLReclaimLookupOrGeneric("GAZP", iv); err == nil {
 			t.Fatalf("%s: want error", iv)
 		}
@@ -31,23 +31,23 @@ func TestPDLReclaimRunsOnMinutes5Only(t *testing.T) {
 }
 
 func TestPDLReclaimParseParamsLayersOverDefaults(t *testing.T) {
-	b, err := PDLReclaimLookupOrGeneric("ZZZZ", enum.Minutes5)
+	b, err := PDLReclaimLookupOrGeneric("ZZZZ", enum.Minutes15)
 	if err != nil {
 		t.Fatalf("lookup: %v", err)
 	}
-	parsed, err := b.ParseParams([]byte(`{"StopDailyATR": 0.7, "RSIExit": 75}`))
+	parsed, err := b.ParseParams([]byte(`{"StopDailyATR": 0.7, "HoldBars": 3}`))
 	if err != nil {
 		t.Fatalf("ParseParams: %v", err)
 	}
 	want := core.DefaultParams()
-	want.StopDailyATR, want.RSIExit = 0.7, 75
+	want.StopDailyATR, want.HoldBars = 0.7, 3
 	if got := parsed.(core.Params); got != want {
 		t.Fatalf("got %+v, want %+v", got, want)
 	}
 }
 
 func TestPDLReclaimGAZPUsesItsPackage(t *testing.T) {
-	b, err := PDLReclaimLookupOrGeneric("GAZP", enum.Minutes5)
+	b, err := PDLReclaimLookupOrGeneric("GAZP", enum.Minutes15)
 	if err != nil {
 		t.Fatalf("lookup: %v", err)
 	}
@@ -59,10 +59,10 @@ func TestPDLReclaimGAZPUsesItsPackage(t *testing.T) {
 // A registered ticker resolves to its own literal; the test injects one of its own.
 func TestPDLReclaimTickerLiteral(t *testing.T) {
 	lit := core.DefaultParams()
-	lit.RSIExit = 77
+	lit.StopDailyATR = 0.77
 	pdlReclaimRegistry["TEST"] = func() core.Params { return lit }
 	t.Cleanup(func() { delete(pdlReclaimRegistry, "TEST") })
-	b, err := PDLReclaimLookupOrGeneric("TEST", enum.Minutes5)
+	b, err := PDLReclaimLookupOrGeneric("TEST", enum.Minutes15)
 	if err != nil {
 		t.Fatalf("lookup: %v", err)
 	}
