@@ -1,18 +1,16 @@
 {
-  "_comment": "GAZP pdl_reclaim: центр плато sweep_pdl_wide.json (медиана PF точки и соседей 1.611, минимум соседа 1.461). РЕЗУЛЬТАТ 2026-10-19: разработка PF 1.775/33, без лучшей 1.362, без трёх лучших 1.092, комиссия 0.1% PF 1.489; hold-out 11 сделок net +3737 PF 1.48; год PF 1.667/44 net +14213. Записано в литерал gazp. 2026-10-19: MACD удалён из стратегии — поля MACD*/PDLMACD этого файла устарели, файл — запись прогона, а не сетка для повтора.",
+  "_comment": "GAZP pdl_reclaim: точка полной перекалибровки 2026-10-19 (sweep_full.json). РЕЗУЛЬТАТ: центр плато — обе ветки, HoldBars 3, стоп 0.7, 10:00–16:00, MaxDayRangeATR 0.8, IndexTrendEMA 200: разработка PF 6.115/27 net +21960, медиана окрестности 5.235, худший сосед 2.649; стоп 0.6 — 3.466, 0.85 — 5.068 (0.7 — пик внутри). Стресс: без лучшей 4.718, без трёх 3.755, комиссия 0.1% PF 5.207; кварталы все в плюсе. Hold-out 18 сделок PF 1.272 net +2977 (PDH 7 сделок PF 0.37). Год 45 сделок PF 2.456 net +25622; год до окна 40 сделок PF 1.352 net +10049 (прежний литерал 1.006/33, +192). Записано в литерал gazp.",
   "EntryPDL": 1,
-  "EntryPDH": 0,
-  "HoldBars": 1,
-  "MACDWaitBars": 5,
-  "StopDailyATR": 0.85,
+  "EntryPDH": 1,
+  "HoldBars": 3,
+  "StopDailyATR": 0.7,
   "DailyATRPeriod": 14,
-  "MACDFast": 9,
-  "MACDSlow": 26,
-  "MACDSignal": 8,
   "EntryFromHour": 10,
   "EntryFromMinute": 0,
-  "EntryToHour": 18,
+  "EntryToHour": 16,
   "EntryToMinute": 0,
   "VolumeMult": 1.5,
-  "VolBars": 20
+  "VolBars": 20,
+  "MaxDayRangeATR": 0.8,
+  "IndexTrendEMA": 200
 }

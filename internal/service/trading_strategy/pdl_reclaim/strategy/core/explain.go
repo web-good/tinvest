@@ -34,6 +34,9 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 	} else {
 		fmt.Fprintf(&sb, "✗ дневной ATR(%d): не посчитан\n", p.DailyATRPeriod)
 	}
+	if why, ok := s.indexOK(md.Times[i]); why != "" {
+		fmt.Fprintf(&sb, "%s тренд индекса вниз: %s\n", mark(ok), why)
+	}
 
 	if md.Position != nil {
 		s.explainExits(&sb, md)

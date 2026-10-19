@@ -10,15 +10,16 @@ import (
 func TestLiteralIsPinned(t *testing.T) {
 	want := core.Params{
 		EntryPDL:       1,
-		EntryPDH:       0,
-		HoldBars:       1,
-		StopDailyATR:   0.85,
+		EntryPDH:       1,
+		HoldBars:       3,
+		StopDailyATR:   0.7,
 		DailyATRPeriod: 14,
 		EntryFromHour:  10,
-		EntryToHour:    18,
+		EntryToHour:    16,
 		VolumeMult:     1.5,
 		VolBars:        20,
 		MaxDayRangeATR: 0.8,
+		IndexTrendEMA:  200,
 	}
 	if got := Params(); got != want {
 		t.Fatalf("литерал GAZP изменился:\n got: %+v\nwant: %+v", got, want)

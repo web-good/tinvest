@@ -3,10 +3,14 @@ package backtest
 import (
 	"encoding/json"
 	"fmt"
+	"time"
+
+	"tinvest/internal/domain/backtest"
 
 	"tinvest/internal/enum"
 	"tinvest/internal/service/trading_strategy/pdl_reclaim/strategy/core"
 	"tinvest/internal/service/trading_strategy/pdl_reclaim/strategy/gazp"
+	"tinvest/internal/service/trading_strategy/pdl_reclaim/strategy/sber"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 )
 
@@ -34,6 +38,7 @@ func pdlReclaimBindingFor(ticker string, interval enum.Interval, defaults func()
 // set per ticker.
 var pdlReclaimRegistry = map[string]func() core.Params{
 	"GAZP": gazp.Params,
+	"SBER": sber.Params,
 }
 
 // PDLReclaimLookupOrGeneric returns the binding for a ticker: the ticker package's literal, or
@@ -48,4 +53,21 @@ func PDLReclaimLookupOrGeneric(ticker string, interval enum.Interval) (Binding, 
 		defaults = core.DefaultParams
 	}
 	return pdlReclaimBindingFor(ticker, interval, defaults), nil
+}
+
+// PDLReclaimWithIndex makes every strategy b builds read the market index dailies (IMOEX) for the
+// IndexTrendEMA filter. The engine hands a strategy only its own dailies, so the index series is
+// attached at build time; the strategy reads only the index dailies of dates before the current
+// bar's.
+func PDLReclaimWithIndex(b Binding, index []backtest.Candle) Binding {
+	times := make([]time.Time, len(index))
+	closes := make([]float64, len(index))
+	for i, c := range index {
+		times[i], closes[i] = c.Time, c.Close
+	}
+	build := b.Build
+	b.Build = func(params any) strategy.Strategy {
+		return build(params).(*core.Strategy).WithIndex(times, closes)
+	}
+	return b
 }

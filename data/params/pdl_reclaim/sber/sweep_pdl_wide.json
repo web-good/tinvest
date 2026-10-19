@@ -1,0 +1,38 @@
+{
+  "_comment": "SBER pdl_reclaim, ветка PDL (EntryPDH 0), расширение: в sweep_pdl.json лучший стоп 1.2–1.5 лежал у края, лучший фильтр запаса хода 1.0 — тоже. Стоп × начало окна × конец окна × MaxDayRangeATR. Окно -months 12 -holdout-months 3. РЕЗУЛЬТАТ 2026-10-19: центр плато стоп 1.5 / с 10:00 / до 16:00 / MaxDayRangeATR 1.2 — PF 2.283/26, медиана окрестности 1.967, худший сосед 1.368; максимум PF 2.609/18 (с 12:00) — мало сделок. → sweep_combo.json.",
+  "phases": [
+    {
+      "name": "sweep",
+      "grid": {
+        "EntryPDL": [
+          1
+        ],
+        "EntryPDH": [
+          0
+        ],
+        "StopDailyATR": [
+          1.0,
+          1.2,
+          1.5,
+          1.8,
+          2.2
+        ],
+        "EntryFromHour": [
+          7,
+          10,
+          12
+        ],
+        "EntryToHour": [
+          16,
+          18
+        ],
+        "MaxDayRangeATR": [
+          0,
+          0.9,
+          1.0,
+          1.2
+        ]
+      }
+    }
+  ]
+}

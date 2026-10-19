@@ -1,0 +1,36 @@
+{
+  "_comment": "SBER pdl_reclaim, ветка пробоя PDH (EntryPDL 0): стоп × HoldBars × VolumeMult × начало окна. Окно -months 12 -holdout-months 3. РЕЗУЛЬТАТ 2026-10-19: лучший PF 2.22/29 (стоп 1.2, HoldBars 1, VolumeMult 1.5, с 10:00), плато нет — соседи до 0.47; стоп 1.2 на краю, ветку проверили поверх точки PDL в sweep_combo.json.",
+  "phases": [
+    {
+      "name": "sweep",
+      "grid": {
+        "EntryPDL": [
+          0
+        ],
+        "EntryPDH": [
+          1
+        ],
+        "StopDailyATR": [
+          0.5,
+          0.85,
+          1.2
+        ],
+        "HoldBars": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "VolumeMult": [
+          0,
+          1.5,
+          2.5
+        ],
+        "EntryFromHour": [
+          7,
+          10
+        ]
+      }
+    }
+  ]
+}
