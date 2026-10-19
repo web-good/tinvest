@@ -153,6 +153,24 @@ func TestReclaimBuysOnReclaimBarOnly(t *testing.T) {
 	}
 }
 
+// Monday's range up to the reclaim bar is 100 − 98.6 = 1.4, i.e. 0.7 of the daily ATR 2: a cap of
+// 0.7 blocks the entry, 0.75 lets it through; the flat warm-up of the previous days doesn't count.
+func TestMaxDayRangeATR(t *testing.T) {
+	if got := dayRange(barsOf(fixture(warm(upTo(reclaimAt)))), warmBars+reclaimAt); math.Abs(got-1.4) > eps {
+		t.Fatalf("dayRange = %v, want 1.4", got)
+	}
+	p := DefaultParams()
+	p.MaxDayRangeATR = 0.7
+	if sig := decide(p, upTo(reclaimAt)); sig.Kind != model.SignalNone {
+		t.Fatalf("cap 0.7: Kind = %v, want None", sig.Kind)
+	}
+	p.MaxDayRangeATR = 0.75
+	sig := decide(p, upTo(reclaimAt))
+	if sig.Kind != model.SignalBuy || !strings.HasSuffix(sig.EntryReason, ", диапазон дня 0.70 ATR < 0.75") {
+		t.Fatalf("cap 0.75: Kind = %v, reason %q", sig.Kind, sig.EntryReason)
+	}
+}
+
 // series builds a series from bars without warm-up.
 func seriesOf(bars []bar) series { return barsOf(fixture(bars)) }
 

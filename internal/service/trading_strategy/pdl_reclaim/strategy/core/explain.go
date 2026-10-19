@@ -27,6 +27,10 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 	s.explainEntry(&sb, md)
 	if atr := s.dailyATR(md); atr > 0 {
 		fmt.Fprintf(&sb, "✓ дневной ATR(%d): %.4f, стоп %.2f ATR\n", p.DailyATRPeriod, atr, p.StopDailyATR)
+		if p.MaxDayRangeATR > 0 {
+			spent := dayRange(barsOf(md), n-1) / atr
+			fmt.Fprintf(&sb, "%s диапазон дня %.2f ATR < %.2f (запас хода)\n", mark(s.roomOK(spent)), spent, p.MaxDayRangeATR)
+		}
 	} else {
 		fmt.Fprintf(&sb, "✗ дневной ATR(%d): не посчитан\n", p.DailyATRPeriod)
 	}

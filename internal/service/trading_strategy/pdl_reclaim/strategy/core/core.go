@@ -45,6 +45,10 @@ type Params struct {
 	// the VolBars main-session bars (10:00–18:30 MSK, weekdays) before it; 0 — off
 	VolumeMult float64
 	VolBars    int
+	// MaxDayRangeATR > 0: no entry when today's range (high − low of the trigger's date up to and
+	// including the trigger bar) is at or above MaxDayRangeATR daily ATRs — the day has already
+	// spent its move; 0 — off
+	MaxDayRangeATR float64
 }
 
 // DefaultParams returns the owner's rules.
@@ -226,6 +230,10 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	if atr <= 0 {
 		return sig
 	}
+	spent := dayRange(ser, k) / atr
+	if !s.roomOK(spent) {
+		return sig
+	}
 	stop := closeP - s.p.StopDailyATR*atr
 	if stop <= 0 {
 		return sig
@@ -240,7 +248,24 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 		vol, avg, _ := s.volumeOK(ser, st.bar)
 		sig.EntryReason += fmt.Sprintf(", объём пробоя %.0f > %.2f × среднее %d дневных свечей %.0f", vol, s.p.VolumeMult, s.p.VolBars, avg)
 	}
+	if s.p.MaxDayRangeATR > 0 {
+		sig.EntryReason += fmt.Sprintf(", диапазон дня %.2f ATR < %.2f", spent, s.p.MaxDayRangeATR)
+	}
 	return sig
+}
+
+// roomOK reports whether today's range so far, spent daily ATRs, leaves the day room to move.
+func (s *Strategy) roomOK(spent float64) bool {
+	return s.p.MaxDayRangeATR <= 0 || spent < s.p.MaxDayRangeATR
+}
+
+// dayRange is high − low over the bars of bar k's date up to and including k.
+func dayRange(ser series, k int) float64 {
+	hi, lo := ser.h[k], ser.l[k]
+	for j := k - 1; j >= 0 && dayKey(ser.t[j]) == dayKey(ser.t[k]); j-- {
+		hi, lo = max(hi, ser.h[j]), min(lo, ser.l[j])
+	}
+	return hi - lo
 }
 
 // targetOf is the target of setup st: its level plus half of yesterday's range — the middle of
