@@ -379,9 +379,10 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 }
 
 // stop is StopDailyATR daily ATRs below the fill, with the ATR frozen at entry (today's when the
-// position carries none); with StopAtExtremum the stop frozen at the signal. 0 — no stop.
+// position carries none); with StopAtExtremum or the pattern entry the stop frozen at the signal
+// (the structural stop of the pattern). 0 — no stop.
 func (s *Strategy) stop(md strategy.MarketData, pos *strategy.Position) float64 {
-	if s.p.StopAtExtremum > 0 {
+	if s.p.StopAtExtremum > 0 || (s.p.PDLPatternEntry > 0 && pos.StopLoss > 0) {
 		return pos.StopLoss
 	}
 	if s.p.StopDailyATR <= 0 {

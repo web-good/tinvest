@@ -165,3 +165,16 @@ func TestPatternEntryTargetR(t *testing.T) {
 		t.Fatalf("default PDLPatternTargetR = %v, want 2", got)
 	}
 }
+
+// A pattern-entry position stops at the structural stop it carries (98.3 on pos0), not at the
+// fill − StopDailyATR × ATR (99.4 − 0.5·2 = 98.4).
+func TestPatternEntryExitAtCarriedStop(t *testing.T) {
+	p := patternEntryP(0, 1)
+	if sig := held(p, []bar{fillBar, {"2026-09-14 10:30", 99.4, 99.5, 98.35, 98.6}}, pos0()); sig.Kind != model.SignalNone {
+		t.Fatalf("low 98.35: got %v %q, want None", sig.Kind, sig.Reason)
+	}
+	sig := held(p, []bar{fillBar, {"2026-09-14 10:30", 99.4, 99.5, 98.3, 98.6}}, pos0())
+	if sig.Reason != "SL" || math.Abs(sig.StopLoss-98.3) > eps {
+		t.Fatalf("low 98.3: got %q at %v, want SL at 98.3", sig.Reason, sig.StopLoss)
+	}
+}
