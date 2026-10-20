@@ -403,3 +403,15 @@ func TestLookbackCoversDayAndVolume(t *testing.T) {
 		t.Fatalf("Lookback %d with VolBars 500, want ≥ %d", l, need)
 	}
 }
+
+// On 5-minute bars a day holds three times the bars, and VolBars 20 still fit one main session.
+func TestLookbackScalesWithStep(t *testing.T) {
+	p := DefaultParams()
+	p.VolumeMult = 0
+	if got := NewWithParams("TEST", 5*time.Minute, p).Lookback(); got != 3*dayBars {
+		t.Fatalf("5m Lookback = %d, want %d", got, 3*dayBars)
+	}
+	if got := NewWithParams("TEST", 5*time.Minute, DefaultParams()).Lookback(); got != 4*3*dayBars {
+		t.Fatalf("5m Lookback with volume = %d, want %d", got, 4*3*dayBars)
+	}
+}

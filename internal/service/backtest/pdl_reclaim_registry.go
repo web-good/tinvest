@@ -42,10 +42,11 @@ var pdlReclaimRegistry = map[string]func() core.Params{
 
 // PDLReclaimLookupOrGeneric returns the binding for a ticker: the ticker package's literal, or
 // core.DefaultParams when the ticker has no package. Partial JSON overrides layer over whichever
-// defaults apply. pdl_reclaim runs on Minutes15 only; other timeframes are rejected.
+// defaults apply. pdl_reclaim runs on Minutes15 and Minutes5 (the same literal: bar counts such as
+// HoldBars and VolBars stay in bars of the run); other timeframes are rejected.
 func PDLReclaimLookupOrGeneric(ticker string, interval enum.Interval) (Binding, error) {
-	if interval != enum.Minutes15 {
-		return Binding{}, fmt.Errorf("pdl_reclaim runs on Minutes15 only, not %s", interval)
+	if interval != enum.Minutes15 && interval != enum.Minutes5 {
+		return Binding{}, fmt.Errorf("pdl_reclaim runs on Minutes15 or Minutes5, not %s", interval)
 	}
 	defaults, ok := pdlReclaimRegistry[ticker]
 	if !ok {

@@ -1,5 +1,5 @@
 // Package core implements pdl_reclaim: a long-only strategy around yesterday's range on
-// 15-minute bars. Yesterday's low (PDL) and high (PDH) are the levels. Two entries:
+// 15-minute (or 5-minute) bars. Yesterday's low (PDL) and high (PDH) are the levels. Two entries:
 //   - at PDL the reclaim: a green bar closes above PDL after a red bar of the same date closed
 //     below it, with no close above PDL in between; the buy comes at the next bar's open right
 //     after the reclaim bar;
@@ -11,7 +11,7 @@
 // The target is the setup level plus half of yesterday's range: the middle of the range at PDL,
 // PDH + half the range at PDH. Exits, in priority order: a stop StopDailyATR daily ATRs below the
 // fill and the target; the position carries overnight until one of them. Pure, stateless between
-// bars and ticker-agnostic. Run with `-strategy pdl_reclaim -interval Minutes15`.
+// bars and ticker-agnostic. Run with `-strategy pdl_reclaim -interval Minutes15` (or Minutes5).
 package core
 
 import (
@@ -90,7 +90,7 @@ type Strategy struct {
 	p      Params
 }
 
-// NewWithParams returns the strategy for a ticker; step is the bar length (15m).
+// NewWithParams returns the strategy for a ticker; step is the bar length (15m or 5m).
 func NewWithParams(ticker string, step time.Duration, p Params) *Strategy {
 	return &Strategy{ticker: ticker, step: step, p: p}
 }
@@ -104,13 +104,17 @@ func (s *Strategy) tf() string { return fmt.Sprintf("%dm", int(s.step.Minutes())
 // the volume filter averages before a breakout early in the day: whole days of bars, plus a
 // weekend in between.
 func (s *Strategy) Lookback() int {
+	day, session := dayBars*s.per15(), sessionBars*s.per15()
 	warm := 0
 	if s.volumeOn() || s.dipVolumeOn() {
-		days := (s.p.VolBars + sessionBars - 1) / sessionBars
-		warm = max(warm, (days+2)*dayBars)
+		days := (s.p.VolBars + session - 1) / session
+		warm = max(warm, (days+2)*day)
 	}
-	return warm + dayBars
+	return warm + day
 }
+
+// per15 is the number of bars in 15 minutes (3 on 5m): dayBars and sessionBars count 15m bars.
+func (s *Strategy) per15() int { return max(1, int(15*time.Minute/s.step)) }
 
 // mskLoc anchors every calendar rule to Moscow (UTC fallback).
 var mskLoc = func() *time.Location {

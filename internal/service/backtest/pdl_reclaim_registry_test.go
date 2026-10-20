@@ -24,8 +24,13 @@ func TestPDLReclaimGenericTickerUsesCoreDefaults(t *testing.T) {
 	}
 }
 
-func TestPDLReclaimRunsOnMinutes15Only(t *testing.T) {
-	for _, iv := range []enum.Interval{enum.Minutes5, enum.Minutes30, enum.Hour1, enum.Hour4, enum.Day1, enum.Week1} {
+func TestPDLReclaimRunsOnMinutes15AndMinutes5(t *testing.T) {
+	for _, iv := range []enum.Interval{enum.Minutes15, enum.Minutes5} {
+		if _, err := PDLReclaimLookupOrGeneric("GAZP", iv); err != nil {
+			t.Fatalf("%s: %v", iv, err)
+		}
+	}
+	for _, iv := range []enum.Interval{enum.Minutes30, enum.Hour1, enum.Hour4, enum.Day1, enum.Week1} {
 		if _, err := PDLReclaimLookupOrGeneric("GAZP", iv); err == nil {
 			t.Fatalf("%s: want error", iv)
 		}
