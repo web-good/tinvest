@@ -10,12 +10,16 @@ type setup struct {
 	bar   int     // index of the setup bar
 	name  string  // "PDL" or "PDH"
 	level float64 // PDL or PDH
+	kind  string  // the pattern of the PDL pattern entry ("молот", "поглощение"); "" otherwise
 }
 
 // what names the setup in reasons.
 func (st setup) what() string {
 	if st.name == "PDH" {
 		return "пробой PDH"
+	}
+	if st.kind != "" {
+		return st.kind + " у PDL"
 	}
 	return "возврат над PDL"
 }
@@ -53,7 +57,18 @@ func (s *Strategy) trigger(ser series, k int, pdl, pdh float64) (setup, string, 
 	if st, minClose, ok := s.held(ser, k, pdh); ok {
 		return st, fmt.Sprintf("держится над PDH %d св. (мин. close %.4f)", k-st.bar, minClose), true
 	}
-	if s.p.EntryPDL <= 0 || !isReclaim(ser, k, pdl) {
+	if s.p.EntryPDL <= 0 {
+		return setup{}, "", false
+	}
+	if s.p.PDLPatternEntry > 0 {
+		st, ok := s.patternEntry(ser, k, pdl)
+		if !ok {
+			return setup{}, "", false
+		}
+		why := fmt.Sprintf("первая зелёная после паттерна %s", ser.t[k].In(mskLoc).Format("15:04"))
+		return s.withDipVolume(ser, k, pdl, st, why)
+	}
+	if !isReclaim(ser, k, pdl) {
 		return setup{}, "", false
 	}
 	why := "покупка сразу"
@@ -64,6 +79,11 @@ func (s *Strategy) trigger(ser series, k int, pdl, pdh float64) (setup, string, 
 		}
 		why += fmt.Sprintf(", %s %s", name, ser.t[at].In(mskLoc).Format("15:04"))
 	}
+	return s.withDipVolume(ser, k, pdl, setup{bar: k, name: "PDL", level: pdl}, why)
+}
+
+// withDipVolume applies the volume filter of the series under PDL to a PDL setup triggered on bar k.
+func (s *Strategy) withDipVolume(ser series, k int, pdl float64, st setup, why string) (setup, string, bool) {
 	if s.dipVolumeOn() {
 		dip, avg, ok := s.dipVolumeOK(ser, k, pdl)
 		if !ok {
@@ -71,7 +91,48 @@ func (s *Strategy) trigger(ser series, k int, pdl, pdh float64) (setup, string, 
 		}
 		why += fmt.Sprintf(", объём серии %.0f > %.2f × обычный %.0f", dip, s.p.PDLDipVolMult, avg)
 	}
-	return setup{bar: k, name: "PDL", level: pdl}, why, true
+	return st, why, true
+}
+
+// patternEntry: bar k is the first green bar after the latest reversal candle of an enabled kind on
+// k's date, and that candle formed after the break of PDL (patternUnderPDL). The setup bar is the
+// pattern bar.
+func (s *Strategy) patternEntry(ser series, k int, pdl float64) (setup, bool) {
+	if ser.c[k] <= ser.o[k] {
+		return setup{}, false
+	}
+	day := dayKey(ser.t[k])
+	for j := k - 1; j >= 0 && dayKey(ser.t[j]) == day; j-- {
+		name := ""
+		switch {
+		case s.p.PDLEngulf > 0 && isEngulf(ser, j):
+			name = "поглощение"
+		case s.p.PDLHammer > 0 && isHammer(ser, j):
+			name = "молот"
+		}
+		if name != "" {
+			return setup{bar: j, name: "PDL", level: pdl, kind: name}, patternUnderPDL(ser, j, pdl)
+		}
+		if ser.c[j] > ser.o[j] {
+			return setup{}, false // an earlier pattern already had its first green bar
+		}
+	}
+	return setup{}, false
+}
+
+// patternUnderPDL: walking back from the pattern bar j over its date, a bar closed below PDL before
+// any bar before j closed above it (j itself or the red bar of an engulfing may be the break).
+func patternUnderPDL(ser series, j int, pdl float64) bool {
+	day := dayKey(ser.t[j])
+	for i := j; i >= 0 && dayKey(ser.t[i]) == day; i-- {
+		if i < j && ser.c[i] > pdl {
+			return false
+		}
+		if ser.c[i] < pdl {
+			return true
+		}
+	}
+	return false
 }
 
 // patternsOn: the PDL reclaim needs a reversal candle.

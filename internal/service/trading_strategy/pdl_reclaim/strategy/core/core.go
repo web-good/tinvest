@@ -63,6 +63,13 @@ type Params struct {
 	// both on either one is enough; both 0 — no pattern needed. The PDH entry is not affected.
 	PDLEngulf int
 	PDLHammer int
+	// PDLPatternEntry switches the PDL entry: 0 — the reclaim of PDL (the patterns above, when on,
+	// only gate it); 1 — the pattern entry: a reversal candle of an enabled kind formed after the
+	// break of PDL (a close below PDL on its date at or before the pattern bar, no close above PDL
+	// in between) and the buy comes at the next open after the first green bar that follows the
+	// pattern bar on its date; no reclaim of PDL needed. With both PDLEngulf and PDLHammer 0 the
+	// pattern entry never fires.
+	PDLPatternEntry int
 	// PDLDipVolMult > 0: the PDL reclaim buys only when the average volume of the main-session bars
 	// of the series under PDL (from the break to the reclaim bar, both included) is above
 	// PDLDipVolMult × the average of the VolBars main-session bars before the series; a series

@@ -82,6 +82,26 @@ func (s *Strategy) explainEntry(sb *strings.Builder, md strategy.MarketData) {
 		return
 	}
 	fmt.Fprintf(sb, "✗ пробоя PDH %d св. назад, удержанного над PDH, нет\n", p.HoldBars)
+	if p.EntryPDL > 0 && p.PDLPatternEntry > 0 {
+		st, ok := s.patternEntry(ser, k, pdl)
+		found := "нет"
+		if ok {
+			found = fmt.Sprintf("%s %s, первая зелёная после паттерна %s", st.kind, ser.t[st.bar].In(mskLoc).Format("15:04"), ser.t[k].In(mskLoc).Format("15:04"))
+		}
+		fmt.Fprintf(sb, "%s вход по паттерну у PDL (поглощение %d, молот %d): %s\n", mark(ok), p.PDLEngulf, p.PDLHammer, found)
+		if !ok {
+			return
+		}
+		if s.dipVolumeOn() {
+			dip, avg, okv := s.dipVolumeOK(ser, k, pdl)
+			fmt.Fprintf(sb, "%s объём серии под PDL %.0f > %.2f × обычный %.0f\n", mark(okv), dip, p.PDLDipVolMult, avg)
+			if !okv {
+				return
+			}
+		}
+		explainTarget(sb, st, pdl, pdh, ser.c[k])
+		return
+	}
 	if p.EntryPDL <= 0 || !isReclaim(ser, k, pdl) {
 		return
 	}
