@@ -23,6 +23,8 @@ func TestLiteralIsPinned(t *testing.T) {
 		PDLDipVolMult:     0.8,
 		PDLReclaimBars:    0,
 		PDLPatternTargetR: 1.5,
+		PDLExitBelowPDL:   1,
+		PDLExitBufferATR:  0.2,
 	}
 	if got := Params(); got != want {
 		t.Fatalf("литерал NVTK изменился:\n got: %+v\nwant: %+v", got, want)

@@ -75,6 +75,12 @@ type Params struct {
 	// PDLMaxStopATR > 0: the hammer stop is never farther than this many daily ATRs below the
 	// signal close — a deeper hammer low is lifted to that distance and the R target follows. 0 — off.
 	PDLMaxStopATR float64
+	// PDLExitBelowPDL > 0: a position also exits at the close of a bar that closes below the PDL of
+	// the entry date (the low of the last weekday before it); the stop keeps working. 0 — off.
+	PDLExitBelowPDL int
+	// PDLExitBufferATR: with PDLExitBelowPDL the close must be this many daily ATRs (frozen at
+	// entry) below that PDL to exit. 0 — any close below PDL.
+	PDLExitBufferATR float64
 	// PDLDipVolMult > 0: the PDL reclaim buys only when the average volume of the main-session bars
 	// of the series under PDL (from the break to the reclaim bar, both included) is above
 	// PDLDipVolMult × the average of the VolBars main-session bars before the series; a series
@@ -369,8 +375,43 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 	if pos.TakeProfit > 0 && high >= pos.TakeProfit {
 		sig.Kind, sig.Reason, sig.TakeProfit = model.SignalSell, "TP", pos.TakeProfit
 		sig.ExitReason = fmt.Sprintf("TP: high %.4f ≥ цели %.4f (вход %.4f)", high, pos.TakeProfit, pos.PurchasePrice)
+		return sig
+	}
+	if lvl, pdl, ok := s.pdlExitLevel(md, pos); ok && md.Closes[i] < lvl {
+		sig.Kind, sig.Reason = model.SignalSell, "PDL"
+		sig.ExitReason = fmt.Sprintf("PDL: close %.4f < PDL дня входа %.4f − %.2f ATR = %.4f (вход %.4f)",
+			md.Closes[i], pdl, s.p.PDLExitBufferATR, lvl, pos.PurchasePrice)
 	}
 	return sig
+}
+
+// pdlExitLevel is the close level under which PDLExitBelowPDL exits: the entry date's PDL minus
+// PDLExitBufferATR daily ATRs (frozen at entry; today's when the position carries none).
+func (s *Strategy) pdlExitLevel(md strategy.MarketData, pos *strategy.Position) (lvl, pdl float64, ok bool) {
+	pdl, ok = s.entryPDL(md, pos)
+	if !ok {
+		return 0, 0, false
+	}
+	atr := pos.EntryATR
+	if atr <= 0 {
+		atr = s.dailyATR(md)
+	}
+	return pdl - s.p.PDLExitBufferATR*atr, pdl, true
+}
+
+// entryPDL is the PDL of the position's entry date for PDLExitBelowPDL: the low of the last
+// weekday daily before that date.
+func (s *Strategy) entryPDL(md strategy.MarketData, pos *strategy.Position) (float64, bool) {
+	if s.p.PDLExitBelowPDL <= 0 || pos.EntryTime.IsZero() || len(md.DailyLows) != len(md.DailyTimes) {
+		return 0, false
+	}
+	day := dayKey(pos.EntryTime)
+	for j := len(md.DailyTimes) - 1; j >= 0; j-- {
+		if t := md.DailyTimes[j]; dayKey(t) < day && !isWeekend(t.In(mskLoc)) {
+			return md.DailyLows[j], md.DailyLows[j] > 0
+		}
+	}
+	return 0, false
 }
 
 // stop is StopDailyATR daily ATRs below the fill, with the ATR frozen at entry (today's when the

@@ -143,6 +143,10 @@ func (s *Strategy) explainExits(sb *strings.Builder, md strategy.MarketData) {
 	} else {
 		sb.WriteString("цель: нет\n")
 	}
+	if lvl, pdl, ok := s.pdlExitLevel(md, pos); ok {
+		fmt.Fprintf(sb, "%s выход ниже PDL дня входа: close %.4f < PDL %.4f − %.2f ATR = %.4f\n",
+			mark(md.Closes[i] < lvl), md.Closes[i], pdl, s.p.PDLExitBufferATR, lvl)
+	}
 }
 
 // mark is ✓ for a passed gate and ✗ for a failed one.
