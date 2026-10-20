@@ -66,7 +66,11 @@
 // объём серии 1) сделок почти нет, лучшая точка 0.53/8. Без них (sweep_pattern_floor*.json): без
 // пола 0.40/332, пол 0.3 — 0.90/118, 0.5 — 0.97/82, 0.7 — 1.22/57, с паттерном не меньше 0.05 ATR
 // 1.55/51, 1.0 — 0.98/35; на Minutes15 лучшее 1.07/48 (пол 0.7). Короткий структурный стоп убыточен,
-// PF растёт с отодвиганием стопа к прежним 0.7 ATR. Литерал не менялся, решение за владельцем.
+// PF растёт с отодвиганием стопа к прежним 0.7 ATR.
+//
+// Литерал по решению владельца — лучшая точка сетки sweep_pattern_floor_wide.json на Minutes5: пол
+// стопа 0.7 ATR, паттерн не меньше 0.05 ATR, часовой тренд и объём серии выключены (H1TrendEMA 0,
+// PDLDipVolMult 0) — PF 1.55/51 за 12 месяцев. Walk-forward не проводился.
 package nvtk
 
 import "tinvest/internal/service/trading_strategy/pdl_reclaim/strategy/core"
@@ -74,19 +78,21 @@ import "tinvest/internal/service/trading_strategy/pdl_reclaim/strategy/core"
 // Params is the NVTK Minutes15 literal.
 func Params() core.Params {
 	return core.Params{
-		EntryPDL:          1,
-		EntryPDH:          0,
-		HoldBars:          3,
-		StopDailyATR:      0.7,
-		DailyATRPeriod:    14,
-		VolumeMult:        1.5,
-		VolBars:           20,
-		MaxDayRangeATR:    1.2,
-		H1TrendEMA:        200,
-		PDLEngulf:         0,
-		PDLHammer:         1,
-		PDLDipVolMult:     1,
-		PDLPatternEntry:   1,
-		PDLPatternTargetR: 2,
+		EntryPDL:              1,
+		EntryPDH:              0,
+		HoldBars:              3,
+		StopDailyATR:          0.7,
+		DailyATRPeriod:        14,
+		VolumeMult:            1.5,
+		VolBars:               20,
+		MaxDayRangeATR:        1.2,
+		H1TrendEMA:            0,
+		PDLEngulf:             0,
+		PDLHammer:             1,
+		PDLDipVolMult:         0,
+		PDLPatternEntry:       1,
+		PDLPatternTargetR:     2,
+		PDLPatternMinStopATR:  0.7,
+		PDLPatternMinRangeATR: 0.05,
 	}
 }
