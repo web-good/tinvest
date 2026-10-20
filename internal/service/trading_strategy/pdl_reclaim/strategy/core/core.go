@@ -45,10 +45,10 @@ type Params struct {
 	// including the trigger bar) is at or above MaxDayRangeATR daily ATRs — the day has already
 	// spent its move; 0 — off
 	MaxDayRangeATR float64
-	// IndexTrendEMA > 0: enter only while the market index (IMOEX, set with WithIndex) is falling —
-	// its EMA(IndexTrendEMA) over completed dailies below the value indexSlopeDays dailies earlier;
-	// 0 — off
-	IndexTrendEMA int
+	// H1TrendEMA > 0: enter only while the close of the ticker's last completed hour is above the
+	// EMA(H1TrendEMA) of the completed hourly closes (the engine's Hour1 series, md.HTFCloses);
+	// fewer hours than the period — no entry; 0 — off. Both entries.
+	H1TrendEMA int
 	// TargetStopMult > 0: the target is TargetStopMult stop distances (StopDailyATR daily ATRs)
 	// above the signal close instead of the setup level + half of yesterday's range; 0 — off
 	TargetStopMult float64
@@ -88,7 +88,6 @@ type Strategy struct {
 	ticker string
 	step   time.Duration
 	p      Params
-	idx    index
 }
 
 // NewWithParams returns the strategy for a ticker; step is the bar length (15m).
@@ -243,8 +242,8 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	if !s.roomOK(spent) {
 		return sig
 	}
-	indexWhy, indexOK := s.indexOK(md.Times[k])
-	if !indexOK {
+	trendWhy, trendOK := s.trendOK(md)
+	if !trendOK {
 		return sig
 	}
 	stop := closeP - s.p.StopDailyATR*atr
@@ -270,8 +269,8 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	if s.p.MaxDayRangeATR > 0 {
 		sig.EntryReason += fmt.Sprintf(", диапазон дня %.2f ATR < %.2f", spent, s.p.MaxDayRangeATR)
 	}
-	if indexWhy != "" {
-		sig.EntryReason += ", " + indexWhy
+	if trendWhy != "" {
+		sig.EntryReason += ", " + trendWhy
 	}
 	return sig
 }

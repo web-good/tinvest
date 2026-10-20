@@ -106,6 +106,14 @@
 // Walk-forward (3/1, 9 фолдов): выбор из 16 точек — пул OOS 2.322, база на тех же месяцах 2.313,
 // фиксированный 1.2 — 2.887 при меньшем compounded (13.3% против 19.7%). Лучший порог в двух окнах
 // разный, прибавка PF за год мала при потере 40% net — фильтр выключен.
+//
+// # 2026-10-20 — фильтр часового тренда вместо IMOEX
+//
+// IndexTrendEMA (вход при падающем IMOEX) удалён из ядра по решению владельца. Вместо него
+// H1TrendEMA 200: вход, только пока close последней завершённой часовой свечи тикера выше EMA(200)
+// часовых закрытий. Период выставлен владельцем без калибровки. В тот же день пробовали тот же
+// фильтр на других таймфреймах (EMA 200, -months 12): 4ч — GAZP PF 1.110/15, SBER 0.843/42, NVTK
+// 1.486/8; дневки — GAZP 4 сделки, SBER 1.794/49, NVTK 0.324/10.
 package gazp
 
 import "tinvest/internal/service/trading_strategy/pdl_reclaim/strategy/core"
@@ -121,7 +129,7 @@ func Params() core.Params {
 		VolumeMult:     1.5,
 		VolBars:        20,
 		MaxDayRangeATR: 0.8,
-		IndexTrendEMA:  200,
+		H1TrendEMA:     200,
 		PDLEngulf:      0,
 		PDLHammer:      0,
 		PDLDipVolMult:  0,

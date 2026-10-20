@@ -32,8 +32,6 @@ const (
 	cacheDir       = "data/candles"
 	volWorkers     = 6   // concurrent candle fetches for -volrank
 	screenTrendEMA = 200 // volrank: trend EMA period (uptrend context for pullback events)
-	// pdlReclaimIndex is the market index whose dailies pdl_reclaim's IndexTrendEMA filter reads.
-	pdlReclaimIndex = "IMOEX"
 )
 
 func main() {
@@ -215,7 +213,7 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 
 	// The optional HTF trend filters need real higher-timeframe candles, loaded with the
 	// same year lead-in as the daily series to warm the HTF EMA: Hour4 for reversion,
-	// Hour1 for scalping_rsimacd. Other strategies pass nil.
+	// Hour1 for scalping_rsimacd and pdl_reclaim (H1TrendEMA). Other strategies pass nil.
 	var (
 		htfCandles  []domain.Candle
 		htfInterval time.Duration
@@ -224,24 +222,12 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 	case "reversion":
 		htfInterval = 4 * time.Hour
 		htfCandles, err = provider.Load(ctx, ticker, share.ID, enum.Hour4, dailyFrom, to, refresh)
-	case "scalping_rsimacd":
+	case "scalping_rsimacd", "pdl_reclaim":
 		htfInterval = time.Hour
 		htfCandles, err = provider.Load(ctx, ticker, share.ID, enum.Hour1, dailyFrom, to, refresh)
 	}
 	if err != nil {
 		return err
-	}
-	// pdl_reclaim's IndexTrendEMA filter reads IMOEX dailies over the same window as the ticker's.
-	if strategyName == "pdl_reclaim" {
-		uid, err := client.InstrumentsServiceClient().IndicativeUIDByTicker(ctx, pdlReclaimIndex)
-		if err != nil {
-			return fmt.Errorf("pdl_reclaim index %s: %w", pdlReclaimIndex, err)
-		}
-		index, err := provider.Load(ctx, pdlReclaimIndex, uid, enum.Day1, dailyFrom, to, refresh)
-		if err != nil {
-			return fmt.Errorf("pdl_reclaim index %s: %w", pdlReclaimIndex, err)
-		}
-		binding = svc.PDLReclaimWithIndex(binding, index)
 	}
 	if strategyName == "scalping_rsimacd" {
 		if err := reportHTFCoverage(htfCandles, dailyFrom); err != nil {

@@ -17,7 +17,7 @@ func TestLiteralIsPinned(t *testing.T) {
 		VolumeMult:     1.5,
 		VolBars:        20,
 		MaxDayRangeATR: 1.2,
-		IndexTrendEMA:  200,
+		H1TrendEMA:     200,
 		PDLEngulf:      0,
 		PDLHammer:      0,
 		PDLDipVolMult:  1.2,
