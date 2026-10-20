@@ -1,0 +1,51 @@
+{
+  "_comment": "NVTK pdl_reclaim: полная калибровка 2026-10-19 по схеме SBER/GAZP — обе ветки × стоп × окно входа × запас хода MaxDayRangeATR × тренд индекса IndexTrendEMA × удержание PDH. Окно -months 12 -holdout-months 3; год до окна (-months 24 -holdout-months 12) — проверка вне выборки. РЕЗУЛЬТАТ: лучший PF 1.409/23 net +7612 (обе ветки, HoldBars 3, стоп 0.7, 10:00–16:00, IndexTrendEMA 50); медиана окрестности 1.107 — плато нет, планка PF ≥ 1.3 на ≥ 25 сделках не взята; IndexTrendEMA 200, лучший у GAZP/SBER, здесь даёт PF ~1.1. Стоп 0.7 — край сетки, см. sweep_stop_low.json.",
+  "phases": [
+    {
+      "name": "sweep",
+      "grid": {
+        "EntryPDL": [
+          1
+        ],
+        "EntryPDH": [
+          0,
+          1
+        ],
+        "HoldBars": [
+          1,
+          3
+        ],
+        "VolumeMult": [
+          1.5
+        ],
+        "StopDailyATR": [
+          0.7,
+          0.85,
+          1.0,
+          1.2,
+          1.5,
+          1.8
+        ],
+        "EntryFromHour": [
+          7,
+          10
+        ],
+        "EntryToHour": [
+          16,
+          18
+        ],
+        "MaxDayRangeATR": [
+          0,
+          0.8,
+          1.0,
+          1.2
+        ],
+        "IndexTrendEMA": [
+          0,
+          50,
+          200
+        ]
+      }
+    }
+  ]
+}

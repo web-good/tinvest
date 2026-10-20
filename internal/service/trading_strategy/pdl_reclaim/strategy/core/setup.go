@@ -1,6 +1,9 @@
 package core
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+)
 
 // setup is the bar that arms an entry: the reclaim of PDL or the breakout of PDH.
 type setup struct {
@@ -53,7 +56,59 @@ func (s *Strategy) trigger(ser series, k int, pdl, pdh float64) (setup, string, 
 	if s.p.EntryPDL <= 0 || !isReclaim(ser, k, pdl) {
 		return setup{}, "", false
 	}
-	return setup{bar: k, name: "PDL", level: pdl}, "покупка сразу", true
+	why := "покупка сразу"
+	if s.patternsOn() {
+		name, at, ok := s.pdlPattern(ser, k, pdl)
+		if !ok {
+			return setup{}, "", false
+		}
+		why += fmt.Sprintf(", %s %s", name, ser.t[at].In(mskLoc).Format("15:04"))
+	}
+	return setup{bar: k, name: "PDL", level: pdl}, why, true
+}
+
+// patternsOn: the PDL reclaim needs a reversal candle.
+func (s *Strategy) patternsOn() bool { return s.p.PDLEngulf > 0 || s.p.PDLHammer > 0 }
+
+// pdlPattern finds the latest reversal candle of an enabled kind between the break of PDL and the
+// reclaim bar k, both included: the window starts at the first bar of a run of closes at or below
+// PDL that ends right before k on k's date. The red bar of an engulfing may sit before the window.
+func (s *Strategy) pdlPattern(ser series, k int, pdl float64) (name string, bar int, ok bool) {
+	day := dayKey(ser.t[k])
+	start := k
+	for start > 0 && dayKey(ser.t[start-1]) == day && ser.c[start-1] <= pdl {
+		start--
+	}
+	for i := k; i >= start; i-- {
+		if s.p.PDLEngulf > 0 && isEngulf(ser, i) {
+			return "поглощение", i, true
+		}
+		if s.p.PDLHammer > 0 && isHammer(ser, i) {
+			return "молот", i, true
+		}
+	}
+	return "", 0, false
+}
+
+// isEngulf: the bullish engulfing on bar i — bar i-1, on i's date, is red, bar i is green, its low
+// is below the red bar's low and its close above the red bar's high.
+func isEngulf(ser series, i int) bool {
+	if i < 1 || dayKey(ser.t[i]) != dayKey(ser.t[i-1]) {
+		return false
+	}
+	p := i - 1
+	return ser.c[p] < ser.o[p] && ser.c[i] > ser.o[i] && ser.l[i] < ser.l[p] && ser.c[i] > ser.h[p]
+}
+
+// isHammer: bar i of either colour has a body of at most a third of its range lying in the upper
+// third — so the lower tail is at least two thirds of the range and at least twice the body.
+func isHammer(ser series, i int) bool {
+	rng := ser.h[i] - ser.l[i]
+	if rng <= 0 {
+		return false
+	}
+	body := math.Abs(ser.c[i] - ser.o[i])
+	return body <= rng/3 && min(ser.o[i], ser.c[i]) >= ser.l[i]+rng*2/3
 }
 
 // held: bar k completes the hold of a PDH breakout — bar k-HoldBars, on k's date, is the breakout

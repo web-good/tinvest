@@ -20,9 +20,8 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 	}
 	i := n - 1
 	t := md.Times[i].In(mskLoc)
-	fmt.Fprintf(&sb, "%s окно: сигнал %s %s %s, покупка %s (сигнал с %02d:%02d, покупка до %02d:%02d, Пн–Пт)\n",
-		mark(s.entryAllowed(md)), s.tf(), t.Weekday(), t.Format("15:04"), md.Times[i].Add(s.step).In(mskLoc).Format("15:04"),
-		p.EntryFromHour, p.EntryFromMinute, p.EntryToHour, p.EntryToMinute)
+	fmt.Fprintf(&sb, "%s день: сигнал %s %s %s, покупка %s (Пн–Пт, покупка в ту же дату)\n",
+		mark(s.entryAllowed(md)), s.tf(), t.Weekday(), t.Format("15:04"), md.Times[i].Add(s.step).In(mskLoc).Format("15:04"))
 	fmt.Fprintf(&sb, "свеча %s: open %.4f high %.4f low %.4f close %.4f\n", s.tf(), md.Opens[i], md.Highs[i], md.Lows[i], md.Closes[i])
 	s.explainEntry(&sb, md)
 	if atr := s.dailyATR(md); atr > 0 {
@@ -85,6 +84,17 @@ func (s *Strategy) explainEntry(sb *strings.Builder, md strategy.MarketData) {
 	fmt.Fprintf(sb, "✗ пробоя PDH %d св. назад, удержанного над PDH, нет\n", p.HoldBars)
 	if p.EntryPDL <= 0 || !isReclaim(ser, k, pdl) {
 		return
+	}
+	if s.patternsOn() {
+		found := "нет"
+		name, at, ok := s.pdlPattern(ser, k, pdl)
+		if ok {
+			found = fmt.Sprintf("%s %s", name, ser.t[at].In(mskLoc).Format("15:04"))
+		}
+		fmt.Fprintf(sb, "%s свечной паттерн между пробоем PDL и возвратом (поглощение %d, молот %d): %s\n", mark(ok), p.PDLEngulf, p.PDLHammer, found)
+		if !ok {
+			return
+		}
 	}
 	explainTarget(sb, setup{bar: k, name: "PDL", level: pdl}, pdl, pdh, ser.c[k])
 }

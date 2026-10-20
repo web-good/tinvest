@@ -7,7 +7,7 @@ import (
 
 func TestExplainReclaimEntry(t *testing.T) {
 	out := newS(DefaultParams()).Explain(fixture(warm(upTo(reclaimAt))))
-	for _, want := range []string{"✓ окно: сигнал 15m", "PDL 99.0000", "✓ возврат над PDL на этой свече",
+	for _, want := range []string{"✓ день: сигнал 15m", "PDL 99.0000", "✓ возврат над PDL на этой свече",
 		"✓ цель 100.0000", "ИТОГ: ПОКУПКА"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in:\n%s", want, out)
@@ -43,9 +43,9 @@ func TestExplainBreakoutHeld(t *testing.T) {
 	}
 }
 
-func TestExplainOutsideWindow(t *testing.T) {
-	out := newS(DefaultParams()).Explain(fixture(path("2026-09-14 06:30", 100, 99.5, 99.4)))
-	if !strings.Contains(out, "✗ окно") || !strings.Contains(out, "ИТОГ: входа нет") {
+func TestExplainWeekend(t *testing.T) {
+	out := newS(DefaultParams()).Explain(fixture(path("2026-09-12 10:00", 100, 99.5, 99.4)))
+	if !strings.Contains(out, "✗ день") || !strings.Contains(out, "ИТОГ: входа нет") {
 		t.Fatalf("got:\n%s", out)
 	}
 }

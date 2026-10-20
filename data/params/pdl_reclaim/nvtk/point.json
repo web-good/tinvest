@@ -1,0 +1,14 @@
+{
+  "_comment": "NVTK pdl_reclaim: лучшая точка sweep_full.json + sweep_stop_low.json, заведена по решению владельца 2026-10-19, хотя калибровку не прошла. 2026-10-19: окно входа (EntryFrom*/EntryTo*) удалено из ядра — входы в любой будний бар. 2026-10-20: свечные паттерны у PDL — PDLEngulf 0, PDLHammer 1 (wf_patterns.json).",
+  "EntryPDL": 1,
+  "EntryPDH": 1,
+  "HoldBars": 3,
+  "StopDailyATR": 0.7,
+  "DailyATRPeriod": 14,
+  "VolumeMult": 1.5,
+  "VolBars": 20,
+  "MaxDayRangeATR": 1.2,
+  "IndexTrendEMA": 50,
+  "PDLEngulf": 0,
+  "PDLHammer": 1
+}

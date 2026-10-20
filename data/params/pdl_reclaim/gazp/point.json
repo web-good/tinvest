@@ -1,16 +1,14 @@
 {
-  "_comment": "GAZP pdl_reclaim: точка полной перекалибровки 2026-10-19 (sweep_full.json). РЕЗУЛЬТАТ: центр плато — обе ветки, HoldBars 3, стоп 0.7, 10:00–16:00, MaxDayRangeATR 0.8, IndexTrendEMA 200: разработка PF 6.115/27 net +21960, медиана окрестности 5.235, худший сосед 2.649; стоп 0.6 — 3.466, 0.85 — 5.068 (0.7 — пик внутри). Стресс: без лучшей 4.718, без трёх 3.755, комиссия 0.1% PF 5.207; кварталы все в плюсе. Hold-out 18 сделок PF 1.272 net +2977 (PDH 7 сделок PF 0.37). Год 45 сделок PF 2.456 net +25622; год до окна 40 сделок PF 1.352 net +10049 (прежний литерал 1.006/33, +192). Записано в литерал gazp.",
+  "_comment": "GAZP pdl_reclaim: точка перекалибровки без окна входа 2026-10-19 (wf_nowindow.json): только возврат над PDL, HoldBars 3 (не действует без PDH), стоп 1.0, MaxDayRangeATR 0.8, IndexTrendEMA 200. Разработка PF 3.269/27, hold-out 1.639/14, год 2.431/41, год до окна 0.940/32. Walk-forward пул OOS 0.988. Предыдущая точка — в git-истории этого файла. 2026-10-20: свечные паттерны у PDL — PDLEngulf 0, PDLHammer 0 (wf_patterns.json).",
   "EntryPDL": 1,
-  "EntryPDH": 1,
+  "EntryPDH": 0,
   "HoldBars": 3,
-  "StopDailyATR": 0.7,
+  "StopDailyATR": 1.0,
   "DailyATRPeriod": 14,
-  "EntryFromHour": 10,
-  "EntryFromMinute": 0,
-  "EntryToHour": 16,
-  "EntryToMinute": 0,
   "VolumeMult": 1.5,
   "VolBars": 20,
   "MaxDayRangeATR": 0.8,
-  "IndexTrendEMA": 200
+  "IndexTrendEMA": 200,
+  "PDLEngulf": 0,
+  "PDLHammer": 0
 }

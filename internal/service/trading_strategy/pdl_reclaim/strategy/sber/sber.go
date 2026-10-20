@@ -48,6 +48,26 @@
 //
 // Риск формы: стоп 1.5 ATR против цели в середине вчерашнего диапазона — стоп-аут в разы больше
 // выигрыша, край держится на доле попаданий по цели (на разработке 36 из 38).
+//
+// # 2026-10-19 — окно входа удалено из ядра
+//
+// Параметры EntryFrom*/EntryTo* удалены по решению владельца: вход в любой будний бар, покупка в ту
+// же дату. Окно 10:00–16:00 из замеров выше больше не действует; литерал без перекалибровки, 24 месяца:
+// 125 сделок, PF 1.635, net +37278 (с окном 10:00–16:00 — 101 / 1.872 / +35067).
+//
+// Перекалибровка без окна (wf_nowindow.json, 64 точки): центр плато статического перебора совпал с
+// литералом — PF 2.064/46, медиана окрестности 1.682, худший сосед 1.413. Скользящий walk-forward
+// (-months 24 -train-months 3 -test-months 1, 21 фолд): пул OOS PF 1.537, compounded +17.1% — пройден.
+//
+// # 2026-10-20 — поглощение у PDL
+//
+// Ядро получило PDLEngulf/PDLHammer: возврат над PDL покупается, только если между пробоем PDL и
+// свечой возврата было включённое поглощение или молот (PDH не затронут). Сетка wf_patterns.json
+// (4 точки), -months 12: поглощение PF 1.883/48, оба 1.621/56, молот 1.569/55, без паттернов
+// 1.548/66; на 36 месяцах поглощение тоже лучшее — 1.256/112 против 1.110/160 без паттернов.
+// Литерал с поглощением на месяцах проверки скользящего walk-forward (3/1, 9 фолдов) — пул 1.461
+// против 1.217 без паттернов. Оговорка: walk-forward с выбором паттерна на каждом подборе дал пул
+// OOS 0.861 — на трёх месяцах подбора выбор между вариантами неустойчив.
 package sber
 
 import "tinvest/internal/service/trading_strategy/pdl_reclaim/strategy/core"
@@ -55,18 +75,16 @@ import "tinvest/internal/service/trading_strategy/pdl_reclaim/strategy/core"
 // Params is the SBER Minutes15 literal.
 func Params() core.Params {
 	return core.Params{
-		EntryPDL:        1,
-		EntryPDH:        1,
-		HoldBars:        1,
-		StopDailyATR:    1.5,
-		DailyATRPeriod:  14,
-		EntryFromHour:   10,
-		EntryFromMinute: 0,
-		EntryToHour:     16,
-		EntryToMinute:   0,
-		VolumeMult:      1.5,
-		VolBars:         20,
-		MaxDayRangeATR:  1.2,
-		IndexTrendEMA:   200,
+		EntryPDL:       1,
+		EntryPDH:       1,
+		HoldBars:       1,
+		StopDailyATR:   1.5,
+		DailyATRPeriod: 14,
+		VolumeMult:     1.5,
+		VolBars:        20,
+		MaxDayRangeATR: 1.2,
+		IndexTrendEMA:  200,
+		PDLEngulf:      1,
+		PDLHammer:      0,
 	}
 }

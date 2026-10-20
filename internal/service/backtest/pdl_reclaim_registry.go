@@ -10,6 +10,7 @@ import (
 	"tinvest/internal/enum"
 	"tinvest/internal/service/trading_strategy/pdl_reclaim/strategy/core"
 	"tinvest/internal/service/trading_strategy/pdl_reclaim/strategy/gazp"
+	"tinvest/internal/service/trading_strategy/pdl_reclaim/strategy/nvtk"
 	"tinvest/internal/service/trading_strategy/pdl_reclaim/strategy/sber"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 )
@@ -38,6 +39,7 @@ func pdlReclaimBindingFor(ticker string, interval enum.Interval, defaults func()
 // set per ticker.
 var pdlReclaimRegistry = map[string]func() core.Params{
 	"GAZP": gazp.Params,
+	"NVTK": nvtk.Params,
 	"SBER": sber.Params,
 }
 

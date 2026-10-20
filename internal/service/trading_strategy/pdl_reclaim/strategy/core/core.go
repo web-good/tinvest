@@ -34,13 +34,9 @@ type Params struct {
 	EntryPDH int // 1 — the breakout of PDH (first green close above it on raised volume) arms an entry
 	// HoldBars: the PDH breakout buys once the HoldBars bars after it all closed at or above PDH; a
 	// close below PDH among them cancels it; 0 — buy right after the breakout bar; < 0 — no PDH entries
-	HoldBars        int
-	StopDailyATR    float64 // stop below the fill in daily ATR; 0 — no entries (no risk unit)
-	DailyATRPeriod  int     // Wilder period over completed weekday dailies
-	EntryFromHour   int     // the buy-trigger bar starts at/after EntryFrom MSK
-	EntryFromMinute int
-	EntryToHour     int // the buy bar starts before EntryTo MSK, on the trigger's date
-	EntryToMinute   int
+	HoldBars       int
+	StopDailyATR   float64 // stop below the fill in daily ATR; 0 — no entries (no risk unit)
+	DailyATRPeriod int     // Wilder period over completed weekday dailies
 	// VolumeMult > 0: the PDH breakout bar's volume must be above VolumeMult × the average volume of
 	// the VolBars main-session bars (10:00–18:30 MSK, weekdays) before it; 0 — off
 	VolumeMult float64
@@ -53,22 +49,32 @@ type Params struct {
 	// its EMA(IndexTrendEMA) over completed dailies below the value indexSlopeDays dailies earlier;
 	// 0 — off
 	IndexTrendEMA int
+	// TargetStopMult > 0: the target is TargetStopMult stop distances (StopDailyATR daily ATRs)
+	// above the signal close instead of the setup level + half of yesterday's range; 0 — off
+	TargetStopMult float64
+	// StopAtExtremum 1: the stop sits StopBufferATR daily ATRs under the setup's low (the day's low
+	// up to the PDL reclaim bar, the lowest low from the PDH breakout bar to the trigger), frozen at
+	// the signal and checked inside the bar, instead of StopDailyATR below the fill; 0 — off
+	StopAtExtremum int
+	StopBufferATR  float64
+	// PDLEngulf / PDLHammer 1: the PDL reclaim buys only when a reversal candle of an enabled kind
+	// formed between the break of PDL (the first close below it on the reclaim's date) and the
+	// reclaim bar, both included — the bullish engulfing (isEngulf) or the hammer (isHammer); with
+	// both on either one is enough; both 0 — no pattern needed. The PDH entry is not affected.
+	PDLEngulf int
+	PDLHammer int
 }
 
 // DefaultParams returns the owner's rules.
 func DefaultParams() Params {
 	return Params{
-		EntryPDL:        1,
-		EntryPDH:        1,
-		HoldBars:        1,
-		StopDailyATR:    0.5,
-		DailyATRPeriod:  14,
-		EntryFromHour:   7,
-		EntryFromMinute: 0,
-		EntryToHour:     18,
-		EntryToMinute:   0,
-		VolumeMult:      1.5,
-		VolBars:         20,
+		EntryPDL:       1,
+		EntryPDH:       1,
+		HoldBars:       1,
+		StopDailyATR:   0.5,
+		DailyATRPeriod: 14,
+		VolumeMult:     1.5,
+		VolBars:        20,
 	}
 }
 
@@ -185,19 +191,12 @@ func (s *Strategy) dailyATR(md strategy.MarketData) float64 {
 	return indicators.ATR(h, l, c, s.p.DailyATRPeriod)
 }
 
-// entryAllowed reports whether the current bar may buy at the next open: a weekday, the bar
-// starts at/after EntryFrom, and the buy bar starts before EntryTo on the trigger's date.
+// entryAllowed reports whether the current bar may buy at the next open: a weekday, and the buy
+// bar starts on the trigger's date. There is no time-of-day window.
 func (s *Strategy) entryAllowed(md strategy.MarketData) bool {
 	t := md.Times[len(md.Times)-1]
-	if isWeekend(t.In(mskLoc)) || minuteOf(t) < s.entryFrom() {
-		return false
-	}
-	fill := t.Add(s.step)
-	return dayKey(fill) == dayKey(t) && minuteOf(fill) < s.p.EntryToHour*60+s.p.EntryToMinute
+	return !isWeekend(t.In(mskLoc)) && dayKey(t.Add(s.step)) == dayKey(t)
 }
-
-// entryFrom is the MSK minute of the day from which a bar may trigger a buy.
-func (s *Strategy) entryFrom() int { return s.p.EntryFromHour*60 + s.p.EntryFromMinute }
 
 func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 	sig := model.Signal{Ticker: s.ticker, Price: md.Price}
@@ -244,8 +243,14 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 		return sig
 	}
 	stop := closeP - s.p.StopDailyATR*atr
-	if stop <= 0 {
+	if s.p.StopAtExtremum > 0 {
+		stop = setupLow(ser, st, k) - s.p.StopBufferATR*atr
+	}
+	if stop <= 0 || stop >= closeP {
 		return sig
+	}
+	if s.p.TargetStopMult > 0 {
+		target = closeP + s.p.TargetStopMult*(closeP-stop)
 	}
 	sig.Kind = model.SignalBuy
 	sig.StopLoss, sig.ATR, sig.Level = stop, atr, st.level
@@ -264,6 +269,20 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 		sig.EntryReason += ", " + indexWhy
 	}
 	return sig
+}
+
+// setupLow is the nearest extremum the setup was built on: for the PDL reclaim the lowest low of
+// the trigger bar's date up to bar k (the dip below PDL), for the PDH breakout the lowest low from
+// the breakout bar to bar k.
+func setupLow(ser series, st setup, k int) float64 {
+	lo := ser.l[k]
+	for j := k - 1; j >= 0 && dayKey(ser.t[j]) == dayKey(ser.t[k]); j-- {
+		if st.name == "PDH" && j < st.bar {
+			break
+		}
+		lo = min(lo, ser.l[j])
+	}
+	return lo
 }
 
 // roomOK reports whether today's range so far, spent daily ATRs, leaves the day room to move.
@@ -306,8 +325,11 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 }
 
 // stop is StopDailyATR daily ATRs below the fill, with the ATR frozen at entry (today's when the
-// position carries none). 0 — no stop.
+// position carries none); with StopAtExtremum the stop frozen at the signal. 0 — no stop.
 func (s *Strategy) stop(md strategy.MarketData, pos *strategy.Position) float64 {
+	if s.p.StopAtExtremum > 0 {
+		return pos.StopLoss
+	}
 	if s.p.StopDailyATR <= 0 {
 		return 0
 	}

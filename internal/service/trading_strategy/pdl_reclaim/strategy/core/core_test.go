@@ -331,13 +331,14 @@ func TestEntrySwitches(t *testing.T) {
 	}
 }
 
-// The window gates the trigger bar: the reclaim shifted so it lands at the given time.
-func TestEntryWindow(t *testing.T) {
+// There is no time-of-day window: any weekday bar triggers, as long as the buy bar falls on the
+// same date. The reclaim is shifted so it lands at the given time.
+func TestEntryAnyWeekdayBar(t *testing.T) {
 	for trig, want := range map[string]bool{
-		"2026-09-14 06:45": false,
 		"2026-09-14 07:00": true,
-		"2026-09-14 17:30": true,  // buy at 17:45
-		"2026-09-14 17:45": false, // buy at 18:00 is too late
+		"2026-09-14 17:45": true,
+		"2026-09-14 23:30": true,  // buy at 23:45
+		"2026-09-14 23:45": false, // the buy bar is the next date
 		"2026-09-12 10:00": false, // Saturday
 	} {
 		from := ts(at(trig).Add(-reclaimAt * step))
@@ -345,20 +346,6 @@ func TestEntryWindow(t *testing.T) {
 		if got := decide(DefaultParams(), bars).Kind == model.SignalBuy; got != want {
 			t.Errorf("%s: buy = %v, want %v", trig, got, want)
 		}
-	}
-}
-
-// With the window widened to midnight the fill bar of a 23:45 trigger is the next date — no entry.
-func TestEntryFillMustBeSameDate(t *testing.T) {
-	p := DefaultParams()
-	p.EntryToHour = 24
-	bars := path("2026-09-14 23:00", 100, 99.5, 98.7, 98.6, 99.2)
-	if sig := decide(p, bars); sig.Kind != model.SignalNone {
-		t.Fatalf("23:45: Kind = %v, want None", sig.Kind)
-	}
-	bars = path("2026-09-14 22:45", 100, 99.5, 98.7, 98.6, 99.2)
-	if sig := decide(p, bars); sig.Kind != model.SignalBuy {
-		t.Fatalf("23:30: Kind = %v, want Buy", sig.Kind)
 	}
 }
 

@@ -14,12 +14,12 @@ func TestLiteralIsPinned(t *testing.T) {
 		HoldBars:       1,
 		StopDailyATR:   1.5,
 		DailyATRPeriod: 14,
-		EntryFromHour:  10,
-		EntryToHour:    16,
 		VolumeMult:     1.5,
 		VolBars:        20,
 		MaxDayRangeATR: 1.2,
 		IndexTrendEMA:  200,
+		PDLEngulf:      1,
+		PDLHammer:      0,
 	}
 	if got := Params(); got != want {
 		t.Fatalf("литерал SBER изменился:\n got: %+v\nwant: %+v", got, want)

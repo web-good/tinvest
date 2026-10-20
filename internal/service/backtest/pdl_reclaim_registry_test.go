@@ -8,6 +8,7 @@ import (
 	"tinvest/internal/enum"
 	"tinvest/internal/service/trading_strategy/pdl_reclaim/strategy/core"
 	"tinvest/internal/service/trading_strategy/pdl_reclaim/strategy/gazp"
+	"tinvest/internal/service/trading_strategy/pdl_reclaim/strategy/nvtk"
 	"tinvest/internal/service/trading_strategy/pdl_reclaim/strategy/sber"
 )
 
@@ -50,7 +51,7 @@ func TestPDLReclaimParseParamsLayersOverDefaults(t *testing.T) {
 }
 
 func TestPDLReclaimTickersUseTheirPackages(t *testing.T) {
-	for ticker, params := range map[string]func() core.Params{"GAZP": gazp.Params, "SBER": sber.Params} {
+	for ticker, params := range map[string]func() core.Params{"GAZP": gazp.Params, "NVTK": nvtk.Params, "SBER": sber.Params} {
 		b, err := PDLReclaimLookupOrGeneric(ticker, enum.Minutes15)
 		if err != nil {
 			t.Fatalf("%s lookup: %v", ticker, err)
