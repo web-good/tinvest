@@ -178,3 +178,38 @@ func TestPatternEntryExitAtCarriedStop(t *testing.T) {
 		t.Fatalf("low 98.3: got %q at %v, want SL at 98.3", sig.Reason, sig.StopLoss)
 	}
 }
+
+// Daily ATR is 2. The red hammer at 10:00 spans 98.0–98.75, 0.375 ATR.
+func TestPatternEntryMinRange(t *testing.T) {
+	p := patternEntryP(0, 1)
+	p.PDLPatternMinRangeATR = 0.4
+	if sig := decide(p, hammerEntryDay()[:5]); sig.Kind != model.SignalNone {
+		t.Fatalf("hammer 0.375 ATR < 0.4: Kind = %v, want None", sig.Kind)
+	}
+	p.PDLPatternMinRangeATR = 0.3
+	if sig := decide(p, hammerEntryDay()[:5]); sig.Kind != model.SignalBuy {
+		t.Fatalf("hammer 0.375 ATR ≥ 0.3: Kind = %v, want Buy", sig.Kind)
+	}
+	out := newS(p).Explain(fixture(warm(hammerEntryDay()[:5])))
+	if !strings.Contains(out, "свеча паттерна не меньше 0.30 ATR") {
+		t.Errorf("explain missing the range gate:\n%s", out)
+	}
+}
+
+// The red hammer stop 98.0 is 0.8 = 0.4 ATR under the close 98.8: a floor of 0.5 ATR moves it to
+// 97.8 and the 2R target to 100.8; a floor of 0.3 ATR leaves it.
+func TestPatternEntryMinStop(t *testing.T) {
+	p := patternEntryP(0, 1)
+	p.PDLPatternMinStopATR = 0.5
+	sig := decide(p, hammerEntryDay()[:5])
+	if math.Abs(sig.StopLoss-97.8) > eps || math.Abs(sig.TakeProfit-100.8) > eps {
+		t.Fatalf("floor 0.5: stop %.4f target %.4f, want 97.8 100.8", sig.StopLoss, sig.TakeProfit)
+	}
+	if !strings.Contains(sig.EntryReason, "стоп по лою свечи паттерна 10:00 98.0000, отодвинут до 0.50 ATR: 97.8000") {
+		t.Fatalf("reason %q", sig.EntryReason)
+	}
+	p.PDLPatternMinStopATR = 0.3
+	if sig := decide(p, hammerEntryDay()[:5]); math.Abs(sig.StopLoss-98.0) > eps {
+		t.Fatalf("floor 0.3: stop %.4f, want 98.0", sig.StopLoss)
+	}
+}

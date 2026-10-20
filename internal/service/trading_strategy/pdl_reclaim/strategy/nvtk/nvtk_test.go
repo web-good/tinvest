@@ -20,7 +20,7 @@ func TestLiteralIsPinned(t *testing.T) {
 		H1TrendEMA:        200,
 		PDLEngulf:         0,
 		PDLHammer:         1,
-		PDLDipVolMult:     0,
+		PDLDipVolMult:     1,
 		PDLPatternEntry:   1,
 		PDLPatternTargetR: 2,
 	}

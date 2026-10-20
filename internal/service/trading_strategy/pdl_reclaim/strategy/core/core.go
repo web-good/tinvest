@@ -75,6 +75,13 @@ type Params struct {
 	// low; a green one — the low of the nearest red bar before it on its date (its own low when
 	// there is none). 0 — the target of the reclaim (the middle of yesterday's range).
 	PDLPatternTargetR float64
+	// PDLPatternMinStopATR > 0: the structural stop of the pattern entry is never closer than this
+	// many daily ATRs below the signal close (it moves down to that distance; the R target follows).
+	// 0 — off.
+	PDLPatternMinStopATR float64
+	// PDLPatternMinRangeATR > 0: a candle counts as a pattern for the pattern entry only when its
+	// range (high − low; of the green bar of an engulfing) is at least this many daily ATRs. 0 — off.
+	PDLPatternMinRangeATR float64
 	// PDLDipVolMult > 0: the PDL reclaim buys only when the average volume of the main-session bars
 	// of the series under PDL (from the break to the reclaim bar, both included) is above
 	// PDLDipVolMult × the average of the VolBars main-session bars before the series; a series
@@ -243,7 +250,11 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	if !ok {
 		return sig
 	}
-	st, why, ok := s.trigger(ser, k, pdl, pdh)
+	minRange, ok := s.patternMinRange(md)
+	if !ok {
+		return sig
+	}
+	st, why, ok := s.trigger(ser, k, pdl, pdh, minRange)
 	if !ok {
 		return sig
 	}
@@ -278,6 +289,10 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	case s.p.StopAtExtremum > 0:
 		stop = setupLow(ser, st, k) - s.p.StopBufferATR*atr
 	}
+	if floor := closeP - s.p.PDLPatternMinStopATR*atr; st.kind != "" && s.p.PDLPatternMinStopATR > 0 && stop > floor {
+		stop = floor
+		stopWhy += fmt.Sprintf(", отодвинут до %.2f ATR: %.4f", s.p.PDLPatternMinStopATR, stop)
+	}
 	if stop <= 0 || stop >= closeP {
 		return sig
 	}
@@ -308,6 +323,16 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 		sig.EntryReason += ", " + stopWhy
 	}
 	return sig
+}
+
+// patternMinRange is the smallest range of a pattern bar of the pattern entry: PDLPatternMinRangeATR
+// daily ATRs, 0 when the gate is off; false when the gate is on and the ATR cannot be had.
+func (s *Strategy) patternMinRange(md strategy.MarketData) (float64, bool) {
+	if s.p.PDLPatternEntry <= 0 || s.p.PDLPatternMinRangeATR <= 0 {
+		return 0, true
+	}
+	atr := s.dailyATR(md)
+	return s.p.PDLPatternMinRangeATR * atr, atr > 0
 }
 
 // patternStop is the stop of the pattern entry and the bar it sits under: a red pattern bar j — its

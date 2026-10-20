@@ -1,5 +1,5 @@
 {
-  "_comment": "NVTK pdl_reclaim: лучшая точка sweep_full.json + sweep_stop_low.json, заведена по решению владельца 2026-10-19, хотя калибровку не прошла. 2026-10-19: окно входа (EntryFrom*/EntryTo*) удалено из ядра — входы в любой будний бар. 2026-10-20: свечные паттерны у PDL — PDLEngulf 0, PDLHammer 1 (wf_patterns.json). 2026-10-20: объём серии под PDL — PDLDipVolMult 0, PDLEngulf 0, PDLHammer 1 (wf_dipvol.json). 2026-10-20: IndexTrendEMA удалён из ядра, вместо него H1TrendEMA 200 (close часа выше EMA 200 часовых закрытий) — без калибровки, по решению владельца. 2026-10-20: вход по паттерну у PDL — PDLPatternEntry 1 (по решению владельца); у входа по паттерну стоп по лою свечи паттерна (красной) или ближайшей красной перед ней (зелёной), цель PDLPatternTargetR 2R.",
+  "_comment": "NVTK pdl_reclaim: лучшая точка sweep_full.json + sweep_stop_low.json, заведена по решению владельца 2026-10-19, хотя калибровку не прошла. 2026-10-19: окно входа (EntryFrom*/EntryTo*) удалено из ядра — входы в любой будний бар. 2026-10-20: свечные паттерны у PDL — PDLEngulf 0, PDLHammer 1 (wf_patterns.json). 2026-10-20: объём серии под PDL — PDLDipVolMult 0, PDLEngulf 0, PDLHammer 1 (wf_dipvol.json). 2026-10-20: IndexTrendEMA удалён из ядра, вместо него H1TrendEMA 200 (close часа выше EMA 200 часовых закрытий) — без калибровки, по решению владельца. 2026-10-20: вход по паттерну у PDL — PDLPatternEntry 1 (по решению владельца); у входа по паттерну стоп по лою свечи паттерна (красной) или ближайшей красной перед ней (зелёной), цель PDLPatternTargetR 2R. 2026-10-20: PDLDipVolMult 1 — по решению владельца.",
   "EntryPDL": 1,
   "EntryPDH": 0,
   "HoldBars": 3,
@@ -11,7 +11,7 @@
   "H1TrendEMA": 200,
   "PDLEngulf": 0,
   "PDLHammer": 1,
-  "PDLDipVolMult": 0.0,
+  "PDLDipVolMult": 1.0,
   "PDLPatternEntry": 1,
   "PDLPatternTargetR": 2.0
 }

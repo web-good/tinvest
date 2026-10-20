@@ -53,7 +53,8 @@ func isBreakout(ser series, i int, pdh float64) bool {
 
 // trigger is the setup bar k buys on and the reason fragment of its confirmation: the held PDH
 // breakout wins over the PDL reclaim on bar k itself.
-func (s *Strategy) trigger(ser series, k int, pdl, pdh float64) (setup, string, bool) {
+// minRange is the smallest range a pattern bar of the pattern entry may have (0 — any).
+func (s *Strategy) trigger(ser series, k int, pdl, pdh, minRange float64) (setup, string, bool) {
 	if st, minClose, ok := s.held(ser, k, pdh); ok {
 		return st, fmt.Sprintf("держится над PDH %d св. (мин. close %.4f)", k-st.bar, minClose), true
 	}
@@ -61,7 +62,7 @@ func (s *Strategy) trigger(ser series, k int, pdl, pdh float64) (setup, string, 
 		return setup{}, "", false
 	}
 	if s.p.PDLPatternEntry > 0 {
-		st, ok := s.patternEntry(ser, k, pdl)
+		st, ok := s.patternEntry(ser, k, pdl, minRange)
 		if !ok {
 			return setup{}, "", false
 		}
@@ -95,9 +96,9 @@ func (s *Strategy) withDipVolume(ser series, k int, pdl float64, st setup, why s
 }
 
 // patternEntry: bar k is the first green bar after the latest reversal candle of an enabled kind on
-// k's date, and that candle formed after the break of PDL (patternUnderPDL). The setup bar is the
-// pattern bar.
-func (s *Strategy) patternEntry(ser series, k int, pdl float64) (setup, bool) {
+// k's date with a range of at least minRange, and that candle formed after the break of PDL
+// (patternUnderPDL). The setup bar is the pattern bar.
+func (s *Strategy) patternEntry(ser series, k int, pdl, minRange float64) (setup, bool) {
 	if ser.c[k] <= ser.o[k] {
 		return setup{}, false
 	}
@@ -110,7 +111,7 @@ func (s *Strategy) patternEntry(ser series, k int, pdl float64) (setup, bool) {
 		case s.p.PDLHammer > 0 && isHammer(ser, j):
 			name = "молот"
 		}
-		if name != "" {
+		if name != "" && ser.h[j]-ser.l[j] >= minRange {
 			return setup{bar: j, name: "PDL", level: pdl, kind: name}, patternUnderPDL(ser, j, pdl)
 		}
 		if ser.c[j] > ser.o[j] {

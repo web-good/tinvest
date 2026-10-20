@@ -83,7 +83,12 @@ func (s *Strategy) explainEntry(sb *strings.Builder, md strategy.MarketData) {
 	}
 	fmt.Fprintf(sb, "✗ пробоя PDH %d св. назад, удержанного над PDH, нет\n", p.HoldBars)
 	if p.EntryPDL > 0 && p.PDLPatternEntry > 0 {
-		st, ok := s.patternEntry(ser, k, pdl)
+		minRange, okr := s.patternMinRange(md)
+		if p.PDLPatternMinRangeATR > 0 {
+			fmt.Fprintf(sb, "%s свеча паттерна не меньше %.2f ATR (%.4f)\n", mark(okr), p.PDLPatternMinRangeATR, minRange)
+		}
+		st, ok := s.patternEntry(ser, k, pdl, minRange)
+		ok = ok && okr
 		found := "нет"
 		if ok {
 			found = fmt.Sprintf("%s %s, первая зелёная после паттерна %s", st.kind, ser.t[st.bar].In(mskLoc).Format("15:04"), ser.t[k].In(mskLoc).Format("15:04"))
@@ -102,6 +107,10 @@ func (s *Strategy) explainEntry(sb *strings.Builder, md strategy.MarketData) {
 		if p.PDLPatternTargetR > 0 {
 			stop, at := patternStop(ser, st.bar)
 			c := ser.c[k]
+			if atr := s.dailyATR(md); p.PDLPatternMinStopATR > 0 && atr > 0 && stop > c-p.PDLPatternMinStopATR*atr {
+				stop = c - p.PDLPatternMinStopATR*atr
+				fmt.Fprintf(sb, "стоп отодвинут до %.2f ATR от close\n", p.PDLPatternMinStopATR)
+			}
 			fmt.Fprintf(sb, "%s стоп по лою свечи %s %.4f ниже close %.4f, цель %.2fR = %.4f\n",
 				mark(stop > 0 && stop < c), ser.t[at].In(mskLoc).Format("15:04"), stop, c, p.PDLPatternTargetR, c+p.PDLPatternTargetR*(c-stop))
 			return
