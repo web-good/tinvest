@@ -10,7 +10,7 @@ import (
 func TestLiteralIsPinned(t *testing.T) {
 	want := core.Params{
 		EntryPDL:       1,
-		EntryPDH:       1,
+		EntryPDH:       0,
 		HoldBars:       3,
 		StopDailyATR:   0.7,
 		DailyATRPeriod: 14,
@@ -20,6 +20,7 @@ func TestLiteralIsPinned(t *testing.T) {
 		IndexTrendEMA:  50,
 		PDLEngulf:      0,
 		PDLHammer:      1,
+		PDLDipVolMult:  0,
 	}
 	if got := Params(); got != want {
 		t.Fatalf("литерал NVTK изменился:\n got: %+v\nwant: %+v", got, want)

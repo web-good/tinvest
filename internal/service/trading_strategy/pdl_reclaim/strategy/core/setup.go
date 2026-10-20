@@ -64,6 +64,13 @@ func (s *Strategy) trigger(ser series, k int, pdl, pdh float64) (setup, string, 
 		}
 		why += fmt.Sprintf(", %s %s", name, ser.t[at].In(mskLoc).Format("15:04"))
 	}
+	if s.dipVolumeOn() {
+		dip, avg, ok := s.dipVolumeOK(ser, k, pdl)
+		if !ok {
+			return setup{}, "", false
+		}
+		why += fmt.Sprintf(", объём серии %.0f > %.2f × обычный %.0f", dip, s.p.PDLDipVolMult, avg)
+	}
 	return setup{bar: k, name: "PDL", level: pdl}, why, true
 }
 
@@ -71,15 +78,9 @@ func (s *Strategy) trigger(ser series, k int, pdl, pdh float64) (setup, string, 
 func (s *Strategy) patternsOn() bool { return s.p.PDLEngulf > 0 || s.p.PDLHammer > 0 }
 
 // pdlPattern finds the latest reversal candle of an enabled kind between the break of PDL and the
-// reclaim bar k, both included: the window starts at the first bar of a run of closes at or below
-// PDL that ends right before k on k's date. The red bar of an engulfing may sit before the window.
+// reclaim bar k, both included (from dipStart). The red bar of an engulfing may sit before the window.
 func (s *Strategy) pdlPattern(ser series, k int, pdl float64) (name string, bar int, ok bool) {
-	day := dayKey(ser.t[k])
-	start := k
-	for start > 0 && dayKey(ser.t[start-1]) == day && ser.c[start-1] <= pdl {
-		start--
-	}
-	for i := k; i >= start; i-- {
+	for i := k; i >= dipStart(ser, k, pdl); i-- {
 		if s.p.PDLEngulf > 0 && isEngulf(ser, i) {
 			return "поглощение", i, true
 		}
@@ -88,6 +89,17 @@ func (s *Strategy) pdlPattern(ser series, k int, pdl float64) (name string, bar 
 		}
 	}
 	return "", 0, false
+}
+
+// dipStart is the first bar of the series under PDL before the reclaim bar k: the run of closes at
+// or below PDL that ends right before k on k's date.
+func dipStart(ser series, k int, pdl float64) int {
+	day := dayKey(ser.t[k])
+	start := k
+	for start > 0 && dayKey(ser.t[start-1]) == day && ser.c[start-1] <= pdl {
+		start--
+	}
+	return start
 }
 
 // isEngulf: the bullish engulfing on bar i — bar i-1, on i's date, is red, bar i is green, its low

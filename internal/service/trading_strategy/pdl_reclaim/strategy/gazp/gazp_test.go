@@ -20,6 +20,7 @@ func TestLiteralIsPinned(t *testing.T) {
 		IndexTrendEMA:  200,
 		PDLEngulf:      0,
 		PDLHammer:      0,
+		PDLDipVolMult:  0,
 	}
 	if got := Params(); got != want {
 		t.Fatalf("литерал GAZP изменился:\n got: %+v\nwant: %+v", got, want)

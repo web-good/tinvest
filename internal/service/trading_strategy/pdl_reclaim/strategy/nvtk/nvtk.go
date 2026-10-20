@@ -33,6 +33,14 @@
 // лучший, но в минусе — 0.675/104 против 0.647/168. Walk-forward (3/1, 9 фолдов): выбор паттерна на
 // подборе — пул OOS 1.065, фиксированный молот 1.312, без паттернов 0.796. Тикер по-прежнему не в
 // PDL_RECLAIM_TICKERS_M15.
+//
+// # 2026-10-20 — только возврат над PDL, объём серии не включён
+//
+// Владелец выключил пробой PDH (EntryPDH 0). Сетка wf_dipvol.json (порог объёма серии
+// 0/1.2/1.5/2.0 × паттерны), -months 12: молот без фильтра объёма — PF 2.376/15, с порогом 1.2 —
+// 1.903/4, без паттернов и объёма 0.811/34. Walk-forward (3/1, 9 фолдов): фиксированный молот —
+// пул OOS 2.271, порог 1.2 без паттернов 0.866, 2.0 — 0.067, выбор из 16 точек 0.716. На 36
+// месяцах молот 0.943/48, порог 2.0 — 1.197/28. Литерал: молот, порог объёма 0.
 package nvtk
 
 import "tinvest/internal/service/trading_strategy/pdl_reclaim/strategy/core"
@@ -41,7 +49,7 @@ import "tinvest/internal/service/trading_strategy/pdl_reclaim/strategy/core"
 func Params() core.Params {
 	return core.Params{
 		EntryPDL:       1,
-		EntryPDH:       1,
+		EntryPDH:       0,
 		HoldBars:       3,
 		StopDailyATR:   0.7,
 		DailyATRPeriod: 14,
@@ -51,5 +59,6 @@ func Params() core.Params {
 		IndexTrendEMA:  50,
 		PDLEngulf:      0,
 		PDLHammer:      1,
+		PDLDipVolMult:  0,
 	}
 }

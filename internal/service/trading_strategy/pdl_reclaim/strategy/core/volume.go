@@ -53,3 +53,34 @@ func inSession(ser series, j int) bool {
 	m := minuteOf(ser.t[j])
 	return m >= sessionFrom && m < sessionTo
 }
+
+// dipVolumeOn reports whether the volume filter of the series under PDL is in play.
+func (s *Strategy) dipVolumeOn() bool { return s.p.PDLDipVolMult > 0 && s.p.VolBars > 0 }
+
+// dipVolumeOK reports the average volume of the main-session bars of the series under PDL ending
+// with the reclaim bar k, the average of the VolBars main-session bars before the series and
+// whether the series is above PDLDipVolMult × that average. Off — always passes; without volumes
+// or main-session bars in the series it fails closed.
+func (s *Strategy) dipVolumeOK(ser series, k int, pdl float64) (dip, avg float64, ok bool) {
+	if !s.dipVolumeOn() {
+		return 0, 0, true
+	}
+	if len(ser.v) != len(ser.c) || len(ser.t) != len(ser.c) {
+		return 0, 0, false
+	}
+	start := dipStart(ser, k, pdl)
+	var sum int64
+	got := 0
+	for j := start; j <= k; j++ {
+		if inSession(ser, j) {
+			sum += ser.v[j]
+			got++
+		}
+	}
+	if got == 0 {
+		return 0, 0, false
+	}
+	dip = float64(sum) / float64(got)
+	avg, ok = averageVolume(ser, start, s.p.VolBars)
+	return dip, avg, ok && avg > 0 && dip > s.p.PDLDipVolMult*avg
+}

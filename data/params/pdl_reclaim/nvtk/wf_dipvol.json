@@ -1,0 +1,24 @@
+{
+  "_comment": "pdl_reclaim: объём серии под PDL (PDLDipVolMult) × свечные паттерны поверх литерала, -months 12 и 36, скользящий walk-forward -train-months 3 -test-months 1. Итог — в doc-комментарии пакета тикера (2026-10-20).",
+  "phases": [
+    {
+      "name": "sweep",
+      "grid": {
+        "PDLDipVolMult": [
+          0,
+          1.2,
+          1.5,
+          2.0
+        ],
+        "PDLEngulf": [
+          0,
+          1
+        ],
+        "PDLHammer": [
+          0,
+          1
+        ]
+      }
+    }
+  ]
+}

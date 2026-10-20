@@ -63,6 +63,11 @@ type Params struct {
 	// both on either one is enough; both 0 — no pattern needed. The PDH entry is not affected.
 	PDLEngulf int
 	PDLHammer int
+	// PDLDipVolMult > 0: the PDL reclaim buys only when the average volume of the main-session bars
+	// of the series under PDL (from the break to the reclaim bar, both included) is above
+	// PDLDipVolMult × the average of the VolBars main-session bars before the series; a series
+	// without main-session bars fails closed; 0 — off. Works with or without the patterns.
+	PDLDipVolMult float64
 }
 
 // DefaultParams returns the owner's rules.
@@ -101,7 +106,7 @@ func (s *Strategy) tf() string { return fmt.Sprintf("%dm", int(s.step.Minutes())
 // weekend in between.
 func (s *Strategy) Lookback() int {
 	warm := 0
-	if s.volumeOn() {
+	if s.volumeOn() || s.dipVolumeOn() {
 		days := (s.p.VolBars + sessionBars - 1) / sessionBars
 		warm = max(warm, (days+2)*dayBars)
 	}

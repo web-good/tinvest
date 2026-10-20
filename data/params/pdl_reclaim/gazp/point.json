@@ -1,5 +1,5 @@
 {
-  "_comment": "GAZP pdl_reclaim: точка перекалибровки без окна входа 2026-10-19 (wf_nowindow.json): только возврат над PDL, HoldBars 3 (не действует без PDH), стоп 1.0, MaxDayRangeATR 0.8, IndexTrendEMA 200. Разработка PF 3.269/27, hold-out 1.639/14, год 2.431/41, год до окна 0.940/32. Walk-forward пул OOS 0.988. Предыдущая точка — в git-истории этого файла. 2026-10-20: свечные паттерны у PDL — PDLEngulf 0, PDLHammer 0 (wf_patterns.json).",
+  "_comment": "GAZP pdl_reclaim: точка перекалибровки без окна входа 2026-10-19 (wf_nowindow.json): только возврат над PDL, HoldBars 3 (не действует без PDH), стоп 1.0, MaxDayRangeATR 0.8, IndexTrendEMA 200. Разработка PF 3.269/27, hold-out 1.639/14, год 2.431/41, год до окна 0.940/32. Walk-forward пул OOS 0.988. Предыдущая точка — в git-истории этого файла. 2026-10-20: свечные паттерны у PDL — PDLEngulf 0, PDLHammer 0 (wf_patterns.json). 2026-10-20: объём серии под PDL — PDLDipVolMult 0, PDLEngulf 0, PDLHammer 0 (wf_dipvol.json).",
   "EntryPDL": 1,
   "EntryPDH": 0,
   "HoldBars": 3,
@@ -10,5 +10,6 @@
   "MaxDayRangeATR": 0.8,
   "IndexTrendEMA": 200,
   "PDLEngulf": 0,
-  "PDLHammer": 0
+  "PDLHammer": 0,
+  "PDLDipVolMult": 0.0
 }

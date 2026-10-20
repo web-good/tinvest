@@ -1,5 +1,5 @@
 {
-  "_comment": "SBER pdl_reclaim: точка полной перекалибровки 2026-10-19 (sweep_full.json). РЕЗУЛЬТАТ: центр плато — обе ветки, HoldBars 1, стоп 1.5, 10:00–16:00, MaxDayRangeATR 1.2, IndexTrendEMA 200: разработка PF 4.106/34 net +12710, медиана окрестности 3.179, худший сосед 1.840; соседняя HoldBars 3 (прежний литерал) 3.975/28. Стресс: без лучшей 3.657, без трёх 2.964, комиссия 0.1% PF 2.997. Hold-out 17 сделок PF 1.426 net +2910 (HoldBars 3 — 1.215). Год 51 сделка PF 2.358 net +15997; год до окна 47 сделок PF 2.162 net +22026 (HoldBars 3 — 1.957/45, +18038). Записано в литерал sber. 2026-10-19: окно входа (EntryFrom*/EntryTo*) удалено из ядра — входы в любой будний бар. 2026-10-20: свечные паттерны у PDL — PDLEngulf 1, PDLHammer 0 (wf_patterns.json).",
+  "_comment": "SBER pdl_reclaim: точка полной перекалибровки 2026-10-19 (sweep_full.json). РЕЗУЛЬТАТ: центр плато — обе ветки, HoldBars 1, стоп 1.5, 10:00–16:00, MaxDayRangeATR 1.2, IndexTrendEMA 200: разработка PF 4.106/34 net +12710, медиана окрестности 3.179, худший сосед 1.840; соседняя HoldBars 3 (прежний литерал) 3.975/28. Стресс: без лучшей 3.657, без трёх 2.964, комиссия 0.1% PF 2.997. Hold-out 17 сделок PF 1.426 net +2910 (HoldBars 3 — 1.215). Год 51 сделка PF 2.358 net +15997; год до окна 47 сделок PF 2.162 net +22026 (HoldBars 3 — 1.957/45, +18038). Записано в литерал sber. 2026-10-19: окно входа (EntryFrom*/EntryTo*) удалено из ядра — входы в любой будний бар. 2026-10-20: свечные паттерны у PDL — PDLEngulf 1, PDLHammer 0 (wf_patterns.json). 2026-10-20: объём серии под PDL — PDLDipVolMult 1.2, PDLEngulf 0, PDLHammer 0 (wf_dipvol.json).",
   "EntryPDL": 1,
   "EntryPDH": 1,
   "HoldBars": 1,
@@ -9,6 +9,7 @@
   "VolBars": 20,
   "MaxDayRangeATR": 1.2,
   "IndexTrendEMA": 200,
-  "PDLEngulf": 1,
-  "PDLHammer": 0
+  "PDLEngulf": 0,
+  "PDLHammer": 0,
+  "PDLDipVolMult": 1.2
 }

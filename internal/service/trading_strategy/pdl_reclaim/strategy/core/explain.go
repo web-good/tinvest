@@ -96,6 +96,14 @@ func (s *Strategy) explainEntry(sb *strings.Builder, md strategy.MarketData) {
 			return
 		}
 	}
+	if s.dipVolumeOn() {
+		dip, avg, ok := s.dipVolumeOK(ser, k, pdl)
+		fmt.Fprintf(sb, "%s объём серии под PDL %.0f > %.2f × обычный %.0f (свечи основной сессии от пробоя до возврата против %d до него)\n",
+			mark(ok), dip, p.PDLDipVolMult, avg, p.VolBars)
+		if !ok {
+			return
+		}
+	}
 	explainTarget(sb, setup{bar: k, name: "PDL", level: pdl}, pdl, pdh, ser.c[k])
 }
 
