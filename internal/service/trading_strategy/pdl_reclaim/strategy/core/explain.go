@@ -99,6 +99,13 @@ func (s *Strategy) explainEntry(sb *strings.Builder, md strategy.MarketData) {
 				return
 			}
 		}
+		if p.PDLPatternTargetR > 0 {
+			stop, at := patternStop(ser, st.bar)
+			c := ser.c[k]
+			fmt.Fprintf(sb, "%s стоп по лою свечи %s %.4f ниже close %.4f, цель %.2fR = %.4f\n",
+				mark(stop > 0 && stop < c), ser.t[at].In(mskLoc).Format("15:04"), stop, c, p.PDLPatternTargetR, c+p.PDLPatternTargetR*(c-stop))
+			return
+		}
 		explainTarget(sb, st, pdl, pdh, ser.c[k])
 		return
 	}

@@ -101,17 +101,18 @@ import "tinvest/internal/service/trading_strategy/pdl_reclaim/strategy/core"
 // Params is the SBER Minutes15 literal.
 func Params() core.Params {
 	return core.Params{
-		EntryPDL:       1,
-		EntryPDH:       1,
-		HoldBars:       1,
-		StopDailyATR:   1.5,
-		DailyATRPeriod: 14,
-		VolumeMult:     1.5,
-		VolBars:        20,
-		MaxDayRangeATR: 1.2,
-		H1TrendEMA:     200,
-		PDLEngulf:      0,
-		PDLHammer:      0,
-		PDLDipVolMult:  1.2,
+		EntryPDL:          1,
+		EntryPDH:          1,
+		HoldBars:          1,
+		StopDailyATR:      1.5,
+		DailyATRPeriod:    14,
+		VolumeMult:        1.5,
+		VolBars:           20,
+		MaxDayRangeATR:    1.2,
+		H1TrendEMA:        200,
+		PDLEngulf:         0,
+		PDLHammer:         0,
+		PDLDipVolMult:     1.2,
+		PDLPatternTargetR: 2,
 	}
 }

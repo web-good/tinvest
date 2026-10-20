@@ -70,6 +70,11 @@ type Params struct {
 	// pattern bar on its date; no reclaim of PDL needed. With both PDLEngulf and PDLHammer 0 the
 	// pattern entry never fires.
 	PDLPatternEntry int
+	// PDLPatternTargetR is the target of the pattern entry in risks: close + R × (close − stop).
+	// The stop of the pattern entry is structural, not StopDailyATR: a red pattern bar — its own
+	// low; a green one — the low of the nearest red bar before it on its date (its own low when
+	// there is none). 0 — the target of the reclaim (the middle of yesterday's range).
+	PDLPatternTargetR float64
 	// PDLDipVolMult > 0: the PDL reclaim buys only when the average volume of the main-session bars
 	// of the series under PDL (from the break to the reclaim bar, both included) is above
 	// PDLDipVolMult × the average of the VolBars main-session bars before the series; a series
@@ -87,6 +92,8 @@ func DefaultParams() Params {
 		DailyATRPeriod: 14,
 		VolumeMult:     1.5,
 		VolBars:        20,
+
+		PDLPatternTargetR: 2,
 	}
 }
 
@@ -242,7 +249,8 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	}
 	closeP := ser.c[k]
 	target := targetOf(st, pdl, pdh)
-	if closeP >= target {
+	patternR := st.kind != "" && s.p.PDLPatternTargetR > 0
+	if !patternR && closeP >= target {
 		return sig
 	}
 	atr := s.dailyATR(md)
@@ -258,13 +266,26 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 		return sig
 	}
 	stop := closeP - s.p.StopDailyATR*atr
-	if s.p.StopAtExtremum > 0 {
+	stopWhy := ""
+	switch {
+	case st.kind != "":
+		var at int
+		stop, at = patternStop(ser, st.bar)
+		stopWhy = fmt.Sprintf("стоп по лою свечи паттерна %s %.4f", ser.t[at].In(mskLoc).Format("15:04"), stop)
+		if at != st.bar {
+			stopWhy = fmt.Sprintf("стоп по лою красной перед паттерном %s %.4f", ser.t[at].In(mskLoc).Format("15:04"), stop)
+		}
+	case s.p.StopAtExtremum > 0:
 		stop = setupLow(ser, st, k) - s.p.StopBufferATR*atr
 	}
 	if stop <= 0 || stop >= closeP {
 		return sig
 	}
-	if s.p.TargetStopMult > 0 {
+	switch {
+	case patternR:
+		target = closeP + s.p.PDLPatternTargetR*(closeP-stop)
+		stopWhy += fmt.Sprintf(", цель %.2fR", s.p.PDLPatternTargetR)
+	case st.kind == "" && s.p.TargetStopMult > 0:
 		target = closeP + s.p.TargetStopMult*(closeP-stop)
 	}
 	sig.Kind = model.SignalBuy
@@ -283,7 +304,25 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	if trendWhy != "" {
 		sig.EntryReason += ", " + trendWhy
 	}
+	if stopWhy != "" {
+		sig.EntryReason += ", " + stopWhy
+	}
 	return sig
+}
+
+// patternStop is the stop of the pattern entry and the bar it sits under: a red pattern bar j — its
+// own low; a green one — the low of the nearest red bar before it on its date, or its own low when
+// there is none.
+func patternStop(ser series, j int) (float64, int) {
+	if ser.c[j] < ser.o[j] {
+		return ser.l[j], j
+	}
+	for i := j - 1; i >= 0 && dayKey(ser.t[i]) == dayKey(ser.t[j]); i-- {
+		if ser.c[i] < ser.o[i] {
+			return ser.l[i], i
+		}
+	}
+	return ser.l[j], j
 }
 
 // setupLow is the nearest extremum the setup was built on: for the PDL reclaim the lowest low of

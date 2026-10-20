@@ -56,6 +56,7 @@ type Trade struct {
 	SupportLevel    float64 // HVN support the entry bounced off; 0 when n/a
 	ResistanceLevel float64 // HVN resistance / target at entry; 0 when n/a
 	ATR             float64 // ATR at entry; 0 when n/a
+	StopLoss        float64 // stop the entry signal set; 0 when none
 	EntryReason     string  // human-readable entry rationale captured at entry
 	ExitReason      string  // human-readable exit rationale captured at exit; empty when n/a
 }

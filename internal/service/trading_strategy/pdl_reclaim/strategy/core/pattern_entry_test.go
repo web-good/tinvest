@@ -1,6 +1,7 @@
 package core
 
 import (
+	"math"
 	"strings"
 	"testing"
 
@@ -121,5 +122,46 @@ func TestExplainPatternEntry(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in:\n%s", want, out)
 		}
+	}
+}
+
+func TestPatternEntryStopAndTarget(t *testing.T) {
+	green := hammerEntryDay()[:3]
+	green[2] = bar{"2026-09-14 10:00", 98.6, 98.75, 98.0, 98.7}
+	green = append(green, bar{"2026-09-14 10:15", 98.7, 98.8, 98.7, 98.8})
+	for name, tc := range map[string]struct {
+		p            Params
+		bars         []bar
+		stop, target float64
+		why          string
+	}{
+		// red hammer 10:00: its own low; entry close 98.8, risk 0.8
+		"red hammer": {patternEntryP(0, 1), hammerEntryDay()[:5], 98.0, 100.4, "стоп по лою свечи паттерна 10:00 98.0000, цель 2.00R"},
+		// green hammer 10:00: the red 09:45 before it, low 98.7; risk 0.1
+		"green hammer": {patternEntryP(0, 1), green, 98.7, 99.0, "стоп по лою красной перед паттерном 09:45 98.7000, цель 2.00R"},
+		// engulfing 10:15 is green: the red 10:00 it engulfed, low 98.6; entry 98.9, risk 0.3
+		"engulfing": {patternEntryP(1, 0), engulfEntryDay(), 98.6, 99.5, "стоп по лою красной перед паттерном 10:00 98.6000, цель 2.00R"},
+	} {
+		sig := decide(tc.p, tc.bars)
+		if sig.Kind != model.SignalBuy {
+			t.Fatalf("%s: Kind = %v, want Buy", name, sig.Kind)
+		}
+		if math.Abs(sig.StopLoss-tc.stop) > eps || math.Abs(sig.TakeProfit-tc.target) > eps {
+			t.Errorf("%s: stop %.4f target %.4f, want %.4f %.4f", name, sig.StopLoss, sig.TakeProfit, tc.stop, tc.target)
+		}
+		if !strings.Contains(sig.EntryReason, tc.why) {
+			t.Errorf("%s: reason %q, want %q", name, sig.EntryReason, tc.why)
+		}
+	}
+}
+
+func TestPatternEntryTargetR(t *testing.T) {
+	p := patternEntryP(0, 1)
+	p.PDLPatternTargetR = 3
+	if sig := decide(p, hammerEntryDay()[:5]); math.Abs(sig.TakeProfit-101.2) > eps {
+		t.Fatalf("R 3: target %.4f, want 101.2", sig.TakeProfit)
+	}
+	if got := DefaultParams().PDLPatternTargetR; got != 2 {
+		t.Fatalf("default PDLPatternTargetR = %v, want 2", got)
 	}
 }

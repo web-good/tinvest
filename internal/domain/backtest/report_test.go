@@ -52,7 +52,7 @@ func TestRenderTradesCSVHeaderAndRow(t *testing.T) {
 	if !strings.Contains(lines[1], "TP") {
 		t.Fatalf("row missing reason: %q", lines[1])
 	}
-	if !strings.HasSuffix(lines[0], "support_level,resistance_level,atr,entry_reason,exit_reason") {
+	if !strings.HasSuffix(lines[0], "support_level,resistance_level,atr,entry_reason,exit_reason,stop_loss") {
 		t.Fatalf("header missing new columns: %q", lines[0])
 	}
 	if !strings.Contains(lines[1], "цель") {
@@ -87,5 +87,21 @@ func TestRenderEquityCSV(t *testing.T) {
 	}
 	if lines[0] != "time,equity" {
 		t.Fatalf("header = %q, want time,equity", lines[0])
+	}
+}
+
+func TestReportsShowStopLoss(t *testing.T) {
+	trades := []Trade{{
+		EntryTime: time.Unix(0, 0), EntryPrice: 100, ExitTime: time.Unix(3600, 0),
+		ExitPrice: 110, Quantity: 10, Reason: "TP", PnL: 100, PnLPct: 0.1, BarsHeld: 1,
+		ResistanceLevel: 112, StopLoss: 95.25,
+	}}
+	md := RenderMarkdown(sampleMeta(), Metrics{TotalTrades: 1}, trades, eqCurve([]float64{100000, 100100}))
+	if !strings.Contains(md, "| Цена входа | Стоп |") || !strings.Contains(md, "| 100.0000 | 95.2500 |") {
+		t.Fatalf("markdown missing stop column: %q", md)
+	}
+	lines := strings.Split(strings.TrimSpace(RenderTradesCSV(trades)), "\n")
+	if !strings.HasSuffix(lines[0], ",exit_reason,stop_loss") || !strings.HasSuffix(lines[1], ",95.250000") {
+		t.Fatalf("csv missing stop_loss: %q / %q", lines[0], lines[1])
 	}
 }
