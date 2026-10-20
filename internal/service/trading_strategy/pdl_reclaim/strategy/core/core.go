@@ -61,27 +61,17 @@ type Params struct {
 	// formed between the break of PDL (the first close below it on the reclaim's date) and the
 	// reclaim bar, both included — the bullish engulfing (isEngulf) or the hammer (isHammer); with
 	// both on either one is enough; both 0 — no pattern needed. The PDH entry is not affected.
+	// A reclaim bought on a hammer stops under the hammer's low (frozen at the signal), not
+	// StopDailyATR below the fill, and targets PDLPatternTargetR risks; the engulfing keeps the
+	// reclaim's stop and target.
 	PDLEngulf int
 	PDLHammer int
-	// PDLPatternEntry switches the PDL entry: 0 — the reclaim of PDL (the patterns above, when on,
-	// only gate it); 1 — the pattern entry: a reversal candle of an enabled kind formed after the
-	// break of PDL (a close below PDL on its date at or before the pattern bar, no close above PDL
-	// in between) and the buy comes at the next open after the first green bar that follows the
-	// pattern bar on its date; no reclaim of PDL needed. With both PDLEngulf and PDLHammer 0 the
-	// pattern entry never fires.
-	PDLPatternEntry int
-	// PDLPatternTargetR is the target of the pattern entry in risks: close + R × (close − stop).
-	// The stop of the pattern entry is structural, not StopDailyATR: a red pattern bar — its own
-	// low; a green one — the low of the nearest red bar before it on its date (its own low when
-	// there is none). 0 — the target of the reclaim (the middle of yesterday's range).
+	// PDLReclaimBars > 0: a hammer counts only when the reclaim bar is at most this many bars after
+	// it (0 — the reclaim bar itself is the hammer); a later reclaim burns the setup. 0 — no limit.
+	PDLReclaimBars int
+	// PDLPatternTargetR is the target of the hammer reclaim in risks: close + R × (close − the
+	// hammer's low). 0 — the target of the reclaim (the middle of yesterday's range).
 	PDLPatternTargetR float64
-	// PDLPatternMinStopATR > 0: the structural stop of the pattern entry is never closer than this
-	// many daily ATRs below the signal close (it moves down to that distance; the R target follows).
-	// 0 — off.
-	PDLPatternMinStopATR float64
-	// PDLPatternMinRangeATR > 0: a candle counts as a pattern for the pattern entry only when its
-	// range (high − low; of the green bar of an engulfing) is at least this many daily ATRs. 0 — off.
-	PDLPatternMinRangeATR float64
 	// PDLDipVolMult > 0: the PDL reclaim buys only when the average volume of the main-session bars
 	// of the series under PDL (from the break to the reclaim bar, both included) is above
 	// PDLDipVolMult × the average of the VolBars main-session bars before the series; a series
@@ -250,11 +240,7 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	if !ok {
 		return sig
 	}
-	minRange, ok := s.patternMinRange(md)
-	if !ok {
-		return sig
-	}
-	st, why, ok := s.trigger(ser, k, pdl, pdh, minRange)
+	st, why, ok := s.trigger(ser, k, pdl, pdh)
 	if !ok {
 		return sig
 	}
@@ -280,18 +266,10 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	stopWhy := ""
 	switch {
 	case st.kind != "":
-		var at int
-		stop, at = patternStop(ser, st.bar)
-		stopWhy = fmt.Sprintf("стоп по лою свечи паттерна %s %.4f", ser.t[at].In(mskLoc).Format("15:04"), stop)
-		if at != st.bar {
-			stopWhy = fmt.Sprintf("стоп по лою красной перед паттерном %s %.4f", ser.t[at].In(mskLoc).Format("15:04"), stop)
-		}
+		stop = ser.l[st.pat]
+		stopWhy = fmt.Sprintf("стоп по лою молота %s %.4f", ser.t[st.pat].In(mskLoc).Format("15:04"), stop)
 	case s.p.StopAtExtremum > 0:
 		stop = setupLow(ser, st, k) - s.p.StopBufferATR*atr
-	}
-	if floor := closeP - s.p.PDLPatternMinStopATR*atr; st.kind != "" && s.p.PDLPatternMinStopATR > 0 && stop > floor {
-		stop = floor
-		stopWhy += fmt.Sprintf(", отодвинут до %.2f ATR: %.4f", s.p.PDLPatternMinStopATR, stop)
 	}
 	if stop <= 0 || stop >= closeP {
 		return sig
@@ -323,31 +301,6 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 		sig.EntryReason += ", " + stopWhy
 	}
 	return sig
-}
-
-// patternMinRange is the smallest range of a pattern bar of the pattern entry: PDLPatternMinRangeATR
-// daily ATRs, 0 when the gate is off; false when the gate is on and the ATR cannot be had.
-func (s *Strategy) patternMinRange(md strategy.MarketData) (float64, bool) {
-	if s.p.PDLPatternEntry <= 0 || s.p.PDLPatternMinRangeATR <= 0 {
-		return 0, true
-	}
-	atr := s.dailyATR(md)
-	return s.p.PDLPatternMinRangeATR * atr, atr > 0
-}
-
-// patternStop is the stop of the pattern entry and the bar it sits under: a red pattern bar j — its
-// own low; a green one — the low of the nearest red bar before it on its date, or its own low when
-// there is none.
-func patternStop(ser series, j int) (float64, int) {
-	if ser.c[j] < ser.o[j] {
-		return ser.l[j], j
-	}
-	for i := j - 1; i >= 0 && dayKey(ser.t[i]) == dayKey(ser.t[j]); i-- {
-		if ser.c[i] < ser.o[i] {
-			return ser.l[i], i
-		}
-	}
-	return ser.l[j], j
 }
 
 // setupLow is the nearest extremum the setup was built on: for the PDL reclaim the lowest low of
@@ -404,10 +357,11 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 }
 
 // stop is StopDailyATR daily ATRs below the fill, with the ATR frozen at entry (today's when the
-// position carries none); with StopAtExtremum or the pattern entry the stop frozen at the signal
-// (the structural stop of the pattern). 0 — no stop.
+// position carries none); with StopAtExtremum or the hammer the stop frozen at the signal (the
+// hammer's low; with PDLEngulf on too an engulfing reclaim carries its ATR stop from the signal
+// close). 0 — no stop.
 func (s *Strategy) stop(md strategy.MarketData, pos *strategy.Position) float64 {
-	if s.p.StopAtExtremum > 0 || (s.p.PDLPatternEntry > 0 && pos.StopLoss > 0) {
+	if s.p.StopAtExtremum > 0 || (s.p.PDLHammer > 0 && pos.StopLoss > 0) {
 		return pos.StopLoss
 	}
 	if s.p.StopDailyATR <= 0 {
