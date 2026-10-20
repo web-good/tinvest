@@ -113,9 +113,13 @@ func (s *Strategy) explainEntry(sb *strings.Builder, md strategy.MarketData) {
 		}
 	}
 	if c := ser.c[k]; hammer >= 0 && p.PDLPatternTargetR > 0 {
-		stop := ser.l[hammer]
-		fmt.Fprintf(sb, "%s стоп по лою молота %.4f ниже close %.4f, цель %.2fR = %.4f\n",
-			mark(stop > 0 && stop < c), stop, c, p.PDLPatternTargetR, c+p.PDLPatternTargetR*(c-stop))
+		stop, capped := ser.l[hammer], ""
+		if lifted, ok := s.capStop(c, stop, s.dailyATR(md)); ok {
+			capped = fmt.Sprintf(" поднят до %.2f ATR: %.4f", p.PDLMaxStopATR, lifted)
+			stop = lifted
+		}
+		fmt.Fprintf(sb, "%s стоп по лою молота %.4f%s ниже close %.4f, цель %.2fR = %.4f\n",
+			mark(stop > 0 && stop < c), ser.l[hammer], capped, c, p.PDLPatternTargetR, c+p.PDLPatternTargetR*(c-stop))
 		return
 	}
 	explainTarget(sb, setup{bar: k, name: "PDL", level: pdl}, pdl, pdh, ser.c[k])

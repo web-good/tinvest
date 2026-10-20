@@ -72,6 +72,9 @@ type Params struct {
 	// PDLPatternTargetR is the target of the hammer reclaim in risks: close + R × (close − the
 	// hammer's low). 0 — the target of the reclaim (the middle of yesterday's range).
 	PDLPatternTargetR float64
+	// PDLMaxStopATR > 0: the hammer stop is never farther than this many daily ATRs below the
+	// signal close — a deeper hammer low is lifted to that distance and the R target follows. 0 — off.
+	PDLMaxStopATR float64
 	// PDLDipVolMult > 0: the PDL reclaim buys only when the average volume of the main-session bars
 	// of the series under PDL (from the break to the reclaim bar, both included) is above
 	// PDLDipVolMult × the average of the VolBars main-session bars before the series; a series
@@ -268,6 +271,10 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	case st.kind != "":
 		stop = ser.l[st.pat]
 		stopWhy = fmt.Sprintf("стоп по лою молота %s %.4f", ser.t[st.pat].In(mskLoc).Format("15:04"), stop)
+		if capped, ok := s.capStop(closeP, stop, atr); ok {
+			stop = capped
+			stopWhy += fmt.Sprintf(", поднят до %.2f ATR: %.4f", s.p.PDLMaxStopATR, stop)
+		}
 	case s.p.StopAtExtremum > 0:
 		stop = setupLow(ser, st, k) - s.p.StopBufferATR*atr
 	}
@@ -301,6 +308,16 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 		sig.EntryReason += ", " + stopWhy
 	}
 	return sig
+}
+
+// capStop lifts a hammer stop deeper than PDLMaxStopATR daily ATRs under closeP to that distance;
+// false when the cap is off or the stop is within it.
+func (s *Strategy) capStop(closeP, stop, atr float64) (float64, bool) {
+	floor := closeP - s.p.PDLMaxStopATR*atr
+	if s.p.PDLMaxStopATR <= 0 || atr <= 0 || stop >= floor {
+		return stop, false
+	}
+	return floor, true
 }
 
 // setupLow is the nearest extremum the setup was built on: for the PDL reclaim the lowest low of

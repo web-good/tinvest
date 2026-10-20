@@ -131,3 +131,25 @@ func TestExplainHammerReclaim(t *testing.T) {
 		t.Errorf("missing the burnt setup in:\n%s", out)
 	}
 }
+
+// The hammer stop 98.0 is 1.2 = 0.6 ATR under the close 99.2: a cap of 0.5 ATR lifts it to 98.2
+// and the 2R target to 101.2; a cap of 0.7 ATR leaves it.
+func TestHammerMaxStop(t *testing.T) {
+	p := hammerP()
+	p.PDLMaxStopATR = 0.5
+	sig := decide(p, hammerDay())
+	if sig.Kind != model.SignalBuy || math.Abs(sig.StopLoss-98.2) > eps || math.Abs(sig.TakeProfit-101.2) > eps {
+		t.Fatalf("cap 0.5: got %v stop %.4f target %.4f, want Buy 98.2 101.2", sig.Kind, sig.StopLoss, sig.TakeProfit)
+	}
+	if !strings.Contains(sig.EntryReason, "стоп по лою молота 10:00 98.0000, поднят до 0.50 ATR: 98.2000, цель 2.00R") {
+		t.Fatalf("reason %q", sig.EntryReason)
+	}
+	out := newS(p).Explain(fixture(warm(hammerDay())))
+	if !strings.Contains(out, "✓ стоп по лою молота 98.0000 поднят до 0.50 ATR: 98.2000 ниже close 99.2000, цель 2.00R = 101.2000") {
+		t.Errorf("explain missing the cap:\n%s", out)
+	}
+	p.PDLMaxStopATR = 0.7
+	if sig := decide(p, hammerDay()); math.Abs(sig.StopLoss-98.0) > eps || math.Abs(sig.TakeProfit-101.6) > eps {
+		t.Fatalf("cap 0.7: stop %.4f target %.4f, want 98.0 101.6", sig.StopLoss, sig.TakeProfit)
+	}
+}
