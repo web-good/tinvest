@@ -79,6 +79,14 @@
 // PDLPatternTargetR (2) рисков от close возврата; PDLReclaimBars ограничивает число баров от молота
 // до возврата (0 — без ограничения). Литерал переведён без перекалибровки, замеры выше относятся к
 // прежнему входу.
+//
+// # 2026-10-21 — объём серии 0.8, цель 1.5R
+//
+// По решению владельца PDLDipVolMult 0.8 и PDLPatternTargetR 1.5, без калибровки и walk-forward.
+// Minutes5, сетка бэктеста по умолчанию: 6 месяцев — 27 сделок, PF 1.175; 12 месяцев — 42 сделки,
+// PF 0.848. Предел стопа PDLMaxStopATR (ядро 2026-10-21) не включён: на 6 месяцах 0.3 давал PF
+// 1.209, на 12 месяцах любой предел хуже (0.3 — 0.723), разница почти целиком в одной сделке
+// 2026-01-14, где поднятый стоп выбило, а стоп по лою молота устоял до тейка.
 package nvtk
 
 import "tinvest/internal/service/trading_strategy/pdl_reclaim/strategy/core"
@@ -97,8 +105,8 @@ func Params() core.Params {
 		H1TrendEMA:        0,
 		PDLEngulf:         0,
 		PDLHammer:         1,
-		PDLDipVolMult:     0,
+		PDLDipVolMult:     0.8,
 		PDLReclaimBars:    0,
-		PDLPatternTargetR: 2,
+		PDLPatternTargetR: 1.5,
 	}
 }

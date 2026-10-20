@@ -20,9 +20,9 @@ func TestLiteralIsPinned(t *testing.T) {
 		H1TrendEMA:        0,
 		PDLEngulf:         0,
 		PDLHammer:         1,
-		PDLDipVolMult:     0,
+		PDLDipVolMult:     0.8,
 		PDLReclaimBars:    0,
-		PDLPatternTargetR: 2,
+		PDLPatternTargetR: 1.5,
 	}
 	if got := Params(); got != want {
 		t.Fatalf("литерал NVTK изменился:\n got: %+v\nwant: %+v", got, want)
