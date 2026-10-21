@@ -211,3 +211,61 @@ func TestNoEntryWithoutDailies(t *testing.T) {
 		t.Fatalf("StopDailyATR 0: kind = %v, want none", sig.Kind)
 	}
 }
+
+// held is MarketData over bs with an open position filled at fill whose signal froze stop and
+// target (EntryATR 2).
+func held(bs []bar, fill, stop, target float64) strategy.MarketData {
+	md := fixture(bs, at(wednesday), 40)
+	md.Position = &strategy.Position{PurchasePrice: fill, Quantity: 1, StopLoss: stop, TakeProfit: target, EntryATR: 2,
+		EntryTime: at(wednesday).Add(-3 * step)}
+	return md
+}
+
+func TestLevelsFollowTheFill(t *testing.T) {
+	// signal close 100, ATR 2, range 2: signal stop 99, target 101; the fill gapped down to 98
+	pos := &strategy.Position{PurchasePrice: 98, StopLoss: 99, TakeProfit: 101, EntryATR: 2}
+	stop, target, ok := NewWithParams("TEST", step, DefaultParams()).exitLevels(pos)
+	if !ok || math.Abs(stop-97) > eps || math.Abs(target-99) > eps {
+		t.Fatalf("exitLevels = %.4f %.4f %v, want 97 99 true", stop, target, ok)
+	}
+}
+
+func TestStopBeforeTarget(t *testing.T) {
+	md := held(bars(fall, bar{98.2, 101.5, 98.9, 99}), 100, 99, 101)
+	if sig := decide(DefaultParams(), md); sig.Kind != model.SignalSell || sig.Reason != "SL" {
+		t.Fatalf("kind %v reason %q, want sell SL", sig.Kind, sig.Reason)
+	}
+}
+
+func TestTargetExit(t *testing.T) {
+	md := held(bars(fall, bar{99.6, 101.2, 99.5, 99.7}), 100, 99, 101)
+	if sig := decide(DefaultParams(), md); sig.Kind != model.SignalSell || sig.Reason != "TP" {
+		t.Fatalf("kind %v reason %q, want sell TP", sig.Kind, sig.Reason)
+	}
+}
+
+func TestRSIExit(t *testing.T) {
+	md := held(bars(rise, bar{102.2, 102.6, 102.2, 102.6}), 102, 50, 200)
+	if _, cur := lastRSI(md, 5); cur <= 70 {
+		t.Fatalf("fixture: RSI(5) %.1f, want > 70", cur)
+	}
+	if sig := decide(DefaultParams(), md); sig.Kind != model.SignalSell || sig.Reason != "RSI" {
+		t.Fatalf("kind %v reason %q, want sell RSI", sig.Kind, sig.Reason)
+	}
+}
+
+func TestExitsSwitchOff(t *testing.T) {
+	p := DefaultParams()
+	p.TargetRangeMult = 0
+	if sig := decide(p, held(bars(fall, bar{98.2, 150, 98.1, 98.3}), 98, 97, 0)); sig.Kind != model.SignalNone {
+		t.Fatalf("no target: kind %v reason %q, want none", sig.Kind, sig.Reason)
+	}
+	if sig := decide(p, held(bars(fall, bar{98.2, 150, 96.5, 98.3}), 98, 97, 0)); sig.Reason != "SL" {
+		t.Fatalf("no target: reason %q, want SL", sig.Reason)
+	}
+	p = DefaultParams()
+	p.RSIExit = 0
+	if sig := decide(p, held(bars(rise, bar{102.2, 102.6, 102.2, 102.6}), 102, 50, 200)); sig.Kind != model.SignalNone {
+		t.Fatalf("RSIExit 0: kind %v reason %q, want none", sig.Kind, sig.Reason)
+	}
+}

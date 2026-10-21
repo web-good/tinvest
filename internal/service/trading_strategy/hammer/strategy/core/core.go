@@ -179,7 +179,55 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	return sig
 }
 
-// manage closes the position; filled in with the exits.
-func (s *Strategy) manage(_ strategy.MarketData, sig model.Signal) model.Signal {
+// manage exits in priority order: the stop, the target, a close with RSI above RSIExit. The
+// position carries overnight.
+func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal {
+	pos := md.Position
+	n := len(md.Closes)
+	if n == 0 || len(md.Highs) != n || len(md.Lows) != n {
+		return sig
+	}
+	stop, target, ok := s.exitLevels(pos)
+	if !ok {
+		return sig
+	}
+	low, high, c := md.Lows[n-1], md.Highs[n-1], md.Closes[n-1]
+	if low <= stop {
+		sig.Kind, sig.Reason, sig.StopLoss = model.SignalSell, "SL", stop
+		sig.ExitReason = fmt.Sprintf("SL: low %.4f ≤ стоп %.4f (вход %.4f)", low, stop, pos.PurchasePrice)
+		return sig
+	}
+	if target > 0 && high >= target {
+		sig.Kind, sig.Reason, sig.TakeProfit = model.SignalSell, "TP", target
+		sig.ExitReason = fmt.Sprintf("TP: high %.4f ≥ цели %.4f (вход %.4f)", high, target, pos.PurchasePrice)
+		return sig
+	}
+	if s.p.RSIExit > 0 && s.p.RSIPeriod > 0 && n > s.p.RSIPeriod {
+		if rsi := indicators.RSISeries(md.Closes, s.p.RSIPeriod)[n-1]; rsi > s.p.RSIExit {
+			sig.Kind, sig.Reason = model.SignalSell, "RSI"
+			sig.ExitReason = fmt.Sprintf("RSI: свеча %s RSI(%d) %.1f > %.0f, выход по %.4f (вход %.4f)",
+				md.Times[n-1].In(mskLoc).Format("01-02 15:04"), s.p.RSIPeriod, rsi, s.p.RSIExit, c, pos.PurchasePrice)
+		}
+	}
 	return sig
+}
+
+// exitLevels rebuilds the stop and the target off the fill price f: the stop is StopDailyATR daily
+// ATRs (frozen at the signal) under f; the target is f plus the target distance frozen at the
+// signal, recovered from the signal's levels — (TakeProfit − StopLoss) less the stop distance —
+// since both were laid off the same signal close. A zero TakeProfit means no target (target 0).
+func (s *Strategy) exitLevels(pos *strategy.Position) (stop, target float64, ok bool) {
+	f := pos.PurchasePrice
+	d := s.p.StopDailyATR * pos.EntryATR
+	if f <= 0 || d <= 0 || pos.StopLoss <= 0 {
+		return 0, 0, false
+	}
+	stop = f - d
+	if stop <= 0 {
+		return 0, 0, false
+	}
+	if pos.TakeProfit > 0 {
+		target = f + (pos.TakeProfit - pos.StopLoss - d)
+	}
+	return stop, target, true
 }
