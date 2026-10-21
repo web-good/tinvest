@@ -114,8 +114,19 @@ func (s *Strategy) explainExits(sb *strings.Builder, md strategy.MarketData) {
 	}
 	low, high := md.Lows[n-1], md.Highs[n-1]
 	fmt.Fprintf(sb, "%s стоп %.4f: low %.4f\n", mark(low <= stop), stop, low)
-	if target > 0 {
+	held := s.rsiHeld(md, n-2)
+	switch {
+	case s.p.RSIHold <= 0 || s.p.MACDFast <= 0:
+		sb.WriteString("RSI-удержание: выключено (RSIHold 0 или MACD выключен)\n")
+	case held >= 0:
+		fmt.Fprintf(sb, "RSI-удержание: RSI(%d) > %.0f на свече %s — цель снята, ждём первую красную MACD\n", p.RSIPeriod, p.RSIHold, md.Times[held].In(mskLoc).Format("01-02 15:04"))
+	default:
+		fmt.Fprintf(sb, "RSI-удержание: RSI(%d) выше %.0f с покупки не закрывался\n", p.RSIPeriod, p.RSIHold)
+	}
+	if target > 0 && held < 0 {
 		fmt.Fprintf(sb, "%s цель %.4f: high %.4f\n", mark(high >= target), target, high)
+	} else if target > 0 {
+		fmt.Fprintf(sb, "цель %.4f снята RSI-удержанием\n", target)
 	} else {
 		sb.WriteString("цель: нет\n")
 	}
@@ -125,7 +136,11 @@ func (s *Strategy) explainExits(sb *strings.Builder, md strategy.MarketData) {
 	}
 	switch hist, green, ok := s.macdTurnedRed(md); {
 	case ok:
-		fmt.Fprintf(sb, "✓ MACD(%d,%d,%d): гистограмма %.4f < 0 после зелёной %s\n", p.MACDFast, p.MACDSlow, p.MACDSignal, hist, green.In(mskLoc).Format("01-02 15:04"))
+		after := "после зелёной"
+		if s.rsiHeld(md, n-1) >= 0 {
+			after = fmt.Sprintf("— первая красная после RSI > %.0f на свече", p.RSIHold)
+		}
+		fmt.Fprintf(sb, "✓ MACD(%d,%d,%d): гистограмма %.4f < 0 %s %s\n", p.MACDFast, p.MACDSlow, p.MACDSignal, hist, after, green.In(mskLoc).Format("01-02 15:04"))
 	case hist < 0:
 		fmt.Fprintf(sb, "✗ MACD(%d,%d,%d): гистограмма %.4f красная, но зелёной с молота ещё не было\n", p.MACDFast, p.MACDSlow, p.MACDSignal, hist)
 	default:

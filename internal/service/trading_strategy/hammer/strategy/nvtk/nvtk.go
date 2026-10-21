@@ -18,6 +18,7 @@ func Params() core.Params {
 		MACDFast:       11,
 		MACDSlow:       15,
 		MACDSignal:     9,
+		RSIHold:        60,
 		TrendEMA:       200,
 		VolumeMult:     1.5,
 		VolBars:        20,

@@ -9,7 +9,9 @@
 // dailies) under the hammer's low; the target is TargetR risks above the fill (exitLevels; the buy
 // signal carries it off the signal close for sizing). Exits in priority order: the stop, the target,
 // the close of a red MACD(MACDFast, MACDSlow, MACDSignal) histogram bar after a green one since the
-// hammer (macdTurnedRed). The position carries overnight and over weekends. Pure, stateless
+// hammer (macdTurnedRed). Once a close since the entry has RSI above RSIHold, the target is off and
+// the first red histogram bar from that close on exits. The position carries overnight and over
+// weekends. Pure, stateless
 // between bars and ticker- and timeframe-agnostic. Run with `-strategy hammer -interval Hour1` (or
 // Minutes30).
 package core
@@ -32,6 +34,10 @@ type Params struct {
 	// MACD(MACDFast, MACDSlow, MACDSignal) of the bar closes: sell at the close of a red (< 0)
 	// histogram bar once a green (> 0) one has printed since the hammer; MACDFast 0 — off
 	MACDFast, MACDSlow, MACDSignal int
+	// RSIHold > 0 (with the MACD exit on): once a close from the entry bar on has RSI(RSIPeriod)
+	// above this, the target no longer exits from the next bar on and the first red histogram bar
+	// from that close on sells; 0 — off
+	RSIHold float64
 	// TrendEMA > 0: the hammer's close must be strictly above a warmed EMA of this period over the
 	// bar closes; 0 — off
 	TrendEMA int
@@ -54,6 +60,7 @@ func DefaultParams() Params {
 		MACDFast:       11,
 		MACDSlow:       15,
 		MACDSignal:     9,
+		RSIHold:        60,
 		TrendEMA:       200,
 		VolumeMult:     1.5,
 		VolBars:        20,
@@ -293,18 +300,49 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 		sig.ExitReason = fmt.Sprintf("SL: low %.4f ≤ стоп %.4f (вход %.4f)", low, stop, pos.PurchasePrice)
 		return sig
 	}
-	if target > 0 && high >= target {
+	held := s.rsiHeld(md, n-2) // a cross on the current bar's close only follows its intrabar high
+	if target > 0 && high >= target && held < 0 {
 		sig.Kind, sig.Reason, sig.TakeProfit = model.SignalSell, "TP", target
 		sig.ExitReason = fmt.Sprintf("TP: high %.4f ≥ цели %.4f (вход %.4f)", high, target, pos.PurchasePrice)
 		return sig
 	}
-	if hist, green, ok := s.macdTurnedRed(md); ok {
+	if hist, at, ok := s.macdTurnedRed(md); ok {
 		sig.Kind, sig.Reason = model.SignalSell, "MACD"
-		sig.ExitReason = fmt.Sprintf("MACD: свеча %s гистограмма MACD(%d,%d,%d) %.4f < 0 после зелёной %s, цель не взята, выход по %.4f (вход %.4f)",
-			md.Times[n-1].In(mskLoc).Format("01-02 15:04"), s.p.MACDFast, s.p.MACDSlow, s.p.MACDSignal, hist,
-			green.In(mskLoc).Format("01-02 15:04"), c, pos.PurchasePrice)
+		why := fmt.Sprintf("после зелёной %s, цель не взята", at.In(mskLoc).Format("01-02 15:04"))
+		if s.rsiHeld(md, n-1) >= 0 {
+			why = fmt.Sprintf("первая красная после RSI(%d) > %.0f на свече %s, цель снята", s.p.RSIPeriod, s.p.RSIHold, at.In(mskLoc).Format("01-02 15:04"))
+		}
+		sig.ExitReason = fmt.Sprintf("MACD: свеча %s гистограмма MACD(%d,%d,%d) %.4f < 0 %s, выход по %.4f (вход %.4f)",
+			md.Times[n-1].In(mskLoc).Format("01-02 15:04"), s.p.MACDFast, s.p.MACDSlow, s.p.MACDSignal, hist, why, c, pos.PurchasePrice)
 	}
 	return sig
+}
+
+// entryIndex is the index of the position's entry bar: the first bar opening at or after its entry
+// time (0 when the window starts later or the time is unset).
+func entryIndex(md strategy.MarketData) int {
+	for j := len(md.Times) - 1; j >= 0; j-- {
+		if md.Times[j].Before(md.Position.EntryTime) {
+			return j + 1
+		}
+	}
+	return 0
+}
+
+// rsiHeld returns the first bar from the entry bar up to upto whose close has RSI(RSIPeriod) above
+// RSIHold, or −1: none, RSIHold off, or the MACD exit off (without it a dropped target would leave
+// only the stop).
+func (s *Strategy) rsiHeld(md strategy.MarketData, upto int) int {
+	if s.p.RSIHold <= 0 || s.p.RSIPeriod <= 0 || s.p.MACDFast <= 0 || len(md.Closes) <= s.p.RSIPeriod {
+		return -1
+	}
+	rsi := indicators.RSISeries(md.Closes, s.p.RSIPeriod)
+	for j := max(entryIndex(md), s.p.RSIPeriod+1); j <= upto && j < len(rsi); j++ {
+		if rsi[j] > s.p.RSIHold {
+			return j
+		}
+	}
+	return -1
 }
 
 // macdHist returns the MACD histogram (MACD line − signal line) of the bar closes, nil when the
@@ -327,22 +365,19 @@ func (s *Strategy) macdHist(closes []float64) []float64 {
 // macdTurnedRed reports whether the last bar of a held position has a red (< 0) MACD histogram
 // while a green (> 0) bar printed between the hammer (the bar before the entry) and the bar before
 // the last: the bounce has faded without reaching the target. A histogram red since the hammer
-// does not exit — after a fall it usually is, and the stop guards that stretch. It returns the last
-// histogram value and the time of the latest green bar.
-func (s *Strategy) macdTurnedRed(md strategy.MarketData) (hist float64, green time.Time, ok bool) {
+// does not exit — after a fall it usually is, and the stop guards that stretch. Once RSI has closed
+// above RSIHold (rsiHeld) no green bar is needed: the first red bar from that close on exits. It
+// returns the last histogram value and the time of the latest green bar, or of the RSI bar.
+func (s *Strategy) macdTurnedRed(md strategy.MarketData) (hist float64, at time.Time, ok bool) {
 	h := s.macdHist(md.Closes)
 	n := len(h)
 	if n < 2 || len(md.Times) != n || h[n-1] >= 0 {
 		return 0, time.Time{}, false
 	}
-	from := 0
-	for j := n - 1; j >= 0; j-- {
-		if md.Times[j].Before(md.Position.EntryTime) {
-			from = j // the hammer: the last bar before the entry bar
-			break
-		}
+	if r := s.rsiHeld(md, n-1); r >= 0 {
+		return h[n-1], md.Times[r], true
 	}
-	for j := n - 2; j >= from; j-- {
+	for j := n - 2; j >= max(entryIndex(md)-1, 0); j-- {
 		if h[j] > 0 {
 			return h[n-1], md.Times[j], true
 		}

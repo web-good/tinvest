@@ -30,7 +30,7 @@ func TestExplainBelowEMA(t *testing.T) {
 
 func TestExplainExits(t *testing.T) {
 	out := NewWithParams("TEST", step, DefaultParams()).Explain(held(fadedBounce(), 101, 50, 200))
-	for _, want := range []string{"--- выходы ---", "✓ MACD(11,15,9)", "ИТОГ: ПРОДАЖА MACD"} {
+	for _, want := range []string{"--- выходы ---", "цель снята", "✓ MACD(11,15,9)", "ИТОГ: ПРОДАЖА MACD"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("no %q in:\n%s", want, out)
 		}

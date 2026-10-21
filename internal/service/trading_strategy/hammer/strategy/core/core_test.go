@@ -301,6 +301,40 @@ func TestNoMACDExitWhileRedSinceHammer(t *testing.T) {
 	}
 }
 
+func TestRSIHoldDropsTarget(t *testing.T) {
+	// fill 101, stop 100: target 103; the rise closed RSI(5) above 60 since the entry
+	md := held(bars(rise, bar{102.2, 105, 102.2, 102.6}), 101, 100, 102)
+	if h := lastHist(t, md); h[len(h)-1] <= 0 {
+		t.Fatalf("fixture: histogram %.4f, want green", h[len(h)-1])
+	}
+	if sig := decide(DefaultParams(), md); sig.Kind != model.SignalNone {
+		t.Fatalf("kind %v reason %q, want none (target off after RSI > 60)", sig.Kind, sig.Reason)
+	}
+	p := DefaultParams()
+	p.RSIHold = 0
+	if sig := decide(p, md); sig.Reason != "TP" {
+		t.Fatalf("RSIHold 0: reason %q, want TP", sig.Reason)
+	}
+}
+
+func TestRSIHoldCrossOnCurrentBarKeepsTarget(t *testing.T) {
+	// fill 98.6, stop 98: target 99.8; only the last close jumps RSI(5) above 60
+	md := held(bars(fall, bar{98.2, 101, 98.2, 100.8}), 98.6, 98, 99)
+	if prev, cur := lastRSI(md, 5); prev >= 60 || cur <= 60 {
+		t.Fatalf("fixture: RSI prev %.1f cur %.1f, want the cross on the last close", prev, cur)
+	}
+	if sig := decide(DefaultParams(), md); sig.Reason != "TP" {
+		t.Fatalf("reason %q, want TP", sig.Reason)
+	}
+}
+
+func TestRSIHoldExitReason(t *testing.T) {
+	sig := decide(DefaultParams(), held(fadedBounce(), 101, 50, 200))
+	if sig.Reason != "MACD" || !strings.Contains(sig.ExitReason, "RSI(5) > 60") {
+		t.Fatalf("reason %q %q, want MACD after RSI > 60", sig.Reason, sig.ExitReason)
+	}
+}
+
 func TestExitsSwitchOff(t *testing.T) {
 	p := DefaultParams()
 	p.TargetR = 0
