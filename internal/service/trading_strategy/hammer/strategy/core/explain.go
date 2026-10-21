@@ -53,13 +53,11 @@ func (s *Strategy) explainEntry(sb *strings.Builder, md strategy.MarketData) {
 
 	o, h, l, c := md.Opens[k], md.Highs[k], md.Lows[k], md.Closes[k]
 	rng := h - l
-	body := max(o, c) - min(o, c)
-	bodyShare, bottomPos := 0.0, 0.0
-	if rng > 0 {
-		bodyShare, bottomPos = body/rng, (min(o, c)-l)/rng
-	}
-	fmt.Fprintf(sb, "%s молот: диапазон %.4f, тело %.4f (%.0f%% диапазона, нужно > 0 и ≤ 33%%), низ тела на %.0f%% диапазона (нужно ≥ 67%%)\n",
-		mark(isHammer(o, h, l, c)), rng, body, 100*bodyShare, 100*bottomPos)
+	bottom := min(o, c)
+	body := max(o, c) - bottom
+	tail := bottom - l
+	fmt.Fprintf(sb, "%s молот: диапазон %.4f, тело %.4f (нужно > 0), низ тела %.4f, середина %.4f (нужно ≥), нижняя тень %.4f = %.2f тела (нужно ≥ 2)\n",
+		mark(isHammer(o, h, l, c)), rng, body, bottom, l+rng/2, tail, ratio(tail, body))
 
 	under := false
 	if p.TrendEMA > 0 {
@@ -153,6 +151,14 @@ func (s *Strategy) explainExits(sb *strings.Builder, md strategy.MarketData) {
 	}
 	rsi := indicators.RSISeries(md.Closes, p.RSIPeriod)[n-1]
 	fmt.Fprintf(sb, "%s RSI(%d) %.1f (выход > %.0f)\n", mark(rsi > p.RSIExit), p.RSIPeriod, rsi, p.RSIExit)
+}
+
+// ratio is a/b, or 0 when b is 0.
+func ratio(a, b float64) float64 {
+	if b == 0 {
+		return 0
+	}
+	return a / b
 }
 
 // mark is ✓ for a passed gate, ✗ otherwise.

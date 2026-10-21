@@ -1,5 +1,5 @@
 // Package core implements hammer: a long-only strategy on hourly or 30-minute bars. The signal is a hammer
-// candle (isHammer) whose own close has RSI(RSIPeriod) below RSIZone and, with TrendEMA on, sits
+// candle (isHammer: a non-zero body in the upper half, a lower tail of at least two bodies) whose own close has RSI(RSIPeriod) below RSIZone and, with TrendEMA on, sits
 // strictly above the EMA(TrendEMA) of the bar closes, on a volume above VolumeMult × the average of
 // the VolBars main-session bars before it; the buy comes at the next bar's open on the same MSK
 // weekday date.
@@ -127,17 +127,22 @@ func dayKey(t time.Time) int {
 }
 
 // isHammer: a bar of either colour has a non-zero body (a doji with open = close is not a hammer)
-// of at most a third of its range lying in the upper third — so the lower tail is at least two
-// thirds of the range and at least twice the body. Adapted from pdl_reclaim/strategy/core/setup.go:
-// isHammer, which also accepts a doji.
+// lying in the upper half of its range (the body's bottom at or above the middle) and a lower tail
+// of at least two bodies. The owner's definition since 2026-10-22; until then the body had to sit
+// in the upper third, as in pdl_reclaim's isHammer. hammerEps absorbs float error on a tail of
+// exactly two bodies.
 func isHammer(o, h, l, c float64) bool {
 	rng := h - l
 	if rng <= 0 {
 		return false
 	}
-	body := max(o, c) - min(o, c)
-	return body > 0 && body <= rng/3 && min(o, c) >= l+rng*2/3
+	bottom := min(o, c)
+	body := max(o, c) - bottom
+	return body > 0 && bottom >= l+rng/2 && bottom-l+hammerEps >= 2*body
 }
+
+// hammerEps is the float slack of isHammer's tail test, far below any price step.
+const hammerEps = 1e-9
 
 // The main session, MSK: the bars opening from 10:00 to before 19:00 (on 1h the 18:00 bar, on 30m
 // the 18:30 one, holds the closing auction). The volume average skips the morning and evening

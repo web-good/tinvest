@@ -139,8 +139,10 @@ func TestIsHammer(t *testing.T) {
 		{"red body in the upper third", bar{99.9, 100, 97, 99.8}, true},
 		{"zero range", bar{100, 100, 100, 100}, false},
 		{"doji: zero body with a long lower tail", bar{99.9, 100, 97, 99.9}, false},
-		{"body in the middle", bar{98.4, 100, 97, 98.6}, false},
-		{"body over a third of the range", bar{98.5, 100, 97, 99.9}, false},
+		{"body bottom under the middle", bar{98.4, 100, 97, 98.6}, false},
+		{"tail under two bodies", bar{98.6, 100, 97, 99.9}, false},
+		{"GAZP 07-16 12:00: tail exactly two bodies, body under the upper third", bar{85.27, 85.34, 83.98, 84.84}, true},
+		{"body just above the middle", bar{98.6, 100, 97, 98.8}, true},
 	}
 	for _, tc := range cases {
 		if got := isHammer(tc.b.o, tc.b.h, tc.b.l, tc.b.c); got != tc.want {
