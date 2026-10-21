@@ -55,9 +55,9 @@ func (s *Strategy) explainEntry(sb *strings.Builder, md strategy.MarketData) {
 	rng := h - l
 	bottom := min(o, c)
 	body := max(o, c) - bottom
-	tail := bottom - l
-	fmt.Fprintf(sb, "%s молот: диапазон %.4f, тело %.4f (нужно > 0), низ тела %.4f, середина %.4f (нужно ≥), нижняя тень %.4f = %.2f тела (нужно ≥ 2)\n",
-		mark(isHammer(o, h, l, c)), rng, body, bottom, l+rng/2, tail, ratio(tail, body))
+	tail, upper := bottom-l, h-max(o, c)
+	fmt.Fprintf(sb, "%s молот: диапазон %.4f, тело %.4f (нужно > 0), низ тела %.4f, середина %.4f (нужно ≥), нижняя тень %.4f = %.2f тела (нужно ≥ 2), верхняя тень %.4f = %.2f тела (нужно ≤ 1)\n",
+		mark(isHammer(o, h, l, c)), rng, body, bottom, l+rng/2, tail, ratio(tail, body), upper, ratio(upper, body))
 
 	if p.TrendEMA > 0 {
 		switch e := ema.Compute(md.Closes, p.TrendEMA)[k]; {
