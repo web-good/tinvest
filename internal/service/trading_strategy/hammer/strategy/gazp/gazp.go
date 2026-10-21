@@ -1,0 +1,22 @@
+// Package gazp supplies the hammer Params for GAZP (Газпром) on Hour1.
+//
+// # 2026-10-21 — литерал владельца до калибровки
+//
+// Правила владельца как есть (core.DefaultParams): RSI(5) < 30 на свече-молоте, стоп 0.5 дневного
+// ATR, цель — половина вчерашнего дневного диапазона, выход по RSI(5) > 70. Записаны литералом,
+// чтобы правка дефолтов ядра не меняла тикер молча.
+package gazp
+
+import "tinvest/internal/service/trading_strategy/hammer/strategy/core"
+
+// Params returns the GAZP literal.
+func Params() core.Params {
+	return core.Params{
+		RSIPeriod:       5,
+		RSIZone:         30,
+		RSIExit:         70,
+		StopDailyATR:    0.5,
+		TargetRangeMult: 0.5,
+		DailyATRPeriod:  14,
+	}
+}
