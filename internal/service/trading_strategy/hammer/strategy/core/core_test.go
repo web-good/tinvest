@@ -427,3 +427,96 @@ func TestVolumeFilterNeedsHistory(t *testing.T) {
 		t.Fatalf("kind = %v, want none", sig.Kind)
 	}
 }
+
+// below is the owner's rules with entries under the trend EMA switched on.
+func below() Params {
+	p := DefaultParams()
+	p.BelowEMA = 1
+	return p
+}
+
+func TestBelowEMAEntry(t *testing.T) {
+	// a flat 100 then a dip to 98.15: the hammer closes under EMA 200 (≈ 100)
+	md := fixture(trendBars(100), at(wednesday), 40)
+	if _, cur := lastRSI(md, 6); cur >= 30 {
+		t.Fatalf("fixture: hammer RSI(6) %.1f, want < 30", cur)
+	}
+	sig := decide(below(), md)
+	if sig.Kind != model.SignalBuy {
+		t.Fatalf("kind = %v, want buy", sig.Kind)
+	}
+	c := trendBars(100)[len(trendBars(100))-1].c
+	if sig.Level <= c || sig.TakeProfit != 0 || math.Abs(sig.StopLoss-(c-1)) > eps {
+		t.Errorf("level %.4f target %.4f stop %.4f, want the EMA over %.4f, no target, stop %.4f",
+			sig.Level, sig.TakeProfit, sig.StopLoss, c, c-1)
+	}
+	if !strings.Contains(sig.EntryReason, "под EMA(200)") {
+		t.Errorf("reason %q, want the under-EMA mode named", sig.EntryReason)
+	}
+}
+
+func TestBelowEMAUsesItsOwnRSI(t *testing.T) {
+	md := fixture(trendBars(100), at(wednesday), 40)
+	p := below()
+	p.RSIZone = 1 // the above-EMA zone plays no part under the EMA
+	if sig := decide(p, md); sig.Kind != model.SignalBuy {
+		t.Fatalf("RSIZone 1: kind = %v, want buy", sig.Kind)
+	}
+	p = below()
+	p.BelowRSIZone = 1
+	if sig := decide(p, md); sig.Kind != model.SignalNone {
+		t.Fatalf("BelowRSIZone 1: kind = %v, want none", sig.Kind)
+	}
+}
+
+func TestAboveEMAEntryCarriesTheEMA(t *testing.T) {
+	var closes []float64
+	for i := 0; i < 300; i++ {
+		closes = append(closes, 90+10*float64(i)/299)
+	}
+	closes = append(closes, fall...)
+	sig := decide(below(), fixture(chain(closes, hammerAfterFall), at(wednesday), 40))
+	if sig.Kind != model.SignalBuy || sig.Level <= 0 || sig.Level >= hammerAfterFall.c || sig.TakeProfit == 0 {
+		t.Fatalf("kind %v level %.4f target %.4f, want buy with the EMA under the close and a target",
+			sig.Kind, sig.Level, sig.TakeProfit)
+	}
+}
+
+// heldBelow is held with the signal close (stop 99 + 0.5 × ATR 2 = 100) under the entry EMA 105,
+// filled at 98: the stop sits at 97.
+func heldBelow(bs []bar) strategy.MarketData {
+	md := held(bs, 98, 99, 0)
+	md.Position.EntryLevel = 105
+	return md
+}
+
+func TestBelowEMAExitOnRSICross50(t *testing.T) {
+	md := heldBelow(bars(fall, bar{98.2, 101.5, 98.2, 101.3}))
+	if prev, cur := lastRSI(md, 6); prev > 50 || cur <= 50 {
+		t.Fatalf("fixture: RSI(6) %.1f → %.1f, want a cross above 50", prev, cur)
+	}
+	if sig := decide(below(), md); sig.Kind != model.SignalSell || sig.Reason != "RSI50" {
+		t.Fatalf("kind %v reason %q, want sell RSI50", sig.Kind, sig.Reason)
+	}
+}
+
+func TestBelowEMAExitNeedsTheCross(t *testing.T) {
+	// RSI(6) already above 50 and RSI(5) above 70: no cross, and the 70 exit is not this mode's
+	md := heldBelow(bars(rise, bar{102.2, 102.6, 102.2, 102.6}))
+	if prev, _ := lastRSI(md, 6); prev <= 50 {
+		t.Fatalf("fixture: previous RSI(6) %.1f, want above 50", prev)
+	}
+	if sig := decide(below(), md); sig.Kind != model.SignalNone {
+		t.Fatalf("kind %v reason %q, want none", sig.Kind, sig.Reason)
+	}
+	md.Position.EntryLevel = 95 // the same bars under the above-EMA rules exit on RSI(5) > 70
+	if sig := decide(below(), md); sig.Reason != "RSI" {
+		t.Fatalf("above-EMA position: reason %q, want RSI", sig.Reason)
+	}
+}
+
+func TestBelowEMAStopStillWorks(t *testing.T) {
+	if sig := decide(below(), heldBelow(bars(fall, bar{98.2, 98.5, 96.9, 98.3}))); sig.Reason != "SL" {
+		t.Fatalf("reason %q, want SL", sig.Reason)
+	}
+}
