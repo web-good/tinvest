@@ -263,13 +263,41 @@ func TestTargetExit(t *testing.T) {
 	}
 }
 
-func TestRSIExit(t *testing.T) {
-	md := held(bars(rise, bar{102.2, 102.6, 102.2, 102.6}), 102, 50, 200)
-	if _, cur := lastRSI(md, 5); cur <= 70 {
-		t.Fatalf("fixture: RSI(5) %.1f, want > 70", cur)
+// lastHist is the MACD histogram of the default periods over md's closes.
+func lastHist(t *testing.T, md strategy.MarketData) []float64 {
+	t.Helper()
+	h := NewWithParams("TEST", step, DefaultParams()).macdHist(md.Closes)
+	if h == nil {
+		t.Fatal("fixture: MACD not computed")
 	}
-	if sig := decide(DefaultParams(), md); sig.Kind != model.SignalSell || sig.Reason != "RSI" {
-		t.Fatalf("kind %v reason %q, want sell RSI", sig.Kind, sig.Reason)
+	return h
+}
+
+// fadedBounce is the rise with a drop to 99 on the last bar: the histogram is green through the
+// rise (the hammer and the entry bar included) and red on the last bar.
+func fadedBounce() []bar { return bars(rise, bar{102.2, 102.2, 99, 99}) }
+
+func TestMACDExitAfterGreen(t *testing.T) {
+	md := held(fadedBounce(), 101, 50, 200)
+	h := lastHist(t, md)
+	if n := len(h); h[n-1] >= 0 || h[n-3] <= 0 {
+		t.Fatalf("fixture: histogram entry %.4f last %.4f, want green then red", h[n-3], h[n-1])
+	}
+	if sig := decide(DefaultParams(), md); sig.Kind != model.SignalSell || sig.Reason != "MACD" {
+		t.Fatalf("kind %v reason %q, want sell MACD", sig.Kind, sig.Reason)
+	}
+}
+
+func TestNoMACDExitWhileRedSinceHammer(t *testing.T) {
+	md := held(bars(fall, bar{98.2, 98.2, 97.8, 97.8}), 98.6, 50, 200)
+	h := lastHist(t, md)
+	for j := len(h) - 4; j < len(h); j++ {
+		if h[j] >= 0 {
+			t.Fatalf("fixture: histogram %.4f at bar %d from the hammer on, want red throughout", h[j], j)
+		}
+	}
+	if sig := decide(DefaultParams(), md); sig.Kind != model.SignalNone {
+		t.Fatalf("kind %v reason %q, want none", sig.Kind, sig.Reason)
 	}
 }
 
@@ -283,9 +311,9 @@ func TestExitsSwitchOff(t *testing.T) {
 		t.Fatalf("no target: reason %q, want SL", sig.Reason)
 	}
 	p = DefaultParams()
-	p.RSIExit = 0
-	if sig := decide(p, held(bars(rise, bar{102.2, 102.6, 102.2, 102.6}), 102, 50, 200)); sig.Kind != model.SignalNone {
-		t.Fatalf("RSIExit 0: kind %v reason %q, want none", sig.Kind, sig.Reason)
+	p.MACDFast = 0
+	if sig := decide(p, held(fadedBounce(), 101, 50, 200)); sig.Kind != model.SignalNone {
+		t.Fatalf("MACDFast 0: kind %v reason %q, want none", sig.Kind, sig.Reason)
 	}
 }
 

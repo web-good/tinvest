@@ -119,12 +119,19 @@ func (s *Strategy) explainExits(sb *strings.Builder, md strategy.MarketData) {
 	} else {
 		sb.WriteString("цель: нет\n")
 	}
-	if p.RSIExit <= 0 || p.RSIPeriod <= 0 || n <= p.RSIPeriod {
-		sb.WriteString("RSI-выход: выключен (RSIExit 0) или не прогрет\n")
+	if s.macdHist(md.Closes) == nil {
+		sb.WriteString("MACD-выход: выключен (MACDFast 0) или не прогрет\n")
 		return
 	}
-	rsi := indicators.RSISeries(md.Closes, p.RSIPeriod)[n-1]
-	fmt.Fprintf(sb, "%s RSI(%d) %.1f (выход > %.0f)\n", mark(rsi > p.RSIExit), p.RSIPeriod, rsi, p.RSIExit)
+	switch hist, green, ok := s.macdTurnedRed(md); {
+	case ok:
+		fmt.Fprintf(sb, "✓ MACD(%d,%d,%d): гистограмма %.4f < 0 после зелёной %s\n", p.MACDFast, p.MACDSlow, p.MACDSignal, hist, green.In(mskLoc).Format("01-02 15:04"))
+	case hist < 0:
+		fmt.Fprintf(sb, "✗ MACD(%d,%d,%d): гистограмма %.4f красная, но зелёной с молота ещё не было\n", p.MACDFast, p.MACDSlow, p.MACDSignal, hist)
+	default:
+		h := s.macdHist(md.Closes)
+		fmt.Fprintf(sb, "✗ MACD(%d,%d,%d): гистограмма %.4f не красная\n", p.MACDFast, p.MACDSlow, p.MACDSignal, h[n-1])
+	}
 }
 
 // ratio is a/b, or 0 when b is 0.

@@ -15,7 +15,9 @@ func Params() core.Params {
 	return core.Params{
 		RSIPeriod:      5,
 		RSIZone:        30,
-		RSIExit:        70,
+		MACDFast:       11,
+		MACDSlow:       15,
+		MACDSignal:     9,
 		TrendEMA:       200,
 		VolumeMult:     1.5,
 		VolBars:        20,

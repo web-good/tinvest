@@ -42,12 +42,12 @@ func TestHammerParseParamsLayersOverDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("lookup: %v", err)
 	}
-	parsed, err := b.ParseParams([]byte(`{"StopBufferATR": 0.1, "RSIExit": 80}`))
+	parsed, err := b.ParseParams([]byte(`{"StopBufferATR": 0.1, "MACDSlow": 26}`))
 	if err != nil {
 		t.Fatalf("ParseParams: %v", err)
 	}
 	want := core.DefaultParams()
-	want.StopBufferATR, want.RSIExit = 0.1, 80
+	want.StopBufferATR, want.MACDSlow = 0.1, 26
 	if got := parsed.(core.Params); got != want {
 		t.Fatalf("got %+v, want %+v", got, want)
 	}
