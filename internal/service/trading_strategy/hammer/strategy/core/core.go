@@ -100,15 +100,17 @@ func dayKey(t time.Time) int {
 	return tl.Year()*10000 + int(tl.Month())*100 + tl.Day()
 }
 
-// isHammer: a bar of either colour has a body of at most a third of its range lying in the upper
-// third — so the lower tail is at least two thirds of the range and at least twice the body.
-// Copied from pdl_reclaim/strategy/core/setup.go:isHammer.
+// isHammer: a bar of either colour has a non-zero body (a doji with open = close is not a hammer)
+// of at most a third of its range lying in the upper third — so the lower tail is at least two
+// thirds of the range and at least twice the body. Adapted from pdl_reclaim/strategy/core/setup.go:
+// isHammer, which also accepts a doji.
 func isHammer(o, h, l, c float64) bool {
 	rng := h - l
 	if rng <= 0 {
 		return false
 	}
-	return max(o, c)-min(o, c) <= rng/3 && min(o, c) >= l+rng*2/3
+	body := max(o, c) - min(o, c)
+	return body > 0 && body <= rng/3 && min(o, c) >= l+rng*2/3
 }
 
 // weekdayDaily drops weekend (Sat/Sun MSK) dailies, keeping the price slices aligned. When times
