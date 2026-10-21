@@ -24,11 +24,13 @@ func TestHammerGenericTickerUsesCoreDefaults(t *testing.T) {
 	}
 }
 
-func TestHammerRunsOnlyOnHour1(t *testing.T) {
-	if _, err := HammerLookupOrGeneric("GAZP", enum.Hour1); err != nil {
-		t.Fatalf("Hour1: %v", err)
+func TestHammerRunsOnHour1AndMinutes30(t *testing.T) {
+	for _, iv := range []enum.Interval{enum.Hour1, enum.Minutes30} {
+		if _, err := HammerLookupOrGeneric("GAZP", iv); err != nil {
+			t.Fatalf("%s: %v", iv, err)
+		}
 	}
-	for _, iv := range []enum.Interval{enum.Minutes5, enum.Minutes15, enum.Minutes30, enum.Day1} {
+	for _, iv := range []enum.Interval{enum.Minutes5, enum.Minutes15, enum.Hour4, enum.Day1} {
 		if _, err := HammerLookupOrGeneric("GAZP", iv); err == nil {
 			t.Fatalf("%s: want error", iv)
 		}

@@ -31,7 +31,8 @@ func hammerBindingFor(ticker string, interval enum.Interval, defaults func() cor
 	}
 }
 
-// hammerRegistry maps tickers with their own package to their Hour1 literal.
+// hammerRegistry maps tickers with their own package to their literal (the same on Hour1 and
+// Minutes30).
 var hammerRegistry = map[string]func() core.Params{
 	"GAZP": gazp.Params,
 	"SBER": sber.Params,
@@ -40,10 +41,10 @@ var hammerRegistry = map[string]func() core.Params{
 
 // HammerLookupOrGeneric returns the binding for a ticker: the ticker package's literal, or
 // core.DefaultParams when the ticker has no package. Partial JSON overrides layer over whichever
-// defaults apply. hammer runs on Hour1 only; other timeframes are rejected.
+// defaults apply. hammer runs on Hour1 and Minutes30; other timeframes are rejected.
 func HammerLookupOrGeneric(ticker string, interval enum.Interval) (Binding, error) {
-	if interval != enum.Hour1 {
-		return Binding{}, fmt.Errorf("hammer runs on Hour1, not %s", interval)
+	if interval != enum.Hour1 && interval != enum.Minutes30 {
+		return Binding{}, fmt.Errorf("hammer runs on Hour1 or Minutes30, not %s", interval)
 	}
 	defaults, ok := hammerRegistry[ticker]
 	if !ok {

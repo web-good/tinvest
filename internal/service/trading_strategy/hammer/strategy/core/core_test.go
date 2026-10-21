@@ -2,6 +2,7 @@ package core
 
 import (
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -335,5 +336,39 @@ func TestTrendFilterNeedsWarmEMA(t *testing.T) {
 	md := fixture(bars(fall, hammerAfterFall), at(wednesday), 40)
 	if sig := decide(DefaultParams(), md); sig.Kind != model.SignalNone {
 		t.Fatalf("kind = %v, want none", sig.Kind)
+	}
+}
+
+// halfHour lays the same bars on 30-minute steps.
+func halfHour(bs []bar, last time.Time, days int) strategy.MarketData {
+	md := fixture(bs, last, days)
+	n := len(md.Times)
+	for i := range md.Times {
+		md.Times[i] = last.Add(-time.Duration(n-1-i) * 30 * time.Minute)
+	}
+	return md
+}
+
+func TestMinutes30EntryAndLabel(t *testing.T) {
+	last := at(wednesday)
+	sig := NewWithParams("TEST", 30*time.Minute, noTrend()).Decide(halfHour(bars(fall, hammerAfterFall), last, 40))
+	if sig.Kind != model.SignalBuy {
+		t.Fatalf("kind = %v, want buy", sig.Kind)
+	}
+	if !sig.FillBy.Equal(last.Add(30 * time.Minute)) {
+		t.Errorf("FillBy = %v, want %v", sig.FillBy, last.Add(30*time.Minute))
+	}
+	if !strings.HasPrefix(sig.EntryReason, "молот 30m ") {
+		t.Errorf("reason %q, want the 30m label", sig.EntryReason)
+	}
+}
+
+func TestMinutes30LastBarOfDay(t *testing.T) {
+	s := NewWithParams("TEST", 30*time.Minute, noTrend())
+	if sig := s.Decide(halfHour(bars(fall, hammerAfterFall), at("2026-09-16 23:00"), 40)); sig.Kind != model.SignalBuy {
+		t.Fatalf("23:00 on 30m: kind = %v, want buy (the 23:30 bar is the same date)", sig.Kind)
+	}
+	if sig := s.Decide(halfHour(bars(fall, hammerAfterFall), at("2026-09-16 23:30"), 40)); sig.Kind != model.SignalNone {
+		t.Fatalf("23:30 on 30m: kind = %v, want none", sig.Kind)
 	}
 }
