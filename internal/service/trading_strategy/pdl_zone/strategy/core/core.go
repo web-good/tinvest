@@ -49,6 +49,9 @@ type Params struct {
 	StopBars   int     // the stop is the lowest low of this many bars before the signal bar
 	MinStopATR float64 // the stop is at least this many daily ATRs under the entry
 	TargetR    float64 // the target in stop distances above the entry
+	// MinRoomATR > 0: the day must have this many daily ATRs of upside left at the signal — the
+	// low of the signal's date so far plus one daily ATR, minus the signal close; 0 — off
+	MinRoomATR float64
 
 	DailyATRPeriod int // Wilder period over completed weekday dailies
 }
@@ -67,6 +70,7 @@ func DefaultParams() Params {
 		StopBars:       5,
 		MinStopATR:     0.2,
 		TargetR:        2,
+		MinRoomATR:     0.7,
 		DailyATRPeriod: 14,
 	}
 }
@@ -242,6 +246,10 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	if !ok {
 		return sig
 	}
+	room := roomLeft(ser, k, atr)
+	if s.p.MinRoomATR > 0 && room < s.p.MinRoomATR {
+		return sig
+	}
 	win, base, ok := s.volumeOK(ser, st.arm, k)
 	if !ok {
 		return sig
@@ -266,6 +274,9 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	sig.EntryReason = fmt.Sprintf("%s %s: взвод на свече %s, первая зелёная гистограмма MACD(%d,%d,%d) на свече %s, PDL %.4f, верх зоны %.4f, сигнал по close %.4f, дневной ATR %.4f, %s, цель %.2fR %.4f (стоп и цель пересчитываются от цены покупки)",
 		st.name(), s.tf(), ser.t[st.arm].In(mskLoc).Format("15:04"), s.p.MACDFast, s.p.MACDSlow, s.p.MACDSignal,
 		ser.t[k].In(mskLoc).Format("15:04"), pdl, pdl+s.p.ZoneATR*atr, closeP, atr, stopWhy, s.p.TargetR, target)
+	if s.p.MinRoomATR > 0 {
+		sig.EntryReason += fmt.Sprintf(", запас хода %.2f ATR ≥ %.2f", room, s.p.MinRoomATR)
+	}
 	if st.kind == kindBreak && s.p.BreakReclaim > 0 {
 		sig.EntryReason += ", после возврата закрытием над PDL"
 	}
@@ -273,6 +284,16 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 		sig.EntryReason += fmt.Sprintf(", средний объём от взвода %.0f > %.2f × среднее %d свечей %.0f", win, s.p.VolumeMult, s.p.VolBars, base)
 	}
 	return sig
+}
+
+// roomLeft is the upside left in the day at bar k, in daily ATRs: the low of bar k's date up to
+// and including k plus one ATR, minus the close of k.
+func roomLeft(ser series, k int, atr float64) float64 {
+	lo := ser.l[k]
+	for j := k - 1; j >= 0 && dayKey(ser.t[j]) == dayKey(ser.t[k]); j-- {
+		lo = min(lo, ser.l[j])
+	}
+	return (lo + atr - ser.c[k]) / atr
 }
 
 // manage exits in priority order: the stop frozen at the signal, the target. The position

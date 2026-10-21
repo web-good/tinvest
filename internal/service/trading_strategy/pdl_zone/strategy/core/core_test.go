@@ -154,9 +154,16 @@ func firstGreen(p Params, day []bar, from int) int {
 // loudFrom is the start of day[i]: the bars from it on are loud.
 func loudFrom(day []bar, i int) time.Time { return day[i].t }
 
+// noRoom is DefaultParams without the room filter: fixtures whose climb spends the day's ATR.
+func noRoom() Params {
+	p := DefaultParams()
+	p.MinRoomATR = 0
+	return p
+}
+
 func TestDefaultParams(t *testing.T) {
 	want := Params{EntryZone: 1, EntryBreak: 1, ZoneATR: 0.2, MACDFast: 8, MACDSlow: 21, MACDSignal: 9,
-		BreakReclaim: 0, VolumeMult: 1.5, VolBars: 15, StopBars: 5, MinStopATR: 0.2, TargetR: 2, DailyATRPeriod: 14}
+		BreakReclaim: 0, VolumeMult: 1.5, VolBars: 15, StopBars: 5, MinStopATR: 0.2, TargetR: 2, MinRoomATR: 0.7, DailyATRPeriod: 14}
 	if got := DefaultParams(); got != want {
 		t.Fatalf("DefaultParams = %+v, want %+v", got, want)
 	}
@@ -185,7 +192,7 @@ func TestZoneArmEntersOnFirstGreen(t *testing.T) {
 }
 
 func TestBreakArmEntersOnFirstGreen(t *testing.T) {
-	p, day := DefaultParams(), breakDay()
+	p, day := noRoom(), breakDay()
 	g := firstGreen(p, day, breakArm)
 	got := buys(p, day, loudFrom(day, breakArm))
 	if g < 0 || len(got) != 1 || got[0] != g {
@@ -194,7 +201,7 @@ func TestBreakArmEntersOnFirstGreen(t *testing.T) {
 }
 
 func TestEntryFlags(t *testing.T) {
-	zoneOff := DefaultParams()
+	zoneOff := noRoom()
 	zoneOff.EntryZone = 0
 	if got := buys(zoneOff, zoneDay(), loudFrom(zoneDay(), zoneArm)); len(got) != 0 {
 		t.Fatalf("EntryZone 0, zone day: buys = %v, want none", got)
@@ -202,7 +209,7 @@ func TestEntryFlags(t *testing.T) {
 	if got := buys(zoneOff, breakDay(), loudFrom(breakDay(), breakArm)); len(got) != 1 {
 		t.Fatalf("EntryZone 0, break day: buys = %v, want one", got)
 	}
-	breakOff := DefaultParams()
+	breakOff := noRoom()
 	breakOff.EntryBreak = 0
 	// breakDay touches the zone (99.4) before the close below PDL: the setup turns into a break.
 	if got := buys(breakOff, breakDay(), loudFrom(breakDay(), 0)); len(got) != 0 {
@@ -211,7 +218,7 @@ func TestEntryFlags(t *testing.T) {
 	if got := buys(breakOff, zoneDay(), loudFrom(zoneDay(), zoneArm)); len(got) != 1 {
 		t.Fatalf("EntryBreak 0, zone day: buys = %v, want one", got)
 	}
-	both := DefaultParams()
+	both := noRoom()
 	both.EntryZone, both.EntryBreak = 0, 0
 	if got := buys(both, zoneDay(), loudFrom(zoneDay(), 0)); len(got) != 0 {
 		t.Fatalf("both off: buys = %v, want none", got)
@@ -219,7 +226,7 @@ func TestEntryFlags(t *testing.T) {
 }
 
 func TestBreakTradesSameWithZoneOnOrOff(t *testing.T) {
-	on, off := DefaultParams(), DefaultParams()
+	on, off := noRoom(), noRoom()
 	off.EntryZone = 0
 	day := breakDay()
 	a, b := buys(on, day, loudFrom(day, breakArm)), buys(off, day, loudFrom(day, breakArm))
@@ -232,7 +239,7 @@ func TestArmBarItselfGreenIsSignal(t *testing.T) {
 	// Climb first so the histogram is green, then one bar dips into the zone with a close above PDL.
 	day := path(dayStart, 100, 100.2, 100.4, 100.6, 100.8, 101.0, 101.2, 101.4, 101.6)
 	day = append(day, bar{day[len(day)-1].t.Add(step), 101.6, 101.8, 99.3, 101.7})
-	p, k := DefaultParams(), len(day)-1
+	p, k := noRoom(), len(day)-1
 	if hist(p, day)[k] <= 0 {
 		t.Fatalf("fixture: the arming bar must be green")
 	}
@@ -497,5 +504,44 @@ func TestBreakReclaimLeavesZoneAlone(t *testing.T) {
 	got := buys(p, day, loudFrom(day, zoneArm))
 	if g := firstGreen(p, day, zoneArm); len(got) != 1 || got[0] != g {
 		t.Fatalf("buys = %v, want [%d]", got, g)
+	}
+}
+
+func TestMinRoomATR(t *testing.T) {
+	day := zoneDay()
+	g := firstGreen(DefaultParams(), day, zoneArm)
+	lo := math.Inf(1)
+	for j := 0; j <= g; j++ {
+		lo = min(lo, day[j].l)
+	}
+	room := (lo + 2 - day[g].c) / 2 // daily ATR 2
+	cases := []struct {
+		name string
+		min  float64
+		want bool
+	}{
+		{"room above the floor", room - 0.01, true},
+		{"room below the floor", room + 0.01, false},
+		{"filter off", 0, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := DefaultParams()
+			p.MinRoomATR = tc.min
+			if got := run(p, day, g, loudFrom(day, zoneArm)).Kind == model.SignalBuy; got != tc.want {
+				t.Fatalf("room %.3f, floor %.3f: buy = %v, want %v", room, tc.min, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestRoomLeftCountsOnlyTheSignalDate(t *testing.T) {
+	// Yesterday's 90 low must not widen today's room.
+	ser := series{
+		h: []float64{91, 101, 101}, l: []float64{90, 99, 99.5}, c: []float64{91, 100, 100.5},
+		t: []time.Time{at("2026-09-14 18:00"), at("2026-09-15 10:00"), at("2026-09-15 10:05")},
+	}
+	if got := roomLeft(ser, 2, 2); math.Abs(got-0.25) > eps {
+		t.Fatalf("roomLeft = %v, want (99 + 2 − 100.5) / 2 = 0.25", got)
 	}
 }
