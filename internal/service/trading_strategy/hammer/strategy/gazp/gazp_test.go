@@ -9,22 +9,15 @@ import (
 // Литерал прибит снимком: правка любого числа меняет то, что гоняет бэктест GAZP на 1h.
 func TestLiteralIsPinned(t *testing.T) {
 	want := core.Params{
-		RSIPeriod:       5,
-		RSIZone:         30,
-		RSIExit:         70,
-		TrendEMA:        200,
-		VolumeMult:      1.5,
-		VolBars:         20,
-		BelowEMA:        0,
-		BelowRSIPeriod:  6,
-		BelowRSIZone:    30,
-		BelowRSIExit:    50,
-		StopDailyATR:    0.5,
-		StopBelowHammer: 0,
-		StopBufferATR:   0.05,
-		TargetR:         2,
-		TargetRangeMult: 0.5,
-		DailyATRPeriod:  14,
+		RSIPeriod:      5,
+		RSIZone:        30,
+		RSIExit:        70,
+		TrendEMA:       200,
+		VolumeMult:     1.5,
+		VolBars:        20,
+		StopBufferATR:  0.05,
+		TargetR:        2,
+		DailyATRPeriod: 14,
 	}
 	if got := Params(); got != want {
 		t.Fatalf("литерал GAZP изменился:\n got: %+v\nwant: %+v", got, want)

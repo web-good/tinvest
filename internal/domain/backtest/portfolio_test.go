@@ -215,14 +215,6 @@ func TestStrategyPositionCarriesEntryTime(t *testing.T) {
 	}
 }
 
-func TestStrategyPositionCarriesEntryLevel(t *testing.T) {
-	p := newPortfolio(Config{InitialCash: 1000, Fraction: 1, Commission: 0, Lot: 1})
-	p.open(100, time.Date(2026, 7, 1, 10, 0, 0, 0, time.UTC), 104.5, 0, 0, 95, "")
-	if pos := p.strategyPosition(); pos == nil || pos.EntryLevel != 104.5 {
-		t.Fatalf("position %+v, want EntryLevel 104.5", pos)
-	}
-}
-
 // The trade keeps the stop the entry signal set.
 func TestPortfolioCloseKeepsEntryStop(t *testing.T) {
 	p := newPortfolio(Config{InitialCash: 100000, Fraction: 1.0, Lot: 1})

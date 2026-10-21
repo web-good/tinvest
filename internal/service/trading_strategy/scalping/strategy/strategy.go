@@ -34,9 +34,6 @@ type Position struct {
 	// trading does not persist it); the backtest engine always populates it.
 	// Time-based exits must degrade to a no-op when zero.
 	EntryTime time.Time
-	// EntryLevel is the entry signal's Level frozen at entry. Zero means "not set" (the signal
-	// carried none, or live trading, which does not persist it); the backtest engine populates it.
-	EntryLevel float64
 }
 
 // MarketData is the raw, per-instrument snapshot the runner hands to a strategy.

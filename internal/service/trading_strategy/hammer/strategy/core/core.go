@@ -1,24 +1,15 @@
-// Package core implements hammer: a long-only strategy on hourly or 30-minute bars. The signal is a hammer
-// candle (isHammer: a non-zero body in the upper half, a lower tail of at least two bodies) whose own close has RSI(RSIPeriod) below RSIZone and, with TrendEMA on, sits
-// strictly above the EMA(TrendEMA) of the bar closes, on a volume above VolumeMult × the average of
-// the VolBars main-session bars before it; the buy comes at the next bar's open on the same MSK
-// weekday date.
+// Package core implements hammer: a long-only strategy on hourly or 30-minute bars. The signal is a
+// hammer candle (isHammer: a non-zero body in the upper half, a lower tail of at least two bodies)
+// whose own close has RSI(RSIPeriod) below RSIZone and, with TrendEMA on, sits strictly above the
+// EMA(TrendEMA) of the bar closes, on a volume above VolumeMult × the average of the VolBars
+// main-session bars before it; the buy comes at the next bar's open on the same MSK weekday date.
 //
-// With BelowEMA on, a hammer closing strictly under the warmed EMA is a second, counter-trend
-// entry with its own RSI(BelowRSIPeriod) below BelowRSIZone; such a position has no target and
-// exits on the stop or on RSI(BelowRSIPeriod) crossing BelowRSIExit upward. Only such a buy signal
-// carries the EMA as its Level: a position with a level was bought under the EMA.
-//
-// With StopBelowHammer on, the stop is a fixed level StopBufferATR daily ATRs under the hammer's low
-// instead of StopDailyATR off the fill, and the target is TargetR risks above the fill.
-//
-// The stop is StopDailyATR daily ATRs (Wilder DailyATRPeriod over completed weekday dailies) under
-// the entry; the target is TargetRangeMult × yesterday's daily range (high − low of the last
-// completed weekday daily) above the entry. Both distances are frozen at the signal: the buy signal
-// carries the levels off the signal close for sizing, and the position rebuilds them off the fill
-// price (exitLevels). Exits in priority order: the stop, the target, a close with RSI above RSIExit.
-// The position carries overnight and over weekends. Pure, stateless between bars and
-// ticker- and timeframe-agnostic. Run with `-strategy hammer -interval Hour1` (or Minutes30).
+// The stop is a fixed level StopBufferATR daily ATRs (Wilder DailyATRPeriod over completed weekday
+// dailies) under the hammer's low; the target is TargetR risks above the fill (exitLevels; the buy
+// signal carries it off the signal close for sizing). Exits in priority order: the stop, the target,
+// a close with RSI above RSIExit. The position carries overnight and over weekends. Pure, stateless
+// between bars and ticker- and timeframe-agnostic. Run with `-strategy hammer -interval Hour1` (or
+// Minutes30).
 package core
 
 import (
@@ -45,24 +36,8 @@ type Params struct {
 	VolumeMult float64
 	VolBars    int
 
-	// BelowEMA 1: a hammer closing strictly under the warmed trend EMA also buys (TrendEMA > 0),
-	// on RSI(BelowRSIPeriod) below BelowRSIZone, with no target and the exit on RSI(BelowRSIPeriod)
-	// crossing BelowRSIExit upward (0 — no RSI exit); 0 — off
-	BelowEMA       int
-	BelowRSIPeriod int
-	BelowRSIZone   float64
-	BelowRSIExit   float64
-
-	StopDailyATR float64 // the stop distance under the entry in daily ATRs; ≤ 0 — no entries
-	// StopBelowHammer 1: the stop is the hammer's low less StopBufferATR daily ATRs (a fixed level,
-	// StopDailyATR unused) and the target is TargetR × (fill − stop) above the fill (0 — no target;
-	// TargetRangeMult unused); 0 — off
-	StopBelowHammer int
-	StopBufferATR   float64
-	TargetR         float64
-	// TargetRangeMult > 0: the target is this share of yesterday's daily range above the entry;
-	// 0 — no target
-	TargetRangeMult float64
+	StopBufferATR float64 // the stop is the hammer's low less this many daily ATRs (a fixed level)
+	TargetR       float64 // the target is this × (fill − stop) above the fill; 0 — no target
 
 	DailyATRPeriod int // Wilder period over completed weekday dailies
 }
@@ -70,22 +45,15 @@ type Params struct {
 // DefaultParams returns the owner's rules.
 func DefaultParams() Params {
 	return Params{
-		RSIPeriod:       5,
-		RSIZone:         30,
-		RSIExit:         70,
-		TrendEMA:        200,
-		VolumeMult:      1.5,
-		VolBars:         20,
-		BelowEMA:        0,
-		BelowRSIPeriod:  6,
-		BelowRSIZone:    30,
-		BelowRSIExit:    50,
-		StopDailyATR:    0.5,
-		StopBelowHammer: 0,
-		StopBufferATR:   0.05,
-		TargetR:         2,
-		TargetRangeMult: 0.5,
-		DailyATRPeriod:  14,
+		RSIPeriod:      5,
+		RSIZone:        30,
+		RSIExit:        70,
+		TrendEMA:       200,
+		VolumeMult:     1.5,
+		VolBars:        20,
+		StopBufferATR:  0.05,
+		TargetR:        2,
+		DailyATRPeriod: 14,
 	}
 }
 
@@ -114,7 +82,7 @@ func (s *Strategy) tf() string {
 // Lookback is enough bars for Wilder's RSI to settle, for the trend EMA to recurse past its SMA
 // seed (twice its period) and for VolBars main-session bars to fit past nights and weekends.
 func (s *Strategy) Lookback() int {
-	return max(20*s.p.RSIPeriod, 20*s.p.BelowRSIPeriod, 100, 2*s.p.TrendEMA+20, 5*s.p.VolBars)
+	return max(20*s.p.RSIPeriod, 100, 2*s.p.TrendEMA+20, 5*s.p.VolBars)
 }
 
 // mskLoc anchors every calendar rule to Moscow (UTC fallback).
@@ -218,16 +186,15 @@ func weekdayDaily(highs, lows, closes []float64, times []time.Time) (h, l, c []f
 	return h, l, c
 }
 
-// dailyLevels returns Wilder's daily ATR and yesterday's range (high − low of the last completed
-// weekday daily); ok is false when the dailies cannot support either.
-func (s *Strategy) dailyLevels(md strategy.MarketData) (atr, rng float64, ok bool) {
+// dailyATR returns Wilder's daily ATR over completed weekday dailies; ok is false when the dailies
+// cannot support it.
+func (s *Strategy) dailyATR(md strategy.MarketData) (atr float64, ok bool) {
 	h, l, c := weekdayDaily(md.DailyHighs, md.DailyLows, md.DailyCloses, md.DailyTimes)
 	if s.p.DailyATRPeriod <= 0 || len(c) < s.p.DailyATRPeriod+1 || len(h) != len(c) || len(l) != len(c) {
-		return 0, 0, false
+		return 0, false
 	}
 	atr = indicators.ATR(h, l, c, s.p.DailyATRPeriod)
-	rng = h[len(h)-1] - l[len(l)-1]
-	return atr, rng, atr > 0 && rng > 0
+	return atr, atr > 0
 }
 
 func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
@@ -248,39 +215,28 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	}
 	k := n - 1
 	t := md.Times[k]
-	if (s.p.StopBelowHammer == 0 && s.p.StopDailyATR <= 0) || isWeekend(t.In(mskLoc)) || dayKey(t.Add(s.step)) != dayKey(t) {
+	if isWeekend(t.In(mskLoc)) || dayKey(t.Add(s.step)) != dayKey(t) {
 		return sig
 	}
 	o, h, l, c := md.Opens[k], md.Highs[k], md.Lows[k], md.Closes[k]
 	if !isHammer(o, h, l, c) {
 		return sig
 	}
-	under, e, trendWhy := false, 0.0, ""
+	if s.p.RSIPeriod <= 0 || k <= s.p.RSIPeriod {
+		return sig
+	}
+	rsi := indicators.RSISeries(md.Closes, s.p.RSIPeriod)[k]
+	if rsi >= s.p.RSIZone {
+		return sig
+	}
+	trendWhy := ""
 	if s.p.TrendEMA > 0 {
-		e = ema.Compute(md.Closes, s.p.TrendEMA)[k]
+		e := ema.Compute(md.Closes, s.p.TrendEMA)[k]
 		// ema.Compute zero-fills the warm-up: an unwarmed EMA must not pass as "above zero"
-		switch {
-		case e <= 0:
-			return sig
-		case c > e:
-			trendWhy = fmt.Sprintf(", close над EMA(%d) %.4f", s.p.TrendEMA, e)
-		case c < e && s.p.BelowEMA > 0:
-			under = true
-			trendWhy = fmt.Sprintf(", close под EMA(%d) %.4f", s.p.TrendEMA, e)
-		default:
+		if e <= 0 || c <= e {
 			return sig
 		}
-	}
-	period, zone := s.p.RSIPeriod, s.p.RSIZone
-	if under {
-		period, zone = s.p.BelowRSIPeriod, s.p.BelowRSIZone
-	}
-	if period <= 0 || k <= period {
-		return sig
-	}
-	rsi := indicators.RSISeries(md.Closes, period)[k]
-	if rsi >= zone {
-		return sig
+		trendWhy = fmt.Sprintf(", close над EMA(%d) %.4f", s.p.TrendEMA, e)
 	}
 	vol, avg, volOK := s.volumeOK(md, k)
 	if !volOK {
@@ -290,45 +246,29 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	if avg > 0 {
 		volWhy = fmt.Sprintf(", объём %.0f > %.1f × среднего %.0f", vol, s.p.VolumeMult, avg)
 	}
-	atr, rng, ok := s.dailyLevels(md)
+	atr, ok := s.dailyATR(md)
 	if !ok {
 		return sig
 	}
-	stop, stopWhy := c-s.p.StopDailyATR*atr, ""
-	if s.p.StopBelowHammer > 0 {
-		stop = l - s.p.StopBufferATR*atr
-		stopWhy = fmt.Sprintf("стоп под молотом %.4f − %.2f ATR: %.4f", l, s.p.StopBufferATR, stop)
-	} else {
-		stopWhy = fmt.Sprintf("стоп %.2f ATR %.4f", s.p.StopDailyATR, stop)
-	}
+	stop := l - s.p.StopBufferATR*atr
 	if stop <= 0 || stop >= c {
 		return sig
 	}
 	target, targetWhy := 0.0, "цели нет"
-	switch {
-	case under:
-	case s.p.StopBelowHammer > 0 && s.p.TargetR > 0:
+	if s.p.TargetR > 0 {
 		target = c + s.p.TargetR*(c-stop)
 		targetWhy = fmt.Sprintf("цель %.2f R: %.4f", s.p.TargetR, target)
-	case s.p.StopBelowHammer == 0 && s.p.TargetRangeMult > 0:
-		target = c + s.p.TargetRangeMult*rng
-		targetWhy = fmt.Sprintf("цель %.2f вчерашнего диапазона %.4f: %.4f", s.p.TargetRangeMult, rng, target)
-	}
-	level := 0.0
-	if under {
-		level = e
 	}
 	sig.Kind = model.SignalBuy
-	sig.StopLoss, sig.TakeProfit, sig.ATR, sig.Level = stop, target, atr, level
+	sig.StopLoss, sig.TakeProfit, sig.ATR = stop, target, atr
 	sig.FillBy = t.Add(s.step)
-	sig.EntryReason = fmt.Sprintf("молот %s на свече %s (o %.4f h %.4f l %.4f c %.4f), RSI(%d) %.1f < %.0f%s%s, дневной ATR %.4f, %s, %s (цель пересчитывается от цены покупки)",
-		s.tf(), t.In(mskLoc).Format("01-02 15:04"), o, h, l, c, period, rsi, zone, trendWhy, volWhy, atr, stopWhy, targetWhy)
+	sig.EntryReason = fmt.Sprintf("молот %s на свече %s (o %.4f h %.4f l %.4f c %.4f), RSI(%d) %.1f < %.0f%s%s, дневной ATR %.4f, стоп под молотом %.4f − %.2f ATR: %.4f, %s (цель пересчитывается от цены покупки)",
+		s.tf(), t.In(mskLoc).Format("01-02 15:04"), o, h, l, c, s.p.RSIPeriod, rsi, s.p.RSIZone, trendWhy, volWhy, atr, l, s.p.StopBufferATR, stop, targetWhy)
 	return sig
 }
 
-// manage exits in priority order: the stop, the target, a close with RSI above RSIExit — or, for a
-// position bought under the EMA, RSI(BelowRSIPeriod) crossing BelowRSIExit upward. The position
-// carries overnight.
+// manage exits in priority order: the stop, the target, a close with RSI above RSIExit. The
+// position carries overnight.
 func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal {
 	pos := md.Position
 	n := len(md.Closes)
@@ -350,17 +290,6 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 		sig.ExitReason = fmt.Sprintf("TP: high %.4f ≥ цели %.4f (вход %.4f)", high, target, pos.PurchasePrice)
 		return sig
 	}
-	if s.boughtUnder(pos) {
-		if x, p := s.p.BelowRSIExit, s.p.BelowRSIPeriod; x > 0 && p > 0 && n > p+1 {
-			r := indicators.RSISeries(md.Closes, p)
-			if prev, cur := r[n-2], r[n-1]; prev <= x && cur > x {
-				sig.Kind, sig.Reason = model.SignalSell, "RSI50"
-				sig.ExitReason = fmt.Sprintf("RSI50: свеча %s RSI(%d) %.1f → %.1f пересёк %.0f снизу вверх, выход по %.4f (вход %.4f)",
-					md.Times[n-1].In(mskLoc).Format("01-02 15:04"), p, prev, cur, x, c, pos.PurchasePrice)
-			}
-		}
-		return sig
-	}
 	if s.p.RSIExit > 0 && s.p.RSIPeriod > 0 && n > s.p.RSIPeriod {
 		if rsi := indicators.RSISeries(md.Closes, s.p.RSIPeriod)[n-1]; rsi > s.p.RSIExit {
 			sig.Kind, sig.Reason = model.SignalSell, "RSI"
@@ -371,41 +300,17 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 	return sig
 }
 
-// boughtUnder reports whether the position was bought under the trend EMA: only such a signal
-// carries a Level (the EMA).
-func (s *Strategy) boughtUnder(pos *strategy.Position) bool {
-	return pos.EntryLevel > 0
-}
-
-// exitLevels rebuilds the stop and the target off the fill price f: the stop is StopDailyATR daily
-// ATRs (frozen at the signal) under f; the target is f plus the target distance frozen at the
-// signal, recovered from the signal's levels — (TakeProfit − StopLoss) less the stop distance —
-// since both were laid off the same signal close. A zero TakeProfit means no target (target 0).
-//
-// With StopBelowHammer on, the stop is the signal's level itself and the target, when the signal had
-// one, is TargetR × (f − stop) above f (none once the fill is at or under the stop).
+// exitLevels returns the stop and the target of a position filled at f: the stop is the signal's
+// level itself; the target, when the signal had one, is TargetR × (f − stop) above f (none once the
+// fill is at or under the stop).
 func (s *Strategy) exitLevels(pos *strategy.Position) (stop, target float64, ok bool) {
 	f := pos.PurchasePrice
-	if s.p.StopBelowHammer > 0 {
-		if f <= 0 || pos.StopLoss <= 0 {
-			return 0, 0, false
-		}
-		stop = pos.StopLoss
-		if pos.TakeProfit > 0 && s.p.TargetR > 0 && f > stop {
-			target = f + s.p.TargetR*(f-stop)
-		}
-		return stop, target, true
-	}
-	d := s.p.StopDailyATR * pos.EntryATR
-	if f <= 0 || d <= 0 || pos.StopLoss <= 0 {
+	if f <= 0 || pos.StopLoss <= 0 {
 		return 0, 0, false
 	}
-	stop = f - d
-	if stop <= 0 {
-		return 0, 0, false
-	}
-	if pos.TakeProfit > 0 {
-		target = f + (pos.TakeProfit - pos.StopLoss - d)
+	stop = pos.StopLoss
+	if pos.TakeProfit > 0 && s.p.TargetR > 0 && f > stop {
+		target = f + s.p.TargetR*(f-stop)
 	}
 	return stop, target, true
 }

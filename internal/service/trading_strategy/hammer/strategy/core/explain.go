@@ -59,33 +59,22 @@ func (s *Strategy) explainEntry(sb *strings.Builder, md strategy.MarketData) {
 	fmt.Fprintf(sb, "%s молот: диапазон %.4f, тело %.4f (нужно > 0), низ тела %.4f, середина %.4f (нужно ≥), нижняя тень %.4f = %.2f тела (нужно ≥ 2)\n",
 		mark(isHammer(o, h, l, c)), rng, body, bottom, l+rng/2, tail, ratio(tail, body))
 
-	under := false
 	if p.TrendEMA > 0 {
-		e := ema.Compute(md.Closes, p.TrendEMA)[k]
-		switch {
+		switch e := ema.Compute(md.Closes, p.TrendEMA)[k]; {
 		case e <= 0:
 			fmt.Fprintf(sb, "✗ тренд: EMA(%d) не прогрета\n", p.TrendEMA)
-		case c > e:
-			fmt.Fprintf(sb, "✓ тренд: close %.4f над EMA(%d) %.4f\n", c, p.TrendEMA, e)
-		case c < e && p.BelowEMA > 0:
-			under = true
-			fmt.Fprintf(sb, "✓ тренд: close %.4f под EMA(%d) %.4f — вход под EMA (BelowEMA)\n", c, p.TrendEMA, e)
 		default:
-			fmt.Fprintf(sb, "✗ тренд: close %.4f не над EMA(%d) %.4f, вход под EMA выключен (BelowEMA 0)\n", c, p.TrendEMA, e)
+			fmt.Fprintf(sb, "%s тренд: close %.4f над EMA(%d) %.4f\n", mark(c > e), c, p.TrendEMA, e)
 		}
 	} else {
 		sb.WriteString("тренд: фильтр выключен (TrendEMA 0)\n")
 	}
 
-	period, zone := p.RSIPeriod, p.RSIZone
-	if under {
-		period, zone = p.BelowRSIPeriod, p.BelowRSIZone
-	}
-	if period > 0 && k > period {
-		rsi := indicators.RSISeries(md.Closes, period)[k]
-		fmt.Fprintf(sb, "%s RSI(%d) на молоте %.1f (нужно < %.0f)\n", mark(rsi < zone), period, rsi, zone)
+	if p.RSIPeriod > 0 && k > p.RSIPeriod {
+		rsi := indicators.RSISeries(md.Closes, p.RSIPeriod)[k]
+		fmt.Fprintf(sb, "%s RSI(%d) на молоте %.1f (нужно < %.0f)\n", mark(rsi < p.RSIZone), p.RSIPeriod, rsi, p.RSIZone)
 	} else {
-		fmt.Fprintf(sb, "✗ RSI(%d): не прогрет или выключен\n", period)
+		fmt.Fprintf(sb, "✗ RSI(%d): не прогрет или выключен\n", p.RSIPeriod)
 	}
 
 	switch vol, avg, ok := s.volumeOK(md, k); {
@@ -98,23 +87,16 @@ func (s *Strategy) explainEntry(sb *strings.Builder, md strategy.MarketData) {
 			mark(ok), vol, p.VolBars, avg, p.VolumeMult, p.VolumeMult*avg, vol/avg)
 	}
 
-	if atr, dr, ok := s.dailyLevels(md); ok {
-		stop := c - p.StopDailyATR*atr
-		if p.StopBelowHammer > 0 {
-			stop = l - p.StopBufferATR*atr
-		}
+	if atr, ok := s.dailyATR(md); ok {
+		stop := l - p.StopBufferATR*atr
 		target := "цели нет"
-		switch {
-		case under:
-		case p.StopBelowHammer > 0 && p.TargetR > 0:
+		if p.TargetR > 0 {
 			target = fmt.Sprintf("цель %.2f R %.4f", p.TargetR, c+p.TargetR*(c-stop))
-		case p.StopBelowHammer == 0 && p.TargetRangeMult > 0:
-			target = fmt.Sprintf("цель %.4f", c+p.TargetRangeMult*dr)
 		}
-		fmt.Fprintf(sb, "%s дневные уровни: ATR(%d) %.4f, вчерашний диапазон %.4f; от close %.4f: стоп %.4f (нужно > 0 и < close), %s\n",
-			mark(stop > 0 && stop < c), p.DailyATRPeriod, atr, dr, c, stop, target)
+		fmt.Fprintf(sb, "%s стоп под молотом: low %.4f − %.2f × ATR(%d) %.4f = %.4f (нужно > 0 и < close %.4f), %s\n",
+			mark(stop > 0 && stop < c), l, p.StopBufferATR, p.DailyATRPeriod, atr, stop, c, target)
 	} else {
-		fmt.Fprintf(sb, "✗ дневные уровни: мало будних дневок для ATR(%d) или нулевой диапазон\n", p.DailyATRPeriod)
+		fmt.Fprintf(sb, "✗ дневной ATR(%d): мало будних дневок\n", p.DailyATRPeriod)
 	}
 }
 
@@ -124,12 +106,7 @@ func (s *Strategy) explainExits(sb *strings.Builder, md strategy.MarketData) {
 	pos := md.Position
 	n := len(md.Closes)
 	sb.WriteString("--- выходы ---\n")
-	under := s.boughtUnder(pos)
-	mode := "над EMA (или без тренда)"
-	if under {
-		mode = fmt.Sprintf("под EMA %.4f", pos.EntryLevel)
-	}
-	fmt.Fprintf(sb, "режим: %s, вход %.4f\n", mode, pos.PurchasePrice)
+	fmt.Fprintf(sb, "вход %.4f\n", pos.PurchasePrice)
 	stop, target, ok := s.exitLevels(pos)
 	if !ok {
 		sb.WriteString("✗ уровни выхода не восстановлены (нет стопа или ATR входа)\n")
@@ -141,17 +118,6 @@ func (s *Strategy) explainExits(sb *strings.Builder, md strategy.MarketData) {
 		fmt.Fprintf(sb, "%s цель %.4f: high %.4f\n", mark(high >= target), target, high)
 	} else {
 		sb.WriteString("цель: нет\n")
-	}
-	if under {
-		x, per := p.BelowRSIExit, p.BelowRSIPeriod
-		if x <= 0 || per <= 0 || n <= per+1 {
-			sb.WriteString("RSI-выход: выключен (BelowRSIExit 0) или не прогрет\n")
-			return
-		}
-		r := indicators.RSISeries(md.Closes, per)
-		fmt.Fprintf(sb, "%s RSI(%d) %.1f → %.1f, пересечение %.0f снизу вверх\n",
-			mark(r[n-2] <= x && r[n-1] > x), per, r[n-2], r[n-1], x)
-		return
 	}
 	if p.RSIExit <= 0 || p.RSIPeriod <= 0 || n <= p.RSIPeriod {
 		sb.WriteString("RSI-выход: выключен (RSIExit 0) или не прогрет\n")
