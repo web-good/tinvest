@@ -19,12 +19,14 @@ func Params() core.Params {
 		MACDFast:       8,
 		MACDSlow:       21,
 		MACDSignal:     9,
-		VolumeMult:     1.5,
+		VolumeMult:     2.0,
 		VolBars:        15,
 		StopBars:       5,
 		MinStopATR:     0.2,
 		TargetR:        1.7,
 		MinRoomATR:     0.7,
+		H1TrendEMA:     0,
+		D1TrendEMA:     0,
 		DailyATRPeriod: 14,
 	}
 }
