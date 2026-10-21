@@ -1,0 +1,13 @@
+{
+  "_comment": "hammer (Hour1, 12 мес, -risk-pct 1), одна фаза поверх литерала тикера: молот на свече с RSI(5) < 30, вход по open следующей свечи; стоп StopDailyATR дневных ATR под ценой покупки; цель TargetRangeMult вчерашнего дневного диапазона над ценой покупки; выход по закрытию с RSI(5) > RSIExit.",
+  "phases": [
+    {
+      "name": "sweep",
+      "grid": {
+        "StopDailyATR": [0.3, 0.5, 0.7, 1.0],
+        "TargetRangeMult": [0.3, 0.5, 0.7],
+        "RSIExit": [60, 70, 80]
+      }
+    }
+  ]
+}
