@@ -51,6 +51,44 @@ func (s *Strategy) explainEntry(sb *strings.Builder, md strategy.MarketData) {
 	fmt.Fprintf(sb, "%s календарь: сигнал %s %s, покупка %s %s (будни, та же дата)\n",
 		mark(!isWeekend(t) && dayKey(buy) == dayKey(t)), t.Weekday(), t.Format("15:04"), buy.Weekday(), buy.Format("01-02 15:04"))
 
+	hb := k
+	if p.ConfirmBars > 0 {
+		hb = s.explainConfirm(sb, md, k)
+	}
+	s.explainHammer(sb, md, hb, md.Closes[k])
+}
+
+// explainConfirm reports the confirmation of each hammer candidate in the ConfirmBars bars before
+// k and returns the bar whose gates to detail: the confirmed hammer, else the current bar (a new
+// hammer that would wait for its confirmation).
+func (s *Strategy) explainConfirm(sb *strings.Builder, md strategy.MarketData, k int) int {
+	o, c := md.Opens[k], md.Closes[k]
+	colour := "не зелёная"
+	if c > o {
+		colour = "зелёная"
+	}
+	fmt.Fprintf(sb, "подтверждение (ConfirmBars %d): свеча %s, close %.4f\n", s.p.ConfirmBars, colour, c)
+	ind := s.series(md)
+	if hb, _, ok := s.confirmedHammer(md, k, ind); ok {
+		fmt.Fprintf(sb, "✓ подтверждает молот %s (high %.4f)\n", md.Times[hb].In(mskLoc).Format("01-02 15:04"), md.Highs[hb])
+		return hb
+	}
+	for h := k - 1; h >= max(k-s.p.ConfirmBars, 0); h-- {
+		if !isHammer(md.Opens[h], md.Highs[h], md.Lows[h], md.Closes[h]) {
+			continue
+		}
+		_, gates := s.hammerGates(md, h, ind)
+		fmt.Fprintf(sb, "✗ кандидат %s: фильтры молота %s, close %.4f > high %.4f %s, не сломан и не подтверждён раньше %s\n",
+			md.Times[h].In(mskLoc).Format("01-02 15:04"), mark(gates), c, md.Highs[h], mark(c > md.Highs[h]), mark(s.hammerOpen(md, h, k)))
+	}
+	sb.WriteString("подтверждённого молота нет; ниже — текущая свеча как новый молот (покупки на ней не будет, только после подтверждения)\n")
+	return k
+}
+
+// explainHammer details the hammer gates of bar k and the stop under its low against the close c
+// of the buy signal's bar.
+func (s *Strategy) explainHammer(sb *strings.Builder, md strategy.MarketData, k int, cBuy float64) {
+	p := s.p
 	o, h, l, c := md.Opens[k], md.Highs[k], md.Lows[k], md.Closes[k]
 	rng := h - l
 	bottom := min(o, c)
@@ -91,10 +129,10 @@ func (s *Strategy) explainEntry(sb *strings.Builder, md strategy.MarketData) {
 		stop := l - p.StopBufferATR*atr
 		target := "цели нет"
 		if p.TargetR > 0 {
-			target = fmt.Sprintf("цель %.2f R %.4f", p.TargetR, c+p.TargetR*(c-stop))
+			target = fmt.Sprintf("цель %.2f R %.4f", p.TargetR, cBuy+p.TargetR*(cBuy-stop))
 		}
 		fmt.Fprintf(sb, "%s стоп под молотом: low %.4f − %.2f × ATR(%d) %.4f = %.4f (нужно > 0 и < close %.4f), %s\n",
-			mark(stop > 0 && stop < c), l, p.StopBufferATR, p.DailyATRPeriod, atr, stop, c, target)
+			mark(stop > 0 && stop < cBuy), l, p.StopBufferATR, p.DailyATRPeriod, atr, stop, cBuy, target)
 	} else {
 		fmt.Fprintf(sb, "✗ дневной ATR(%d): мало будних дневок\n", p.DailyATRPeriod)
 	}

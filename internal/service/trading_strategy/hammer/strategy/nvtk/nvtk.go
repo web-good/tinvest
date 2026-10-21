@@ -22,6 +22,7 @@ func Params() core.Params {
 		TrendEMA:       200,
 		VolumeMult:     1.5,
 		VolBars:        20,
+		ConfirmBars:    0,
 		StopBufferATR:  0.05,
 		TargetR:        2,
 		DailyATRPeriod: 14,

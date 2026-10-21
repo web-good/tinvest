@@ -4,6 +4,8 @@
 // whose own close has RSI(RSIPeriod) below RSIZone and, with TrendEMA on, sits strictly above the
 // EMA(TrendEMA) of the bar closes, on a volume above VolumeMult × the average of the VolBars
 // main-session bars before it; the buy comes at the next bar's open on the same MSK weekday date.
+// With ConfirmBars on, the buy waits for a green bar closing above the hammer's high within that
+// many bars (confirmedHammer) and comes at the open after it.
 //
 // The stop is a fixed level StopBufferATR daily ATRs (Wilder DailyATRPeriod over completed weekday
 // dailies) under the hammer's low; the target is TargetR risks above the fill (exitLevels; the buy
@@ -45,6 +47,11 @@ type Params struct {
 	// main-session bars before it; 0 — off
 	VolumeMult float64
 	VolBars    int
+
+	// ConfirmBars > 0: no buy right after the hammer; the first of the next ConfirmBars bars that
+	// closes green above the hammer's high is the signal (the buy at the open after it); a bar
+	// under the hammer's low before that burns the hammer; 0 — buy right after the hammer
+	ConfirmBars int
 
 	StopBufferATR float64 // the stop is the hammer's low less this many daily ATRs (a fixed level)
 	TargetR       float64 // the target is this × (fill − stop) above the fill; 0 — no target
@@ -96,7 +103,7 @@ func (s *Strategy) tf() string {
 // past its SMA seed (twice its period) and for VolBars main-session bars to fit past nights and
 // weekends.
 func (s *Strategy) Lookback() int {
-	return max(20*s.p.RSIPeriod, 100, 2*s.p.TrendEMA+20, 5*s.p.VolBars, 10*(s.p.MACDSlow+s.p.MACDSignal))
+	return max(20*s.p.RSIPeriod, 100, 2*s.p.TrendEMA+20, 5*s.p.VolBars+s.p.ConfirmBars, 10*(s.p.MACDSlow+s.p.MACDSignal))
 }
 
 // mskLoc anchors every calendar rule to Moscow (UTC fallback).
@@ -220,9 +227,9 @@ func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 	return s.enter(md, sig)
 }
 
-// enter buys the next open when the current bar is a hammer with its own RSI below RSIZone (above
-// the trend EMA and on raised volume when those filters are on), on a weekday whose next bar starts
-// on the same date. With BelowEMA on, a hammer under the EMA buys on its own RSI rules, no target.
+// enter buys the next open on a weekday whose next bar starts on the same date when the current
+// bar is a hammer passing hammerGates or, with ConfirmBars on, confirms such a hammer
+// (confirmedHammer). The stop sits under the hammer's low, the target is off the current close.
 func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal {
 	n := len(md.Closes)
 	if n == 0 || len(md.Times) != n || len(md.Opens) != n || len(md.Highs) != n || len(md.Lows) != n {
@@ -233,39 +240,22 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	if isWeekend(t.In(mskLoc)) || dayKey(t.Add(s.step)) != dayKey(t) {
 		return sig
 	}
-	o, h, l, c := md.Opens[k], md.Highs[k], md.Lows[k], md.Closes[k]
-	if !isHammer(o, h, l, c) {
+	ind := s.series(md)
+	hb, why, ok := k, "", false
+	if s.p.ConfirmBars > 0 {
+		hb, why, ok = s.confirmedHammer(md, k, ind)
+	} else {
+		why, ok = s.hammerGates(md, k, ind)
+	}
+	if !ok {
 		return sig
-	}
-	if s.p.RSIPeriod <= 0 || k <= s.p.RSIPeriod {
-		return sig
-	}
-	rsi := indicators.RSISeries(md.Closes, s.p.RSIPeriod)[k]
-	if rsi >= s.p.RSIZone {
-		return sig
-	}
-	trendWhy := ""
-	if s.p.TrendEMA > 0 {
-		e := ema.Compute(md.Closes, s.p.TrendEMA)[k]
-		// ema.Compute zero-fills the warm-up: an unwarmed EMA must not pass as "above zero"
-		if e <= 0 || c <= e {
-			return sig
-		}
-		trendWhy = fmt.Sprintf(", close над EMA(%d) %.4f", s.p.TrendEMA, e)
-	}
-	vol, avg, volOK := s.volumeOK(md, k)
-	if !volOK {
-		return sig
-	}
-	volWhy := ""
-	if avg > 0 {
-		volWhy = fmt.Sprintf(", объём %.0f > %.1f × среднего %.0f", vol, s.p.VolumeMult, avg)
 	}
 	atr, ok := s.dailyATR(md)
 	if !ok {
 		return sig
 	}
-	stop := l - s.p.StopBufferATR*atr
+	c, low := md.Closes[k], md.Lows[hb]
+	stop := low - s.p.StopBufferATR*atr
 	if stop <= 0 || stop >= c {
 		return sig
 	}
@@ -277,9 +267,89 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	sig.Kind = model.SignalBuy
 	sig.StopLoss, sig.TakeProfit, sig.ATR = stop, target, atr
 	sig.FillBy = t.Add(s.step)
-	sig.EntryReason = fmt.Sprintf("молот %s на свече %s (o %.4f h %.4f l %.4f c %.4f), RSI(%d) %.1f < %.0f%s%s, дневной ATR %.4f, стоп под молотом %.4f − %.2f ATR: %.4f, %s (цель пересчитывается от цены покупки)",
-		s.tf(), t.In(mskLoc).Format("01-02 15:04"), o, h, l, c, s.p.RSIPeriod, rsi, s.p.RSIZone, trendWhy, volWhy, atr, l, s.p.StopBufferATR, stop, targetWhy)
+	sig.EntryReason = fmt.Sprintf("%s, дневной ATR %.4f, стоп под молотом %.4f − %.2f ATR: %.4f, %s (цель пересчитывается от цены покупки)",
+		why, atr, low, s.p.StopBufferATR, stop, targetWhy)
 	return sig
+}
+
+// series holds the per-bar indicators the entry gates read: RSI(RSIPeriod) and, with TrendEMA on,
+// the trend EMA (nil when off or too short).
+type series struct{ rsi, trend []float64 }
+
+func (s *Strategy) series(md strategy.MarketData) series {
+	var ind series
+	if s.p.RSIPeriod > 0 && len(md.Closes) > s.p.RSIPeriod {
+		ind.rsi = indicators.RSISeries(md.Closes, s.p.RSIPeriod)
+	}
+	if s.p.TrendEMA > 0 {
+		ind.trend = ema.Compute(md.Closes, s.p.TrendEMA)
+	}
+	return ind
+}
+
+// hammerGates checks bar h as the signal hammer: the shape, its own RSI below RSIZone, the close
+// strictly above a warmed trend EMA (TrendEMA on) and the raised volume (VolumeMult on). why
+// describes the bar and the gates it passed.
+func (s *Strategy) hammerGates(md strategy.MarketData, h int, ind series) (why string, ok bool) {
+	o, hi, l, c := md.Opens[h], md.Highs[h], md.Lows[h], md.Closes[h]
+	if !isHammer(o, hi, l, c) || ind.rsi == nil || h <= s.p.RSIPeriod {
+		return "", false
+	}
+	rsi := ind.rsi[h]
+	if rsi >= s.p.RSIZone {
+		return "", false
+	}
+	trendWhy := ""
+	if s.p.TrendEMA > 0 {
+		e := ind.trend[h]
+		// ema.Compute zero-fills the warm-up: an unwarmed EMA must not pass as "above zero"
+		if e <= 0 || c <= e {
+			return "", false
+		}
+		trendWhy = fmt.Sprintf(", close над EMA(%d) %.4f", s.p.TrendEMA, e)
+	}
+	vol, avg, volOK := s.volumeOK(md, h)
+	if !volOK {
+		return "", false
+	}
+	volWhy := ""
+	if avg > 0 {
+		volWhy = fmt.Sprintf(", объём %.0f > %.1f × среднего %.0f", vol, s.p.VolumeMult, avg)
+	}
+	return fmt.Sprintf("молот %s на свече %s (o %.4f h %.4f l %.4f c %.4f), RSI(%d) %.1f < %.0f%s%s",
+		s.tf(), md.Times[h].In(mskLoc).Format("01-02 15:04"), o, hi, l, c, s.p.RSIPeriod, rsi, s.p.RSIZone, trendWhy, volWhy), true
+}
+
+// confirmedHammer finds the hammer the current bar k confirms: k closes green above the high of a
+// weekday hammer at most ConfirmBars bars back that passes hammerGates, and no bar between them
+// confirmed it already (a green close above its high) or broke it (a low under its low). The
+// latest such hammer wins.
+func (s *Strategy) confirmedHammer(md strategy.MarketData, k int, ind series) (hb int, why string, ok bool) {
+	o, c := md.Opens[k], md.Closes[k]
+	if c <= o {
+		return 0, "", false
+	}
+	for h := k - 1; h >= max(k-s.p.ConfirmBars, 0); h-- {
+		if c <= md.Highs[h] || isWeekend(md.Times[h].In(mskLoc)) || !s.hammerOpen(md, h, k) {
+			continue
+		}
+		if why, ok := s.hammerGates(md, h, ind); ok {
+			return h, fmt.Sprintf("%s; подтверждение %s: зелёная, close %.4f > high молота %.4f",
+				why, md.Times[k].In(mskLoc).Format("01-02 15:04"), c, md.Highs[h]), true
+		}
+	}
+	return 0, "", false
+}
+
+// hammerOpen reports whether no bar strictly between the hammer h and k confirmed it (a green close
+// above its high) or broke it (a low under its low).
+func (s *Strategy) hammerOpen(md strategy.MarketData, h, k int) bool {
+	for j := h + 1; j < k; j++ {
+		if md.Lows[j] < md.Lows[h] || (md.Closes[j] > md.Opens[j] && md.Closes[j] > md.Highs[h]) {
+			return false
+		}
+	}
+	return true
 }
 
 // manage exits in priority order: the stop, the target, the close of a red MACD histogram bar

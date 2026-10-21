@@ -7,7 +7,8 @@
         "StopBufferATR": [0, 0.05, 0.1, 0.2],
         "TargetR": [1.5, 2, 3],
         "MACDFast": [0, 11],
-        "RSIHold": [0, 60]
+        "RSIHold": [0, 60],
+        "ConfirmBars": [0, 1, 2, 3]
       }
     }
   ]

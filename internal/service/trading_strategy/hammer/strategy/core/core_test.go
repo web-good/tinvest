@@ -513,3 +513,75 @@ func TestTargetROffEntry(t *testing.T) {
 		t.Fatalf("TargetR 0: kind %v target %.4f, want buy, no target", sig.Kind, sig.TakeProfit)
 	}
 }
+
+// confirmed is the fall, hammerAfterFall (at the wednesday hour, as in the other tests), the given
+// bars after it and last, with the hammer trading 200 lots so the volume filter passes on it.
+func confirmed(between []bar, last bar) strategy.MarketData {
+	bs := bars(fall, hammerAfterFall)
+	bs = append(append(bs, between...), last)
+	md := fixture(bs, at(wednesday).Add(time.Duration(1+len(between))*step), 40)
+	md.Volumes[len(bs)-2-len(between)] = 200
+	return md
+}
+
+// confirmBar closes green at 98.5, above hammerAfterFall's high 98.2.
+var confirmBar = bar{98.15, 98.6, 98.1, 98.5}
+
+func confirmParams(n int) Params {
+	p := noTrend()
+	p.ConfirmBars = n
+	return p
+}
+
+func TestConfirmBuysAfterGreenAboveHigh(t *testing.T) {
+	sig := decide(confirmParams(3), confirmed(nil, confirmBar))
+	if sig.Kind != model.SignalBuy {
+		t.Fatalf("kind = %v, want buy", sig.Kind)
+	}
+	// stop under the hammer: 97 − 0.05 × 2 = 96.9; target off the confirmation close 98.5
+	if math.Abs(sig.StopLoss-96.9) > eps || math.Abs(sig.TakeProfit-(98.5+2*(98.5-96.9))) > eps {
+		t.Errorf("stop %.4f target %.4f, want 96.9 %.4f", sig.StopLoss, sig.TakeProfit, 98.5+2*(98.5-96.9))
+	}
+	if !strings.Contains(sig.EntryReason, "подтверждение") {
+		t.Errorf("reason %q, want the confirmation", sig.EntryReason)
+	}
+}
+
+func TestConfirmSkipsTheHammerBar(t *testing.T) {
+	md := fixture(bars(fall, hammerAfterFall), at(wednesday), 40)
+	if sig := decide(confirmParams(3), md); sig.Kind != model.SignalNone {
+		t.Fatalf("kind = %v, want none (waiting for the confirmation)", sig.Kind)
+	}
+}
+
+func TestConfirmNeedsCloseAboveHigh(t *testing.T) {
+	if sig := decide(confirmParams(3), confirmed(nil, bar{98.15, 98.3, 98.1, 98.2})); sig.Kind != model.SignalNone {
+		t.Fatalf("close at the high: kind = %v, want none", sig.Kind)
+	}
+	if sig := decide(confirmParams(3), confirmed(nil, bar{98.7, 98.8, 98.3, 98.5})); sig.Kind != model.SignalNone {
+		t.Fatalf("red bar above the high: kind = %v, want none", sig.Kind)
+	}
+}
+
+func TestConfirmBurnedUnderHammerLow(t *testing.T) {
+	broke := bar{98.15, 98.2, 96.8, 98.0}
+	if sig := decide(confirmParams(3), confirmed([]bar{broke}, confirmBar)); sig.Kind != model.SignalNone {
+		t.Fatalf("kind = %v, want none (a low under the hammer's burned it)", sig.Kind)
+	}
+}
+
+func TestConfirmWindow(t *testing.T) {
+	wait := bar{98.15, 98.2, 97.9, 98.0}
+	if sig := decide(confirmParams(1), confirmed([]bar{wait}, confirmBar)); sig.Kind != model.SignalNone {
+		t.Fatalf("ConfirmBars 1, confirmation 2 bars later: kind = %v, want none", sig.Kind)
+	}
+	if sig := decide(confirmParams(2), confirmed([]bar{wait}, confirmBar)); sig.Kind != model.SignalBuy {
+		t.Fatalf("ConfirmBars 2, confirmation 2 bars later: kind = %v, want buy", sig.Kind)
+	}
+}
+
+func TestConfirmOnlyTheFirstGreen(t *testing.T) {
+	if sig := decide(confirmParams(3), confirmed([]bar{confirmBar}, bar{98.5, 98.9, 98.4, 98.8})); sig.Kind != model.SignalNone {
+		t.Fatalf("kind = %v, want none (the hammer was confirmed a bar earlier)", sig.Kind)
+	}
+}

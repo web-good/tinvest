@@ -36,3 +36,16 @@ func TestExplainExits(t *testing.T) {
 		}
 	}
 }
+
+func TestExplainConfirm(t *testing.T) {
+	out := NewWithParams("TEST", step, confirmParams(3)).Explain(confirmed(nil, confirmBar))
+	for _, want := range []string{"✓ подтверждает молот", "✓ молот", "✓ стоп под молотом", "ИТОГ: ПОКУПКА"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("no %q in:\n%s", want, out)
+		}
+	}
+	out = NewWithParams("TEST", step, confirmParams(3)).Explain(fixture(bars(fall, hammerAfterFall), at(wednesday), 40))
+	if !strings.Contains(out, "подтверждённого молота нет") || !strings.Contains(out, "ИТОГ: входа нет") {
+		t.Errorf("want no confirmed hammer:\n%s", out)
+	}
+}
