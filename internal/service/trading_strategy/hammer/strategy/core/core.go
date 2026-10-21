@@ -1,6 +1,7 @@
 // Package core implements hammer: a long-only strategy on hourly bars. The signal is a hammer
-// candle (isHammer) whose own close has RSI(RSIPeriod) below RSIZone; the buy comes at the next
-// bar's open on the same MSK weekday date.
+// candle (isHammer) whose own close has RSI(RSIPeriod) below RSIZone and, with TrendEMA on, sits
+// strictly above the EMA(TrendEMA) of the hourly closes; the buy comes at the next bar's open on
+// the same MSK weekday date.
 //
 // The stop is StopDailyATR daily ATRs (Wilder DailyATRPeriod over completed weekday dailies) under
 // the entry; the target is TargetRangeMult × yesterday's daily range (high − low of the last
@@ -15,6 +16,7 @@ import (
 	"fmt"
 	"time"
 
+	"tinvest/internal/domain/ema"
 	"tinvest/internal/service/trading_strategy/scalping/model"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 	"tinvest/pkg/indicators"
@@ -26,6 +28,9 @@ type Params struct {
 	RSIPeriod int     // RSI length over the hourly closes
 	RSIZone   float64 // the hammer bar's own RSI must be below this
 	RSIExit   float64 // sell on a close whose RSI is above this; 0 — off
+	// TrendEMA > 0: the hammer's close must be strictly above a warmed EMA of this period over the
+	// hourly closes; 0 — off
+	TrendEMA int
 
 	StopDailyATR float64 // the stop distance under the entry in daily ATRs; ≤ 0 — no entries
 	// TargetRangeMult > 0: the target is this share of yesterday's daily range above the entry;
@@ -41,6 +46,7 @@ func DefaultParams() Params {
 		RSIPeriod:       5,
 		RSIZone:         30,
 		RSIExit:         70,
+		TrendEMA:        200,
 		StopDailyATR:    0.5,
 		TargetRangeMult: 0.5,
 		DailyATRPeriod:  14,
@@ -61,8 +67,9 @@ func NewWithParams(ticker string, step time.Duration, p Params) *Strategy {
 
 func (s *Strategy) Ticker() string { return s.ticker }
 
-// Lookback is enough hourly bars for Wilder's RSI to settle.
-func (s *Strategy) Lookback() int { return max(20*s.p.RSIPeriod, 100) }
+// Lookback is enough hourly bars for Wilder's RSI to settle and for the trend EMA to recurse past
+// its SMA seed (twice its period).
+func (s *Strategy) Lookback() int { return max(20*s.p.RSIPeriod, 100, 2*s.p.TrendEMA+20) }
 
 // mskLoc anchors every calendar rule to Moscow (UTC fallback).
 var mskLoc = func() *time.Location {
@@ -158,6 +165,15 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	if rsi >= s.p.RSIZone {
 		return sig
 	}
+	trendWhy := ""
+	if s.p.TrendEMA > 0 {
+		e := ema.Compute(md.Closes, s.p.TrendEMA)[k]
+		// ema.Compute zero-fills the warm-up: an unwarmed EMA must not pass as "above zero"
+		if e <= 0 || c <= e {
+			return sig
+		}
+		trendWhy = fmt.Sprintf(", close над EMA(%d) %.4f", s.p.TrendEMA, e)
+	}
 	atr, rng, ok := s.dailyLevels(md)
 	if !ok {
 		return sig
@@ -174,8 +190,8 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	sig.Kind = model.SignalBuy
 	sig.StopLoss, sig.TakeProfit, sig.ATR = stop, target, atr
 	sig.FillBy = t.Add(s.step)
-	sig.EntryReason = fmt.Sprintf("молот 1h на свече %s (o %.4f h %.4f l %.4f c %.4f), RSI(%d) %.1f < %.0f, дневной ATR %.4f, стоп %.2f ATR %.4f, %s (стоп и цель пересчитываются от цены покупки)",
-		t.In(mskLoc).Format("01-02 15:04"), o, h, l, c, s.p.RSIPeriod, rsi, s.p.RSIZone, atr, s.p.StopDailyATR, stop, targetWhy)
+	sig.EntryReason = fmt.Sprintf("молот 1h на свече %s (o %.4f h %.4f l %.4f c %.4f), RSI(%d) %.1f < %.0f%s, дневной ATR %.4f, стоп %.2f ATR %.4f, %s (стоп и цель пересчитываются от цены покупки)",
+		t.In(mskLoc).Format("01-02 15:04"), o, h, l, c, s.p.RSIPeriod, rsi, s.p.RSIZone, trendWhy, atr, s.p.StopDailyATR, stop, targetWhy)
 	return sig
 }
 

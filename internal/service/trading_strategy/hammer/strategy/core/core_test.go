@@ -44,21 +44,35 @@ var hammerAfterFall = bar{o: 98.1, h: 98.2, l: 97.0, c: 98.15}
 // bars chains warmBars alternating bars, then bars with the given closes (each opening at the
 // previous close, highs and lows hugging the bodies), then last.
 func bars(closes []float64, last bar) []bar {
-	var out []bar
-	prev := 100.0
+	var warm []float64
 	for i := 0; i < warmBars; i++ {
 		c := 100.0
 		if i%2 == 1 {
 			c = 100.2
 		}
-		out = append(out, bar{prev, max(prev, c), min(prev, c), c})
-		prev = c
+		warm = append(warm, c)
 	}
+	return chain(append(warm, closes...), last)
+}
+
+// chain turns closes into bars opening at the previous close (the first at 100), highs and lows
+// hugging the bodies, then appends last.
+func chain(closes []float64, last bar) []bar {
+	var out []bar
+	prev := 100.0
 	for _, c := range closes {
 		out = append(out, bar{prev, max(prev, c), min(prev, c), c})
 		prev = c
 	}
 	return append(out, last)
+}
+
+// noTrend is the owner's rules with the EMA trend filter off, for the tests of the other gates
+// (their short fixtures cannot warm EMA 200).
+func noTrend() Params {
+	p := DefaultParams()
+	p.TrendEMA = 0
+	return p
 }
 
 // dailyBars returns `days` calendar days of completed dailies ending the day before `before`, all
@@ -137,7 +151,7 @@ func TestEntryOnHammerInZone(t *testing.T) {
 	if _, cur := lastRSI(md, 5); cur >= 30 {
 		t.Fatalf("fixture: hammer RSI(5) %.1f, want < 30", cur)
 	}
-	sig := decide(DefaultParams(), md)
+	sig := decide(noTrend(), md)
 	if sig.Kind != model.SignalBuy {
 		t.Fatalf("kind = %v, want buy", sig.Kind)
 	}
@@ -156,7 +170,7 @@ func TestNoEntryWhenRSIAboveZone(t *testing.T) {
 	if !isHammer(h.o, h.h, h.l, h.c) {
 		t.Fatal("fixture: not a hammer")
 	}
-	if sig := decide(DefaultParams(), md); sig.Kind != model.SignalNone {
+	if sig := decide(noTrend(), md); sig.Kind != model.SignalNone {
 		t.Fatalf("kind = %v, want none", sig.Kind)
 	}
 }
@@ -170,28 +184,28 @@ func TestNoEntryWhenRSIInZoneOnlyBefore(t *testing.T) {
 	if !isHammer(h.o, h.h, h.l, h.c) {
 		t.Fatal("fixture: not a hammer")
 	}
-	if sig := decide(DefaultParams(), md); sig.Kind != model.SignalNone {
+	if sig := decide(noTrend(), md); sig.Kind != model.SignalNone {
 		t.Fatalf("kind = %v, want none", sig.Kind)
 	}
 }
 
 func TestNoEntryWhenBuyBarIsNextDate(t *testing.T) {
 	md := fixture(bars(fall, hammerAfterFall), at("2026-09-16 23:00"), 40)
-	if sig := decide(DefaultParams(), md); sig.Kind != model.SignalNone {
+	if sig := decide(noTrend(), md); sig.Kind != model.SignalNone {
 		t.Fatalf("kind = %v, want none", sig.Kind)
 	}
 }
 
 func TestNoEntryOnWeekend(t *testing.T) {
 	md := fixture(bars(fall, hammerAfterFall), at("2026-09-19 12:00"), 40)
-	if sig := decide(DefaultParams(), md); sig.Kind != model.SignalNone {
+	if sig := decide(noTrend(), md); sig.Kind != model.SignalNone {
 		t.Fatalf("kind = %v, want none", sig.Kind)
 	}
 }
 
 func TestMondayUsesFridayRange(t *testing.T) {
 	md := fixture(bars(fall, hammerAfterFall), at("2026-09-21 12:00"), 40)
-	sig := decide(DefaultParams(), md)
+	sig := decide(noTrend(), md)
 	if sig.Kind != model.SignalBuy {
 		t.Fatalf("kind = %v, want buy", sig.Kind)
 	}
@@ -202,10 +216,10 @@ func TestMondayUsesFridayRange(t *testing.T) {
 
 func TestNoEntryWithoutDailies(t *testing.T) {
 	last := at(wednesday)
-	if sig := decide(DefaultParams(), fixture(bars(fall, hammerAfterFall), last, 10)); sig.Kind != model.SignalNone {
+	if sig := decide(noTrend(), fixture(bars(fall, hammerAfterFall), last, 10)); sig.Kind != model.SignalNone {
 		t.Fatalf("10 days of dailies: kind = %v, want none", sig.Kind)
 	}
-	p := DefaultParams()
+	p := noTrend()
 	p.StopDailyATR = 0
 	if sig := decide(p, fixture(bars(fall, hammerAfterFall), last, 40)); sig.Kind != model.SignalNone {
 		t.Fatalf("StopDailyATR 0: kind = %v, want none", sig.Kind)
@@ -267,5 +281,59 @@ func TestExitsSwitchOff(t *testing.T) {
 	p.RSIExit = 0
 	if sig := decide(p, held(bars(rise, bar{102.2, 102.6, 102.2, 102.6}), 102, 50, 200)); sig.Kind != model.SignalNone {
 		t.Fatalf("RSIExit 0: kind %v reason %q, want none", sig.Kind, sig.Reason)
+	}
+}
+
+// trendBars is 300 alternating closes around level (EMA 200 settles there), the five fall
+// drops shifted onto it, then hammerAfterFall shifted the same way.
+func trendBars(level float64) []bar {
+	var closes []float64
+	for i := 0; i < 300; i++ {
+		c := level
+		if i%2 == 1 {
+			c = level + 0.2
+		}
+		closes = append(closes, c)
+	}
+	d := level - 100
+	for _, c := range fall {
+		closes = append(closes, c+d)
+	}
+	h := hammerAfterFall
+	return chain(closes, bar{h.o + d, h.h + d, h.l + d, h.c + d})
+}
+
+func TestTrendFilterBlocksBelowEMA(t *testing.T) {
+	// a flat 100 then a dip to 98.15: the hammer closes under EMA 200 (≈ 100)
+	md := fixture(trendBars(100), at(wednesday), 40)
+	if sig := decide(DefaultParams(), md); sig.Kind != model.SignalNone {
+		t.Fatalf("kind = %v, want none", sig.Kind)
+	}
+	if sig := decide(noTrend(), md); sig.Kind != model.SignalBuy {
+		t.Fatalf("filter off: kind = %v, want buy", sig.Kind)
+	}
+}
+
+func TestTrendFilterPassesAboveEMA(t *testing.T) {
+	// 300 bars rising from 90 to 100, then the dip: EMA 200 lags far under the hammer's close
+	var closes []float64
+	for i := 0; i < 300; i++ {
+		closes = append(closes, 90+10*float64(i)/299)
+	}
+	closes = append(closes, fall...)
+	md := fixture(chain(closes, hammerAfterFall), at(wednesday), 40)
+	if _, cur := lastRSI(md, 5); cur >= 30 {
+		t.Fatalf("fixture: hammer RSI(5) %.1f, want < 30", cur)
+	}
+	if sig := decide(DefaultParams(), md); sig.Kind != model.SignalBuy {
+		t.Fatalf("kind = %v, want buy", sig.Kind)
+	}
+}
+
+func TestTrendFilterNeedsWarmEMA(t *testing.T) {
+	// 66 bars cannot warm EMA 200: no entry rather than "above a zero EMA"
+	md := fixture(bars(fall, hammerAfterFall), at(wednesday), 40)
+	if sig := decide(DefaultParams(), md); sig.Kind != model.SignalNone {
+		t.Fatalf("kind = %v, want none", sig.Kind)
 	}
 }

@@ -12,6 +12,7 @@ func TestLiteralIsPinned(t *testing.T) {
 		RSIPeriod:       5,
 		RSIZone:         30,
 		RSIExit:         70,
+		TrendEMA:        200,
 		StopDailyATR:    0.5,
 		TargetRangeMult: 0.5,
 		DailyATRPeriod:  14,
