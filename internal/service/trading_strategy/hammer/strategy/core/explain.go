@@ -99,12 +99,20 @@ func (s *Strategy) explainEntry(sb *strings.Builder, md strategy.MarketData) {
 	}
 
 	if atr, dr, ok := s.dailyLevels(md); ok {
+		stop := c - p.StopDailyATR*atr
+		if p.StopBelowHammer > 0 {
+			stop = l - p.StopBufferATR*atr
+		}
 		target := "цели нет"
-		if p.TargetRangeMult > 0 && !under {
+		switch {
+		case under:
+		case p.StopBelowHammer > 0 && p.TargetR > 0:
+			target = fmt.Sprintf("цель %.2f R %.4f", p.TargetR, c+p.TargetR*(c-stop))
+		case p.StopBelowHammer == 0 && p.TargetRangeMult > 0:
 			target = fmt.Sprintf("цель %.4f", c+p.TargetRangeMult*dr)
 		}
-		fmt.Fprintf(sb, "✓ дневные уровни: ATR(%d) %.4f, вчерашний диапазон %.4f; от close: стоп %.4f, %s\n",
-			p.DailyATRPeriod, atr, dr, c-p.StopDailyATR*atr, target)
+		fmt.Fprintf(sb, "%s дневные уровни: ATR(%d) %.4f, вчерашний диапазон %.4f; от close %.4f: стоп %.4f (нужно > 0 и < close), %s\n",
+			mark(stop > 0 && stop < c), p.DailyATRPeriod, atr, dr, c, stop, target)
 	} else {
 		fmt.Fprintf(sb, "✗ дневные уровни: мало будних дневок для ATR(%d) или нулевой диапазон\n", p.DailyATRPeriod)
 	}

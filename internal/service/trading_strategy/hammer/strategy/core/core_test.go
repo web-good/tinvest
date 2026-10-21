@@ -471,21 +471,21 @@ func TestBelowEMAUsesItsOwnRSI(t *testing.T) {
 	}
 }
 
-func TestAboveEMAEntryCarriesTheEMA(t *testing.T) {
+func TestAboveEMAEntryCarriesNoLevel(t *testing.T) {
 	var closes []float64
 	for i := 0; i < 300; i++ {
 		closes = append(closes, 90+10*float64(i)/299)
 	}
 	closes = append(closes, fall...)
 	sig := decide(below(), fixture(chain(closes, hammerAfterFall), at(wednesday), 40))
-	if sig.Kind != model.SignalBuy || sig.Level <= 0 || sig.Level >= hammerAfterFall.c || sig.TakeProfit == 0 {
-		t.Fatalf("kind %v level %.4f target %.4f, want buy with the EMA under the close and a target",
+	if sig.Kind != model.SignalBuy || sig.Level != 0 || sig.TakeProfit == 0 {
+		t.Fatalf("kind %v level %.4f target %.4f, want buy with no level (above-EMA mode) and a target",
 			sig.Kind, sig.Level, sig.TakeProfit)
 	}
 }
 
-// heldBelow is held with the signal close (stop 99 + 0.5 × ATR 2 = 100) under the entry EMA 105,
-// filled at 98: the stop sits at 97.
+// heldBelow is held with the entry EMA 105 as the level (bought under the EMA), filled at 98: the
+// stop sits at 97.
 func heldBelow(bs []bar) strategy.MarketData {
 	md := held(bs, 98, 99, 0)
 	md.Position.EntryLevel = 105
@@ -511,7 +511,7 @@ func TestBelowEMAExitNeedsTheCross(t *testing.T) {
 	if sig := decide(below(), md); sig.Kind != model.SignalNone {
 		t.Fatalf("kind %v reason %q, want none", sig.Kind, sig.Reason)
 	}
-	md.Position.EntryLevel = 95 // the same bars under the above-EMA rules exit on RSI(5) > 70
+	md.Position.EntryLevel = 0 // the same bars under the above-EMA rules exit on RSI(5) > 70
 	if sig := decide(below(), md); sig.Reason != "RSI" {
 		t.Fatalf("above-EMA position: reason %q, want RSI", sig.Reason)
 	}
@@ -520,5 +520,56 @@ func TestBelowEMAExitNeedsTheCross(t *testing.T) {
 func TestBelowEMAStopStillWorks(t *testing.T) {
 	if sig := decide(below(), heldBelow(bars(fall, bar{98.2, 98.5, 96.9, 98.3}))); sig.Reason != "SL" {
 		t.Fatalf("reason %q, want SL", sig.Reason)
+	}
+}
+
+// hammerStop is noTrend with the stop under the hammer's low and the target in R.
+func hammerStop() Params {
+	p := noTrend()
+	p.StopBelowHammer = 1
+	return p
+}
+
+func TestHammerStopEntry(t *testing.T) {
+	md := fixture(bars(fall, hammerAfterFall), at(wednesday), 40)
+	sig := decide(hammerStop(), md)
+	// stop = low 97 − 0.05 × ATR 2 = 96.9; target = close 98.15 + 2 × (98.15 − 96.9) = 100.65
+	if sig.Kind != model.SignalBuy || math.Abs(sig.StopLoss-96.9) > eps || math.Abs(sig.TakeProfit-100.65) > eps {
+		t.Fatalf("kind %v stop %.4f target %.4f, want buy 96.9 100.65", sig.Kind, sig.StopLoss, sig.TakeProfit)
+	}
+	p := hammerStop()
+	p.StopDailyATR = 0 // the ATR stop plays no part
+	p.TargetR = 0
+	if sig := decide(p, md); sig.Kind != model.SignalBuy || sig.TakeProfit != 0 {
+		t.Fatalf("StopDailyATR 0, TargetR 0: kind %v target %.4f, want buy, no target", sig.Kind, sig.TakeProfit)
+	}
+}
+
+func TestHammerStopLevelsFromFill(t *testing.T) {
+	s := NewWithParams("TEST", step, hammerStop())
+	// the stop stays at the hammer level; the target is 2 R off the fill
+	stop, target, ok := s.exitLevels(&strategy.Position{PurchasePrice: 98.5, StopLoss: 96.9, TakeProfit: 100.65, EntryATR: 2})
+	if !ok || math.Abs(stop-96.9) > eps || math.Abs(target-101.7) > eps {
+		t.Fatalf("exitLevels = %.4f %.4f %v, want 96.9 101.7 true", stop, target, ok)
+	}
+	// filled under the stop: no target, the stop exits at once
+	stop, target, ok = s.exitLevels(&strategy.Position{PurchasePrice: 96.5, StopLoss: 96.9, TakeProfit: 100.65, EntryATR: 2})
+	if !ok || stop != 96.9 || target != 0 {
+		t.Fatalf("gap under the stop: exitLevels = %.4f %.4f %v, want 96.9 0 true", stop, target, ok)
+	}
+	// a signal without a target (under the EMA, or TargetR 0) keeps none
+	if _, target, _ = s.exitLevels(&strategy.Position{PurchasePrice: 98.5, StopLoss: 96.9, EntryATR: 2}); target != 0 {
+		t.Fatalf("no signal target: target %.4f, want 0", target)
+	}
+}
+
+func TestHammerStopUnderEMA(t *testing.T) {
+	p := below()
+	p.StopBelowHammer = 1
+	sig := decide(p, fixture(trendBars(100), at(wednesday), 40))
+	h := trendBars(100)[len(trendBars(100))-1]
+	if sig.Kind != model.SignalBuy || sig.TakeProfit != 0 || math.Abs(sig.StopLoss-(h.l-0.05*2)) > eps || sig.Level <= 0 {
+		t.Fatalf("kind %v stop %.4f target %.4f level %.4f, want buy under the hammer, no target, the EMA as level",
+			sig.Kind, sig.StopLoss, sig.TakeProfit, sig.Level)
 	}
 }

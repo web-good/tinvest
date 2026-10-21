@@ -23,6 +23,9 @@ func Params() core.Params {
 		BelowRSIZone:    30,
 		BelowRSIExit:    50,
 		StopDailyATR:    0.5,
+		StopBelowHammer: 0,
+		StopBufferATR:   0.05,
+		TargetR:         2,
 		TargetRangeMult: 0.5,
 		DailyATRPeriod:  14,
 	}
