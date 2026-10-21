@@ -52,12 +52,6 @@ type Params struct {
 	// MinRoomATR > 0: the day must have this many daily ATRs of upside left at the signal — the
 	// low of the signal's date so far plus one daily ATR, minus the signal close; 0 — off
 	MinRoomATR float64
-	// H1TrendEMA > 0: enter only while the last completed hourly close is above the EMA(N) of the
-	// hourly closes (cmd/backtest loads Hour1 as the HTF series); 0 — off
-	H1TrendEMA int
-	// D1TrendEMA > 0: enter only while the last completed weekday daily close is above the EMA(N)
-	// of the weekday daily closes; 0 — off
-	D1TrendEMA int
 
 	DailyATRPeriod int // Wilder period over completed weekday dailies
 }
@@ -252,10 +246,6 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	if !ok {
 		return sig
 	}
-	trendWhy, trendOK := s.trendOK(md)
-	if !trendOK {
-		return sig
-	}
 	room := roomLeft(ser, k, atr)
 	if s.p.MinRoomATR > 0 && room < s.p.MinRoomATR {
 		return sig
@@ -286,9 +276,6 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 		ser.t[k].In(mskLoc).Format("15:04"), pdl, pdl+s.p.ZoneATR*atr, closeP, atr, stopWhy, s.p.TargetR, target)
 	if s.p.MinRoomATR > 0 {
 		sig.EntryReason += fmt.Sprintf(", запас хода %.2f ATR ≥ %.2f", room, s.p.MinRoomATR)
-	}
-	if trendWhy != "" {
-		sig.EntryReason += ", " + trendWhy
 	}
 	if st.kind == kindBreak && s.p.BreakReclaim > 0 {
 		sig.EntryReason += ", после возврата закрытием над PDL"

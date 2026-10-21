@@ -219,7 +219,7 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 
 	// The optional HTF trend filters need real higher-timeframe candles, loaded with the
 	// same year lead-in as the daily series to warm the HTF EMA: Hour4 for reversion,
-	// Hour1 for scalping_rsimacd, pdl_reclaim and pdl_zone (H1TrendEMA). Other strategies pass nil.
+	// Hour1 for scalping_rsimacd and pdl_reclaim (H1TrendEMA). Other strategies pass nil.
 	var (
 		htfCandles  []domain.Candle
 		htfInterval time.Duration
@@ -228,7 +228,7 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 	case "reversion":
 		htfInterval = 4 * time.Hour
 		htfCandles, err = provider.Load(ctx, ticker, share.ID, enum.Hour4, dailyFrom, to, refresh)
-	case "scalping_rsimacd", "pdl_reclaim", "pdl_zone":
+	case "scalping_rsimacd", "pdl_reclaim":
 		htfInterval = time.Hour
 		htfCandles, err = provider.Load(ctx, ticker, share.ID, enum.Hour1, dailyFrom, to, refresh)
 	}

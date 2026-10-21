@@ -545,39 +545,3 @@ func TestRoomLeftCountsOnlyTheSignalDate(t *testing.T) {
 		t.Fatalf("roomLeft = %v, want (99 + 2 − 100.5) / 2 = 0.25", got)
 	}
 }
-
-func TestTrendFilters(t *testing.T) {
-	day := zoneDay()
-	g := firstGreen(DefaultParams(), day, zoneArm)
-	md := func() strategy.MarketData { return fixture(warm(day)[:warmBars+g+1], loudFrom(day, zoneArm)) }
-	rising := []float64{90, 92, 94, 96, 98, 100}
-	falling := []float64{110, 108, 106, 104, 102, 100}
-	cases := []struct {
-		name   string
-		h1, d1 int
-		hours  []float64
-		dailyC float64 // the last daily close (the rest close at 100)
-		want   bool
-	}{
-		{"off", 0, 0, nil, 100, true},
-		{"hourly above EMA", 3, 0, rising, 100, true},
-		{"hourly below EMA", 3, 0, falling, 100, false},
-		{"too few hours", 10, 0, rising, 100, false},
-		{"daily above EMA", 0, 5, nil, 101, true},
-		{"daily flat is not above", 0, 5, nil, 100, false},
-		{"daily below EMA", 0, 5, nil, 99, false},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			p := DefaultParams()
-			p.H1TrendEMA, p.D1TrendEMA = tc.h1, tc.d1
-			m := md()
-			m.HTFCloses = tc.hours
-			m.DailyCloses = append([]float64(nil), m.DailyCloses...)
-			m.DailyCloses[len(m.DailyCloses)-1] = tc.dailyC
-			if got := NewWithParams("TEST", step, p).Decide(m).Kind == model.SignalBuy; got != tc.want {
-				t.Fatalf("buy = %v, want %v", got, tc.want)
-			}
-		})
-	}
-}

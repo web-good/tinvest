@@ -9,7 +9,7 @@ import (
 // Литерал прибит снимком: правка любого числа меняет то, что гоняет бэктест NVTK на 5m.
 func TestLiteralIsPinned(t *testing.T) {
 	want := core.Params{
-		EntryZone:      1,
+		EntryZone:      0,
 		EntryBreak:     1,
 		ZoneATR:        0.2,
 		BreakReclaim:   1,
@@ -21,9 +21,7 @@ func TestLiteralIsPinned(t *testing.T) {
 		StopBars:       5,
 		MinStopATR:     0.2,
 		TargetR:        1.7,
-		MinRoomATR:     0.7,
-		H1TrendEMA:     0,
-		D1TrendEMA:     0,
+		MinRoomATR:     0.2,
 		DailyATRPeriod: 14,
 	}
 	if got := Params(); got != want {
