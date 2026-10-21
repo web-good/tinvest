@@ -6,6 +6,7 @@
       "grid": {
         "EntryZone": [0, 1],
         "EntryBreak": [0, 1],
+        "BreakReclaim": [0, 1],
         "ZoneATR": [0.1, 0.2, 0.3],
         "MinStopATR": [0.1, 0.2, 0.3],
         "TargetR": [1.5, 2, 3],

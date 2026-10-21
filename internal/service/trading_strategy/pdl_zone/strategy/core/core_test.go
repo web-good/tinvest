@@ -156,7 +156,7 @@ func loudFrom(day []bar, i int) time.Time { return day[i].t }
 
 func TestDefaultParams(t *testing.T) {
 	want := Params{EntryZone: 1, EntryBreak: 1, ZoneATR: 0.2, MACDFast: 8, MACDSlow: 21, MACDSignal: 9,
-		VolumeMult: 1.5, VolBars: 15, StopBars: 5, MinStopATR: 0.2, TargetR: 2, DailyATRPeriod: 14}
+		BreakReclaim: 0, VolumeMult: 1.5, VolBars: 15, StopBars: 5, MinStopATR: 0.2, TargetR: 2, DailyATRPeriod: 14}
 	if got := DefaultParams(); got != want {
 		t.Fatalf("DefaultParams = %+v, want %+v", got, want)
 	}
@@ -451,5 +451,51 @@ func TestLookbackCoversMACDWarmup(t *testing.T) {
 	s := NewWithParams("TEST", step, DefaultParams())
 	if s.Lookback() < 3*(21+9) || s.Lookback() < 3*dayBars {
 		t.Fatalf("Lookback = %d", s.Lookback())
+	}
+}
+
+// slowBreakDay breaks PDL (98.8 at index 5), turns the histogram green under PDL (index 12) and
+// closes back above PDL at index 15 (99.1).
+func slowBreakDay() []bar {
+	return path(dayStart, 100, 99.8, 99.6, 99.4, 99.2, 99.0, 98.8, 98.6, 98.5, 98.55, 98.65, 98.75, 98.85, 98.9, 98.95, 98.9, 99.1, 99.3, 99.5, 99.7)
+}
+
+func TestBreakReclaimWaitsForCloseAbovePDL(t *testing.T) {
+	const arm, under, reclaim = 5, 12, 15
+	day := slowBreakDay()
+	off := DefaultParams()
+	if got := buys(off, day, loudFrom(day, arm)); len(got) != 1 || got[0] != under || firstGreen(off, day, arm) != under {
+		t.Fatalf("BreakReclaim 0: buys = %v, want [%d] (green under PDL)", got, under)
+	}
+	on := DefaultParams()
+	on.BreakReclaim = 1
+	if got := buys(on, day, loudFrom(day, arm)); len(got) != 1 || got[0] != reclaim {
+		t.Fatalf("BreakReclaim 1: buys = %v, want [%d] (the green reclaim bar)", got, reclaim)
+	}
+}
+
+func TestBreakReclaimRestartsOnNewCloseBelow(t *testing.T) {
+	// Break, reclaim above PDL, a red close below again, then the final reclaim and a climb.
+	day := path(dayStart, 100, 99.8, 99.6, 99.4, 99.2, 99.0, 98.8, 98.7, 98.75, 98.85, 99.0, 99.1, 98.9, 98.8, 98.85, 99.05, 99.3, 99.6, 99.9)
+	p := DefaultParams()
+	p.BreakReclaim, p.VolumeMult = 1, 0
+	got := buys(p, day, time.Time{})
+	h := hist(p, day)
+	for _, b := range got {
+		if b >= 11 && b < 14 {
+			t.Fatalf("bought at %d while back under PDL (h=%v)", b, h[b])
+		}
+		if day[b].c < 99 {
+			t.Fatalf("bought at %d on a close %.2f under PDL", b, day[b].c)
+		}
+	}
+}
+
+func TestBreakReclaimLeavesZoneAlone(t *testing.T) {
+	p, day := DefaultParams(), zoneDay()
+	p.BreakReclaim = 1
+	got := buys(p, day, loudFrom(day, zoneArm))
+	if g := firstGreen(p, day, zoneArm); len(got) != 1 || got[0] != g {
+		t.Fatalf("buys = %v, want [%d]", got, g)
 	}
 }

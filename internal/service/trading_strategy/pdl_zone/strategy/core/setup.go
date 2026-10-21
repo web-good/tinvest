@@ -36,13 +36,17 @@ const (
 // after a signal; a close below PDL arms (or re-arms) a break unless a break is already armed; an
 // idle bar with low ≤ zoneTop and close ≥ PDL arms a zone (EntryZone on); an armed bar with a
 // green histogram is the signal, which burns the setup whatever follows — a refused buy or a
-// position already open. The arming bar may itself be the signal.
+// position already open. The arming bar may itself be the signal. With BreakReclaim on, an armed
+// break waits for a close back above PDL first: green bars before it neither signal nor burn the
+// setup, the reclaim bar itself may be the signal, and a new close below PDL restarts the wait
+// (the arming bar stays the first break).
 func (s *Strategy) scan(ser series, hist []float64, k int, pdl, zoneTop float64) (setup, bool) {
 	start := k
 	for start > 0 && dayKey(ser.t[start-1]) == dayKey(ser.t[k]) {
 		start--
 	}
 	state, cur := stateIdle, setup{}
+	reclaimed := false // BreakReclaim: a close back above PDL since the break's latest close below it
 	for j := start; j <= k; j++ {
 		if state == stateNeedRed && hist[j] <= 0 {
 			state = stateIdle
@@ -50,9 +54,15 @@ func (s *Strategy) scan(ser series, hist []float64, k int, pdl, zoneTop float64)
 		switch {
 		case state == stateNeedRed:
 		case ser.c[j] < pdl && (state == stateIdle || cur.kind == kindZone):
-			state, cur = stateArmed, setup{arm: j, kind: kindBreak}
+			state, cur, reclaimed = stateArmed, setup{arm: j, kind: kindBreak}, false
 		case state == stateIdle && s.p.EntryZone > 0 && ser.l[j] <= zoneTop && ser.c[j] >= pdl:
 			state, cur = stateArmed, setup{arm: j, kind: kindZone}
+		}
+		if state == stateArmed && cur.kind == kindBreak {
+			reclaimed = ser.c[j] > pdl || reclaimed && ser.c[j] >= pdl
+		}
+		if s.p.BreakReclaim > 0 && state == stateArmed && cur.kind == kindBreak && !reclaimed {
+			continue
 		}
 		if state == stateArmed && hist[j] > 0 {
 			if j == k {

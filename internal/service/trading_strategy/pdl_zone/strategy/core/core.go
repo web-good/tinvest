@@ -32,6 +32,9 @@ type Params struct {
 	EntryZone  int     // 1 — a dip into the zone above PDL arms a setup
 	EntryBreak int     // 1 — a close below PDL arms a setup (and turns an armed zone setup into a break)
 	ZoneATR    float64 // the zone's top above PDL in daily ATR
+	// BreakReclaim 1: a break setup signals only after a bar closes back above PDL (the first green
+	// histogram bar from that reclaim bar on); 0 — the first green bar after the break
+	BreakReclaim int
 
 	MACDFast   int
 	MACDSlow   int
@@ -263,6 +266,9 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	sig.EntryReason = fmt.Sprintf("%s %s: взвод на свече %s, первая зелёная гистограмма MACD(%d,%d,%d) на свече %s, PDL %.4f, верх зоны %.4f, сигнал по close %.4f, дневной ATR %.4f, %s, цель %.2fR %.4f (стоп и цель пересчитываются от цены покупки)",
 		st.name(), s.tf(), ser.t[st.arm].In(mskLoc).Format("15:04"), s.p.MACDFast, s.p.MACDSlow, s.p.MACDSignal,
 		ser.t[k].In(mskLoc).Format("15:04"), pdl, pdl+s.p.ZoneATR*atr, closeP, atr, stopWhy, s.p.TargetR, target)
+	if st.kind == kindBreak && s.p.BreakReclaim > 0 {
+		sig.EntryReason += ", после возврата закрытием над PDL"
+	}
 	if s.volumeOn() {
 		sig.EntryReason += fmt.Sprintf(", средний объём от взвода %.0f > %.2f × среднее %d свечей %.0f", win, s.p.VolumeMult, s.p.VolBars, base)
 	}

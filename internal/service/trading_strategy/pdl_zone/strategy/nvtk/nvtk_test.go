@@ -12,6 +12,7 @@ func TestLiteralIsPinned(t *testing.T) {
 		EntryZone:      1,
 		EntryBreak:     1,
 		ZoneATR:        0.2,
+		BreakReclaim:   0,
 		MACDFast:       8,
 		MACDSlow:       21,
 		MACDSignal:     9,
@@ -19,7 +20,7 @@ func TestLiteralIsPinned(t *testing.T) {
 		VolBars:        15,
 		StopBars:       5,
 		MinStopATR:     0.2,
-		TargetR:        2,
+		TargetR:        1.7,
 		DailyATRPeriod: 14,
 	}
 	if got := Params(); got != want {
