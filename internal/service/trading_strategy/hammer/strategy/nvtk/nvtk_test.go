@@ -13,6 +13,8 @@ func TestLiteralIsPinned(t *testing.T) {
 		RSIZone:         30,
 		RSIExit:         70,
 		TrendEMA:        200,
+		VolumeMult:      1.5,
+		VolBars:         20,
 		StopDailyATR:    0.5,
 		TargetRangeMult: 0.5,
 		DailyATRPeriod:  14,

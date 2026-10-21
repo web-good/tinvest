@@ -97,7 +97,8 @@ func dailyBars(before time.Time, days int) (highs, lows, closes []float64, times
 }
 
 // fixture builds MarketData from bars whose last bar starts at `last`, hourly back from it, plus
-// `days` days of dailies before it.
+// `days` days of dailies before it. Every bar trades 100 lots, the last one 200: it passes the
+// default volume filter (above 1.5 × 100).
 func fixture(bs []bar, last time.Time, days int) strategy.MarketData {
 	var md strategy.MarketData
 	n := len(bs)
@@ -109,6 +110,7 @@ func fixture(bs []bar, last time.Time, days int) strategy.MarketData {
 		md.Closes = append(md.Closes, b.c)
 		md.Volumes = append(md.Volumes, 100)
 	}
+	md.Volumes[n-1] = 200
 	md.Price = md.Closes[n-1]
 	md.DailyHighs, md.DailyLows, md.DailyCloses, md.DailyTimes = dailyBars(last, days)
 	return md
@@ -207,7 +209,10 @@ func TestNoEntryOnWeekend(t *testing.T) {
 
 func TestMondayUsesFridayRange(t *testing.T) {
 	md := fixture(bars(fall, hammerAfterFall), at("2026-09-21 12:00"), 40)
-	sig := decide(noTrend(), md)
+	// 66 bars back from Monday noon hold only two main-session bars: the volume filter is off
+	p := noTrend()
+	p.VolumeMult = 0
+	sig := decide(p, md)
 	if sig.Kind != model.SignalBuy {
 		t.Fatalf("kind = %v, want buy", sig.Kind)
 	}
@@ -371,5 +376,54 @@ func TestMinutes30LastBarOfDay(t *testing.T) {
 	}
 	if sig := s.Decide(halfHour(bars(fall, hammerAfterFall), at("2026-09-16 23:30"), 40)); sig.Kind != model.SignalNone {
 		t.Fatalf("23:30 on 30m: kind = %v, want none", sig.Kind)
+	}
+}
+
+func TestVolumeFilter(t *testing.T) {
+	md := fixture(bars(fall, hammerAfterFall), at(wednesday), 40)
+	n := len(md.Volumes)
+	cases := []struct {
+		name string
+		vol  int64
+		want model.SignalKind
+	}{
+		{"at 1.5 × the average", 150, model.SignalNone},
+		{"above 1.5 × the average", 151, model.SignalBuy},
+	}
+	for _, tc := range cases {
+		md.Volumes[n-1] = tc.vol
+		if sig := decide(noTrend(), md); sig.Kind != tc.want {
+			t.Errorf("%s: kind = %v, want %v", tc.name, sig.Kind, tc.want)
+		}
+	}
+	p := noTrend()
+	p.VolumeMult = 0
+	md.Volumes[n-1] = 100
+	if sig := decide(p, md); sig.Kind != model.SignalBuy {
+		t.Fatalf("filter off: kind = %v, want buy", sig.Kind)
+	}
+}
+
+func TestVolumeAverageSkipsOffSessionBars(t *testing.T) {
+	// the evening, night and morning bars trade 1000 lots: counted in, they would lift the average
+	// over 151 / 1.5
+	md := fixture(bars(fall, hammerAfterFall), at(wednesday), 40)
+	n := len(md.Volumes)
+	for i, tm := range md.Times[:n-1] {
+		if h := tm.In(mskLoc).Hour(); h < 10 || h >= 19 {
+			md.Volumes[i] = 1000
+		}
+	}
+	md.Volumes[n-1] = 151
+	if sig := decide(noTrend(), md); sig.Kind != model.SignalBuy {
+		t.Fatalf("kind = %v, want buy", sig.Kind)
+	}
+}
+
+func TestVolumeFilterNeedsHistory(t *testing.T) {
+	p := noTrend()
+	p.VolBars = 500
+	if sig := decide(p, fixture(bars(fall, hammerAfterFall), at(wednesday), 40)); sig.Kind != model.SignalNone {
+		t.Fatalf("kind = %v, want none", sig.Kind)
 	}
 }

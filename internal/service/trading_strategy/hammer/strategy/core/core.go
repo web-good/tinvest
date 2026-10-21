@@ -1,7 +1,8 @@
 // Package core implements hammer: a long-only strategy on hourly or 30-minute bars. The signal is a hammer
 // candle (isHammer) whose own close has RSI(RSIPeriod) below RSIZone and, with TrendEMA on, sits
-// strictly above the EMA(TrendEMA) of the bar closes; the buy comes at the next bar's open on
-// the same MSK weekday date.
+// strictly above the EMA(TrendEMA) of the bar closes, on a volume above VolumeMult × the average of
+// the VolBars main-session bars before it; the buy comes at the next bar's open on the same MSK
+// weekday date.
 //
 // The stop is StopDailyATR daily ATRs (Wilder DailyATRPeriod over completed weekday dailies) under
 // the entry; the target is TargetRangeMult × yesterday's daily range (high − low of the last
@@ -31,6 +32,10 @@ type Params struct {
 	// TrendEMA > 0: the hammer's close must be strictly above a warmed EMA of this period over the
 	// bar closes; 0 — off
 	TrendEMA int
+	// VolumeMult > 0: the hammer bar's volume must be above this × the average of the VolBars
+	// main-session bars before it; 0 — off
+	VolumeMult float64
+	VolBars    int
 
 	StopDailyATR float64 // the stop distance under the entry in daily ATRs; ≤ 0 — no entries
 	// TargetRangeMult > 0: the target is this share of yesterday's daily range above the entry;
@@ -47,6 +52,8 @@ func DefaultParams() Params {
 		RSIZone:         30,
 		RSIExit:         70,
 		TrendEMA:        200,
+		VolumeMult:      1.5,
+		VolBars:         20,
 		StopDailyATR:    0.5,
 		TargetRangeMult: 0.5,
 		DailyATRPeriod:  14,
@@ -75,9 +82,11 @@ func (s *Strategy) tf() string {
 	return fmt.Sprintf("%dm", int(s.step.Minutes()))
 }
 
-// Lookback is enough bars for Wilder's RSI to settle and for the trend EMA to recurse past
-// its SMA seed (twice its period).
-func (s *Strategy) Lookback() int { return max(20*s.p.RSIPeriod, 100, 2*s.p.TrendEMA+20) }
+// Lookback is enough bars for Wilder's RSI to settle, for the trend EMA to recurse past its SMA
+// seed (twice its period) and for VolBars main-session bars to fit past nights and weekends.
+func (s *Strategy) Lookback() int {
+	return max(20*s.p.RSIPeriod, 100, 2*s.p.TrendEMA+20, 5*s.p.VolBars)
+}
 
 // mskLoc anchors every calendar rule to Moscow (UTC fallback).
 var mskLoc = func() *time.Location {
@@ -111,6 +120,47 @@ func isHammer(o, h, l, c float64) bool {
 	}
 	body := max(o, c) - min(o, c)
 	return body > 0 && body <= rng/3 && min(o, c) >= l+rng*2/3
+}
+
+// The main session, MSK: the bars opening from 10:00 to before 19:00 (on 1h the 18:00 bar, on 30m
+// the 18:30 one, holds the closing auction). The volume average skips the morning and evening
+// sessions and weekends.
+const (
+	sessionFrom = 10 * 60
+	sessionTo   = 19 * 60
+)
+
+// inSession reports whether t opens a weekday main-session bar.
+func inSession(t time.Time) bool {
+	tl := t.In(mskLoc)
+	m := tl.Hour()*60 + tl.Minute()
+	return !isWeekend(tl) && m >= sessionFrom && m < sessionTo
+}
+
+// volumeOK reports the volume of bar k, the average of the VolBars main-session bars before it
+// and whether the filter passes: the volume is above VolumeMult × that average. Off (VolumeMult
+// or VolBars ≤ 0) — always passes; without volumes or that many main-session bars it fails closed.
+func (s *Strategy) volumeOK(md strategy.MarketData, k int) (vol, avg float64, ok bool) {
+	if s.p.VolumeMult <= 0 || s.p.VolBars <= 0 {
+		return 0, 0, true
+	}
+	if len(md.Volumes) != len(md.Closes) {
+		return 0, 0, false
+	}
+	var sum int64
+	got := 0
+	for j := k - 1; j >= 0 && got < s.p.VolBars; j-- {
+		if inSession(md.Times[j]) {
+			sum += md.Volumes[j]
+			got++
+		}
+	}
+	if got < s.p.VolBars {
+		return 0, 0, false
+	}
+	avg = float64(sum) / float64(got)
+	vol = float64(md.Volumes[k])
+	return vol, avg, avg > 0 && vol > s.p.VolumeMult*avg
 }
 
 // weekdayDaily drops weekend (Sat/Sun MSK) dailies, keeping the price slices aligned. When times
@@ -154,8 +204,9 @@ func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 	return s.enter(md, sig)
 }
 
-// enter buys the next open when the current bar is a hammer with its own RSI below RSIZone, on a
-// weekday whose next bar starts on the same date.
+// enter buys the next open when the current bar is a hammer with its own RSI below RSIZone (above
+// the trend EMA and on raised volume when those filters are on), on a weekday whose next bar starts
+// on the same date.
 func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal {
 	n := len(md.Closes)
 	if n == 0 || len(md.Times) != n || len(md.Opens) != n || len(md.Highs) != n || len(md.Lows) != n {
@@ -184,6 +235,14 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 		}
 		trendWhy = fmt.Sprintf(", close над EMA(%d) %.4f", s.p.TrendEMA, e)
 	}
+	vol, avg, volOK := s.volumeOK(md, k)
+	if !volOK {
+		return sig
+	}
+	volWhy := ""
+	if avg > 0 {
+		volWhy = fmt.Sprintf(", объём %.0f > %.1f × среднего %.0f", vol, s.p.VolumeMult, avg)
+	}
 	atr, rng, ok := s.dailyLevels(md)
 	if !ok {
 		return sig
@@ -200,8 +259,8 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	sig.Kind = model.SignalBuy
 	sig.StopLoss, sig.TakeProfit, sig.ATR = stop, target, atr
 	sig.FillBy = t.Add(s.step)
-	sig.EntryReason = fmt.Sprintf("молот %s на свече %s (o %.4f h %.4f l %.4f c %.4f), RSI(%d) %.1f < %.0f%s, дневной ATR %.4f, стоп %.2f ATR %.4f, %s (стоп и цель пересчитываются от цены покупки)",
-		s.tf(), t.In(mskLoc).Format("01-02 15:04"), o, h, l, c, s.p.RSIPeriod, rsi, s.p.RSIZone, trendWhy, atr, s.p.StopDailyATR, stop, targetWhy)
+	sig.EntryReason = fmt.Sprintf("молот %s на свече %s (o %.4f h %.4f l %.4f c %.4f), RSI(%d) %.1f < %.0f%s%s, дневной ATR %.4f, стоп %.2f ATR %.4f, %s (стоп и цель пересчитываются от цены покупки)",
+		s.tf(), t.In(mskLoc).Format("01-02 15:04"), o, h, l, c, s.p.RSIPeriod, rsi, s.p.RSIZone, trendWhy, volWhy, atr, s.p.StopDailyATR, stop, targetWhy)
 	return sig
 }
 
