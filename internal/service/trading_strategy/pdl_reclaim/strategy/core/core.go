@@ -45,10 +45,10 @@ type Params struct {
 	// including the trigger bar) is at or above MaxDayRangeATR daily ATRs — the day has already
 	// spent its move; 0 — off
 	MaxDayRangeATR float64
-	// H1TrendEMA > 0: enter only while the close of the ticker's last completed hour is above the
-	// EMA(H1TrendEMA) of the completed hourly closes (the engine's Hour1 series, md.HTFCloses);
-	// fewer hours than the period — no entry; 0 — off. Both entries.
-	H1TrendEMA int
+	// IndexTrendEMA > 0: enter only while the market index (IMOEX, set with WithIndex) is falling —
+	// its EMA(IndexTrendEMA) over completed dailies below the value indexSlopeDays dailies earlier;
+	// 0 — off
+	IndexTrendEMA int
 	// TargetStopMult > 0: the target is TargetStopMult stop distances (StopDailyATR daily ATRs)
 	// above the signal close instead of the setup level + half of yesterday's range; 0 — off
 	TargetStopMult float64
@@ -67,25 +67,39 @@ type Params struct {
 	PDLEngulf int
 	PDLHammer int
 	// PDLReclaimBars > 0: a hammer counts only when the reclaim bar is at most this many bars after
-	// it (0 — the reclaim bar itself is the hammer); a later reclaim burns the setup. 0 — no limit.
+	// it; a later reclaim burns the setup. 0 — no limit.
 	PDLReclaimBars int
+	// PDLHammerEntry 1 (with PDLHammer on): the PDL entry does not wait for the reclaim — a hammer
+	// that formed after the break of PDL (a red close below PDL on its date, no close above PDL
+	// since) followed by a green bar buys the next open after that green bar; a red bar after the
+	// hammer burns it. The reclaim no longer buys and PDLReclaimBars does not apply. Stop under the
+	// hammer's low, target and filters are those of the hammer reclaim. 0 — buy on the reclaim.
+	PDLHammerEntry int
+	// PDLSignalVolMult > 0: a hammer entry buys only when the hammer bar and the trigger bar (the
+	// reclaim, or the green bar after the hammer under PDLHammerEntry) each traded more than this ×
+	// the average of the VolBars main-session bars before the hammer; without volumes it fails
+	// closed; 0 — off.
+	PDLSignalVolMult float64
 	// PDLPatternTargetR is the target of the hammer reclaim in risks: close + R × (close − the
 	// hammer's low). 0 — the target of the reclaim (the middle of yesterday's range).
 	PDLPatternTargetR float64
 	// PDLMaxStopATR > 0: the hammer stop is never farther than this many daily ATRs below the
 	// signal close — a deeper hammer low is lifted to that distance and the R target follows. 0 — off.
 	PDLMaxStopATR float64
-	// PDLExitBelowPDL > 0: a position also exits at the close of a bar that closes below the PDL of
-	// the entry date (the low of the last weekday before it); the stop keeps working. 0 — off.
-	PDLExitBelowPDL int
-	// PDLExitBufferATR: with PDLExitBelowPDL the close must be this many daily ATRs (frozen at
-	// entry) below that PDL to exit. 0 — any close below PDL.
-	PDLExitBufferATR float64
+	// PDLMinStopATR > 0: the hammer stop is never closer than this many daily ATRs below the
+	// signal close — a shallower hammer low is lowered to that distance and the R target follows.
+	// 0 — off.
+	PDLMinStopATR float64
 	// PDLDipVolMult > 0: the PDL reclaim buys only when the average volume of the main-session bars
 	// of the series under PDL (from the break to the reclaim bar, both included) is above
 	// PDLDipVolMult × the average of the VolBars main-session bars before the series; a series
 	// without main-session bars fails closed; 0 — off. Works with or without the patterns.
 	PDLDipVolMult float64
+	// LockAfterR > 0: once a bar after the fill has closed at or above the fill + LockAfterR risks
+	// (the risk is the fill minus the entry stop), the stop moves up to the fill + LockAtR risks from
+	// the next bar on and never back; 0 — off.
+	LockAfterR float64
+	LockAtR    float64
 }
 
 // DefaultParams returns the owner's rules.
@@ -108,6 +122,7 @@ type Strategy struct {
 	ticker string
 	step   time.Duration
 	p      Params
+	idx    index
 }
 
 // NewWithParams returns the strategy for a ticker; step is the bar length (15m or 5m).
@@ -267,19 +282,27 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	if !s.roomOK(spent) {
 		return sig
 	}
-	trendWhy, trendOK := s.trendOK(md)
-	if !trendOK {
+	indexWhy, indexOK := s.indexOK(md.Times[k])
+	if !indexOK {
+		return sig
+	}
+	hammerWhy, hammerOK := s.hammerOK(ser, st, k)
+	if !hammerOK {
 		return sig
 	}
 	stop := closeP - s.p.StopDailyATR*atr
-	stopWhy := ""
+	stopWhy := hammerWhy
 	switch {
 	case st.kind != "":
 		stop = ser.l[st.pat]
-		stopWhy = fmt.Sprintf("стоп по лою молота %s %.4f", ser.t[st.pat].In(mskLoc).Format("15:04"), stop)
+		stopWhy += fmt.Sprintf("стоп по лою молота %s %.4f", ser.t[st.pat].In(mskLoc).Format("15:04"), stop)
 		if capped, ok := s.capStop(closeP, stop, atr); ok {
 			stop = capped
 			stopWhy += fmt.Sprintf(", поднят до %.2f ATR: %.4f", s.p.PDLMaxStopATR, stop)
+		}
+		if floored, ok := s.floorStop(closeP, stop, atr); ok {
+			stop = floored
+			stopWhy += fmt.Sprintf(", опущен до %.2f ATR: %.4f", s.p.PDLMinStopATR, stop)
 		}
 	case s.p.StopAtExtremum > 0:
 		stop = setupLow(ser, st, k) - s.p.StopBufferATR*atr
@@ -307,8 +330,8 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	if s.p.MaxDayRangeATR > 0 {
 		sig.EntryReason += fmt.Sprintf(", диапазон дня %.2f ATR < %.2f", spent, s.p.MaxDayRangeATR)
 	}
-	if trendWhy != "" {
-		sig.EntryReason += ", " + trendWhy
+	if indexWhy != "" {
+		sig.EntryReason += ", " + indexWhy
 	}
 	if stopWhy != "" {
 		sig.EntryReason += ", " + stopWhy
@@ -316,11 +339,34 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	return sig
 }
 
+// hammerOK applies the volume filter PDLSignalVolMult to a setup that stops under a hammer; why
+// is the passed filter as a reason prefix ending with ", ".
+func (s *Strategy) hammerOK(ser series, st setup, k int) (why string, ok bool) {
+	if st.kind == "" || !s.signalVolumeOn() {
+		return "", true
+	}
+	vol, avg, ok := s.signalVolumeOK(ser, st.pat, k)
+	if !ok {
+		return "", false
+	}
+	return fmt.Sprintf("объём молота и сигнала от %.0f > %.2f × обычный %.0f, ", vol, s.p.PDLSignalVolMult, avg), true
+}
+
 // capStop lifts a hammer stop deeper than PDLMaxStopATR daily ATRs under closeP to that distance;
 // false when the cap is off or the stop is within it.
 func (s *Strategy) capStop(closeP, stop, atr float64) (float64, bool) {
 	floor := closeP - s.p.PDLMaxStopATR*atr
 	if s.p.PDLMaxStopATR <= 0 || atr <= 0 || stop >= floor {
+		return stop, false
+	}
+	return floor, true
+}
+
+// floorStop lowers a hammer stop closer than PDLMinStopATR daily ATRs under closeP to that
+// distance; ok is false when the floor is off or the stop is already that deep.
+func (s *Strategy) floorStop(closeP, stop, atr float64) (float64, bool) {
+	floor := closeP - s.p.PDLMinStopATR*atr
+	if s.p.PDLMinStopATR <= 0 || atr <= 0 || stop <= floor {
 		return stop, false
 	}
 	return floor, true
@@ -367,6 +413,12 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 	}
 	i := n - 1
 	low, high := md.Lows[i], md.Highs[i]
+	if lock, ok := s.lockStop(md, pos); ok && low <= lock {
+		sig.Kind, sig.Reason, sig.StopLoss = model.SignalSell, "TRAIL", lock
+		sig.ExitReason = fmt.Sprintf("TRAIL: low %.4f ≤ стоп %.4f (+%.2fR после +%.2fR, вход %.4f)",
+			low, lock, s.p.LockAtR, s.p.LockAfterR, pos.PurchasePrice)
+		return sig
+	}
 	if stop := s.stop(md, pos); stop > 0 && low <= stop {
 		sig.Kind, sig.Reason, sig.StopLoss = model.SignalSell, "SL", stop
 		sig.ExitReason = fmt.Sprintf("SL: low %.4f ≤ стоп %.4f (вход %.4f)", low, stop, pos.PurchasePrice)
@@ -377,41 +429,26 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 		sig.ExitReason = fmt.Sprintf("TP: high %.4f ≥ цели %.4f (вход %.4f)", high, pos.TakeProfit, pos.PurchasePrice)
 		return sig
 	}
-	if lvl, pdl, ok := s.pdlExitLevel(md, pos); ok && md.Closes[i] < lvl {
-		sig.Kind, sig.Reason = model.SignalSell, "PDL"
-		sig.ExitReason = fmt.Sprintf("PDL: close %.4f < PDL дня входа %.4f − %.2f ATR = %.4f (вход %.4f)",
-			md.Closes[i], pdl, s.p.PDLExitBufferATR, lvl, pos.PurchasePrice)
-	}
 	return sig
 }
 
-// pdlExitLevel is the close level under which PDLExitBelowPDL exits: the entry date's PDL minus
-// PDLExitBufferATR daily ATRs (frozen at entry; today's when the position carries none).
-func (s *Strategy) pdlExitLevel(md strategy.MarketData, pos *strategy.Position) (lvl, pdl float64, ok bool) {
-	pdl, ok = s.entryPDL(md, pos)
-	if !ok {
-		return 0, 0, false
-	}
-	atr := pos.EntryATR
-	if atr <= 0 {
-		atr = s.dailyATR(md)
-	}
-	return pdl - s.p.PDLExitBufferATR*atr, pdl, true
-}
-
-// entryPDL is the PDL of the position's entry date for PDLExitBelowPDL: the low of the last
-// weekday daily before that date.
-func (s *Strategy) entryPDL(md strategy.MarketData, pos *strategy.Position) (float64, bool) {
-	if s.p.PDLExitBelowPDL <= 0 || pos.EntryTime.IsZero() || len(md.DailyLows) != len(md.DailyTimes) {
+// lockStop is the stop moved up by LockAfterR/LockAtR: the fill + LockAtR risks once a bar after
+// the fill and before the current one has closed at or above the fill + LockAfterR risks
+// (pos.PrevMaxFavorablePrice, the engine's highest close through the previous bar). ok is false
+// when the lock is off, not armed, or the position has no stop to measure the risk by.
+func (s *Strategy) lockStop(md strategy.MarketData, pos *strategy.Position) (float64, bool) {
+	if s.p.LockAfterR <= 0 {
 		return 0, false
 	}
-	day := dayKey(pos.EntryTime)
-	for j := len(md.DailyTimes) - 1; j >= 0; j-- {
-		if t := md.DailyTimes[j]; dayKey(t) < day && !isWeekend(t.In(mskLoc)) {
-			return md.DailyLows[j], md.DailyLows[j] > 0
-		}
+	stop := s.stop(md, pos)
+	risk := pos.PurchasePrice - stop
+	if stop <= 0 || risk <= 0 {
+		return 0, false
 	}
-	return 0, false
+	if pos.PrevMaxFavorablePrice < pos.PurchasePrice+s.p.LockAfterR*risk {
+		return 0, false
+	}
+	return pos.PurchasePrice + s.p.LockAtR*risk, true
 }
 
 // stop is StopDailyATR daily ATRs below the fill, with the ATR frozen at entry (today's when the

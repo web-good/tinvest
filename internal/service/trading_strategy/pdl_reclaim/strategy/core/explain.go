@@ -33,8 +33,8 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 	} else {
 		fmt.Fprintf(&sb, "✗ дневной ATR(%d): не посчитан\n", p.DailyATRPeriod)
 	}
-	if why, ok := s.trendOK(md); why != "" {
-		fmt.Fprintf(&sb, "%s тренд часа: %s\n", mark(ok), why)
+	if why, ok := s.indexOK(md.Times[i]); why != "" {
+		fmt.Fprintf(&sb, "%s тренд индекса вниз: %s\n", mark(ok), why)
 	}
 
 	if md.Position != nil {
@@ -82,11 +82,20 @@ func (s *Strategy) explainEntry(sb *strings.Builder, md strategy.MarketData) {
 		return
 	}
 	fmt.Fprintf(sb, "✗ пробоя PDH %d св. назад, удержанного над PDH, нет\n", p.HoldBars)
-	if p.EntryPDL <= 0 || !isReclaim(ser, k, pdl) {
+	if p.EntryPDL <= 0 {
 		return
 	}
 	hammer := -1
-	if s.patternsOn() {
+	if s.hammerEntryOn() {
+		h, ok := greenAfterHammer(ser, k, pdl)
+		fmt.Fprintf(sb, "%s эта свеча зелёная, предыдущая — молот после пробоя PDL без закрытий выше PDL (вход после молота %d)\n", mark(ok), p.PDLHammerEntry)
+		if !ok {
+			return
+		}
+		hammer = h
+	} else if !isReclaim(ser, k, pdl) {
+		return
+	} else if s.patternsOn() {
 		found := "нет"
 		name, at, ok := s.pdlPattern(ser, k, pdl)
 		if ok {
@@ -112,17 +121,36 @@ func (s *Strategy) explainEntry(sb *strings.Builder, md strategy.MarketData) {
 			return
 		}
 	}
+	if hammer >= 0 && !s.explainSignalVolume(sb, ser, hammer, k) {
+		return
+	}
 	if c := ser.c[k]; hammer >= 0 && p.PDLPatternTargetR > 0 {
 		stop, capped := ser.l[hammer], ""
 		if lifted, ok := s.capStop(c, stop, s.dailyATR(md)); ok {
 			capped = fmt.Sprintf(" поднят до %.2f ATR: %.4f", p.PDLMaxStopATR, lifted)
 			stop = lifted
 		}
+		if lowered, ok := s.floorStop(c, stop, s.dailyATR(md)); ok {
+			capped += fmt.Sprintf(" опущен до %.2f ATR: %.4f", p.PDLMinStopATR, lowered)
+			stop = lowered
+		}
 		fmt.Fprintf(sb, "%s стоп по лою молота %.4f%s ниже close %.4f, цель %.2fR = %.4f\n",
 			mark(stop > 0 && stop < c), ser.l[hammer], capped, c, p.PDLPatternTargetR, c+p.PDLPatternTargetR*(c-stop))
 		return
 	}
 	explainTarget(sb, setup{bar: k, name: "PDL", level: pdl}, pdl, pdh, ser.c[k])
+}
+
+// explainSignalVolume reports the volume filter PDLSignalVolMult for the hammer bar h and the
+// trigger bar k; false when it fails.
+func (s *Strategy) explainSignalVolume(sb *strings.Builder, ser series, h, k int) bool {
+	if !s.signalVolumeOn() {
+		return true
+	}
+	vol, avg, ok := s.signalVolumeOK(ser, h, k)
+	fmt.Fprintf(sb, "%s объём молота и сигнала (меньший) %.0f > %.2f × обычный %.0f (%d свечей основной сессии до молота)\n",
+		mark(ok), vol, s.p.PDLSignalVolMult, avg, s.p.VolBars)
+	return ok
 }
 
 // explainTarget reports whether the close of the trigger bar is below the target of setup st.
@@ -138,14 +166,17 @@ func (s *Strategy) explainExits(sb *strings.Builder, md strategy.MarketData) {
 	sb.WriteString("--- выходы ---\n")
 	stop := s.stop(md, pos)
 	fmt.Fprintf(sb, "%s стоп: вход %.4f, стоп %.4f, low %.4f\n", mark(stop > 0 && md.Lows[i] <= stop), pos.PurchasePrice, stop, md.Lows[i])
+	if s.p.LockAfterR > 0 {
+		if lock, ok := s.lockStop(md, pos); ok {
+			fmt.Fprintf(sb, "%s стоп поднят на +%.2fR после +%.2fR: %.4f, low %.4f\n", mark(md.Lows[i] <= lock), s.p.LockAtR, s.p.LockAfterR, lock, md.Lows[i])
+		} else {
+			fmt.Fprintf(sb, "стоп ещё не поднят: нужен ход +%.2fR\n", s.p.LockAfterR)
+		}
+	}
 	if pos.TakeProfit > 0 {
 		fmt.Fprintf(sb, "%s цель %.4f, high %.4f\n", mark(md.Highs[i] >= pos.TakeProfit), pos.TakeProfit, md.Highs[i])
 	} else {
 		sb.WriteString("цель: нет\n")
-	}
-	if lvl, pdl, ok := s.pdlExitLevel(md, pos); ok {
-		fmt.Fprintf(sb, "%s выход ниже PDL дня входа: close %.4f < PDL %.4f − %.2f ATR = %.4f\n",
-			mark(md.Closes[i] < lvl), md.Closes[i], pdl, s.p.PDLExitBufferATR, lvl)
 	}
 }
 

@@ -70,3 +70,27 @@ func TestExitCarriesOvernight(t *testing.T) {
 		t.Fatalf("next day: Reason = %q, want TP", sig.Reason)
 	}
 }
+
+// pos0 risks 1 (fill 99.4, stop 98.4): a close at 100.4 (+1R) arms the lock (the engine's highest
+// close through the previous bar), and from the next bar on the stop is 99.65 (+0.25R).
+func TestExitLockAfterR(t *testing.T) {
+	p := DefaultParams()
+	p.LockAfterR, p.LockAtR = 1, 0.25
+	dip := []bar{fillBar, {"2026-09-14 10:45", 100, 100.1, 99.6, 99.8}}
+	armed := pos0()
+	armed.PrevMaxFavorablePrice = 100.4
+	sig := held(p, dip, armed)
+	if sig.Kind != model.SignalSell || sig.Reason != "TRAIL" || math.Abs(sig.StopLoss-99.65) > eps {
+		t.Fatalf("got %v %q SL %v, want Sell TRAIL at 99.65", sig.Kind, sig.Reason, sig.StopLoss)
+	}
+	// A high at +1R with the close short of it does not arm.
+	wick := pos0()
+	wick.PrevMaxFavorablePrice = 100.3
+	if sig := held(p, []bar{fillBar, {"2026-09-14 10:30", 99.4, 100.6, 99.3, 100.3}, dip[1]}, wick); sig.Kind != model.SignalNone {
+		t.Fatalf("wick only: Kind = %v %q, want None", sig.Kind, sig.Reason)
+	}
+	p.LockAfterR = 0
+	if sig := held(p, dip, armed); sig.Kind != model.SignalNone {
+		t.Fatalf("off: Kind = %v %q, want None", sig.Kind, sig.Reason)
+	}
+}

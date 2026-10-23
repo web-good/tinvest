@@ -1,0 +1,32 @@
+{
+  "_comment": "hammer NVTK, скользящий walk-forward (-train-months 3 -test-months 1, Hour1, -months 36, -risk-pct 1, -min-trades 5, metric profit_factor) поверх литерала владельца 2026-10-22 (RSI 6 / зона 50 / RSIHold 70 / объём 0.5 / ConfirmBars 3 / цель 1.5R). MACD 11/15/9 и DailyATRPeriod 14 не калибруются (владелец). Три фазы, в следующую идут 5 лучших: вход (зона RSI молота, объём, подтверждение) → выходы (запас стопа, цель, RSIHold) → контекст (период RSI, EMA тренда, окно объёма, зона у вчерашнего минимума).",
+  "phases": [
+    {
+      "name": "entry",
+      "keepTop": 5,
+      "grid": {
+        "RSIZone": [30, 40, 50],
+        "VolumeMult": [0, 0.5, 1, 1.5],
+        "ConfirmBars": [0, 1, 3, 5]
+      }
+    },
+    {
+      "name": "exits",
+      "keepTop": 5,
+      "grid": {
+        "StopBufferATR": [0, 0.05, 0.1, 0.2],
+        "TargetR": [1.5, 2, 3],
+        "RSIHold": [0, 60, 70]
+      }
+    },
+    {
+      "name": "context",
+      "grid": {
+        "RSIPeriod": [5, 6, 9],
+        "TrendEMA": [0, 100, 200],
+        "VolBars": [20, 40],
+        "PDLZoneATR": [0, 0.5]
+      }
+    }
+  ]
+}

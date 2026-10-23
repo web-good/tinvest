@@ -328,6 +328,26 @@ func TestRSIHoldCrossOnCurrentBarKeepsTarget(t *testing.T) {
 	}
 }
 
+func TestRSIExitWithoutGreenMACD(t *testing.T) {
+	// fill 98.6, stop 97: target 101.8 above the high; the last close jumps RSI(5) above 60 while
+	// the histogram after the fall is still not green
+	md := held(bars(fall, bar{98.2, 100, 98.2, 99.9}), 98.6, 97, 99)
+	if prev, cur := lastRSI(md, 5); prev >= 60 || cur <= 60 {
+		t.Fatalf("fixture: RSI prev %.1f cur %.1f, want the cross on the last close", prev, cur)
+	}
+	if h := lastHist(t, md); h[len(h)-1] > 0 {
+		t.Fatalf("fixture: histogram %.4f, want not green", h[len(h)-1])
+	}
+	if sig := decide(DefaultParams(), md); sig.Kind != model.SignalSell || sig.Reason != "RSI" {
+		t.Fatalf("kind %v reason %q, want sell RSI", sig.Kind, sig.Reason)
+	}
+	p := DefaultParams()
+	p.RSIHold = 0
+	if sig := decide(p, md); sig.Kind != model.SignalNone {
+		t.Fatalf("RSIHold 0: kind %v reason %q, want none", sig.Kind, sig.Reason)
+	}
+}
+
 func TestRSIHoldExitReason(t *testing.T) {
 	sig := decide(DefaultParams(), held(fadedBounce(), 101, 50, 200))
 	if sig.Reason != "MACD" || !strings.Contains(sig.ExitReason, "RSI(5) > 60") {
@@ -583,5 +603,50 @@ func TestConfirmWindow(t *testing.T) {
 func TestConfirmOnlyTheFirstGreen(t *testing.T) {
 	if sig := decide(confirmParams(3), confirmed([]bar{confirmBar}, bar{98.5, 98.9, 98.4, 98.8})); sig.Kind != model.SignalNone {
 		t.Fatalf("kind = %v, want none (the hammer was confirmed a bar earlier)", sig.Kind)
+	}
+}
+
+// pdlOn is noTrend with the hammer looked for only within zone daily ATRs of yesterday's low.
+func pdlOn(zone float64) Params {
+	p := noTrend()
+	p.PDLZoneATR = zone
+	return p
+}
+
+func TestPDLZone(t *testing.T) {
+	// yesterday's low 99, ATR 2; the hammer's low 97 is 1 ATR under it
+	md := fixture(bars(fall, hammerAfterFall), at(wednesday), 40)
+	if sig := decide(pdlOn(1.1), md); sig.Kind != model.SignalBuy || math.Abs(sig.StopLoss-96.9) > eps {
+		t.Fatalf("zone 1.1 ATR: kind %v stop %.4f, want buy under the hammer 96.9", sig.Kind, sig.StopLoss)
+	}
+	if sig := decide(pdlOn(0.5), md); sig.Kind != model.SignalNone {
+		t.Fatalf("zone 0.5 ATR: kind = %v, want none", sig.Kind)
+	}
+	md.DailyLows[len(md.DailyLows)-1] = 97.2 // yesterday's low just above the hammer's low
+	if sig := decide(pdlOn(0.2), md); sig.Kind != model.SignalBuy {
+		t.Fatalf("PDL 97.2, zone 0.2 ATR: kind = %v, want buy", sig.Kind)
+	}
+	md.DailyLows[len(md.DailyLows)-1] = 96.7 // and just under it
+	if sig := decide(pdlOn(0.2), md); sig.Kind != model.SignalBuy {
+		t.Fatalf("PDL 96.7, zone 0.2 ATR: kind = %v, want buy", sig.Kind)
+	}
+}
+
+func TestPDLSkipsWeekendDailies(t *testing.T) {
+	// on Monday yesterday is Friday: the Sunday daily (low 99.9) is skipped
+	md := fixture(bars(fall, hammerAfterFall), at("2026-09-21 12:00"), 40)
+	for i := len(md.DailyTimes) - 1; i >= 0; i-- {
+		if md.DailyTimes[i].In(mskLoc).Weekday() == time.Friday {
+			md.DailyLows[i] = 97.1
+			break
+		}
+	}
+	p := pdlOn(0.1)
+	p.VolumeMult = 0 // too few main-session bars back from Monday noon
+	if pdl, ok := NewWithParams("TEST", step, p).atPDL(md, len(md.Lows)-1, 2); !ok || pdl != 97.1 {
+		t.Fatalf("PDL %.4f ok %v, want Friday's 97.1", pdl, ok)
+	}
+	if sig := decide(p, md); sig.Kind != model.SignalBuy {
+		t.Fatalf("kind = %v, want buy", sig.Kind)
 	}
 }

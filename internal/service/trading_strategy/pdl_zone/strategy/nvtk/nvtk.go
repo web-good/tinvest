@@ -13,19 +13,30 @@ import "tinvest/internal/service/trading_strategy/pdl_zone/strategy/core"
 // Params returns the NVTK literal.
 func Params() core.Params {
 	return core.Params{
-		EntryZone:      0,
-		EntryBreak:     1,
-		ZoneATR:        0.2,
-		BreakReclaim:   1,
-		MACDFast:       8,
-		MACDSlow:       21,
-		MACDSignal:     9,
-		VolumeMult:     1.5,
-		VolBars:        15,
-		StopBars:       5,
-		MinStopATR:     0.2,
-		TargetR:        1.7,
-		MinRoomATR:     0.2,
-		DailyATRPeriod: 14,
+		// Взвод сетапа
+		EntryZone:    0,   // 1 — взвод заходом в зону над PDL (low ≤ PDL + ZoneATR·ATR, close ≥ PDL); 0 — выключен
+		EntryBreak:   1,   // 1 — взвод закрытием ниже PDL (пробой); 0 — выключен
+		ZoneATR:      0.2, // высота зоны над PDL в дневных ATR (работает только при EntryZone 1)
+		BreakReclaim: 1,   // 1 — после пробоя сигнал только после бара, закрывшегося обратно выше PDL; 0 — первый зелёный бар после пробоя
+
+		// Сигнал: первый закрытый бар с зелёной гистограммой MACD (macd − signal > 0) от бара взвода
+		MACDFast:   8,  // период быстрой EMA MACD на 5m
+		MACDSlow:   21, // период медленной EMA MACD на 5m
+		MACDSignal: 9,  // период сигнальной линии MACD
+
+		// Фильтр объёма: средний объём баров основной сессии от взвода до сигнала >
+		// VolumeMult × среднего объёма VolBars баров основной сессии перед взводом
+		VolumeMult: 1.5, // во сколько раз объём окна должен превышать базу; 0 — фильтр выключен
+		VolBars:    15,  // сколько баров основной сессии перед взводом берётся в базу
+
+		// Стоп и цель
+		StopBars:   5,   // стоп — минимальный low этого числа баров перед сигнальным
+		MinStopATR: 0.2, // стоп не ближе этого числа дневных ATR к цене покупки (иначе опускается)
+		TargetR:    1.7, // цель — столько расстояний до стопа выше цены покупки
+
+		// Запас хода дня на сигнале: (лой дня + 1 ATR − close сигнала) / ATR ≥ MinRoomATR; 0 — выключен
+		MinRoomATR: 0.5,
+
+		DailyATRPeriod: 14, // период дневного ATR (Wilder) по завершённым будним дневкам
 	}
 }

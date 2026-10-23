@@ -153,3 +153,115 @@ func TestHammerMaxStop(t *testing.T) {
 		t.Fatalf("cap 0.7: stop %.4f target %.4f, want 98.0 101.6", sig.StopLoss, sig.TakeProfit)
 	}
 }
+
+// The hammer stop 98.0 is 0.6 ATR under the close 99.2: a floor of 0.8 ATR lowers it to 97.6 and
+// the 2R target to 102.4; a floor of 0.5 ATR leaves it.
+func TestHammerMinStop(t *testing.T) {
+	p := hammerP()
+	p.PDLMinStopATR = 0.8
+	sig := decide(p, hammerDay())
+	if sig.Kind != model.SignalBuy || math.Abs(sig.StopLoss-97.6) > eps || math.Abs(sig.TakeProfit-102.4) > eps {
+		t.Fatalf("floor 0.8: got %v stop %.4f target %.4f, want Buy 97.6 102.4", sig.Kind, sig.StopLoss, sig.TakeProfit)
+	}
+	if !strings.Contains(sig.EntryReason, "стоп по лою молота 10:00 98.0000, опущен до 0.80 ATR: 97.6000, цель 2.00R") {
+		t.Fatalf("reason %q", sig.EntryReason)
+	}
+	out := newS(p).Explain(fixture(warm(hammerDay())))
+	if !strings.Contains(out, "✓ стоп по лою молота 98.0000 опущен до 0.80 ATR: 97.6000 ниже close 99.2000, цель 2.00R = 102.4000") {
+		t.Errorf("explain missing the floor:\n%s", out)
+	}
+	p.PDLMinStopATR = 0.5
+	if sig := decide(p, hammerDay()); math.Abs(sig.StopLoss-98.0) > eps || math.Abs(sig.TakeProfit-101.6) > eps {
+		t.Fatalf("floor 0.5: stop %.4f target %.4f, want 98.0 101.6", sig.StopLoss, sig.TakeProfit)
+	}
+}
+
+// PDLHammerEntry: the hammer 10:00 (low 98.0) and the green 10:15 (close 98.9, risk 0.9) buy the
+// next open: stop 98.0, 2R target 100.7. The hammer bar alone does not buy.
+func TestHammerEntry(t *testing.T) {
+	p := hammerP()
+	p.PDLHammerEntry = 1
+	d := append(hammerDay()[:3], bar{"2026-09-14 10:15", 98.6, 98.95, 98.5, 98.9})
+	sig := decide(p, d)
+	if sig.Kind != model.SignalBuy || math.Abs(sig.StopLoss-98.0) > eps || math.Abs(sig.TakeProfit-100.7) > eps {
+		t.Fatalf("got %v stop %.4f target %.4f, want Buy 98.0 100.7", sig.Kind, sig.StopLoss, sig.TakeProfit)
+	}
+	if !strings.Contains(sig.EntryReason, "молот после пробоя PDL на свече 10:00, следующая свеча 10:15 зелёная") {
+		t.Fatalf("reason %q", sig.EntryReason)
+	}
+	if sig := decide(p, d[:3]); sig.Kind != model.SignalNone {
+		t.Fatalf("hammer bar: Kind = %v, want None", sig.Kind)
+	}
+	// A red bar after the hammer burns it; a green one later does not buy.
+	red := append(hammerDay()[:3], bar{"2026-09-14 10:15", 98.6, 98.65, 98.3, 98.4}, bar{"2026-09-14 10:30", 98.4, 98.8, 98.4, 98.7})
+	for n := 4; n <= 5; n++ {
+		if sig := decide(p, red[:n]); sig.Kind != model.SignalNone {
+			t.Fatalf("red after hammer, %d bars: Kind = %v, want None", n, sig.Kind)
+		}
+	}
+	p.PDLHammerEntry = 0
+	if sig := decide(p, d); sig.Kind != model.SignalNone {
+		t.Fatalf("off: Kind = %v, want None", sig.Kind)
+	}
+}
+
+// The hammer counts only after a red close below PDL with no close above PDL since.
+func TestHammerEntryNeedsBreak(t *testing.T) {
+	p := hammerP()
+	p.PDLHammerEntry = 1
+	d := append(hammerDay()[:3], bar{"2026-09-14 10:15", 98.6, 98.95, 98.5, 98.9})
+	d[2] = bar{"2026-09-14 10:00", 98.55, 98.65, 98.0, 98.6}
+	if sig := decide(p, d); sig.Kind != model.SignalBuy {
+		t.Fatalf("after the break: Kind = %v, want Buy", sig.Kind)
+	}
+	d[1] = bar{"2026-09-14 09:45", 99.0, 99.2, 98.9, 99.1}
+	if sig := decide(p, d); sig.Kind != model.SignalNone {
+		t.Fatalf("no break: Kind = %v, want None", sig.Kind)
+	}
+}
+
+func TestExplainHammerEntry(t *testing.T) {
+	p := hammerP()
+	p.PDLHammerEntry = 1
+	d := append(hammerDay()[:3], bar{"2026-09-14 10:15", 98.6, 98.95, 98.5, 98.9})
+	out := newS(p).Explain(fixture(warm(d)))
+	for _, want := range []string{"✓ эта свеча зелёная, предыдущая — молот после пробоя PDL без закрытий выше PDL (вход после молота 1)",
+		"✓ стоп по лою молота 98.0000 ниже close 98.9000, цель 2.00R = 100.7000", "ИТОГ: ПОКУПКА"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+}
+
+// tuesdayHammer is tuesdayDip with the 10:00 bar a hammer (low 98.0) and the reclaim 10:15; both
+// sit in the main session after Monday's warm-up of volume 100.
+func tuesdayHammer() []bar {
+	d := tuesdayDip()
+	d[2] = bar{"2026-09-15 10:00", 98.7, 98.75, 98.0, 98.6}
+	return d
+}
+
+// Each of the hammer and the reclaim must trade more than 1.5 × the normal 100.
+func TestHammerSignalVolume(t *testing.T) {
+	p := hammerP()
+	p.PDLSignalVolMult = 1.5
+	sig := newS(p).Decide(dipMD(tuesdayHammer(), 151))
+	if sig.Kind != model.SignalBuy || !strings.Contains(sig.EntryReason, "объём молота и сигнала от 151 > 1.50 × обычный 100") {
+		t.Fatalf("151: got %v %q", sig.Kind, sig.EntryReason)
+	}
+	if sig := newS(p).Decide(dipMD(tuesdayHammer(), 150)); sig.Kind != model.SignalNone {
+		t.Fatalf("150: Kind = %v, want None", sig.Kind)
+	}
+	md := dipMD(tuesdayHammer(), 151)
+	md.Volumes[len(md.Volumes)-1] = 120
+	if sig := newS(p).Decide(md); sig.Kind != model.SignalNone {
+		t.Fatalf("quiet reclaim: Kind = %v, want None", sig.Kind)
+	}
+	if out := newS(p).Explain(md); !strings.Contains(out, "✗ объём молота и сигнала (меньший) 120 > 1.50 × обычный 100") {
+		t.Errorf("explain missing the volume:\n%s", out)
+	}
+	md.Volumes = nil
+	if sig := newS(p).Decide(md); sig.Kind != model.SignalNone {
+		t.Fatalf("no volumes: Kind = %v, want None", sig.Kind)
+	}
+}

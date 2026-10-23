@@ -17,14 +17,17 @@ func TestLiteralIsPinned(t *testing.T) {
 		VolumeMult:        1.5,
 		VolBars:           20,
 		MaxDayRangeATR:    1.2,
-		H1TrendEMA:        0,
+		IndexTrendEMA:     150,
 		PDLEngulf:         0,
 		PDLHammer:         1,
-		PDLDipVolMult:     0.8,
+		PDLDipVolMult:     0.7,
 		PDLReclaimBars:    0,
-		PDLPatternTargetR: 1.5,
-		PDLExitBelowPDL:   1,
-		PDLExitBufferATR:  0.2,
+		PDLHammerEntry:    0,
+		PDLSignalVolMult:  0.5,
+		PDLPatternTargetR: 1.6,
+		PDLMinStopATR:     0.3,
+		LockAfterR:        1,
+		LockAtR:           0.25,
 	}
 	if got := Params(); got != want {
 		t.Fatalf("литерал NVTK изменился:\n got: %+v\nwant: %+v", got, want)

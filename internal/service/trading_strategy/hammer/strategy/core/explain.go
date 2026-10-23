@@ -126,6 +126,15 @@ func (s *Strategy) explainHammer(sb *strings.Builder, md strategy.MarketData, k 
 	}
 
 	if atr, ok := s.dailyATR(md); ok {
+		switch pdl, ok := s.atPDL(md, k, atr); {
+		case p.PDLZoneATR <= 0:
+			sb.WriteString("вчерашний минимум: фильтр выключен (PDLZoneATR 0)\n")
+		case pdl == 0:
+			sb.WriteString("✗ вчерашний минимум: нет будней дневки до даты молота\n")
+		default:
+			d := p.PDLZoneATR * atr
+			fmt.Fprintf(sb, "%s вчерашний минимум %.4f: low молота %.4f в зоне %.4f–%.4f (± %.2f ATR)\n", mark(ok), pdl, l, pdl-d, pdl+d, p.PDLZoneATR)
+		}
 		stop := l - p.StopBufferATR*atr
 		target := "цели нет"
 		if p.TargetR > 0 {
@@ -157,7 +166,7 @@ func (s *Strategy) explainExits(sb *strings.Builder, md strategy.MarketData) {
 	case s.p.RSIHold <= 0 || s.p.MACDFast <= 0:
 		sb.WriteString("RSI-удержание: выключено (RSIHold 0 или MACD выключен)\n")
 	case held >= 0:
-		fmt.Fprintf(sb, "RSI-удержание: RSI(%d) > %.0f на свече %s — цель снята, ждём первую красную MACD\n", p.RSIPeriod, p.RSIHold, md.Times[held].In(mskLoc).Format("01-02 15:04"))
+		fmt.Fprintf(sb, "RSI-удержание: RSI(%d) > %.0f на свече %s при зелёной MACD — цель снята, ждём первую красную MACD\n", p.RSIPeriod, p.RSIHold, md.Times[held].In(mskLoc).Format("01-02 15:04"))
 	default:
 		fmt.Fprintf(sb, "RSI-удержание: RSI(%d) выше %.0f с покупки не закрывался\n", p.RSIPeriod, p.RSIHold)
 	}
@@ -170,6 +179,10 @@ func (s *Strategy) explainExits(sb *strings.Builder, md strategy.MarketData) {
 	}
 	if s.macdHist(md.Closes) == nil {
 		sb.WriteString("MACD-выход: выключен (MACDFast 0) или не прогрет\n")
+		return
+	}
+	if r, hist, ok := s.rsiExit(md); ok {
+		fmt.Fprintf(sb, "✓ RSI-выход: свеча %s закрылась с RSI(%d) > %.0f, гистограмма MACD %.4f не зелёная\n", md.Times[r].In(mskLoc).Format("01-02 15:04"), p.RSIPeriod, p.RSIHold, hist)
 		return
 	}
 	switch hist, green, ok := s.macdTurnedRed(md); {

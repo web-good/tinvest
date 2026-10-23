@@ -10,18 +10,24 @@ import (
 func TestLiteralIsPinned(t *testing.T) {
 	want := core.Params{
 		EntryPDL:          1,
-		EntryPDH:          1,
-		HoldBars:          1,
-		StopDailyATR:      1.5,
+		EntryPDH:          0,
+		HoldBars:          3,
+		StopDailyATR:      0.7,
 		DailyATRPeriod:    14,
 		VolumeMult:        1.5,
 		VolBars:           20,
 		MaxDayRangeATR:    1.2,
-		H1TrendEMA:        200,
+		IndexTrendEMA:     150,
 		PDLEngulf:         0,
-		PDLHammer:         0,
-		PDLDipVolMult:     1.2,
-		PDLPatternTargetR: 2,
+		PDLHammer:         1,
+		PDLDipVolMult:     0.5,
+		PDLReclaimBars:    0,
+		PDLHammerEntry:    1,
+		PDLSignalVolMult:  0.8,
+		PDLPatternTargetR: 1.5,
+		PDLMinStopATR:     0.4,
+		LockAfterR:        1,
+		LockAtR:           0.25,
 	}
 	if got := Params(); got != want {
 		t.Fatalf("литерал SBER изменился:\n got: %+v\nwant: %+v", got, want)

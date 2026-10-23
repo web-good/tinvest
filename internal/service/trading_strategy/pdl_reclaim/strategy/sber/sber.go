@@ -94,6 +94,36 @@
 // 200: молот 1.013/39, поглощение 0.984/38, оба 1.013/39 против возврата 0.771/43; без фильтра
 // тренда молот 1.361/61, поглощение 1.164/59, оба 1.404/63 против 1.661/73. На 5m с фильтром тренда
 // оба 1.045/53 против 0.989/51.
+//
+// # 2026-10-21 — возвращён фильтр падающего IMOEX
+//
+// По решению владельца H1TrendEMA удалён из ядра, вместо него возвращён IndexTrendEMA (вход, только
+// пока EMA дневных закрытий IMOEX ниже значения 5 дневок назад).
+//
+// # 2026-10-21 — литерал NVTK на 5m, многооконная проверка
+//
+// Владелец переписал литерал SBER настройками NVTK: только возврат над PDL по молоту, стоп не ближе
+// PDLMinStopATR 0.4 ATR, цель 1.5R, объём серии 0.5, MaxDayRangeATR 1.2, IndexTrendEMA 150. Эта
+// точка на SBER не калибровалась. Скользящий walk-forward на Minutes5 (-months 12, подбор 3 мес,
+// проверка 1 мес, 9 фолдов) с общей сеткой wf_rolling_m5.json (IndexTrendEMA 0/150 ×
+// PDLMinStopATR 0.2/0.4/0.6 × PDLPatternTargetR 1.5/2 × PDLDipVolMult 0/0.5): выбор в фолде — пул
+// OOS 0.790/27, −2.7%; литерал на тех же месяцах — 1.450/24, net +4496, доходность +4.5%. Выбор в фолдах гуляет по всем
+// четырём осям, литерал не меняется. С фильтром IMOEX 150 январь–март 2026 почти без сделок.//
+// # 2026-10-21 — подъём стопа на +0.25R после close на +1R
+//
+// LockAfterR 1 / LockAtR 0.25 (ядро 2026-10-21): после бара, закрывшегося на вход + 1R и выше, стоп
+// со следующего бара — вход + 0.25R. Minutes5, 12 месяцев: 1.629/33 net +6410, просадка 2099 против
+// 1.437/33 net +5938, просадка 3155. Скользящий walk-forward (3/1, 9 фолдов), фиксированная точка:
+// пул OOS 1.469/24 +3.9% против 1.450/24 +4.5% — ничья. Взвод по high был хуже базы (1.350/34).
+// Включён по решению владельца у всех тикеров.
+//
+// # 2026-10-21 — вход после молота и объём свечей сигнала
+//
+// PDLHammerEntry 1 (владелец): без ожидания возврата над PDL — молот после пробоя PDL и сразу за ним
+// зелёная свеча, покупка по open следующей. PDLSignalVolMult 0.8: молот и зелёная свеча торговали
+// больше 0.8 × среднего 20 свечей основной сессии до молота. Minutes5, 12 месяцев: 1.834/26 net +6564
+// против 1.117/47 +2319 без фильтра объёма и 1.629/33 +6410 у входа на возврате; без walk-forward.
+// PDLHammerMinRangeATR не включён: 0.05 — 1.495/33, 0.1 — 0.651/16; удалён из ядра.
 package sber
 
 import "tinvest/internal/service/trading_strategy/pdl_reclaim/strategy/core"
@@ -102,17 +132,23 @@ import "tinvest/internal/service/trading_strategy/pdl_reclaim/strategy/core"
 func Params() core.Params {
 	return core.Params{
 		EntryPDL:          1,
-		EntryPDH:          1,
-		HoldBars:          1,
-		StopDailyATR:      1.5,
+		EntryPDH:          0,
+		HoldBars:          3,
+		StopDailyATR:      0.7,
 		DailyATRPeriod:    14,
 		VolumeMult:        1.5,
 		VolBars:           20,
 		MaxDayRangeATR:    1.2,
-		H1TrendEMA:        200,
+		IndexTrendEMA:     150,
 		PDLEngulf:         0,
-		PDLHammer:         0,
-		PDLDipVolMult:     1.2,
-		PDLPatternTargetR: 2,
+		PDLHammer:         1,
+		PDLDipVolMult:     0.5,
+		PDLReclaimBars:    0,
+		PDLHammerEntry:    1,
+		PDLSignalVolMult:  0.8,
+		PDLPatternTargetR: 1.5,
+		PDLMinStopATR:     0.4,
+		LockAfterR:        1,
+		LockAtR:           0.25,
 	}
 }

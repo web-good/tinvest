@@ -12,12 +12,16 @@ type setup struct {
 	level float64 // PDL or PDH
 	kind  string  // "молот" when the PDL reclaim stops under a hammer; "" otherwise
 	pat   int     // index of that hammer bar
+	early bool    // the PDL entry buys right after the hammer, before any reclaim (PDLHammerEntry)
 }
 
 // what names the setup in reasons.
 func (st setup) what() string {
 	if st.name == "PDH" {
 		return "пробой PDH"
+	}
+	if st.early {
+		return "молот после пробоя PDL"
 	}
 	return "возврат над PDL"
 }
@@ -55,7 +59,18 @@ func (s *Strategy) trigger(ser series, k int, pdl, pdh float64) (setup, string, 
 	if st, minClose, ok := s.held(ser, k, pdh); ok {
 		return st, fmt.Sprintf("держится над PDH %d св. (мин. close %.4f)", k-st.bar, minClose), true
 	}
-	if s.p.EntryPDL <= 0 || !isReclaim(ser, k, pdl) {
+	if s.p.EntryPDL <= 0 {
+		return setup{}, "", false
+	}
+	if s.hammerEntryOn() {
+		h, ok := greenAfterHammer(ser, k, pdl)
+		if !ok {
+			return setup{}, "", false
+		}
+		why := fmt.Sprintf("следующая свеча %s зелёная", ser.t[k].In(mskLoc).Format("15:04"))
+		return s.withDipVolume(ser, k, pdl, setup{bar: h, name: "PDL", level: pdl, kind: "молот", pat: h, early: true}, why)
+	}
+	if !isReclaim(ser, k, pdl) {
 		return setup{}, "", false
 	}
 	st := setup{bar: k, name: "PDL", level: pdl}
@@ -70,6 +85,11 @@ func (s *Strategy) trigger(ser series, k int, pdl, pdh float64) (setup, string, 
 		}
 		why += fmt.Sprintf(", %s %s", name, ser.t[at].In(mskLoc).Format("15:04"))
 	}
+	return s.withDipVolume(ser, k, pdl, st, why)
+}
+
+// withDipVolume applies the volume filter of the series under PDL to a PDL setup triggered on bar k.
+func (s *Strategy) withDipVolume(ser series, k int, pdl float64, st setup, why string) (setup, string, bool) {
 	if s.dipVolumeOn() {
 		dip, avg, ok := s.dipVolumeOK(ser, k, pdl)
 		if !ok {
@@ -78,6 +98,34 @@ func (s *Strategy) trigger(ser series, k int, pdl, pdh float64) (setup, string, 
 		why += fmt.Sprintf(", объём серии %.0f > %.2f × обычный %.0f", dip, s.p.PDLDipVolMult, avg)
 	}
 	return st, why, true
+}
+
+// hammerEntryOn: the PDL entry buys right after the hammer instead of on the reclaim.
+func (s *Strategy) hammerEntryOn() bool { return s.p.PDLHammer > 0 && s.p.PDLHammerEntry > 0 }
+
+// greenAfterHammer: bar k is green and the bar right before it, on k's date, is a hammer that
+// formed after the break of PDL (brokenBefore); h is the hammer bar.
+func greenAfterHammer(ser series, k int, pdl float64) (h int, ok bool) {
+	h = k - 1
+	if h < 0 || dayKey(ser.t[h]) != dayKey(ser.t[k]) || ser.c[k] <= ser.o[k] {
+		return 0, false
+	}
+	return h, isHammer(ser, h) && brokenBefore(ser, h, pdl)
+}
+
+// brokenBefore: walking back from bar k over its date, a red bar closed below PDL before any bar
+// before k closed above it; k itself may be that red bar.
+func brokenBefore(ser series, k int, pdl float64) bool {
+	day := dayKey(ser.t[k])
+	for j := k; j >= 0 && dayKey(ser.t[j]) == day; j-- {
+		if j < k && ser.c[j] > pdl {
+			return false
+		}
+		if ser.c[j] < ser.o[j] && ser.c[j] < pdl {
+			return true
+		}
+	}
+	return false
 }
 
 // patternsOn: the PDL reclaim needs a reversal candle.

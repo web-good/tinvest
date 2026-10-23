@@ -84,3 +84,21 @@ func (s *Strategy) dipVolumeOK(ser series, k int, pdl float64) (dip, avg float64
 	avg, ok = averageVolume(ser, start, s.p.VolBars)
 	return dip, avg, ok && avg > 0 && dip > s.p.PDLDipVolMult*avg
 }
+
+// signalVolumeOn reports whether the volume filter of the hammer and the trigger bar is in play.
+func (s *Strategy) signalVolumeOn() bool { return s.p.PDLSignalVolMult > 0 && s.p.VolBars > 0 }
+
+// signalVolumeOK reports the smaller volume of the hammer bar h and the trigger bar k, the average
+// of the VolBars main-session bars before the hammer and whether each of the two bars is above
+// PDLSignalVolMult × that average. Off — always passes; without volumes it fails closed.
+func (s *Strategy) signalVolumeOK(ser series, h, k int) (vol, avg float64, ok bool) {
+	if !s.signalVolumeOn() {
+		return 0, 0, true
+	}
+	if len(ser.v) != len(ser.c) || len(ser.t) != len(ser.c) {
+		return 0, 0, false
+	}
+	avg, ok = averageVolume(ser, h, s.p.VolBars)
+	vol = float64(min(ser.v[h], ser.v[k]))
+	return vol, avg, ok && avg > 0 && vol > s.p.PDLSignalVolMult*avg
+}
