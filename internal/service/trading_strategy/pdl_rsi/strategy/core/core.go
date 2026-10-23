@@ -286,8 +286,3 @@ func (s *Strategy) armHour(hs []hourBar, st setup) int {
 	}
 	return 0
 }
-
-// manage is a stub until the exit rules land: it holds the position.
-func (s *Strategy) manage(_ strategy.MarketData, sig model.Signal) model.Signal {
-	return sig
-}
