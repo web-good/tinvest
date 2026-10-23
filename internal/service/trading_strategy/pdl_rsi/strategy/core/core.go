@@ -8,6 +8,14 @@
 // pass and the buy bar (the next 15m open) falls on the same weekday date. The stop is the lowest
 // low of the search window's 15m bars with RSI below RSIEntry and the signal bar.
 //
+// The search window starts at the first 15m bar of the arming hour and ends at the signal; the
+// signal comes only after the arming hour completed. While a setup is alive further hours below
+// RSIArm do not re-arm it, so the window stays put. A setup burns on the hourly RSI crossing
+// RSIGate up, or on its signal cross (15m RSI up through RSIEntry with the low in the zone)
+// whether it buys or fails a filter; a cross with the low outside the zone keeps it. Arming and
+// the signal share one MSK date: a setup never outlives its date. The core is stateless: every
+// bar replays the automaton over the bars of its date.
+//
 // Once a completed hour after the fill crosses RSIBreakeven upward the stop moves to the fill
 // (exit reason TRAIL). The RSI exit fires on the bar completing an hour whose RSI crosses RSIExit
 // upward. The position carries overnight. Pure, stateless between bars and ticker-agnostic.
@@ -15,6 +23,7 @@
 package core
 
 import (
+	"fmt"
 	"time"
 
 	"tinvest/internal/service/trading_strategy/scalping/model"
@@ -197,7 +206,88 @@ func roomLeft(ser series, k int, atr float64) float64 {
 	return (lo + atr - ser.c[k]) / atr
 }
 
-// Decide is a stub until the entry and exit rules land: it only echoes the ticker and price.
+// Decide buys the next open on a signal, or manages the open position.
 func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
-	return model.Signal{Ticker: s.ticker, Price: md.Price}
+	sig := model.Signal{Ticker: s.ticker, Price: md.Price}
+	if md.Position != nil {
+		return s.manage(md, sig)
+	}
+	return s.enter(md, sig)
+}
+
+// enter buys the next open when the current bar is the signal of a setup (scan) and the buy bar,
+// room, volume and stop checks pass. A failed check leaves the setup burnt: the replay already
+// spent it on this bar.
+func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal {
+	n := len(md.Closes)
+	if n < 2 || len(md.Times) != n || len(md.Opens) != n || len(md.Highs) != n || len(md.Lows) != n {
+		return sig
+	}
+	if s.p.RSIPeriod <= 0 || !s.entryAllowed(md) {
+		return sig
+	}
+	pdl, ok := s.pdl(md)
+	if !ok {
+		return sig
+	}
+	atr := s.dailyATR(md)
+	if atr <= 0 {
+		return sig
+	}
+	ser, k := barsOf(md), n-1
+	hs := s.hourBars(md)
+	rh := indicators.RSISeries(hourCloses(hs), s.p.RSIPeriod)
+	r15 := indicators.RSISeries(ser.c, s.p.RSIPeriod)
+	zoneLo, zoneHi := pdl-s.p.ZoneATR*atr, pdl+s.p.ZoneATR*atr
+	st, ok := s.scan(ser, hs, rh, r15, k, zoneLo, zoneHi)
+	if !ok {
+		return sig
+	}
+	room := roomLeft(ser, k, atr)
+	if s.p.MinRoomATR > 0 && room < s.p.MinRoomATR {
+		return sig
+	}
+	win, base, ok := s.volumeOK(ser, st.from, k)
+	if !ok {
+		return sig
+	}
+	closeP := ser.c[k]
+	sb := stopBar(ser, r15, st, s.p.RSIEntry)
+	stop := ser.l[sb]
+	if stop <= 0 || stop >= closeP {
+		return sig
+	}
+	armHour := s.armHour(hs, st)
+	hm := func(j int) string { return ser.t[j].In(mskLoc).Format("15:04") }
+	sig.Kind = model.SignalBuy
+	sig.StopLoss, sig.TakeProfit, sig.ATR, sig.Level = stop, 0, atr, pdl
+	sig.FillBy = md.Times[k].Add(s.step)
+	sig.EntryReason = fmt.Sprintf("взвод: час %s RSI(%d) %.2f < %.0f (закрыт на свече %s); крест RSI(%d) 15m %.2f → %.2f через %.0f на свече %s, лой %.4f в зоне PDL %.4f ± %.2f ATR [%.4f; %.4f]; close %.4f, дневной ATR %.4f; стоп %.4f по лою свечи %s",
+		hs[armHour].start.In(mskLoc).Format("15:04"), s.p.RSIPeriod, rh[armHour], s.p.RSIArm, hm(st.arm),
+		s.p.RSIPeriod, r15[k-1], r15[k], s.p.RSIEntry, hm(k), ser.l[k], pdl, s.p.ZoneATR, zoneLo, zoneHi,
+		closeP, atr, stop, hm(sb))
+	if s.p.MinRoomATR > 0 {
+		sig.EntryReason += fmt.Sprintf(", запас хода %.2f ATR ≥ %.2f", room, s.p.MinRoomATR)
+	}
+	if s.volumeOn() {
+		sig.EntryReason += fmt.Sprintf(", средний объём от %s %.0f > %.2f × среднее %d свечей %.0f",
+			hm(st.from), win, s.p.VolumeMult, s.p.VolBars, base)
+	}
+	return sig
+}
+
+// armHour is the index in hs of the hour that armed st: the one starting at the window's first
+// bar and completed at the arming bar.
+func (s *Strategy) armHour(hs []hourBar, st setup) int {
+	for h := len(hs) - 1; h >= 0; h-- {
+		if hs[h].first == st.from && hs[h].done == st.arm {
+			return h
+		}
+	}
+	return 0
+}
+
+// manage is a stub until the exit rules land: it holds the position.
+func (s *Strategy) manage(_ strategy.MarketData, sig model.Signal) model.Signal {
+	return sig
 }
