@@ -6,6 +6,7 @@ import (
 
 	"tinvest/internal/enum"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/core"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/nvtk"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 )
 
@@ -28,9 +29,10 @@ func pdlRSIBindingFor(ticker string, interval enum.Interval, defaults func() cor
 	}
 }
 
-// pdlRSIRegistry maps tickers with their own package to their Minutes15 literal. Empty until a
-// ticker is calibrated.
-var pdlRSIRegistry = map[string]func() core.Params{}
+// pdlRSIRegistry maps tickers with their own package to their Minutes15 literal.
+var pdlRSIRegistry = map[string]func() core.Params{
+	"NVTK": nvtk.Params,
+}
 
 // PDLRSILookupOrGeneric returns the binding for a ticker: the ticker package's literal, or
 // core.DefaultParams when the ticker has no package. Partial JSON overrides layer over whichever

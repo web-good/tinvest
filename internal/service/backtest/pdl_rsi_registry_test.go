@@ -5,7 +5,18 @@ import (
 
 	"tinvest/internal/enum"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/core"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/nvtk"
 )
+
+func TestPDLRSITickersUseTheirPackages(t *testing.T) {
+	b, err := PDLRSILookupOrGeneric("NVTK", enum.Minutes15)
+	if err != nil {
+		t.Fatalf("lookup: %v", err)
+	}
+	if got := b.DefaultParams().(core.Params); got != nvtk.Params() {
+		t.Fatalf("NVTK defaults = %+v, want nvtk.Params()", got)
+	}
+}
 
 func TestPDLRSIGenericTickerUsesCoreDefaults(t *testing.T) {
 	b, err := PDLRSILookupOrGeneric("ZZZZ", enum.Minutes15)
