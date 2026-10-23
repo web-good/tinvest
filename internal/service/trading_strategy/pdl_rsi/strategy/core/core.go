@@ -1,9 +1,16 @@
 // Package core implements pdl_rsi: a long-only strategy at yesterday's low (PDL) on 15-minute
-// bars with an hourly RSI. A setup arms when the hourly RSI falls below RSIArm while the price is
-// in the zone PDL..PDL + ZoneATR daily ATRs; the entry comes when the hourly RSI crosses back up
-// through RSIEntry, filtered by the day's remaining room (MinRoomATR) and the volume (VolumeMult).
-// The position is managed by a stop, a breakeven once the hourly RSI passes RSIBreakeven and an
-// exit on the hourly RSI crossing RSIExit. Pure, stateless between bars and ticker-agnostic.
+// bars with an hourly RSI. Hours are built from the 15m bars; one RSI period (RSIPeriod) drives
+// both the hourly and the 15m RSI.
+//
+// A completed hour with the hourly RSI below RSIArm arms a setup. The signal is a closed 15m bar
+// on which the 15m RSI crosses RSIEntry upward, provided its low lies within PDL ± ZoneATR daily
+// ATRs, the hourly RSI has not crossed RSIGate upward since arming, the volume and room filters
+// pass and the buy bar (the next 15m open) falls on the same weekday date. The stop is the lowest
+// low of the search window's 15m bars with RSI below RSIEntry and the signal bar.
+//
+// Once a completed hour after the fill crosses RSIBreakeven upward the stop moves to the fill
+// (exit reason TRAIL). The RSI exit fires on the bar completing an hour whose RSI crosses RSIExit
+// upward. The position carries overnight. Pure, stateless between bars and ticker-agnostic.
 // Run with `-strategy pdl_rsi -interval Minutes15`.
 package core
 
@@ -25,18 +32,20 @@ const holdDays = 10
 // Params holds every tunable. All fields are int or float64 so reflection grid calibration can
 // sweep them.
 type Params struct {
-	RSIPeriod int // Wilder period of the hourly RSI; 0 — no entries
-	// RSIArm: a setup arms when the hourly RSI is below this
+	// RSIPeriod is the Wilder period of both the hourly and the 15m RSI; 0 — no entries
+	RSIPeriod int
+	// RSIArm: a completed hour with the hourly RSI below this arms a setup
 	RSIArm float64
-	// RSIEntry: the entry is the hourly RSI crossing up through this
+	// RSIEntry: the signal is the 15m RSI crossing up through this
 	RSIEntry float64
-	// RSIGate: the hourly RSI must be below this at the entry; 0 — no gate
+	// RSIGate: the hourly RSI must not have crossed this upward since arming; 0 — no gate
 	RSIGate float64
 	// RSIBreakeven: once the hourly RSI passes this the stop moves to the fill; 0 — no breakeven
 	RSIBreakeven float64
 	// RSIExit: the hourly RSI crossing up through this exits; 0 — no RSI exit
 	RSIExit float64
-	// ZoneATR is the zone's top above PDL in daily ATR
+	// ZoneATR is the half-width of the zone in daily ATR: the signal bar's low must lie in
+	// PDL ± ZoneATR × daily ATR
 	ZoneATR float64
 
 	// VolumeMult > 0: the entry window's average main-session volume must be above VolumeMult ×

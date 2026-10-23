@@ -65,7 +65,7 @@ func TestHourBarsMissingCloseBar(t *testing.T) {
 
 func TestLookbackCoversHoldAndWarmup(t *testing.T) {
 	s := NewWithParams("X", step, DefaultParams())
-	if lb := s.Lookback(); lb < (holdDays+3)*dayBars || lb < 4*(4*6+2) {
+	if lb := s.Lookback(); lb < (holdDays+3)*dayBars || lb < 4*(4*DefaultParams().RSIPeriod+2+64) {
 		t.Errorf("Lookback = %d too small", lb)
 	}
 	big := DefaultParams()
