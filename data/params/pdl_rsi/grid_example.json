@@ -1,0 +1,15 @@
+{
+  "_comment": "pdl_rsi (Minutes15, 12 мес, -risk-pct 1), одна фаза поверх дефолтов ядра: часовой RSI ниже RSIArm взводит сетап, сигнал — крест 15m RSI через RSIEntry вверх с лоем в зоне вчерашнего лоя ± ZoneATR дневных ATR; стоп — минимальный лой окна поиска; безубыток по кресту часового RSI через RSIBreakeven, выход по кресту через RSIExit. VolumeMult 0 и MinRoomATR 0 выключают фильтры объёма и запаса хода.",
+  "phases": [
+    {
+      "name": "sweep",
+      "grid": {
+        "ZoneATR": [0.2, 0.3, 0.4, 0.5],
+        "RSIPeriod": [5, 6, 8],
+        "MinRoomATR": [0, 0.4, 0.6, 0.8],
+        "VolumeMult": [0, 1.2, 1.5, 2.0],
+        "VolBars": [15, 20]
+      }
+    }
+  ]
+}
