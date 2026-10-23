@@ -18,7 +18,12 @@
 //
 // Once a completed hour after the fill crosses RSIBreakeven upward the stop moves to the fill
 // (exit reason TRAIL). The RSI exit fires on the bar completing an hour whose RSI crosses RSIExit
-// upward. The position carries overnight. Pure, stateless between bars and ticker-agnostic.
+// upward. The position carries overnight.
+//
+// A weekday exchange holiday shows up as dealer-only bars from about 02:00 MSK, while an exchange
+// weekday starts at 06:45: a weekday date whose first bar starts before 06:45 is a dealer date
+// (dealerDate). It never buys, and its bars stay out of the volume window and baseline.
+// Pure, stateless between bars and ticker-agnostic.
 // Run with `-strategy pdl_rsi -interval Minutes15`.
 package core
 
@@ -31,12 +36,19 @@ import (
 	"tinvest/pkg/indicators"
 )
 
-// dayBars is the number of 15-minute bars from 07:00 to 23:45 (the last bar of the evening session)
-// inclusive: a setup is never older than that.
-const dayBars = 68
+// dayBars is the number of 15-minute bars of an exchange weekday, from 06:45 to 23:45 (the last bar
+// of the evening session) inclusive: a setup is never older than that.
+const dayBars = 69
 
-// holdDays is the weekdays of history the breakeven scan keeps for an open position.
-const holdDays = 10
+// longDayBars bounds the 15-minute bars of a weekend or dealer date: from 02:00 to 23:45 inclusive.
+const longDayBars = 88
+
+// holdDays is the weekdays of history the breakeven scan keeps for an open position; they span
+// holdWeekendDays weekend days.
+const (
+	holdDays        = 10
+	holdWeekendDays = 4
+)
 
 // Params holds every tunable. All fields are int or float64 so reflection grid calibration can
 // sweep them.
@@ -99,12 +111,13 @@ func NewWithParams(ticker string, step time.Duration, p Params) *Strategy {
 
 func (s *Strategy) Ticker() string { return s.ticker }
 
-// Lookback covers holdDays weekdays plus a weekend for the breakeven scan, whole days for the
-// VolBars main-session bars before a window that starts early in the day, the current day and
-// the hourly RSI warm-up (four 15m bars per hour).
+// Lookback covers holdDays weekdays plus the two weekends they span (holdWeekendDays days of up to
+// longDayBars bars) for the breakeven scan, whole days for the VolBars main-session bars before a
+// window that starts early in the day, the current day and the hourly RSI warm-up (four 15m bars
+// per hour).
 func (s *Strategy) Lookback() int {
 	volDays := (max(s.p.VolBars, 1) + sessionBars - 1) / sessionBars
-	return max(4*(4*s.p.RSIPeriod+2+64), (holdDays+volDays+3)*dayBars)
+	return max(4*(4*s.p.RSIPeriod+2+64), (holdDays+volDays+1)*dayBars+holdWeekendDays*longDayBars)
 }
 
 // mskLoc anchors every calendar rule to Moscow (UTC fallback).
@@ -120,6 +133,25 @@ var mskLoc = func() *time.Location {
 func isWeekend(tl time.Time) bool {
 	wd := tl.Weekday()
 	return wd == time.Saturday || wd == time.Sunday
+}
+
+// exchangeOpen is the MSK minute the first bar of an exchange weekday starts at (06:45).
+const exchangeOpen = 6*60 + 45
+
+// dealerDate reports whether bar k falls on a weekday exchange holiday: a weekday date whose first
+// bar in times starts before exchangeOpen (dealer-only prints from about 02:00, no daily candle).
+// Only bars at or before k are read. The oldest date may start mid-day in the window: it counts as
+// an exchange date unless its first visible bar is before exchangeOpen. Weekends are never dealer
+// dates: they are handled as weekends.
+func dealerDate(times []time.Time, k int) bool {
+	if isWeekend(times[k].In(mskLoc)) {
+		return false
+	}
+	date, first := dayKey(times[k]), k
+	for first > 0 && dayKey(times[first-1]) == date {
+		first--
+	}
+	return minuteOf(times[first]) < exchangeOpen
 }
 
 // dayKey is the MSK calendar date of t as yyyymmdd.
@@ -189,11 +221,12 @@ func (s *Strategy) dailyATR(md strategy.MarketData) float64 {
 	return indicators.ATR(h, l, c, s.p.DailyATRPeriod)
 }
 
-// entryAllowed reports whether the current bar may buy at the next open: a weekday, and the buy
-// bar starts on the signal's date.
+// entryAllowed reports whether the current bar may buy at the next open: a weekday exchange date
+// (not a dealer date), and the buy bar starts on the signal's date.
 func (s *Strategy) entryAllowed(md strategy.MarketData) bool {
-	t := md.Times[len(md.Times)-1]
-	return !isWeekend(t.In(mskLoc)) && dayKey(t.Add(s.step)) == dayKey(t)
+	k := len(md.Times) - 1
+	t := md.Times[k]
+	return !isWeekend(t.In(mskLoc)) && dayKey(t.Add(s.step)) == dayKey(t) && !dealerDate(md.Times, k)
 }
 
 // roomLeft is the upside left in the day at bar k, in daily ATRs: the low of bar k's date up to

@@ -1,7 +1,8 @@
 package core
 
 // The main session, MSK minutes: from the 10:00 bar to the last one starting before 18:45. The
-// volume averages skip the morning and evening sessions, the closing auction and weekends.
+// volume averages skip the morning and evening sessions, the closing auction, weekends and
+// weekday exchange holidays (dealer dates).
 const (
 	sessionFrom = 10 * 60
 	sessionTo   = 18*60 + 45
@@ -55,11 +56,12 @@ func averageVolume(ser series, i, n int) (float64, bool) {
 	return float64(sum) / float64(n), true
 }
 
-// inSession reports whether bar j of ser is a weekday main-session bar.
+// inSession reports whether bar j of ser is a main-session bar of a weekday exchange date: weekend
+// and dealer-date (dealerDate) bars never count.
 func inSession(ser series, j int) bool {
 	if isWeekend(ser.t[j].In(mskLoc)) {
 		return false
 	}
 	m := minuteOf(ser.t[j])
-	return m >= sessionFrom && m < sessionTo
+	return m >= sessionFrom && m < sessionTo && !dealerDate(ser.t, j)
 }

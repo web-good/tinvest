@@ -71,12 +71,19 @@ func dailyBars(before time.Time, days int) (highs, lows, closes []float64, times
 // baseline and both RSIs are warm (a flat RSI is 50: it neither arms nor crosses).
 const warmBars = 1000
 
-// warm prepends warmBars flat bars at the day's first open ending one bar before day[0].
+// warm prepends warmBars flat bars at the day's first open ending one bar before day[0]. Like a
+// real exchange day the bars start at 06:45 MSK, so no warm date reads as a dealer date.
 func warm(day []bar) []bar {
-	var out []bar
 	o := day[0].o
-	for k := warmBars; k >= 1; k-- {
-		out = append(out, bar{day[0].t.Add(-time.Duration(k) * step), o, o, o, o})
+	out := make([]bar, warmBars)
+	t := day[0].t
+	for k := warmBars - 1; k >= 0; {
+		t = t.Add(-step)
+		if minuteOf(t) < exchangeOpen {
+			continue
+		}
+		out[k] = bar{t, o, o, o, o}
+		k--
 	}
 	return append(out, day...)
 }

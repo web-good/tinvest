@@ -65,7 +65,12 @@ func TestHourBarsMissingCloseBar(t *testing.T) {
 
 func TestLookbackCoversHoldAndWarmup(t *testing.T) {
 	s := NewWithParams("X", step, DefaultParams())
-	if lb := s.Lookback(); lb < (holdDays+3)*dayBars || lb < 4*(4*DefaultParams().RSIPeriod+2+64) {
+	// Ten exchange weekdays of 69 bars (06:45–23:45), two weekends of up to 88 bars a day
+	// (02:00–23:45), a day of volume baseline and the current day.
+	if dayBars != 69 || longDayBars != 88 {
+		t.Fatalf("dayBars/longDayBars = %d/%d, want 69/88", dayBars, longDayBars)
+	}
+	if lb := s.Lookback(); lb < (10+2)*69+4*88 || lb < 4*(4*DefaultParams().RSIPeriod+2+64) {
 		t.Errorf("Lookback = %d too small", lb)
 	}
 	big := DefaultParams()
