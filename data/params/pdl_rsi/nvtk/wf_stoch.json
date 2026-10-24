@@ -1,0 +1,23 @@
+{
+  "_comment": "pdl_rsi NVTK на Hour1 (сигнал — крест часового RSI(6) через 30 вниз, вход по первому кресту стохастика %K над %D вверх ниже 40 в пределах StochBars часов при RSI ≤ 50 и close над EMA(150); стоп StopATR от цены покупки, цель TargetR или крест RSI 70 вверх). Скользящий walk-forward (-train-months 3 -test-months 1, -months 36, -risk-pct 1, -min-trades 5, metric profit_factor) поверх литерала владельца на 2026-10-24. Итог: 33 фолда, 51 сделка, pooled OOS PF 1.168, +3.88%; мода фолдов — StochK 5, StochSmooth 1, StochD 3, StochBars 2, StopATR 0.3, TargetR 1, MinRoomATR 0; на всём окне 36 мес она даёт PF 1.027 на 66 сделках. Две фазы в каждом фолде: стохастик (36 точек, keepTop 3), затем стоп, цель и запас хода дня (48 точек на каждую из трёх выживших). RSI, StochCrossMax, RSITriggerMax, TrendEMA, объём и DailyATRPeriod не калибруются.",
+  "phases": [
+    {
+      "name": "stoch",
+      "keepTop": 3,
+      "grid": {
+        "StochK": [5, 9, 14],
+        "StochSmooth": [1, 3],
+        "StochD": [3, 5],
+        "StochBars": [2, 3, 4]
+      }
+    },
+    {
+      "name": "exits",
+      "grid": {
+        "StopATR": [0.3, 0.5, 0.7, 1.0],
+        "TargetR": [1, 1.5, 2, 3],
+        "MinRoomATR": [0, 0.5, 0.8]
+      }
+    }
+  ]
+}

@@ -34,127 +34,91 @@ func posAt(day []bar, i int, price, stop float64) strategy.Position {
 	return strategy.Position{PurchasePrice: price, Quantity: 1, StopLoss: stop, EntryTime: day[i].t}
 }
 
-// riseDay is Tuesday from 10:00: the 10:00 hour slides to 99.0 (hourly RSI 0), the 11:00 hour
-// climbs to 100.0 (the hourly RSI crosses 50 at its 11:45 close), the 12:00 hour climbs to 100.8
-// (it crosses 70 at 12:45), then a further climb.
+// riseDay is Tuesday by hours from 10:00: a dip to 99.0 (RSI 0), then a climb whose RSI crosses
+// 70 on a later hour.
 func riseDay() []bar {
-	return path("2026-09-15 10:00", 100, 99.6, 99.4, 99.2, 99.0, 99.3, 99.6, 99.8, 100.0,
-		100.2, 100.4, 100.6, 100.8, 101.0, 101.2, 101.4, 101.6, 101.8, 102.0, 102.2, 102.4)
+	return path("2026-09-15 10:00", 100, 99.5, 99.0, 100.0, 100.5, 101.0, 101.5, 102.0)
 }
 
-const (
-	rise50 = 7  // 11:45: completes the hour crossing 50
-	rise70 = 11 // 12:45: completes the hour crossing 70
-)
-
-func checkRise(t *testing.T, p Params, day []bar) {
+// rise70 is the first hour of riseDay whose RSI crosses 70.
+func rise70(t *testing.T, p Params, day []bar) int {
 	t.Helper()
-	rh := hourRSI(p, day)
-	if !crossUp(rh[rise50-4], rh[rise50], 50) || rh[rise50] >= 70 {
-		t.Fatalf("fixture: hour RSI %v → %v, want a cross of 50 only", rh[rise50-4], rh[rise50])
+	r := rsiOf(p, day)
+	for j := 1; j < len(day); j++ {
+		if crossUp(r[j-1], r[j], 70) {
+			return j
+		}
 	}
-	if !crossUp(rh[rise50], rh[rise70], 70) {
-		t.Fatalf("fixture: hour RSI %v → %v, want a cross of 70", rh[rise50], rh[rise70])
-	}
+	t.Fatalf("fixture: no cross of 70 (RSI %v)", r)
+	return -1
 }
 
 func TestStopHitIsSL(t *testing.T) {
-	p, day := DefaultParams(), riseDay()
-	pos := posAt(day, 0, 100, 99.5)
+	p, day := testParams(), riseDay()
+	pos := posAt(day, 0, 100, 99.2)
 	i, sig := firstExit(p, day, 0, pos)
-	if i != 1 || sig.Reason != "SL" || sig.StopLoss != pos.StopLoss {
-		t.Fatalf("exit at %d %q stop %v, want 1 SL %v", i, sig.Reason, sig.StopLoss, pos.StopLoss)
-	}
-	if !strings.Contains(sig.ExitReason, "стоп") {
-		t.Errorf("ExitReason %q", sig.ExitReason)
+	if i != 1 || sig.Reason != "SL" || sig.StopLoss != pos.StopLoss || !strings.Contains(sig.ExitReason, "стоп") {
+		t.Fatalf("exit at %d %q stop %v (%q), want 1 SL %v", i, sig.Reason, sig.StopLoss, sig.ExitReason, pos.StopLoss)
 	}
 }
 
-func TestBreakevenAfterHourlyCross50(t *testing.T) {
-	p, day := DefaultParams(), riseDay()
-	checkRise(t, p, day)
-	pos := posAt(day, 0, 100, 98)
-	if day[rise50+1].l > pos.PurchasePrice || day[rise50+1].l <= pos.StopLoss {
-		t.Fatalf("fixture: bar %d low %v", rise50+1, day[rise50+1].l)
-	}
+// climbDay is Tuesday by hours from 10:00: from a 100 open, closes 100.5, 101.0, 101.5, 102.5.
+func climbDay() []bar {
+	return path("2026-09-15 10:00", 100, 100.5, 101.0, 101.5, 102.5)
+}
+
+func TestStopAndTargetFromFill(t *testing.T) {
+	// Filled at 100 with an entry ATR of 2: the stop 99 (0.5 ATR under the fill, not the 97 the
+	// signal carried), the target 102 (2 R above it).
+	p, day := testParams(), climbDay()
+	p.RSIExit = 0
+	pos := posAt(day, 0, 100, 97)
+	pos.EntryATR = 2
 	i, sig := firstExit(p, day, 0, pos)
-	if i != rise50+1 || sig.Reason != "TRAIL" || sig.StopLoss != pos.PurchasePrice {
-		t.Fatalf("exit at %d %q stop %v, want %d TRAIL %v", i, sig.Reason, sig.StopLoss, rise50+1, pos.PurchasePrice)
+	if i != 3 || sig.Reason != "TP" || math.Abs(sig.TakeProfit-102) > eps || !strings.Contains(sig.ExitReason, "цели") {
+		t.Fatalf("exit at %d %q target %v (%q), want 3 TP 102", i, sig.Reason, sig.TakeProfit, sig.ExitReason)
 	}
-	if !strings.Contains(sig.ExitReason, "безубыт") {
-		t.Errorf("ExitReason %q", sig.ExitReason)
+	if i, sig := firstExit(p, withLow(day, 1, 98.9), 0, pos); i != 1 || sig.Reason != "SL" || math.Abs(sig.StopLoss-99) > eps {
+		t.Fatalf("exit at %d %q stop %v, want 1 SL 99", i, sig.Reason, sig.StopLoss)
 	}
-}
-
-func TestBreakevenNotOnTheCrossBarItself(t *testing.T) {
-	p, day := DefaultParams(), riseDay()
-	checkRise(t, p, day)
-	pos := posAt(day, 0, 100, 98)
-	if day[rise50].l > pos.PurchasePrice || day[rise50].l <= pos.StopLoss {
-		t.Fatalf("fixture: bar %d low %v", rise50, day[rise50].l)
-	}
-	if sig := hold(p, day, rise50, pos); sig.Kind == model.SignalSell {
-		t.Fatalf("sold %q on the bar completing the 50-cross hour", sig.Reason)
-	}
-}
-
-func TestBreakevenNeverLowersStop(t *testing.T) {
-	// The stop sits above the fill: the breakeven move must not lower it.
-	p, day := DefaultParams(), riseDay()
-	pos := posAt(day, 0, 99.5, 100.1)
-	i, sig := firstExit(p, day, rise50+1, pos)
-	if i != rise50+1 || sig.StopLoss != 100.1 {
-		t.Fatalf("exit at %d stop %v, want %d at 100.1", i, sig.StopLoss, rise50+1)
-	}
-}
-
-func TestCross50BeforeEntryIgnored(t *testing.T) {
-	p, day := DefaultParams(), riseDay()
-	checkRise(t, p, day)
-	// Filled at 12:00, after the 11:00 hour crossed 50; its low 100.0 touches the fill.
-	pos := posAt(day, rise50+1, 100, 98)
-	if sig := hold(p, day, rise50+1, pos); sig.Kind == model.SignalSell {
-		t.Fatalf("sold %q: the 50 cross before the entry moved the stop", sig.Reason)
-	}
-	sl := withLow(day, rise50+2, 97.9)
-	if sig := hold(p, sl, rise50+2, pos); sig.Reason != "SL" || sig.StopLoss != 98 {
-		t.Fatalf("got %q stop %v, want SL 98", sig.Reason, sig.StopLoss)
-	}
-}
-
-func TestBreakevenOff(t *testing.T) {
-	p, day := DefaultParams(), riseDay()
-	p.RSIBreakeven, p.RSIExit = 0, 0
-	pos := posAt(day, 0, 100, 98)
+	p.TargetR = 0
 	if i, sig := firstExit(p, day, 0, pos); i != -1 {
-		t.Fatalf("exit at %d %q, want none", i, sig.Reason)
-	}
-	sl := withLow(day, rise50+2, 97.9)
-	if i, sig := firstExit(p, sl, 0, pos); i != rise50+2 || sig.Reason != "SL" || sig.StopLoss != 98 {
-		t.Fatalf("exit at %d %q stop %v, want %d SL 98", i, sig.Reason, sig.StopLoss, rise50+2)
+		t.Fatalf("TargetR 0: exit at %d %q, want none", i, sig.Reason)
 	}
 }
 
-// flatHourDay is riseDay with the 12:00 hour flat at 101.0 from its first bar: the forming hour
-// already sits at its crossing close on 12:00–12:30, but the hour completes only at 12:45.
-func flatHourDay() []bar {
-	return path("2026-09-15 10:00", 100, 99.6, 99.4, 99.2, 99.0, 99.3, 99.6, 99.8, 100.0,
-		101.0, 101.0, 101.0, 101.0, 101.2, 101.4)
+func TestMaxStopPctFromFill(t *testing.T) {
+	// Filled at 100 with an entry ATR of 2: 0.5 ATR is 1.0, a 0.5% cap moves the stop to 99.5 and
+	// the target to 101 (2 R of the capped stop).
+	p, day := testParams(), climbDay()
+	p.RSIExit, p.MaxStopPct = 0, 0.5
+	pos := posAt(day, 0, 100, 97)
+	pos.EntryATR = 2
+	if i, sig := firstExit(p, withLow(day, 1, 99.4), 0, pos); i != 1 || sig.Reason != "SL" || math.Abs(sig.StopLoss-99.5) > eps {
+		t.Fatalf("exit at %d %q stop %v, want 1 SL 99.5", i, sig.Reason, sig.StopLoss)
+	}
+	if i, sig := firstExit(p, day, 0, pos); i != 1 || sig.Reason != "TP" || math.Abs(sig.TakeProfit-101) > eps {
+		t.Fatalf("exit at %d %q target %v, want 1 TP 101", i, sig.Reason, sig.TakeProfit)
+	}
 }
 
-func TestRSIExitOnHourCompletion(t *testing.T) {
-	p, day := DefaultParams(), flatHourDay()
-	rh := hourRSI(p, day)
-	if !crossUp(rh[rise50], rh[rise70], 70) {
-		t.Fatalf("fixture: hour RSI %v → %v", rh[rise50], rh[rise70])
+func TestStopBeforeTarget(t *testing.T) {
+	// One hour spans both the stop and the target: the stop wins.
+	p, day := testParams(), climbDay()
+	pos := posAt(day, 0, 100, 97)
+	pos.EntryATR = 2
+	if sig := hold(p, withLow(day, 3, 98.5), 3, pos); sig.Reason != "SL" {
+		t.Fatalf("got %q, want SL", sig.Reason)
 	}
-	pos := posAt(day, 0, 99.5, 98) // under every low after the 50 cross: no breakeven exit
+}
+
+func TestRSIExit(t *testing.T) {
+	p, day := testParams(), riseDay()
+	at70 := rise70(t, p, day)
+	pos := posAt(day, 0, 99.5, 98) // under every low after the dip, the 102.5 target out of reach
 	i, sig := firstExit(p, day, 0, pos)
-	if i != rise70 || sig.Reason != "RSI" {
-		t.Fatalf("exit at %d %q, want %d RSI", i, sig.Reason, rise70)
-	}
-	if !strings.Contains(sig.ExitReason, "RSI") {
-		t.Errorf("ExitReason %q", sig.ExitReason)
+	if i != at70 || sig.Reason != "RSI" || math.Abs(sig.Price-day[at70].c) > eps || !strings.Contains(sig.ExitReason, "RSI") {
+		t.Fatalf("exit at %d %q price %v, want %d RSI at the close", i, sig.Reason, sig.Price, at70)
 	}
 	p.RSIExit = 0
 	if i, sig := firstExit(p, day, 0, pos); i != -1 {
@@ -162,145 +126,104 @@ func TestRSIExitOnHourCompletion(t *testing.T) {
 	}
 }
 
-// jumpDay slides to 99.0 in the 10:00 hour and jumps to 105 at 11:00: the 11:00 hour crosses both
-// 50 and 70 at its 11:45 close.
-func jumpDay() []bar {
-	return path("2026-09-15 10:00", 100, 99.6, 99.4, 99.2, 99.0, 105, 105, 105, 105, 105, 105)
+func TestStochExit(t *testing.T) {
+	// A climb lifts %K over %D high up; the 15:00 pullback turns %K under %D above 40.
+	p := testParams()
+	p.RSIExit, p.TargetR, p.StochExitAbove = 0, 0, 40
+	day := path("2026-09-15 10:00", 100, 100.5, 101.0, 101.5, 102.0, 102.5, 102.0, 102.2)
+	k, d := stochOf(p, day)
+	at := -1
+	for j := 1; j < len(day) && at < 0; j++ {
+		if crossUnder(k, d, j) {
+			at = j
+		}
+	}
+	if at < 0 || k[at] <= 40 {
+		t.Fatalf("fixture: %%K %v, %%D %v", k, d)
+	}
+	pos := posAt(day, 0, 100, 97)
+	i, sig := firstExit(p, day, 0, pos)
+	if i != at || sig.Reason != "STOCH" || math.Abs(sig.Price-day[at].c) > eps || !strings.Contains(sig.ExitReason, "вниз выше 40") {
+		t.Fatalf("exit at %d %q price %v (%q), want %d STOCH at the close", i, sig.Reason, sig.Price, sig.ExitReason, at)
+	}
+	p.StochExitAbove = k[at]
+	if i, sig := firstExit(p, day, 0, pos); i != -1 {
+		t.Fatalf("StochExitAbove at the cross %%K %v: exit at %d %q, want none", k[at], i, sig.Reason)
+	}
+	p.StochExitAbove = 0
+	if i, sig := firstExit(p, day, 0, pos); i != -1 {
+		t.Fatalf("StochExitAbove 0: exit at %d %q, want none", i, sig.Reason)
+	}
 }
 
 func TestStopBeforeRSI(t *testing.T) {
-	p, day := DefaultParams(), jumpDay()
-	const done = 7
-	rh := hourRSI(p, day)
-	if !crossUp(rh[3], rh[done], 70) {
-		t.Fatalf("fixture: hour RSI %v → %v", rh[3], rh[done])
+	// The 11:00 hour jumps to 105: its RSI crosses 70; a tail under the stop on the same hour wins.
+	p := testParams()
+	p.TargetR = 0
+	day := path("2026-09-15 10:00", 100, 99.0, 105, 105)
+	r := rsiOf(p, day)
+	if !crossUp(r[0], r[1], 70) {
+		t.Fatalf("fixture: RSI %v", r)
 	}
 	pos := posAt(day, 0, 100, 98)
-	if i, sig := firstExit(p, day, 0, pos); i != done || sig.Reason != "RSI" {
-		t.Fatalf("exit at %d %q, want %d RSI", i, sig.Reason, done)
+	if i, sig := firstExit(p, day, 1, pos); i != 1 || sig.Reason != "RSI" {
+		t.Fatalf("exit at %d %q, want 1 RSI", i, sig.Reason)
 	}
-	tail := withLow(day, done, 97.5)
-	if sig := hold(p, tail, done, pos); sig.Reason != "SL" || sig.StopLoss != 98 {
+	if sig := hold(p, withLow(day, 1, 97.5), 1, pos); sig.Reason != "SL" || sig.StopLoss != 98 {
 		t.Fatalf("got %q stop %v, want SL 98", sig.Reason, sig.StopLoss)
 	}
 }
 
 func TestCarriesOvernight(t *testing.T) {
-	// Filled Friday 22:00, flat over the weekend, the stop hit on Monday's 10:15 bar.
-	p := DefaultParams()
-	fri := path("2026-09-18 22:00", 100, 100, 100, 100, 100, 100, 100, 100, 100)
-	mon := path("2026-09-21 07:00", 100, slices.Repeat([]float64{100}, 12)...)
-	mon = append(mon, path("2026-09-21 10:00", 100, 100, 98.8)...)
+	// Filled Friday 20:00, flat over the weekend, the stop hit on Monday's 10:00 hour.
+	p := testParams()
+	fri := path("2026-09-18 20:00", 100, 100, 100, 100, 100)
+	mon := path("2026-09-21 06:00", 100, slices.Repeat([]float64{100}, 4)...)
+	mon = append(mon, path("2026-09-21 10:00", 100, 98.8)...)
 	day := append(fri, mon...)
 	pos := posAt(day, 0, 100, 99)
-	i, sig := firstExit(p, day, 0, pos)
-	if i != len(day)-1 || sig.Reason != "SL" {
+	if i, sig := firstExit(p, day, 0, pos); i != len(day)-1 || sig.Reason != "SL" {
 		t.Fatalf("exit at %d %q, want %d SL", i, sig.Reason, len(day)-1)
 	}
 }
 
-func TestEntryOlderThanWindow(t *testing.T) {
-	p, day := DefaultParams(), riseDay()
-	checkRise(t, p, day)
-	pos := posAt(day, 0, 100, 98)
-	pos.EntryTime = warm(day)[0].t.Add(-24 * time.Hour)
-	sig := hold(p, day, rise50+1, pos)
-	if sig.Reason != "TRAIL" || sig.StopLoss != 100 {
-		t.Fatalf("got %q stop %v, want TRAIL at the fill 100", sig.Reason, sig.StopLoss)
-	}
-}
-
-func TestWarmupZerosNeverMoveStop(t *testing.T) {
-	// The window's hourly RSI starts with RSIPeriod warm-up zeros followed by 50 on flat bars: that
-	// step is no cross. A bar touching the fill must not exit.
-	p := DefaultParams()
-	day := path("2026-09-15 10:00", 100, 100, 100, 100, 100)
+func TestWarmupZerosNeverExit(t *testing.T) {
+	// Without the warm-up the RSI starts with HourRSIPeriod zeros followed by 50 on flat bars: that
+	// step is no cross. Flat hours over the stop must not exit.
+	p := testParams()
+	day := path("2026-09-15 06:00", 100, slices.Repeat([]float64{100}, 10)...)
 	pos := posAt(day, 0, 100.5, 98)
-	pos.EntryTime = warm(day)[0].t.Add(-24 * time.Hour)
-	if sig := hold(p, day, len(day)-1, pos); sig.Kind == model.SignalSell {
+	md := fixture(day, time.Time{})
+	md.Position = &pos
+	if sig := NewWithParams("TEST", step, p).Decide(md); sig.Kind == model.SignalSell {
 		t.Fatalf("sold %q stop %v on the warm-up zeros", sig.Reason, sig.StopLoss)
 	}
 }
 
-func TestGapBelowStop(t *testing.T) {
-	// The fill bar opens at 98, below the 99 stop: the engine fills min(stop, open).
-	p := DefaultParams()
-	day := path("2026-09-15 10:00", 98, 98.5, 98.7)
-	pos := posAt(day, 0, 98, 99)
-	sig := hold(p, day, 0, pos)
-	if sig.Reason != "SL" || sig.StopLoss != 99 {
-		t.Fatalf("got %q stop %v, want SL 99", sig.Reason, sig.StopLoss)
-	}
-}
-
 func TestDecideRoundTrip(t *testing.T) {
-	p := DefaultParams()
-	day := append(canonical(), path("2026-09-15 14:00", 100.3,
-		100.5, 100.7, 100.9, 101.1, 101.3, 101.5, 101.7, 101.9, 102.1, 102.3, 102.5, 102.7)...)
-	checkCanonical(t, p, day[:16])
-	loud := loudFrom(day, canonFrom)
-	buy := run(p, day, canonCross, loud)
+	p := testParams()
+	day := append(canonical(), path("2026-09-15 16:00", 100.5, 101.0, 101.5, 102.0, 102.5)...)
+	checkCanonical(t, p, day[:canonTrigger+1])
+	buy := run(p, day, canonTrigger, time.Time{})
 	if buy.Kind != model.SignalBuy {
-		t.Fatal("fixture: no buy at the canonical cross")
+		t.Fatal("fixture: no buy at the canonical trigger")
 	}
-	fill := canonCross + 1
-	pos := strategy.Position{PurchasePrice: day[fill].o, Quantity: 1, StopLoss: buy.StopLoss, EntryTime: day[fill].t}
-	const exitBar = 19 // 14:45: the 14:00 hour's RSI crosses 70
-	rh := hourRSI(p, day)
-	if !crossUp(rh[exitBar-4], rh[exitBar], p.RSIExit) {
-		t.Fatalf("fixture: hour RSI %v → %v", rh[exitBar-4], rh[exitBar])
-	}
+	fill := canonTrigger + 1
+	pos := strategy.Position{PurchasePrice: day[fill].o, Quantity: 1, StopLoss: buy.StopLoss,
+		TakeProfit: buy.TakeProfit, EntryATR: buy.ATR, EntryTime: day[fill].t}
 	for i := fill; i < len(day); i++ {
-		md := fixture(warm(day)[:warmBars+i+1], loud)
+		md := fixture(warm(day)[:warmBars+i+1], time.Time{})
 		md.Position = &pos
 		sig := NewWithParams("TEST", step, p).Decide(md)
 		if sig.Kind == model.SignalBuy {
 			t.Fatalf("bought at %d while in position", i)
 		}
-		if sig.Kind != model.SignalSell {
-			continue
+		if sig.Kind == model.SignalSell {
+			if sig.Reason != "RSI" && sig.Reason != "TP" {
+				t.Fatalf("exit at %d %q, want RSI or TP", i, sig.Reason)
+			}
+			return
 		}
-		if i != exitBar || sig.Reason != "RSI" {
-			t.Fatalf("exit at %d %q, want %d RSI", i, sig.Reason, exitBar)
-		}
-		if math.Abs(sig.Price-day[i].c) > eps {
-			t.Fatalf("Price %v, want the close %v", sig.Price, day[i].c)
-		}
-		return
 	}
 	t.Fatal("no exit")
-}
-
-func TestSignalWhileInPositionBurnsSetup(t *testing.T) {
-	// twoCrossDay crosses in zone at 12:00 and again at 12:30 with no re-arm. A position held at
-	// 12:00 swallows the first signal; it stops out at 12:15 and the 12:30 cross must not buy.
-	p := DefaultParams()
-	p.MinRoomATR = 0 // the control's 98.0 tail would otherwise use up the room
-	const first, out, second = 8, 9, 10
-	day := withLow(twoCrossDay(), out, 99.0) // a 12:15 tail under the 99.1 stop
-	loud := loudFrom(day, 4)
-	pos := posAt(day, 0, 100, 99.1)
-	if day[first].l <= pos.StopLoss {
-		t.Fatalf("fixture: bar %d low %v hits the stop", first, day[first].l)
-	}
-	for i := first; i < out; i++ {
-		if sig := hold(p, day, i, pos); sig.Kind != model.SignalNone {
-			t.Fatalf("bar %d: %v %q while in position", i, sig.Kind, sig.Reason)
-		}
-	}
-	if sig := hold(p, day, out, pos); sig.Reason != "SL" {
-		t.Fatalf("bar %d: %q, want SL", out, sig.Reason)
-	}
-	if sig := run(p, day, second, loud); sig.Kind == model.SignalBuy {
-		t.Fatal("bought the second cross of a setup burnt while in position")
-	}
-
-	// Control: with the first cross's low below the zone the setup survives and the second buys.
-	ctl := withLow(day, first, 98.0)
-	if inZone(p, ctl, first) {
-		t.Fatal("fixture: the control's first cross must lie outside the zone")
-	}
-	if sig := run(p, ctl, second, loud); sig.Kind != model.SignalBuy {
-		t.Fatal("control: the second cross must buy")
-	}
 }

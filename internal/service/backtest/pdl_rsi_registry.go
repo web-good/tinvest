@@ -6,7 +6,9 @@ import (
 
 	"tinvest/internal/enum"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/core"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mdmg"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/nvtk"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/vtbr"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 )
 
@@ -29,17 +31,19 @@ func pdlRSIBindingFor(ticker string, interval enum.Interval, defaults func() cor
 	}
 }
 
-// pdlRSIRegistry maps tickers with their own package to their Minutes15 literal.
+// pdlRSIRegistry maps tickers with their own package to their Hour1 literal.
 var pdlRSIRegistry = map[string]func() core.Params{
+	"MDMG": mdmg.Params,
 	"NVTK": nvtk.Params,
+	"VTBR": vtbr.Params,
 }
 
 // PDLRSILookupOrGeneric returns the binding for a ticker: the ticker package's literal, or
 // core.DefaultParams when the ticker has no package. Partial JSON overrides layer over whichever
-// defaults apply. pdl_rsi runs on Minutes15 only; other timeframes are rejected.
+// defaults apply. pdl_rsi runs on Hour1 only; other timeframes are rejected.
 func PDLRSILookupOrGeneric(ticker string, interval enum.Interval) (Binding, error) {
-	if interval != enum.Minutes15 {
-		return Binding{}, fmt.Errorf("pdl_rsi runs on Minutes15, not %s", interval)
+	if interval != enum.Hour1 {
+		return Binding{}, fmt.Errorf("pdl_rsi runs on Hour1, not %s", interval)
 	}
 	defaults, ok := pdlRSIRegistry[ticker]
 	if !ok {

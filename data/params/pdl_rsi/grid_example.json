@@ -1,14 +1,15 @@
 {
-  "_comment": "pdl_rsi (Minutes15, 12 мес, -risk-pct 1), одна фаза поверх дефолтов ядра: часовой RSI ниже RSIArm взводит сетап, сигнал — крест 15m RSI через RSIEntry вверх с лоем в зоне вчерашнего лоя ± ZoneATR дневных ATR; стоп — минимальный лой окна поиска; безубыток по кресту часового RSI через RSIBreakeven, выход по кресту через RSIExit. VolumeMult 0 и MinRoomATR 0 выключают фильтры объёма и запаса хода.",
+  "_comment": "pdl_rsi (Hour1, 12 мес, -risk-pct 1), одна фаза поверх дефолтов ядра: сигнал — крест часового RSI через RSIArm вниз, вход по первому кресту стохастика %K над %D вверх в пределах StochBars часов при RSI не выше RSITriggerMax и close над EMA(TrendEMA); стоп — StopATR дневных ATR ниже цены покупки, цель — TargetR стопов или крест RSI через RSIExit вверх. Объём и запас хода выключены.",
   "phases": [
     {
       "name": "sweep",
       "grid": {
-        "ZoneATR": [0.2, 0.3, 0.4, 0.5],
-        "RSIPeriod": [5, 6, 8],
-        "MinRoomATR": [0, 0.4, 0.6, 0.8],
-        "VolumeMult": [0, 1.2, 1.5, 2.0],
-        "VolBars": [15, 20]
+        "HourRSIPeriod": [5, 6, 8],
+        "StochBars": [3, 4, 6],
+        "RSITriggerMax": [0, 50],
+        "StopATR": [0.3, 0.5, 0.7],
+        "TargetR": [1.5, 2, 3],
+        "TrendEMA": [0, 150, 200]
       }
     }
   ]

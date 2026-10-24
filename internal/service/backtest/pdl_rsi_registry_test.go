@@ -5,21 +5,25 @@ import (
 
 	"tinvest/internal/enum"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/core"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mdmg"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/nvtk"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/vtbr"
 )
 
 func TestPDLRSITickersUseTheirPackages(t *testing.T) {
-	b, err := PDLRSILookupOrGeneric("NVTK", enum.Minutes15)
-	if err != nil {
-		t.Fatalf("lookup: %v", err)
-	}
-	if got := b.DefaultParams().(core.Params); got != nvtk.Params() {
-		t.Fatalf("NVTK defaults = %+v, want nvtk.Params()", got)
+	for ticker, want := range map[string]func() core.Params{"MDMG": mdmg.Params, "NVTK": nvtk.Params, "VTBR": vtbr.Params} {
+		b, err := PDLRSILookupOrGeneric(ticker, enum.Hour1)
+		if err != nil {
+			t.Fatalf("%s lookup: %v", ticker, err)
+		}
+		if got := b.DefaultParams().(core.Params); got != want() {
+			t.Fatalf("%s defaults = %+v, want the package literal", ticker, got)
+		}
 	}
 }
 
 func TestPDLRSIGenericTickerUsesCoreDefaults(t *testing.T) {
-	b, err := PDLRSILookupOrGeneric("ZZZZ", enum.Minutes15)
+	b, err := PDLRSILookupOrGeneric("ZZZZ", enum.Hour1)
 	if err != nil {
 		t.Fatalf("lookup: %v", err)
 	}
@@ -32,11 +36,11 @@ func TestPDLRSIGenericTickerUsesCoreDefaults(t *testing.T) {
 	}
 }
 
-func TestPDLRSIRunsOnlyOnMinutes15(t *testing.T) {
-	if _, err := PDLRSILookupOrGeneric("NVTK", enum.Minutes15); err != nil {
-		t.Fatalf("Minutes15: %v", err)
+func TestPDLRSIRunsOnlyOnHour1(t *testing.T) {
+	if _, err := PDLRSILookupOrGeneric("NVTK", enum.Hour1); err != nil {
+		t.Fatalf("Hour1: %v", err)
 	}
-	for _, iv := range []enum.Interval{enum.Minutes5, enum.Minutes30, enum.Hour1, enum.Day1} {
+	for _, iv := range []enum.Interval{enum.Minutes5, enum.Minutes15, enum.Minutes30, enum.Day1} {
 		if _, err := PDLRSILookupOrGeneric("NVTK", iv); err == nil {
 			t.Fatalf("%s: want error", iv)
 		}
@@ -44,16 +48,16 @@ func TestPDLRSIRunsOnlyOnMinutes15(t *testing.T) {
 }
 
 func TestPDLRSIParseParamsLayersOverDefaults(t *testing.T) {
-	b, err := PDLRSILookupOrGeneric("ZZZZ", enum.Minutes15)
+	b, err := PDLRSILookupOrGeneric("ZZZZ", enum.Hour1)
 	if err != nil {
 		t.Fatalf("lookup: %v", err)
 	}
-	parsed, err := b.ParseParams([]byte(`{"ZoneATR": 0.3, "MinRoomATR": 0}`))
+	parsed, err := b.ParseParams([]byte(`{"StochCrossMax": 30, "MinRoomATR": 0.5}`))
 	if err != nil {
 		t.Fatalf("ParseParams: %v", err)
 	}
 	want := core.DefaultParams()
-	want.ZoneATR, want.MinRoomATR = 0.3, 0
+	want.StochCrossMax, want.MinRoomATR = 30, 0.5
 	if got := parsed.(core.Params); got != want {
 		t.Fatalf("got %+v, want %+v", got, want)
 	}

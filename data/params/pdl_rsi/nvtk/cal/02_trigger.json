@@ -1,0 +1,74 @@
+{
+  "_comment": "pdl_rsi NVTK Hour1, шаг 2 «trigger» пошаговой калибровки (36 мес, -risk-pct 1): оси StochK [5, 10, 14], StochBars [2, 4, 6], StochCrossMax [0, 30, 40, 50], остальные поля прибиты к точке шагов ['signal']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker NVTK -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/nvtk/cal/02_trigger.json -min-trades 1 -combos 0 -out reports/NVTK_pdl_rsi/trigger.  РЕЗУЛЬТАТ: StochK 5, StochBars 2, StochCrossMax 40, PF 0.830, net -11681, сделок 162, острый пик; точка сдвинута.",
+  "phases": [
+    {
+      "name": "trigger",
+      "grid": {
+        "HourRSIPeriod": [
+          6
+        ],
+        "RSIArm": [
+          30
+        ],
+        "RSIFloor": [
+          0
+        ],
+        "RSITriggerMax": [
+          0
+        ],
+        "RSIExit": [
+          70
+        ],
+        "StochExitAbove": [
+          0
+        ],
+        "StochK": [
+          5,
+          10,
+          14
+        ],
+        "StochSmooth": [
+          3
+        ],
+        "StochD": [
+          3
+        ],
+        "StochBars": [
+          2,
+          4,
+          6
+        ],
+        "StochCrossMax": [
+          0,
+          30,
+          40,
+          50
+        ],
+        "VolumeMult": [
+          0
+        ],
+        "VolBars": [
+          20
+        ],
+        "MinRoomATR": [
+          0
+        ],
+        "StopATR": [
+          0.5
+        ],
+        "MaxStopPct": [
+          0
+        ],
+        "TargetR": [
+          2
+        ],
+        "TrendEMA": [
+          0
+        ],
+        "DailyATRPeriod": [
+          14
+        ]
+      }
+    }
+  ]
+}

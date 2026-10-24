@@ -1,0 +1,15 @@
+{
+  "_comment": "pdl_rsi NVTK на Hour1 (вход по кресту часового RSI через RSIArm вверх, стоп StopATR от close), скользящий walk-forward (-train-months 3 -test-months 1, -months 36, -risk-pct 1, -min-trades 5, metric profit_factor) поверх литерала владельца 2026-10-23 (RSI 4 / без зоны / объём 1 / запас 0.5 / EMA 150 / стоп 0.5 / без безубытка / выход 70). Одна фаза, 48 точек: период RSI, зона у PDL, тренд, стоп, объём. RSIArm/RSIExit, ZoneATR, MinRoomATR, VolBars и DailyATRPeriod не калибруются.",
+  "phases": [
+    {
+      "name": "h1",
+      "grid": {
+        "HourRSIPeriod": [4, 6],
+        "PDLZone": [0, 1],
+        "TrendEMA": [0, 150],
+        "StopATR": [0.3, 0.5, 0.7],
+        "VolumeMult": [0, 1]
+      }
+    }
+  ]
+}
