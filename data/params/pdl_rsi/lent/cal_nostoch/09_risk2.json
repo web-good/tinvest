@@ -1,5 +1,5 @@
 {
-  "_comment": "pdl_rsi LENT Hour1, шаг 9 «risk2» пошаговой калибровки, без стохастика (StochK 0) (36 мес, -risk-pct 1): оси StopATR [0.3, 0.5, 0.7, 1.0], TargetR [1.5, 2, 3], MaxStopPct [0, 1, 1.5], остальные поля прибиты к точке шагов ['signal', 'trend', 'floor', 'volume', 'room', 'risk', 'exits', 'signal2']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker LENT -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/lent/cal_nostoch/09_risk2.json -min-trades 1 -combos 0 -out reports/LENT_pdl_rsi/nostoch_risk2.  РЕЗУЛЬТАТ: StopATR 0.5, TargetR 2, MaxStopPct 0, PF 1.021, net +3425, сделок 317, острый пик; лучший центр StopATR 0.5, TargetR 2, MaxStopPct 1 (1.021) не выше текущей точки на 5% — точка остаётся.",
+  "_comment": "pdl_rsi LENT Hour1, шаг 9 «risk2» пошаговой калибровки, без стохастика (StochK 0) (36 мес, -risk-pct 1): оси StopATR [0.3, 0.5, 0.7, 1.0], TargetR [1.5, 2, 3], MaxStopPct [0, 1, 1.5], остальные поля прибиты к точке шагов ['signal', 'trend', 'floor', 'volume', 'room', 'risk', 'exits', 'signal2']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker LENT -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/lent/cal_nostoch/09_risk2.json -min-trades 1 -combos 0 -out reports/LENT_pdl_rsi/nostoch_risk2.  РЕЗУЛЬТАТ: StopATR 1, TargetR 2, MaxStopPct 0, PF 1.677, net +3082, сделок 22, острый пик; точка сдвинута.",
   "phases": [
     {
       "name": "risk2",
@@ -8,13 +8,13 @@
           6
         ],
         "RSIArm": [
-          30
+          25
         ],
         "RSIFloor": [
           0
         ],
         "RSIExit": [
-          70
+          75
         ],
         "RSITrailFrom": [
           0
@@ -35,7 +35,7 @@
           3
         ],
         "VolumeMult": [
-          0
+          1.2
         ],
         "VolBars": [
           20
@@ -60,7 +60,7 @@
           3
         ],
         "TrendEMA": [
-          0
+          170
         ],
         "DailyATRPeriod": [
           14

@@ -67,7 +67,7 @@ STEPS = [
     # TrendEMA 0 is banned after this step (owner 2026-10-26): the trend filter is always on. It starts
     # at 0 so the signal and trigger steps see the biggest sample; the trend step then must pick one of
     # its periods — the off value does not compete and the 5% rule does not keep the point at 0.
-    ("trend", {"TrendEMA": [100, 150, 200]}),
+    ("trend", {"TrendEMA": [100, 150, 170, 200]}),
     ("floor", {"RSIFloor": [0, 15, 20, 22]}),
     ("volume", {"VolumeMult": [0, 0.5, 0.8, 1.2]}),
     ("room", {"MinRoomATR": [0, 0.3, 0.6]}),

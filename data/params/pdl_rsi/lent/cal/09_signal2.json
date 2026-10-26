@@ -1,5 +1,5 @@
 {
-  "_comment": "pdl_rsi LENT Hour1, шаг 9 «signal2» пошаговой калибровки, стохастик: %K ниже 20 (36 мес, -risk-pct 1): оси HourRSIPeriod [4, 5, 6, 8], RSIArm [25, 30, 35], остальные поля прибиты к точке шагов ['signal', 'trigger', 'trend', 'floor', 'volume', 'room', 'risk', 'exits']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker LENT -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/lent/cal/09_signal2.json -min-trades 1 -combos 0 -out reports/LENT_pdl_rsi/signal2.  РЕЗУЛЬТАТ: HourRSIPeriod 6, RSIArm 30, PF 1.011, net +2048, сделок 318, острый пик; лучший центр HourRSIPeriod 4, RSIArm 30 (1.014) не выше текущей точки на 5% — точка остаётся.",
+  "_comment": "pdl_rsi LENT Hour1, шаг 9 «signal2» пошаговой калибровки, стохастик: %K ниже 20 (36 мес, -risk-pct 1): оси HourRSIPeriod [4, 5, 6, 8], RSIArm [25, 30, 35], остальные поля прибиты к точке шагов ['signal', 'trigger', 'trend', 'floor', 'volume', 'room', 'risk', 'exits']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker LENT -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/lent/cal/09_signal2.json -min-trades 1 -combos 0 -out reports/LENT_pdl_rsi/signal2.  РЕЗУЛЬТАТ: HourRSIPeriod 6, RSIArm 30, PF 1.420, net +9065, сделок 48, острый пик; лучший центр HourRSIPeriod 6, RSIArm 25 (1.370) не выше текущей точки на 5% — точка остаётся.",
   "phases": [
     {
       "name": "signal2",
@@ -19,16 +19,16 @@
           0
         ],
         "RSIExit": [
-          70
+          75
         ],
         "RSITrailFrom": [
-          0
+          50
         ],
         "RSITrailTo": [
           70
         ],
         "RSITrailStep": [
-          10
+          15
         ],
         "StochK": [
           14
@@ -49,16 +49,16 @@
           0
         ],
         "StopATR": [
-          0.7
+          0.5
         ],
         "MaxStopPct": [
-          1.5
+          0
         ],
         "TargetR": [
           1.5
         ],
         "TrendEMA": [
-          0
+          100
         ],
         "DailyATRPeriod": [
           14
