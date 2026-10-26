@@ -1,5 +1,5 @@
 {
-  "_comment": "pdl_rsi VTBR Hour1, шаг 1 «signal» пошаговой калибровки (36 мес, -risk-pct 1): оси HourRSIPeriod [4, 5, 6, 8], RSIArm [25, 30, 35], остальные поля прибиты к точке шагов старта. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker VTBR -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/vtbr/cal/01_signal.json -min-trades 1 -combos 0 -out reports/VTBR_pdl_rsi/signal.  РЕЗУЛЬТАТ: HourRSIPeriod 6, RSIArm 30, PF 0.703, net -35254, сделок 295, острый пик; лучший центр HourRSIPeriod 6, RSIArm 30 (0.703) не выше текущей точки на 5% — точка остаётся.",
+  "_comment": "pdl_rsi VTBR Hour1, шаг 1 «signal» пошаговой калибровки, стохастик: уровень (36 мес, -risk-pct 1): оси HourRSIPeriod [4, 5, 6, 8], RSIArm [25, 30, 35], остальные поля прибиты к точке шагов старта. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker VTBR -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/vtbr/cal/01_signal.json -min-trades 1 -combos 0 -out reports/VTBR_pdl_rsi/signal.  РЕЗУЛЬТАТ: HourRSIPeriod 4, RSIArm 35, PF 0.618, net -45231, сделок 335, острый пик; точка сдвинута.",
   "phases": [
     {
       "name": "signal",
@@ -24,9 +24,6 @@
         "RSIExit": [
           70
         ],
-        "StochExitAbove": [
-          0
-        ],
         "StochK": [
           5
         ],
@@ -36,11 +33,14 @@
         "StochD": [
           3
         ],
-        "StochBars": [
-          4
+        "StochBelow": [
+          20
         ],
-        "StochCrossMax": [
-          40
+        "StochCross": [
+          0
+        ],
+        "StochBars": [
+          3
         ],
         "VolumeMult": [
           0

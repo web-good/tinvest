@@ -1,14 +1,14 @@
 {
-  "_comment": "pdl_rsi VTBR Hour1, шаг 3 «trend» пошаговой калибровки (36 мес, -risk-pct 1): оси TrendEMA [0, 100, 150, 200], остальные поля прибиты к точке шагов ['signal', 'trigger']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker VTBR -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/vtbr/cal/03_trend.json -min-trades 1 -combos 0 -out reports/VTBR_pdl_rsi/trend.  РЕЗУЛЬТАТ: TrendEMA 0, PF 0.854, net -10099, сделок 168, острый пик; лучший центр TrendEMA 0 (0.748) не выше текущей точки на 5% — точка остаётся.",
+  "_comment": "pdl_rsi VTBR Hour1, шаг 3 «trend» пошаговой калибровки, стохастик: уровень (36 мес, -risk-pct 1): оси TrendEMA [0, 100, 150, 200], остальные поля прибиты к точке шагов ['signal', 'trigger']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker VTBR -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/vtbr/cal/03_trend.json -min-trades 1 -combos 0 -out reports/VTBR_pdl_rsi/trend.  РЕЗУЛЬТАТ: TrendEMA 0, PF 0.875, net -11812, сделок 257, острый пик; лучший центр TrendEMA 0 (0.794) не выше текущей точки на 5% — точка остаётся.",
   "phases": [
     {
       "name": "trend",
       "grid": {
         "HourRSIPeriod": [
-          6
+          4
         ],
         "RSIArm": [
-          30
+          35
         ],
         "RSIFloor": [
           0
@@ -19,9 +19,6 @@
         "RSIExit": [
           70
         ],
-        "StochExitAbove": [
-          0
-        ],
         "StochK": [
           14
         ],
@@ -31,11 +28,14 @@
         "StochD": [
           3
         ],
-        "StochBars": [
-          2
+        "StochBelow": [
+          30
         ],
-        "StochCrossMax": [
-          50
+        "StochCross": [
+          0
+        ],
+        "StochBars": [
+          0
         ],
         "VolumeMult": [
           0

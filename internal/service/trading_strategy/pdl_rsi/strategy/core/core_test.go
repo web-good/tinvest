@@ -17,9 +17,9 @@ func at(s string) time.Time {
 }
 
 func TestDefaultParams(t *testing.T) {
-	want := Params{HourRSIPeriod: 6, RSIArm: 30, RSIFloor: 22, RSITriggerMax: 50, RSIExit: 70,
-		StochK: 5, StochSmooth: 3, StochD: 3, StochBars: 4, StochCrossMax: 40,
-		VolumeMult: 0, VolBars: 20, MinRoomATR: 0, StopATR: 0.5, TargetR: 2, TrendEMA: 200, DailyATRPeriod: 14}
+	want := Params{HourRSIPeriod: 6, RSIArm: 30, RSIFloor: 22, RSIExit: 70,
+		RSITrailFrom: 0, RSITrailTo: 70, RSITrailStep: 10,
+		StochK: 14, StochSmooth: 1, StochD: 3, VolumeMult: 0, VolBars: 20, MinRoomATR: 0, StopATR: 0.5, TargetR: 2, TrendEMA: 200, DailyATRPeriod: 14}
 	if got := DefaultParams(); got != want {
 		t.Fatalf("DefaultParams() = %+v, want %+v", got, want)
 	}

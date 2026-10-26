@@ -5,13 +5,16 @@ import (
 
 	"tinvest/internal/enum"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/core"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/gazp"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/lent"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mdmg"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/nvtk"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/svcb"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/vtbr"
 )
 
 func TestPDLRSITickersUseTheirPackages(t *testing.T) {
-	for ticker, want := range map[string]func() core.Params{"MDMG": mdmg.Params, "NVTK": nvtk.Params, "VTBR": vtbr.Params} {
+	for ticker, want := range map[string]func() core.Params{"GAZP": gazp.Params, "LENT": lent.Params, "MDMG": mdmg.Params, "NVTK": nvtk.Params, "SVCB": svcb.Params, "VTBR": vtbr.Params} {
 		b, err := PDLRSILookupOrGeneric(ticker, enum.Hour1)
 		if err != nil {
 			t.Fatalf("%s lookup: %v", ticker, err)
@@ -52,12 +55,12 @@ func TestPDLRSIParseParamsLayersOverDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("lookup: %v", err)
 	}
-	parsed, err := b.ParseParams([]byte(`{"StochCrossMax": 30, "MinRoomATR": 0.5}`))
+	parsed, err := b.ParseParams([]byte(`{"StochK": 10, "MinRoomATR": 0.5}`))
 	if err != nil {
 		t.Fatalf("ParseParams: %v", err)
 	}
 	want := core.DefaultParams()
-	want.StochCrossMax, want.MinRoomATR = 30, 0.5
+	want.StochK, want.MinRoomATR = 10, 0.5
 	if got := parsed.(core.Params); got != want {
 		t.Fatalf("got %+v, want %+v", got, want)
 	}

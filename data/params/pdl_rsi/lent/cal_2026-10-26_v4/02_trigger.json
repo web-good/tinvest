@@ -1,0 +1,73 @@
+{
+  "_comment": "pdl_rsi LENT Hour1, шаг 2 «trigger» пошаговой калибровки, стохастик: уровень (36 мес, -risk-pct 1): оси StochK [5, 10, 14], StochBelow [20, 30], остальные поля прибиты к точке шагов ['signal']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker LENT -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/lent/cal/02_trigger.json -min-trades 1 -combos 0 -out reports/LENT_pdl_rsi/trigger.  РЕЗУЛЬТАТ: StochK 14, StochBelow 30, PF 1.001, net +210, сделок 305, острый пик; точка сдвинута.",
+  "phases": [
+    {
+      "name": "trigger",
+      "grid": {
+        "HourRSIPeriod": [
+          6
+        ],
+        "RSIArm": [
+          30
+        ],
+        "RSIFloor": [
+          0
+        ],
+        "RSIExit": [
+          70
+        ],
+        "RSITrailFrom": [
+          0
+        ],
+        "RSITrailTo": [
+          70
+        ],
+        "RSITrailStep": [
+          10
+        ],
+        "StochK": [
+          5,
+          10,
+          14
+        ],
+        "StochSmooth": [
+          3
+        ],
+        "StochD": [
+          3
+        ],
+        "StochBelow": [
+          20,
+          30
+        ],
+        "StochCross": [
+          0
+        ],
+        "VolumeMult": [
+          0
+        ],
+        "VolBars": [
+          20
+        ],
+        "MinRoomATR": [
+          0
+        ],
+        "StopATR": [
+          0.5
+        ],
+        "MaxStopPct": [
+          0
+        ],
+        "TargetR": [
+          2
+        ],
+        "TrendEMA": [
+          0
+        ],
+        "DailyATRPeriod": [
+          14
+        ]
+      }
+    }
+  ]
+}

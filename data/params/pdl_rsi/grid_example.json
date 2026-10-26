@@ -1,12 +1,11 @@
 {
-  "_comment": "pdl_rsi (Hour1, 12 мес, -risk-pct 1), одна фаза поверх дефолтов ядра: сигнал — крест часового RSI через RSIArm вниз, вход по первому кресту стохастика %K над %D вверх в пределах StochBars часов при RSI не выше RSITriggerMax и close над EMA(TrendEMA); стоп — StopATR дневных ATR ниже цены покупки, цель — TargetR стопов или крест RSI через RSIExit вверх. Объём и запас хода выключены.",
+  "_comment": "pdl_rsi (Hour1, 12 мес, -risk-pct 1), одна фаза поверх дефолтов ядра: сигнал — час, на котором часовой RSI ниже RSIArm и стохастик %K ниже 20 одновременно (никто никого не ждёт), close над EMA(TrendEMA); стоп — StopATR дневных ATR ниже цены покупки, цель — TargetR стопов или крест RSI через RSIExit вниз. Объём и запас хода выключены.",
   "phases": [
     {
       "name": "sweep",
       "grid": {
         "HourRSIPeriod": [5, 6, 8],
-        "StochBars": [3, 4, 6],
-        "RSITriggerMax": [0, 50],
+        "StochK": [10, 14],
         "StopATR": [0.3, 0.5, 0.7],
         "TargetR": [1.5, 2, 3],
         "TrendEMA": [0, 150, 200]

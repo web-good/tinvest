@@ -54,7 +54,7 @@ func TestNoEntryOnDealerWeekday(t *testing.T) {
 			off := len(lead)
 			want := []int(nil)
 			if tc.buy {
-				want = []int{off + canonTrigger}
+				want = []int{off + canonSignal}
 			}
 			if got := buys(p, day, time.Time{}); !slices.Equal(got, want) {
 				t.Fatalf("buys = %v, want %v", got, want)

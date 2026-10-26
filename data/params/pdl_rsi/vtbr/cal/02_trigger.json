@@ -1,14 +1,14 @@
 {
-  "_comment": "pdl_rsi VTBR Hour1, шаг 2 «trigger» пошаговой калибровки (36 мес, -risk-pct 1): оси StochK [5, 10, 14], StochBars [2, 4, 6], StochCrossMax [0, 30, 40, 50], остальные поля прибиты к точке шагов ['signal']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker VTBR -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/vtbr/cal/02_trigger.json -min-trades 1 -combos 0 -out reports/VTBR_pdl_rsi/trigger.  РЕЗУЛЬТАТ: StochK 14, StochBars 2, StochCrossMax 50, PF 0.854, net -10099, сделок 168, острый пик; точка сдвинута.",
+  "_comment": "pdl_rsi VTBR Hour1, шаг 2 «trigger» пошаговой калибровки, стохастик: уровень (36 мес, -risk-pct 1): оси StochK [5, 10, 14], StochBelow [20, 30], StochBars [0, 1, 3, 5], остальные поля прибиты к точке шагов ['signal']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker VTBR -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/vtbr/cal/02_trigger.json -min-trades 1 -combos 0 -out reports/VTBR_pdl_rsi/trigger.  РЕЗУЛЬТАТ: StochK 14, StochBelow 30, StochBars 0, PF 0.875, net -11812, сделок 257, острый пик; точка сдвинута.",
   "phases": [
     {
       "name": "trigger",
       "grid": {
         "HourRSIPeriod": [
-          6
+          4
         ],
         "RSIArm": [
-          30
+          35
         ],
         "RSIFloor": [
           0
@@ -18,9 +18,6 @@
         ],
         "RSIExit": [
           70
-        ],
-        "StochExitAbove": [
-          0
         ],
         "StochK": [
           5,
@@ -33,16 +30,18 @@
         "StochD": [
           3
         ],
-        "StochBars": [
-          2,
-          4,
-          6
+        "StochBelow": [
+          20,
+          30
         ],
-        "StochCrossMax": [
+        "StochCross": [
+          0
+        ],
+        "StochBars": [
           0,
-          30,
-          40,
-          50
+          1,
+          3,
+          5
         ],
         "VolumeMult": [
           0

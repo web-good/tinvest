@@ -6,8 +6,11 @@ import (
 
 	"tinvest/internal/enum"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/core"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/gazp"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/lent"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mdmg"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/nvtk"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/svcb"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/vtbr"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 )
@@ -33,8 +36,11 @@ func pdlRSIBindingFor(ticker string, interval enum.Interval, defaults func() cor
 
 // pdlRSIRegistry maps tickers with their own package to their Hour1 literal.
 var pdlRSIRegistry = map[string]func() core.Params{
+	"GAZP": gazp.Params,
+	"LENT": lent.Params,
 	"MDMG": mdmg.Params,
 	"NVTK": nvtk.Params,
+	"SVCB": svcb.Params,
 	"VTBR": vtbr.Params,
 }
 

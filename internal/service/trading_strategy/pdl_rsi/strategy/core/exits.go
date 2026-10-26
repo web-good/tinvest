@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"time"
 
 	"tinvest/internal/service/trading_strategy/scalping/model"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
@@ -11,8 +12,9 @@ import (
 // manage exits the open position, in order on the current hour:
 //   - the stop by the hour's low (SL); the engine fills it at min(stop, open);
 //   - the target by the hour's high (TP); the engine fills it at max(target, open);
-//   - the stochastic %K crossing %D down above StochExitAbove on this hour (STOCH), at its close;
-//   - the hourly RSI crossing RSIExit up on this hour (RSI), at its close.
+//   - the hourly RSI crossing RSIExit down on this hour (RSI), at its close: the RSI left the upper
+//     zone;
+//   - the RSI ladder (RSITR), at its close: see trailLevel.
 //
 // Both levels come from exitLevels. No end-of-day exit: the position carries overnight and over
 // weekends.
@@ -38,48 +40,46 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 	if md.Times[k].Before(pos.EntryTime) {
 		return sig
 	}
-	reason, why, ok := s.softExit(md, s.exitIndicators(md.Closes, barsOf(md)), k)
-	if !ok {
+	if s.p.HourRSIPeriod <= 0 || k <= s.p.HourRSIPeriod || (s.p.RSIExit <= 0 && s.p.RSITrailFrom <= 0) {
 		return sig
 	}
-	sig.Kind, sig.Reason = model.SignalSell, reason
-	sig.ExitReason = why
+	rsi := indicators.RSISeries(md.Closes, s.p.HourRSIPeriod)
+	if s.p.RSIExit > 0 && crossDown(rsi[k-1], rsi[k], s.p.RSIExit) {
+		sig.Kind, sig.Reason = model.SignalSell, "RSI"
+		sig.ExitReason = fmt.Sprintf("RSI: часовой RSI(%d) %.2f → %.2f через %.0f вниз на часе %s, выход по close %.4f (вход %.4f)",
+			s.p.HourRSIPeriod, rsi[k-1], rsi[k], s.p.RSIExit, md.Times[k].In(mskLoc).Format("15:04"), md.Closes[k], pos.PurchasePrice)
+		return sig
+	}
+	if rung, level, ok := s.trailLevel(md.Times, rsi, k, pos); ok && crossDown(rsi[k-1], rsi[k], level) {
+		sig.Kind, sig.Reason = model.SignalSell, "RSITR"
+		sig.ExitReason = fmt.Sprintf("RSITR: часовой RSI(%d) дошёл до %.0f, %.2f → %.2f через %.0f вниз на часе %s, выход по close %.4f (вход %.4f)",
+			s.p.HourRSIPeriod, rung, rsi[k-1], rsi[k], level, md.Times[k].In(mskLoc).Format("15:04"), md.Closes[k], pos.PurchasePrice)
+	}
 	return sig
 }
 
-// exitSeries holds the indicators of the close-based exits; a nil slice — that exit is off.
-type exitSeries struct {
-	rsi        []float64
-	sk, sd     []float64
-	stochFirst int
-}
-
-// exitIndicators computes the RSI of the RSI exit and the stochastic of the STOCH exit.
-func (s *Strategy) exitIndicators(closes []float64, ser series) exitSeries {
-	var ind exitSeries
-	if s.p.HourRSIPeriod > 0 && s.p.RSIExit > 0 {
-		ind.rsi = indicators.RSISeries(closes, s.p.HourRSIPeriod)
+// trailLevel is the RSI ladder: the rungs run from RSITrailFrom to RSITrailTo every RSITrailStep;
+// once a closed hour of the position (from the fill hour, before hour k) has an RSI at or above a
+// rung, the exit level is that rung minus RSITrailStep, and the highest rung reached wins (with
+// 50/70/10: reached 50 — exit on a cross of 40 down, 60 — of 50, 70 — of 60). The level only
+// ratchets up. ok is false while no rung is reached or the ladder is off (RSITrailFrom 0).
+func (s *Strategy) trailLevel(times []time.Time, rsi []float64, k int, pos *strategy.Position) (rung, level float64, ok bool) {
+	if s.p.RSITrailFrom <= 0 || s.p.RSITrailStep <= 0 {
+		return 0, 0, false
 	}
-	if s.p.StochExitAbove > 0 {
-		ind.sk, ind.sd, ind.stochFirst = s.stochKD(ser)
+	top := max(s.p.RSITrailTo, s.p.RSITrailFrom)
+	peak := -1.0
+	for j := k - 1; j >= 0 && !times[j].Before(pos.EntryTime); j-- {
+		peak = max(peak, rsi[j])
 	}
-	return ind
-}
-
-// softExit reports whether hour m fires a close-based exit: the stochastic %K crossing %D down above
-// StochExitAbove (STOCH) first, then the hourly RSI crossing RSIExit up (RSI). It returns the reason
-// and the exit text.
-func (s *Strategy) softExit(md strategy.MarketData, ind exitSeries, m int) (reason, why string, ok bool) {
-	hm := md.Times[m].In(mskLoc).Format("15:04")
-	if ind.sk != nil && m-1 >= ind.stochFirst && crossUnder(ind.sk, ind.sd, m) && ind.sk[m] > s.p.StochExitAbove {
-		return "STOCH", fmt.Sprintf("STOCH: стохастик %%K %.2f → %.2f пересёк %%D %.2f → %.2f вниз выше %.0f на часе %s, выход по close %.4f (вход %.4f)",
-			ind.sk[m-1], ind.sk[m], ind.sd[m-1], ind.sd[m], s.p.StochExitAbove, hm, md.Closes[m], md.Position.PurchasePrice), true
+	if peak < s.p.RSITrailFrom {
+		return 0, 0, false
 	}
-	if ind.rsi != nil && m > s.p.HourRSIPeriod && crossUp(ind.rsi[m-1], ind.rsi[m], s.p.RSIExit) {
-		return "RSI", fmt.Sprintf("RSI: часовой RSI(%d) %.2f → %.2f через %.0f на часе %s, выход по close %.4f (вход %.4f)",
-			s.p.HourRSIPeriod, ind.rsi[m-1], ind.rsi[m], s.p.RSIExit, hm, md.Closes[m], md.Position.PurchasePrice), true
+	rung = s.p.RSITrailFrom
+	for rung+s.p.RSITrailStep <= top && peak >= rung+s.p.RSITrailStep {
+		rung += s.p.RSITrailStep
 	}
-	return "", "", false
+	return rung, rung - s.p.RSITrailStep, true
 }
 
 // exitLevels rebuilds the stop and the target off the fill: the stop StopATR entry daily ATRs (the

@@ -1,0 +1,69 @@
+{
+  "_comment": "pdl_rsi NVTK Hour1, шаг 5 «trigmax» пошаговой калибровки, стохастик: уровень (36 мес, -risk-pct 1): оси RSITriggerMax [0, 40, 50], остальные поля прибиты к точке шагов ['signal', 'trigger', 'trend', 'floor']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker NVTK -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/nvtk/cal/05_trigmax.json -min-trades 1 -combos 0 -out reports/NVTK_pdl_rsi/trigmax.  РЕЗУЛЬТАТ: RSITriggerMax 0, PF 1.293, net +5012, сделок 44, плато; лучший центр RSITriggerMax 40 (1.293) не выше текущей точки на 5% — точка остаётся.",
+  "phases": [
+    {
+      "name": "trigmax",
+      "grid": {
+        "HourRSIPeriod": [
+          6
+        ],
+        "RSIArm": [
+          25
+        ],
+        "RSIFloor": [
+          0
+        ],
+        "RSITriggerMax": [
+          0,
+          40,
+          50
+        ],
+        "RSIExit": [
+          70
+        ],
+        "StochK": [
+          5
+        ],
+        "StochSmooth": [
+          3
+        ],
+        "StochD": [
+          3
+        ],
+        "StochBelow": [
+          20
+        ],
+        "StochCross": [
+          0
+        ],
+        "StochBars": [
+          3
+        ],
+        "VolumeMult": [
+          0
+        ],
+        "VolBars": [
+          20
+        ],
+        "MinRoomATR": [
+          0
+        ],
+        "StopATR": [
+          0.5
+        ],
+        "MaxStopPct": [
+          0
+        ],
+        "TargetR": [
+          2
+        ],
+        "TrendEMA": [
+          150
+        ],
+        "DailyATRPeriod": [
+          14
+        ]
+      }
+    }
+  ]
+}

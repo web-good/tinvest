@@ -34,23 +34,9 @@ func posAt(day []bar, i int, price, stop float64) strategy.Position {
 	return strategy.Position{PurchasePrice: price, Quantity: 1, StopLoss: stop, EntryTime: day[i].t}
 }
 
-// riseDay is Tuesday by hours from 10:00: a dip to 99.0 (RSI 0), then a climb whose RSI crosses
-// 70 on a later hour.
+// riseDay is Tuesday by hours from 10:00: a dip to 99.0 (RSI 0), then a climb.
 func riseDay() []bar {
 	return path("2026-09-15 10:00", 100, 99.5, 99.0, 100.0, 100.5, 101.0, 101.5, 102.0)
-}
-
-// rise70 is the first hour of riseDay whose RSI crosses 70.
-func rise70(t *testing.T, p Params, day []bar) int {
-	t.Helper()
-	r := rsiOf(p, day)
-	for j := 1; j < len(day); j++ {
-		if crossUp(r[j-1], r[j], 70) {
-			return j
-		}
-	}
-	t.Fatalf("fixture: no cross of 70 (RSI %v)", r)
-	return -1
 }
 
 func TestStopHitIsSL(t *testing.T) {
@@ -113,11 +99,17 @@ func TestStopBeforeTarget(t *testing.T) {
 }
 
 func TestRSIExit(t *testing.T) {
-	p, day := testParams(), riseDay()
-	at70 := rise70(t, p, day)
-	pos := posAt(day, 0, 99.5, 98) // under every low after the dip, the 102.5 target out of reach
+	// The RSI climbs to 100 and slides: the exit is the hour it crosses 70 down, not the climb
+	// through 70.
+	p, day := testParams(), peakFallDay()
+	p.TargetR = 0
+	at70 := firstCrossDown(p, day, 70)
+	if at70 < 2 {
+		t.Fatalf("fixture: cross of 70 down at %d (RSI %v)", at70, rsiOf(p, day))
+	}
+	pos := posAt(day, 0, 100, 99)
 	i, sig := firstExit(p, day, 0, pos)
-	if i != at70 || sig.Reason != "RSI" || math.Abs(sig.Price-day[at70].c) > eps || !strings.Contains(sig.ExitReason, "RSI") {
+	if i != at70 || sig.Reason != "RSI" || math.Abs(sig.Price-day[at70].c) > eps || !strings.Contains(sig.ExitReason, "вниз") {
 		t.Fatalf("exit at %d %q price %v, want %d RSI at the close", i, sig.Reason, sig.Price, at70)
 	}
 	p.RSIExit = 0
@@ -126,50 +118,21 @@ func TestRSIExit(t *testing.T) {
 	}
 }
 
-func TestStochExit(t *testing.T) {
-	// A climb lifts %K over %D high up; the 15:00 pullback turns %K under %D above 40.
-	p := testParams()
-	p.RSIExit, p.TargetR, p.StochExitAbove = 0, 0, 40
-	day := path("2026-09-15 10:00", 100, 100.5, 101.0, 101.5, 102.0, 102.5, 102.0, 102.2)
-	k, d := stochOf(p, day)
-	at := -1
-	for j := 1; j < len(day) && at < 0; j++ {
-		if crossUnder(k, d, j) {
-			at = j
-		}
-	}
-	if at < 0 || k[at] <= 40 {
-		t.Fatalf("fixture: %%K %v, %%D %v", k, d)
-	}
-	pos := posAt(day, 0, 100, 97)
-	i, sig := firstExit(p, day, 0, pos)
-	if i != at || sig.Reason != "STOCH" || math.Abs(sig.Price-day[at].c) > eps || !strings.Contains(sig.ExitReason, "вниз выше 40") {
-		t.Fatalf("exit at %d %q price %v (%q), want %d STOCH at the close", i, sig.Reason, sig.Price, sig.ExitReason, at)
-	}
-	p.StochExitAbove = k[at]
-	if i, sig := firstExit(p, day, 0, pos); i != -1 {
-		t.Fatalf("StochExitAbove at the cross %%K %v: exit at %d %q, want none", k[at], i, sig.Reason)
-	}
-	p.StochExitAbove = 0
-	if i, sig := firstExit(p, day, 0, pos); i != -1 {
-		t.Fatalf("StochExitAbove 0: exit at %d %q, want none", i, sig.Reason)
-	}
-}
-
 func TestStopBeforeRSI(t *testing.T) {
-	// The 11:00 hour jumps to 105: its RSI crosses 70; a tail under the stop on the same hour wins.
+	// The 11:00 hour jumps to 105 (RSI over 70), the later hours slide: the first cross of 70 down
+	// exits; a tail under the stop on the same hour wins.
 	p := testParams()
 	p.TargetR = 0
-	day := path("2026-09-15 10:00", 100, 99.0, 105, 105)
-	r := rsiOf(p, day)
-	if !crossUp(r[0], r[1], 70) {
-		t.Fatalf("fixture: RSI %v", r)
+	day := path("2026-09-15 10:00", 100, 99.0, 105, 104.5, 104, 103.5, 103)
+	at70 := firstCrossDown(p, day, 70)
+	if at70 < 2 {
+		t.Fatalf("fixture: cross of 70 down at %d (RSI %v)", at70, rsiOf(p, day))
 	}
 	pos := posAt(day, 0, 100, 98)
-	if i, sig := firstExit(p, day, 1, pos); i != 1 || sig.Reason != "RSI" {
-		t.Fatalf("exit at %d %q, want 1 RSI", i, sig.Reason)
+	if i, sig := firstExit(p, day, 1, pos); i != at70 || sig.Reason != "RSI" {
+		t.Fatalf("exit at %d %q, want %d RSI", i, sig.Reason, at70)
 	}
-	if sig := hold(p, withLow(day, 1, 97.5), 1, pos); sig.Reason != "SL" || sig.StopLoss != 98 {
+	if sig := hold(p, withLow(day, at70, 97.5), at70, pos); sig.Reason != "SL" || sig.StopLoss != 98 {
 		t.Fatalf("got %q stop %v, want SL 98", sig.Reason, sig.StopLoss)
 	}
 }
@@ -203,12 +166,12 @@ func TestWarmupZerosNeverExit(t *testing.T) {
 func TestDecideRoundTrip(t *testing.T) {
 	p := testParams()
 	day := append(canonical(), path("2026-09-15 16:00", 100.5, 101.0, 101.5, 102.0, 102.5)...)
-	checkCanonical(t, p, day[:canonTrigger+1])
-	buy := run(p, day, canonTrigger, time.Time{})
+	checkCanonical(t, p, day[:canonSignal+1])
+	buy := run(p, day, canonSignal, time.Time{})
 	if buy.Kind != model.SignalBuy {
-		t.Fatal("fixture: no buy at the canonical trigger")
+		t.Fatal("fixture: no buy at the canonical signal")
 	}
-	fill := canonTrigger + 1
+	fill := canonSignal + 1
 	pos := strategy.Position{PurchasePrice: day[fill].o, Quantity: 1, StopLoss: buy.StopLoss,
 		TakeProfit: buy.TakeProfit, EntryATR: buy.ATR, EntryTime: day[fill].t}
 	for i := fill; i < len(day); i++ {
@@ -226,4 +189,80 @@ func TestDecideRoundTrip(t *testing.T) {
 		}
 	}
 	t.Fatal("no exit")
+}
+
+// peakFallDay is Tuesday by hours from 10:00: a climb to 102 (RSI to 100), then a steady slide whose
+// RSI crosses 60, 50 and 40 down on later hours.
+func peakFallDay() []bar {
+	return path("2026-09-15 10:00", 100, 101.0, 102.0, 101.8, 101.6, 101.4, 101.2, 101.0, 100.8, 100.6, 100.4, 100.2, 100.0)
+}
+
+// firstCrossDown is the first index of day whose RSI crosses level down; -1 when none.
+func firstCrossDown(p Params, day []bar, level float64) int {
+	r := rsiOf(p, day)
+	for j := 1; j < len(day); j++ {
+		if crossDown(r[j-1], r[j], level) {
+			return j
+		}
+	}
+	return -1
+}
+
+func ladderParams() Params {
+	p := testParams()
+	p.RSIExit, p.TargetR = 0, 0
+	p.RSITrailFrom, p.RSITrailTo, p.RSITrailStep = 50, 70, 10
+	return p
+}
+
+func TestRSILadderExitsOnTheHighestRung(t *testing.T) {
+	// The RSI peaked at 100: the top rung 70 is reached, the exit is the first cross of 60 down.
+	p, day := ladderParams(), peakFallDay()
+	want := firstCrossDown(p, day, 60)
+	if want < 0 || want >= firstCrossDown(p, day, 50) {
+		t.Fatalf("fixture: cross of 60 at %d must come before the cross of 50", want)
+	}
+	pos := posAt(day, 0, 100, 90)
+	i, sig := firstExit(p, day, 0, pos)
+	if i != want || sig.Reason != "RSITR" || math.Abs(sig.Price-day[want].c) > eps || !strings.Contains(sig.ExitReason, "дошёл до 70") {
+		t.Fatalf("exit at %d %q (%q), want %d RSITR off rung 70", i, sig.Reason, sig.ExitReason, want)
+	}
+}
+
+func TestRSILadderTopRungCapsTheLevel(t *testing.T) {
+	// RSITrailTo 50 leaves one rung: whatever the peak, the exit is the cross of 40 down.
+	p, day := ladderParams(), peakFallDay()
+	p.RSITrailTo = 50
+	want := firstCrossDown(p, day, 40)
+	if want < 0 {
+		t.Fatal("fixture: no cross of 40 down")
+	}
+	i, sig := firstExit(p, day, 0, posAt(day, 0, 100, 90))
+	if i != want || sig.Reason != "RSITR" || !strings.Contains(sig.ExitReason, "дошёл до 50") {
+		t.Fatalf("exit at %d %q (%q), want %d RSITR off rung 50", i, sig.Reason, sig.ExitReason, want)
+	}
+}
+
+func TestRSILadderIgnoresThePeakBeforeTheFill(t *testing.T) {
+	// Filled right after the cross of 60 down: the peak of 100 before the fill does not count. The
+	// highest RSI from the fill on is in [50, 60), so the rung is 50 and the exit is the cross of 40.
+	p, day := ladderParams(), peakFallDay()
+	from := firstCrossDown(p, day, 60) + 1
+	r := rsiOf(p, day)
+	if peak := slices.Max(r[from:]); peak < 50 || peak >= 60 {
+		t.Fatalf("fixture: RSI peak after the fill %v, want [50, 60)", peak)
+	}
+	want := firstCrossDown(p, day, 40)
+	i, sig := firstExit(p, day, from, posAt(day, from, 100.5, 90))
+	if i != want || sig.Reason != "RSITR" || !strings.Contains(sig.ExitReason, "дошёл до 50") {
+		t.Fatalf("exit at %d %q (%q), want %d RSITR off rung 50", i, sig.Reason, sig.ExitReason, want)
+	}
+}
+
+func TestRSILadderOff(t *testing.T) {
+	p, day := ladderParams(), peakFallDay()
+	p.RSITrailFrom = 0
+	if i, sig := firstExit(p, day, 0, posAt(day, 0, 100, 90)); i != -1 {
+		t.Fatalf("RSITrailFrom 0: exit at %d %q, want none", i, sig.Reason)
+	}
 }

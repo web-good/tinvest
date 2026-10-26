@@ -1,0 +1,78 @@
+{
+  "_comment": "pdl_rsi LENT Hour1, шаг 7 «room» пошаговой калибровки, стохастик: крест %K над %D (36 мес, -risk-pct 1): оси MinRoomATR [0, 0.3, 0.6], остальные поля прибиты к точке шагов ['signal', 'trigger', 'trend', 'floor', 'trigmax', 'volume']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker LENT -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/lent/cal_cross/07_room.json -min-trades 1 -combos 0 -out reports/LENT_pdl_rsi/cross_room.  РЕЗУЛЬТАТ: MinRoomATR 0, PF 1.380, net +3983, сделок 29, плато; лучший центр MinRoomATR 0 (1.380) не выше текущей точки на 5% — точка остаётся.",
+  "phases": [
+    {
+      "name": "room",
+      "grid": {
+        "HourRSIPeriod": [
+          4
+        ],
+        "RSIArm": [
+          25
+        ],
+        "RSIFloor": [
+          0
+        ],
+        "RSITriggerMax": [
+          0
+        ],
+        "RSIExit": [
+          70
+        ],
+        "RSITrailFrom": [
+          0
+        ],
+        "RSITrailTo": [
+          70
+        ],
+        "RSITrailStep": [
+          10
+        ],
+        "StochK": [
+          14
+        ],
+        "StochSmooth": [
+          3
+        ],
+        "StochD": [
+          3
+        ],
+        "StochBelow": [
+          30
+        ],
+        "StochCross": [
+          1
+        ],
+        "StochBars": [
+          4
+        ],
+        "VolumeMult": [
+          1.2
+        ],
+        "VolBars": [
+          20
+        ],
+        "MinRoomATR": [
+          0,
+          0.3,
+          0.6
+        ],
+        "StopATR": [
+          0.5
+        ],
+        "MaxStopPct": [
+          0
+        ],
+        "TargetR": [
+          2
+        ],
+        "TrendEMA": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ]
+      }
+    }
+  ]
+}

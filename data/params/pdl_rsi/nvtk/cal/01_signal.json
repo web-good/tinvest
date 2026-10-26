@@ -1,5 +1,5 @@
 {
-  "_comment": "pdl_rsi NVTK Hour1, шаг 1 «signal» пошаговой калибровки (36 мес, -risk-pct 1): оси HourRSIPeriod [4, 5, 6, 8], RSIArm [25, 30, 35], остальные поля прибиты к точке шагов старта. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker NVTK -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/nvtk/cal/01_signal.json -min-trades 1 -combos 0 -out reports/NVTK_pdl_rsi/signal.  РЕЗУЛЬТАТ: HourRSIPeriod 6, RSIArm 30, PF 0.609, net -47930, сделок 324, острый пик; лучший центр HourRSIPeriod 5, RSIArm 25 (0.637) не выше текущей точки на 5% — точка остаётся.",
+  "_comment": "pdl_rsi NVTK Hour1, шаг 1 «signal» пошаговой калибровки, стохастик: %K ниже 20 (36 мес, -risk-pct 1): оси HourRSIPeriod [4, 5, 6, 8], RSIArm [25, 30, 35], остальные поля прибиты к точке шагов старта. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker NVTK -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/nvtk/cal/01_signal.json -min-trades 1 -combos 0 -out reports/NVTK_pdl_rsi/signal.  РЕЗУЛЬТАТ: HourRSIPeriod 5, RSIArm 30, PF 0.658, net -54334, сделок 483, острый пик; точка сдвинута.",
   "phases": [
     {
       "name": "signal",
@@ -18,29 +18,26 @@
         "RSIFloor": [
           0
         ],
-        "RSITriggerMax": [
-          0
-        ],
         "RSIExit": [
           70
         ],
-        "StochExitAbove": [
+        "RSITrailFrom": [
           0
         ],
+        "RSITrailTo": [
+          70
+        ],
+        "RSITrailStep": [
+          10
+        ],
         "StochK": [
-          5
+          14
         ],
         "StochSmooth": [
-          3
+          1
         ],
         "StochD": [
           3
-        ],
-        "StochBars": [
-          4
-        ],
-        "StochCrossMax": [
-          40
         ],
         "VolumeMult": [
           0

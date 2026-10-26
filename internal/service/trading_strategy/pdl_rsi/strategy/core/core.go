@@ -1,20 +1,19 @@
 // Package core implements pdl_rsi: a long-only strategy on hourly bars
 // (`-strategy pdl_rsi -interval Hour1`).
 //
-// The RSI signal is a closed hour on which the hourly RSI(HourRSIPeriod) crosses RSIArm downward:
-// the previous hour of the same MSK date closed with the RSI at or above RSIArm, this one below it.
-// The trigger is the first hour within StochBars hours after the RSI signal on which the slow
-// stochastic %K (StochK raw, smoothed over StochSmooth) crosses its %D (StochD) upward with %K below
-// StochCrossMax. It buys the next hour's open when the trigger closes strictly above the
-// EMA(TrendEMA) of the hourly closes, the RSI stayed at or above RSIFloor from the signal through
-// the trigger, the trigger hour's RSI is at or below RSITriggerMax, the
-// optional filters pass (the volume on the RSI hour, the room on the trigger) and the buy bar falls
-// on the same weekday exchange date.
+// The signal is a closed hour on which the hourly RSI(HourRSIPeriod) and the slow stochastic (%K:
+// StochK raw, smoothed over StochSmooth) are both low — neither waits for the other: the hourly RSI
+// is below RSIArm and %K is below stochZone (20) on the same hour; every such hour is a signal.
+// StochK 0 — no gate: the signal is the RSI crossing RSIArm down from an hour of the same MSK date.
+// There is no cross of %K over %D and no tunable level. It buys
+// the next hour's open when the signal hour's RSI is at or above RSIFloor, the signal closes
+// strictly above the EMA(TrendEMA) of the hourly closes, the optional filters pass (the signal
+// hour's volume, the room left in the day at the signal) and the buy bar falls on the same weekday
+// exchange date.
 //
 // The stop sits StopATR daily ATRs (frozen at the signal) under the fill, the target TargetR stop
-// distances above it; the signal carries both off the trigger close for sizing. The RSI exit fires
-// on the close of an hour whose RSI crosses RSIExit upward, the optional stochastic exit on the close
-// of an hour whose %K crosses %D down above StochExitAbove. The position carries overnight.
+// distances above it; the signal carries both off the signal close for sizing. The RSI exit fires
+// on the close of an hour whose RSI crosses RSIExit downward. The position carries overnight.
 //
 // A weekday exchange holiday shows up as dealer-only bars from 02:00 MSK, while an exchange
 // weekday starts at 06:00: a weekday date whose first bar starts before 06:00 is a dealer date
@@ -43,36 +42,32 @@ const longDayBars = 22
 type Params struct {
 	// HourRSIPeriod is the Wilder period of the hourly RSI; 0 — no entries
 	HourRSIPeriod int
-	// RSIArm: the RSI signal is the hourly RSI crossing down through this
+	// RSIArm: the signal hour's hourly RSI is below this
 	RSIArm float64
-	// RSIFloor > 0: no entry when the hourly RSI dropped below this on any hour from the RSI signal
-	// through the trigger; 0 — off
+	// RSIFloor > 0: no entry when the signal hour's RSI is below this (the fall is too steep); 0 — off
 	RSIFloor float64
-	// RSITriggerMax > 0: the hourly RSI of the trigger hour must be at or below this; 0 — off
-	RSITriggerMax float64
-	// RSIExit: the hourly RSI crossing up through this exits; 0 — no RSI exit
+	// RSIExit: the hourly RSI crossing down through this exits (leaving the upper zone); 0 — no RSI exit
 	RSIExit float64
-	// StochExitAbove > 0: the stochastic %K crossing %D down with %K (and so %D) above this exits at
-	// the hour's close; 0 — off
-	StochExitAbove float64
+	// The RSI ladder exit: rungs from RSITrailFrom to RSITrailTo every RSITrailStep; once the
+	// position's hourly RSI reached a rung, the RSI crossing (that rung − RSITrailStep) down exits
+	// at the close. RSITrailFrom 0 — off
+	RSITrailFrom float64
+	RSITrailTo   float64
+	RSITrailStep float64
 
-	// The slow stochastic: %K is the raw StochK-bar %K smoothed over StochSmooth bars, %D its
-	// StochD-bar average. The trigger is %K crossing %D up within StochBars hours after the RSI
-	// signal (the signal hour itself excluded); any of them 0 — no entries
+	// The slow stochastic gate on the signal hour itself: %K — the raw StochK-bar %K smoothed over
+	// StochSmooth bars — must be under stochZone (20). %D, the StochD-bar average of %K, only goes
+	// into the entry reason. StochK 0 — gate off
 	StochK      int
 	StochSmooth int
 	StochD      int
-	StochBars   int
-	// StochCrossMax > 0: the cross counts only with %K (and so %D) below this on the trigger hour;
-	// a cross at or above it is no trigger; 0 — any level
-	StochCrossMax float64
 
-	// VolumeMult > 0: the RSI signal hour (a main-session hour) must trade above VolumeMult × the
+	// VolumeMult > 0: the signal hour (a main-session hour) must trade above VolumeMult × the
 	// average of the VolBars main-session hours before it; 0 — volume off
 	VolumeMult float64
 	VolBars    int
 
-	// MinRoomATR > 0: the day must have this many daily ATRs of upside left at the trigger; 0 — room off
+	// MinRoomATR > 0: the day must have this many daily ATRs of upside left at the signal; 0 — room off
 	MinRoomATR float64
 
 	// StopATR: the stop sits this many daily ATRs under the fill; 0 — no entries
@@ -82,7 +77,7 @@ type Params struct {
 	// TargetR: the target sits this many stop distances above the fill; 0 — no target
 	TargetR float64
 
-	// TrendEMA > 0: the trigger hour must close strictly above the warmed EMA of this period over
+	// TrendEMA > 0: the signal hour must close strictly above the warmed EMA of this period over
 	// the hourly closes; 0 — trend off
 	TrendEMA int
 
@@ -95,13 +90,13 @@ func DefaultParams() Params {
 		HourRSIPeriod:  6,
 		RSIArm:         30,
 		RSIFloor:       22,
-		RSITriggerMax:  50,
 		RSIExit:        70,
-		StochK:         5,
-		StochSmooth:    3,
+		RSITrailFrom:   0,
+		RSITrailTo:     70,
+		RSITrailStep:   10,
+		StochK:         14,
+		StochSmooth:    1,
 		StochD:         3,
-		StochBars:      4,
-		StochCrossMax:  40,
 		VolumeMult:     0,
 		VolBars:        20,
 		MinRoomATR:     0,
@@ -126,13 +121,12 @@ func NewWithParams(ticker string, step time.Duration, p Params) *Strategy {
 
 func (s *Strategy) Ticker() string { return s.ticker }
 
-// Lookback covers the VolBars main-session hours before an RSI hour up to StochBars hours back
-// (whole days plus a weekend of up to longDayBars bars a day), the current day, the RSI and
+// Lookback covers the VolBars main-session hours before the signal hour (whole days plus a weekend of up to longDayBars bars a day), the current day, the RSI and
 // stochastic warm-up and twice the trend EMA period.
 func (s *Strategy) Lookback() int {
 	volDays := (max(s.p.VolBars, 1) + sessionHours - 1) / sessionHours
-	return max(4*s.p.HourRSIPeriod+66+s.p.StochBars, (volDays+2)*dayBars+2*longDayBars,
-		2*s.p.TrendEMA+20)
+	return max(4*s.p.HourRSIPeriod+66, s.p.StochK+s.p.StochSmooth+s.p.StochD+2,
+		(volDays+2)*dayBars+2*longDayBars, 2*s.p.TrendEMA+20)
 }
 
 // trendAt is the EMA(TrendEMA) of the closes at bar k; false while the EMA is not warm
@@ -264,40 +258,32 @@ func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 	return s.enter(md, sig)
 }
 
-// enter buys the next open when the current hour is a trigger (the first stochastic cross up within
-// StochBars hours after the RSI crossing RSIArm down) and the trend, RSI cap, room, volume and
-// stop checks pass.
+// enter buys the next open when the current hour is a signal (the RSI and the stochastic both low on
+// it) and the floor, trend, room, volume and stop checks pass.
 func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal {
 	n := len(md.Closes)
 	if n < 2 || len(md.Times) != n || len(md.Opens) != n || len(md.Highs) != n || len(md.Lows) != n {
 		return sig
 	}
-	if s.p.HourRSIPeriod <= 0 || s.p.StochBars <= 0 || !s.entryAllowed(md) {
+	if s.p.HourRSIPeriod <= 0 || !s.entryAllowed(md) {
 		return sig
 	}
 	ser, k := barsOf(md), n-1
-	sk, sd, first := s.stochKD(ser)
-	if sk == nil || k-1 < first || !s.stochTrigger(sk, sd, k) {
+	if k <= s.p.HourRSIPeriod { // the RSIs of k−1 and k are real values
 		return sig
 	}
 	rsi := indicators.RSISeries(ser.c, s.p.HourRSIPeriod)
-	j := s.rsiSignal(ser, rsi, k)
-	if j < 0 {
-		return sig
-	}
-	for m := max(j+1, first+1); m < k; m++ {
-		if s.stochTrigger(sk, sd, m) {
-			return sig // not the first trigger cross after the RSI signal
+	var sk []float64
+	var skFirst int
+	if s.stochOn() {
+		if sk, skFirst = s.stochK(ser); sk == nil || k < skFirst {
+			return sig
 		}
 	}
-	if s.p.RSITriggerMax > 0 && rsi[k] > s.p.RSITriggerMax {
+	if !s.signal(ser, rsi, sk, k) {
 		return sig
 	}
-	low := rsi[j]
-	for m := j + 1; m <= k; m++ {
-		low = min(low, rsi[m])
-	}
-	if s.p.RSIFloor > 0 && low < s.p.RSIFloor {
+	if s.p.RSIFloor > 0 && rsi[k] < s.p.RSIFloor {
 		return sig
 	}
 	atr := s.dailyATR(md)
@@ -316,7 +302,7 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	if s.p.MinRoomATR > 0 && room < s.p.MinRoomATR {
 		return sig
 	}
-	win, base, ok := s.volumeOK(ser, j)
+	win, base, ok := s.volumeOK(ser, k)
 	if !ok {
 		return sig
 	}
@@ -332,9 +318,15 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	sig.Kind = model.SignalBuy
 	sig.StopLoss, sig.TakeProfit, sig.ATR = stop, target, atr
 	sig.FillBy = md.Times[k].Add(s.step)
-	sig.EntryReason = fmt.Sprintf("крест часового RSI(%d) %.2f → %.2f через %.0f вниз на часе %s; стохастик(%d,%d,%d) %%K %.2f → %.2f пересёк %%D %.2f → %.2f вверх на часе %s (через %d ч)%s, RSI %.2f; close %.4f, дневной ATR %.4f; стоп %.4f = close − %.2f ATR",
-		s.p.HourRSIPeriod, rsi[j-1], rsi[j], s.p.RSIArm, hm(j),
-		s.p.StochK, s.p.StochSmooth, s.p.StochD, sk[k-1], sk[k], sd[k-1], sd[k], hm(k), k-j, s.stochWhy(), rsi[k],
+	if sk != nil {
+		sig.EntryReason = fmt.Sprintf("на часе %s часовой RSI(%d) %.2f < %.0f и стохастик(%d,%d,%d) %%K %.2f < %d (%%D %.2f)",
+			hm(k), s.p.HourRSIPeriod, rsi[k], s.p.RSIArm, s.p.StochK, s.p.StochSmooth, s.p.StochD, sk[k], stochZone,
+			s.stochD(sk, skFirst, k))
+	} else {
+		sig.EntryReason = fmt.Sprintf("крест часового RSI(%d) %.2f → %.2f через %.0f вниз на часе %s",
+			s.p.HourRSIPeriod, rsi[k-1], rsi[k], s.p.RSIArm, hm(k))
+	}
+	sig.EntryReason += fmt.Sprintf("; close %.4f, дневной ATR %.4f; стоп %.4f = close − %.2f ATR",
 		closeP, atr, stop, s.p.StopATR)
 	if s.stopCapped(closeP, atr) {
 		sig.EntryReason += fmt.Sprintf(" (урезан до %.2f%% цены)", s.p.MaxStopPct)
@@ -342,11 +334,8 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	if target > 0 {
 		sig.EntryReason += fmt.Sprintf(", цель %.4f = close + %.2f R", target, s.p.TargetR)
 	}
-	if s.p.RSITriggerMax > 0 {
-		sig.EntryReason += fmt.Sprintf(" (RSI ≤ %.0f)", s.p.RSITriggerMax)
-	}
 	if s.p.RSIFloor > 0 {
-		sig.EntryReason += fmt.Sprintf(", мин. RSI от сигнала %.2f ≥ %.0f", low, s.p.RSIFloor)
+		sig.EntryReason += fmt.Sprintf(", RSI %.2f ≥ пола %.0f", rsi[k], s.p.RSIFloor)
 	}
 	if s.p.TrendEMA > 0 {
 		sig.EntryReason += fmt.Sprintf(", над EMA(%d) %.4f", s.p.TrendEMA, trend)
@@ -355,7 +344,7 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 		sig.EntryReason += fmt.Sprintf(", запас хода %.2f ATR ≥ %.2f", room, s.p.MinRoomATR)
 	}
 	if s.volumeOn() {
-		sig.EntryReason += fmt.Sprintf(", объём часа RSI %.0f > %.2f × среднее %d часов %.0f",
+		sig.EntryReason += fmt.Sprintf(", объём часа сигнала %.0f > %.2f × среднее %d часов %.0f",
 			win, s.p.VolumeMult, s.p.VolBars, base)
 	}
 	return sig
@@ -376,20 +365,16 @@ func (s *Strategy) stopCapped(price, atr float64) bool {
 	return s.p.MaxStopPct > 0 && s.p.MaxStopPct/100*price < s.p.StopATR*atr
 }
 
-// rsiSignal is the latest hour j within StochBars hours before the trigger k (k−StochBars ≤ j < k)
-// on which the RSI crosses RSIArm down from an hour of the same MSK date; -1 when none. Hours start
-// at HourRSIPeriod + 1, so both RSIs of the cross are real values.
-func (s *Strategy) rsiSignal(ser series, rsi []float64, k int) int {
-	for j := k - 1; j >= k-s.p.StochBars && j > s.p.HourRSIPeriod; j-- {
-		if dayKey(ser.t[j-1]) == dayKey(ser.t[j]) && crossDown(rsi[j-1], rsi[j], s.p.RSIArm) {
-			return j
-		}
+// signal reports whether hour k is a signal. With the stochastic gate (sk set) it is any hour with
+// the RSI below RSIArm and the gate passing on that same hour — neither waits for the other, and
+// every such hour qualifies, so the first one the filters let through buys. Without the gate it is
+// the RSI crossing RSIArm down from an hour of the same MSK date.
+func (s *Strategy) signal(ser series, rsi, sk []float64, k int) bool {
+	if sk != nil {
+		return rsi[k] < s.p.RSIArm && stochHit(sk, k)
 	}
-	return -1
+	return dayKey(ser.t[k-1]) == dayKey(ser.t[k]) && crossDown(rsi[k-1], rsi[k], s.p.RSIArm)
 }
-
-// crossUp reports whether a series moved from below level to at or above it.
-func crossUp(prev, cur, level float64) bool { return prev < level && cur >= level }
 
 // crossDown reports whether a series moved from at or above level to below it.
 func crossDown(prev, cur, level float64) bool { return prev >= level && cur < level }

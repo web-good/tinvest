@@ -1,0 +1,72 @@
+{
+  "_comment": "pdl_rsi LENT Hour1, шаг 7 «exits» пошаговой калибровки, без стохастика (StochK 0) (36 мес, -risk-pct 1): оси RSIExit [65, 70, 75], RSITrailFrom [0, 40, 50, 60], RSITrailStep [10, 15, 20], RSITrailTo [70, 80], остальные поля прибиты к точке шагов ['signal', 'trend', 'floor', 'volume', 'room', 'risk']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker LENT -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/lent/cal_nostoch/07_exits.json -min-trades 1 -combos 0 -out reports/LENT_pdl_rsi/nostoch_exits.  РЕЗУЛЬТАТ: RSIExit 70, RSITrailFrom 0, RSITrailStep 10, RSITrailTo 70, PF 1.021, net +3425, сделок 317, острый пик; лучший центр RSIExit 70, RSITrailFrom 0, RSITrailStep 15, RSITrailTo 70 (1.021) не выше текущей точки на 5% — точка остаётся.",
+  "phases": [
+    {
+      "name": "exits",
+      "grid": {
+        "HourRSIPeriod": [
+          6
+        ],
+        "RSIArm": [
+          30
+        ],
+        "RSIFloor": [
+          0
+        ],
+        "RSIExit": [
+          65,
+          70,
+          75
+        ],
+        "RSITrailFrom": [
+          0,
+          40,
+          50,
+          60
+        ],
+        "RSITrailTo": [
+          70,
+          80
+        ],
+        "RSITrailStep": [
+          10,
+          15,
+          20
+        ],
+        "StochK": [
+          0
+        ],
+        "StochSmooth": [
+          1
+        ],
+        "StochD": [
+          3
+        ],
+        "VolumeMult": [
+          0
+        ],
+        "VolBars": [
+          20
+        ],
+        "MinRoomATR": [
+          0
+        ],
+        "StopATR": [
+          0.5
+        ],
+        "MaxStopPct": [
+          0
+        ],
+        "TargetR": [
+          2
+        ],
+        "TrendEMA": [
+          0
+        ],
+        "DailyATRPeriod": [
+          14
+        ]
+      }
+    }
+  ]
+}
