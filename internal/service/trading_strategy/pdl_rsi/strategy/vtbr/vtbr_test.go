@@ -9,13 +9,13 @@ import (
 // Литерал прибит снимком: правка любого числа меняет то, что гоняет бэктест VTBR на 1h.
 func TestLiteralIsPinned(t *testing.T) {
 	want := core.Params{
-		HourRSIPeriod:  5,
-		RSIArm:         35,
-		RSIFloor:       0,
-		StochK:         0,
-		StochSmooth:    3,
+		HourRSIPeriod:  6,
+		RSIArm:         30,
+		RSIFloor:       22,
+		StochK:         9,
+		StochSmooth:    1,
 		StochD:         3,
-		RSIExit:        70,
+		RSIExit:        75,
 		RSITrailFrom:   0,
 		RSITrailTo:     70,
 		RSITrailStep:   10,
@@ -24,7 +24,7 @@ func TestLiteralIsPinned(t *testing.T) {
 		MinRoomATR:     0,
 		StopATR:        0.5,
 		MaxStopPct:     0,
-		TargetR:        2,
+		TargetR:        3,
 		TrendEMA:       100,
 		DailyATRPeriod: 14,
 	}

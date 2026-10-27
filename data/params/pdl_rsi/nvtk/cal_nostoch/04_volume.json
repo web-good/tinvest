@@ -1,5 +1,5 @@
 {
-  "_comment": "pdl_rsi NVTK Hour1, шаг 4 «volume» пошаговой калибровки, без стохастика (StochK 0) (36 мес, -risk-pct 1): оси VolumeMult [0, 0.5, 0.8, 1.2], остальные поля прибиты к точке шагов ['signal', 'trend', 'floor']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker NVTK -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/nvtk/cal_nostoch/04_volume.json -min-trades 1 -combos 0 -out reports/NVTK_pdl_rsi/nostoch_volume.  РЕЗУЛЬТАТ: VolumeMult 1.2, PF 0.668, net -27515, сделок 182, острый пик; точка сдвинута.",
+  "_comment": "pdl_rsi NVTK Hour1, шаг 4 «volume» пошаговой калибровки, без стохастика (StochK 0) (36 мес, -risk-pct 1): оси VolumeMult [0, 0.5, 0.8, 1.2], остальные поля прибиты к точке шагов ['signal', 'trend', 'floor']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker NVTK -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/nvtk/cal_nostoch/04_volume.json -min-trades 1 -combos 0 -out reports/NVTK_pdl_rsi/nostoch_volume.  РЕЗУЛЬТАТ: VolumeMult 0, PF 0.591, net -24703, сделок 119, острый пик; лучший центр VolumeMult 0 (0.518) не выше текущей точки на 5% — точка остаётся.",
   "phases": [
     {
       "name": "volume",
@@ -56,7 +56,7 @@
           2
         ],
         "TrendEMA": [
-          0
+          100
         ],
         "DailyATRPeriod": [
           14

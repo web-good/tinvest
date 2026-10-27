@@ -1,5 +1,5 @@
 {
-  "_comment": "pdl_rsi NVTK Hour1, шаг 6 «risk» пошаговой калибровки, без стохастика (StochK 0) (36 мес, -risk-pct 1): оси StopATR [0.3, 0.5, 0.7, 1.0], TargetR [1.5, 2, 3], MaxStopPct [0, 1, 1.5], остальные поля прибиты к точке шагов ['signal', 'trend', 'floor', 'volume', 'room']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker NVTK -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/nvtk/cal_nostoch/06_risk.json -min-trades 1 -combos 0 -out reports/NVTK_pdl_rsi/nostoch_risk.  РЕЗУЛЬТАТ: StopATR 0.3, TargetR 1.5, MaxStopPct 1.5, PF 0.899, net -9806, сделок 198, острый пик; точка сдвинута.",
+  "_comment": "pdl_rsi NVTK Hour1, шаг 6 «risk» пошаговой калибровки, без стохастика (StochK 0) (36 мес, -risk-pct 1): оси StopATR [0.3, 0.5, 0.7, 1.0], TargetR [1.5, 2, 3], MaxStopPct [0, 1, 1.5], остальные поля прибиты к точке шагов ['signal', 'trend', 'floor', 'volume', 'room']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker NVTK -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/nvtk/cal_nostoch/06_risk.json -min-trades 1 -combos 0 -out reports/NVTK_pdl_rsi/nostoch_risk.  РЕЗУЛЬТАТ: StopATR 0.3, TargetR 1.5, MaxStopPct 1.5, PF 0.676, net -23278, сделок 136, острый пик; точка сдвинута.",
   "phases": [
     {
       "name": "risk",
@@ -35,7 +35,7 @@
           3
         ],
         "VolumeMult": [
-          1.2
+          0
         ],
         "VolBars": [
           20
@@ -60,7 +60,7 @@
           3
         ],
         "TrendEMA": [
-          0
+          100
         ],
         "DailyATRPeriod": [
           14

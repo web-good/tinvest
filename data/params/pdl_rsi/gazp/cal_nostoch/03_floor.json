@@ -1,5 +1,5 @@
 {
-  "_comment": "pdl_rsi GAZP Hour1, шаг 3 «floor» пошаговой калибровки, без стохастика (StochK 0) (36 мес, -risk-pct 1): оси RSIFloor [0, 15, 20, 22], остальные поля прибиты к точке шагов ['signal', 'trend']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker GAZP -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/gazp/cal_nostoch/03_floor.json -min-trades 1 -combos 0 -out reports/GAZP_pdl_rsi/nostoch_floor.  РЕЗУЛЬТАТ: RSIFloor 0, PF 0.757, net -33764, сделок 380, острый пик; лучший центр RSIFloor 0 (0.758) не выше текущей точки на 5% — точка остаётся.",
+  "_comment": "pdl_rsi GAZP Hour1, шаг 3 «floor» пошаговой калибровки, без стохастика (StochK 0) (36 мес, -risk-pct 1): оси RSIFloor [0, 15, 20, 22], остальные поля прибиты к точке шагов ['signal', 'trend']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker GAZP -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/gazp/cal_nostoch/03_floor.json -min-trades 1 -combos 0 -out reports/GAZP_pdl_rsi/nostoch_floor.  РЕЗУЛЬТАТ: RSIFloor 0, PF 1.106, net +3913, сделок 83, плато; лучший центр RSIFloor 0 (1.106) не выше текущей точки на 5% — точка остаётся.",
   "phases": [
     {
       "name": "floor",
@@ -56,7 +56,7 @@
           2
         ],
         "TrendEMA": [
-          0
+          100
         ],
         "DailyATRPeriod": [
           14

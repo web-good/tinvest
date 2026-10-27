@@ -1,5 +1,5 @@
 {
-  "_comment": "pdl_rsi NVTK Hour1, шаг 9 «signal2» пошаговой калибровки, стохастик: %K ниже 20 (36 мес, -risk-pct 1): оси HourRSIPeriod [4, 5, 6, 8], RSIArm [25, 30, 35], остальные поля прибиты к точке шагов ['signal', 'trigger', 'trend', 'floor', 'volume', 'room', 'risk', 'exits']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker NVTK -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/nvtk/cal/09_signal2.json -min-trades 1 -combos 0 -out reports/NVTK_pdl_rsi/signal2.  РЕЗУЛЬТАТ: HourRSIPeriod 5, RSIArm 30, PF 1.112, net +5907, сделок 130, острый пик; лучший центр HourRSIPeriod 6, RSIArm 25 (1.127) не выше текущей точки на 5% — точка остаётся.",
+  "_comment": "pdl_rsi NVTK Hour1, шаг 9 «signal2» пошаговой калибровки, стохастик: %K ниже 20 (36 мес, -risk-pct 1): оси HourRSIPeriod [4, 5, 6, 8], RSIArm [25, 30, 35], остальные поля прибиты к точке шагов ['signal', 'trigger', 'trend', 'floor', 'volume', 'room', 'risk', 'exits']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker NVTK -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/nvtk/cal/09_signal2.json -min-trades 1 -combos 0 -out reports/NVTK_pdl_rsi/signal2.  РЕЗУЛЬТАТ: HourRSIPeriod 6, RSIArm 25, PF 1.409, net +7479, сделок 43, плато; точка сдвинута.",
   "phases": [
     {
       "name": "signal2",
@@ -28,7 +28,7 @@
           70
         ],
         "RSITrailStep": [
-          15
+          10
         ],
         "StochK": [
           14
@@ -58,7 +58,7 @@
           3
         ],
         "TrendEMA": [
-          150
+          100
         ],
         "DailyATRPeriod": [
           14

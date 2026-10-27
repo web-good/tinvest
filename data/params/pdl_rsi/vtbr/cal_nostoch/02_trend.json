@@ -1,5 +1,5 @@
 {
-  "_comment": "pdl_rsi VTBR Hour1, шаг 2 «trend» пошаговой калибровки, без стохастика (StochBelow 0) (36 мес, -risk-pct 1): оси TrendEMA [0, 100, 150, 200], остальные поля прибиты к точке шагов ['signal']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker VTBR -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/vtbr/cal_nostoch/02_trend.json -min-trades 1 -combos 0 -out reports/VTBR_pdl_rsi/nostoch_trend.  РЕЗУЛЬТАТ: TrendEMA 0, PF 0.735, net -47467, сделок 518, острый пик; лучший центр TrendEMA 0 (0.821) не выше текущей точки на 5% — точка остаётся.",
+  "_comment": "pdl_rsi VTBR Hour1, шаг 2 «trend» пошаговой калибровки, без стохастика (StochK 0) (36 мес, -risk-pct 1): оси TrendEMA [100, 150, 170, 200], остальные поля прибиты к точке шагов ['signal']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker VTBR -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/vtbr/cal_nostoch/02_trend.json -min-trades 1 -combos 0 -out reports/VTBR_pdl_rsi/nostoch_trend.  РЕЗУЛЬТАТ: TrendEMA 100, PF 0.918, net -5398, сделок 158, острый пик; выключенное значение запрещено — выбран лучший центр.",
   "phases": [
     {
       "name": "trend",
@@ -13,28 +13,25 @@
         "RSIFloor": [
           0
         ],
-        "RSITriggerMax": [
-          0
-        ],
         "RSIExit": [
           70
         ],
+        "RSITrailFrom": [
+          0
+        ],
+        "RSITrailTo": [
+          70
+        ],
+        "RSITrailStep": [
+          10
+        ],
         "StochK": [
-          5
+          0
         ],
         "StochSmooth": [
-          3
+          1
         ],
         "StochD": [
-          3
-        ],
-        "StochBelow": [
-          0
-        ],
-        "StochCross": [
-          0
-        ],
-        "StochBars": [
           3
         ],
         "VolumeMult": [
@@ -56,9 +53,9 @@
           2
         ],
         "TrendEMA": [
-          0,
           100,
           150,
+          170,
           200
         ],
         "DailyATRPeriod": [
