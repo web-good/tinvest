@@ -54,7 +54,7 @@ func pdlGuest(trade bool, tg *tgmocks.MockClient) forcedBuy {
 func TestPDLRSIGuestPaperDoesNotTrade(t *testing.T) {
 	e := newSharedEnv(t, hourPass1, nil, nil, pdlGuest(false, nil))
 	e.instruments.EXPECT().Shares(mock.Anything).Return(sharesOf("GAZP"), nil)
-	e.expectHourCandles(flatAt1h(hourBar9, 400, 100), dailies(hourPass1, 60))
+	e.expectHourCandles(flatAt1h(hourBar9, 600, 100), dailies(hourPass1, 60))
 	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return(nil, nil)
 	e.ops.EXPECT().GetPortfolioTotal(mock.Anything, mock.Anything).Return(1_000_000.0, nil)
 	e.ops.EXPECT().GetAvailableCash(mock.Anything, mock.Anything).Return(1_000_000.0, nil)
@@ -86,7 +86,7 @@ func TestPDLRSIGuestTakesTickerOnlyWhenPullbackSilent(t *testing.T) {
 		Return(flatAt30m(hourPass1.Add(-31*time.Minute), 400, 100), nil)
 	e.market.EXPECT().GetCandles(mock.Anything, mock.Anything, mock.MatchedBy(isH1),
 		mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-		Return(flatAt1h(hourBar9, 400, 100), nil)
+		Return(flatAt1h(hourBar9, 600, 100), nil)
 	e.market.EXPECT().GetCandles(mock.Anything, mock.Anything, mock.MatchedBy(isDay1),
 		mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(dailies(hourPass1, 60), nil)

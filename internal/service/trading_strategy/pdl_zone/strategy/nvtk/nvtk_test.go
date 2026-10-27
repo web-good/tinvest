@@ -21,7 +21,7 @@ func TestLiteralIsPinned(t *testing.T) {
 		StopBars:       5,
 		MinStopATR:     0.2,
 		TargetR:        1.7,
-		MinRoomATR:     0.2,
+		MinRoomATR:     0.5,
 		DailyATRPeriod: 14,
 	}
 	if got := Params(); got != want {

@@ -20,14 +20,14 @@ func TestLiteralIsPinned(t *testing.T) {
 		IndexTrendEMA:     150,
 		PDLEngulf:         0,
 		PDLHammer:         1,
-		PDLDipVolMult:     0.5,
+		PDLDipVolMult:     0.9,
 		PDLReclaimBars:    0,
 		PDLHammerEntry:    0,
-		PDLSignalVolMult:  0.5,
+		PDLSignalVolMult:  1,
 		PDLPatternTargetR: 1.5,
 		PDLMinStopATR:     0.4,
 		LockAfterR:        1,
-		LockAtR:           0.25,
+		LockAtR:           0.3,
 	}
 	if got := Params(); got != want {
 		t.Fatalf("литерал AFKS изменился:\n got: %+v\nwant: %+v", got, want)

@@ -18,13 +18,13 @@ func TestValidateAcceptsDefaults(t *testing.T) {
 
 func TestValidateRejects(t *testing.T) {
 	cases := map[string]func(*runCfg){
-		"holdout == months":     func(c *runCfg) { c.holdoutMonths = c.months },
-		"zero workers":          func(c *runCfg) { c.workers = 0 },
-		"negative tick gate":    func(c *runCfg) { c.maxTickPct = -0.1 },
-		"negative min trades":   func(c *runCfg) { c.minTrades = -1 },
-		"negative shortlist":    func(c *runCfg) { c.shortlist = -1 },
+		"holdout == months":      func(c *runCfg) { c.holdoutMonths = c.months },
+		"zero workers":           func(c *runCfg) { c.workers = 0 },
+		"negative tick gate":     func(c *runCfg) { c.maxTickPct = -0.1 },
+		"negative min trades":    func(c *runCfg) { c.minTrades = -1 },
+		"negative shortlist":     func(c *runCfg) { c.shortlist = -1 },
 		"Minutes15 not screened": func(c *runCfg) { c.interval = enum.Minutes15 },
-		"Day1 not screened":     func(c *runCfg) { c.interval = enum.Day1 },
+		"Day1 not screened":      func(c *runCfg) { c.interval = enum.Day1 },
 	}
 	for name, mutate := range cases {
 		c := validCfg()
