@@ -5,6 +5,7 @@ package live
 import (
 	"time"
 
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/aflt"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/core"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/gazp"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/lent"
@@ -20,6 +21,7 @@ import (
 // paramsByTicker — тикеры, которые раннер знает (литералы пакетов тикеров, как в реестре
 // бэктеста). Торгуют только перечисленные в PDL_RSI_TICKERS.
 var paramsByTicker = map[string]func() core.Params{
+	"AFLT": aflt.Params,
 	"GAZP": gazp.Params,
 	"LENT": lent.Params,
 	"MDMG": mdmg.Params,

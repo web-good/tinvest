@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/aflt"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/gazp"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/lent"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mdmg"
@@ -23,6 +24,7 @@ import (
 // он не экспортирован — сверка по явному списку) и отдаёт литерал пакета тикера как есть.
 func TestRegistryMatchesBacktestRegistry(t *testing.T) {
 	want := map[string]func() any{
+		"AFLT": func() any { return aflt.Params() },
 		"GAZP": func() any { return gazp.Params() },
 		"LENT": func() any { return lent.Params() },
 		"MDMG": func() any { return mdmg.Params() },
@@ -38,7 +40,7 @@ func TestRegistryMatchesBacktestRegistry(t *testing.T) {
 		got = append(got, tk)
 	}
 	slices.Sort(got)
-	if !slices.Equal(got, []string{"GAZP", "LENT", "MDMG", "MGNT", "MRKV", "NVTK", "SVCB", "VTBR", "X5"}) {
+	if !slices.Equal(got, []string{"AFLT", "GAZP", "LENT", "MDMG", "MGNT", "MRKV", "NVTK", "SVCB", "VTBR", "X5"}) {
 		t.Fatalf("тикеры реестра = %v", got)
 	}
 	for tk, lit := range want {
