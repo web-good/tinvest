@@ -353,16 +353,38 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 // stopDistance is the stop distance under price: StopATR daily ATRs, capped at MaxStopPct percent
 // of price when MaxStopPct > 0.
 func (s *Strategy) stopDistance(price, atr float64) float64 {
-	d := s.p.StopATR * atr
-	if s.stopCapped(price, atr) {
-		d = s.p.MaxStopPct / 100 * price
+	return stopDistance(s.p, price, atr)
+}
+
+func stopDistance(p Params, price, atr float64) float64 {
+	d := p.StopATR * atr
+	if stopCapped(p, price, atr) {
+		d = p.MaxStopPct / 100 * price
 	}
 	return d
 }
 
 // stopCapped reports whether MaxStopPct cuts the StopATR distance at price.
 func (s *Strategy) stopCapped(price, atr float64) bool {
-	return s.p.MaxStopPct > 0 && s.p.MaxStopPct/100*price < s.p.StopATR*atr
+	return stopCapped(s.p, price, atr)
+}
+
+func stopCapped(p Params, price, atr float64) bool {
+	return p.MaxStopPct > 0 && p.MaxStopPct/100*price < p.StopATR*atr
+}
+
+// StopLevel is the protective stop for a position filled at fill with the daily ATR frozen at the
+// signal: fill minus the stop distance (StopATR ATRs, capped at MaxStopPct percent). It is 0 when
+// there is no stop: no fill, no ATR, the stop is off, or the level lands outside (0, fill).
+func StopLevel(p Params, fill, atr float64) float64 {
+	if fill <= 0 || atr <= 0 || p.StopATR <= 0 {
+		return 0
+	}
+	level := fill - stopDistance(p, fill, atr)
+	if level <= 0 || level >= fill {
+		return 0
+	}
+	return level
 }
 
 // signal reports whether hour k is a signal. With the stochastic gate (sk set) it is any hour with

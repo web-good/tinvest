@@ -266,3 +266,45 @@ func TestRSILadderOff(t *testing.T) {
 		t.Fatalf("RSITrailFrom 0: exit at %d %q, want none", i, sig.Reason)
 	}
 }
+
+// stopLevelParams — набор без обращения к литералу тикера: стоп 0.7 ATR, кап 1.5% цены.
+func stopLevelParams() Params {
+	p := DefaultParams()
+	p.StopATR, p.MaxStopPct = 0.7, 1.5
+	return p
+}
+
+func TestStopLevelMatchesExitLevels(t *testing.T) {
+	p := stopLevelParams()
+	// кап 1.5% (1.5) сильнее 0.7 × 5 = 3.5
+	if got := StopLevel(p, 100, 5); math.Abs(got-98.5) > 1e-9 {
+		t.Errorf("StopLevel(100, 5) = %v, want 98.5", got)
+	}
+	// кап не режет: 0.7 × 1 = 0.7
+	if got := StopLevel(p, 100, 1); math.Abs(got-99.3) > 1e-9 {
+		t.Errorf("StopLevel(100, 1) = %v, want 99.3", got)
+	}
+	// exitLevels берёт тот же уровень от цены входа и ATR позиции
+	stop, _, ok := NewWithParams("TEST", step, p).exitLevels(&strategy.Position{PurchasePrice: 100, EntryATR: 5})
+	if !ok || math.Abs(stop-StopLevel(p, 100, 5)) > 1e-9 {
+		t.Errorf("exitLevels stop = %v ok=%v, want %v", stop, ok, StopLevel(p, 100, 5))
+	}
+}
+
+func TestStopLevelZeroWithoutATR(t *testing.T) {
+	p := stopLevelParams()
+	if got := StopLevel(p, 100, 0); got != 0 {
+		t.Errorf("StopLevel(atr 0) = %v, want 0", got)
+	}
+	if got := StopLevel(p, 0, 5); got != 0 {
+		t.Errorf("StopLevel(fill 0) = %v, want 0", got)
+	}
+	p.StopATR = 0
+	if got := StopLevel(p, 100, 5); got != 0 {
+		t.Errorf("StopLevel(StopATR 0) = %v, want 0", got)
+	}
+	p.StopATR, p.MaxStopPct = 30, 0 // уровень ниже нуля
+	if got := StopLevel(p, 100, 5); got != 0 {
+		t.Errorf("StopLevel(level<=0) = %v, want 0", got)
+	}
+}

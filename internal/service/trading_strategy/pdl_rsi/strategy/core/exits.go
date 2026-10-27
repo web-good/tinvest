@@ -90,7 +90,7 @@ func (s *Strategy) exitLevels(pos *strategy.Position) (stop, target float64, ok 
 	f := pos.PurchasePrice
 	stop = pos.StopLoss
 	if pos.EntryATR > 0 && s.p.StopATR > 0 {
-		stop = f - s.stopDistance(f, pos.EntryATR)
+		stop = StopLevel(s.p, f, pos.EntryATR)
 	}
 	if f <= 0 || stop <= 0 || stop >= f {
 		return 0, 0, false

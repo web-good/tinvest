@@ -21,14 +21,17 @@ var msk = func() *time.Location {
 // fakeClient отдаёт свечи из заранее построенных серий, обрезая их запрошенным окном —
 // как делает настоящий API. Записывает окна запросов, чтобы тест мог проверить чанкование.
 type fakeClient struct {
-	m30, day []*imodel.CandleItemTechAnalyse
-	windows  []int32 // интервалы запросов в порядке вызова
+	m30, h1, day []*imodel.CandleItemTechAnalyse
+	windows      []int32 // интервалы запросов в порядке вызова
 }
 
 func (f *fakeClient) GetCandles(_ context.Context, _ *string, interval int32,
 	from, to *timestamppb.Timestamp, limit *int32, _ bool) ([]*imodel.CandleItemTechAnalyse, error) {
 	f.windows = append(f.windows, interval)
 	src := f.m30
+	if interval == enum.Hour1.ToNumberInvestAPI() {
+		src = f.h1
+	}
 	if interval == enum.Day1.ToNumberInvestAPI() {
 		src = f.day
 	}
@@ -112,7 +115,7 @@ func seriesDaily(end time.Time, n int) []*imodel.CandleItemTechAnalyse {
 func TestAssembleChunksUntilLookbackIsFilled(t *testing.T) {
 	now := time.Date(2026, 3, 10, 12, 0, 0, 0, msk)
 	f := &fakeClient{m30: series30m(now.Add(-30*time.Minute), 900), day: seriesDaily(now, 90)}
-	md, err := Assemble(context.Background(), f, "uid", 403, now)
+	md, err := Assemble(context.Background(), f, "uid", enum.Minutes30, 403, now)
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -135,7 +138,7 @@ func TestAssembleChunksUntilLookbackIsFilled(t *testing.T) {
 func TestAssembleFailsWhenHistoryIsShort(t *testing.T) {
 	now := time.Date(2026, 3, 10, 12, 0, 0, 0, msk)
 	f := &fakeClient{m30: series30m(now.Add(-30*time.Minute), 50), day: seriesDaily(now, 90)}
-	if _, err := Assemble(context.Background(), f, "uid", 403, now); err == nil {
+	if _, err := Assemble(context.Background(), f, "uid", enum.Minutes30, 403, now); err == nil {
 		t.Fatal("Assemble returned nil error on a short history, want an error")
 	}
 }
@@ -148,7 +151,7 @@ func TestAssembleDropsIncompleteBar(t *testing.T) {
 	forming.Time = now
 	forming.IsComplete = false
 	f := &fakeClient{m30: append(bars, &forming), day: seriesDaily(now, 90)}
-	md, err := Assemble(context.Background(), f, "uid", 403, now)
+	md, err := Assemble(context.Background(), f, "uid", enum.Minutes30, 403, now)
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -162,7 +165,7 @@ func TestAssembleDropsIncompleteBar(t *testing.T) {
 func TestAssembleExcludesTodayFromDailies(t *testing.T) {
 	now := time.Date(2026, 3, 10, 12, 0, 0, 0, msk)
 	f := &fakeClient{m30: series30m(now.Add(-30*time.Minute), 900), day: seriesDaily(now, 90)}
-	md, err := Assemble(context.Background(), f, "uid", 403, now)
+	md, err := Assemble(context.Background(), f, "uid", enum.Minutes30, 403, now)
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -180,7 +183,7 @@ func TestAssembleExcludesTodayFromDailies(t *testing.T) {
 func TestAssembleKeepsWeekendBarsInTheWindow(t *testing.T) {
 	now := time.Date(2026, 3, 10, 12, 0, 0, 0, msk)
 	f := &fakeClient{m30: series30m(now.Add(-30*time.Minute), 900), day: seriesDaily(now, 90)}
-	md, err := Assemble(context.Background(), f, "uid", 403, now)
+	md, err := Assemble(context.Background(), f, "uid", enum.Minutes30, 403, now)
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -224,7 +227,7 @@ func TestAssembleFillsTodayExtentFromEngine(t *testing.T) {
 	}
 
 	f := &fakeClient{m30: bars, day: seriesDaily(now, 90)}
-	md, err := Assemble(context.Background(), f, "uid", 403, now)
+	md, err := Assemble(context.Background(), f, "uid", enum.Minutes30, 403, now)
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -244,7 +247,7 @@ func TestAssembleUsesLastBarTimeNotNowForDailyBoundary(t *testing.T) {
 	now := time.Date(2026, 3, 10, 0, 10, 0, 0, msk)
 	lastBar := time.Date(2026, 3, 9, 22, 30, 0, 0, msk)
 	f := &fakeClient{m30: series30m(lastBar, 900), day: seriesDaily(now, 90)}
-	md, err := Assemble(context.Background(), f, "uid", 403, now)
+	md, err := Assemble(context.Background(), f, "uid", enum.Minutes30, 403, now)
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
@@ -297,5 +300,36 @@ func TestIndexDailyClosesDropsToday(t *testing.T) {
 func TestIndexDailyClosesError(t *testing.T) {
 	if _, err := IndexDailyCloses(context.Background(), errClient{}, "uid-imoex", 5, time.Now()); err == nil {
 		t.Fatal("err = nil, want ошибку")
+	}
+}
+
+// Часовой гость просит часовые свечи (и дневки), а не получасовые.
+func TestAssembleHour1RequestsHourCandles(t *testing.T) {
+	now := time.Date(2026, 6, 10, 13, 0, 0, 0, msk)
+	var h1 []*imodel.CandleItemTechAnalyse
+	for _, c := range series30m(now.Add(-time.Hour), 60) {
+		c.Time = c.Time.Truncate(time.Hour)
+		h1 = append(h1, c)
+	}
+	f := &fakeClient{h1: h1, day: seriesDaily(now, 90)}
+	md, err := Assemble(context.Background(), f, "uid", enum.Hour1, 30, now)
+	if err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+	if len(md.Times) != 30 {
+		t.Fatalf("len(Times) = %d, want 30", len(md.Times))
+	}
+	for _, iv := range f.windows {
+		if iv != enum.Hour1.ToNumberInvestAPI() && iv != enum.Day1.ToNumberInvestAPI() {
+			t.Fatalf("неожиданный интервал запроса %d", iv)
+		}
+	}
+}
+
+func TestAssembleRejectsUnsupportedInterval(t *testing.T) {
+	now := time.Date(2026, 6, 10, 13, 0, 0, 0, msk)
+	f := &fakeClient{day: seriesDaily(now, 90)}
+	if _, err := Assemble(context.Background(), f, "uid", enum.Minutes5, 30, now); err == nil {
+		t.Fatal("Assemble принял Minutes5, want error")
 	}
 }

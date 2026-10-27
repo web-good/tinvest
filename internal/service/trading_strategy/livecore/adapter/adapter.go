@@ -7,6 +7,7 @@ import (
 	"context"
 	"time"
 
+	"tinvest/internal/enum"
 	"tinvest/internal/service/trading_strategy/livecore/candles"
 	"tinvest/internal/service/trading_strategy/livecore/statestore"
 	"tinvest/internal/service/trading_strategy/scalping/model"
@@ -74,6 +75,14 @@ type Strategy interface {
 // тянула бы их на каждом пассе. Сопровождение открытых позиций окно не ограничивает.
 type EntryWindow interface {
 	EntryPossible(now time.Time) bool
+}
+
+// BarInterval — необязательный рабочий таймфрейм стратегии. Стратегия без него работает на
+// enum.Minutes30, как раннер и задуман. С ним раннер собирает MarketData по этому интервалу,
+// принимает вход только на пассе сразу после закрытия бара и спрашивает ядро по открытой
+// позиции один раз на бар (statestore.Entry.LastBar).
+type BarInterval interface {
+	BarInterval() enum.Interval
 }
 
 // EntryFilter — необязательное вето стратегии на вход после BUY-сигнала ядра (например,

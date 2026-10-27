@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"tinvest/internal/enum"
 	imodel "tinvest/internal/model"
 	"tinvest/internal/service/trading_strategy/livecore/adapter"
 	"tinvest/internal/service/trading_strategy/livecore/notifier"
@@ -26,7 +27,41 @@ import (
 // refuses to act on it. The cron fires every half hour, so anything older than an hour
 // means the feed is behind (holiday, halt, API outage) — and a decision taken on a stale
 // bar is a decision taken on the wrong price.
+// Часовой гость (adapter.BarInterval) меряется barAgeLimit: два его бара, то есть 120m.
 const maxBarAge = 60 * time.Minute
+
+// cronStep — шаг расписания раннера (1,31 6-23 * * *). Им меряется свежесть входа часового
+// гостя: бар принимается только на пассе, ближайшем к его закрытию.
+const cronStep = 30 * time.Minute
+
+// intervalOf — рабочий таймфрейм стратегии слота; без adapter.BarInterval — Minutes30.
+func intervalOf(sl *slot) enum.Interval {
+	if b, ok := sl.strat.(adapter.BarInterval); ok {
+		return b.BarInterval()
+	}
+	return enum.Minutes30
+}
+
+// hasBarInterval — слот объявил свой таймфрейм. Только такие слоты пишут и читают
+// statestore.Entry.LastBar и проходят гейты freshClose/«один Decide на бар»; остальные идут
+// прежним путём побайтно.
+func hasBarInterval(sl *slot) bool {
+	_, ok := sl.strat.(adapter.BarInterval)
+	return ok
+}
+
+// barAgeLimit — предел возраста последнего завершённого бара: maxBarAge, но не меньше двух
+// баров интервала (на пассе :31 часовой бар закрыт полчаса назад и открыт полтора часа назад).
+func barAgeLimit(iv enum.Interval) time.Duration {
+	return max(maxBarAge, 2*iv.ToTimeDuration())
+}
+
+// freshClose — последний завершённый бар (открыт в lastOpen) закрылся не раньше одного шага
+// cron назад: пасс идёт сразу после его закрытия. Поздний вход не равен входу бэктеста,
+// поэтому вход на пассе :31 по часу, закрывшемуся в :00, не принимается.
+func freshClose(lastOpen time.Time, iv enum.Interval, now time.Time) bool {
+	return now.Sub(lastOpen.Add(iv.ToTimeDuration())) <= cronStep
+}
 
 // freshEntryGrace is how long after an entry the position's absence from the broker's
 // portfolio is NOT taken as a sale. Settlement lags the filled order, so the pass right
@@ -38,6 +73,7 @@ const maxBarAge = 60 * time.Minute
 // dangerous of the two errors. The cost of the wide window is a delayed notification of a
 // real stop-out in the first two hours — never a missed action: hasState still blocks a
 // second entry, and the exchange stop keeps working.
+// Часовому гостю тех же двух часов хватает: его вход тоже на пассе сразу после закрытия бара.
 const freshEntryGrace = 2 * maxBarAge
 
 // barSpan — длина бара, на котором работает раннер (30m).
@@ -49,11 +85,18 @@ const barSpan = 30 * time.Minute
 // опаздывает меньше чем на бар). Ядра, которые привязываются к бару входа (выход STUCK у
 // rsi_zone), берут последний бар, открывшийся не позже этого времени. Нулевое время остаётся
 // нулевым: ядро тогда молчит, а не гадает.
-func entryBarTime(fill time.Time) time.Time {
+//
+// Гость с другим интервалом (часовой pdl_rsi) покупает на открытии следующего бара, как
+// EntryAtNextOpen движка: бар входа — тот, внутри которого заявка, то есть fill, усечённый
+// до интервала.
+func entryBarTime(fill time.Time, iv enum.Interval) time.Time {
 	if fill.IsZero() {
 		return fill
 	}
-	return fill.Add(-barSpan)
+	if iv == enum.Minutes30 {
+		return fill.Add(-barSpan)
+	}
+	return fill.Truncate(iv.ToTimeDuration())
 }
 
 // passCtx несёт состояние, общее для всех тикеров одного пасса: снапшот биржевых заявок
@@ -171,7 +214,11 @@ func (s *service) pass(ctx context.Context) error {
 				s.slots[0].alert(ticker, fmt.Sprintf("реальная позиция у бумажной стратегии %s — сопровождение пропущено; снимите паузу или разметьте вручную", c.sl.strat.Name()))
 				continue
 			}
-			md, ok := s.assemble(ctx, c.sl, ticker, sh, c.dec, now, true)
+			var decided time.Time // последний решённый бар: только у гостя с BarInterval
+			if hasState && hasBarInterval(c.sl) {
+				decided = entry.LastBar
+			}
+			md, ok := s.assemble(ctx, c.sl, ticker, sh, c.dec, now, true, decided)
 			if !ok {
 				continue
 			}
@@ -189,8 +236,13 @@ func (s *service) pass(ctx context.Context) error {
 			if w, ok := c.sl.strat.(adapter.EntryWindow); ok && !w.EntryPossible(now) {
 				continue // окно входа закрыто: ни свечей, ни вопроса стратегии
 			}
-			md, ok := s.assemble(ctx, c.sl, ticker, sh, c.dec, now, false)
+			md, ok := s.assemble(ctx, c.sl, ticker, sh, c.dec, now, false, time.Time{})
 			if !ok {
+				continue
+			}
+			if hasBarInterval(c.sl) && !freshClose(md.Times[len(md.Times)-1], intervalOf(c.sl), now) {
+				// Бар закрылся раньше прошлого пасса — вход по нему уже решался (или пасс
+				// пропущен, и поздний вход не равен входу бэктеста). Молча дальше.
 				continue
 			}
 			signaled, perr := s.buy(ctx, pc, c.sl, ticker, sh, c.dec, md)
@@ -213,10 +265,14 @@ func (s *service) pass(ctx context.Context) error {
 // assemble собирает MarketData окном Lookback стратегии и отбрасывает протухший бар.
 // Своя сборка на стратегию, а не срез общей: окно ровно то, что видит движок бэктеста.
 // watched — по тикеру есть позиция или запись: только тогда пропуск будит владельца.
+// decided — LastBar записи часового гостя (нулевое у остальных): бар новее него ещё не решён,
+// и протухание его не отбрасывает — так час 23:00, после которого пасса до утра нет, решается
+// на пассе 06:01, как его решил бы бэктест на закрытии.
 func (s *service) assemble(ctx context.Context, sl *slot, ticker string, sh *imodel.Share,
-	dec adapter.Decider, now time.Time, watched bool) (strategy.MarketData, bool) {
+	dec adapter.Decider, now time.Time, watched bool, decided time.Time) (strategy.MarketData, bool) {
 
-	md, err := marketdata.Assemble(ctx, s.market, sh.ID, dec.Lookback(), now)
+	iv := intervalOf(sl)
+	md, err := marketdata.Assemble(ctx, s.market, sh.ID, iv, dec.Lookback(), now)
 	if err != nil {
 		if watched {
 			sl.alert(ticker, "рыночные данные недоступны — сопровождение пропущено: "+err.Error())
@@ -224,7 +280,9 @@ func (s *service) assemble(ctx context.Context, sl *slot, ticker string, sh *imo
 		logger.ErrorContext(ctx, fmt.Sprintf("%s: %s marketdata: %v", sl.strat.Name(), ticker, err))
 		return strategy.MarketData{}, false
 	}
-	if n := len(md.Times); n == 0 || now.Sub(md.Times[n-1]) > maxBarAge {
+	n := len(md.Times)
+	catchUp := n > 0 && !decided.IsZero() && md.Times[n-1].After(decided)
+	if n == 0 || (now.Sub(md.Times[n-1]) > barAgeLimit(iv) && !catchUp) {
 		if watched {
 			sl.alert(ticker, "последний завершённый бар протух — сопровождение пропущено")
 		}
@@ -422,6 +480,12 @@ func (s *service) buy(ctx context.Context, pc *passCtx, sl *slot, ticker string,
 		Quantity:   qty,
 		Strategy:   sl.strat.Name(),
 	}
+	if hasBarInterval(sl) {
+		// Сигнальный бар решён: на пассе :31 сопровождение не спросит по нему ядро повторно.
+		e := pc.state[ticker]
+		e.LastBar = md.Times[len(md.Times)-1]
+		pc.state[ticker] = e
+	}
 	if err := pc.store.Save(pc.state); err != nil {
 		return true, fmt.Errorf("%s: save state after buy %s: %w", sl.strat.Name(), ticker, err)
 	}
@@ -603,10 +667,21 @@ func (s *service) manage(ctx context.Context, pc *passCtx, sl *slot, ticker stri
 		StopLoss:              entry.StopLoss,
 		MaxFavorablePrice:     entry.MaxFav,
 		PrevMaxFavorablePrice: prevMaxFav,
-		EntryTime:             entryBarTime(entry.EntryTime),
+		EntryTime:             entryBarTime(entry.EntryTime, intervalOf(sl)),
 	}
 
-	sig := dec.Decide(md)
+	// Часовой гость решает по бару один раз: пасс :31 видит тот же закрытый час, что и :01.
+	// Гейт стоит здесь, после страховочной части: судьба заявки, размер и MaxFav сверены, а
+	// перестановка стопа ниже идёт и без решения. Пропущенный Decide оставляет sig пустым —
+	// ветка PendingExit всё равно повторяет принятый раньше выход.
+	var sig model.Signal
+	last := md.Times[len(md.Times)-1]
+	if !hasBarInterval(sl) || entry.LastBar.IsZero() || last.After(entry.LastBar) {
+		sig = dec.Decide(md)
+		if hasBarInterval(sl) {
+			entry.LastBar = last
+		}
+	}
 	if sig.Kind != model.SignalSell && entry.PendingExit != "" {
 		// Выход уже принят стратегией на одном из прошлых баров, но брокер его не
 		// исполнил. Выходы по индикатору — события ОДНОГО бара (крест RSI вверх через
@@ -614,7 +689,27 @@ func (s *service) manage(ctx context.Context, pc *passCtx, sl *slot, ticker stri
 		// повтор, а потерю выхода: позиция досидит до стопа или цели.
 		sig = model.Signal{Kind: model.SignalSell, Reason: entry.PendingExit, Price: md.Price}
 	}
+	// Догоняющее решение (бар старше barAgeLimit прошёл в assemble только как нерешённый —
+	// час 23:00 на пассе 06:01) приходится на время до открытия торгов: рыночный SELL биржа
+	// отклонит, а снятый перед ним стоп оставил бы позицию без защиты до утра. Выход
+	// запоминается в PendingExit, стоп ведётся как обычно, продажа уходит на первом свежем
+	// пассе после открытия.
+	if sig.Kind == model.SignalSell && hasBarInterval(sl) && pc.now.Sub(last) > barAgeLimit(intervalOf(sl)) {
+		entry.PendingExit = sig.Reason
+		if entry.PendingExit == "" {
+			entry.PendingExit = "EXIT"
+		}
+		sig = model.Signal{}
+	}
 	if sig.Kind == model.SignalSell {
+		if prev := pc.state[ticker]; !prev.LastBar.Equal(entry.LastBar) {
+			// Решённый бар — в стейт до продажи: при сбое продажи повтор идёт по PendingExit,
+			// а не повторным решением того же бара.
+			pc.state[ticker] = entry
+			if err := pc.store.Save(pc.state); err != nil {
+				return fmt.Errorf("%s: save decided bar %s: %w", sl.strat.Name(), ticker, err)
+			}
+		}
 		return s.sell(ctx, pc, sl, ticker, sh, entry, pos, sig)
 	}
 
