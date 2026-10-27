@@ -11,6 +11,7 @@ import (
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/lent"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mdmg"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mgnt"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/moex"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mrkv"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/nvtk"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/svcb"
@@ -26,6 +27,7 @@ var paramsByTicker = map[string]func() core.Params{
 	"LENT": lent.Params,
 	"MDMG": mdmg.Params,
 	"MGNT": mgnt.Params,
+	"MOEX": moex.Params,
 	"MRKV": mrkv.Params,
 	"NVTK": nvtk.Params,
 	"SVCB": svcb.Params,

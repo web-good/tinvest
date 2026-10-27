@@ -13,6 +13,7 @@ import (
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/lent"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mdmg"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mgnt"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/moex"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mrkv"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/nvtk"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/svcb"
@@ -29,6 +30,7 @@ func TestRegistryMatchesBacktestRegistry(t *testing.T) {
 		"LENT": func() any { return lent.Params() },
 		"MDMG": func() any { return mdmg.Params() },
 		"MGNT": func() any { return mgnt.Params() },
+		"MOEX": func() any { return moex.Params() },
 		"MRKV": func() any { return mrkv.Params() },
 		"NVTK": func() any { return nvtk.Params() },
 		"SVCB": func() any { return svcb.Params() },
@@ -40,7 +42,7 @@ func TestRegistryMatchesBacktestRegistry(t *testing.T) {
 		got = append(got, tk)
 	}
 	slices.Sort(got)
-	if !slices.Equal(got, []string{"AFLT", "GAZP", "LENT", "MDMG", "MGNT", "MRKV", "NVTK", "SVCB", "VTBR", "X5"}) {
+	if !slices.Equal(got, []string{"AFLT", "GAZP", "LENT", "MDMG", "MGNT", "MOEX", "MRKV", "NVTK", "SVCB", "VTBR", "X5"}) {
 		t.Fatalf("тикеры реестра = %v", got)
 	}
 	for tk, lit := range want {
