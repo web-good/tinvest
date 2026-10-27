@@ -228,9 +228,9 @@ func checkTicker(ctx context.Context, provider *svc.CandleProvider, ticker, inst
 // before asOf, marked complete. Feeding it the SAME hist/day slices the reference assembly
 // reads means any divergence traces to the assembly logic, not to different underlying data.
 type cacheClient struct {
-	interval enum.Interval
+	interval  enum.Interval
 	hist, day []backtest.Candle
-	asOf     time.Time
+	asOf      time.Time
 }
 
 var _ candles.CandleClient = (*cacheClient)(nil)
