@@ -15,6 +15,7 @@ import (
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/nvtk"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/svcb"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/vtbr"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/x5"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 )
 
@@ -48,6 +49,7 @@ var pdlRSIRegistry = map[string]func() core.Params{
 	"NVTK": nvtk.Params,
 	"SVCB": svcb.Params,
 	"VTBR": vtbr.Params,
+	"X5":   x5.Params,
 }
 
 // PDLRSILookupOrGeneric returns the binding for a ticker: the ticker package's literal, or

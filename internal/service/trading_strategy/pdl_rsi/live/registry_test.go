@@ -16,6 +16,7 @@ import (
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/nvtk"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/svcb"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/vtbr"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/x5"
 )
 
 // Реестр live совпадает с реестром бэктеста (internal/service/backtest/pdl_rsi_registry.go,
@@ -30,13 +31,14 @@ func TestRegistryMatchesBacktestRegistry(t *testing.T) {
 		"NVTK": func() any { return nvtk.Params() },
 		"SVCB": func() any { return svcb.Params() },
 		"VTBR": func() any { return vtbr.Params() },
+		"X5":   func() any { return x5.Params() },
 	}
 	var got []string
 	for tk := range paramsByTicker {
 		got = append(got, tk)
 	}
 	slices.Sort(got)
-	if !slices.Equal(got, []string{"GAZP", "LENT", "MDMG", "MGNT", "MRKV", "NVTK", "SVCB", "VTBR"}) {
+	if !slices.Equal(got, []string{"GAZP", "LENT", "MDMG", "MGNT", "MRKV", "NVTK", "SVCB", "VTBR", "X5"}) {
 		t.Fatalf("тикеры реестра = %v", got)
 	}
 	for tk, lit := range want {
