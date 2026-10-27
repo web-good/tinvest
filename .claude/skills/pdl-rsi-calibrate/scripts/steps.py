@@ -18,6 +18,9 @@ Usage (from the repo root):
                                           saved as "best" in point.json
   steps.py wf      <T>                 -> cal/wf_rolling.json: the walk-forward grid around the best combo
   steps.py verdict <walkforward.md>    the gate: the pooled OOS and the last FRESH_FOLDS folds in profit
+                                          on at least RECENT_MIN_TRADES trades
+  steps.py prod    <final12 report.md> the prod gate on the literal's -months 12 run: PF > PROD_PF and
+                                          ≥ RECENT_MIN_TRADES trades
   steps.py literal <T>                 the point as a Go literal body for core.Params
 
 The entry has two modes, each calibrated on its own from the open start (pass the flag anywhere on
@@ -100,6 +103,10 @@ MONTHS = 36
 MIN_TRADES = 20      # ≈ 7 a year over 36 months; fewer — the combo is out of the step's choice
 BEST_MIN_TRADES = 10 # the best combo for the literal: the owner takes the top PF below 20 trades too, but
                      # under the walk-forward gate's 10 trades a PF is a couple of lucky trades
+RECENT_MIN_TRADES = 11 # trades in the last 12 months of the window (owner 2026-10-27): a combo that barely
+                       # trades on the freshest market is out of the step's choice and of the literal, and the
+                       # literal's own 12-month run needs as many for the prod gate
+PROD_PF = 1.2        # the literal's last-12-months run must beat this PF for prod (owner 2026-10-27)
 MOVE_SHARE = 0.05    # the point moves only when the new centre beats the current one by 5%
 PF_CAP = 10.0        # an inf PF (no losers) counts as this in a median
 WF_MIN_TRADES = 3
@@ -203,6 +210,7 @@ def grid(t, name):
 
 
 def combos(md):
+    """(rank, PF, net, trades, params, trades in the last 12 months) per combo of a calibration report."""
     s = open(md).read()
     total = int(re.search(r"Всего комбинаций: (\d+)", s).group(1))
     table = {}
@@ -213,10 +221,18 @@ def combos(md):
     for m in re.finditer(r"^### #(\d+) — .*?\n(.*?)(?=^### #|\Z)", s, re.M | re.S):
         k = int(m.group(1))
         p = {a: num(float(v)) for a, v in re.findall(r"^\| (\w+) \| ([-\d.]+) \|", m.group(2), re.M)}
-        rows.append((k, *table[k], p))
+        recent = re.search(r"^Сделок за последние 12 мес: (\d+)$", m.group(2), re.M)
+        if not recent:
+            sys.exit(f"{md}: нет числа сделок за последние 12 мес у комбинаций — пересобери бинарь и перезапусти шаг")
+        rows.append((k, *table[k], p, int(recent.group(1))))
     if len(rows) < total:
         sys.exit(f"{md}: в отчёте {len(rows)} из {total} комбинаций — запусти с -combos 0")
     return rows
+
+
+def eligible(r, floor=MIN_TRADES):
+    """A combo competes with at least floor trades over the window and RECENT_MIN_TRADES in its last 12 months."""
+    return r[3] >= floor and r[5] >= RECENT_MIN_TRADES
 
 
 def pick(t, name, md):
@@ -246,23 +262,23 @@ def pick(t, name, md):
     forced = any(k in FORCED and cur[k] == 0 for k in axes)
     if forced:
         rows = [r for r in rows if all(r[4][k] != 0 for k in axes if k in FORCED)]
-    ok = [r for r in rows if r[3] >= MIN_TRADES]
-    print(f"шаг {i + 1} «{name}»: {len(rows)} комбинаций, с ≥ {MIN_TRADES} сделками — {len(ok)}"
+    ok = [r for r in rows if eligible(r)]
+    print(f"шаг {i + 1} «{name}»: {len(rows)} комбинаций, с ≥ {MIN_TRADES} сделками и ≥ {RECENT_MIN_TRADES} за последние 12 мес — {len(ok)}"
           + ("; выключенное значение запрещено — выбор обязателен" if forced else ""))
     for r in sorted(ok or (rows if forced else []), key=lambda r: (-score(r), -r[3]))[:5]:
-        print(f"  #{r[0]}: медиана окрестности {score(r):.3f}, PF {r[1]:.3f}, net {r[2]:+.0f}, сделок {r[3]} — {tag(r[4])}")
+        print(f"  #{r[0]}: медиана окрестности {score(r):.3f}, PF {r[1]:.3f}, net {r[2]:+.0f}, сделок {r[3]} ({r[5]} за 12 мес) — {tag(r[4])}")
     if forced:
         # the off value is banned and not in the grid: the best centre wins outright, MOVE_SHARE aside
         best = max(ok or rows, key=lambda r: (score(r), r[3], -r[0]))
         why = "выключенное значение запрещено — выбран лучший центр" + (
-            "" if ok else f" (ни у одной комбинации нет {MIN_TRADES} сделок)")
+            "" if ok else f" (ни у одной комбинации нет {MIN_TRADES} сделок и {RECENT_MIN_TRADES} за последние 12 мес)")
     else:
         here = next(r for r in rows if all(r[4][k] == cur[k] for k in axes))
-        hs = score(here) if here[3] >= MIN_TRADES else float("-inf")
-        print(f"  текущая точка #{here[0]}: медиана {score(here):.3f}, PF {here[1]:.3f}, сделок {here[3]} — {tag(cur)}"
-              + ("" if here[3] >= MIN_TRADES else f" (меньше {MIN_TRADES} сделок)"))
+        hs = score(here) if eligible(here) else float("-inf")
+        print(f"  текущая точка #{here[0]}: медиана {score(here):.3f}, PF {here[1]:.3f}, сделок {here[3]} ({here[5]} за 12 мес) — {tag(cur)}"
+              + ("" if eligible(here) else f" (меньше {MIN_TRADES} сделок или {RECENT_MIN_TRADES} за последние 12 мес)"))
         if not ok:
-            best, why = here, f"ни у одной комбинации нет {MIN_TRADES} сделок — точка не двигается"
+            best, why = here, f"ни у одной комбинации нет {MIN_TRADES} сделок и {RECENT_MIN_TRADES} за последние 12 мес — точка не двигается"
         else:
             top = max(ok, key=lambda r: (score(r), r[3], -r[0]))
             if all(top[4][k] == cur[k] for k in axes) or (hs > float("-inf") and score(top) < hs * (1 + MOVE_SHARE)):
@@ -271,14 +287,14 @@ def pick(t, name, md):
                 best, why = top, "точка сдвинута"
     nb = neighbours(best[4])
     plateau = all(n[1] >= 1.0 for n in nb)
-    print(f"ВЫБОР: {tag(best[4])}, PF {best[1]:.3f}, net {best[2]:+.0f}, сделок {best[3]} — {why}")
+    print(f"ВЫБОР: {tag(best[4])}, PF {best[1]:.3f}, net {best[2]:+.0f}, сделок {best[3]} ({best[5]} за 12 мес) — {why}")
     for n in nb:
         d = next(k for k in axes if n[4][k] != best[4][k])
         print(f"  сосед {d} {n[4][d]:g}: PF {n[1]:.3f}/{n[3]}")
     print("ПЛАТО ЕСТЬ" if plateau else "ОСТРЫЙ ПИК (соседи ниже PF 1)")
     for k in axes:
         cur[k] = best[4][k]
-    res = f"{tag(best[4])}, PF {best[1]:.3f}, net {best[2]:+.0f}, сделок {best[3]}, {'плато' if plateau else 'острый пик'}; {why}"
+    res = f"{tag(best[4])}, PF {best[1]:.3f}, net {best[2]:+.0f}, сделок {best[3]} ({best[5]} за 12 мес), {'плато' if plateau else 'острый пик'}; {why}"
     st["_steps"].append({"step": name, "result": res})
     st["_comment"] = f"pdl_rsi {t}: текущая точка пошаговой калибровки (steps.py{FLAG}). Шаги: " + "; ".join(
         f"{s['step']} — {s['result']}" for s in st["_steps"]) + "."
@@ -315,14 +331,16 @@ def best(t):
                 continue
             if r[4].get("TrendEMA", 1) == 0:
                 continue  # banned (owner 2026-10-26): the signal and trigger steps run with the filter off  # banned (owner 2026-10-26): a report from before the ban may still hold it
-            if r[3] >= BEST_MIN_TRADES and (top is None or (r[1], r[3], r[2]) > (top[1], top[3], top[2])):
+            if eligible(r, BEST_MIN_TRADES) and (top is None or (r[1], r[3], r[2]) > (top[1], top[3], top[2])):
                 top = (name, *r[1:])
-    name, pf, net, n, p = top
+    if top is None:
+        sys.exit(f"ни у одной комбинации нет {BEST_MIN_TRADES} сделок и {RECENT_MIN_TRADES} за последние 12 мес — литерала нет, тикер не годен")
+    name, pf, net, n, p, recent = top
     full = dict(st["params"], **p)
     diff = [k for k in full if full[k] != st["params"][k]]
-    st["best"] = {"step": name, "pf": pf, "net": net, "trades": n, "params": full}
+    st["best"] = {"step": name, "pf": pf, "net": net, "trades": n, "recent_trades": recent, "params": full}
     dump(sp, st)
-    print(f"лучшая комбинация: шаг {name}, PF {pf:.3f}, net {net:+.0f}, сделок {n}"
+    print(f"лучшая комбинация: шаг {name}, PF {pf:.3f}, net {net:+.0f}, сделок {n} ({recent} за последние 12 мес)"
           + (f" (меньше {MIN_TRADES} — спуск её не выбирал)" if n < MIN_TRADES else ""))
     print("отличие от точки спуска: " + (", ".join(f"{k} {st['params'][k]:g} → {full[k]:g}" for k in diff) or "нет"))
     print(f"дальше: steps.py wf {t}{FLAG}")
@@ -371,12 +389,13 @@ def verdict(md):
     print(f"последние {len(fresh)} фолдов: {sum(k for k, _, _ in fresh)} сделок, PF {fpf:.3f}, compounded {100 * (comp - 1):+.2f}%, "
           f"в плюсе {up} из {len(fresh)}")
     pool_ok = pf >= GATE_PF and net > 0 and n >= GATE_TRADES
-    fresh_ok = len(fresh) == FRESH_FOLDS and comp > 1 and fpf >= FRESH_PF
+    fn = sum(k for k, _, _ in fresh)
+    fresh_ok = len(fresh) == FRESH_FOLDS and comp > 1 and fpf >= FRESH_PF and fn >= RECENT_MIN_TRADES
     if pool_ok and fresh_ok:
         print("ГОДЕН")
     else:
         why = ([] if pool_ok else [f"пул: нужно PF ≥ {GATE_PF}, net > 0, сделок ≥ {GATE_TRADES}"]) + \
-              ([] if fresh_ok else [f"последние {FRESH_FOLDS} фолдов: нужно PF ≥ {FRESH_PF} и compounded > 0"])
+              ([] if fresh_ok else [f"последние {FRESH_FOLDS} фолдов: нужно PF ≥ {FRESH_PF}, compounded > 0, сделок ≥ {RECENT_MIN_TRADES}"])
         print("НЕ ГОДЕН (" + "; ".join(why) + ")")
     # The fold picks: different values across folds are the expected answer to a changing market, not a
     # flaw. The last fold's pick is the one fitted to the freshest months.
@@ -387,6 +406,17 @@ def verdict(md):
         v = [x.strip() for x in vals.split(",")]
         share = ", ".join(f"{x} ×{v.count(x)}" for x in sorted(set(v), key=lambda x: -v.count(x)))
         print(f"  {k}: {share}; последний фолд — {v[-1]}")
+
+
+def prod(md):
+    """The prod gate on the literal's last-12-months run (-months 12): PF above PROD_PF and at least
+    RECENT_MIN_TRADES trades (owner 2026-10-27)."""
+    s = open(md).read()
+    f = lambda label: re.search(rf"\| {label} \| ([^|]+) \|", s).group(1).strip()
+    n, pf = int(f("Всего сделок")), float(f("Profit factor"))
+    ok = pf > PROD_PF and n >= RECENT_MIN_TRADES
+    print(f"последние 12 мес: PF {pf:.3f} на {n} сделках — допуск в прод: {'да' if ok else 'нет'}"
+          + ("" if ok else f" (нужно PF > {PROD_PF} и сделок ≥ {RECENT_MIN_TRADES})"))
 
 
 def literal(t):
@@ -404,4 +434,5 @@ if __name__ == "__main__":
     {"init": lambda: init(a[2].upper()), "grid": lambda: grid(a[2].upper(), a[3]),
      "pick": lambda: pick(a[2].upper(), a[3], a[4]), "status": lambda: status(a[2].upper()),
      "best": lambda: best(a[2].upper()), "wf": lambda: wf(a[2].upper()), "verdict": lambda: verdict(a[2]),
+     "prod": lambda: prod(a[2]),
      "literal": lambda: literal(a[2].upper())}.get(a[1], lambda: sys.exit(__doc__))()

@@ -6,15 +6,18 @@ import (
 	"tinvest/internal/enum"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/core"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/gazp"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/hnfg"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/lent"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mdmg"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mgnt"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mrkv"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/nvtk"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/svcb"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/vtbr"
 )
 
 func TestPDLRSITickersUseTheirPackages(t *testing.T) {
-	for ticker, want := range map[string]func() core.Params{"GAZP": gazp.Params, "LENT": lent.Params, "MDMG": mdmg.Params, "NVTK": nvtk.Params, "SVCB": svcb.Params, "VTBR": vtbr.Params} {
+	for ticker, want := range map[string]func() core.Params{"GAZP": gazp.Params, "HNFG": hnfg.Params, "LENT": lent.Params, "MDMG": mdmg.Params, "MGNT": mgnt.Params, "MRKV": mrkv.Params, "NVTK": nvtk.Params, "SVCB": svcb.Params, "VTBR": vtbr.Params} {
 		b, err := PDLRSILookupOrGeneric(ticker, enum.Hour1)
 		if err != nil {
 			t.Fatalf("%s lookup: %v", ticker, err)
