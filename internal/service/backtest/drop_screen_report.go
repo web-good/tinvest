@@ -118,8 +118,8 @@ func RenderDropScreenMarkdown(ranked, noSignals, tickRejected, rejected []DropRo
 	b.WriteString("# drop_bounce screener\n\n")
 	fmt.Fprintf(&b, "Таймфрейм: %s. Окно: %d мес., holdout: последние %d мес. (срез %s).\n",
 		meta.Interval, meta.Months, meta.HoldoutMonths, meta.Split.Format("2006-01-02"))
-	fmt.Fprintf(&b, "Сетка: %d конфигураций — RSIZone {25, 35} × RSICap {40, 60} × DaySpentATR {0.5, 1.0} × RSIExit {60, 75}; "+
-		"прибито: RSI(6), EMA(200), стоп 1.0 дневного ATR(14), StartHour 7.\n", gridSize)
+	fmt.Fprintf(&b, "Сетка: %d конфигураций — RSIPeriod {4, 6} × RSIExitPeriod {8, 12} × StopDailyATR {0.5, 1.0}; "+
+		"прибито: часовые зона RSI 30/50, EMA(200), выход RSI 70; MACD 1h(8,26,5) до 20 ч, затем MACD(12,26,9) на 15m, ожидание 6 баров; дневной ATR(14), стоп не переносится; только будни, в пятницу до 11:00.\n", gridSize)
 	fmt.Fprintf(&b, "Гейты: оборот >= %.0f млн ₽/день, медиана сделок на train >= %.0f, два шага цены <= %.2f%% цены (0 — гейт выключен). PF зажат сверху на %.1f.\n",
 		meta.Gates.MinTurnoverM, meta.Gates.MinTrades, meta.Gates.MaxTickPct, meta.PFCap)
 	fmt.Fprintf(&b, "Стресс издержек (`PFmed×2`, ключ рейтинга): к комиссии %.4f за сторону добавлена ещё одна такая же и два шага цены на круг.\n",
@@ -159,14 +159,14 @@ func RenderDropScreenMarkdown(ranked, noSignals, tickRejected, rejected []DropRo
 	b.WriteString("`PFmed×2 HO` в сортировке не участвует: это красный флаг («работало и развалилось»), а не критерий отбора.\n\n")
 
 	b.WriteString("## Детали топа\n\n")
-	b.WriteString("| Ticker | SL% | RSI% | MACD% | HoldD | TopHalf | Лучшая конфигурация | Полугодия лучшей конфигурации |\n")
-	b.WriteString("|---|---|---|---|---|---|---|---|\n")
+	b.WriteString("| Ticker | SL% | RSI% | HoldD | TopHalf | Лучшая конфигурация | Полугодия лучшей конфигурации |\n")
+	b.WriteString("|---|---|---|---|---|---|---|\n")
 	for _, r := range top {
 		topHalf := "—"
 		if r.TopHalf > 0 {
 			topHalf = pct0(r.TopHalf)
 		}
-		best := fmt.Sprintf("зона %.0f, планка %.0f, день %g, выход %.0f", r.Best.RSIZone, r.Best.RSICap, r.Best.DaySpentATR, r.Best.RSIExit)
+		best := fmt.Sprintf("RSI %d, выход RSI %d, стоп %g", r.Best.RSIPeriod, r.Best.RSIExitPeriod, r.Best.StopDailyATR)
 		halves := make([]string, 0, len(r.BestHalves))
 		for _, h := range r.BestHalves {
 			share := 0.0
@@ -175,10 +175,10 @@ func RenderDropScreenMarkdown(ranked, noSignals, tickRejected, rejected []DropRo
 			}
 			halves = append(halves, fmt.Sprintf("%s %+.1f%%", h.Label, share))
 		}
-		fmt.Fprintf(&b, "| %s | %s | %s | %s | %.1f | %s | %s | %s |\n",
-			r.Ticker, pct0(r.SLShare), pct0(r.RSIShare), pct0(r.MACDShare), r.HoldDays, topHalf, best, strings.Join(halves, " · "))
+		fmt.Fprintf(&b, "| %s | %s | %s | %.1f | %s | %s | %s |\n",
+			r.Ticker, pct0(r.SLShare), pct0(r.RSIShare), r.HoldDays, topHalf, best, strings.Join(halves, " · "))
 	}
-	b.WriteString("\n`SL%`/`RSI%`/`MACD%` — доли выходов: стоп, немедленный выход по кресту RSI на красной гистограмме, выход по смене цвета гистограммы после взведения (остаток — закрытие в конце окна); `HoldD` — медианная длительность сделки, дней; ")
+	b.WriteString("\n`SL%`/`RSI%` — доли выходов: стоп и крест RSI выхода вверх (остаток — закрытие в конце окна); `HoldD` — медианная длительность сделки, дней; ")
 	b.WriteString("`TopHalf` — доля лучшего полугодия в сумме прибыльных (100% — весь профит из одного отрезка, «—» — прибыльных нет). ")
 	b.WriteString("Полугодия лучшей конфигурации — train-сделки в процентах от стартового кэша.\n\n")
 

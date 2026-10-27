@@ -1,0 +1,66 @@
+{
+  "_comment": "pdl_rsi GAZP Hour1, шаг 10 «signal2» пошаговой калибровки (36 мес, -risk-pct 1): оси HourRSIPeriod [4, 5, 6, 8], RSIArm [25, 30, 35], остальные поля прибиты к точке шагов ['signal', 'trigger', 'trend', 'floor', 'trigmax', 'volume', 'room', 'risk', 'exits']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker GAZP -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/gazp/cal/10_signal2.json -min-trades 1 -combos 0 -out reports/GAZP_pdl_rsi/signal2.  РЕЗУЛЬТАТ: HourRSIPeriod 6, RSIArm 25, PF 1.240, net +3211, сделок 22, острый пик; точка сдвинута.",
+  "phases": [
+    {
+      "name": "signal2",
+      "grid": {
+        "HourRSIPeriod": [
+          4,
+          5,
+          6,
+          8
+        ],
+        "RSIArm": [
+          25,
+          30,
+          35
+        ],
+        "RSIFloor": [
+          0
+        ],
+        "RSITriggerMax": [
+          0
+        ],
+        "RSIExit": [
+          0
+        ],
+        "StochK": [
+          14
+        ],
+        "StochSmooth": [
+          3
+        ],
+        "StochBelow": [
+          30
+        ],
+        "StochBars": [
+          1
+        ],
+        "VolumeMult": [
+          1.2
+        ],
+        "VolBars": [
+          20
+        ],
+        "MinRoomATR": [
+          0
+        ],
+        "StopATR": [
+          0.7
+        ],
+        "MaxStopPct": [
+          1.5
+        ],
+        "TargetR": [
+          2
+        ],
+        "TrendEMA": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ]
+      }
+    }
+  ]
+}

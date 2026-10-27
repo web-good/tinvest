@@ -1,0 +1,6 @@
+{
+  "H1TrendEMA": [0],
+  "PDLDipVolMult": [0],
+  "PDLPatternMinStopATR": [0.5, 0.7, 1.0],
+  "PDLPatternMinRangeATR": [0, 0.03, 0.05]
+}

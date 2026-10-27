@@ -1,0 +1,15 @@
+{
+  "_comment": "hammer (Hour1, 12 мес, -risk-pct 1), одна фаза поверх литерала тикера: молот на свече с RSI(RSIPeriod) < RSIZone и close над EMA(TrendEMA) часовых закрытий, вход по open следующей свечи; стоп — low молота минус StopBufferATR дневных ATR; цель TargetR рисков над ценой покупки; выход по закрытию красной свечи гистограммы MACD(MACDFast, MACDSlow, MACDSignal) после зелёной с молота (MACDFast 0 — выкл); после закрытия с RSI > RSIHold цель снимается, выход по первой красной MACD (RSIHold 0 — выкл).",
+  "phases": [
+    {
+      "name": "sweep",
+      "grid": {
+        "StopBufferATR": [0, 0.05, 0.1, 0.2],
+        "TargetR": [1.5, 2, 3],
+        "MACDFast": [0, 11],
+        "RSIHold": [0, 60],
+        "ConfirmBars": [0, 1, 2, 3]
+      }
+    }
+  ]
+}

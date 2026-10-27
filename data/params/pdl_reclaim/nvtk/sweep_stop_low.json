@@ -1,0 +1,38 @@
+{
+  "_comment": "NVTK pdl_reclaim: расширение sweep_full.json вниз по стопу — лучшие точки полной сетки легли на её край (стоп 0.7). Окно -months 12 -holdout-months 3. РЕЗУЛЬТАТ: 0.7 — пик внутри (0.6 — 1.329/24, 0.5 и 0.4 хуже); лучшая точка та же 1.409/23, медиана окрестности 1.312.",
+  "phases": [
+    {
+      "name": "sweep",
+      "grid": {
+        "EntryPDH": [
+          1
+        ],
+        "HoldBars": [
+          1,
+          3
+        ],
+        "StopDailyATR": [
+          0.4,
+          0.5,
+          0.6,
+          0.7
+        ],
+        "EntryFromHour": [
+          10
+        ],
+        "EntryToHour": [
+          16
+        ],
+        "MaxDayRangeATR": [
+          0,
+          1.2
+        ],
+        "IndexTrendEMA": [
+          0,
+          50,
+          200
+        ]
+      }
+    }
+  ]
+}

@@ -8,11 +8,11 @@ import (
 	"testing"
 )
 
-// dropBounceLiveKeys — вселенная drop_bounce в env/prod.env (стратегия только на 1h).
-var dropBounceLiveKeys = []string{"DROP_BOUNCE_TICKERS_H1"}
+// dropBounceLiveKeys — вселенная drop_bounce в env/prod.env (стратегия только на 15m).
+var dropBounceLiveKeys = []string{"DROP_BOUNCE_TICKERS_M15"}
 
-// dropBounceLiveTickers читает вселенные drop_bounce из env/prod.env: ключ — переменная.
-func dropBounceLiveTickers(t *testing.T) map[string][]string {
+// prodEnvTickerLists читает списки тикеров из env/prod.env: ключ — переменная.
+func prodEnvTickerLists(t *testing.T) map[string][]string {
 	t.Helper()
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
@@ -45,7 +45,7 @@ func dropBounceLiveTickers(t *testing.T) map[string][]string {
 // Каждая вселенная drop_bounce есть в env/prod.env, и каждый её тикер имеет пакет с литералом:
 // тикер без пакета торговал бы на дефолтах ядра, которые никто не калибровал.
 func TestDropBounceLiveTickersAreRegistered(t *testing.T) {
-	lists := dropBounceLiveTickers(t)
+	lists := prodEnvTickerLists(t)
 	for _, key := range dropBounceLiveKeys {
 		tickers, ok := lists[key]
 		if !ok {
@@ -60,13 +60,14 @@ func TestDropBounceLiveTickersAreRegistered(t *testing.T) {
 	}
 }
 
-// Ключи прежних таймфреймов удалены вместе с 15m/30m-правилами: их возвращение в env значило бы,
-// что кто-то торгует drop_bounce не на 1h.
+// Ключи прежних таймфреймов удалены: с 2026-10-15 drop_bounce идёт на 15m (сигнал и MACD 1h,
+// подтверждение MACD 15m), и возвращение _M30/_H1 в env значило бы, что кто-то торгует его на
+// старых правилах.
 func TestDropBounceNoLegacyTimeframeKeys(t *testing.T) {
-	lists := dropBounceLiveTickers(t)
-	for _, key := range []string{"DROP_BOUNCE_TICKERS_M15", "DROP_BOUNCE_TICKERS_M30"} {
+	lists := prodEnvTickerLists(t)
+	for _, key := range []string{"DROP_BOUNCE_TICKERS_M30", "DROP_BOUNCE_TICKERS_H1"} {
 		if _, ok := lists[key]; ok {
-			t.Errorf("%s есть в env/prod.env, drop_bounce работает только на 1h", key)
+			t.Errorf("%s есть в env/prod.env, drop_bounce работает только на 15m", key)
 		}
 	}
 }

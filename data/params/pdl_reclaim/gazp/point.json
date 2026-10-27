@@ -1,0 +1,22 @@
+{
+  "_comment": "GAZP pdl_reclaim: точка перекалибровки без окна входа 2026-10-19 (wf_nowindow.json): только возврат над PDL, HoldBars 3 (не действует без PDH), стоп 1.0, MaxDayRangeATR 0.8, IndexTrendEMA 200. Разработка PF 3.269/27, hold-out 1.639/14, год 2.431/41, год до окна 0.940/32. Walk-forward пул OOS 0.988. Предыдущая точка — в git-истории этого файла. 2026-10-20: свечные паттерны у PDL — PDLEngulf 0, PDLHammer 0 (wf_patterns.json). 2026-10-20: объём серии под PDL — PDLDipVolMult 0, PDLEngulf 0, PDLHammer 0 (wf_dipvol.json). 2026-10-20: IndexTrendEMA удалён из ядра, вместо него H1TrendEMA 200 (close часа выше EMA 200 часовых закрытий) — без калибровки, по решению владельца. 2026-10-20: вход по паттерну у PDL — PDLPatternEntry 0; у входа по паттерну стоп по лою свечи паттерна (красной) или ближайшей красной перед ней (зелёной), цель PDLPatternTargetR 2R. 2026-10-21: литерал переписан владельцем настройками NVTK на 5m; walk-forward по wf_rolling_m5.json — литерал 1.490/19, net +6463, доходность +6.6% против выбора в фолде 0.713/33, −7.7%. 2026-10-21: подъём стопа LockAfterR 1 / LockAtR 0.25 — взвод по close бара, 12 мес 1.519/31 против 1.233/28, WF пул OOS 1.578/21 против 1.490/19. 2026-10-21: PDLSignalVolMult 0.5 — 12 мес 2.064/18 +9139 против 1.519/31; вход после молота в минусе; PDLHammerMinRangeATR выкл и удалён из ядра; без walk-forward.",
+  "EntryPDL": 1,
+  "EntryPDH": 0,
+  "HoldBars": 3,
+  "StopDailyATR": 0.7,
+  "DailyATRPeriod": 14,
+  "VolumeMult": 1.5,
+  "VolBars": 20,
+  "MaxDayRangeATR": 1.2,
+  "IndexTrendEMA": 150,
+  "PDLEngulf": 0,
+  "PDLHammer": 1,
+  "PDLDipVolMult": 0.5,
+  "PDLReclaimBars": 0,
+  "PDLHammerEntry": 0,
+  "PDLSignalVolMult": 0.5,
+  "PDLPatternTargetR": 1.5,
+  "PDLMinStopATR": 0.4,
+  "LockAfterR": 1,
+  "LockAtR": 0.25
+}

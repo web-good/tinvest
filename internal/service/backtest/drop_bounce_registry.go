@@ -8,7 +8,14 @@ import (
 	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/core"
 	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/enpg"
 	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/gazp"
+	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/gmkn"
 	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/ivat"
+	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/lkoh"
+	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/nvtk"
+	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/plzl"
+	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/rosn"
+	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/sber"
+	"tinvest/internal/service/trading_strategy/drop_bounce/strategy/tatn"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 )
 
@@ -31,22 +38,31 @@ func dropBounceBindingFor(ticker string, interval enum.Interval, defaults func()
 	}
 }
 
-// dropBounceRegistry maps tickers with their own package to their Hour1 literal. The packages
+// dropBounceRegistry maps tickers with their own package to their Minutes15 literal. The packages
 // calibrated on the volume-spike rules (15m) were deleted on 2026-10-13 with the rewrite to the
-// 1h RSI-zone rules; a ticker comes back here with a calibration on the new rules
-// (skill drop-bounce-calibrate).
+// 1h RSI-zone rules; since 2026-10-14 the rules run on 15m (hourly signal, 15m MACD
+// confirmation) and a ticker comes back here with a calibration on them (skill
+// drop-bounce-calibrate).
 var dropBounceRegistry = map[string]func() core.Params{
 	"ENPG": enpg.Params,
 	"GAZP": gazp.Params,
+	"GMKN": gmkn.Params,
 	"IVAT": ivat.Params,
+	"LKOH": lkoh.Params,
+	"NVTK": nvtk.Params,
+	"PLZL": plzl.Params,
+	"ROSN": rosn.Params,
+	"SBER": sber.Params,
+	"TATN": tatn.Params,
 }
 
 // DropBounceLookupOrGeneric returns the binding for a ticker: the ticker package's literal, or
 // core.DefaultParams when the ticker has no package. Partial JSON overrides layer over whichever
-// defaults apply. drop_bounce runs on Hour1 only; other timeframes are rejected.
+// defaults apply. drop_bounce runs on Minutes15 only (hourly signal built from the 15m bars, 15m MACD
+// confirmation); other timeframes are rejected.
 func DropBounceLookupOrGeneric(ticker string, interval enum.Interval) (Binding, error) {
-	if interval != enum.Hour1 {
-		return Binding{}, fmt.Errorf("drop_bounce runs on Hour1 only, not %s", interval)
+	if interval != enum.Minutes15 {
+		return Binding{}, fmt.Errorf("drop_bounce runs on Minutes15 only, not %s", interval)
 	}
 	defaults, ok := dropBounceRegistry[ticker]
 	if !ok {

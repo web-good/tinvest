@@ -1,0 +1,22 @@
+{
+  "_comment": "AFKS pdl_reclaim: заведён 2026-10-21 с общим литералом GAZP на 5m.",
+  "EntryPDL": 1,
+  "EntryPDH": 0,
+  "HoldBars": 3,
+  "StopDailyATR": 0.7,
+  "DailyATRPeriod": 14,
+  "VolumeMult": 1.5,
+  "VolBars": 20,
+  "MaxDayRangeATR": 1.2,
+  "IndexTrendEMA": 150,
+  "PDLEngulf": 0,
+  "PDLHammer": 1,
+  "PDLDipVolMult": 0.5,
+  "PDLReclaimBars": 0,
+  "PDLHammerEntry": 0,
+  "PDLSignalVolMult": 0.5,
+  "PDLPatternTargetR": 1.5,
+  "PDLMinStopATR": 0.4,
+  "LockAfterR": 1,
+  "LockAtR": 0.25
+}

@@ -28,7 +28,7 @@ import (
 
 func main() {
 	var (
-		intervalS     = flag.String("interval", "Hour1", "timeframe: Hour1 (drop_bounce runs on 1h only)")
+		intervalS     = flag.String("interval", "Minutes15", "timeframe: Minutes15 (drop_bounce runs on 15m only: hourly signal, 15m MACD)")
 		months        = flag.Int("months", 36, "lookback period in months")
 		holdoutMonths = flag.Int("holdout-months", 6, "trailing months held out of the ranking window")
 		minTurnoverM  = flag.Float64("min-turnover", 50, "gate: minimum mean daily turnover in millions of RUB")
@@ -82,10 +82,10 @@ type runCfg struct {
 
 // parseInterval accepts the one timeframe drop_bounce runs on.
 func parseInterval(s string) (enum.Interval, error) {
-	if strings.EqualFold(s, enum.Hour1.String()) {
-		return enum.Hour1, nil
+	if strings.EqualFold(s, enum.Minutes15.String()) {
+		return enum.Minutes15, nil
 	}
-	return 0, fmt.Errorf("unknown -interval %q (want Hour1: drop_bounce runs on 1h only)", s)
+	return 0, fmt.Errorf("unknown -interval %q (want Minutes15: drop_bounce runs on 15m only)", s)
 }
 
 // pregated reports whether the daily-candle turnover fails the gate; equality passes.

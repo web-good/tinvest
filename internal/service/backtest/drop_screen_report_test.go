@@ -88,7 +88,7 @@ func TestDropShortlist(t *testing.T) {
 
 func dropMeta() DropScreenMeta {
 	return DropScreenMeta{
-		Interval: enum.Hour1, Months: 36, HoldoutMonths: 6, TopN: 50, Shortlist: 2,
+		Interval: enum.Minutes15, Months: 36, HoldoutMonths: 6, TopN: 50, Shortlist: 2,
 		Split: time.Date(2026, 4, 12, 0, 0, 0, 0, time.UTC), Gates: DropGates{MinTurnoverM: 50, MaxTickPct: 0.3, MinTrades: 20},
 		PFCap: 10, Commission: 0.0005, Cash: 100000, Scanned: 5, Skipped: 1,
 	}
@@ -97,18 +97,18 @@ func dropMeta() DropScreenMeta {
 func TestRenderDropScreenMarkdown(t *testing.T) {
 	ranked := []DropRow{dropRow("C", 2.0, 25, 100, 0.1), dropRow("B", 1.5, 40, 100, 0.1), dropRow("A", 1.5, 30, 100, 0.1)}
 	ranked[0].BestHalves = []HalfResult{{Label: "2024H1", PnL: 1500, Trades: 3}}
-	ranked[0].MACDShare = 0.4
+	ranked[0].RSIShare = 0.4
 	md := RenderDropScreenMarkdown(ranked, []DropRow{{Ticker: "H", NoSignals: true}},
 		[]DropRow{dropRow("F", 3, 30, 100, 0.31)}, []DropRow{dropRow("D", 3, 30, 49.9, 0.1)}, dropMeta())
 	for _, want := range []string{
 		"# drop_bounce screener",
-		"Hour1",
-		"RSIZone {25, 35}",
+		"Minutes15",
+		"RSIPeriod {4, 6} × RSIExitPeriod {8, 12} × StopDailyATR {0.5, 1.0}",
 		"## Рейтинг",
 		"## Детали топа",
 		"2024H1 +1.5%",
-		"| Ticker | SL% | RSI% | MACD% | HoldD |",
-		"`SL%`/`RSI%`/`MACD%`",
+		"| Ticker | SL% | RSI% | HoldD |",
+		"`SL%`/`RSI%`",
 		" 40% |",
 		"## Нет сигналов",
 		"## Отсеяно гейтом шага цены",

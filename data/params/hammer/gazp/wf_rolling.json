@@ -1,0 +1,13 @@
+{
+  "_comment": "hammer GAZP, скользящий walk-forward (-train-months 3 -test-months 1, Hour1, -risk-pct 1, -min-trades 5) поверх литерала владельца (RSI 9, объём 1.0, RSIExit 70): зона RSI молота × запас стопа под low молота × цель в R. 36 точек.",
+  "phases": [
+    {
+      "name": "wf",
+      "grid": {
+        "RSIZone": [30, 40, 50],
+        "StopBufferATR": [0, 0.05, 0.1, 0.2],
+        "TargetR": [1.5, 2, 3]
+      }
+    }
+  ]
+}

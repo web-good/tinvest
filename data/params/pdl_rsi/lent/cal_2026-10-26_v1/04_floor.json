@@ -1,0 +1,70 @@
+{
+  "_comment": "pdl_rsi LENT Hour1, шаг 4 «floor» пошаговой калибровки, стохастик: уровень (36 мес, -risk-pct 1): оси RSIFloor [0, 15, 20, 22], остальные поля прибиты к точке шагов ['signal', 'trigger', 'trend']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker LENT -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/lent/cal/04_floor.json -min-trades 1 -combos 0 -out reports/LENT_pdl_rsi/floor.  РЕЗУЛЬТАТ: RSIFloor 22, PF 1.295, net +6539, сделок 48, плато; точка сдвинута.",
+  "phases": [
+    {
+      "name": "floor",
+      "grid": {
+        "HourRSIPeriod": [
+          6
+        ],
+        "RSIArm": [
+          30
+        ],
+        "RSIFloor": [
+          0,
+          15,
+          20,
+          22
+        ],
+        "RSITriggerMax": [
+          0
+        ],
+        "RSIExit": [
+          70
+        ],
+        "StochK": [
+          14
+        ],
+        "StochSmooth": [
+          3
+        ],
+        "StochD": [
+          3
+        ],
+        "StochBelow": [
+          30
+        ],
+        "StochCross": [
+          0
+        ],
+        "StochBars": [
+          0
+        ],
+        "VolumeMult": [
+          0
+        ],
+        "VolBars": [
+          20
+        ],
+        "MinRoomATR": [
+          0
+        ],
+        "StopATR": [
+          0.5
+        ],
+        "MaxStopPct": [
+          0
+        ],
+        "TargetR": [
+          2
+        ],
+        "TrendEMA": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ]
+      }
+    }
+  ]
+}

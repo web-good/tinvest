@@ -1,0 +1,14 @@
+{
+  "_comment": "pdl_rsi NVTK, скользящий walk-forward (-train-months 3 -test-months 1, Minutes15, -months 24, -risk-pct 1, -min-trades 5, metric profit_factor) поверх литерала владельца 2026-10-23 (HourRSI 6 / EntryRSI 4 / зона 0.3 / объём 0.5 / запас 0.3 / EMA 150). Одна фаза, 32 точки: вход у PDL или без зоны, период 15m RSI, запас хода, тренд на часе, объём. Уровни RSI (30/30/50/50/70), ZoneATR, VolBars и DailyATRPeriod не калибруются. 2026-10-23: прогон сделан на старом входе по кресту 15m RSI (pooled OOS PF 0.671); вход заменён на MACD, ось EntryRSIPeriod удалена вместе с параметром. Позже стратегия переведена на Hour1 (вход по кресту часового RSI); сетка — запись прогона на 15m.",
+  "phases": [
+    {
+      "name": "entry",
+      "grid": {
+        "PDLZone": [0, 1],
+        "MinRoomATR": [0, 0.3],
+        "TrendEMA": [0, 150],
+        "VolumeMult": [0, 0.5]
+      }
+    }
+  ]
+}

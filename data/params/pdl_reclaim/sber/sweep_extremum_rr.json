@@ -1,0 +1,25 @@
+{
+  "_comment": "SBER pdl_reclaim: стоп за ближайшим экстремумом сетапа (StopAtExtremum 1: минимум дня до свечи возврата над PDL / минимум от свечи пробоя PDH, минус StopBufferATR дневных ATR, внутри свечи) и цель TargetStopMult × расстояние до стопа от close сигнала. Прогоны 2026-10-20: год до окна (-months 24 -holdout-months 12) | год калибровки (-months 12); скользящий walk-forward -months 24 -train-months 3 -test-months 1 -min-trades 5. РЕЗУЛЬТАТ: литерал +42151 (2.31/59 | 1.51/65). Стоп у экстремума везде хуже: от −4.6 до +13.5 тыс., год калибровки PF 0.67–0.95 во всех вариантах. Walk-forward: пул OOS PF 0.694 −15.6% против 1.922. ВЫВОД: не подтверждено.",
+  "phases": [
+    {
+      "name": "sweep",
+      "grid": {
+        "StopAtExtremum": [
+          0,
+          1
+        ],
+        "StopBufferATR": [
+          0,
+          0.05,
+          0.1,
+          0.2
+        ],
+        "TargetStopMult": [
+          0,
+          1.5,
+          2
+        ]
+      }
+    }
+  ]
+}

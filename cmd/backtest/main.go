@@ -32,13 +32,15 @@ const (
 	cacheDir       = "data/candles"
 	volWorkers     = 6   // concurrent candle fetches for -volrank
 	screenTrendEMA = 200 // volrank: trend EMA period (uptrend context for pullback events)
+	// pdlReclaimIndex is the market index whose dailies pdl_reclaim's IndexTrendEMA filter reads.
+	pdlReclaimIndex = "IMOEX"
 )
 
 func main() {
 	var (
 		ticker       = flag.String("ticker", "", "ticker, e.g. RUAL (required)")
 		intervalS    = flag.String("interval", "Hour1", "candle timeframe: Minutes5|Minutes15|Minutes30|Hour1|Hour4|Day1|Week1")
-		strategyName = flag.String("strategy", "scalping", "strategy engine: scalping|reversion|scalping_rsimacd|rsi_ema|vwap_rev|rsi_pullback|rsi_zone|gap_fade|drop_bounce")
+		strategyName = flag.String("strategy", "scalping", "strategy engine: scalping|reversion|scalping_rsimacd|rsi_ema|vwap_rev|rsi_pullback|rsi_zone|gap_fade|drop_bounce|pdl_reclaim|pdl_zone|hammer|pdl_rsi")
 		months       = flag.Int("months", 12, "lookback period in months")
 		cash         = flag.Float64("cash", 100000, "starting mock cash")
 		fraction     = flag.Float64("fraction", 1.0, "fraction of cash per Buy")
@@ -54,7 +56,7 @@ func main() {
 		outDir       = flag.String("out", "reports", "report output directory")
 		refresh      = flag.Bool("refresh", false, "force candle refetch (ignore cache)")
 		explain      = flag.String("explain", "", "diagnose one bar: MSK time 'YYYY-MM-DD HH:MM'; prints why the strategy did/didn't enter")
-		riskPct      = flag.Float64("risk-pct", 0, "risk-based sizing: risk this %% of equity per trade off the entry stop (requires CatStopATRMult>0; 0 = fixed -fraction sizing)")
+		riskPct      = flag.Float64("risk-pct", 0, "risk-based sizing: risk this %% of equity per trade off the entry stop (needs a stop on the buy signal: reversion CatStopATRMult>0, drop_bounce/pdl_reclaim StopDailyATR>0, pdl_zone, hammer and pdl_rsi always; 0 = fixed -fraction sizing)")
 		screen       = flag.String("screen", "", "screen mode: comma-separated tickers; ranks them by variance ratio (ignores -ticker/-strategy)")
 		volRank      = flag.Bool("volrank", false, "screener mode: rank the liquid RUB universe by Hour1 pullback-in-trend fitness (ignores -ticker/-strategy/-interval)")
 		minTurnover  = flag.Float64("min-turnover", 50, "volrank: minimum mean daily turnover in millions of RUB")
@@ -180,8 +182,32 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 			return err
 		}
 		binding = b
+	case "pdl_reclaim":
+		b, err := svc.PDLReclaimLookupOrGeneric(ticker, interval)
+		if err != nil {
+			return err
+		}
+		binding = b
+	case "pdl_zone":
+		b, err := svc.PDLZoneLookupOrGeneric(ticker, interval)
+		if err != nil {
+			return err
+		}
+		binding = b
+	case "hammer":
+		b, err := svc.HammerLookupOrGeneric(ticker, interval)
+		if err != nil {
+			return err
+		}
+		binding = b
+	case "pdl_rsi":
+		b, err := svc.PDLRSILookupOrGeneric(ticker, interval)
+		if err != nil {
+			return err
+		}
+		binding = b
 	default:
-		return fmt.Errorf("unknown strategy %q (want scalping|reversion|scalping_rsimacd|rsi_ema|vwap_rev|rsi_pullback|rsi_zone|gap_fade|drop_bounce)", strategyName)
+		return fmt.Errorf("unknown strategy %q (want scalping|reversion|scalping_rsimacd|rsi_ema|vwap_rev|rsi_pullback|rsi_zone|gap_fade|drop_bounce|pdl_reclaim|pdl_zone|hammer|pdl_rsi)", strategyName)
 	}
 
 	share, err := resolveShare(ctx, client, ticker)
@@ -223,6 +249,18 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 	if err != nil {
 		return err
 	}
+	// pdl_reclaim's IndexTrendEMA filter reads IMOEX dailies over the same window as the ticker's.
+	if strategyName == "pdl_reclaim" {
+		uid, err := client.InstrumentsServiceClient().IndicativeUIDByTicker(ctx, pdlReclaimIndex)
+		if err != nil {
+			return fmt.Errorf("pdl_reclaim index %s: %w", pdlReclaimIndex, err)
+		}
+		index, err := provider.Load(ctx, pdlReclaimIndex, uid, enum.Day1, dailyFrom, to, refresh)
+		if err != nil {
+			return fmt.Errorf("pdl_reclaim index %s: %w", pdlReclaimIndex, err)
+		}
+		binding = svc.PDLReclaimWithIndex(binding, index)
+	}
 	if strategyName == "scalping_rsimacd" {
 		if err := reportHTFCoverage(htfCandles, dailyFrom); err != nil {
 			return err
@@ -230,9 +268,9 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 	}
 
 	cfg := domain.Config{InitialCash: cash, Fraction: fraction, Commission: commission, Lot: share.Lot, RiskFractionPct: riskPct, HTFInterval: htfInterval,
-		// gap_fade triggers on the opening-auction print itself and drop_bounce on a bar's close;
-		// either way the first price an order can get is the next bar's open.
-		EntryAtNextOpen: strategyName == "gap_fade" || strategyName == "drop_bounce"}
+		// gap_fade triggers on the opening-auction print itself, drop_bounce, pdl_reclaim, pdl_zone, hammer
+		// and pdl_rsi on a bar's close; either way the first price an order can get is the next bar's open.
+		EntryAtNextOpen: strategyName == "gap_fade" || strategyName == "drop_bounce" || strategyName == "pdl_reclaim" || strategyName == "pdl_zone" || strategyName == "hammer" || strategyName == "pdl_rsi"}
 	periodDays := to.Sub(from).Hours() / 24
 
 	if explain != "" {

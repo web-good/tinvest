@@ -5,44 +5,35 @@ import (
 	"testing"
 )
 
-// explainAt runs Explain over closes ending at end with the entry fixture's params.
-func explainAt(end string, closes []float64) string {
-	return NewWithParams("TEST", stepH1, entryParams()).Explain(fixture(endingAt(end, closes)))
-}
-
-func TestExplainEntryBar(t *testing.T) {
-	out := explainAt("2026-09-16 07:00", trendCloses(6))
-	for _, want := range []string{"✓ окно", "✓ тренд", "✓ RSI(6)", "ветка ZONE", "✓ ход дня", "ИТОГ: ПОКУПКА"} {
+func TestExplainConfirmedEntry(t *testing.T) {
+	bars, g := greenAfterSignal()
+	out := NewWithParams("TEST", stepBar, entryParams()).Explain(fixture(bars[:g+1]))
+	for _, want := range []string{"✓ будни", "✓ взведено: сигнал час", "(ZONE), MACD 1h зелёная", "(через 1 ч), бар 1 из 6", "✓ MACD 15m", "✓ дневной ATR(14)", "ИТОГ: ПОКУПКА"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("missing %q in:\n%s", want, out)
 		}
 	}
 }
 
-// The Friday cutoff shows up as the failed window gate and the verdict agrees with Decide.
-func TestExplainFridayAfternoon(t *testing.T) {
-	out := explainAt("2026-09-18 15:00", trendCloses(6))
-	for _, want := range []string{"✗ окно", "пятница до 12:00 ✗", "ИТОГ: входа нет"} {
+// The signal hour with a red hourly MACD waits, and the verdict agrees with Decide.
+func TestExplainWaitsOnRedHour(t *testing.T) {
+	bars, a, _ := signalThenGreenHour()
+	out := NewWithParams("TEST", stepBar, entryParams()).Explain(fixture(bars[:a+1]))
+	for _, want := range []string{"сигнал ZONE", "(красная)", "✗ взвода нет", "ИТОГ: входа нет"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("missing %q in:\n%s", want, out)
 		}
 	}
 }
 
-func TestExplainTrendFails(t *testing.T) {
-	out := explainAt("2026-09-16 07:00", trendCloses(12))
-	if !strings.Contains(out, "✗ тренд") || !strings.Contains(out, "ИТОГ: входа нет") {
-		t.Fatalf("want failed trend gate and no entry:\n%s", out)
-	}
-}
-
-// A held position lists the exits; the Friday green-histogram cross ends in a FRI sale.
-func TestExplainHeldFriday(t *testing.T) {
-	bars := armedPathFriday()
-	md := fixture(bars[:armedCross+1])
-	md.Position = position(100, bars[95].t, fixtureATR)
-	out := NewWithParams("TEST", stepH1, stopOnlyOff()).Explain(md)
-	for _, want := range []string{"--- выходы ---", "пятница и RSI ≥ 70 (FRI) ✓", "ИТОГ: ПРОДАЖА FRI"} {
+// A held position lists the exits; the hourly RSI(10) cross ends in an RSI sale.
+func TestExplainHeldRSIExit(t *testing.T) {
+	bars := slideAndRise()
+	_, d := exitHour(t)
+	md := fixture(bars[:d+1])
+	md.Position = position(200, bars[60].t, fixtureATR)
+	out := NewWithParams("TEST", stepBar, stopOnlyOff()).Explain(md)
+	for _, want := range []string{"--- выходы ---", "закрыт на этом баре ✓", "крест 70 вверх ✓", "ИТОГ: ПРОДАЖА RSI"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("missing %q in:\n%s", want, out)
 		}

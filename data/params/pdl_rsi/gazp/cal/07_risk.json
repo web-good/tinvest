@@ -1,0 +1,71 @@
+{
+  "_comment": "pdl_rsi GAZP Hour1, шаг 7 «risk» пошаговой калибровки, стохастик: %K ниже 20 (36 мес, -risk-pct 1): оси StopATR [0.3, 0.5, 0.7, 1.0], TargetR [1.5, 2, 3], MaxStopPct [0, 1, 1.5], остальные поля прибиты к точке шагов ['signal', 'trigger', 'trend', 'floor', 'volume', 'room']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker GAZP -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/gazp/cal/07_risk.json -min-trades 1 -combos 0 -out reports/GAZP_pdl_rsi/risk.  РЕЗУЛЬТАТ: StopATR 0.7, TargetR 2, MaxStopPct 1.5, PF 1.567, net +9631, сделок 40, плато; точка сдвинута.",
+  "phases": [
+    {
+      "name": "risk",
+      "grid": {
+        "HourRSIPeriod": [
+          6
+        ],
+        "RSIArm": [
+          30
+        ],
+        "RSIFloor": [
+          0
+        ],
+        "RSIExit": [
+          70
+        ],
+        "RSITrailFrom": [
+          0
+        ],
+        "RSITrailTo": [
+          70
+        ],
+        "RSITrailStep": [
+          10
+        ],
+        "StochK": [
+          14
+        ],
+        "StochSmooth": [
+          1
+        ],
+        "StochD": [
+          3
+        ],
+        "VolumeMult": [
+          1.2
+        ],
+        "VolBars": [
+          20
+        ],
+        "MinRoomATR": [
+          0
+        ],
+        "StopATR": [
+          0.3,
+          0.5,
+          0.7,
+          1.0
+        ],
+        "MaxStopPct": [
+          0,
+          1,
+          1.5
+        ],
+        "TargetR": [
+          1.5,
+          2,
+          3
+        ],
+        "TrendEMA": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ]
+      }
+    }
+  ]
+}

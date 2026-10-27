@@ -644,7 +644,7 @@ func assembleFromFixture(t *testing.T, ticker string, m30, day []*imodel.CandleI
 	if !ok {
 		t.Fatalf("тикер %s не зарегистрирован", ticker)
 	}
-	md, err := marketdata.Assemble(context.Background(), market, "uid-"+ticker, st.Lookback(),
+	md, err := marketdata.Assemble(context.Background(), market, "uid-"+ticker, enum.Minutes30, st.Lookback(),
 		m30[len(m30)-1].Time.Add(time.Minute))
 	if err != nil {
 		t.Fatalf("Assemble: %v", err)

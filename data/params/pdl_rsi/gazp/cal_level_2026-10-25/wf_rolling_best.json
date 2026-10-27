@@ -1,0 +1,67 @@
+{
+  "_comment": "pdl_rsi GAZP: walk-forward вокруг лучшей комбинации калибровки (trigger2 #1: StochK 5, StochBelow 20), остальное как в wf_rolling.json",
+  "phases": [
+    {
+      "name": "wf",
+      "grid": {
+        "HourRSIPeriod": [
+          5,
+          6,
+          8
+        ],
+        "RSIArm": [
+          25
+        ],
+        "RSIFloor": [
+          0
+        ],
+        "RSITriggerMax": [
+          0
+        ],
+        "RSIExit": [
+          0
+        ],
+        "StochK": [
+          5
+        ],
+        "StochSmooth": [
+          3
+        ],
+        "StochBelow": [
+          20
+        ],
+        "StochBars": [
+          5
+        ],
+        "VolumeMult": [
+          1.2
+        ],
+        "VolBars": [
+          20
+        ],
+        "MinRoomATR": [
+          0
+        ],
+        "StopATR": [
+          0.5,
+          0.7,
+          1.0
+        ],
+        "MaxStopPct": [
+          1.5
+        ],
+        "TargetR": [
+          1.5,
+          2,
+          3
+        ],
+        "TrendEMA": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ]
+      }
+    }
+  ]
+}

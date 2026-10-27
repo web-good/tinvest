@@ -1,0 +1,25 @@
+{
+  "_comment": "NVTK pdl_reclaim: стоп за ближайшим экстремумом сетапа (StopAtExtremum 1: минимум дня до свечи возврата над PDL / минимум от свечи пробоя PDH, минус StopBufferATR дневных ATR, внутри свечи) и цель TargetStopMult × расстояние до стопа от close сигнала. Прогоны 2026-10-20: год до окна (-months 24 -holdout-months 12) | год калибровки (-months 12); скользящий walk-forward -months 24 -train-months 3 -test-months 1 -min-trades 5. РЕЗУЛЬТАТ: литерал −32093. Стоп у экстремума: от −26.1 до +5.0 тыс. (лучшая — без запаса, цель 1.5×стоп: 1.32/83 | 0.78/67); год калибровки в минусе во всех вариантах. Walk-forward: пул OOS PF 0.751 −23.5% против 0.748. ВЫВОД: не подтверждено.",
+  "phases": [
+    {
+      "name": "sweep",
+      "grid": {
+        "StopAtExtremum": [
+          0,
+          1
+        ],
+        "StopBufferATR": [
+          0,
+          0.05,
+          0.1,
+          0.2
+        ],
+        "TargetStopMult": [
+          0,
+          1.5,
+          2
+        ]
+      }
+    }
+  ]
+}

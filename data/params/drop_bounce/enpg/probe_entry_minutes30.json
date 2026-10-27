@@ -1,0 +1,68 @@
+{
+  "_comment": "drop_bounce ENPG Minutes30: проба фильтров входа 2026-10-14 (RSICap 50/40, ConfirmBars 4/3/2, ZoneEntry 1/0) поверх литерала тикера; только окно разработки 30 мес. (-holdout-months 6), не калибровка. Запуск: reports/drop_bounce_cal/backtest -ticker ENPG -strategy drop_bounce -interval Minutes30 -calibrate data/params/drop_bounce/enpg/probe_entry_minutes30.json -months 36 -holdout-months 6 -metric profit_factor -min-trades 1 -combos 0. РЕЗУЛЬТАТ 2026-10-14: база 0.974/43; только RSICap 40 → 0.886/33; только ConfirmBars 3 → 1.275/32, 2 → 0.771/20; только ZoneEntry 0 → 1.087/32; RSICap 40 + ConfirmBars 3 → 1.505/22, + ConfirmBars 2 → 1.468/14; лучший PF 3.435 на 4 сделках. RSICap 40 в одиночку хуже базы на всех трёх.",
+  "phases": [
+    {
+      "name": "probe",
+      "grid": {
+        "RSIPeriod": [
+          6
+        ],
+        "RSIZone": [
+          30
+        ],
+        "RSICap": [
+          50,
+          40
+        ],
+        "ZoneEntry": [
+          1,
+          0
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "BreakevenATR": [
+          0.5
+        ],
+        "TrailATR": [
+          0.0
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "RSIExitPeriod": [
+          10
+        ],
+        "RSIExit": [
+          70
+        ],
+        "MACDFast": [
+          12
+        ],
+        "MACDSlow": [
+          26
+        ],
+        "MACDSignal": [
+          9
+        ],
+        "ConfirmBars": [
+          4,
+          3,
+          2
+        ],
+        "FridayTo": [
+          11
+        ],
+        "StaleBars": [
+          0
+        ],
+        "StaleATR": [
+          0.3
+        ]
+      }
+    }
+  ]
+}

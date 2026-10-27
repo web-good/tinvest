@@ -306,20 +306,22 @@ func RenderWalkForwardMarkdown(ticker, metric string, s WalkForwardSummary, trai
 	fmt.Fprintf(&b, "| Compounded return | %.2f%% |\n\n", s.CompoundedReturnPct*100)
 
 	b.WriteString("## Результаты по фолдам\n\n")
-	b.WriteString("| # | Train-окно | Test-окно | In-sample PF | OOS PF | OOS сделок | OOS NetPnL% | OOS MaxDD% |\n")
-	b.WriteString("|---|---|---|---|---|---|---|---|\n")
+	b.WriteString("| # | Train-окно | Test-окно | In-sample PF | OOS PF | OOS сделок | OOS NetPnL% | OOS MaxDD% | OOS gross +/− |\n")
+	b.WriteString("|---|---|---|---|---|---|---|---|---|\n")
 	df := func(t time.Time) string { return t.Format("2006-01-02") }
 	for _, f := range s.Folds {
 		train := fmt.Sprintf("%s—%s", df(f.TrainFrom), df(f.TrainTo))
 		test := fmt.Sprintf("%s—%s", df(f.TestFrom), df(f.TestTo))
 		if f.WinnerRows == nil {
-			// Skipped fold (no calibration winner): keep the row at 8 columns, surfacing
-			// the reason in the last cell instead of numeric OOS stats.
-			fmt.Fprintf(&b, "| %d | %s | %s | — | — | — | — | %s |\n", f.Index, train, test, f.Note)
+			// Skipped fold (no calibration winner): keep the numeric columns empty, surfacing
+			// the reason in the MaxDD cell instead of numeric OOS stats.
+			fmt.Fprintf(&b, "| %d | %s | %s | — | — | — | — | %s | — |\n", f.Index, train, test, f.Note)
 			continue
 		}
-		fmt.Fprintf(&b, "| %d | %s | %s | %.3f | %.3f | %d | %.2f%% | %.2f%% |\n",
-			f.Index, train, test, f.InSamplePF, f.OOS.ProfitFactor, f.OOSTrades, f.OOSNetPnLPct*100, f.OOSMaxDDPct*100)
+		// The gross columns let a reader pool any run of folds (e.g. the freshest year) into one PF.
+		fmt.Fprintf(&b, "| %d | %s | %s | %.3f | %.3f | %d | %.2f%% | %.2f%% | %.2f / %.2f |\n",
+			f.Index, train, test, f.InSamplePF, f.OOS.ProfitFactor, f.OOSTrades, f.OOSNetPnLPct*100, f.OOSMaxDDPct*100,
+			f.OOS.GrossProfit, f.OOS.GrossLoss)
 	}
 
 	b.WriteString("\n## Стабильность параметров\n\n")

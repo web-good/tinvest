@@ -116,6 +116,7 @@ func (p *portfolio) close(price float64, t time.Time, reason, exitReason string)
 		SupportLevel:    p.entryLevel,
 		ResistanceLevel: p.entryTarget,
 		ATR:             p.entryATR,
+		StopLoss:        p.entryStop,
 		EntryReason:     p.entryReason,
 		ExitReason:      exitReason,
 	}

@@ -1,0 +1,21 @@
+{
+  "_comment": "drop_bounce GAZP Minutes15: центр перебора sweep_minutes15.json (#4) на паре MACD h8-26-5_m8-17-9. Разработка (30 из 36 мес): 84 сделки, PF 0.748, net -10926 ₽. РЕЗУЛЬТАТ 2026-10-15 (шаг MACD → пара 1h 8/26/5 + 15m 8/17/9): все 45 точек в минусе, PF 0.552–0.768, 68–126 сделок; центр #4 — RSI входа 6, RSI выхода 11, стоп 0.5 ATR, PF 0.748/84, соседи 0.688/0.688/0.685/0.679 — ОСТРЫЙ ПИК. Стресс: S1–S4 нет (полугодий в плюсе 1 из 5). Издержки 0.1%: PF 0.641, net -16228 ₽. Hold-out не открывался. Решение: не торговать. Отчёты reports/GAZP_drop_bounce/m15/.",
+  "RSIPeriod": 6,
+  "RSIZone": 30,
+  "RSICap": 50,
+  "ZoneEntry": 1,
+  "EMAPeriod": 200,
+  "StopDailyATR": 0.5,
+  "DailyATRPeriod": 14,
+  "RSIExitPeriod": 11,
+  "RSIExit": 70,
+  "HourMACDFast": 8,
+  "HourMACDSlow": 26,
+  "HourMACDSignal": 5,
+  "HourMACDHours": 20,
+  "MACDFast": 8,
+  "MACDSlow": 17,
+  "MACDSignal": 9,
+  "ConfirmBars": 6,
+  "FridayTo": 11
+}

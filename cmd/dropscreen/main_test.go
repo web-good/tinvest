@@ -7,7 +7,7 @@ import (
 )
 
 func validCfg() runCfg {
-	return runCfg{interval: enum.Hour1, months: 36, holdoutMonths: 6, workers: 1, maxTickPct: 0.3, minTrades: 20, shortlist: 10}
+	return runCfg{interval: enum.Minutes15, months: 36, holdoutMonths: 6, workers: 1, maxTickPct: 0.3, minTrades: 20, shortlist: 10}
 }
 
 func TestValidateAcceptsDefaults(t *testing.T) {
@@ -36,13 +36,13 @@ func TestValidateRejects(t *testing.T) {
 }
 
 func TestParseInterval(t *testing.T) {
-	for s, want := range map[string]enum.Interval{"Hour1": enum.Hour1} {
+	for s, want := range map[string]enum.Interval{"Minutes15": enum.Minutes15} {
 		got, err := parseInterval(s)
 		if err != nil || got != want {
 			t.Fatalf("parseInterval(%q) = %v, %v; want %v", s, got, err, want)
 		}
 	}
-	for _, s := range []string{"Minutes5", "Minutes15", "Minutes30", "Day1", "15m", ""} {
+	for _, s := range []string{"Minutes5", "Minutes30", "Hour1", "Day1", "15m", ""} {
 		if _, err := parseInterval(s); err == nil {
 			t.Fatalf("parseInterval(%q) accepted, want an error", s)
 		}

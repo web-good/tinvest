@@ -1,0 +1,70 @@
+{
+  "_comment": "pdl_rsi VTBR Hour1, шаг 9 «exits» пошаговой калибровки, стохастик: уровень (36 мес, -risk-pct 1): оси RSIExit [0, 65, 70, 75], остальные поля прибиты к точке шагов ['signal', 'trigger', 'trend', 'floor', 'trigmax', 'volume', 'room', 'risk']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker VTBR -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/vtbr/cal/09_exits.json -min-trades 1 -combos 0 -out reports/VTBR_pdl_rsi/exits.  РЕЗУЛЬТАТ: RSIExit 70, PF 0.875, net -11812, сделок 257, острый пик; лучший центр RSIExit 65 (0.875) не выше текущей точки на 5% — точка остаётся.",
+  "phases": [
+    {
+      "name": "exits",
+      "grid": {
+        "HourRSIPeriod": [
+          4
+        ],
+        "RSIArm": [
+          35
+        ],
+        "RSIFloor": [
+          0
+        ],
+        "RSITriggerMax": [
+          0
+        ],
+        "RSIExit": [
+          0,
+          65,
+          70,
+          75
+        ],
+        "StochK": [
+          14
+        ],
+        "StochSmooth": [
+          3
+        ],
+        "StochD": [
+          3
+        ],
+        "StochBelow": [
+          30
+        ],
+        "StochCross": [
+          0
+        ],
+        "StochBars": [
+          0
+        ],
+        "VolumeMult": [
+          0
+        ],
+        "VolBars": [
+          20
+        ],
+        "MinRoomATR": [
+          0
+        ],
+        "StopATR": [
+          0.5
+        ],
+        "MaxStopPct": [
+          0
+        ],
+        "TargetR": [
+          2
+        ],
+        "TrendEMA": [
+          0
+        ],
+        "DailyATRPeriod": [
+          14
+        ]
+      }
+    }
+  ]
+}

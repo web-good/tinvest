@@ -16,6 +16,7 @@ import (
 	gaplive "tinvest/internal/service/trading_strategy/gap_fade/live"
 	"tinvest/internal/service/trading_strategy/golden_x"
 	"tinvest/internal/service/trading_strategy/livecore/adapter"
+	pdlrsilive "tinvest/internal/service/trading_strategy/pdl_rsi/live"
 	"tinvest/internal/service/trading_strategy/reversion/live"
 	rsipullbacklive "tinvest/internal/service/trading_strategy/rsi_pullback/live"
 	rsizonelive "tinvest/internal/service/trading_strategy/rsi_zone/live"
@@ -198,7 +199,7 @@ func (*ServiceProvider) GetReversionLiveService() live.Service {
 // reversion: its own gRPC client (RSI_PULLBACK_TOKEN) and its own Telegram topic — sharing
 // either with reversion would let one strategy see the other's position in the portfolio and
 // manage it as its own, since the two overlap on tickers. rsi_pullback owns the account;
-// rsi_zone and gap_fade join it as guests (same client and state file, its own Telegram topic).
+// rsi_zone, gap_fade and pdl_rsi join it as guests (same client and state file, its own Telegram topic).
 func (*ServiceProvider) GetRSIPullbackLiveService() rsipullbacklive.Service {
 	if serviceProvider.service.rsiPullbackLiveService == nil {
 		grpcClient, _ := serviceProvider.GetRSIPullbackGrpcClient()
@@ -215,6 +216,13 @@ func (*ServiceProvider) GetRSIPullbackLiveService() rsipullbacklive.Service {
 		if gap := serviceProvider.appConfig.GapFade; gap.Enabled() {
 			gapTG, _ := serviceProvider.GetGapFadeSender()
 			guests = append(guests, gaplive.New(gap, gapTG, grpcClient.InstrumentsServiceClient()))
+		}
+		// pdl_rsi — четвёртый гость, часовой (docs/pdl_rsi/live.md): тот же счёт и файл
+		// стейта, своя тема Telegram; раннер собирает ему Hour1-бары. Слот последний по
+		// приоритету: тикер, занятый другой стратегией, он не берёт.
+		if pdl := serviceProvider.appConfig.PDLRSI; pdl.Enabled() {
+			pdlTG, _ := serviceProvider.GetPDLRSISender()
+			guests = append(guests, pdlrsilive.New(pdl, pdlTG))
 		}
 		serviceProvider.service.rsiPullbackLiveService = rsipullbacklive.NewService(
 			grpcClient.InstrumentsServiceClient(),

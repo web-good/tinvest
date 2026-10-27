@@ -1,10 +1,12 @@
 {
-  "_comment": "drop_bounce GAZP Hour1: in-sample перебор на первых 30 из 36 месяцев (последние 6 — hold-out), оси EMAPeriod [100, 120, 150, 200], StaleBars [10, 15, 25, 35], StopDailyATR [0.7, 1.0, 1.5], остальное — дефолты ядра, все поля прибиты. Запуск: reports/drop_bounce_cal/backtest -ticker GAZP -strategy drop_bounce -interval Hour1 -calibrate data/params/drop_bounce/gazp/sweep_hour1.json -months 36 -holdout-months 6 -metric profit_factor -min-trades 1 -combos 0. РЕЗУЛЬТАТ 2026-10-14: окно 2023-10-14 — 2026-04-14, 48 комбо. Центр (report.py center) #1 — EMA 100, стоп 0.7, STALE 10: PF 1.579 на 54 сделках, медиана окрестности 1.439, соседи стоп 1.0 → 1.470, STALE 15 → 1.408, EMA 120 → 1.377 — ПЛАТО ЕСТЬ (центр в углу сетки). Для сравнения: точка владельца EMA 120 / STALE 25 / стоп 1.0 — 1.182/55, дефолты — 0.959/71.",
+  "_comment": "drop_bounce GAZP Hour1: in-sample перебор на первых 30 из 36 месяцев (последние 6 — hold-out), оси RSIPeriod [4, 5, 6], RSIExitPeriod [8, 9, 10, 11, 12], StopDailyATR [0.5, 0.7, 1.0], остальное — дефолты ядра, все поля прибиты. Запуск: reports/drop_bounce_cal/backtest -ticker GAZP -strategy drop_bounce -interval Hour1 -calibrate data/params/drop_bounce/gazp/sweep_hour1.json -months 36 -holdout-months 6 -metric profit_factor -min-trades 1 -combos 0. РЕЗУЛЬТАТ 2026-10-14 (правила с окнами покупки 07–11/17–24 и RSI выхода): все 45 точек в минусе — PF от 0.437 до 0.870, медиана 0.568, сделок 59–137. center: #3 RSIPeriod 4 / RSIExitPeriod 9 / стоп 0.7, PF 0.858/122, медиана окрестности 0.818, ОСТРЫЙ ПИК (все соседи < 1.0). Не торговать; стресс и hold-out не гонялись.",
   "phases": [
     {
       "name": "sweep",
       "grid": {
         "RSIPeriod": [
+          4,
+          5,
           6
         ],
         "RSIZone": [
@@ -14,42 +16,40 @@
           50
         ],
         "EMAPeriod": [
-          100,
-          120,
-          150,
           200
         ],
-        "DaySpentATR": [
-          0.7
-        ],
         "StopDailyATR": [
+          0.5,
           0.7,
-          1.0,
-          1.5
+          1.0
         ],
         "DailyATRPeriod": [
           14
         ],
+        "RSIExitPeriod": [
+          8,
+          9,
+          10,
+          11,
+          12
+        ],
         "RSIExit": [
           70
         ],
-        "StartHour": [
+        "MorningFrom": [
           7
         ],
-        "MACDFast": [
-          12
+        "MorningTo": [
+          11
         ],
-        "MACDSlow": [
-          26
+        "EveningFrom": [
+          17
         ],
-        "MACDSignal": [
-          9
+        "EveningTo": [
+          24
         ],
         "StaleBars": [
-          10,
-          15,
-          25,
-          35
+          0
         ],
         "StaleATR": [
           0.3

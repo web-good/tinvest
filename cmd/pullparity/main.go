@@ -4,7 +4,7 @@
 // once the way internal/domain/backtest.Run does it, once through the live
 // marketdata.Assemble fed by a cache-backed CandleClient that only ever returns candles
 // visible at that bar's close. Any divergence is a live/backtest fidelity bug.
-// The -strategy flag picks the live registry to check: rsi_pullback (default), rsi_zone or gap_fade.
+// The -strategy flag picks the live registry to check: rsi_pullback (default), rsi_zone, gap_fade or pdl_rsi (Hour1).
 package main
 
 import (
@@ -26,6 +26,7 @@ import (
 	gaplive "tinvest/internal/service/trading_strategy/gap_fade/live"
 	"tinvest/internal/service/trading_strategy/livecore/adapter"
 	"tinvest/internal/service/trading_strategy/livecore/candles"
+	pdlrsilive "tinvest/internal/service/trading_strategy/pdl_rsi/live"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/live"
 	"tinvest/internal/service/trading_strategy/rsi_pullback/live/marketdata"
 	rsizonelive "tinvest/internal/service/trading_strategy/rsi_zone/live"
@@ -53,7 +54,7 @@ func main() {
 		months       = flag.Int("months", 24, "lookback period in months")
 		examples     = flag.Int("examples", 10, "max diverging lines printed per ticker")
 		cacheDir     = flag.String("cache", "data/candles", "candle cache directory")
-		strategyName = flag.String("strategy", "rsi_pullback", "rsi_pullback | rsi_zone | gap_fade")
+		strategyName = flag.String("strategy", "rsi_pullback", "rsi_pullback | rsi_zone | gap_fade | pdl_rsi")
 	)
 	flag.Parse()
 	logger.Init()
@@ -109,7 +110,7 @@ func run(ctx context.Context, cfg runCfg) error {
 		if err != nil {
 			return err
 		}
-		diffs, bars, err := checkTicker(ctx, provider, ticker, ids[ticker], st, from, to)
+		diffs, bars, err := checkTicker(ctx, provider, ticker, ids[ticker], st, intervalFor(cfg.strategy), from, to)
 		if err != nil {
 			return fmt.Errorf("%s: %w", ticker, err)
 		}
@@ -146,45 +147,65 @@ func resolveDecider(strategyName, ticker string) (adapter.Decider, error) {
 		if st, ok := gaplive.StrategyFor(ticker); ok {
 			return st, nil
 		}
+	case "pdl_rsi":
+		if st, ok := pdlrsilive.StrategyFor(ticker); ok {
+			return st, nil
+		}
 	default:
-		return nil, fmt.Errorf("unknown -strategy %q (rsi_pullback | rsi_zone | gap_fade)", strategyName)
+		return nil, fmt.Errorf("unknown -strategy %q (rsi_pullback | rsi_zone | gap_fade | pdl_rsi)", strategyName)
 	}
 	return nil, fmt.Errorf("%s: not registered in %s live registry — add calibrated params before checking parity", ticker, strategyName)
 }
 
-// checkTicker replays m30 bar by bar from lookback-1 onward, building the MarketData
-// snapshot (and the resulting Decide verdict) twice per bar — once via the engine's own
+// intervalFor — рабочий таймфрейм стратегии: pdl_rsi ходит по часам, остальные по 30 минутам.
+func intervalFor(strategyName string) enum.Interval {
+	if strategyName == "pdl_rsi" {
+		return enum.Hour1
+	}
+	return enum.Minutes30
+}
+
+// barDuration — длина бара рабочего таймфрейма.
+func barDuration(interval enum.Interval) time.Duration {
+	if interval == enum.Hour1 {
+		return time.Hour
+	}
+	return 30 * time.Minute
+}
+
+// checkTicker replays the working-interval bars (30m by default, Hour1 for pdl_rsi) bar by
+// bar from lookback-1 onward, building the MarketData snapshot (and the resulting Decide verdict) twice per bar — once via the engine's own
 // AssembleMarketData/TodayExtent, once via marketdata.Assemble fed by a cache-backed
 // client that only ever sees candles visible at that bar's close. bars is the number of
-// bars actually replayed (len(m30) - lookback + 1).
+// bars actually replayed (len(hist) - lookback + 1).
 func checkTicker(ctx context.Context, provider *svc.CandleProvider, ticker, instrumentUID string,
-	st adapter.Decider, from, to time.Time) (diffs []string, bars int, err error) {
+	st adapter.Decider, interval enum.Interval, from, to time.Time) (diffs []string, bars int, err error) {
 
 	lookback := st.Lookback()
-	m30, err := provider.Load(ctx, ticker, instrumentUID, enum.Minutes30, from, to, false)
+	hist, err := provider.Load(ctx, ticker, instrumentUID, interval, from, to, false)
 	if err != nil {
-		return nil, 0, fmt.Errorf("load 30m: %w", err)
+		return nil, 0, fmt.Errorf("load bars: %w", err)
 	}
 	day, err := provider.Load(ctx, ticker, instrumentUID, enum.Day1, from, to, false)
 	if err != nil {
 		return nil, 0, fmt.Errorf("load daily: %w", err)
 	}
-	if len(m30) < lookback {
-		return nil, 0, fmt.Errorf("only %d cached 30m candles, need at least lookback %d", len(m30), lookback)
+	if len(hist) < lookback {
+		return nil, 0, fmt.Errorf("only %d cached candles of the working interval, need at least lookback %d", len(hist), lookback)
 	}
 
-	for i := lookback - 1; i < len(m30); i++ {
-		cur := m30[i].Time
+	for i := lookback - 1; i < len(hist); i++ {
+		cur := hist[i].Time
 		bars++
 
-		want := backtest.AssembleMarketData(m30[i-lookback+1:i+1], day, nil, cur)
-		want.TodayHigh, want.TodayLow = backtest.TodayExtent(m30, i)
+		want := backtest.AssembleMarketData(hist[i-lookback+1:i+1], day, nil, cur)
+		want.TodayHigh, want.TodayLow = backtest.TodayExtent(hist, i)
 
 		// asOf is the instant bar i has just closed: the moment a live runner would wake
 		// up and act on it.
-		asOf := cur.Add(30 * time.Minute)
-		fake := newCacheClient(m30, day, asOf)
-		got, aerr := marketdata.Assemble(ctx, fake, instrumentUID, lookback, asOf)
+		asOf := cur.Add(barDuration(interval))
+		fake := newCacheClient(interval, hist, day, asOf)
+		got, aerr := marketdata.Assemble(ctx, fake, instrumentUID, interval, lookback, asOf)
 		if aerr != nil {
 			// The engine built a snapshot on this bar; the live path refusing to is itself
 			// a divergence worth reporting, not a reason to skip the bar.
@@ -204,17 +225,18 @@ func checkTicker(ctx context.Context, provider *svc.CandleProvider, ticker, inst
 // cacheClient implements candles.CandleClient over in-memory slices already loaded by the
 // candle provider. It returns exactly what a live GetCandles call would have returned had
 // it been made at asOf: bars whose Time falls in the requested [from, to] AND strictly
-// before asOf, marked complete. Feeding it the SAME m30/day slices the reference assembly
+// before asOf, marked complete. Feeding it the SAME hist/day slices the reference assembly
 // reads means any divergence traces to the assembly logic, not to different underlying data.
 type cacheClient struct {
-	m30, day []backtest.Candle
-	asOf     time.Time
+	interval  enum.Interval
+	hist, day []backtest.Candle
+	asOf      time.Time
 }
 
 var _ candles.CandleClient = (*cacheClient)(nil)
 
-func newCacheClient(m30, day []backtest.Candle, asOf time.Time) *cacheClient {
-	return &cacheClient{m30: m30, day: day, asOf: asOf}
+func newCacheClient(interval enum.Interval, hist, day []backtest.Candle, asOf time.Time) *cacheClient {
+	return &cacheClient{interval: interval, hist: hist, day: day, asOf: asOf}
 }
 
 func (c *cacheClient) GetCandles(_ context.Context, _ *string, interval int32,
@@ -222,8 +244,8 @@ func (c *cacheClient) GetCandles(_ context.Context, _ *string, interval int32,
 
 	var src []backtest.Candle
 	switch interval {
-	case enum.Minutes30.ToNumberInvestAPI():
-		src = c.m30
+	case c.interval.ToNumberInvestAPI():
+		src = c.hist
 	case enum.Day1.ToNumberInvestAPI():
 		src = c.day
 	default:

@@ -214,3 +214,12 @@ func TestStrategyPositionCarriesEntryTime(t *testing.T) {
 		t.Fatalf("EntryTime = %v, want %v", pos.EntryTime, entry)
 	}
 }
+
+// The trade keeps the stop the entry signal set.
+func TestPortfolioCloseKeepsEntryStop(t *testing.T) {
+	p := newPortfolio(Config{InitialCash: 100000, Fraction: 1.0, Lot: 1})
+	p.open(100, time.Unix(0, 0), 0, 110, 0, 95.5, "")
+	if tr := p.close(105, time.Unix(60, 0), "TP", ""); tr.StopLoss != 95.5 {
+		t.Fatalf("StopLoss = %v, want 95.5", tr.StopLoss)
+	}
+}

@@ -10,34 +10,29 @@ import (
 )
 
 // Pinned drop-screener axes. Like the zone screener, it answers "is this ticker worth
-// calibrating", so it sweeps only the axes whose useful range depends on the paper: how deep the
-// oversold zone sits and how high a cross may land, how much of the day's range is still allowed,
-// and the two opposite exit shapes. See
-// docs/superpowers/specs/2026-10-13-drop-bounce-h1-rsi-ema-design.md.
+// calibrating", so it sweeps the calibration axes at their ends: the entry RSI length, the exit
+// RSI length and the stop (rules of 2026-10-14: hourly signal on 15m bars, 15m MACD confirmation).
 var (
-	dropGridZones    = []float64{25, 35}
-	dropGridCaps     = []float64{40, 60}
-	dropGridDaySpent = []float64{0.5, 1.0}
-	dropGridRSIExits = []float64{60, 75}
+	dropGridRSIPeriods     = []int{4, 6}
+	dropGridRSIExitPeriods = []int{8, 12}
+	dropGridStops          = []float64{0.5, 1.0}
 )
 
-// DropGrid returns the 16 configurations every ticker is screened on, in a deterministic order
-// (RSIZone outermost, RSIExit innermost). RSI(6), EMA(200) and the stop at 1.0 daily ATR(14) are
-// pinned: the core defaults, properties of a tuned point rather than of the paper. drop_bounce
-// runs on Hour1 only.
+// DropGrid returns the 8 configurations every ticker is screened on, in a deterministic order
+// (RSIPeriod outermost, StopDailyATR innermost). The rest — the RSI zone 30/50, EMA(200), the exit
+// level 70, MACD(12,26,9) and the confirmation window — are the core defaults. drop_bounce runs on
+// Minutes15 only.
 func DropGrid(interval enum.Interval) ([]dropcore.Params, error) {
-	if interval != enum.Hour1 {
-		return nil, fmt.Errorf("drop screener runs on Hour1 only, not %s", interval)
+	if interval != enum.Minutes15 {
+		return nil, fmt.Errorf("drop screener runs on Minutes15 only, not %s", interval)
 	}
-	out := make([]dropcore.Params, 0, len(dropGridZones)*len(dropGridCaps)*len(dropGridDaySpent)*len(dropGridRSIExits))
-	for _, zone := range dropGridZones {
-		for _, capV := range dropGridCaps {
-			for _, day := range dropGridDaySpent {
-				for _, exit := range dropGridRSIExits {
-					p := dropcore.DefaultParams()
-					p.RSIZone, p.RSICap, p.DaySpentATR, p.RSIExit = zone, capV, day, exit
-					out = append(out, p)
-				}
+	out := make([]dropcore.Params, 0, len(dropGridRSIPeriods)*len(dropGridRSIExitPeriods)*len(dropGridStops))
+	for _, rsi := range dropGridRSIPeriods {
+		for _, exit := range dropGridRSIExitPeriods {
+			for _, stop := range dropGridStops {
+				p := dropcore.DefaultParams()
+				p.RSIPeriod, p.RSIExitPeriod, p.StopDailyATR = rsi, exit, stop
+				out = append(out, p)
 			}
 		}
 	}
@@ -90,7 +85,6 @@ type DropRow struct {
 	TopHalf   float64 // median share of the best half in summed profitable halves; 0 = none profitable
 	SLShare   float64 // median share of stop exits (trading configurations only)
 	RSIShare  float64 // median share of RSI exits
-	MACDShare float64 // median share of MACD exits
 	HoldDays  float64 // median of per-configuration median holding time, calendar days
 
 	Best       dropcore.Params // configuration with the highest raw train PF (reference only)
@@ -109,7 +103,7 @@ func AggregateDrop(ticker, name string, results []DropConfigResult, split time.T
 	n := len(results)
 	pfs, pfsStress, counts := make([]float64, 0, n), make([]float64, 0, n), make([]float64, 0, n)
 	pfsHO, pfsStressHO, countsHO := make([]float64, 0, n), make([]float64, 0, n), make([]float64, 0, n)
-	var halvesPos, topHalf, sl, rsi, macd, hold []float64
+	var halvesPos, topHalf, sl, rsi, hold []float64
 	var plateau int
 	var haveBest bool
 	var bestTrain []backtest.Trade
@@ -164,7 +158,6 @@ func AggregateDrop(ticker, name string, results []DropConfigResult, split time.T
 		}
 		sl = append(sl, exitShare(train, "SL"))
 		rsi = append(rsi, exitShare(train, "RSI"))
-		macd = append(macd, exitShare(train, "MACD"))
 		hold = append(hold, medianHoldDays(train))
 	}
 
@@ -180,7 +173,6 @@ func AggregateDrop(ticker, name string, results []DropConfigResult, split time.T
 	row.TopHalf = medianF(topHalf)
 	row.SLShare = medianF(sl)
 	row.RSIShare = medianF(rsi)
-	row.MACDShare = medianF(macd)
 	row.HoldDays = medianF(hold)
 	if n > 0 {
 		row.Plateau = float64(plateau) / float64(n)

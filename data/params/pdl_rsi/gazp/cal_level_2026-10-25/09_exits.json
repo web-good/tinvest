@@ -1,0 +1,64 @@
+{
+  "_comment": "pdl_rsi GAZP Hour1, шаг 9 «exits» пошаговой калибровки (36 мес, -risk-pct 1): оси RSIExit [0, 65, 70, 75], остальные поля прибиты к точке шагов ['signal', 'trigger', 'trend', 'floor', 'trigmax', 'volume', 'room', 'risk']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker GAZP -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/gazp/cal/09_exits.json -min-trades 1 -combos 0 -out reports/GAZP_pdl_rsi/exits.  РЕЗУЛЬТАТ: RSIExit 0, PF 1.074, net +1449, сделок 29, плато; точка сдвинута.",
+  "phases": [
+    {
+      "name": "exits",
+      "grid": {
+        "HourRSIPeriod": [
+          6
+        ],
+        "RSIArm": [
+          30
+        ],
+        "RSIFloor": [
+          0
+        ],
+        "RSITriggerMax": [
+          0
+        ],
+        "RSIExit": [
+          0,
+          65,
+          70,
+          75
+        ],
+        "StochK": [
+          14
+        ],
+        "StochSmooth": [
+          3
+        ],
+        "StochBelow": [
+          30
+        ],
+        "StochBars": [
+          1
+        ],
+        "VolumeMult": [
+          1.2
+        ],
+        "VolBars": [
+          20
+        ],
+        "MinRoomATR": [
+          0
+        ],
+        "StopATR": [
+          0.7
+        ],
+        "MaxStopPct": [
+          1.5
+        ],
+        "TargetR": [
+          2
+        ],
+        "TrendEMA": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ]
+      }
+    }
+  ]
+}

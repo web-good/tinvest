@@ -1,0 +1,64 @@
+{
+  "_comment": "drop_bounce GAZP Minutes15: шаг выбора пары MACD на первых 30 из 36 месяцев (последние 6 — hold-out), MACD 1h 5/35/5, MACD 15m 12/26/9, одна точка — дефолты ядра (RSI 6, RSI выхода 10, стоп 1.0), все поля прибиты. Одна из 9 пар: выбирает report.py macd <все calibration.md>. Запуск: reports/drop_bounce_cal/backtest -ticker GAZP -strategy drop_bounce -interval Minutes15 -calibrate data/params/drop_bounce/gazp/macd_minutes15_h5-35-5_m12-26-9.json -months 36 -holdout-months 6 -metric profit_factor -risk-pct 1 -min-trades 1 -combos 0 -out reports/GAZP_drop_bounce/macd/h5-35-5_m12-26-9/Minutes15. РЕЗУЛЬТАТ 2026-10-15: PF 0.567/74 сделок.",
+  "phases": [
+    {
+      "name": "macd",
+      "grid": {
+        "RSIPeriod": [
+          6
+        ],
+        "RSIZone": [
+          30
+        ],
+        "RSICap": [
+          50
+        ],
+        "ZoneEntry": [
+          1
+        ],
+        "EMAPeriod": [
+          200
+        ],
+        "StopDailyATR": [
+          1.0
+        ],
+        "DailyATRPeriod": [
+          14
+        ],
+        "RSIExitPeriod": [
+          10
+        ],
+        "RSIExit": [
+          70
+        ],
+        "HourMACDFast": [
+          5
+        ],
+        "HourMACDSlow": [
+          35
+        ],
+        "HourMACDSignal": [
+          5
+        ],
+        "HourMACDHours": [
+          20
+        ],
+        "MACDFast": [
+          12
+        ],
+        "MACDSlow": [
+          26
+        ],
+        "MACDSignal": [
+          9
+        ],
+        "ConfirmBars": [
+          6
+        ],
+        "FridayTo": [
+          11
+        ]
+      }
+    }
+  ]
+}

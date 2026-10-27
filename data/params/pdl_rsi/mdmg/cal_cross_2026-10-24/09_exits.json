@@ -1,0 +1,72 @@
+{
+  "_comment": "pdl_rsi MDMG Hour1, шаг 9 «exits» пошаговой калибровки (36 мес, -risk-pct 1): оси RSIExit [0, 65, 70, 75], StochExitAbove [0, 40, 60], остальные поля прибиты к точке шагов ['signal', 'trigger', 'trend', 'floor', 'trigmax', 'volume', 'room', 'risk']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker MDMG -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/mdmg/cal/09_exits.json -min-trades 1 -combos 0 -out reports/MDMG_pdl_rsi/exits.  РЕЗУЛЬТАТ: RSIExit 70, StochExitAbove 0, PF 1.647, net +18508, сделок 98, плато; лучший центр RSIExit 70, StochExitAbove 0 (1.515) не выше текущей точки на 5% — точка остаётся.",
+  "phases": [
+    {
+      "name": "exits",
+      "grid": {
+        "HourRSIPeriod": [
+          4
+        ],
+        "RSIArm": [
+          35
+        ],
+        "RSIFloor": [
+          0
+        ],
+        "RSITriggerMax": [
+          50
+        ],
+        "RSIExit": [
+          0,
+          65,
+          70,
+          75
+        ],
+        "StochExitAbove": [
+          0,
+          40,
+          60
+        ],
+        "StochK": [
+          5
+        ],
+        "StochSmooth": [
+          3
+        ],
+        "StochD": [
+          3
+        ],
+        "StochBars": [
+          4
+        ],
+        "StochCrossMax": [
+          40
+        ],
+        "VolumeMult": [
+          1.2
+        ],
+        "VolBars": [
+          20
+        ],
+        "MinRoomATR": [
+          0
+        ],
+        "StopATR": [
+          1
+        ],
+        "MaxStopPct": [
+          1.5
+        ],
+        "TargetR": [
+          1.5
+        ],
+        "TrendEMA": [
+          0
+        ],
+        "DailyATRPeriod": [
+          14
+        ]
+      }
+    }
+  ]
+}

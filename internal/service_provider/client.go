@@ -111,6 +111,10 @@ func (s *ServiceProvider) GetGapFadeSender() (telegram.Client, error) {
 	return s.topicSender(s.appConfig.TelegramClient.TopicGapFade, "gap_fade")
 }
 
+func (s *ServiceProvider) GetPDLRSISender() (telegram.Client, error) {
+	return s.topicSender(s.appConfig.TelegramClient.TopicPDLRSI, "pdl_rsi")
+}
+
 func (s *ServiceProvider) GetNewsSender() (telegram.Client, error) {
 	return s.topicSender(s.appConfig.TelegramClient.TopicNews, "news")
 }

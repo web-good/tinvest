@@ -1,0 +1,40 @@
+{
+  "_comment": "SBER pdl_reclaim: точка PDL (центр плато sweep_pdl_wide.json: стоп 1.5, с 10:00, до 16:00, MaxDayRangeATR 1.2) плюс ветка пробоя PDH — стоп и окно у веток общие. Окно -months 12 -holdout-months 3. РЕЗУЛЬТАТ 2026-10-19: PDH поверх PDL поднимает PF с 2.283/26 до 3.202/38 (HoldBars 3, VolumeMult 1.5); плато HoldBars 2–3 × VolumeMult 1.5–2.5 — 3.07–3.20; без фильтра объёма и с HoldBars 0–1 хуже. → point.json.",
+  "phases": [
+    {
+      "name": "sweep",
+      "grid": {
+        "EntryPDL": [
+          1
+        ],
+        "EntryPDH": [
+          0,
+          1
+        ],
+        "StopDailyATR": [
+          1.5
+        ],
+        "EntryFromHour": [
+          10
+        ],
+        "EntryToHour": [
+          16
+        ],
+        "MaxDayRangeATR": [
+          1.2
+        ],
+        "HoldBars": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "VolumeMult": [
+          0,
+          1.5,
+          2.5
+        ]
+      }
+    }
+  ]
+}

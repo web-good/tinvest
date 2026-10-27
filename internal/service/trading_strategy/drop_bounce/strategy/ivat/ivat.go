@@ -1,4 +1,39 @@
-// Package ivat supplies the drop_bounce Params for IVAT (ИВА Технолоджис) on Hour1.
+// Package ivat supplies the drop_bounce Params for IVAT (ИВА Технолоджис) on Minutes15.
+//
+// # Перекалибровка 2026-10-15
+//
+// Перекалибровка 2026-10-15 по просьбе владельца (схема hold-out, 45 точек, -risk-pct 1, BreakevenPct
+// 0.1, выбор по свежим месяцам при ничьей; отчёты reports/IVAT_drop_bounce/r1015/). Центр: #33 —
+// RSIPeriod 4, StopDailyATR 0.5, RSIExitPeriod 8, PF 0.645 на 27 сделках; соседи: RSIPeriod 5: PF
+// 0.909/19; RSIExitPeriod 9: PF 0.733/27; StopDailyATR 0.7: PF 0.617/24; ОСТРЫЙ ПИК. Точка: RSI входа
+// 4, RSI выхода 8, стоп 0.5 ATR. Разработка: 27 сделок, PF 0.646, net -6678 ₽. Стресс: S1 PF 0.646 ≥
+// 1.3 и 27 ≥ 25 сделок: нет; S2 без лучшей сделки (+2790 ₽) PF 0.497 ≥ 1.15: нет; S3 без трёх лучших
+// PF 0.308 ≥ 1.0: нет; S4 полугодий в плюсе 1 из 5 (нужно ≥ 4): нет. Издержки 0.1%: PF 0.590, net
+// -8050 ₽ на 27 сделках. hold-out не открывался. Решение: не торговать (острый пик).
+//
+// # Перекалибровка 2026-10-14 с -risk-pct 1
+//
+// Та же схема (перебор 45 точек на 30 из 36 мес., центр плато, стресс, hold-out), но размер позиции —
+// 1% капитала на стоп (-risk-pct 1), PrevCloseGate 0. Литерал — новый центр (point_minutes30.json);
+// разделы ниже — прежние замеры при фиксированной доле.
+//
+// Центр плато: RSI входа 4, RSI выхода 8, стоп 0.5 дневного ATR — PF 0.552 на 27 сделках (лучшая
+// точка перебора PF 1.188); соседи: RSI входа 5 → 0.742/19, RSI выхода 9 → 0.640/27, стоп 0.7 →
+// 0.528/24 — ОСТРЫЙ ПИК. Стресс, издержки и hold-out не запускались. Решение: не торговать.
+//
+// # Правила 2026-10-14: сигнал на 1h, подтверждение MACD на 30m
+//
+// Ядро переведено на 30m: часовой сигнал RSI над EMA собирается из 30-минутных свечей, вход — по
+// первой зелёной гистограмме MACD(12,26,9) на 30m за ConfirmBars баров, только будни (в пятницу покупка до 11:00); выход — стоп
+// в дневных ATR или часовой RSI(RSIExitPeriod) крест 70 вверх. Литерал сброшен на дефолты ядра до
+// калибровки на этих правилах; все замеры ниже сняты на прежних правилах (1h) и к ним не относятся.
+//
+// # Правила 2026-10-14
+//
+// Ядро переписано (окна покупки 07–11 и 17–24 MSK, выход по RSI(RSIExitPeriod), без гейта хода
+// дня, MACD-выхода и пятничных правил). Все замеры ниже сняты на прежних правилах и к новым не
+// относятся; литерал сброшен на дефолты ядра до калибровки на новых правилах (скилл
+// drop-bounce-calibrate, перебор RSIPeriod × RSIExitPeriod × StopDailyATR).
 //
 // Откалиброван 2026-10-13 на правилах 1h RSI-зоны с выходом RSI+MACD (скилл
 // drop-bounce-calibrate), дважды: без выхода по времени (сетка v2) и с выходом STALE 10 баров /
@@ -31,6 +66,13 @@
 // плюс — последний фолд 3.761 на 7 сделках), C да (+6.52%), D да (фолдов с ≥ 10 сделками нет).
 // Сигналов мало — около 7 сделок в год. Плато и издержки не гонялись: они нужны только при
 // взятой планке. Тикер не входит в DROP_BOUNCE_TICKERS_H1.
+//
+// # Переход на 15m (2026-10-15)
+//
+// Владелец перевёл стратегию на 15m: сигнал на часе, затем зелёная гистограмма часового MACD(8,26,5)
+// не позже 20 часов, затем MACD(12,26,9) на 15m за 6 баров; безубыток, трейлинг и выключенные фильтры
+// удалены из ядра. Точка ниже (RSI входа, RSI выхода, стоп) снята на прежних правилах (30m, безубыток
+// 0.5 ATR) и на новых не проверена: тикер ждёт перекалибровки скиллом drop-bounce-calibrate.
 package ivat
 
 import "tinvest/internal/service/trading_strategy/drop_bounce/strategy/core"
@@ -38,22 +80,26 @@ import "tinvest/internal/service/trading_strategy/drop_bounce/strategy/core"
 // Ticker is the instrument this package configures.
 const Ticker = "IVAT"
 
-// Params returns the IVAT literal for Hour1.
+// Params returns the IVAT literal for Minutes15.
 func Params() core.Params {
 	return core.Params{
-		RSIPeriod:      6,
+		RSIPeriod:      4,
 		RSIZone:        30,
 		RSICap:         50,
+		ZoneEntry:      1,
 		EMAPeriod:      200,
-		DaySpentATR:    0.7,
-		StopDailyATR:   1.0,
+		StopDailyATR:   0.5,
 		DailyATRPeriod: 14,
+		RSIExitPeriod:  8,
 		RSIExit:        70,
-		StartHour:      7,
+		HourMACDFast:   8,
+		HourMACDSlow:   26,
+		HourMACDSignal: 5,
+		HourMACDHours:  20,
 		MACDFast:       12,
 		MACDSlow:       26,
 		MACDSignal:     9,
-		StaleBars:      10,
-		StaleATR:       0.3,
+		ConfirmBars:    6,
+		FridayTo:       11,
 	}
 }
