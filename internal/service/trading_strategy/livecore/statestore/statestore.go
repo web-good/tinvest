@@ -48,6 +48,12 @@ type Entry struct {
 	// появления поля, и его позиции должны вестись как прежде. reversion поле не пишет —
 	// omitempty оставляет формат его файла прежним.
 	Strategy string `json:"strategy,omitempty"`
+
+	// LastBar — время открытия последнего бара, по которому ядро уже решило. Пишут только
+	// гости с adapter.BarInterval (часовые): раннер ходит каждые полчаса, а решение по
+	// часовому бару принимается один раз. Нулевое значение — «не решали», 30m-гости поле
+	// не пишут и не читают.
+	LastBar time.Time `json:"lastBar,omitzero"`
 }
 
 // Store loads and saves the full per-ticker entry-state map.
