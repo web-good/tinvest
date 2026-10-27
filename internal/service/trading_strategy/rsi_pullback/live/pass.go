@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"tinvest/internal/enum"
 	imodel "tinvest/internal/model"
 	"tinvest/internal/service/trading_strategy/livecore/adapter"
 	"tinvest/internal/service/trading_strategy/livecore/notifier"
@@ -216,7 +217,7 @@ func (s *service) pass(ctx context.Context) error {
 func (s *service) assemble(ctx context.Context, sl *slot, ticker string, sh *imodel.Share,
 	dec adapter.Decider, now time.Time, watched bool) (strategy.MarketData, bool) {
 
-	md, err := marketdata.Assemble(ctx, s.market, sh.ID, dec.Lookback(), now)
+	md, err := marketdata.Assemble(ctx, s.market, sh.ID, enum.Minutes30, dec.Lookback(), now)
 	if err != nil {
 		if watched {
 			sl.alert(ticker, "рыночные данные недоступны — сопровождение пропущено: "+err.Error())

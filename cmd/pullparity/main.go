@@ -184,7 +184,7 @@ func checkTicker(ctx context.Context, provider *svc.CandleProvider, ticker, inst
 		// up and act on it.
 		asOf := cur.Add(30 * time.Minute)
 		fake := newCacheClient(m30, day, asOf)
-		got, aerr := marketdata.Assemble(ctx, fake, instrumentUID, lookback, asOf)
+		got, aerr := marketdata.Assemble(ctx, fake, instrumentUID, enum.Minutes30, lookback, asOf)
 		if aerr != nil {
 			// The engine built a snapshot on this bar; the live path refusing to is itself
 			// a divergence worth reporting, not a reason to skip the bar.

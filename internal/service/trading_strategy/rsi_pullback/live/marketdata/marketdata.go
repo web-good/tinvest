@@ -26,6 +26,22 @@ import (
 // 14 days keeps us clear of the cap the way the backtest's chunkDaysFor does.
 const chunkDays = 14
 
+// chunkDaysHour1 — окно одного запроса часовых свечей: API отдаёт их за период до трёх
+// месяцев, 60 дней оставляют запас так же, как 14 дней у получасовых.
+const chunkDaysHour1 = 60
+
+// chunkDaysFor возвращает размер чанка для интервала; неподдержанный интервал — ошибка,
+// а не молчаливый запрос с неверным окном.
+func chunkDaysFor(interval enum.Interval) (int, error) {
+	switch interval {
+	case enum.Minutes30:
+		return chunkDays, nil
+	case enum.Hour1:
+		return chunkDaysHour1, nil
+	}
+	return 0, fmt.Errorf("rsi_pullback marketdata: unsupported interval %v", interval)
+}
+
 // maxChunks bounds the walk backwards. UGLD's 403-bar window is about two calendar weeks
 // of MOEX 30-minute bars, so two chunks normally suffice; eight leaves room for the New
 // Year holidays and a halted instrument without turning a data outage into an endless loop.
@@ -47,12 +63,13 @@ const maxChunks = 8
 // years.
 const dailyFetchDays = 730
 
-// Assemble builds the MarketData snapshot as of `now`. lookbackBars is the 30-minute window
-// size (Strategy.Lookback()). Position is left nil for the caller to set.
+// Assemble builds the MarketData snapshot as of `now`. interval is the strategy's working
+// timeframe (Minutes30 or Hour1); lookbackBars is the window size in its bars
+// (Strategy.Lookback()). Position is left nil for the caller to set.
 func Assemble(ctx context.Context, c candles.CandleClient, instrumentID string,
-	lookbackBars int, now time.Time) (strategy.MarketData, error) {
+	interval enum.Interval, lookbackBars int, now time.Time) (strategy.MarketData, error) {
 
-	window, err := fetch30m(ctx, c, instrumentID, lookbackBars, now)
+	window, err := fetchBars(ctx, c, instrumentID, interval, lookbackBars, now)
 	if err != nil {
 		return strategy.MarketData{}, err
 	}
@@ -61,7 +78,7 @@ func Assemble(ctx context.Context, c candles.CandleClient, instrumentID string,
 		// нулевую серию, трендовый гейт молча закрывается на весь прогон, и раннер
 		// выглядит работающим, ничего не торгуя.
 		return strategy.MarketData{}, fmt.Errorf(
-			"rsi_pullback marketdata: %d completed 30m candles < lookback %d", len(window), lookbackBars)
+			"rsi_pullback marketdata: %d completed %s candles < lookback %d", len(window), interval, lookbackBars)
 	}
 
 	daily, err := fetchDaily(ctx, c, instrumentID, now)
@@ -75,24 +92,29 @@ func Assemble(ctx context.Context, c candles.CandleClient, instrumentID string,
 	return md, nil
 }
 
-// fetch30m walks backwards in chunkDays windows until it holds lookbackBars completed bars,
+// fetchBars walks backwards in per-interval chunk windows until it holds lookbackBars completed bars,
 // then returns the last lookbackBars (oldest-first). Chunk boundaries may overlap, so bars
 // are de-duplicated by open-time.
-func fetch30m(ctx context.Context, c candles.CandleClient, instrumentID string,
-	lookbackBars int, now time.Time) ([]backtest.Candle, error) {
+func fetchBars(ctx context.Context, c candles.CandleClient, instrumentID string,
+	interval enum.Interval, lookbackBars int, now time.Time) ([]backtest.Candle, error) {
+
+	days, err := chunkDaysFor(interval)
+	if err != nil {
+		return nil, err
+	}
 
 	seen := make(map[int64]struct{})
 	var all []backtest.Candle
 	to := now
 	for chunk := 0; chunk < maxChunks && len(all) < lookbackBars; chunk++ {
-		from := to.AddDate(0, 0, -chunkDays)
+		from := to.AddDate(0, 0, -days)
 		// limit is nil, exactly like the backtest's candle provider (internal/service/backtest/candles.go):
 		// the request window is already bounded by chunkDays/the interval's API cap, and an
 		// explicit Limit is just another way to silently truncate differently from the engine.
-		raw, err := c.GetCandles(ctx, &instrumentID, enum.Minutes30.ToNumberInvestAPI(),
+		raw, err := c.GetCandles(ctx, &instrumentID, interval.ToNumberInvestAPI(),
 			timestamppb.New(from), timestamppb.New(to), nil, true)
 		if err != nil {
-			return nil, fmt.Errorf("rsi_pullback marketdata: 30m candles: %w", err)
+			return nil, fmt.Errorf("rsi_pullback marketdata: %s candles: %w", interval, err)
 		}
 		for _, cd := range candles.ToCandles(raw, true) {
 			key := cd.Time.UnixNano()
@@ -118,7 +140,7 @@ func fetchDaily(ctx context.Context, c candles.CandleClient, instrumentID string
 	now time.Time) ([]backtest.Candle, error) {
 
 	from := now.AddDate(0, 0, -dailyFetchDays)
-	// limit is nil for the same reason as fetch30m: the window already bounds the request.
+	// limit is nil for the same reason as fetchBars: the window already bounds the request.
 	raw, err := c.GetCandles(ctx, &instrumentID, enum.Day1.ToNumberInvestAPI(),
 		timestamppb.New(from), timestamppb.New(now), nil, true)
 	if err != nil {
