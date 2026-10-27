@@ -1,6 +1,6 @@
 # pdl_rsi — вход, когда часовой RSI ниже 30 и стохастик ниже 20 на одном часе
 
-Бэктест-стратегия, только лонг, таймфрейм **только 1h** (`-interval Hour1`, другие cmd/backtest отклоняет). Позиция переносится через ночь и выходные. Код: `internal/service/trading_strategy/pdl_rsi/strategy/core`, привязка к бэктесту — `internal/service/backtest/pdl_rsi_registry.go`. Спека первой версии (15m): `docs/superpowers/specs/2026-10-23-pdl-rsi-design.md`. Живого раннера нет.
+Стратегия (бэктест и live-гость), только лонг, таймфрейм **только 1h** (`-interval Hour1`, другие cmd/backtest отклоняет). Позиция переносится через ночь и выходные. Код: `internal/service/trading_strategy/pdl_rsi/strategy/core`, привязка к бэктесту — `internal/service/backtest/pdl_rsi_registry.go`. Спека первой версии (15m): `docs/superpowers/specs/2026-10-23-pdl-rsi-design.md`. Живой запуск (гость раннера счёта `rsi_pullback`, выключен по умолчанию) — [live.md](live.md).
 
 RSI — Уайлдер с периодом `HourRSIPeriod` по закрытиям часовых свечей. Стохастик — медленный %K (`StochK`, `StochSmooth`; по умолчанию 14, 1): сырой %K за `StochK` баров, сглаженный средней за `StochSmooth`; %D — средняя %K за `StochD` (3), идёт только в причину входа. Гейт — %K ниже 20, порог зашит в ядро (`stochZone`); креста %K над %D и настраиваемого уровня нет. Сигналы — только по закрытым часовым свечам, покупка — по open следующей (`EntryAtNextOpen`).
 

@@ -1,9 +1,14 @@
 package main
 
 import (
+	"context"
 	"testing"
 	"time"
 
+	"google.golang.org/protobuf/types/known/timestamppb"
+
+	"tinvest/internal/domain/backtest"
+	"tinvest/internal/enum"
 	"tinvest/internal/service/trading_strategy/scalping/model"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 )
@@ -150,5 +155,32 @@ func TestResolveDeciderPicksStrategyRegistry(t *testing.T) {
 	}
 	if _, err := resolveDecider("nope", "GAZP"); err == nil {
 		t.Fatal("неизвестная стратегия — ждали ошибку")
+	}
+}
+
+func TestResolveDeciderPDLRSI(t *testing.T) {
+	if _, err := resolveDecider("pdl_rsi", "GAZP"); err != nil {
+		t.Fatalf("pdl_rsi GAZP: %v", err)
+	}
+	if _, err := resolveDecider("pdl_rsi", "SBER"); err == nil {
+		t.Fatal("SBER не в реестре pdl_rsi — ждали ошибку")
+	}
+	if got := intervalFor("pdl_rsi"); got != enum.Hour1 {
+		t.Fatalf("intervalFor(pdl_rsi) = %v, want Hour1", got)
+	}
+	if got := intervalFor("rsi_zone"); got != enum.Minutes30 {
+		t.Fatalf("intervalFor(rsi_zone) = %v, want Minutes30", got)
+	}
+
+	hour := []backtest.Candle{{Time: time.Date(2026, 1, 12, 7, 0, 0, 0, time.UTC), Close: 1}}
+	day := []backtest.Candle{{Time: time.Date(2026, 1, 12, 0, 0, 0, 0, time.UTC), Close: 1}}
+	asOf := time.Date(2026, 1, 12, 8, 0, 0, 0, time.UTC)
+	c := newCacheClient(enum.Hour1, hour, day, asOf)
+	from, to := timestamppb.New(asOf.Add(-48*time.Hour)), timestamppb.New(asOf)
+	if out, err := c.GetCandles(context.Background(), nil, enum.Hour1.ToNumberInvestAPI(), from, to, nil, false); err != nil || len(out) != 1 {
+		t.Fatalf("Hour1: len=%d err=%v, want 1 bar", len(out), err)
+	}
+	if _, err := c.GetCandles(context.Background(), nil, enum.Minutes30.ToNumberInvestAPI(), from, to, nil, false); err == nil {
+		t.Fatal("Minutes30 в прогоне Hour1 — ждали отказ")
 	}
 }
