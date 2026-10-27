@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"tinvest/internal/domain/backtest"
 )
@@ -19,6 +20,24 @@ type Grid map[string][]float64
 type CalibResult struct {
 	Params  any
 	Metrics backtest.Metrics
+	// RecentTrades counts the trades entered in the last recentMonths of the window, so a
+	// calibration can drop combos that barely trade on the freshest market.
+	RecentTrades int
+}
+
+// recentMonths is the fresh tail of the window whose trades CalibResult.RecentTrades counts.
+const recentMonths = 12
+
+// recentTrades counts the trades entered at or after end minus recentMonths.
+func recentTrades(trades []backtest.Trade, end time.Time) int {
+	from := end.AddDate(0, -recentMonths, 0)
+	n := 0
+	for _, tr := range trades {
+		if !tr.EntryTime.Before(from) {
+			n++
+		}
+	}
+	return n
 }
 
 // defaultKeepTop is how many top-ranked parameter sets carry into the next phase
@@ -63,6 +82,10 @@ func runCombos(b Binding, combos []any, candles, dailyCandles, htfCandles []back
 	cfg backtest.Config, periodDays float64,
 ) []CalibResult {
 	results := make([]CalibResult, len(combos))
+	var end time.Time
+	if len(candles) > 0 {
+		end = candles[len(candles)-1].Time
+	}
 
 	jobs := make(chan int)
 	var wg sync.WaitGroup
@@ -74,7 +97,7 @@ func runCombos(b Binding, combos []any, candles, dailyCandles, htfCandles []back
 			for i := range jobs {
 				res := backtest.Run(b.Build(combos[i]), candles, dailyCandles, htfCandles, cfg)
 				m := backtest.Compute(res, res.BarsInMarket, len(res.Equity), periodDays)
-				results[i] = CalibResult{Params: combos[i], Metrics: m}
+				results[i] = CalibResult{Params: combos[i], Metrics: m, RecentTrades: recentTrades(res.Trades, end)}
 			}
 		}()
 	}
@@ -301,8 +324,8 @@ func RenderCalibrationMarkdown(metric string, results []CalibResult, topN int) s
 				break
 			}
 			m := r.Metrics
-			fmt.Fprintf(&b, "\n### #%d — %s %.4g, сделок %d\n\n| Параметр | Значение |\n|---|---|\n",
-				i+1, metric, metricValue(m, metric), m.TotalTrades)
+			fmt.Fprintf(&b, "\n### #%d — %s %.4g, сделок %d\n\nСделок за последние %d мес: %d\n\n| Параметр | Значение |\n|---|---|\n",
+				i+1, metric, metricValue(m, metric), m.TotalTrades, recentMonths, r.RecentTrades)
 			for _, row := range ParamRows(r.Params) {
 				fmt.Fprintf(&b, "| %s | %s |\n", row.Name, row.Value)
 			}

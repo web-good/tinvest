@@ -151,6 +151,29 @@ func TestRenderCalibrationMarkdownTopParams(t *testing.T) {
 	}
 }
 
+func TestRecentTradesCountsLastTwelveMonths(t *testing.T) {
+	end := time.Date(2026, 10, 27, 18, 0, 0, 0, time.UTC)
+	trades := []backtest.Trade{
+		{EntryTime: end.AddDate(-2, 0, 0)},
+		{EntryTime: end.AddDate(0, -12, -1)},
+		{EntryTime: end.AddDate(0, -12, 0)}, // the boundary counts
+		{EntryTime: end.AddDate(0, -1, 0)},
+	}
+	if got := recentTrades(trades, end); got != 2 {
+		t.Fatalf("recent trades = %d, want 2", got)
+	}
+}
+
+func TestRenderCalibrationMarkdownRecentTrades(t *testing.T) {
+	results := []CalibResult{
+		{Params: rusal.DefaultParams(), Metrics: backtest.Metrics{ProfitFactor: 2.0, TotalTrades: 30}, RecentTrades: 11},
+	}
+	out := RenderCalibrationMarkdown("profit_factor", results, 10)
+	if !strings.Contains(out, "\nСделок за последние 12 мес: 11\n") {
+		t.Fatalf("combo block missing the last-12-months trade count:\n%s", out)
+	}
+}
+
 func TestRunPhasesNarrowsAndCarriesSeeds(t *testing.T) {
 	b, _ := Lookup("RUAL")
 	cfg := backtest.Config{InitialCash: 100000, Fraction: 1.0, Commission: 0.0005, Lot: 1}
