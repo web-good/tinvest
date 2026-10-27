@@ -140,16 +140,20 @@ func TestHourGuestDoesNotDecideSignalBarAfterBuy(t *testing.T) {
 }
 
 // Час 23:00 решается на утреннем пассе 06:01: пасса в 00:01 нет, а выход по нему иначе
-// терялся бы каждый вечер.
+// терялся бы каждый вечер. Торги ещё закрыты, поэтому SELL не исполняется сразу: стоп
+// остаётся на бирже, выход запоминается в PendingExit и уходит на первом свежем пассе.
 func TestHourGuestCatchesUpMissedHourOnNextPass(t *testing.T) {
 	now := time.Date(2026, 3, 11, 6, 1, 0, 0, msk)
 	last := time.Date(2026, 3, 10, 23, 0, 0, 0, msk)
-	g := newHourFake(model.SignalSell, false)
+	g := newHourFake(model.SignalSell, true)
 	e := newSharedEnv(t, now, nil, nil, g)
-	e.seed(t, hourEntry(last.Add(-time.Hour), ""))
+	e.seed(t, hourEntry(last.Add(-time.Hour), "so-1"))
 	e.instruments.EXPECT().Shares(mock.Anything).Return(sharesOf("GAZP"), nil)
 	e.expectHourCandles(flatAt1h(last, 400, 100), dailies(now, 60))
 	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return([]*grpcmodel.Position{held("GAZP", 100)}, nil)
+	e.stops.EXPECT().GetStopOrders(mock.Anything, mock.MatchedBy(statusIs(investapi.StopOrderStatusOption_STOP_ORDER_STATUS_ACTIVE))).
+		Return(activeList("uid-GAZP", "so-1", 90, 10), nil)
+	// Ни CancelStopOrder, ни PostStopOrder, ни PostOrder: мок провалит любой такой вызов.
 	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
 
 	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
@@ -158,11 +162,72 @@ func TestHourGuestCatchesUpMissedHourOnNextPass(t *testing.T) {
 	if g.decideCalls != 1 {
 		t.Fatalf("Decide = %d, want 1", g.decideCalls)
 	}
-	if !g.said("Выход GAZP") {
-		t.Fatalf("нет выхода: %q", g.msgs)
+	got, ok := e.state(t)["GAZP"]
+	if !ok {
+		t.Fatal("запись удалена до открытия торгов")
 	}
-	if _, ok := e.state(t)["GAZP"]; ok {
+	if got.PendingExit != "FAKE" || !got.LastBar.Equal(last) || got.StopOrderID != "so-1" {
+		t.Fatalf("PendingExit=%q LastBar=%v StopOrderID=%q, want FAKE/%v/so-1",
+			got.PendingExit, got.LastBar, got.StopOrderID, last)
+	}
+	if g.said("Выход GAZP") {
+		t.Fatalf("выход до открытия торгов: %q", g.msgs)
+	}
+
+	// Первый свежий пасс после открытия: ядро по новому часу молчит, продаёт PendingExit.
+	now2 := time.Date(2026, 3, 11, 8, 1, 0, 0, msk)
+	g2 := newHourFake(model.SignalNone, true)
+	e2 := newSharedEnv(t, now2, nil, nil, g2)
+	e2.seed(t, got)
+	e2.instruments.EXPECT().Shares(mock.Anything).Return(sharesOf("GAZP"), nil)
+	e2.expectHourCandles(flatAt1h(time.Date(2026, 3, 11, 7, 0, 0, 0, msk), 400, 100), dailies(now2, 60))
+	e2.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return([]*grpcmodel.Position{held("GAZP", 100)}, nil)
+	e2.stops.EXPECT().GetStopOrders(mock.Anything, mock.MatchedBy(statusIs(investapi.StopOrderStatusOption_STOP_ORDER_STATUS_ACTIVE))).
+		Return(activeList("uid-GAZP", "so-1", 90, 10), nil)
+	e2.stops.EXPECT().CancelStopOrder(mock.Anything, mock.MatchedBy(func(in *investapi.CancelStopOrderRequest) bool {
+		return in.GetStopOrderId() == "so-1"
+	})).Return(&investapi.CancelStopOrderResponse{}, nil).Once()
+	e2.orders.EXPECT().PostOrder(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(filledOrder(10, 100), nil).Once()
+	e2.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
+
+	if err := e2.svc.Run(context.Background(), dto.Run{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if g2.decideCalls != 1 {
+		t.Fatalf("Decide на свежем пассе = %d, want 1", g2.decideCalls)
+	}
+	if !g2.said("Выход GAZP") {
+		t.Fatalf("нет выхода на свежем пассе: %q", g2.msgs)
+	}
+	if _, ok := e2.state(t)["GAZP"]; ok {
 		t.Fatal("SELL не закрыл запись")
+	}
+}
+
+// Настоящее протухание часового бара (уже решённый 09:00 на пассе 11:31) по-прежнему
+// даёт алерт и пропуск без решения.
+func TestHourGuestStaleDecidedBarAlerts(t *testing.T) {
+	now := time.Date(2026, 3, 10, 11, 31, 0, 0, msk)
+	g := newHourFake(model.SignalSell, false)
+	e := newSharedEnv(t, now, nil, nil, g)
+	e.seed(t, hourEntry(hourBar9, ""))
+	e.instruments.EXPECT().Shares(mock.Anything).Return(sharesOf("GAZP"), nil)
+	e.expectHourCandles(flatAt1h(hourBar9, 400, 100), dailies(now, 60))
+	e.ops.EXPECT().GetPortfolio(mock.Anything, mock.Anything).Return([]*grpcmodel.Position{held("GAZP", 100)}, nil)
+	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
+
+	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if g.decideCalls != 0 {
+		t.Fatalf("Decide = %d, want 0", g.decideCalls)
+	}
+	if !g.said("протух") {
+		t.Fatalf("нет алерта протухания: %q", g.msgs)
+	}
+	if _, ok := e.state(t)["GAZP"]; !ok {
+		t.Fatal("запись потеряна")
 	}
 }
 

@@ -689,12 +689,26 @@ func (s *service) manage(ctx context.Context, pc *passCtx, sl *slot, ticker stri
 		// повтор, а потерю выхода: позиция досидит до стопа или цели.
 		sig = model.Signal{Kind: model.SignalSell, Reason: entry.PendingExit, Price: md.Price}
 	}
+	// Догоняющее решение (бар старше barAgeLimit прошёл в assemble только как нерешённый —
+	// час 23:00 на пассе 06:01) приходится на время до открытия торгов: рыночный SELL биржа
+	// отклонит, а снятый перед ним стоп оставил бы позицию без защиты до утра. Выход
+	// запоминается в PendingExit, стоп ведётся как обычно, продажа уходит на первом свежем
+	// пассе после открытия.
+	if sig.Kind == model.SignalSell && hasBarInterval(sl) && pc.now.Sub(last) > barAgeLimit(intervalOf(sl)) {
+		entry.PendingExit = sig.Reason
+		if entry.PendingExit == "" {
+			entry.PendingExit = "EXIT"
+		}
+		sig = model.Signal{}
+	}
 	if sig.Kind == model.SignalSell {
 		if prev := pc.state[ticker]; !prev.LastBar.Equal(entry.LastBar) {
 			// Решённый бар — в стейт до продажи: при сбое продажи повтор идёт по PendingExit,
 			// а не повторным решением того же бара.
 			pc.state[ticker] = entry
-			_ = pc.store.Save(pc.state)
+			if err := pc.store.Save(pc.state); err != nil {
+				return fmt.Errorf("%s: save decided bar %s: %w", sl.strat.Name(), ticker, err)
+			}
 		}
 		return s.sell(ctx, pc, sl, ticker, sh, entry, pos, sig)
 	}
