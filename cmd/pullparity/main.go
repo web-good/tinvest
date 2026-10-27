@@ -173,16 +173,16 @@ func barDuration(interval enum.Interval) time.Duration {
 	return 30 * time.Minute
 }
 
-// checkTicker replays the working-interval bars (m30 by default, Hour1 for pdl_rsi) bar by bar from lookback-1 onward, building the MarketData
-// snapshot (and the resulting Decide verdict) twice per bar — once via the engine's own
+// checkTicker replays the working-interval bars (30m by default, Hour1 for pdl_rsi) bar by
+// bar from lookback-1 onward, building the MarketData snapshot (and the resulting Decide verdict) twice per bar — once via the engine's own
 // AssembleMarketData/TodayExtent, once via marketdata.Assemble fed by a cache-backed
 // client that only ever sees candles visible at that bar's close. bars is the number of
-// bars actually replayed (len(m30) - lookback + 1).
+// bars actually replayed (len(hist) - lookback + 1).
 func checkTicker(ctx context.Context, provider *svc.CandleProvider, ticker, instrumentUID string,
 	st adapter.Decider, interval enum.Interval, from, to time.Time) (diffs []string, bars int, err error) {
 
 	lookback := st.Lookback()
-	m30, err := provider.Load(ctx, ticker, instrumentUID, interval, from, to, false)
+	hist, err := provider.Load(ctx, ticker, instrumentUID, interval, from, to, false)
 	if err != nil {
 		return nil, 0, fmt.Errorf("load bars: %w", err)
 	}
@@ -190,21 +190,21 @@ func checkTicker(ctx context.Context, provider *svc.CandleProvider, ticker, inst
 	if err != nil {
 		return nil, 0, fmt.Errorf("load daily: %w", err)
 	}
-	if len(m30) < lookback {
-		return nil, 0, fmt.Errorf("only %d cached bar candles, need at least lookback %d", len(m30), lookback)
+	if len(hist) < lookback {
+		return nil, 0, fmt.Errorf("only %d cached candles of the working interval, need at least lookback %d", len(hist), lookback)
 	}
 
-	for i := lookback - 1; i < len(m30); i++ {
-		cur := m30[i].Time
+	for i := lookback - 1; i < len(hist); i++ {
+		cur := hist[i].Time
 		bars++
 
-		want := backtest.AssembleMarketData(m30[i-lookback+1:i+1], day, nil, cur)
-		want.TodayHigh, want.TodayLow = backtest.TodayExtent(m30, i)
+		want := backtest.AssembleMarketData(hist[i-lookback+1:i+1], day, nil, cur)
+		want.TodayHigh, want.TodayLow = backtest.TodayExtent(hist, i)
 
 		// asOf is the instant bar i has just closed: the moment a live runner would wake
 		// up and act on it.
 		asOf := cur.Add(barDuration(interval))
-		fake := newCacheClient(interval, m30, day, asOf)
+		fake := newCacheClient(interval, hist, day, asOf)
 		got, aerr := marketdata.Assemble(ctx, fake, instrumentUID, interval, lookback, asOf)
 		if aerr != nil {
 			// The engine built a snapshot on this bar; the live path refusing to is itself
@@ -225,18 +225,18 @@ func checkTicker(ctx context.Context, provider *svc.CandleProvider, ticker, inst
 // cacheClient implements candles.CandleClient over in-memory slices already loaded by the
 // candle provider. It returns exactly what a live GetCandles call would have returned had
 // it been made at asOf: bars whose Time falls in the requested [from, to] AND strictly
-// before asOf, marked complete. Feeding it the SAME m30/day slices the reference assembly
+// before asOf, marked complete. Feeding it the SAME hist/day slices the reference assembly
 // reads means any divergence traces to the assembly logic, not to different underlying data.
 type cacheClient struct {
 	interval enum.Interval
-	m30, day []backtest.Candle
+	hist, day []backtest.Candle
 	asOf     time.Time
 }
 
 var _ candles.CandleClient = (*cacheClient)(nil)
 
-func newCacheClient(interval enum.Interval, m30, day []backtest.Candle, asOf time.Time) *cacheClient {
-	return &cacheClient{interval: interval, m30: m30, day: day, asOf: asOf}
+func newCacheClient(interval enum.Interval, hist, day []backtest.Candle, asOf time.Time) *cacheClient {
+	return &cacheClient{interval: interval, hist: hist, day: day, asOf: asOf}
 }
 
 func (c *cacheClient) GetCandles(_ context.Context, _ *string, interval int32,
@@ -245,7 +245,7 @@ func (c *cacheClient) GetCandles(_ context.Context, _ *string, interval int32,
 	var src []backtest.Candle
 	switch interval {
 	case c.interval.ToNumberInvestAPI():
-		src = c.m30
+		src = c.hist
 	case enum.Day1.ToNumberInvestAPI():
 		src = c.day
 	default:
