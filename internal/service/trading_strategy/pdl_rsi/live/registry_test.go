@@ -1,7 +1,11 @@
 package live
 
 import (
+	"os"
+	"path/filepath"
+	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/gazp"
@@ -33,7 +37,7 @@ func TestRegistryMatchesBacktestRegistry(t *testing.T) {
 	}
 	for tk, lit := range want {
 		p, ok := ParamsFor(tk)
-		if !ok || any(p) != lit() {
+		if !ok || !reflect.DeepEqual(any(p), lit()) {
 			t.Errorf("%s: ParamsFor = %+v/%v, want литерал пакета %+v", tk, p, ok, lit())
 		}
 	}
@@ -51,12 +55,43 @@ func TestRegisteredLiteralsHaveExchangeStop(t *testing.T) {
 	}
 }
 
-func TestStrategyForIsHourly(t *testing.T) {
+// Ядро не раскрывает шаг баров, поэтому проверяется только реестровость.
+func TestStrategyForOnlyRegistered(t *testing.T) {
 	st, ok := StrategyFor("SVCB")
 	if !ok || st == nil {
 		t.Fatalf("StrategyFor(SVCB) = %v/%v", st, ok)
 	}
 	if _, ok := StrategyFor("НЕТ"); ok {
 		t.Fatal("StrategyFor(НЕТ) ok")
+	}
+}
+
+// Каждый тикер из PDL_RSI_TICKERS в примерах env (local и prod) зарегистрирован: незарегистрированный
+// тикер гость молча не торговал бы. Пустое значение допустимо.
+func TestPDLRSILiveTickersAreRegistered(t *testing.T) {
+	for _, name := range []string{"local.env.example", "prod.env.example"} {
+		raw, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "..", "env", name))
+		if err != nil {
+			t.Fatalf("read env/%s: %v", name, err)
+		}
+		found := false
+		for _, line := range strings.Split(string(raw), "\n") {
+			key, v, ok := strings.Cut(strings.TrimSpace(line), "=")
+			if !ok || key != "PDL_RSI_TICKERS" {
+				continue
+			}
+			found = true
+			for _, tk := range strings.Split(v, ",") {
+				if tk = strings.TrimSpace(tk); tk == "" {
+					continue
+				}
+				if _, ok := ParamsFor(tk); !ok {
+					t.Errorf("%s есть в PDL_RSI_TICKERS env/%s, но не зарегистрирован в реестре pdl_rsi/live", tk, name)
+				}
+			}
+		}
+		if !found {
+			t.Errorf("PDL_RSI_TICKERS не найден в env/%s", name)
+		}
 	}
 }

@@ -141,7 +141,7 @@ func TestReconstructRebuildsEntryWithoutTarget(t *testing.T) {
 		t.Errorf("Strategy = %q, want пусто (проставляет раннер)", e.Strategy)
 	}
 	if e.Ticker != "SVCB" || !e.EntryTime.Equal(buy) {
-		t.Errorf("Ticker/EntryTime = %s/%v, want AFKS/%v", e.Ticker, e.EntryTime, buy)
+		t.Errorf("Ticker/EntryTime = %s/%v, want SVCB/%v", e.Ticker, e.EntryTime, buy)
 	}
 	if e.TakeProfit != 0 {
 		t.Errorf("TakeProfit = %v, want 0", e.TakeProfit)
@@ -166,7 +166,7 @@ func TestReconstructFailsWithoutBuy(t *testing.T) {
 	}
 	_, err := s.Reconstruct(context.Background(), in)
 	if err == nil || !strings.Contains(err.Error(), "SVCB") {
-		t.Fatalf("err = %v, want ошибка с тикером AFKS", err)
+		t.Fatalf("err = %v, want ошибка с тикером SVCB", err)
 	}
 }
 
