@@ -15,6 +15,7 @@ import (
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/flot"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/gazp"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/lent"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/lsngp"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mdmg"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mgnt"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/moex"
@@ -38,37 +39,38 @@ import (
 // он не экспортирован — сверка по явному списку) и отдаёт литерал пакета тикера как есть.
 func TestRegistryMatchesBacktestRegistry(t *testing.T) {
 	want := map[string]func() any{
-		"AFLT": func() any { return aflt.Params() },
-		"BLNG": func() any { return blng.Params() },
-		"BSPB": func() any { return bspb.Params() },
-		"DATA": func() any { return data.Params() },
-		"FLOT": func() any { return flot.Params() },
-		"GAZP": func() any { return gazp.Params() },
-		"LENT": func() any { return lent.Params() },
-		"MDMG": func() any { return mdmg.Params() },
-		"MGNT": func() any { return mgnt.Params() },
-		"MOEX": func() any { return moex.Params() },
-		"MRKC": func() any { return mrkc.Params() },
-		"MRKV": func() any { return mrkv.Params() },
-		"MSNG": func() any { return msng.Params() },
-		"MSRS": func() any { return msrs.Params() },
-		"MTSS": func() any { return mtss.Params() },
-		"NVTK": func() any { return nvtk.Params() },
-		"PHOR": func() any { return phor.Params() },
-		"RENI": func() any { return reni.Params() },
-		"ROSN": func() any { return rosn.Params() },
-		"SPBE": func() any { return spbe.Params() },
-		"SVCB": func() any { return svcb.Params() },
-		"TGKA": func() any { return tgka.Params() },
-		"VTBR": func() any { return vtbr.Params() },
-		"X5":   func() any { return x5.Params() },
+		"AFLT":  func() any { return aflt.Params() },
+		"BLNG":  func() any { return blng.Params() },
+		"BSPB":  func() any { return bspb.Params() },
+		"DATA":  func() any { return data.Params() },
+		"FLOT":  func() any { return flot.Params() },
+		"GAZP":  func() any { return gazp.Params() },
+		"LENT":  func() any { return lent.Params() },
+		"LSNGP": func() any { return lsngp.Params() },
+		"MDMG":  func() any { return mdmg.Params() },
+		"MGNT":  func() any { return mgnt.Params() },
+		"MOEX":  func() any { return moex.Params() },
+		"MRKC":  func() any { return mrkc.Params() },
+		"MRKV":  func() any { return mrkv.Params() },
+		"MSNG":  func() any { return msng.Params() },
+		"MSRS":  func() any { return msrs.Params() },
+		"MTSS":  func() any { return mtss.Params() },
+		"NVTK":  func() any { return nvtk.Params() },
+		"PHOR":  func() any { return phor.Params() },
+		"RENI":  func() any { return reni.Params() },
+		"ROSN":  func() any { return rosn.Params() },
+		"SPBE":  func() any { return spbe.Params() },
+		"SVCB":  func() any { return svcb.Params() },
+		"TGKA":  func() any { return tgka.Params() },
+		"VTBR":  func() any { return vtbr.Params() },
+		"X5":    func() any { return x5.Params() },
 	}
 	var got []string
 	for tk := range paramsByTicker {
 		got = append(got, tk)
 	}
 	slices.Sort(got)
-	if !slices.Equal(got, []string{"AFLT", "BLNG", "BSPB", "DATA", "FLOT", "GAZP", "LENT", "MDMG", "MGNT", "MOEX", "MRKC", "MRKV", "MSNG", "MSRS", "MTSS", "NVTK", "PHOR", "RENI", "ROSN", "SPBE", "SVCB", "TGKA", "VTBR", "X5"}) {
+	if !slices.Equal(got, []string{"AFLT", "BLNG", "BSPB", "DATA", "FLOT", "GAZP", "LENT", "LSNGP", "MDMG", "MGNT", "MOEX", "MRKC", "MRKV", "MSNG", "MSRS", "MTSS", "NVTK", "PHOR", "RENI", "ROSN", "SPBE", "SVCB", "TGKA", "VTBR", "X5"}) {
 		t.Fatalf("тикеры реестра = %v", got)
 	}
 	for tk, lit := range want {

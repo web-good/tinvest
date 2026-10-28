@@ -1,0 +1,67 @@
+{
+  "_comment": "pdl_rsi LSNGP Hour1, шаг 2 «trend» пошаговой калибровки, без стохастика (StochK 0) (36 мес, -risk-pct 1): оси TrendEMA [100, 150, 170, 200], остальные поля прибиты к точке шагов ['signal']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker LSNGP -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/lsngp/cal_nostoch/02_trend.json -min-trades 1 -combos 0 -out reports/LSNGP_pdl_rsi/nostoch_trend.  РЕЗУЛЬТАТ: TrendEMA 150, PF 1.146, net +2444, сделок 30 (15 за 12 мес), плато; выключенное значение запрещено — выбран лучший центр.",
+  "phases": [
+    {
+      "name": "trend",
+      "grid": {
+        "HourRSIPeriod": [
+          8
+        ],
+        "RSIArm": [
+          30
+        ],
+        "RSIFloor": [
+          0
+        ],
+        "RSIExit": [
+          70
+        ],
+        "RSITrailFrom": [
+          0
+        ],
+        "RSITrailTo": [
+          70
+        ],
+        "RSITrailStep": [
+          10
+        ],
+        "StochK": [
+          0
+        ],
+        "StochSmooth": [
+          1
+        ],
+        "StochD": [
+          3
+        ],
+        "VolumeMult": [
+          0
+        ],
+        "VolBars": [
+          20
+        ],
+        "MinRoomATR": [
+          0
+        ],
+        "StopATR": [
+          0.5
+        ],
+        "MaxStopPct": [
+          0
+        ],
+        "TargetR": [
+          2
+        ],
+        "TrendEMA": [
+          100,
+          150,
+          170,
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ]
+      }
+    }
+  ]
+}

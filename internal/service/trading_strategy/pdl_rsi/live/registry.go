@@ -13,6 +13,7 @@ import (
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/flot"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/gazp"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/lent"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/lsngp"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mdmg"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mgnt"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/moex"
@@ -35,30 +36,31 @@ import (
 // paramsByTicker — тикеры, которые раннер знает (литералы пакетов тикеров, как в реестре
 // бэктеста). Торгуют только перечисленные в PDL_RSI_TICKERS.
 var paramsByTicker = map[string]func() core.Params{
-	"AFLT": aflt.Params,
-	"BLNG": blng.Params,
-	"BSPB": bspb.Params,
-	"DATA": data.Params,
-	"FLOT": flot.Params,
-	"GAZP": gazp.Params,
-	"LENT": lent.Params,
-	"MDMG": mdmg.Params,
-	"MGNT": mgnt.Params,
-	"MOEX": moex.Params,
-	"MRKC": mrkc.Params,
-	"MRKV": mrkv.Params,
-	"MSNG": msng.Params,
-	"MSRS": msrs.Params,
-	"MTSS": mtss.Params,
-	"NVTK": nvtk.Params,
-	"PHOR": phor.Params,
-	"RENI": reni.Params,
-	"ROSN": rosn.Params,
-	"SPBE": spbe.Params,
-	"SVCB": svcb.Params,
-	"TGKA": tgka.Params,
-	"VTBR": vtbr.Params,
-	"X5":   x5.Params,
+	"AFLT":  aflt.Params,
+	"BLNG":  blng.Params,
+	"BSPB":  bspb.Params,
+	"DATA":  data.Params,
+	"FLOT":  flot.Params,
+	"GAZP":  gazp.Params,
+	"LENT":  lent.Params,
+	"LSNGP": lsngp.Params,
+	"MDMG":  mdmg.Params,
+	"MGNT":  mgnt.Params,
+	"MOEX":  moex.Params,
+	"MRKC":  mrkc.Params,
+	"MRKV":  mrkv.Params,
+	"MSNG":  msng.Params,
+	"MSRS":  msrs.Params,
+	"MTSS":  mtss.Params,
+	"NVTK":  nvtk.Params,
+	"PHOR":  phor.Params,
+	"RENI":  reni.Params,
+	"ROSN":  rosn.Params,
+	"SPBE":  spbe.Params,
+	"SVCB":  svcb.Params,
+	"TGKA":  tgka.Params,
+	"VTBR":  vtbr.Params,
+	"X5":    x5.Params,
 }
 
 // ParamsFor возвращает параметры тикера; false — тикер не зарегистрирован.
