@@ -22,6 +22,7 @@ import (
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mtss"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/nvtk"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/phor"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/reni"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/rosn"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/spbe"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/svcb"
@@ -68,6 +69,7 @@ var pdlRSIRegistry = map[string]func() core.Params{
 	"MTSS": mtss.Params,
 	"NVTK": nvtk.Params,
 	"PHOR": phor.Params,
+	"RENI": reni.Params,
 	"ROSN": rosn.Params,
 	"SPBE": spbe.Params,
 	"SVCB": svcb.Params,
