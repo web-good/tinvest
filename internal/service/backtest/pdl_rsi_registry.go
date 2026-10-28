@@ -7,15 +7,23 @@ import (
 	"tinvest/internal/enum"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/aflt"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/core"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/data"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/gazp"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/hnfg"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/lent"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mdmg"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mgnt"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/moex"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mrkc"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mrkv"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/msrs"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mtss"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/nvtk"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/phor"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/rosn"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/spbe"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/svcb"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/tgka"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/vtbr"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/x5"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
@@ -43,15 +51,23 @@ func pdlRSIBindingFor(ticker string, interval enum.Interval, defaults func() cor
 // pdlRSIRegistry maps tickers with their own package to their Hour1 literal.
 var pdlRSIRegistry = map[string]func() core.Params{
 	"AFLT": aflt.Params,
+	"DATA": data.Params,
 	"GAZP": gazp.Params,
 	"HNFG": hnfg.Params,
 	"LENT": lent.Params,
 	"MDMG": mdmg.Params,
 	"MGNT": mgnt.Params,
 	"MOEX": moex.Params,
+	"MRKC": mrkc.Params,
 	"MRKV": mrkv.Params,
+	"MSRS": msrs.Params,
+	"MTSS": mtss.Params,
 	"NVTK": nvtk.Params,
+	"PHOR": phor.Params,
+	"ROSN": rosn.Params,
+	"SPBE": spbe.Params,
 	"SVCB": svcb.Params,
+	"TGKA": tgka.Params,
 	"VTBR": vtbr.Params,
 	"X5":   x5.Params,
 }

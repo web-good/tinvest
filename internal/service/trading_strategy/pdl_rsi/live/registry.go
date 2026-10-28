@@ -7,14 +7,22 @@ import (
 
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/aflt"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/core"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/data"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/gazp"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/lent"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mdmg"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mgnt"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/moex"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mrkc"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mrkv"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/msrs"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mtss"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/nvtk"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/phor"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/rosn"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/spbe"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/svcb"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/tgka"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/vtbr"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/x5"
 )
@@ -23,14 +31,22 @@ import (
 // бэктеста). Торгуют только перечисленные в PDL_RSI_TICKERS.
 var paramsByTicker = map[string]func() core.Params{
 	"AFLT": aflt.Params,
+	"DATA": data.Params,
 	"GAZP": gazp.Params,
 	"LENT": lent.Params,
 	"MDMG": mdmg.Params,
 	"MGNT": mgnt.Params,
 	"MOEX": moex.Params,
+	"MRKC": mrkc.Params,
 	"MRKV": mrkv.Params,
+	"MSRS": msrs.Params,
+	"MTSS": mtss.Params,
 	"NVTK": nvtk.Params,
+	"PHOR": phor.Params,
+	"ROSN": rosn.Params,
+	"SPBE": spbe.Params,
 	"SVCB": svcb.Params,
+	"TGKA": tgka.Params,
 	"VTBR": vtbr.Params,
 	"X5":   x5.Params,
 }

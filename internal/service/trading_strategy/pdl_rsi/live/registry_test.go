@@ -9,14 +9,22 @@ import (
 	"testing"
 
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/aflt"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/data"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/gazp"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/lent"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mdmg"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mgnt"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/moex"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mrkc"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mrkv"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/msrs"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mtss"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/nvtk"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/phor"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/rosn"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/spbe"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/svcb"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/tgka"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/vtbr"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/x5"
 )
@@ -26,14 +34,22 @@ import (
 func TestRegistryMatchesBacktestRegistry(t *testing.T) {
 	want := map[string]func() any{
 		"AFLT": func() any { return aflt.Params() },
+		"DATA": func() any { return data.Params() },
 		"GAZP": func() any { return gazp.Params() },
 		"LENT": func() any { return lent.Params() },
 		"MDMG": func() any { return mdmg.Params() },
 		"MGNT": func() any { return mgnt.Params() },
 		"MOEX": func() any { return moex.Params() },
+		"MRKC": func() any { return mrkc.Params() },
 		"MRKV": func() any { return mrkv.Params() },
+		"MSRS": func() any { return msrs.Params() },
+		"MTSS": func() any { return mtss.Params() },
 		"NVTK": func() any { return nvtk.Params() },
+		"PHOR": func() any { return phor.Params() },
+		"ROSN": func() any { return rosn.Params() },
+		"SPBE": func() any { return spbe.Params() },
 		"SVCB": func() any { return svcb.Params() },
+		"TGKA": func() any { return tgka.Params() },
 		"VTBR": func() any { return vtbr.Params() },
 		"X5":   func() any { return x5.Params() },
 	}
@@ -42,7 +58,7 @@ func TestRegistryMatchesBacktestRegistry(t *testing.T) {
 		got = append(got, tk)
 	}
 	slices.Sort(got)
-	if !slices.Equal(got, []string{"AFLT", "GAZP", "LENT", "MDMG", "MGNT", "MOEX", "MRKV", "NVTK", "SVCB", "VTBR", "X5"}) {
+	if !slices.Equal(got, []string{"AFLT", "DATA", "GAZP", "LENT", "MDMG", "MGNT", "MOEX", "MRKC", "MRKV", "MSRS", "MTSS", "NVTK", "PHOR", "ROSN", "SPBE", "SVCB", "TGKA", "VTBR", "X5"}) {
 		t.Fatalf("тикеры реестра = %v", got)
 	}
 	for tk, lit := range want {

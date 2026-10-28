@@ -1,0 +1,66 @@
+{
+  "_comment": "pdl_rsi SPBE Hour1, шаг 5 «room» пошаговой калибровки, без стохастика (StochK 0) (36 мес, -risk-pct 1): оси MinRoomATR [0, 0.3, 0.6], остальные поля прибиты к точке шагов ['signal', 'trend', 'floor', 'volume']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker SPBE -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/spbe/cal_nostoch/05_room.json -min-trades 1 -combos 0 -out reports/SPBE_pdl_rsi/nostoch_room.  РЕЗУЛЬТАТ: MinRoomATR 0.6, PF 1.171, net +3972, сделок 47 (18 за 12 мес), плато; точка сдвинута.",
+  "phases": [
+    {
+      "name": "room",
+      "grid": {
+        "HourRSIPeriod": [
+          6
+        ],
+        "RSIArm": [
+          30
+        ],
+        "RSIFloor": [
+          0
+        ],
+        "RSIExit": [
+          70
+        ],
+        "RSITrailFrom": [
+          0
+        ],
+        "RSITrailTo": [
+          70
+        ],
+        "RSITrailStep": [
+          10
+        ],
+        "StochK": [
+          0
+        ],
+        "StochSmooth": [
+          1
+        ],
+        "StochD": [
+          3
+        ],
+        "VolumeMult": [
+          1.2
+        ],
+        "VolBars": [
+          20
+        ],
+        "MinRoomATR": [
+          0,
+          0.3,
+          0.6
+        ],
+        "StopATR": [
+          0.5
+        ],
+        "MaxStopPct": [
+          0
+        ],
+        "TargetR": [
+          2
+        ],
+        "TrendEMA": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ]
+      }
+    }
+  ]
+}
