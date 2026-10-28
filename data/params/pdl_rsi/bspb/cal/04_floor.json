@@ -1,0 +1,67 @@
+{
+  "_comment": "pdl_rsi BSPB Hour1, шаг 4 «floor» пошаговой калибровки, стохастик: %K ниже 20 (36 мес, -risk-pct 1): оси RSIFloor [0, 15, 20, 22], остальные поля прибиты к точке шагов ['signal', 'trigger', 'trend']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker BSPB -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/bspb/cal/04_floor.json -min-trades 1 -combos 0 -out reports/BSPB_pdl_rsi/floor.  РЕЗУЛЬТАТ: RSIFloor 0, PF 0.662, net -10770, сделок 62 (25 за 12 мес), острый пик; лучший центр RSIFloor 0 (0.666) не выше текущей точки на 5% — точка остаётся.",
+  "phases": [
+    {
+      "name": "floor",
+      "grid": {
+        "HourRSIPeriod": [
+          6
+        ],
+        "RSIArm": [
+          30
+        ],
+        "RSIFloor": [
+          0,
+          15,
+          20,
+          22
+        ],
+        "RSIExit": [
+          70
+        ],
+        "RSITrailFrom": [
+          0
+        ],
+        "RSITrailTo": [
+          70
+        ],
+        "RSITrailStep": [
+          10
+        ],
+        "StochK": [
+          10
+        ],
+        "StochSmooth": [
+          3
+        ],
+        "StochD": [
+          3
+        ],
+        "VolumeMult": [
+          0
+        ],
+        "VolBars": [
+          20
+        ],
+        "MinRoomATR": [
+          0
+        ],
+        "StopATR": [
+          0.5
+        ],
+        "MaxStopPct": [
+          0
+        ],
+        "TargetR": [
+          2
+        ],
+        "TrendEMA": [
+          150
+        ],
+        "DailyATRPeriod": [
+          14
+        ]
+      }
+    }
+  ]
+}
