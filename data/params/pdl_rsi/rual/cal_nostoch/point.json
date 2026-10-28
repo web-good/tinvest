@@ -1,0 +1,89 @@
+{
+  "_comment": "pdl_rsi RUAL: текущая точка пошаговой калибровки (steps.py --no-stoch). Шаги: signal — HourRSIPeriod 6, RSIArm 30, PF 0.658, net -51702, сделок 350 (115 за 12 мес), острый пик; лучший центр HourRSIPeriod 4, RSIArm 30 (0.681) не выше текущей точки на 5% — точка остаётся; trend — TrendEMA 100, PF 0.900, net -4123, сделок 78 (30 за 12 мес), острый пик; выключенное значение запрещено — выбран лучший центр; floor — RSIFloor 22, PF 1.012, net +545, сделок 72 (29 за 12 мес), острый пик; точка сдвинута; volume — VolumeMult 1.2, PF 1.381, net +4252, сделок 23 (11 за 12 мес), острый пик; точка сдвинута; room — MinRoomATR 0, PF 1.381, net +4252, сделок 23 (11 за 12 мес), плато; лучший центр MinRoomATR 0 (1.381) не выше текущей точки на 5% — точка остаётся; risk — StopATR 0.5, TargetR 2, MaxStopPct 0, PF 1.381, net +4252, сделок 23 (11 за 12 мес), острый пик; лучший центр StopATR 0.7, TargetR 2, MaxStopPct 0 (1.367) не выше текущей точки на 5% — точка остаётся; exits — RSIExit 75, RSITrailFrom 40, RSITrailStep 20, RSITrailTo 70, PF 1.865, net +7948, сделок 23 (11 за 12 мес), плато; точка сдвинута; signal2 — HourRSIPeriod 5, RSIArm 30, PF 1.340, net +5000, сделок 35 (14 за 12 мес), острый пик; точка сдвинута; risk2 — StopATR 0.7, TargetR 3, MaxStopPct 0, PF 1.569, net +5537, сделок 35 (14 за 12 мес), плато; точка сдвинута.",
+  "variant": "nostoch",
+  "_steps": [
+    {
+      "step": "signal",
+      "result": "HourRSIPeriod 6, RSIArm 30, PF 0.658, net -51702, сделок 350 (115 за 12 мес), острый пик; лучший центр HourRSIPeriod 4, RSIArm 30 (0.681) не выше текущей точки на 5% — точка остаётся"
+    },
+    {
+      "step": "trend",
+      "result": "TrendEMA 100, PF 0.900, net -4123, сделок 78 (30 за 12 мес), острый пик; выключенное значение запрещено — выбран лучший центр"
+    },
+    {
+      "step": "floor",
+      "result": "RSIFloor 22, PF 1.012, net +545, сделок 72 (29 за 12 мес), острый пик; точка сдвинута"
+    },
+    {
+      "step": "volume",
+      "result": "VolumeMult 1.2, PF 1.381, net +4252, сделок 23 (11 за 12 мес), острый пик; точка сдвинута"
+    },
+    {
+      "step": "room",
+      "result": "MinRoomATR 0, PF 1.381, net +4252, сделок 23 (11 за 12 мес), плато; лучший центр MinRoomATR 0 (1.381) не выше текущей точки на 5% — точка остаётся"
+    },
+    {
+      "step": "risk",
+      "result": "StopATR 0.5, TargetR 2, MaxStopPct 0, PF 1.381, net +4252, сделок 23 (11 за 12 мес), острый пик; лучший центр StopATR 0.7, TargetR 2, MaxStopPct 0 (1.367) не выше текущей точки на 5% — точка остаётся"
+    },
+    {
+      "step": "exits",
+      "result": "RSIExit 75, RSITrailFrom 40, RSITrailStep 20, RSITrailTo 70, PF 1.865, net +7948, сделок 23 (11 за 12 мес), плато; точка сдвинута"
+    },
+    {
+      "step": "signal2",
+      "result": "HourRSIPeriod 5, RSIArm 30, PF 1.340, net +5000, сделок 35 (14 за 12 мес), острый пик; точка сдвинута"
+    },
+    {
+      "step": "risk2",
+      "result": "StopATR 0.7, TargetR 3, MaxStopPct 0, PF 1.569, net +5537, сделок 35 (14 за 12 мес), плато; точка сдвинута"
+    }
+  ],
+  "params": {
+    "HourRSIPeriod": 5,
+    "RSIArm": 30,
+    "RSIFloor": 22,
+    "RSIExit": 75,
+    "RSITrailFrom": 40,
+    "RSITrailTo": 70,
+    "RSITrailStep": 20,
+    "StochK": 0,
+    "StochSmooth": 1,
+    "StochD": 3,
+    "VolumeMult": 1.2,
+    "VolBars": 20,
+    "MinRoomATR": 0,
+    "StopATR": 0.7,
+    "MaxStopPct": 0,
+    "TargetR": 3,
+    "TrendEMA": 100,
+    "DailyATRPeriod": 14
+  },
+  "best": {
+    "step": "exits",
+    "pf": 1.865,
+    "net": 7948.42,
+    "trades": 23,
+    "recent_trades": 11,
+    "params": {
+      "HourRSIPeriod": 6,
+      "RSIArm": 30,
+      "RSIFloor": 22,
+      "RSIExit": 75,
+      "RSITrailFrom": 40,
+      "RSITrailTo": 70,
+      "RSITrailStep": 20,
+      "StochK": 0,
+      "StochSmooth": 1,
+      "StochD": 3,
+      "VolumeMult": 1.2,
+      "VolBars": 20,
+      "MinRoomATR": 0,
+      "StopATR": 0.5,
+      "MaxStopPct": 0,
+      "TargetR": 2,
+      "TrendEMA": 100,
+      "DailyATRPeriod": 14
+    }
+  }
+}

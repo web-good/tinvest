@@ -28,6 +28,7 @@ import (
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/phor"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/reni"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/rosn"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/sber"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/spbe"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/svcb"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/tgka"
@@ -59,6 +60,7 @@ func TestRegistryMatchesBacktestRegistry(t *testing.T) {
 		"PHOR":  func() any { return phor.Params() },
 		"RENI":  func() any { return reni.Params() },
 		"ROSN":  func() any { return rosn.Params() },
+		"SBER":  func() any { return sber.Params() },
 		"SPBE":  func() any { return spbe.Params() },
 		"SVCB":  func() any { return svcb.Params() },
 		"TGKA":  func() any { return tgka.Params() },
@@ -70,7 +72,7 @@ func TestRegistryMatchesBacktestRegistry(t *testing.T) {
 		got = append(got, tk)
 	}
 	slices.Sort(got)
-	if !slices.Equal(got, []string{"AFLT", "BLNG", "BSPB", "DATA", "FLOT", "GAZP", "LENT", "LSNGP", "MDMG", "MGNT", "MOEX", "MRKC", "MRKV", "MSNG", "MSRS", "MTSS", "NVTK", "PHOR", "RENI", "ROSN", "SPBE", "SVCB", "TGKA", "VTBR", "X5"}) {
+	if !slices.Equal(got, []string{"AFLT", "BLNG", "BSPB", "DATA", "FLOT", "GAZP", "LENT", "LSNGP", "MDMG", "MGNT", "MOEX", "MRKC", "MRKV", "MSNG", "MSRS", "MTSS", "NVTK", "PHOR", "RENI", "ROSN", "SBER", "SPBE", "SVCB", "TGKA", "VTBR", "X5"}) {
 		t.Fatalf("тикеры реестра = %v", got)
 	}
 	for tk, lit := range want {
@@ -79,8 +81,8 @@ func TestRegistryMatchesBacktestRegistry(t *testing.T) {
 			t.Errorf("%s: ParamsFor = %+v/%v, want литерал пакета %+v", tk, p, ok, lit())
 		}
 	}
-	if _, ok := ParamsFor("SBER"); ok {
-		t.Error("SBER не должен быть в реестре")
+	if _, ok := ParamsFor("NOPE"); ok {
+		t.Error("неизвестный тикер NOPE не должен быть в реестре")
 	}
 }
 

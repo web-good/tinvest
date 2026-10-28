@@ -26,6 +26,7 @@ import (
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/phor"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/reni"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/rosn"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/sber"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/spbe"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/svcb"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/tgka"
@@ -56,6 +57,7 @@ var paramsByTicker = map[string]func() core.Params{
 	"PHOR":  phor.Params,
 	"RENI":  reni.Params,
 	"ROSN":  rosn.Params,
+	"SBER":  sber.Params,
 	"SPBE":  spbe.Params,
 	"SVCB":  svcb.Params,
 	"TGKA":  tgka.Params,

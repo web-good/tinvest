@@ -1,0 +1,72 @@
+{
+  "_comment": "pdl_rsi GMKN Hour1, стохастик: %K ниже 20, скользящий walk-forward (подбор 3 мес, проверка 1 мес, шаг 1 мес, 36 мес, -risk-pct 1, -min-trades 3) вокруг лучшей комбинации калибровки (литерал), каждый фолд выбирает свои значения (имитация периодической перекалибровки): оси HourRSIPeriod [5, 6, 8], RSIArm [25, 30, 35], StochK [13, 14], StopATR [0.7, 1.0], TargetR [1.5, 2, 3], остальное прибито к точке. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker GMKN -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/gmkn/cal/wf_rolling.json -min-trades 3 -combos 0 -train-months 3 -test-months 1 -out reports/GMKN_pdl_rsi/wf. РЕЗУЛЬТАТ: прогон не делался.",
+  "phases": [
+    {
+      "name": "wf",
+      "grid": {
+        "HourRSIPeriod": [
+          5,
+          6,
+          8
+        ],
+        "RSIArm": [
+          25,
+          30,
+          35
+        ],
+        "RSIFloor": [
+          22
+        ],
+        "RSIExit": [
+          65
+        ],
+        "RSITrailFrom": [
+          50
+        ],
+        "RSITrailTo": [
+          70
+        ],
+        "RSITrailStep": [
+          15
+        ],
+        "StochK": [
+          13,
+          14
+        ],
+        "StochSmooth": [
+          3
+        ],
+        "StochD": [
+          3
+        ],
+        "VolumeMult": [
+          0.5
+        ],
+        "VolBars": [
+          20
+        ],
+        "MinRoomATR": [
+          0
+        ],
+        "StopATR": [
+          0.7,
+          1.0
+        ],
+        "MaxStopPct": [
+          0
+        ],
+        "TargetR": [
+          1.5,
+          2,
+          3
+        ],
+        "TrendEMA": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ]
+      }
+    }
+  ]
+}

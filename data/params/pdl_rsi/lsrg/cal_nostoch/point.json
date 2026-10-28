@@ -1,0 +1,89 @@
+{
+  "_comment": "pdl_rsi LSRG: текущая точка пошаговой калибровки (steps.py --no-stoch). Шаги: signal — HourRSIPeriod 8, RSIArm 35, PF 0.804, net -29710, сделок 275 (97 за 12 мес), острый пик; точка сдвинута; trend — TrendEMA 100, PF 0.903, net -3859, сделок 58 (16 за 12 мес), острый пик; выключенное значение запрещено — выбран лучший центр; floor — RSIFloor 20, PF 0.965, net -1295, сделок 57 (15 за 12 мес), острый пик; точка сдвинута; volume — VolumeMult 0, PF 0.965, net -1295, сделок 57 (15 за 12 мес), острый пик; лучший центр VolumeMult 0 (0.980) не выше текущей точки на 5% — точка остаётся; room — MinRoomATR 0.6, PF 1.079, net +2525, сделок 55 (15 за 12 мес), острый пик; точка сдвинута; risk — StopATR 0.7, TargetR 2, MaxStopPct 0, PF 1.030, net +713, сделок 52 (14 за 12 мес), острый пик; точка сдвинута; exits — RSIExit 75, RSITrailFrom 0, RSITrailStep 10, RSITrailTo 70, PF 1.084, net +2323, сделок 52 (14 за 12 мес), острый пик; точка сдвинута; signal2 — HourRSIPeriod 6, RSIArm 35, PF 0.736, net -11775, сделок 90 (26 за 12 мес), острый пик; точка сдвинута; risk2 — StopATR 1, TargetR 2, MaxStopPct 1.5, PF 0.805, net -10733, сделок 96 (27 за 12 мес), острый пик; точка сдвинута.",
+  "variant": "nostoch",
+  "_steps": [
+    {
+      "step": "signal",
+      "result": "HourRSIPeriod 8, RSIArm 35, PF 0.804, net -29710, сделок 275 (97 за 12 мес), острый пик; точка сдвинута"
+    },
+    {
+      "step": "trend",
+      "result": "TrendEMA 100, PF 0.903, net -3859, сделок 58 (16 за 12 мес), острый пик; выключенное значение запрещено — выбран лучший центр"
+    },
+    {
+      "step": "floor",
+      "result": "RSIFloor 20, PF 0.965, net -1295, сделок 57 (15 за 12 мес), острый пик; точка сдвинута"
+    },
+    {
+      "step": "volume",
+      "result": "VolumeMult 0, PF 0.965, net -1295, сделок 57 (15 за 12 мес), острый пик; лучший центр VolumeMult 0 (0.980) не выше текущей точки на 5% — точка остаётся"
+    },
+    {
+      "step": "room",
+      "result": "MinRoomATR 0.6, PF 1.079, net +2525, сделок 55 (15 за 12 мес), острый пик; точка сдвинута"
+    },
+    {
+      "step": "risk",
+      "result": "StopATR 0.7, TargetR 2, MaxStopPct 0, PF 1.030, net +713, сделок 52 (14 за 12 мес), острый пик; точка сдвинута"
+    },
+    {
+      "step": "exits",
+      "result": "RSIExit 75, RSITrailFrom 0, RSITrailStep 10, RSITrailTo 70, PF 1.084, net +2323, сделок 52 (14 за 12 мес), острый пик; точка сдвинута"
+    },
+    {
+      "step": "signal2",
+      "result": "HourRSIPeriod 6, RSIArm 35, PF 0.736, net -11775, сделок 90 (26 за 12 мес), острый пик; точка сдвинута"
+    },
+    {
+      "step": "risk2",
+      "result": "StopATR 1, TargetR 2, MaxStopPct 1.5, PF 0.805, net -10733, сделок 96 (27 за 12 мес), острый пик; точка сдвинута"
+    }
+  ],
+  "params": {
+    "HourRSIPeriod": 6,
+    "RSIArm": 35,
+    "RSIFloor": 20,
+    "RSIExit": 75,
+    "RSITrailFrom": 0,
+    "RSITrailTo": 70,
+    "RSITrailStep": 10,
+    "StochK": 0,
+    "StochSmooth": 1,
+    "StochD": 3,
+    "VolumeMult": 0,
+    "VolBars": 20,
+    "MinRoomATR": 0.6,
+    "StopATR": 1,
+    "MaxStopPct": 1.5,
+    "TargetR": 2,
+    "TrendEMA": 100,
+    "DailyATRPeriod": 14
+  },
+  "best": {
+    "step": "risk",
+    "pf": 1.28,
+    "net": 6344.14,
+    "trades": 54,
+    "recent_trades": 15,
+    "params": {
+      "HourRSIPeriod": 8,
+      "RSIArm": 35,
+      "RSIFloor": 20,
+      "RSIExit": 70,
+      "RSITrailFrom": 0,
+      "RSITrailTo": 70,
+      "RSITrailStep": 10,
+      "StochK": 0,
+      "StochSmooth": 1,
+      "StochD": 3,
+      "VolumeMult": 0,
+      "VolBars": 20,
+      "MinRoomATR": 0.6,
+      "StopATR": 0.7,
+      "MaxStopPct": 0,
+      "TargetR": 1.5,
+      "TrendEMA": 100,
+      "DailyATRPeriod": 14
+    }
+  }
+}

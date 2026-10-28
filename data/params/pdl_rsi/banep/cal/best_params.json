@@ -1,0 +1,20 @@
+{
+ "HourRSIPeriod": 6,
+ "RSIArm": 30,
+ "RSIFloor": 0,
+ "RSIExit": 70,
+ "RSITrailFrom": 40,
+ "RSITrailTo": 70,
+ "RSITrailStep": 15,
+ "StochK": 14,
+ "StochSmooth": 2,
+ "StochD": 3,
+ "VolumeMult": 0.8,
+ "VolBars": 20,
+ "MinRoomATR": 0,
+ "StopATR": 0.3,
+ "MaxStopPct": 1,
+ "TargetR": 2,
+ "TrendEMA": 200,
+ "DailyATRPeriod": 14
+}

@@ -1,0 +1,72 @@
+{
+  "_comment": "pdl_rsi NKHP Hour1, шаг 2 «trigger» пошаговой калибровки, стохастик: %K ниже 20 (36 мес, -risk-pct 1): оси StochK [8, 9, 10, 11, 12, 13, 14], StochSmooth [1, 2, 3], остальные поля прибиты к точке шагов ['signal']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker NKHP -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/nkhp/cal/02_trigger.json -min-trades 1 -combos 0 -out reports/NKHP_pdl_rsi/trigger.  РЕЗУЛЬТАТ: StochK 9, StochSmooth 1, PF 0.697, net -36555, сделок 286 (107 за 12 мес), острый пик; точка сдвинута.",
+  "phases": [
+    {
+      "name": "trigger",
+      "grid": {
+        "HourRSIPeriod": [
+          6
+        ],
+        "RSIArm": [
+          30
+        ],
+        "RSIFloor": [
+          0
+        ],
+        "RSIExit": [
+          70
+        ],
+        "RSITrailFrom": [
+          0
+        ],
+        "RSITrailTo": [
+          70
+        ],
+        "RSITrailStep": [
+          10
+        ],
+        "StochK": [
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14
+        ],
+        "StochSmooth": [
+          1,
+          2,
+          3
+        ],
+        "StochD": [
+          3
+        ],
+        "VolumeMult": [
+          0
+        ],
+        "VolBars": [
+          20
+        ],
+        "MinRoomATR": [
+          0
+        ],
+        "StopATR": [
+          0.5
+        ],
+        "MaxStopPct": [
+          0
+        ],
+        "TargetR": [
+          2
+        ],
+        "TrendEMA": [
+          0
+        ],
+        "DailyATRPeriod": [
+          14
+        ]
+      }
+    }
+  ]
+}

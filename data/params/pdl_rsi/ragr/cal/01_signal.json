@@ -1,0 +1,69 @@
+{
+  "_comment": "pdl_rsi RAGR Hour1, шаг 1 «signal» пошаговой калибровки, стохастик: %K ниже 20 (36 мес, -risk-pct 1): оси HourRSIPeriod [4, 5, 6, 8], RSIArm [25, 30, 35], остальные поля прибиты к точке шагов старта. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker RAGR -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/ragr/cal/01_signal.json -min-trades 1 -combos 0 -out reports/RAGR_pdl_rsi/signal.  РЕЗУЛЬТАТ: HourRSIPeriod 6, RSIArm 30, PF 0.631, net -50725, сделок 325 (118 за 12 мес), острый пик; лучший центр HourRSIPeriod 6, RSIArm 30 (0.733) не выше текущей точки на 5% — точка остаётся.",
+  "phases": [
+    {
+      "name": "signal",
+      "grid": {
+        "HourRSIPeriod": [
+          4,
+          5,
+          6,
+          8
+        ],
+        "RSIArm": [
+          25,
+          30,
+          35
+        ],
+        "RSIFloor": [
+          0
+        ],
+        "RSIExit": [
+          70
+        ],
+        "RSITrailFrom": [
+          0
+        ],
+        "RSITrailTo": [
+          70
+        ],
+        "RSITrailStep": [
+          10
+        ],
+        "StochK": [
+          14
+        ],
+        "StochSmooth": [
+          1
+        ],
+        "StochD": [
+          3
+        ],
+        "VolumeMult": [
+          0
+        ],
+        "VolBars": [
+          20
+        ],
+        "MinRoomATR": [
+          0
+        ],
+        "StopATR": [
+          0.5
+        ],
+        "MaxStopPct": [
+          0
+        ],
+        "TargetR": [
+          2
+        ],
+        "TrendEMA": [
+          0
+        ],
+        "DailyATRPeriod": [
+          14
+        ]
+      }
+    }
+  ]
+}

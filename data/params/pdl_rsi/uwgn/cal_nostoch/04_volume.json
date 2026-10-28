@@ -1,0 +1,67 @@
+{
+  "_comment": "pdl_rsi UWGN Hour1, шаг 4 «volume» пошаговой калибровки, без стохастика (StochK 0) (36 мес, -risk-pct 1): оси VolumeMult [0, 0.5, 0.8, 1.2], остальные поля прибиты к точке шагов ['signal', 'trend', 'floor']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker UWGN -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/uwgn/cal_nostoch/04_volume.json -min-trades 1 -combos 0 -out reports/UWGN_pdl_rsi/nostoch_volume.  РЕЗУЛЬТАТ: VolumeMult 0.5, PF 1.047, net +468, сделок 30 (11 за 12 мес), острый пик; точка сдвинута.",
+  "phases": [
+    {
+      "name": "volume",
+      "grid": {
+        "HourRSIPeriod": [
+          4
+        ],
+        "RSIArm": [
+          25
+        ],
+        "RSIFloor": [
+          22
+        ],
+        "RSIExit": [
+          70
+        ],
+        "RSITrailFrom": [
+          0
+        ],
+        "RSITrailTo": [
+          70
+        ],
+        "RSITrailStep": [
+          10
+        ],
+        "StochK": [
+          0
+        ],
+        "StochSmooth": [
+          1
+        ],
+        "StochD": [
+          3
+        ],
+        "VolumeMult": [
+          0,
+          0.5,
+          0.8,
+          1.2
+        ],
+        "VolBars": [
+          20
+        ],
+        "MinRoomATR": [
+          0
+        ],
+        "StopATR": [
+          0.5
+        ],
+        "MaxStopPct": [
+          0
+        ],
+        "TargetR": [
+          2
+        ],
+        "TrendEMA": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ]
+      }
+    }
+  ]
+}

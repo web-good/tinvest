@@ -1,0 +1,71 @@
+{
+  "_comment": "pdl_rsi IRKT Hour1, шаг 11 «risk2» пошаговой калибровки, стохастик: %K ниже 20 (36 мес, -risk-pct 1): оси StopATR [0.3, 0.5, 0.7, 1.0], TargetR [1.5, 2, 3], MaxStopPct [0, 1, 1.5], остальные поля прибиты к точке шагов ['signal', 'trigger', 'trend', 'floor', 'volume', 'room', 'risk', 'exits', 'signal2', 'trigger2']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker IRKT -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/irkt/cal/11_risk2.json -min-trades 1 -combos 0 -out reports/IRKT_pdl_rsi/risk2.  РЕЗУЛЬТАТ: StopATR 0.5, TargetR 3, MaxStopPct 1.5, PF 1.124, net +3330, сделок 46 (18 за 12 мес), острый пик; лучший центр StopATR 0.7, TargetR 3, MaxStopPct 1.5 (1.084) не выше текущей точки на 5% — точка остаётся.",
+  "phases": [
+    {
+      "name": "risk2",
+      "grid": {
+        "HourRSIPeriod": [
+          6
+        ],
+        "RSIArm": [
+          30
+        ],
+        "RSIFloor": [
+          0
+        ],
+        "RSIExit": [
+          70
+        ],
+        "RSITrailFrom": [
+          0
+        ],
+        "RSITrailTo": [
+          70
+        ],
+        "RSITrailStep": [
+          10
+        ],
+        "StochK": [
+          13
+        ],
+        "StochSmooth": [
+          2
+        ],
+        "StochD": [
+          3
+        ],
+        "VolumeMult": [
+          0
+        ],
+        "VolBars": [
+          20
+        ],
+        "MinRoomATR": [
+          0
+        ],
+        "StopATR": [
+          0.3,
+          0.5,
+          0.7,
+          1.0
+        ],
+        "MaxStopPct": [
+          0,
+          1,
+          1.5
+        ],
+        "TargetR": [
+          1.5,
+          2,
+          3
+        ],
+        "TrendEMA": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ]
+      }
+    }
+  ]
+}

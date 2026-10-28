@@ -1,0 +1,72 @@
+{
+  "_comment": "pdl_rsi HYDR Hour1, шаг 8 «exits» пошаговой калибровки, стохастик: %K ниже 20 (36 мес, -risk-pct 1): оси RSIExit [65, 70, 75], RSITrailFrom [0, 40, 50, 60], RSITrailStep [10, 15, 20], RSITrailTo [70, 80], остальные поля прибиты к точке шагов ['signal', 'trigger', 'trend', 'floor', 'volume', 'room', 'risk']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker HYDR -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/hydr/cal/08_exits.json -min-trades 1 -combos 0 -out reports/HYDR_pdl_rsi/exits.  РЕЗУЛЬТАТ: RSIExit 75, RSITrailFrom 40, RSITrailStep 15, RSITrailTo 70, PF 1.199, net +4536, сделок 60 (27 за 12 мес), острый пик; точка сдвинута.",
+  "phases": [
+    {
+      "name": "exits",
+      "grid": {
+        "HourRSIPeriod": [
+          6
+        ],
+        "RSIArm": [
+          30
+        ],
+        "RSIFloor": [
+          22
+        ],
+        "RSIExit": [
+          65,
+          70,
+          75
+        ],
+        "RSITrailFrom": [
+          0,
+          40,
+          50,
+          60
+        ],
+        "RSITrailTo": [
+          70,
+          80
+        ],
+        "RSITrailStep": [
+          10,
+          15,
+          20
+        ],
+        "StochK": [
+          14
+        ],
+        "StochSmooth": [
+          1
+        ],
+        "StochD": [
+          3
+        ],
+        "VolumeMult": [
+          0
+        ],
+        "VolBars": [
+          20
+        ],
+        "MinRoomATR": [
+          0
+        ],
+        "StopATR": [
+          0.5
+        ],
+        "MaxStopPct": [
+          0
+        ],
+        "TargetR": [
+          2
+        ],
+        "TrendEMA": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,67 @@
+{
+  "_comment": "pdl_rsi UGLD Hour1, шаг 4 «floor» пошаговой калибровки, стохастик: %K ниже 20 (36 мес, -risk-pct 1): оси RSIFloor [0, 15, 20, 22], остальные поля прибиты к точке шагов ['signal', 'trigger', 'trend']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker UGLD -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/ugld/cal/04_floor.json -min-trades 1 -combos 0 -out reports/UGLD_pdl_rsi/floor.  РЕЗУЛЬТАТ: RSIFloor 0, PF 0.993, net -117, сделок 29 (5 за 12 мес), острый пик; ни у одной комбинации нет 20 сделок и 11 за последние 12 мес — точка не двигается.",
+  "phases": [
+    {
+      "name": "floor",
+      "grid": {
+        "HourRSIPeriod": [
+          8
+        ],
+        "RSIArm": [
+          25
+        ],
+        "RSIFloor": [
+          0,
+          15,
+          20,
+          22
+        ],
+        "RSIExit": [
+          70
+        ],
+        "RSITrailFrom": [
+          0
+        ],
+        "RSITrailTo": [
+          70
+        ],
+        "RSITrailStep": [
+          10
+        ],
+        "StochK": [
+          14
+        ],
+        "StochSmooth": [
+          1
+        ],
+        "StochD": [
+          3
+        ],
+        "VolumeMult": [
+          0
+        ],
+        "VolBars": [
+          20
+        ],
+        "MinRoomATR": [
+          0
+        ],
+        "StopATR": [
+          0.5
+        ],
+        "MaxStopPct": [
+          0
+        ],
+        "TargetR": [
+          2
+        ],
+        "TrendEMA": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ]
+      }
+    }
+  ]
+}

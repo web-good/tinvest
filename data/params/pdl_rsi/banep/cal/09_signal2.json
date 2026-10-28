@@ -1,0 +1,69 @@
+{
+  "_comment": "pdl_rsi BANEP Hour1, шаг 9 «signal2» пошаговой калибровки, стохастик: %K ниже 20 (36 мес, -risk-pct 1): оси HourRSIPeriod [4, 5, 6, 8], RSIArm [25, 30, 35], остальные поля прибиты к точке шагов ['signal', 'trigger', 'trend', 'floor', 'volume', 'room', 'risk', 'exits']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker BANEP -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/banep/cal/09_signal2.json -min-trades 1 -combos 0 -out reports/BANEP_pdl_rsi/signal2.  РЕЗУЛЬТАТ: HourRSIPeriod 6, RSIArm 30, PF 1.567, net +7160, сделок 28 (12 за 12 мес), плато; лучший центр HourRSIPeriod 8, RSIArm 35 (1.304) не выше текущей точки на 5% — точка остаётся.",
+  "phases": [
+    {
+      "name": "signal2",
+      "grid": {
+        "HourRSIPeriod": [
+          4,
+          5,
+          6,
+          8
+        ],
+        "RSIArm": [
+          25,
+          30,
+          35
+        ],
+        "RSIFloor": [
+          0
+        ],
+        "RSIExit": [
+          70
+        ],
+        "RSITrailFrom": [
+          40
+        ],
+        "RSITrailTo": [
+          70
+        ],
+        "RSITrailStep": [
+          15
+        ],
+        "StochK": [
+          8
+        ],
+        "StochSmooth": [
+          3
+        ],
+        "StochD": [
+          3
+        ],
+        "VolumeMult": [
+          0.8
+        ],
+        "VolBars": [
+          20
+        ],
+        "MinRoomATR": [
+          0
+        ],
+        "StopATR": [
+          0.3
+        ],
+        "MaxStopPct": [
+          1
+        ],
+        "TargetR": [
+          2
+        ],
+        "TrendEMA": [
+          200
+        ],
+        "DailyATRPeriod": [
+          14
+        ]
+      }
+    }
+  ]
+}

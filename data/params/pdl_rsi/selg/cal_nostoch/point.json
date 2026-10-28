@@ -1,0 +1,89 @@
+{
+  "_comment": "pdl_rsi SELG: текущая точка пошаговой калибровки (steps.py --no-stoch). Шаги: signal — HourRSIPeriod 8, RSIArm 35, PF 0.794, net -32783, сделок 313 (101 за 12 мес), острый пик; точка сдвинута; trend — TrendEMA 170, PF 0.835, net -8239, сделок 82 (28 за 12 мес), острый пик; выключенное значение запрещено — выбран лучший центр; floor — RSIFloor 0, PF 0.835, net -8239, сделок 82 (28 за 12 мес), острый пик; лучший центр RSIFloor 0 (0.835) не выше текущей точки на 5% — точка остаётся; volume — VolumeMult 0.8, PF 1.007, net +171, сделок 41 (12 за 12 мес), плато; точка сдвинута; room — MinRoomATR 0, PF 1.007, net +171, сделок 41 (12 за 12 мес), плато; лучший центр MinRoomATR 0 (1.007) не выше текущей точки на 5% — точка остаётся; risk — StopATR 0.7, TargetR 3, MaxStopPct 1, PF 1.321, net +10774, сделок 45 (14 за 12 мес), острый пик; точка сдвинута; exits — RSIExit 70, RSITrailFrom 0, RSITrailStep 10, RSITrailTo 70, PF 1.321, net +10774, сделок 45 (14 за 12 мес), плато; лучший центр RSIExit 75, RSITrailFrom 0, RSITrailStep 10, RSITrailTo 70 (1.357) не выше текущей точки на 5% — точка остаётся; signal2 — HourRSIPeriod 8, RSIArm 35, PF 1.321, net +10774, сделок 45 (14 за 12 мес), острый пик; лучший центр HourRSIPeriod 8, RSIArm 35 (1.321) не выше текущей точки на 5% — точка остаётся; risk2 — StopATR 0.7, TargetR 3, MaxStopPct 1, PF 1.321, net +10774, сделок 45 (14 за 12 мес), острый пик; лучший центр StopATR 0.7, TargetR 3, MaxStopPct 1 (1.247) не выше текущей точки на 5% — точка остаётся.",
+  "variant": "nostoch",
+  "_steps": [
+    {
+      "step": "signal",
+      "result": "HourRSIPeriod 8, RSIArm 35, PF 0.794, net -32783, сделок 313 (101 за 12 мес), острый пик; точка сдвинута"
+    },
+    {
+      "step": "trend",
+      "result": "TrendEMA 170, PF 0.835, net -8239, сделок 82 (28 за 12 мес), острый пик; выключенное значение запрещено — выбран лучший центр"
+    },
+    {
+      "step": "floor",
+      "result": "RSIFloor 0, PF 0.835, net -8239, сделок 82 (28 за 12 мес), острый пик; лучший центр RSIFloor 0 (0.835) не выше текущей точки на 5% — точка остаётся"
+    },
+    {
+      "step": "volume",
+      "result": "VolumeMult 0.8, PF 1.007, net +171, сделок 41 (12 за 12 мес), плато; точка сдвинута"
+    },
+    {
+      "step": "room",
+      "result": "MinRoomATR 0, PF 1.007, net +171, сделок 41 (12 за 12 мес), плато; лучший центр MinRoomATR 0 (1.007) не выше текущей точки на 5% — точка остаётся"
+    },
+    {
+      "step": "risk",
+      "result": "StopATR 0.7, TargetR 3, MaxStopPct 1, PF 1.321, net +10774, сделок 45 (14 за 12 мес), острый пик; точка сдвинута"
+    },
+    {
+      "step": "exits",
+      "result": "RSIExit 70, RSITrailFrom 0, RSITrailStep 10, RSITrailTo 70, PF 1.321, net +10774, сделок 45 (14 за 12 мес), плато; лучший центр RSIExit 75, RSITrailFrom 0, RSITrailStep 10, RSITrailTo 70 (1.357) не выше текущей точки на 5% — точка остаётся"
+    },
+    {
+      "step": "signal2",
+      "result": "HourRSIPeriod 8, RSIArm 35, PF 1.321, net +10774, сделок 45 (14 за 12 мес), острый пик; лучший центр HourRSIPeriod 8, RSIArm 35 (1.321) не выше текущей точки на 5% — точка остаётся"
+    },
+    {
+      "step": "risk2",
+      "result": "StopATR 0.7, TargetR 3, MaxStopPct 1, PF 1.321, net +10774, сделок 45 (14 за 12 мес), острый пик; лучший центр StopATR 0.7, TargetR 3, MaxStopPct 1 (1.247) не выше текущей точки на 5% — точка остаётся"
+    }
+  ],
+  "params": {
+    "HourRSIPeriod": 8,
+    "RSIArm": 35,
+    "RSIFloor": 0,
+    "RSIExit": 70,
+    "RSITrailFrom": 0,
+    "RSITrailTo": 70,
+    "RSITrailStep": 10,
+    "StochK": 0,
+    "StochSmooth": 1,
+    "StochD": 3,
+    "VolumeMult": 0.8,
+    "VolBars": 20,
+    "MinRoomATR": 0,
+    "StopATR": 0.7,
+    "MaxStopPct": 1,
+    "TargetR": 3,
+    "TrendEMA": 170,
+    "DailyATRPeriod": 14
+  },
+  "best": {
+    "step": "exits",
+    "pf": 1.357,
+    "net": 12113.37,
+    "trades": 44,
+    "recent_trades": 14,
+    "params": {
+      "HourRSIPeriod": 8,
+      "RSIArm": 35,
+      "RSIFloor": 0,
+      "RSIExit": 75,
+      "RSITrailFrom": 0,
+      "RSITrailTo": 70,
+      "RSITrailStep": 10,
+      "StochK": 0,
+      "StochSmooth": 1,
+      "StochD": 3,
+      "VolumeMult": 0.8,
+      "VolBars": 20,
+      "MinRoomATR": 0,
+      "StopATR": 0.7,
+      "MaxStopPct": 1,
+      "TargetR": 3,
+      "TrendEMA": 170,
+      "DailyATRPeriod": 14
+    }
+  }
+}

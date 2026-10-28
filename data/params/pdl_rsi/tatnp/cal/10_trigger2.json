@@ -1,0 +1,72 @@
+{
+  "_comment": "pdl_rsi TATNP Hour1, шаг 10 «trigger2» пошаговой калибровки, стохастик: %K ниже 20 (36 мес, -risk-pct 1): оси StochK [8, 9, 10, 11, 12, 13, 14], StochSmooth [1, 2, 3], остальные поля прибиты к точке шагов ['signal', 'trigger', 'trend', 'floor', 'volume', 'room', 'risk', 'exits', 'signal2']. Запуск: taskset -c 0 nice -n 19 env GOMAXPROCS=1 reports/pdl_rsi_cal/backtest -ticker TATNP -strategy pdl_rsi -interval Hour1 -risk-pct 1 -metric profit_factor -months 36 -calibrate data/params/pdl_rsi/tatnp/cal/10_trigger2.json -min-trades 1 -combos 0 -out reports/TATNP_pdl_rsi/trigger2.  РЕЗУЛЬТАТ: StochK 14, StochSmooth 1, PF 1.229, net +8010, сделок 76 (28 за 12 мес), плато; лучший центр StochK 12, StochSmooth 1 (1.255) не выше текущей точки на 5% — точка остаётся.",
+  "phases": [
+    {
+      "name": "trigger2",
+      "grid": {
+        "HourRSIPeriod": [
+          6
+        ],
+        "RSIArm": [
+          30
+        ],
+        "RSIFloor": [
+          0
+        ],
+        "RSIExit": [
+          70
+        ],
+        "RSITrailFrom": [
+          0
+        ],
+        "RSITrailTo": [
+          70
+        ],
+        "RSITrailStep": [
+          10
+        ],
+        "StochK": [
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14
+        ],
+        "StochSmooth": [
+          1,
+          2,
+          3
+        ],
+        "StochD": [
+          3
+        ],
+        "VolumeMult": [
+          0
+        ],
+        "VolBars": [
+          20
+        ],
+        "MinRoomATR": [
+          0
+        ],
+        "StopATR": [
+          0.3
+        ],
+        "MaxStopPct": [
+          1
+        ],
+        "TargetR": [
+          1.5
+        ],
+        "TrendEMA": [
+          100
+        ],
+        "DailyATRPeriod": [
+          14
+        ]
+      }
+    }
+  ]
+}
