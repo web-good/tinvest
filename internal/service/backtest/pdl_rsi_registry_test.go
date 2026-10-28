@@ -5,6 +5,7 @@ import (
 
 	"tinvest/internal/enum"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/aflt"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/blng"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/core"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/data"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/flot"
@@ -31,7 +32,7 @@ import (
 )
 
 func TestPDLRSITickersUseTheirPackages(t *testing.T) {
-	for ticker, want := range map[string]func() core.Params{"AFLT": aflt.Params, "DATA": data.Params, "FLOT": flot.Params, "GAZP": gazp.Params, "HNFG": hnfg.Params, "LENT": lent.Params, "MDMG": mdmg.Params, "MGNT": mgnt.Params, "MOEX": moex.Params, "MRKC": mrkc.Params, "MRKV": mrkv.Params, "MSNG": msng.Params, "MSRS": msrs.Params, "MTSS": mtss.Params, "NVTK": nvtk.Params, "PHOR": phor.Params, "RENI": reni.Params, "ROSN": rosn.Params, "SPBE": spbe.Params, "SVCB": svcb.Params, "TGKA": tgka.Params, "VTBR": vtbr.Params, "X5": x5.Params} {
+	for ticker, want := range map[string]func() core.Params{"AFLT": aflt.Params, "BLNG": blng.Params, "DATA": data.Params, "FLOT": flot.Params, "GAZP": gazp.Params, "HNFG": hnfg.Params, "LENT": lent.Params, "MDMG": mdmg.Params, "MGNT": mgnt.Params, "MOEX": moex.Params, "MRKC": mrkc.Params, "MRKV": mrkv.Params, "MSNG": msng.Params, "MSRS": msrs.Params, "MTSS": mtss.Params, "NVTK": nvtk.Params, "PHOR": phor.Params, "RENI": reni.Params, "ROSN": rosn.Params, "SPBE": spbe.Params, "SVCB": svcb.Params, "TGKA": tgka.Params, "VTBR": vtbr.Params, "X5": x5.Params} {
 		b, err := PDLRSILookupOrGeneric(ticker, enum.Hour1)
 		if err != nil {
 			t.Fatalf("%s lookup: %v", ticker, err)

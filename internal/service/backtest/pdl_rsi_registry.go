@@ -6,6 +6,7 @@ import (
 
 	"tinvest/internal/enum"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/aflt"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/blng"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/core"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/data"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/flot"
@@ -54,6 +55,7 @@ func pdlRSIBindingFor(ticker string, interval enum.Interval, defaults func() cor
 // pdlRSIRegistry maps tickers with their own package to their Hour1 literal.
 var pdlRSIRegistry = map[string]func() core.Params{
 	"AFLT": aflt.Params,
+	"BLNG": blng.Params,
 	"DATA": data.Params,
 	"FLOT": flot.Params,
 	"GAZP": gazp.Params,

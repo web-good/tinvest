@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/aflt"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/blng"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/core"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/data"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/flot"
@@ -34,6 +35,7 @@ import (
 // бэктеста). Торгуют только перечисленные в PDL_RSI_TICKERS.
 var paramsByTicker = map[string]func() core.Params{
 	"AFLT": aflt.Params,
+	"BLNG": blng.Params,
 	"DATA": data.Params,
 	"FLOT": flot.Params,
 	"GAZP": gazp.Params,
