@@ -28,6 +28,7 @@ import (
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/nvtk"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/phor"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/reni"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/rnft"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/rosn"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/sber"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/spbe"
@@ -62,6 +63,7 @@ func TestRegistryMatchesBacktestRegistry(t *testing.T) {
 		"NVTK":  func() any { return nvtk.Params() },
 		"PHOR":  func() any { return phor.Params() },
 		"RENI":  func() any { return reni.Params() },
+		"RNFT":  func() any { return rnft.Params() },
 		"ROSN":  func() any { return rosn.Params() },
 		"SBER":  func() any { return sber.Params() },
 		"SPBE":  func() any { return spbe.Params() },
@@ -76,7 +78,7 @@ func TestRegistryMatchesBacktestRegistry(t *testing.T) {
 		got = append(got, tk)
 	}
 	slices.Sort(got)
-	if !slices.Equal(got, []string{"AFLT", "BLNG", "BSPB", "DATA", "DELI", "FLOT", "GAZP", "LENT", "LSNGP", "MDMG", "MGNT", "MOEX", "MRKC", "MRKV", "MSNG", "MSRS", "MTSS", "NVTK", "PHOR", "RENI", "ROSN", "SBER", "SPBE", "SVCB", "TGKA", "VTBR", "X5", "ZAYM"}) {
+	if !slices.Equal(got, []string{"AFLT", "BLNG", "BSPB", "DATA", "DELI", "FLOT", "GAZP", "LENT", "LSNGP", "MDMG", "MGNT", "MOEX", "MRKC", "MRKV", "MSNG", "MSRS", "MTSS", "NVTK", "PHOR", "RENI", "RNFT", "ROSN", "SBER", "SPBE", "SVCB", "TGKA", "VTBR", "X5", "ZAYM"}) {
 		t.Fatalf("тикеры реестра = %v", got)
 	}
 	for tk, lit := range want {
