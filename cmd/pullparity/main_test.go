@@ -162,8 +162,8 @@ func TestResolveDeciderPDLRSI(t *testing.T) {
 	if _, err := resolveDecider("pdl_rsi", "GAZP"); err != nil {
 		t.Fatalf("pdl_rsi GAZP: %v", err)
 	}
-	if _, err := resolveDecider("pdl_rsi", "SBER"); err == nil {
-		t.Fatal("SBER не в реестре pdl_rsi — ждали ошибку")
+	if _, err := resolveDecider("pdl_rsi", "NOPE"); err == nil {
+		t.Fatal("неизвестный тикер NOPE не в реестре pdl_rsi — ждали ошибку")
 	}
 	if got := intervalFor("pdl_rsi"); got != enum.Hour1 {
 		t.Fatalf("intervalFor(pdl_rsi) = %v, want Hour1", got)
