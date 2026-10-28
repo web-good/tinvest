@@ -12,6 +12,7 @@ import (
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/blng"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/bspb"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/data"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/deli"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/flot"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/gazp"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/lent"
@@ -34,6 +35,7 @@ import (
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/tgka"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/vtbr"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/x5"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/zaym"
 )
 
 // Реестр live совпадает с реестром бэктеста (internal/service/backtest/pdl_rsi_registry.go,
@@ -44,6 +46,7 @@ func TestRegistryMatchesBacktestRegistry(t *testing.T) {
 		"BLNG":  func() any { return blng.Params() },
 		"BSPB":  func() any { return bspb.Params() },
 		"DATA":  func() any { return data.Params() },
+		"DELI":  func() any { return deli.Params() },
 		"FLOT":  func() any { return flot.Params() },
 		"GAZP":  func() any { return gazp.Params() },
 		"LENT":  func() any { return lent.Params() },
@@ -66,13 +69,14 @@ func TestRegistryMatchesBacktestRegistry(t *testing.T) {
 		"TGKA":  func() any { return tgka.Params() },
 		"VTBR":  func() any { return vtbr.Params() },
 		"X5":    func() any { return x5.Params() },
+		"ZAYM":  func() any { return zaym.Params() },
 	}
 	var got []string
 	for tk := range paramsByTicker {
 		got = append(got, tk)
 	}
 	slices.Sort(got)
-	if !slices.Equal(got, []string{"AFLT", "BLNG", "BSPB", "DATA", "FLOT", "GAZP", "LENT", "LSNGP", "MDMG", "MGNT", "MOEX", "MRKC", "MRKV", "MSNG", "MSRS", "MTSS", "NVTK", "PHOR", "RENI", "ROSN", "SBER", "SPBE", "SVCB", "TGKA", "VTBR", "X5"}) {
+	if !slices.Equal(got, []string{"AFLT", "BLNG", "BSPB", "DATA", "DELI", "FLOT", "GAZP", "LENT", "LSNGP", "MDMG", "MGNT", "MOEX", "MRKC", "MRKV", "MSNG", "MSRS", "MTSS", "NVTK", "PHOR", "RENI", "ROSN", "SBER", "SPBE", "SVCB", "TGKA", "VTBR", "X5", "ZAYM"}) {
 		t.Fatalf("тикеры реестра = %v", got)
 	}
 	for tk, lit := range want {

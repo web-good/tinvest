@@ -10,6 +10,7 @@ import (
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/bspb"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/core"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/data"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/deli"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/flot"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/gazp"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/lent"
@@ -32,6 +33,7 @@ import (
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/tgka"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/vtbr"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/x5"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/zaym"
 )
 
 // paramsByTicker — тикеры, которые раннер знает (литералы пакетов тикеров, как в реестре
@@ -41,6 +43,7 @@ var paramsByTicker = map[string]func() core.Params{
 	"BLNG":  blng.Params,
 	"BSPB":  bspb.Params,
 	"DATA":  data.Params,
+	"DELI":  deli.Params,
 	"FLOT":  flot.Params,
 	"GAZP":  gazp.Params,
 	"LENT":  lent.Params,
@@ -63,6 +66,7 @@ var paramsByTicker = map[string]func() core.Params{
 	"TGKA":  tgka.Params,
 	"VTBR":  vtbr.Params,
 	"X5":    x5.Params,
+	"ZAYM":  zaym.Params,
 }
 
 // ParamsFor возвращает параметры тикера; false — тикер не зарегистрирован.
