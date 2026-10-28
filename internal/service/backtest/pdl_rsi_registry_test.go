@@ -7,6 +7,7 @@ import (
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/aflt"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/core"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/data"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/flot"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/gazp"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/hnfg"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/lent"
@@ -15,6 +16,7 @@ import (
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/moex"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mrkc"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mrkv"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/msng"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/msrs"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mtss"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/nvtk"
@@ -28,7 +30,7 @@ import (
 )
 
 func TestPDLRSITickersUseTheirPackages(t *testing.T) {
-	for ticker, want := range map[string]func() core.Params{"AFLT": aflt.Params, "DATA": data.Params, "GAZP": gazp.Params, "HNFG": hnfg.Params, "LENT": lent.Params, "MDMG": mdmg.Params, "MGNT": mgnt.Params, "MOEX": moex.Params, "MRKC": mrkc.Params, "MRKV": mrkv.Params, "MSRS": msrs.Params, "MTSS": mtss.Params, "NVTK": nvtk.Params, "PHOR": phor.Params, "ROSN": rosn.Params, "SPBE": spbe.Params, "SVCB": svcb.Params, "TGKA": tgka.Params, "VTBR": vtbr.Params, "X5": x5.Params} {
+	for ticker, want := range map[string]func() core.Params{"AFLT": aflt.Params, "DATA": data.Params, "FLOT": flot.Params, "GAZP": gazp.Params, "HNFG": hnfg.Params, "LENT": lent.Params, "MDMG": mdmg.Params, "MGNT": mgnt.Params, "MOEX": moex.Params, "MRKC": mrkc.Params, "MRKV": mrkv.Params, "MSNG": msng.Params, "MSRS": msrs.Params, "MTSS": mtss.Params, "NVTK": nvtk.Params, "PHOR": phor.Params, "ROSN": rosn.Params, "SPBE": spbe.Params, "SVCB": svcb.Params, "TGKA": tgka.Params, "VTBR": vtbr.Params, "X5": x5.Params} {
 		b, err := PDLRSILookupOrGeneric(ticker, enum.Hour1)
 		if err != nil {
 			t.Fatalf("%s lookup: %v", ticker, err)

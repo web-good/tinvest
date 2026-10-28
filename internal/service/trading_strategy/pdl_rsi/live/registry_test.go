@@ -10,6 +10,7 @@ import (
 
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/aflt"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/data"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/flot"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/gazp"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/lent"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mdmg"
@@ -17,6 +18,7 @@ import (
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/moex"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mrkc"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mrkv"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/msng"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/msrs"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mtss"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/nvtk"
@@ -35,6 +37,7 @@ func TestRegistryMatchesBacktestRegistry(t *testing.T) {
 	want := map[string]func() any{
 		"AFLT": func() any { return aflt.Params() },
 		"DATA": func() any { return data.Params() },
+		"FLOT": func() any { return flot.Params() },
 		"GAZP": func() any { return gazp.Params() },
 		"LENT": func() any { return lent.Params() },
 		"MDMG": func() any { return mdmg.Params() },
@@ -42,6 +45,7 @@ func TestRegistryMatchesBacktestRegistry(t *testing.T) {
 		"MOEX": func() any { return moex.Params() },
 		"MRKC": func() any { return mrkc.Params() },
 		"MRKV": func() any { return mrkv.Params() },
+		"MSNG": func() any { return msng.Params() },
 		"MSRS": func() any { return msrs.Params() },
 		"MTSS": func() any { return mtss.Params() },
 		"NVTK": func() any { return nvtk.Params() },
@@ -58,7 +62,7 @@ func TestRegistryMatchesBacktestRegistry(t *testing.T) {
 		got = append(got, tk)
 	}
 	slices.Sort(got)
-	if !slices.Equal(got, []string{"AFLT", "DATA", "GAZP", "LENT", "MDMG", "MGNT", "MOEX", "MRKC", "MRKV", "MSRS", "MTSS", "NVTK", "PHOR", "ROSN", "SPBE", "SVCB", "TGKA", "VTBR", "X5"}) {
+	if !slices.Equal(got, []string{"AFLT", "DATA", "FLOT", "GAZP", "LENT", "MDMG", "MGNT", "MOEX", "MRKC", "MRKV", "MSNG", "MSRS", "MTSS", "NVTK", "PHOR", "ROSN", "SPBE", "SVCB", "TGKA", "VTBR", "X5"}) {
 		t.Fatalf("тикеры реестра = %v", got)
 	}
 	for tk, lit := range want {

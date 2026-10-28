@@ -8,6 +8,7 @@ import (
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/aflt"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/core"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/data"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/flot"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/gazp"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/hnfg"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/lent"
@@ -16,6 +17,7 @@ import (
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/moex"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mrkc"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mrkv"
+	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/msng"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/msrs"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/mtss"
 	"tinvest/internal/service/trading_strategy/pdl_rsi/strategy/nvtk"
@@ -52,6 +54,7 @@ func pdlRSIBindingFor(ticker string, interval enum.Interval, defaults func() cor
 var pdlRSIRegistry = map[string]func() core.Params{
 	"AFLT": aflt.Params,
 	"DATA": data.Params,
+	"FLOT": flot.Params,
 	"GAZP": gazp.Params,
 	"HNFG": hnfg.Params,
 	"LENT": lent.Params,
@@ -60,6 +63,7 @@ var pdlRSIRegistry = map[string]func() core.Params{
 	"MOEX": moex.Params,
 	"MRKC": mrkc.Params,
 	"MRKV": mrkv.Params,
+	"MSNG": msng.Params,
 	"MSRS": msrs.Params,
 	"MTSS": mtss.Params,
 	"NVTK": nvtk.Params,
