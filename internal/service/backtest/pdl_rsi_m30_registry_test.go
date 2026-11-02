@@ -1,6 +1,7 @@
 package backtest
 
 import (
+	"os"
 	"testing"
 
 	"tinvest/internal/enum"
@@ -15,6 +16,41 @@ func TestPDLRSIM30RENIUsesItsPackage(t *testing.T) {
 	}
 	if got := b.DefaultParams().(core.Params); got != reni.Params() {
 		t.Fatalf("defaults = %+v, want RENI literal", got)
+	}
+}
+
+func TestPDLRSIM30RENIAssetsMatchCurrentParams(t *testing.T) {
+	b, err := PDLRSIM30LookupOrGeneric("RENI", enum.Minutes30)
+	if err != nil {
+		t.Fatalf("lookup: %v", err)
+	}
+	baseline, err := os.ReadFile("../../../data/params/pdl_rsi_m30/reni/baseline.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := b.ParseParams(baseline)
+	if err != nil {
+		t.Fatalf("parse baseline: %v", err)
+	}
+	if got := parsed.(core.Params); got != reni.Params() {
+		t.Fatalf("baseline = %+v, want RENI literal %+v", got, reni.Params())
+	}
+
+	for _, file := range []string{"wf_stoch.json", "wf_nostoch.json"} {
+		raw, err := os.ReadFile("../../../data/params/pdl_rsi_m30/reni/" + file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		phases, err := ParsePhases(raw)
+		if err != nil {
+			t.Fatalf("%s ParsePhases: %v", file, err)
+		}
+		if len(phases) != 1 {
+			t.Fatalf("%s phases = %d, want 1", file, len(phases))
+		}
+		if _, err := expandGrid(reni.Params(), phases[0].Grid); err != nil {
+			t.Fatalf("%s: %v", file, err)
+		}
 	}
 }
 

@@ -1,0 +1,17 @@
+{
+  "_comment": "RENI pdl_rsi_m30 no-stochastic pilot. Rolling walk-forward: -months 36 -train-months 3 -test-months 1 -risk-pct 1 -metric profit_factor -min-trades 3. StochK=0 makes the entry signal the M30 RSI cross down through RSIArm.",
+  "phases": [
+    {
+      "name": "wf-nostoch",
+      "grid": {
+        "RSIPeriod": [5, 6, 8],
+        "RSIArm": [25, 30],
+        "StochK": [0],
+        "StopATR": [0.3, 0.5, 0.7],
+        "TargetR": [1.5, 2, 3],
+        "RSIExit": [70],
+        "TrendEMA": [100, 200]
+      }
+    }
+  ]
+}
