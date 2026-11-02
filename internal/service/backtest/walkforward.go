@@ -120,9 +120,25 @@ type WalkForwardFold struct {
 // WalkForwardSummary aggregates all folds: the pooled OOS trade metrics and the
 // compounded fold-over-fold return.
 type WalkForwardSummary struct {
-	Folds               []WalkForwardFold
-	PooledOOS           backtest.Metrics // PooledMetrics over every fold's OOS trades
-	CompoundedReturnPct float64
+	Folds                []WalkForwardFold
+	PooledOOS            backtest.Metrics // PooledMetrics over every fold's OOS trades
+	PooledOOSMaxDDPct    float64
+	PooledOOSAvgBarsHeld float64
+	PooledOOSExitReasons map[string]int
+	CompoundedReturnPct  float64
+}
+
+func pooledOOSBehavior(trades []backtest.Trade, initialCash float64) (maxDDPct, avgBarsHeld float64, exitReasons map[string]int) {
+	exitReasons = make(map[string]int)
+	var barsHeld int
+	for _, trade := range trades {
+		barsHeld += trade.BarsHeld
+		exitReasons[trade.Reason]++
+	}
+	if len(trades) > 0 {
+		avgBarsHeld = float64(barsHeld) / float64(len(trades))
+	}
+	return tradeReplayDrawdownPct(trades, initialCash), avgBarsHeld, exitReasons
 }
 
 // paramStability splits the swept parameters into those that held the same winning value
@@ -274,6 +290,8 @@ func RunWalkForward(b Binding, phases []Phase, candles, dailyCandles, htfCandles
 	}
 
 	summary.PooledOOS = PooledMetrics(pool)
+	summary.PooledOOSMaxDDPct, summary.PooledOOSAvgBarsHeld, summary.PooledOOSExitReasons =
+		pooledOOSBehavior(pool, cfg.InitialCash)
 	summary.CompoundedReturnPct = compoundReturns(foldPcts)
 	return summary, nil
 }
@@ -300,6 +318,19 @@ func RenderWalkForwardMarkdown(ticker, metric string, s WalkForwardSummary, trai
 	fmt.Fprintf(&b, "| Win rate | %.2f%% |\n", m.WinRate*100)
 	fmt.Fprintf(&b, "| Profit factor | %.3f |\n", m.ProfitFactor)
 	fmt.Fprintf(&b, "| Gross profit / loss | %.2f / %.2f |\n", m.GrossProfit, m.GrossLoss)
+	fmt.Fprintf(&b, "| Чистый PnL | %.2f |\n", m.GrossProfit-m.GrossLoss)
+	fmt.Fprintf(&b, "| Макс. просадка | %.2f%% |\n", s.PooledOOSMaxDDPct*100)
+	fmt.Fprintf(&b, "| Среднее удержание | %.2f баров |\n", s.PooledOOSAvgBarsHeld)
+	reasons := make([]string, 0, len(s.PooledOOSExitReasons))
+	for reason := range s.PooledOOSExitReasons {
+		reasons = append(reasons, reason)
+	}
+	sort.Strings(reasons)
+	reasonCounts := make([]string, 0, len(reasons))
+	for _, reason := range reasons {
+		reasonCounts = append(reasonCounts, fmt.Sprintf("%s: %d", reason, s.PooledOOSExitReasons[reason]))
+	}
+	fmt.Fprintf(&b, "| Причины выходов | %s |\n", strings.Join(reasonCounts, "; "))
 	fmt.Fprintf(&b, "| Expectancy | %.2f |\n", m.Expectancy)
 	fmt.Fprintf(&b, "| Sortino | %.3f |\n", m.Sortino)
 	fmt.Fprintf(&b, "| Лучшая / худшая сделка | %.2f / %.2f |\n", m.BestTrade, m.WorstTrade)

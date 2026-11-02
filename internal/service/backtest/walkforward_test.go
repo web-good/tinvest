@@ -223,6 +223,12 @@ func TestRunWalkForward(t *testing.T) {
 	if s.PooledOOS.TotalTrades != oosSum {
 		t.Fatalf("pooled trades = %d, want sum of folds %d", s.PooledOOS.TotalTrades, oosSum)
 	}
+	if s.PooledOOSAvgBarsHeld <= 0 {
+		t.Fatalf("pooled average holding = %.2f, want positive", s.PooledOOSAvgBarsHeld)
+	}
+	if len(s.PooledOOSExitReasons) == 0 {
+		t.Fatal("pooled exit reasons are empty")
+	}
 }
 
 // hungryStrategy's lookback grows with BOTH params, so a grid-aware bound has to accumulate
@@ -321,8 +327,11 @@ func TestRenderWalkForwardMarkdown(t *testing.T) {
 				WinnerRows: []backtest.ParamLine{{Name: "RSIPeriod", Value: "6"}, {Name: "StopATRMult", Value: "1.2"}},
 			},
 		},
-		PooledOOS:           backtest.Metrics{ProfitFactor: 1.05, TotalTrades: 21, WinRate: 0.48},
-		CompoundedReturnPct: 0.0186,
+		PooledOOS:            backtest.Metrics{ProfitFactor: 1.05, TotalTrades: 21, WinRate: 0.48},
+		PooledOOSMaxDDPct:    0.061,
+		PooledOOSAvgBarsHeld: 7.25,
+		PooledOOSExitReasons: map[string]int{"SL": 8, "RSI": 13},
+		CompoundedReturnPct:  0.0186,
 	}
 	md := RenderWalkForwardMarkdown("NVTK", "profit_factor", s, 3, 3)
 
@@ -330,6 +339,9 @@ func TestRenderWalkForwardMarkdown(t *testing.T) {
 		"# Walk-forward NVTK",
 		"## Пул сделок (агрегат OOS)",
 		"Profit factor",
+		"Макс. просадка | 6.10%",
+		"Среднее удержание | 7.25 баров",
+		"Причины выходов | RSI: 13; SL: 8",
 		"Compounded return",
 		"## Результаты по фолдам",
 		"## Стабильность параметров",
