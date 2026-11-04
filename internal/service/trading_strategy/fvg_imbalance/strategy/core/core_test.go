@@ -670,3 +670,27 @@ func TestStopBuffer(t *testing.T) {
 		t.Fatalf("actual-fill target: %+v", sig)
 	}
 }
+
+func TestStopBufferRequiresPositiveStop(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		buffer float64
+		want   model.SignalKind
+		stop   float64
+	}{
+		{"positive stop", 49.5, model.SignalBuy, 1},
+		{"zero stop", 50, model.SignalNone, 0},
+		{"negative stop", 51, model.SignalNone, 0},
+		{"overflowing buffer", math.MaxFloat64, model.SignalNone, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := testParams()
+			p.StopBufferATR = tc.buffer
+			md := snapshot(append(formation(), bar{103, 104, 101, 103})...)
+			sig := NewWithParams("TEST", step, p).Decide(md)
+			if sig.Kind != tc.want || sig.StopLoss != tc.stop {
+				t.Fatalf("signal=%+v, want kind %v and stop %v", sig, tc.want, tc.stop)
+			}
+		})
+	}
+}

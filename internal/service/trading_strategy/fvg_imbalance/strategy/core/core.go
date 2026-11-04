@@ -274,8 +274,12 @@ func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 		if day := fillBy.Weekday(); day == time.Saturday || day == time.Sunday {
 			return sig
 		}
+		stop := z.lower - s.p.StopBufferATR*z.atr
+		if stop <= 0 || math.IsNaN(stop) || math.IsInf(stop, 0) {
+			continue
+		}
 		sig.Kind = model.SignalBuy
-		sig.StopLoss, sig.ATR, sig.Level = z.lower-s.p.StopBufferATR*z.atr, z.atr, z.upper
+		sig.StopLoss, sig.ATR, sig.Level = stop, z.atr, z.upper
 		if s.p.MaxEntryDistanceATR > 0 {
 			sig.MaxEntryPrice = z.upper + s.p.MaxEntryDistanceATR*z.atr
 		}
