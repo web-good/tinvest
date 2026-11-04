@@ -185,6 +185,48 @@ func TestRetest(t *testing.T) {
 	}
 }
 
+func TestWeekendFill(t *testing.T) {
+	tests := []struct {
+		name string
+		day  int
+		want model.SignalKind
+	}{
+		{"Saturday fill", 6, model.SignalNone},
+		{"Sunday fill", 7, model.SignalNone},
+		{"Monday fill", 8, model.SignalBuy},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			md := snapshot(append(formation(), bar{103, 104, 101, 103})...)
+			// The retest closes at midnight; its next M30 open is on the following day.
+			last := time.Date(2026, 11, tt.day, 23, 30, 0, 0, time.FixedZone("MSK", 3*60*60))
+			for i := range md.Times {
+				md.Times[i] = last.Add(time.Duration(i-len(md.Times)+1) * step)
+			}
+			sig := NewWithParams("TEST", step, testParams()).Decide(md)
+			if sig.Kind != tt.want {
+				t.Fatalf("signal=%+v, want kind %v", sig, tt.want)
+			}
+			if tt.want == model.SignalBuy {
+				wantFill := time.Date(2026, 11, 9, 0, 0, 0, 0, last.Location())
+				if !sig.FillBy.Equal(wantFill) {
+					t.Fatalf("FillBy=%v, want %v", sig.FillBy, wantFill)
+				}
+			}
+		})
+	}
+}
+
+func TestPositionWeekendStop(t *testing.T) {
+	md := snapshot(bar{104, 120, 99, 104})
+	md.Times[0] = time.Date(2026, 11, 7, 12, 0, 0, 0, time.UTC)
+	md.Position = &strategy.Position{PurchasePrice: 104, StopLoss: 100}
+	sig := NewWithParams("TEST", step, testParams()).Decide(md)
+	if sig.Kind != model.SignalSell || sig.Reason != "SL" || sig.StopLoss != 100 {
+		t.Fatalf("weekend stop: %+v", sig)
+	}
+}
+
 func TestRetestExpiry(t *testing.T) {
 	for _, age := range []int{8, 9} {
 		t.Run(fmt.Sprint(age), func(t *testing.T) {

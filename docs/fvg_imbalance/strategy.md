@@ -39,6 +39,9 @@ The signal is emitted after the retest candle closes. `EntryAtNextOpen` schedule
 the buy for the following M30 open, and `FillBy` is that exact timestamp
 (`retest candle timestamp + 30 minutes`). If that slot is absent, the engine
 drops the pending buy instead of carrying it across a night, weekend, or data gap.
+A new entry whose exact `FillBy` falls on Saturday or Sunday is discarded by the
+strategy and is not carried into Monday. Stop-loss and take-profit exits for an
+existing position are unaffected.
 
 ## Stop and target
 

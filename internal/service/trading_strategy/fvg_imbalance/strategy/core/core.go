@@ -136,12 +136,16 @@ func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 		if invalid || md.Lows[k] > z.upper || (s.p.RequireCloseAboveZone == 1 && md.Closes[k] <= z.upper) {
 			continue
 		}
+		fillBy := md.Times[k].Add(s.step)
+		if day := fillBy.Weekday(); day == time.Saturday || day == time.Sunday {
+			return sig
+		}
 		sig.Kind = model.SignalBuy
 		sig.StopLoss, sig.ATR, sig.Level = z.lower, z.atr, z.upper
 		if s.p.TakeProfitR > 0 {
 			sig.TakeProfit = md.Closes[k] + s.p.TakeProfitR*(md.Closes[k]-z.lower)
 		}
-		sig.FillBy = md.Times[k].Add(s.step)
+		sig.FillBy = fillBy
 		sig.EntryReason = fmt.Sprintf("M30 bullish FVG [%.4f, %.4f] protected retest, ATR %.4f", z.lower, z.upper, z.atr)
 		return sig
 	}
