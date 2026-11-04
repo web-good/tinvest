@@ -30,6 +30,9 @@ type Signal struct {
 	// time at which it may still fill; a pending Buy whose next candle opens later is dropped.
 	// Zero means no expiry.
 	FillBy time.Time
+	// MaxEntryPrice caps the next-open fill price for a deferred Buy. Zero means
+	// no limit; an open equal to the limit may fill.
+	MaxEntryPrice float64
 }
 
 // IsStopReason reports whether reason is a stop-style exit. The list is

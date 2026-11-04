@@ -10,6 +10,9 @@ import (
 type Position struct {
 	PurchasePrice float64
 	Quantity      int64
+	// BarsHeld is the number of completed bar advances since entry. Zero on
+	// the entry bar and when a live builder does not track bar age.
+	BarsHeld int
 	// StopLoss is the hard stop frozen at entry. Zero means "not set" (e.g. live
 	// trading, which does not yet persist entry state — see the levels
 	// entry-locked-stops spec). The backtest engine always populates it.

@@ -133,3 +133,37 @@ func TestEntryAtNextOpenFillByExpiry(t *testing.T) {
 		})
 	}
 }
+
+func TestEntryAtNextOpenMaxEntryPrice(t *testing.T) {
+	cases := []struct {
+		name          string
+		maxEntryPrice float64
+		wantOpen      bool
+	}{
+		{"zero limit", 0, true},
+		{"open below limit", 106, true},
+		{"open equal to limit", 105, true},
+		{"open above limit", 104, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			candles := openCandles([]float64{10, 100, 105}, []float64{10, 100, 105})
+			s := scriptedStrategy{lookback: 1, decide: func(md strategy.MarketData) model.Signal {
+				if md.Position == nil && md.Price == 100 {
+					return model.Signal{Kind: model.SignalBuy, MaxEntryPrice: tc.maxEntryPrice}
+				}
+				return model.Signal{}
+			}}
+			res := Run(s, candles, nil, nil, nextOpenCfg)
+			if opened := res.BarsInMarket > 0; opened != tc.wantOpen {
+				t.Fatalf("opened = %v (bars in market %d), want %v", opened, res.BarsInMarket, tc.wantOpen)
+			}
+			if len(res.Trades) != 0 {
+				t.Fatalf("trades = %d, want 0", len(res.Trades))
+			}
+			if !tc.wantOpen && res.FinalEquity != nextOpenCfg.InitialCash {
+				t.Fatalf("final equity = %.2f, want %.2f", res.FinalEquity, nextOpenCfg.InitialCash)
+			}
+		})
+	}
+}

@@ -87,6 +87,29 @@ func TestStrategyPositionNilWhenFlat(t *testing.T) {
 	}
 }
 
+func TestPortfolioStrategyPositionReportsBarsHeld(t *testing.T) {
+	p := newPortfolio(Config{InitialCash: 100000, Fraction: 1.0, Commission: 0, Lot: 1})
+	p.bar = 3
+	p.open(100, time.Unix(3, 0), 0, 0, 0, 0, "")
+	for _, tc := range []struct {
+		bar      int
+		wantHeld int
+	}{
+		{3, 0},
+		{4, 1},
+		{8, 5},
+	} {
+		p.bar = tc.bar
+		pos := p.strategyPosition()
+		if pos == nil || pos.BarsHeld != tc.wantHeld {
+			t.Fatalf("bar %d: position = %+v, want bars held %d", tc.bar, pos, tc.wantHeld)
+		}
+		if p.entryBar != 3 || pos.PurchasePrice != 100 || pos.Quantity != 1000 {
+			t.Fatalf("bar %d: entry state changed: entryBar=%d, position=%+v", tc.bar, p.entryBar, pos)
+		}
+	}
+}
+
 func TestPortfolioOpenFreezesStopAndSeedsFavorable(t *testing.T) {
 	p := newPortfolio(Config{InitialCash: 100000, Fraction: 1.0, Commission: 0, Lot: 1})
 	p.open(100, time.Unix(0, 0), 90, 110, 2, 95, "") // level 90, target 110, atr 2, stop 95

@@ -288,9 +288,11 @@ func Run(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Candl
 // fillPending opens a Buy deferred by Config.EntryAtNextOpen at bar c's open, before the bar is
 // managed, and clears it. A pending Buy with a position already open is dropped, and so is one
 // whose non-zero FillBy is before c's open (the slot it was meant for is missing from the data:
-// the next candle is a later session, night or weekend). Returns the new pending state (always nil).
+// the next candle is a later session, night or weekend), or whose open exceeds a non-zero
+// MaxEntryPrice. Returns the new pending state (always nil).
 func fillPending(p *portfolio, pending *model.Signal, c Candle) *model.Signal {
-	if pending == nil || (!pending.FillBy.IsZero() && c.Time.After(pending.FillBy)) {
+	if pending == nil || (!pending.FillBy.IsZero() && c.Time.After(pending.FillBy)) ||
+		(pending.MaxEntryPrice > 0 && c.Open > pending.MaxEntryPrice) {
 		return nil
 	}
 	if p.qty == 0 {

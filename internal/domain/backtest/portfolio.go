@@ -140,6 +140,7 @@ func (p *portfolio) strategyPosition() *strategy.Position {
 	return &strategy.Position{
 		PurchasePrice:         p.entryPrice,
 		Quantity:              p.qty,
+		BarsHeld:              p.bar - p.entryBar,
 		StopLoss:              p.entryStop,
 		TakeProfit:            p.entryTarget,
 		EntryATR:              p.entryATR,
