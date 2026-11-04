@@ -82,7 +82,7 @@ func (s *Strategy) discover(md strategy.MarketData) []zone {
 			continue
 		}
 		lower, upper := md.Highs[a], md.Lows[c]
-		if md.Closes[b] <= md.Opens[b] || lower >= upper || md.Opens[b] < lower || md.Closes[b] > upper {
+		if md.Closes[b] <= md.Opens[b] || lower >= upper || md.Opens[b] > lower || md.Closes[b] < upper {
 			continue
 		}
 		start := c + 1 - s.atrBars()

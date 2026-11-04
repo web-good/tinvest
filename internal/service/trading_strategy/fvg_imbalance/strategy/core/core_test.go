@@ -43,8 +43,10 @@ func TestFVGFormation(t *testing.T) {
 		{"green body", func([]bar) {}, .25, 1},
 		{"red middle", func(b []bar) { b[1].o = 102; b[1].c = 100 }, .25, 0},
 		{"touching outer wicks", func(b []bar) { b[2].l = 100 }, .25, 0},
-		{"body starts below zone", func(b []bar) { b[1].o = 99.5 }, .25, 0},
-		{"body ends above zone", func(b []bar) { b[1].c = 102.5 }, .25, 0},
+		{"body starts below zone", func(b []bar) { b[1].o = 99.5 }, .25, 1},
+		{"body ends above zone", func(b []bar) { b[1].c = 102.5 }, .25, 1},
+		{"body starts above lower boundary", func(b []bar) { b[1].o = 100.5 }, .25, 0},
+		{"body ends below upper boundary", func(b []bar) { b[1].c = 101.5 }, .25, 0},
 		{"gap below formation ATR threshold", func([]bar) {}, 1.01, 0},
 	}
 	for _, tt := range tests {
@@ -59,6 +61,55 @@ func TestFVGFormation(t *testing.T) {
 			}
 			if tt.want > 0 && (zones[0].lower != 100 || zones[0].upper != 102 || zones[0].formed != 2 || zones[0].atr != 2) {
 				t.Fatalf("zone=%+v", zones[0])
+			}
+		})
+	}
+}
+
+func TestFVGFormationRealGAZP20261015(t *testing.T) {
+	tests := []struct {
+		name  string
+		hour  int
+		bars  []bar
+		want  int
+		lower float64
+		upper float64
+	}{
+		{
+			name: "07:00 contained body",
+			hour: 6,
+			bars: []bar{
+				{104.75, 104.75, 104.75, 104.75},
+				{104.76, 105.00, 104.55, 104.88},
+				{104.88, 105.35, 104.88, 105.22},
+			},
+			want: 0,
+		},
+		{
+			name: "15:00 bullish impulse",
+			hour: 14,
+			bars: []bar{
+				{104.33, 104.61, 104.29, 104.56},
+				{104.56, 105.80, 104.53, 105.47},
+				{105.49, 106.42, 105.35, 106.00},
+			},
+			want: 1, lower: 104.61, upper: 105.35,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			md := snapshot(tt.bars...)
+			start := time.Date(2026, 10, 15, tt.hour, 30, 0, 0, time.FixedZone("MSK", 3*60*60))
+			for i := range md.Times {
+				md.Times[i] = start.Add(time.Duration(i) * step)
+			}
+			p := testParams()
+			zones := NewWithParams("GAZP", step, p).discover(md)
+			if len(zones) != tt.want {
+				t.Fatalf("zones=%+v, want %d", zones, tt.want)
+			}
+			if tt.want == 1 && (zones[0].lower != tt.lower || zones[0].upper != tt.upper || zones[0].formed != 2) {
+				t.Fatalf("zone=%+v, want [%v, %v] formed at c", zones[0], tt.lower, tt.upper)
 			}
 		})
 	}

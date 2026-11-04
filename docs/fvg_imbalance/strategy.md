@@ -10,7 +10,8 @@ For three consecutive M30 candles `a`, `b`, `c`, a bullish fair-value gap forms 
 
 - `close_b > open_b`;
 - `high_a < low_c`;
-- the green body of `b` fits inside the gap: `open_b >= high_a` and `close_b <= low_c`.
+- the green body of `b` crosses the gap from below to above:
+  `open_b <= high_a` and `close_b >= low_c`.
 
 The zone is `[lower, upper] = [high_a, low_c]`. Consecutive means exact 30-minute
 timestamps, so a formation cannot cross a missing candle or overnight gap.
