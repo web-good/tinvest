@@ -549,12 +549,19 @@ func TestFirstRetest(t *testing.T) {
 	}{
 		{"first touch", []bar{{103, 104, 101, 101}}, 1, model.SignalBuy},
 		{"second protected touch", []bar{{103, 104, 101, 101}, {103, 104, 101, 101}}, 1, model.SignalNone},
-		{"first touch fails depth", []bar{{103, 104, 101, 101.5}, {103, 104, 101, 101}}, 1, model.SignalNone},
+		{"first touch fails depth", []bar{{103, 104, 101.5, 101.5}, {103, 104, 101, 101}}, 1, model.SignalNone},
 		{"disabled allows second touch", []bar{{103, 104, 101, 101}, {103, 104, 101, 101}}, 0, model.SignalBuy},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p := testParams()
 			p.RequireFirstRetest = tc.enabled
+			if tc.name == "first touch fails depth" {
+				p.MinRetestDepthPct = 50
+				first := snapshot(append(formation(), tc.later[0])...)
+				if sig := NewWithParams("TEST", step, p).Decide(first); sig.Kind != model.SignalNone {
+					t.Fatalf("shallow first-touch signal=%+v, want no entry", sig)
+				}
+			}
 			sig := NewWithParams("TEST", step, p).Decide(snapshot(append(formation(), tc.later...)...))
 			if sig.Kind != tc.want {
 				t.Fatalf("signal=%+v, want %v", sig, tc.want)
