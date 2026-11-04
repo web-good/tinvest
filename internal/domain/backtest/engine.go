@@ -214,6 +214,15 @@ func todayExtentIn(candles []Candle, i int, loc *time.Location) (high, low float
 	return high, low
 }
 
+// htfDecisionTime defaults to the historical bar-start cutoff. Strategies that
+// decide on a completed bar may opt in to a later HTF cutoff.
+func htfDecisionTime(s strategy.Strategy, start time.Time) time.Time {
+	if timed, ok := s.(interface{ HTFDecisionOffset() time.Duration }); ok {
+		return start.Add(timed.HTFDecisionOffset())
+	}
+	return start
+}
+
 // Run replays a strategy over oldest-first candles on a mock portfolio and
 // returns the raw result. It mirrors the live runner: per bar it builds a
 // lookback-sized MarketData, calls Decide, and acts only on Buy (when flat) or
@@ -235,7 +244,7 @@ func Run(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Candl
 		pending = fillPending(p, pending, candles[i])
 		md := buildMarketData(candles[i-l+1 : i+1])
 		md.DailyCloses, md.DailyHighs, md.DailyLows, md.DailyTimes, md.DailyVolumes = daily.visible(candles[i].Time)
-		md.HTFCloses, md.HTFHighs, md.HTFLows = htf.visible(candles[i].Time)
+		md.HTFCloses, md.HTFHighs, md.HTFLows = htf.visible(htfDecisionTime(s, candles[i].Time))
 		md.TodayHigh, md.TodayLow = todayExtentIn(candles, i, mskLoc)
 		if p.qty != 0 {
 			p.mark(candles[i].Close)
@@ -325,7 +334,7 @@ func Trace(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Can
 		pending = fillPending(p, pending, candles[i])
 		md := buildMarketData(candles[i-l+1 : i+1])
 		md.DailyCloses, md.DailyHighs, md.DailyLows, md.DailyTimes, md.DailyVolumes = daily.visible(candles[i].Time)
-		md.HTFCloses, md.HTFHighs, md.HTFLows = htf.visible(candles[i].Time)
+		md.HTFCloses, md.HTFHighs, md.HTFLows = htf.visible(htfDecisionTime(s, candles[i].Time))
 		md.TodayHigh, md.TodayLow = todayExtentIn(candles, i, mskLoc)
 		if p.qty != 0 {
 			p.mark(candles[i].Close)

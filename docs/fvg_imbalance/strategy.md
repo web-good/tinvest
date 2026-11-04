@@ -55,9 +55,10 @@ most one position at a time.
 At the retest decision, `HTFTrendEMA > 0` requires the last completed H4 close
 to be strictly above its EMA. At least that many finite H4 closes and a finite EMA
 are required; missing, insufficient or non-finite H4 data blocks entry. The
-backtest loads H4 with a one-year lead-in and exposes only H4 candles completed
-by the M30 decision, never a still-forming candle. `0` disables the gate, and
-position exits do not depend on H4 data.
+backtest loads H4 with a one-year lead-in when the selected parameters or any
+calibration phase enable the gate. It exposes H4 candles completed at or before
+the M30 decision close; later-closing candles remain hidden. `0` disables the
+gate, and position exits do not depend on H4 data.
 
 The signal is emitted after the retest candle closes. `EntryAtNextOpen` schedules
 the buy for the following M30 open, and `FillBy` is that exact timestamp

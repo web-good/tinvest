@@ -22,6 +22,7 @@ import (
 	domain "tinvest/internal/domain/backtest"
 	"tinvest/internal/enum"
 	svc "tinvest/internal/service/backtest"
+	fvg "tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/core"
 	grpcclient "tinvest/pkg/client/grpc"
 	"tinvest/pkg/logger"
 	"tinvest/pkg/semaphore"
@@ -163,6 +164,15 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 		return err
 	}
 
+	inputGridPath := calibratePath
+	if explain != "" {
+		inputGridPath = "" // -explain uses the single-run params, even when -calibrate is set.
+	}
+	params, phases, err := resolveRunInputs(binding, paramsPath, inputGridPath)
+	if err != nil {
+		return err
+	}
+
 	share, err := resolveShare(ctx, client, ticker)
 	if err != nil {
 		return err
@@ -187,6 +197,7 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 	// Load higher-timeframe history with the same lead-in used for daily EMA warmup.
 	var htfCandles []domain.Candle
 	htfIntervalCode, htfInterval, hasHTF := htfSpec(strategyName)
+	hasHTF = hasHTF && requiresHTF(strategyName, params, phases)
 	if hasHTF {
 		htfCandles, err = provider.Load(ctx, ticker, share.ID, htfIntervalCode, dailyFrom, to, refresh)
 		if err != nil {
@@ -205,7 +216,7 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 		}
 		binding = svc.PDLReclaimWithIndex(binding, index)
 	}
-	if strategyName == "scalping_rsimacd" || strategyName == "fvg_imbalance" {
+	if hasHTF && (strategyName == "scalping_rsimacd" || strategyName == "fvg_imbalance") {
 		label := "H1"
 		if strategyName == "fvg_imbalance" {
 			label = "H4"
@@ -231,10 +242,6 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 		if err != nil {
 			return fmt.Errorf("parse -explain time %q (want 'YYYY-MM-DD HH:MM' MSK): %w", explain, err)
 		}
-		params, err := loadParams(binding, paramsPath)
-		if err != nil {
-			return err
-		}
 		fmt.Println(domain.Trace(binding.Build(params), candles, dailyCandles, htfCandles, cfg, target))
 		return nil
 	}
@@ -246,11 +253,11 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 	base := filepath.Join(outDir, fmt.Sprintf("%s_%s_%s_%s", ticker, strategyName, interval.String(), stamp))
 
 	if calibratePath != "" {
-		return runCalibration(binding, calibratePath, candles, dailyCandles, htfCandles, cfg, metric, minTrades, testMonths, trainMonths, combosN, periodDays, base,
+		return runCalibration(binding, phases, candles, dailyCandles, htfCandles, cfg, metric, minTrades, testMonths, trainMonths, combosN, periodDays, base,
 			metaCommon(ticker, interval, from, to, cfg), from, to)
 	}
 
-	return runSingle(binding, paramsPath, candles, dailyCandles, htfCandles, cfg, periodDays, base,
+	return runSingle(binding, params, candles, dailyCandles, htfCandles, cfg, periodDays, base,
 		metaCommon(ticker, interval, from, to, cfg))
 }
 
@@ -335,10 +342,50 @@ func selectStrategy(ticker, strategyName string, interval enum.Interval) (svc.Bi
 	return binding, strategyName == "gap_fade" || strategyName == "drop_bounce" || strategyName == "pdl_reclaim" || strategyName == "pdl_zone" || strategyName == "hammer" || strategyName == "pdl_rsi" || strategyName == "pdl_rsi_m30" || strategyName == "fvg_imbalance", nil
 }
 
+// resolveRunInputs reads the selected inputs once before deciding which data to load.
+func resolveRunInputs(b svc.Binding, paramsPath, gridPath string) (any, []svc.Phase, error) {
+	if gridPath == "" {
+		params, err := loadParams(b, paramsPath)
+		return params, nil, err
+	}
+	raw, err := os.ReadFile(gridPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("read grid: %w", err)
+	}
+	phases, err := svc.ParsePhases(raw)
+	return b.DefaultParams(), phases, err
+}
+
+// requiresHTF keeps existing routing for other strategies. For staged FVG grids,
+// each phase can override the inherited EMA setting before that phase is run.
+func requiresHTF(strategyName string, params any, phases []svc.Phase) bool {
+	if strategyName != "fvg_imbalance" {
+		return true
+	}
+	enabled := params.(fvg.Params).HTFTrendEMA > 0
+	if phases == nil {
+		return enabled
+	}
+	for _, phase := range phases {
+		if values, ok := phase.Grid["HTFTrendEMA"]; ok {
+			enabled = false
+			for _, value := range values {
+				if int64(value) > 0 {
+					enabled = true
+					break
+				}
+			}
+		}
+		if enabled {
+			return true
+		}
+	}
+	return false
+}
+
 // loadParams resolves the strategy Params for a run: b.DefaultParams() when paramsPath
 // is empty, otherwise the JSON at paramsPath parsed via the binding. Shared by
-// runSingle and the -explain path so -explain diagnoses the SAME configuration a real
-// run would use, instead of silently falling back to defaults.
+// single runs and -explain so they use the same configuration.
 func loadParams(b svc.Binding, paramsPath string) (any, error) {
 	if paramsPath == "" {
 		return b.DefaultParams(), nil
@@ -354,14 +401,9 @@ func loadParams(b svc.Binding, paramsPath string) (any, error) {
 	return params, nil
 }
 
-func runSingle(b svc.Binding, paramsPath string, candles []domain.Candle, dailyCandles, htfCandles []domain.Candle,
+func runSingle(b svc.Binding, params any, candles []domain.Candle, dailyCandles, htfCandles []domain.Candle,
 	cfg domain.Config, periodDays float64, base string, meta domain.Meta,
 ) error {
-	params, err := loadParams(b, paramsPath)
-	if err != nil {
-		return err
-	}
-
 	if len(candles) < b.Build(params).Lookback() {
 		fmt.Printf("⚠️ not enough candles (%d) for lookback; empty report\n", len(candles))
 	}
@@ -385,18 +427,10 @@ func runSingle(b svc.Binding, paramsPath string, candles []domain.Candle, dailyC
 	return nil
 }
 
-func runCalibration(b svc.Binding, gridPath string, candles []domain.Candle, dailyCandles, htfCandles []domain.Candle,
+func runCalibration(b svc.Binding, phases []svc.Phase, candles []domain.Candle, dailyCandles, htfCandles []domain.Candle,
 	cfg domain.Config, metric string, minTrades, testMonths, trainMonths, combosN int, periodDays float64, base string, meta domain.Meta, from, to time.Time,
 ) error {
 	if trainMonths > 0 {
-		raw, err := os.ReadFile(gridPath)
-		if err != nil {
-			return fmt.Errorf("read grid: %w", err)
-		}
-		phases, err := svc.ParsePhases(raw)
-		if err != nil {
-			return err
-		}
 		summary, err := svc.RunWalkForward(b, phases, candles, dailyCandles, htfCandles, cfg, metric, minTrades, from, to, trainMonths, testMonths)
 		if err != nil {
 			return err
@@ -408,15 +442,6 @@ func runCalibration(b svc.Binding, gridPath string, candles []domain.Candle, dai
 		fmt.Printf("walk-forward: %s (folds=%d, pooled PF=%.3f, compounded=%.2f%%)\n",
 			wfPath, len(summary.Folds), summary.PooledOOS.ProfitFactor, summary.CompoundedReturnPct*100)
 		return nil
-	}
-
-	raw, err := os.ReadFile(gridPath)
-	if err != nil {
-		return fmt.Errorf("read grid: %w", err)
-	}
-	phases, err := svc.ParsePhases(raw)
-	if err != nil {
-		return err
 	}
 
 	gridCandles, gridDaily, gridHTF := candles, dailyCandles, htfCandles

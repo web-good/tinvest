@@ -821,3 +821,43 @@ func TestDailyCursorPrefixIsAppendSafe(t *testing.T) {
 		t.Fatalf("volumes = %v, want [10 12] — append испортил общий массив", got)
 	}
 }
+
+type closeDecisionStrategy struct{ scriptedStrategy }
+
+func (s closeDecisionStrategy) HTFDecisionOffset() time.Duration { return 30 * time.Minute }
+
+func TestHTFDecisionOffsetRunAndTrace(t *testing.T) {
+	start := time.Date(2026, 1, 1, 3, 30, 0, 0, time.UTC)
+	candles := []Candle{{Time: start, Open: 10, High: 10, Low: 10, Close: 10}}
+	htf := []Candle{{Time: start.Add(-3*time.Hour - 30*time.Minute), Close: 10}, {Time: start.Add(-3*time.Hour - 29*time.Minute), Close: 20}}
+	for _, tc := range []struct {
+		name          string
+		closeDecision bool
+		want          []float64
+	}{
+		{"legacy opening cutoff", false, nil},
+		{"opt in decision close cutoff", true, []float64{10}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, trace := range []bool{false, true} {
+				var seen []float64
+				base := scriptedStrategy{lookback: 1, decide: func(md strategy.MarketData) model.Signal {
+					seen = append([]float64(nil), md.HTFCloses...)
+					return model.Signal{}
+				}}
+				var s strategy.Strategy = base
+				if tc.closeDecision {
+					s = closeDecisionStrategy{base}
+				}
+				if trace {
+					Trace(s, candles, nil, htf, Config{}, start)
+				} else {
+					Run(s, candles, nil, htf, Config{})
+				}
+				if !reflect.DeepEqual(seen, tc.want) {
+					t.Errorf("trace=%v: HTF closes %v, want %v", trace, seen, tc.want)
+				}
+			}
+		})
+	}
+}

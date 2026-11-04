@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -238,6 +240,72 @@ func TestFVGHTFCoverageLabels(t *testing.T) {
 	for _, line := range lines {
 		if !strings.Contains(line, "H4") || strings.Contains(line, "H1") {
 			t.Errorf("wrong H4 label: %q", line)
+		}
+	}
+}
+
+// A single run and every evaluated calibration phase determine whether H4 is needed.
+func TestFVGSelectedInputsRequireHTF(t *testing.T) {
+	binding, _, err := selectStrategy("GAZP", "fvg_imbalance", enum.Minutes30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, params, grid string
+		want               bool
+	}{
+		{"default", "", "", false},
+		{"partial params disabled", `{ "MinGapATR": 0.8 }`, "", false},
+		{"params enabled", `{ "HTFTrendEMA": 20 }`, "", true},
+		{"flat grid disabled", "", `{ "HTFTrendEMA": [0] }`, false},
+		{"flat grid enabled", "", `{ "HTFTrendEMA": [0, 20] }`, true},
+		{"later phase enabled", "", `{ "phases": [{"grid": {"MinGapATR": [0.8]}}, {"grid": {"HTFTrendEMA": [0, 20]}}] }`, true},
+		{"all phases disabled", "", `{ "phases": [{"grid": {"HTFTrendEMA": [0]}}, {"grid": {"MinGapATR": [0.8]}}] }`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			write := func(name, content string) string {
+				if content == "" {
+					return ""
+				}
+				path := filepath.Join(dir, name)
+				if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+					t.Fatal(err)
+				}
+				return path
+			}
+			params, phases, err := resolveRunInputs(binding, write("params.json", tc.params), write("grid.json", tc.grid))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := requiresHTF("fvg_imbalance", params, phases); got != tc.want {
+				t.Fatalf("requires H4 = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestFVGGridInheritsAndOverridesEnabledDefaults(t *testing.T) {
+	p := fvg.DefaultParams()
+	p.HTFTrendEMA = 20
+	for _, tc := range []struct {
+		name   string
+		phases []svc.Phase
+		want   bool
+	}{
+		{"inherited", []svc.Phase{{Grid: svc.Grid{"MinGapATR": {0.8}}}}, true},
+		{"disabled before first run", []svc.Phase{{Grid: svc.Grid{"HTFTrendEMA": {0}}}, {Grid: svc.Grid{"MinGapATR": {0.8}}}}, false},
+		{"enabled before later disable", []svc.Phase{{Grid: svc.Grid{"MinGapATR": {0.8}}}, {Grid: svc.Grid{"HTFTrendEMA": {0}}}}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := requiresHTF("fvg_imbalance", p, tc.phases); got != tc.want {
+				t.Fatalf("requires H4 = %v, want %v", got, tc.want)
+			}
+		})
+	}
+	for _, strategy := range []string{"reversion", "scalping_rsimacd"} {
+		if !requiresHTF(strategy, nil, nil) {
+			t.Errorf("%s must retain HTF", strategy)
 		}
 	}
 }

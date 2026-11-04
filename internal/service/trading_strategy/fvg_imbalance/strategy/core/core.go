@@ -87,6 +87,9 @@ func NewWithParams(ticker string, step time.Duration, p Params) *Strategy {
 }
 func (s *Strategy) Ticker() string { return s.ticker }
 
+// HTFDecisionOffset makes completed H4 data visible at the M30 decision close.
+func (s *Strategy) HTFDecisionOffset() time.Duration { return s.step }
+
 // Lookback retains the complete formation ATR history through the last eligible
 // retest, together with all three formation candles even when ATRPeriod is 1.
 func (s *Strategy) Lookback() int {
