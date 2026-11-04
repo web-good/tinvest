@@ -133,3 +133,28 @@ func TestEngineBufferedTargetAndGapThroughStop(t *testing.T) {
 		})
 	}
 }
+
+// A forming H4 uptrend must not override the completed downtrend at the retest.
+func TestFVGEngineHTFExcludesFormingCandle(t *testing.T) {
+	p := testParams()
+	p.HTFTrendEMA = 2
+	candles := engineCandles(bar{104, 111, 101, 110})
+	decision := candles[len(candles)-2].Time
+	htf := []bt.Candle{
+		{Time: decision.Add(-12 * time.Hour), Close: 110},
+		{Time: decision.Add(-8 * time.Hour), Close: 100},
+		{Time: decision.Add(-4*time.Hour + 30*time.Minute), Close: 120},
+	}
+	cfg := bt.Config{InitialCash: 100000, Fraction: 1, Lot: 1, EntryAtNextOpen: true, HTFInterval: 4 * time.Hour}
+	blocked := bt.Run(NewWithParams("TEST", step, p), candles, nil, htf, cfg)
+	if len(blocked.Trades) != 0 || blocked.BarsInMarket != 0 {
+		t.Fatalf("forming H4 allowed entry: %+v", blocked)
+	}
+	for i := range candles {
+		candles[i].Time = candles[i].Time.Add(30 * time.Minute)
+	}
+	passed := bt.Run(NewWithParams("TEST", step, p), candles, nil, htf, cfg)
+	if len(passed.Trades) != 1 || passed.Trades[0].Reason != "TP" {
+		t.Fatalf("completed H4 should allow entry: %+v", passed)
+	}
+}

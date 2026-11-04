@@ -15,7 +15,7 @@ import (
 func TestHTFCoverageLines_EmptySeriesErrors(t *testing.T) {
 	leadInFrom := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 
-	lines, err := htfCoverageLines(nil, leadInFrom)
+	lines, err := htfCoverageLines(nil, leadInFrom, "H1")
 
 	if err == nil {
 		t.Fatal("expected an error for an empty H1 series, got nil")
@@ -34,7 +34,7 @@ func TestHTFCoverageLines_HealthyHeadDoesNotWarn(t *testing.T) {
 		{Time: leadInFrom.Add(13 * time.Hour), Close: 2},
 	}
 
-	lines, err := htfCoverageLines(htf, leadInFrom)
+	lines, err := htfCoverageLines(htf, leadInFrom, "H1")
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -57,7 +57,7 @@ func TestHTFCoverageLines_ShortHeadWarns(t *testing.T) {
 		{Time: leadInFrom.AddDate(0, 3, 0).Add(time.Hour), Close: 2},
 	}
 
-	lines, err := htfCoverageLines(htf, leadInFrom)
+	lines, err := htfCoverageLines(htf, leadInFrom, "H1")
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -79,7 +79,7 @@ func TestHTFCoverageLines_GapAtToleranceBoundaryWarns(t *testing.T) {
 		{Time: leadInFrom.Add(htfLeadInGapTolerance), Close: 1},
 	}
 
-	lines, err := htfCoverageLines(htf, leadInFrom)
+	lines, err := htfCoverageLines(htf, leadInFrom, "H1")
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -95,7 +95,7 @@ func TestHTFCoverageLines_GapJustUnderToleranceDoesNotWarn(t *testing.T) {
 		{Time: leadInFrom.Add(htfLeadInGapTolerance - time.Hour), Close: 1},
 	}
 
-	lines, err := htfCoverageLines(htf, leadInFrom)
+	lines, err := htfCoverageLines(htf, leadInFrom, "H1")
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -202,5 +202,42 @@ func TestSelectStrategyFVGImbalanceRejectsNonM30(t *testing.T) {
 				t.Fatalf("expected registry interval error, got %v", err)
 			}
 		})
+	}
+}
+
+func TestHTFSpec(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		interval enum.Interval
+		span     time.Duration
+		enabled  bool
+	}{
+		{"reversion", enum.Hour4, 4 * time.Hour, true},
+		{"scalping_rsimacd", enum.Hour1, time.Hour, true},
+		{"fvg_imbalance", enum.Hour4, 4 * time.Hour, true},
+		{"scalping", 0, 0, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			interval, span, enabled := htfSpec(tc.name)
+			if interval != tc.interval || span != tc.span || enabled != tc.enabled {
+				t.Fatalf("got %v, %v, %v; want %v, %v, %v", interval, span, enabled, tc.interval, tc.span, tc.enabled)
+			}
+		})
+	}
+}
+
+func TestFVGHTFCoverageLabels(t *testing.T) {
+	start := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	if _, err := htfCoverageLines(nil, start, "H4"); err == nil || !strings.Contains(err.Error(), "H4") {
+		t.Fatalf("empty H4 error = %v", err)
+	}
+	lines, err := htfCoverageLines([]domain.Candle{{Time: start.AddDate(0, 3, 0)}}, start, "H4")
+	if err != nil || len(lines) != 2 {
+		t.Fatalf("lines = %v, err = %v", lines, err)
+	}
+	for _, line := range lines {
+		if !strings.Contains(line, "H4") || strings.Contains(line, "H1") {
+			t.Errorf("wrong H4 label: %q", line)
+		}
 	}
 }

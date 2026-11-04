@@ -184,23 +184,14 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 		return err
 	}
 
-	// The optional HTF trend filters need real higher-timeframe candles, loaded with the
-	// same year lead-in as the daily series to warm the HTF EMA: Hour4 for reversion,
-	// Hour1 for scalping_rsimacd. Other strategies pass nil.
-	var (
-		htfCandles  []domain.Candle
-		htfInterval time.Duration
-	)
-	switch strategyName {
-	case "reversion":
-		htfInterval = 4 * time.Hour
-		htfCandles, err = provider.Load(ctx, ticker, share.ID, enum.Hour4, dailyFrom, to, refresh)
-	case "scalping_rsimacd":
-		htfInterval = time.Hour
-		htfCandles, err = provider.Load(ctx, ticker, share.ID, enum.Hour1, dailyFrom, to, refresh)
-	}
-	if err != nil {
-		return err
+	// Load higher-timeframe history with the same lead-in used for daily EMA warmup.
+	var htfCandles []domain.Candle
+	htfIntervalCode, htfInterval, hasHTF := htfSpec(strategyName)
+	if hasHTF {
+		htfCandles, err = provider.Load(ctx, ticker, share.ID, htfIntervalCode, dailyFrom, to, refresh)
+		if err != nil {
+			return err
+		}
 	}
 	// pdl_reclaim's IndexTrendEMA filter reads IMOEX dailies over the same window as the ticker's.
 	if strategyName == "pdl_reclaim" {
@@ -214,8 +205,12 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 		}
 		binding = svc.PDLReclaimWithIndex(binding, index)
 	}
-	if strategyName == "scalping_rsimacd" {
-		if err := reportHTFCoverage(htfCandles, dailyFrom); err != nil {
+	if strategyName == "scalping_rsimacd" || strategyName == "fvg_imbalance" {
+		label := "H1"
+		if strategyName == "fvg_imbalance" {
+			label = "H4"
+		}
+		if err := reportHTFCoverage(htfCandles, dailyFrom, label); err != nil {
 			return err
 		}
 	}
@@ -257,6 +252,18 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 
 	return runSingle(binding, paramsPath, candles, dailyCandles, htfCandles, cfg, periodDays, base,
 		metaCommon(ticker, interval, from, to, cfg))
+}
+
+// htfSpec selects the higher timeframe needed by each strategy.
+func htfSpec(strategyName string) (enum.Interval, time.Duration, bool) {
+	switch strategyName {
+	case "reversion", "fvg_imbalance":
+		return enum.Hour4, 4 * time.Hour, true
+	case "scalping_rsimacd":
+		return enum.Hour1, time.Hour, true
+	default:
+		return 0, 0, false
+	}
 }
 
 // selectStrategy resolves the CLI binding and its entry execution policy.
@@ -493,25 +500,28 @@ const htfLeadInGapTolerance = 7 * 24 * time.Hour
 // so the warning stays a signal instead of firing on every healthy run. Returns the
 // report lines to print (coverage line always, warning line only when the gap matters)
 // so the logic is testable without capturing stdout.
-func htfCoverageLines(htf []domain.Candle, leadInFrom time.Time) ([]string, error) {
+func htfCoverageLines(htf []domain.Candle, leadInFrom time.Time, label string) ([]string, error) {
 	if len(htf) == 0 {
-		return nil, fmt.Errorf("H1-серия для HTFTrendEMA пуста: используйте -refresh, чтобы догрузить часовые свечи из API")
+		if label == "H1" {
+			return nil, fmt.Errorf("H1-серия для HTFTrendEMA пуста: используйте -refresh, чтобы догрузить часовые свечи из API")
+		}
+		return nil, fmt.Errorf("%s-серия для HTFTrendEMA пуста: используйте -refresh, чтобы догрузить свечи из API", label)
 	}
 	first, last := htf[0].Time, htf[len(htf)-1].Time
-	lines := []string{fmt.Sprintf("H1: %d баров, покрытие %s .. %s",
-		len(htf), first.Format("2006-01-02 15:04"), last.Format("2006-01-02 15:04"))}
+	lines := []string{fmt.Sprintf("%s: %d баров, покрытие %s .. %s",
+		label, len(htf), first.Format("2006-01-02 15:04"), last.Format("2006-01-02 15:04"))}
 	if gap := first.Sub(leadInFrom); gap >= htfLeadInGapTolerance {
-		lines = append(lines, fmt.Sprintf("⚠️ H1-кэш короче запрошенного лид-ина на %s (первый бар %s, лид-ин с %s): "+
+		lines = append(lines, fmt.Sprintf("⚠️ %s-кэш короче запрошенного лид-ина на %s (первый бар %s, лид-ин с %s): "+
 			"запустите с -refresh, чтобы догрузить историю в начало кэша; "+
 			"иначе fail-closed фильтр HTFTrendEMA будет глушить входы на самых ранних фолдах",
-			gap.Round(time.Hour), first.Format("2006-01-02 15:04"), leadInFrom.Format("2006-01-02 15:04")))
+			label, gap.Round(time.Hour), first.Format("2006-01-02 15:04"), leadInFrom.Format("2006-01-02 15:04")))
 	}
 	return lines, nil
 }
 
 // reportHTFCoverage prints htfCoverageLines' report to stdout.
-func reportHTFCoverage(htf []domain.Candle, leadInFrom time.Time) error {
-	lines, err := htfCoverageLines(htf, leadInFrom)
+func reportHTFCoverage(htf []domain.Candle, leadInFrom time.Time, label string) error {
+	lines, err := htfCoverageLines(htf, leadInFrom, label)
 	if err != nil {
 		return err
 	}
