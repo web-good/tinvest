@@ -254,8 +254,8 @@ func TestFVGSelectedInputsRequireHTF(t *testing.T) {
 		name, params, grid string
 		want               bool
 	}{
-		{"default", "", "", false},
-		{"partial params disabled", `{ "MinGapATR": 0.8 }`, "", false},
+		{"default", "", "", true},
+		{"partial params inherit H4", `{ "MinGapATR": 0.8 }`, "", true},
 		{"params enabled", `{ "HTFTrendEMA": 20 }`, "", true},
 		{"flat grid disabled", "", `{ "HTFTrendEMA": [0] }`, false},
 		{"flat grid enabled", "", `{ "HTFTrendEMA": [0, 20] }`, true},

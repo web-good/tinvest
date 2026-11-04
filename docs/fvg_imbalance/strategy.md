@@ -1,141 +1,121 @@
-# FVG imbalance
+# FVG imbalance — стратегия возврата к бычьему дисбалансу
 
-`fvg_imbalance` is a backtest-only, long-only strategy on completed M30 candles.
-It reconstructs zones and structure from the supplied history on each decision.
-GAZP has an explicit parameter literal; unregistered tickers use core defaults.
+## Кратко
 
-## Formation and structure
+`fvg_imbalance` — стратегия только для бэктеста, только для лонга и только для завершённых M30-свечей. Она находит бычий FVG из трёх свечей, ждёт глубокого закрытия ретеста в его зоне и покупает по открытию следующей M30-свечи. Одновременно может быть открыта только одна позиция. Для GAZP и DOMRF заданы отдельные литералы параметров; незарегистрированные тикеры используют параметры ядра. Стратегия не хранит состояние зон между вызовами: на каждом решении восстанавливает их по переданной истории.
 
-For three consecutive M30 candles `a`, `b`, `c`, a bullish fair-value gap forms when:
+Основной код: `internal/service/trading_strategy/fvg_imbalance/strategy/core/core.go`; привязка к бэктесту: `internal/service/backtest/fvg_imbalance_registry.go`.
 
-- `close_b > open_b`;
-- `high_a < low_c`;
-- the green body of `b` crosses the gap from below to above:
-  `open_b <= high_a` and `close_b >= low_c`.
+## Формирование зоны
 
-The zone is `[lower, upper] = [high_a, low_c]`. Consecutive means exact 30-minute
-timestamps, so a formation cannot cross a missing candle or overnight gap.
-Its height must be at least `MinGapATR * ATR(ATRPeriod)`. Wilder ATR is computed
-from exactly `2 * ATRPeriod` candles ending at `c`, and remains frozen at formation
-for every subsequent retest, stop and entry-distance calculation.
+Для трёх подряд идущих 30-минутных свечей `a, b, c` зона появляется после закрытия `c`, если:
 
-Optional structure gates use strict fractal pivots: a high or low must exceed or
-be below all `SwingK` bars on each side, and is usable only after the right-hand
-bars have completed. Equal values do not form pivots. Searches are bounded by
-`StructureLookbackBars` before `c` and use the most recent eligible pivot.
+1. `close[b] > open[b]`: средняя свеча зелёная;
+2. `high[a] < low[c]`: между крайними свечами есть строгий разрыв;
+3. `open[b] <= high[a]` и `close[b] >= low[c]`: тело зелёной свечи проходит разрыв снизу вверх;
+4. `low[c] - high[a] >= MinGapATR × ATR_formation`.
 
-A bullish liquidity sweep is a bar `s` whose low is strictly below the most recent
-swing low confirmed before `s` and whose close is strictly above it. It must occur
-by `b`, with `1 <= c-s <= MaxSweepToFVGBars`; the newest qualifying sweep is used.
-A bullish break of structure (BOS) requires a close strictly above a confirmed
-swing high. With a sweep required, the high is the most recent one usable at `s`
-and the break can occur from `s` through `c`. Without a sweep, the high is the
-most recent one usable at `a` and `b` or `c` must break it. With both gates on,
-the order is sweep, BOS, completed FVG; the sweep and BOS may share a bar.
-Either gate can also be used independently.
+Границы зоны: `lower = high[a]`, `upper = low[c]`. Временные метки `a → b → c` должны отличаться ровно на 30 минут: через пропуск свечи, ночь или выходной FVG не образуется. `ATR_formation` — ATR Уайлдера по ровно `2 × ATRPeriod` свечам, заканчивающимся на `c`. Его значение фиксируется для зоны и впоследствии используется для ограничения цены входа и отступа стопа. Неположительный ATR или недостаток истории исключают зону.
 
-The retained lookback is `max(3, 2 * ATRPeriod) + MaxRetestBars`; when a
-structure gate is enabled, the maximum also includes
-`StructureLookbackBars + 2 * SwingK + 3`. Missing or malformed required history
-fails closed.
+**Пример.** Пусть `high[a] = 100`, свеча `b` открылась по `99` и закрылась по `103`, `low[c] = 102`, а ATR при формировании равен `2`. Зона — `[100, 102]`, высота — `1 ATR`; она проходит порог GAZP `MinGapATR = 0.8`. Если бы `b` открылась по `101`, её тело не пересекло бы нижнюю границу и FVG был бы отклонён.
 
-## Retest and execution
+## Фильтры структуры
 
-A zone can signal on the first through `MaxRetestBars`-th completed candle after
-formation, inclusive. A later low at or below `lower` invalidates the zone,
-including on the retest candle itself. A protected retest has
-`lower < low <= upper`. With `RequireCloseAboveZone = 1`, the same candle must
-also close strictly above `upper`; `0` accepts a protected touch without this
-close confirmation. With `RequireFirstRetest = 1`, every earlier post-formation
-bar must have `low > upper`: any earlier touch consumes the zone even if it
-failed close confirmation or another gate, or its entry could not fill. When
-several zones qualify, the newest qualifying zone wins. The strategy opens at
-most one position at a time.
+Swing high — свеча, чей максимум строго выше максимумов `SwingK` свечей слева и справа. Для swing low правило симметрично. Равные экстремумы не подходят. Pivot доступен только после закрытия всех свечей справа. Поиск ограничен `StructureLookbackBars` свечами перед формированием FVG; выбирается самый новый пригодный pivot.
 
-At the retest decision, `HTFTrendEMA > 0` requires the last completed H4 close
-to be strictly above its EMA. At least that many finite H4 closes and a finite EMA
-are required; missing, insufficient or non-finite H4 data blocks entry. The
-backtest loads H4 with a one-year lead-in when the selected parameters or any
-calibration phase enable the gate. It exposes H4 candles completed at or before
-the M30 decision close; later-closing candles remain hidden. `0` disables the
-gate, and position exits do not depend on H4 data.
+- **Liquidity sweep** (`RequireLiquiditySweep = 1`): свеча `s` прокалывает снизу последний подтверждённый до неё swing low (`low[s] < swingLow`) и закрывается строго выше уровня (`close[s] > swingLow`). `s` может быть свечой `b`, но не `c`; `1 <= c-s <= MaxSweepToFVGBars`. Из нескольких sweep берётся самый поздний.
+- **Bullish BOS** (`RequireBullishBOS = 1`): закрытие строго выше подтверждённого swing high. Если требуется sweep, опорный high — последний доступный на `s`, а пробой может быть на любой свече от `s` до `c`. Если sweep не требуется, опорный high — последний доступный на `a`, а пробить его должна `b` или `c`. Sweep и BOS могут совпасть на одной свече.
 
-The signal is emitted after the retest candle closes. `EntryAtNextOpen` schedules
-the buy for the following M30 open, and `FillBy` is that exact timestamp
-(`retest candle timestamp + 30 minutes`). If that slot is absent, the engine
-drops the pending buy instead of carrying it across a night, weekend, or data gap.
-A new entry whose exact `FillBy` falls on Saturday or Sunday is discarded by the
-strategy. When `MaxEntryDistanceATR > 0`, the engine also cancels a buy if the
-actual next open is strictly above `upper + MaxEntryDistanceATR * formationATR`;
-equality is allowed. This limit does not reject a gap down.
+Фильтры можно включать независимо. При обоих включённых порядок таков: sweep → BOS → завершённый FVG. Если обязательный pivot отсутствует, вход блокируется.
 
-## Stop, target and time exit
+## Ретест и вход
 
-The stop is `lower - StopBufferATR * formationATR`; a non-positive or non-finite
-stop rejects the entry. For an open position, the target is
-`actual fill + TakeProfitR * (actual fill - stop)`, derived from the position
-purchase price. The signal also carries a provisional target based on the retest
-close; position management uses the actual fill instead. `TakeProfitR = 0`
-disables target exits. The buffer therefore widens both the stop and R target.
+Зона может дать сигнал на свечах `c+1 ... c+MaxRetestBars` включительно. Ретест на текущей свече `k` должен коснуться зоны (`lower <= low[k] <= upper`) и закрыться достаточно глубоко:
 
-Exit priority is stop loss, then take profit, then time exit. If the buy fills at
-or below the stop, the fill candle immediately signals a stop exit; the engine
-uses the available opening price for a gap through the stop. With `MaxHoldBars > 0`,
-a position exits at the current M30 close once `BarsHeld >= MaxHoldBars`. Age is
-the number of processed M30 bars since entry, with the fill bar counted as zero.
-There is no trailing stop or forced end-of-day close.
+```text
+threshold = upper - MinRetestDepthPct / 100 × (upper - lower)
+lower <= close[k] <= threshold
+```
 
-## Parameters
+`MinRetestDepthPct` — конечное число от `0` до `100`, по умолчанию `50`: закрытие должно попасть в нижнюю половину FVG. При `0` допустимо закрытие в любой точке зоны, при `100` — ровно на `lower`. Любой `low < lower` после образования зоны инвалидирует её, включая саму свечу ретеста; касание `low == lower` разрешено. Равенство закрытия расчётному порогу также допускается.
 
-| Parameter | Core default | GAZP baseline | Validation and meaning |
+`RequireFirstRetest = 1` требует, чтобы все свечи после `c` и до `k` имели `low > upper`. Первое касание расходует зону даже если оно не прошло порог глубины закрытия, фильтр контекста или не привело к исполненному ордеру. При `0` допустимы следующие защищённые касания в пределах срока зоны. Если одновременно подходят несколько зон, выбирается самая новая.
+
+При `HTFTrendEMA > 0` вход разрешён, только если последнее **завершённое** закрытие H4 строго выше EMA H4 с этим периодом. Требуется не менее `HTFTrendEMA` корректных H4-закрытий; отсутствие данных, нечисловые значения и незавершённая H4-свеча не дают пройти фильтр. Для такого прогона бэктест загружает H4 с годом предварительной истории. Значение `0` выключает фильтр; на выходы из уже открытой позиции H4 не влияет.
+
+Сигнал формируется **после закрытия** ретеста. Бэктест покупает по фактическому `open` следующей M30-свечи. `FillBy = time[k] + 30 минут`: если точного следующего слота нет, отложенная покупка отменяется и не переносится через ночь или пропуск данных. Если расчётный момент входа приходится на субботу или воскресенье, стратегия вообще не выдаёт сигнал. При `MaxEntryDistanceATR > 0` фактический `open` должен быть не выше `upper + MaxEntryDistanceATR × ATR_formation`; равенство допускается. Ограничения на гэп вниз нет.
+
+Основной стоп фиксируется на входе: `primary = lower - StopBufferATR × ATR_formation`. Неположительный или нечисловой основной стоп блокирует сигнал. При `-risk-pct > 0` объём позиции считается из расстояния между **фактическим open** и основным стопом, затем округляется до целых лотов с учётом доступных денег. При `-risk-pct 0` используется доля средств из `-fraction`.
+
+## Выходы
+
+Риск сделки и цель считаются от фактической цены исполнения:
+
+```text
+risk   = actual_fill - primary
+target = actual_fill + TakeProfitR × risk
+```
+
+Предварительная цель в сигнале рассчитана от закрытия ретеста, но позиция управляется целью от `actual_fill`. `TakeProfitR = 0` отключает цель. Основной стоп не подтягивается, частичных выходов нет. Аварийный стоп не меняет расчёт риска, объёма и цели.
+
+Для открытой позиции действуют два уровня, рассчитанные из замороженного ATR формирования зоны:
+
+```text
+primary   = lower - StopBufferATR × ATR_formation
+emergency = primary - 2 × StopBufferATR × ATR_formation
+```
+
+Основной стоп подтверждается завершённой M30-свечой: при `close <= primary` выход `SL_CLOSE` исполняется по фактическому `close`. Тень ниже `primary` с закрытием выше него сама по себе не закрывает позицию. Аварийный стоп `SL_EMERGENCY` срабатывает внутри свечи при `low <= emergency`; исполнение — по `min(open, emergency)`, включая гэп ниже аварийного уровня.
+
+На каждой обработанной M30-свече приоритет таков: **SL_EMERGENCY → SL_CLOSE → TP → TIME**. Поэтому при достижении аварийного уровня и цели на одной свече побеждает аварийный стоп; закрытие на основном уровне или ниже также проверяется раньше цели. При гэпе выше цели бэктест использует `max(open, target)`. Свеча исполнения покупки сразу проверяется на выход по тем же правилам: открытие на основном стопе или ниже само по себе не вызывает `SL_CLOSE`, если свеча затем закрылась выше него и не достигла аварийного уровня. При `StopBufferATR = 0` оба уровня совпадают, и первым срабатывает внутрисвечный аварийный стоп.
+
+При `MaxHoldBars > 0` позиция закрывается по текущему `close`, когда `BarsHeld >= MaxHoldBars`, если раньше не сработали стоп или цель. Возраст считается в **обработанных M30-свечах**: свеча входа имеет возраст `0`. При `0` ограничение времени выключено. Принудительного закрытия в конце дня нет.
+
+**Пример выхода.** Для зоны `[100, 102]`, ATR `2` и `StopBufferATR = 0.1` основной стоп равен `99.8`, аварийный — `99.4`. Если ретест закрылся по `101`, а следующая свеча открылась по `102.5`, фактический риск — `2.7`. При `TakeProfitR = 1` цель позиции — `105.2`, хотя предварительная цель сигнала была бы `102.2`.
+
+## Параметры
+
+| Параметр | Ядро | GAZP | Смысл |
 |---|---:|---:|---|
-| `ATRPeriod` | 14 | 14 | Positive integer; M30 Wilder ATR period |
-| `MinGapATR` | 0.25 | 0.8 | Finite, non-negative minimum zone height in formation ATRs |
-| `MaxRetestBars` | 8 | 8 | Positive integer; maximum later candles eligible for retest |
-| `RequireCloseAboveZone` | 1 | 0 | `0` or `1`; require a close strictly above the zone |
-| `TakeProfitR` | 1.5 | 1.5 | Finite, non-negative target multiple; `0` disables target |
-| `RequireFirstRetest` | 0 | 0 | `0` or `1`; accept only the first touch |
-| `RequireBullishBOS` | 0 | 0 | `0` or `1`; require bullish BOS |
-| `RequireLiquiditySweep` | 0 | 0 | `0` or `1`; require a preceding bullish sweep |
-| `SwingK` | 2 | 2 | Positive integer; bars on each side of a pivot |
-| `StructureLookbackBars` | 48 | 48 | Positive integer; structure search history before formation |
-| `MaxSweepToFVGBars` | 8 | 8 | Positive integer; maximum sweep-to-formation distance |
-| `HTFTrendEMA` | 0 | 0 | Non-negative H4 EMA period; `0` disables the gate |
-| `MaxEntryDistanceATR` | 0 | 0 | Finite, non-negative next-open limit above the zone in formation ATRs; `0` disables |
-| `MaxHoldBars` | 0 | 0 | Non-negative holding limit in processed bars; `0` disables |
-| `StopBufferATR` | 0 | 0 | Finite, non-negative stop buffer below the zone in formation ATRs |
+| `ATRPeriod` | 14 | 14 | Период M30 ATR Уайлдера; положительное целое |
+| `MinGapATR` | 0.25 | 0.8 | Минимальная высота FVG в ATR; конечное число ≥ 0 |
+| `MaxRetestBars` | 8 | 12 | Максимальный возраст ретеста в свечах; положительное целое |
+| `MinRetestDepthPct` | 50 | 50 | Минимальная глубина закрытия от верхней границы FVG, %; конечное число от 0 до 100 |
+| `TakeProfitR` | 1.5 | 1 | Цель в единицах риска; 0 отключает |
+| `RequireFirstRetest` | 0 | 0 | Только первое касание зоны; 0 или 1 |
+| `RequireBullishBOS` | 0 | 0 | Требовать bullish BOS; 0 или 1 |
+| `RequireLiquiditySweep` | 0 | 0 | Требовать sweep swing low; 0 или 1 |
+| `SwingK` | 2 | 2 | Число свечей с каждой стороны pivot; положительное целое |
+| `StructureLookbackBars` | 48 | 50 | Глубина поиска структуры; положительное целое |
+| `MaxSweepToFVGBars` | 8 | 15 | Максимальное расстояние sweep → FVG; положительное целое |
+| `HTFTrendEMA` | 0 | 150 | Период H4 EMA; 0 отключает |
+| `MaxEntryDistanceATR` | 0 | 0 | Допустимое превышение верхней границы зоны ценой входа, в ATR; 0 отключает |
+| `MaxHoldBars` | 0 | 0 | Предел удержания в обработанных свечах; 0 отключает |
+| `StopBufferATR` | 0 | 1 | Отступ основного стопа под зоной, в ATR; аварийный ещё на два таких отступа ниже |
 
-Structural helper parameters must stay positive even when their gates are off.
-Partial parameter JSON overlays the selected ticker defaults and is validated by
-the backtest binding. Other intervals are rejected; invalid parameters or a
-non-M30 step make the core fail closed.
+Числовые переключатели принимают только `0` и `1`. Параметры структуры должны быть положительными даже при выключенных фильтрах. Частичный JSON накладывается на литерал тикера (либо на значения ядра) и валидируется; неизвестные поля отклоняются с указанием имени. Другие интервалы бэктест отклоняет; при неверном шаге или параметрах ядро не даёт сигналов.
 
-## Backtest and calibration
+## Бэктест и калибровка
 
-The refreshed full-window baseline uses:
+Прогон GAZP с текущим литералом:
 
 ```bash
 go run ./cmd/backtest \
   -ticker GAZP -strategy fvg_imbalance -interval Minutes30 \
-  -out reports/GAZP/fvg_imbalance/r20261104/baseline_full \
+  -out reports/GAZP/fvg_imbalance/baseline \
   -months 24 -risk-pct 1 -commission 0.0005 -refresh
 ```
 
-The staged grid varies formation, context, execution and holding controls in that
-order. The primary rolling walk-forward uses 12 months of training and 3 months
-of testing inside a 24-month window:
+Сетка `data/params/fvg_imbalance/gazp/grid.json` поэтапно перебирает формирование FVG, фильтры контекста, исполнение и время удержания. Walk-forward прогон:
 
 ```bash
 go run ./cmd/backtest \
   -ticker GAZP -strategy fvg_imbalance -interval Minutes30 \
   -calibrate data/params/fvg_imbalance/gazp/grid.json \
-  -out reports/GAZP/fvg_imbalance/r20261104/quality_wf \
+  -out reports/GAZP/fvg_imbalance/quality_wf \
   -months 24 -train-months 12 -test-months 3 \
   -min-trades 20 -metric profit_factor \
   -risk-pct 1 -commission 0.0005 -refresh
 ```
 
-`-risk-pct 1` sizes positions by stop risk to normalize comparisons across stop
-widths. The minimum trade count applies to each training ranking; inspect any
-phase where all combinations fall below it. Walk-forward results inform a later
-default-selection decision and do not automatically change the ticker literal.
+`-risk-pct 1` нормализует объём позиции по риску до стопа. `-min-trades 20` относится к ранжированию на обучающем участке: фазы, где все комбинации ниже порога, нужно отдельно изучать в отчёте. Результаты калибровки не меняют литерал GAZP автоматически.

@@ -7,7 +7,7 @@
       "grid": {
         "MinGapATR": [0.25, 0.5, 0.8, 1.0],
         "MaxRetestBars": [4, 8, 12],
-        "RequireCloseAboveZone": [0, 1],
+        "MinRetestDepthPct": [0, 50, 100],
         "TakeProfitR": [1, 1.5, 2]
       }
     },
@@ -18,7 +18,7 @@
         "RequireFirstRetest": [0, 1],
         "RequireBullishBOS": [0, 1],
         "RequireLiquiditySweep": [0, 1],
-        "HTFTrendEMA": [0, 20, 50, 100],
+        "HTFTrendEMA": [0, 20, 50, 100, 150, 200],
         "SwingK": [2],
         "StructureLookbackBars": [48],
         "MaxSweepToFVGBars": [8]

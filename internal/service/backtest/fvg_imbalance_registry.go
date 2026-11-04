@@ -1,11 +1,14 @@
 package backtest
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 
 	"tinvest/internal/enum"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/core"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/domrf"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/gazp"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 )
@@ -18,7 +21,15 @@ func fvgImbalanceBindingFor(ticker string, interval enum.Interval, defaults func
 		},
 		ParseParams: func(raw []byte) (any, error) {
 			p := defaults()
-			if err := json.Unmarshal(raw, &p); err != nil {
+			decoder := json.NewDecoder(bytes.NewReader(raw))
+			decoder.DisallowUnknownFields()
+			if err := decoder.Decode(&p); err != nil {
+				return nil, fmt.Errorf("backtest: parse FVG imbalance params: %w", err)
+			}
+			if err := decoder.Decode(new(any)); err != io.EOF {
+				if err == nil {
+					err = fmt.Errorf("multiple JSON values")
+				}
 				return nil, fmt.Errorf("backtest: parse FVG imbalance params: %w", err)
 			}
 			if err := core.ValidateParams(p); err != nil {
@@ -30,7 +41,8 @@ func fvgImbalanceBindingFor(ticker string, interval enum.Interval, defaults func
 }
 
 var fvgImbalanceRegistry = map[string]func() core.Params{
-	"GAZP": gazp.Params,
+	"DOMRF": domrf.Params,
+	"GAZP":  gazp.Params,
 }
 
 // FVGImbalanceLookupOrGeneric returns a backtest-only M30 binding using the ticker
