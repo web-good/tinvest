@@ -15,7 +15,7 @@ func engineCandles(later ...bar) []bt.Candle {
 		bars[i] = bar{99, 100, 98, 99}
 	}
 	bars = append(bars, formation()...)
-	bars = append(bars, bar{103, 104, 101, 103})
+	bars = append(bars, bar{103, 104, 101, 101})
 	bars = append(bars, later...)
 	md := snapshot(bars...)
 	candles := make([]bt.Candle, len(bars))
@@ -40,8 +40,8 @@ func TestEngineMissingM30SlotExpiresSignal(t *testing.T) {
 	}
 }
 func TestEngineTargetUsesActualEntry(t *testing.T) {
-	// Signal close 103 implies a displayed target 107.5. Actual fill 104 and stop
-	// 100 imply 104 + 1.5*(104-100) = 110; crossing 107.5 must not exit.
+	// Signal close 101 implies a displayed target 102.5. Actual fill 104 and stop
+	// 100 imply 104 + 1.5*(104-100) = 110; crossing 102.5 must not exit.
 	candles := engineCandles(bar{104, 108, 101, 105}, bar{105, 111, 104, 110})
 	result := runEngine(candles)
 	if len(result.Trades) != 1 {
@@ -60,14 +60,14 @@ func TestEngineGapThroughStopExitsFillBar(t *testing.T) {
 	}
 	tr := result.Trades[0]
 	fillTime := candles[len(candles)-1].Time
-	if tr.Reason != "SL" || tr.EntryPrice != 99 || tr.ExitPrice != 99 || !tr.EntryTime.Equal(fillTime) || !tr.ExitTime.Equal(fillTime) {
+	if tr.Reason != "SL_EMERGENCY" || tr.EntryPrice != 99 || tr.ExitPrice != 99 || !tr.EntryTime.Equal(fillTime) || !tr.ExitTime.Equal(fillTime) {
 		t.Fatalf("want same-fill-bar SL at open: %+v", tr)
 	}
 }
 func TestEngineStopWinsOnFillBar(t *testing.T) {
 	candles := engineCandles(bar{104, 120, 99, 110})
 	result := runEngine(candles)
-	if len(result.Trades) != 1 || result.Trades[0].Reason != "SL" || result.Trades[0].ExitPrice != 100 {
+	if len(result.Trades) != 1 || result.Trades[0].Reason != "SL_EMERGENCY" || result.Trades[0].ExitPrice != 100 {
 		t.Fatalf("want stop at 100 before target: %+v", result.Trades)
 	}
 }
@@ -118,7 +118,7 @@ func TestEngineBufferedTargetAndGapThroughStop(t *testing.T) {
 		reason      string
 	}{
 		{"actual fill target", []bar{{104, 110, 100, 105}, {105, 112, 100, 110}}, 104, 111.5, "TP"},
-		{"gap through buffered stop", []bar{{98, 104, 97, 103}}, 98, 98, "SL"},
+		{"gap through buffered stop", []bar{{98, 104, 97, 103}}, 98, 97, "SL_EMERGENCY"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			candles := engineCandles(tc.later...)
@@ -163,6 +163,35 @@ func TestFVGEngineHTFDecisionClose(t *testing.T) {
 				}
 			} else if len(result.Trades) != 0 || result.BarsInMarket != 0 {
 				t.Fatalf("forming H4 allowed entry: %+v", result)
+			}
+		})
+	}
+}
+
+// Primary is 99, formation ATR is 2, so the emergency stop is 97.
+func TestEngineDualStopFills(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		exitBar bar
+		reason  string
+		exit    float64
+	}{
+		{"emergency at level", bar{104, 105, 97, 102}, "SL_EMERGENCY", 97},
+		{"emergency gap", bar{96, 105, 95, 102}, "SL_EMERGENCY", 96},
+		{"primary close at level", bar{104, 105, 98, 99}, "SL_CLOSE", 99},
+		{"primary gap recovered above emergency", bar{98, 105, 97.5, 98.5}, "SL_CLOSE", 98},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := testParams()
+			p.StopBufferATR = .5
+			candles := engineCandles(bar{104, 105, 102, 104}, tc.exitBar)
+			result := bt.Run(NewWithParams("TEST", step, p), candles, nil, nil, bt.Config{InitialCash: 100000, Fraction: 1, Lot: 1, EntryAtNextOpen: true})
+			if len(result.Trades) != 1 {
+				t.Fatalf("trades=%+v", result.Trades)
+			}
+			tr := result.Trades[0]
+			if tr.EntryPrice != 104 || tr.ExitPrice != tc.exit || tr.Reason != tc.reason || !tr.ExitTime.Equal(candles[len(candles)-1].Time) {
+				t.Fatalf("trade=%+v", tr)
 			}
 		})
 	}

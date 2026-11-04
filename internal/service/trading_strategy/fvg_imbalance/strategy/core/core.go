@@ -18,7 +18,7 @@ type Params struct {
 	ATRPeriod             int
 	MinGapATR             float64
 	MaxRetestBars         int
-	RequireCloseAboveZone int
+	MinRetestDepthPct     float64
 	TakeProfitR           float64
 	RequireFirstRetest    int
 	RequireBullishBOS     int
@@ -34,7 +34,7 @@ type Params struct {
 
 // DefaultParams returns the baseline M30 FVG settings.
 func DefaultParams() Params {
-	return Params{ATRPeriod: 14, MinGapATR: .25, MaxRetestBars: 8, RequireCloseAboveZone: 1, TakeProfitR: 1.5, SwingK: 2, StructureLookbackBars: 48, MaxSweepToFVGBars: 8}
+	return Params{ATRPeriod: 14, MinGapATR: .25, MaxRetestBars: 8, MinRetestDepthPct: 50, TakeProfitR: 1.5, SwingK: 2, StructureLookbackBars: 48, MaxSweepToFVGBars: 8}
 }
 
 // ValidateParams rejects invalid domains, including non-finite grid values.
@@ -68,8 +68,8 @@ func ValidateParams(p Params) error {
 		return fmt.Errorf("MinGapATR must be finite and non-negative")
 	case p.TakeProfitR < 0 || math.IsNaN(p.TakeProfitR) || math.IsInf(p.TakeProfitR, 0):
 		return fmt.Errorf("TakeProfitR must be finite and non-negative")
-	case p.RequireCloseAboveZone != 0 && p.RequireCloseAboveZone != 1:
-		return fmt.Errorf("RequireCloseAboveZone must be 0 or 1")
+	case p.MinRetestDepthPct < 0 || p.MinRetestDepthPct > 100 || math.IsNaN(p.MinRetestDepthPct) || math.IsInf(p.MinRetestDepthPct, 0):
+		return fmt.Errorf("MinRetestDepthPct must be finite and in 0..100")
 	}
 	return nil
 }
@@ -240,9 +240,15 @@ func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 		if pos.StopLoss <= 0 {
 			return sig
 		}
-		if pos.PurchasePrice <= pos.StopLoss || md.Lows[k] <= pos.StopLoss {
-			sig.Kind, sig.Reason, sig.StopLoss = model.SignalSell, "SL", pos.StopLoss
-			sig.ExitReason = fmt.Sprintf("FVG stop %.4f", pos.StopLoss)
+		emergency := pos.StopLoss - 2*s.p.StopBufferATR*pos.EntryATR
+		if md.Lows[k] <= emergency {
+			sig.Kind, sig.Reason, sig.StopLoss = model.SignalSell, "SL_EMERGENCY", emergency
+			sig.ExitReason = fmt.Sprintf("FVG emergency stop %.4f", emergency)
+			return sig
+		}
+		if md.Closes[k] <= pos.StopLoss {
+			sig.Kind, sig.Reason, sig.StopLoss = model.SignalSell, "SL_CLOSE", pos.StopLoss
+			sig.ExitReason = fmt.Sprintf("FVG close-confirmed stop %.4f", pos.StopLoss)
 			return sig
 		}
 		target := pos.PurchasePrice + s.p.TakeProfitR*(pos.PurchasePrice-pos.StopLoss)
@@ -266,12 +272,12 @@ func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 		}
 		invalid := false
 		for j := z.formed + 1; j <= k; j++ {
-			if md.Lows[j] <= z.lower || (s.p.RequireFirstRetest == 1 && j < k && md.Lows[j] <= z.upper) {
+			if md.Lows[j] < z.lower || (s.p.RequireFirstRetest == 1 && j < k && md.Lows[j] <= z.upper) {
 				invalid = true
 				break
 			}
 		}
-		if invalid || !s.structurePasses(md, z) || md.Lows[k] > z.upper || (s.p.RequireCloseAboveZone == 1 && md.Closes[k] <= z.upper) {
+		if invalid || !s.structurePasses(md, z) || md.Lows[k] > z.upper || md.Closes[k] < z.lower || md.Closes[k] > z.upper-s.p.MinRetestDepthPct/100*(z.upper-z.lower) {
 			continue
 		}
 		htfOK, htfClose, htfEMA := s.htfTrendOK(md)

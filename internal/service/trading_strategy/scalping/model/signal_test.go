@@ -8,6 +8,9 @@ func TestIsStopReason(t *testing.T) {
 		want   bool
 	}{
 		{reason: "SL", want: true},
+		{reason: "SL_CLOSE", want: true},
+		{reason: "SL_EMERGENCY", want: true},
+		{reason: "CATSL", want: true},
 		{reason: "TRAIL", want: true},
 		{reason: "ATRSL", want: true},
 		{reason: "TP", want: false},
