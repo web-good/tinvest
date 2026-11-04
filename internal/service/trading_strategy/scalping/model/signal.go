@@ -35,13 +35,16 @@ type Signal struct {
 	MaxEntryPrice float64
 }
 
-// IsStopReason reports whether reason is a stop-style exit. The list is
-// load-bearing for the backtest engine (internal/domain/backtest/engine.go,
-// Run): stop reasons fill intrabar at min(StopLoss, open) — the stop level,
-// adjusted for a gap-down open; "TP" fills at max(TakeProfit, open); any other
-// Sell reason fills at the bar's close. A new stop-style exit reason MUST be
-// added here, otherwise the backtest will silently fill it at close and
-// understate gap/stop slippage.
+// IsCloseConfirmedStopReason reports whether an exit requires a completed candle
+// and fills at its close rather than at an intrabar stop level.
+func IsCloseConfirmedStopReason(reason string) bool {
+	return reason == "SL_CLOSE"
+}
+
+// IsStopReason reports whether reason is a stop-style exit. In backtest Run and
+// Trace, close-confirmed stops fill at the candle close; other stop reasons fill
+// at min(StopLoss, open), adjusted for gap-down risk. New stop reasons must be
+// listed here and classified by IsCloseConfirmedStopReason when appropriate.
 func IsStopReason(reason string) bool {
 	switch reason {
 	case "SL", "SL_CLOSE", "SL_EMERGENCY", "TRAIL", "ATRSL", "CATSL":

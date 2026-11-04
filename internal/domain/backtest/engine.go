@@ -265,12 +265,14 @@ func Run(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Candl
 		case model.SignalSell:
 			if p.qty != 0 {
 				exitPrice := c.Close
-				// Stop exits fill at the stop level, adjusted for a gap-down open:
+				// Intrabar stop exits fill at the stop level, adjusted for a gap-down open:
 				// min(level, open) lands inside the bar and charges real gap risk.
 				// TP exits fill at the target, adjusted for a gap-up open: max(target,
 				// open) is the limit fill and rewards a gap through the target.
 				// The set of stop-style reasons is centralized in model.IsStopReason.
 				switch {
+				case model.IsCloseConfirmedStopReason(sig.Reason):
+					// Confirmation is known only at the completed candle close.
 				case model.IsStopReason(sig.Reason):
 					if sig.StopLoss > 0 {
 						exitPrice = min(sig.StopLoss, c.Open)
@@ -379,6 +381,8 @@ func Trace(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Can
 			if p.qty != 0 {
 				exitPrice := c.Close
 				switch {
+				case model.IsCloseConfirmedStopReason(sig.Reason):
+					// Confirmation is known only at the completed candle close.
 				case model.IsStopReason(sig.Reason):
 					if sig.StopLoss > 0 {
 						exitPrice = min(sig.StopLoss, c.Open)

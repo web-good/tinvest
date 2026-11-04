@@ -179,7 +179,7 @@ func TestEngineDualStopFills(t *testing.T) {
 		{"emergency at level", bar{104, 105, 97, 102}, "SL_EMERGENCY", 97},
 		{"emergency gap", bar{96, 105, 95, 102}, "SL_EMERGENCY", 96},
 		{"primary close at level", bar{104, 105, 98, 99}, "SL_CLOSE", 99},
-		{"primary gap recovered above emergency", bar{98, 105, 97.5, 98.5}, "SL_CLOSE", 98},
+		{"primary gap recovered above emergency", bar{98, 105, 97.5, 98.5}, "SL_CLOSE", 98.5},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p := testParams()

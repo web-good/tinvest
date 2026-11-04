@@ -277,7 +277,7 @@ func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 				break
 			}
 		}
-		if invalid || !s.structurePasses(md, z) || md.Lows[k] > z.upper || md.Closes[k] < z.lower || md.Closes[k] > z.upper-s.p.MinRetestDepthPct/100*(z.upper-z.lower) {
+		if invalid || !s.structurePasses(md, z) || md.Lows[k] > z.upper-s.p.MinRetestDepthPct/100*(z.upper-z.lower) {
 			continue
 		}
 		htfOK, htfClose, htfEMA := s.htfTrendOK(md)

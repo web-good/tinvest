@@ -32,3 +32,14 @@ func TestIsStopReason(t *testing.T) {
 		})
 	}
 }
+
+func TestIsCloseConfirmedStopReason(t *testing.T) {
+	for _, reason := range []string{"SL_CLOSE", "SL_EMERGENCY", "SL", "TRAIL", "ATRSL", "CATSL", "TP", "OB", "RSI50", "", "sl_close", "SL_CLOSE "} {
+		t.Run(reason, func(t *testing.T) {
+			want := reason == "SL_CLOSE"
+			if got := IsCloseConfirmedStopReason(reason); got != want {
+				t.Errorf("IsCloseConfirmedStopReason(%q)=%v, want %v", reason, got, want)
+			}
+		})
+	}
+}

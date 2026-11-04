@@ -168,24 +168,25 @@ func TestValidateParams(t *testing.T) {
 // Compile-time assertion also pins the consumer interface.
 var _ strategy.Strategy = (*Strategy)(nil)
 
-// Reject shallow closes while keeping inclusive depth boundaries and lower-wick protection.
-func TestRetestRequiresConfiguredDepth(t *testing.T) {
+// Reject shallow wicks while keeping inclusive depth boundaries and lower-wick protection.
+func TestRetestDepthUsesWick(t *testing.T) {
 	for _, tc := range []struct {
 		name              string
 		depth, low, close float64
 		want              model.SignalKind
 	}{
-		{"midpoint inclusive", 50, 101, 101, model.SignalBuy},
-		{"above midpoint", 50, 101, 101.01, model.SignalNone},
-		{"above zone", 50, 101, 103, model.SignalNone},
-		{"lower inclusive", 100, 100, 100, model.SignalBuy},
-		{"lower breached", 100, 99.99, 100, model.SignalNone},
-		{"below lower close", 50, 100, 99, model.SignalNone},
-		{"fractional depth inclusive", 37.5, 101, 101.25, model.SignalBuy},
-		{"fractional depth shallow", 37.5, 101, 101.26, model.SignalNone},
-		{"zero depth upper inclusive", 0, 101, 102, model.SignalBuy},
-		{"zero depth above upper", 0, 101, 102.01, model.SignalNone},
-		{"full depth above lower", 100, 100, 100.01, model.SignalNone},
+		{"midpoint inclusive with close above zone", 50, 101, 103, model.SignalBuy},
+		{"above midpoint with high close", 50, 101.01, 103, model.SignalNone},
+		{"above midpoint with low close", 50, 101.01, 101.01, model.SignalNone},
+		{"lower inclusive", 50, 100, 103, model.SignalBuy},
+		{"lower breached", 50, 99.99, 103, model.SignalNone},
+		{"full depth lower inclusive", 100, 100, 103, model.SignalBuy},
+		{"full depth lower breached", 100, 99.99, 103, model.SignalNone},
+		{"full depth above lower", 100, 100.01, 103, model.SignalNone},
+		{"fractional depth inclusive", 37.5, 101.25, 103, model.SignalBuy},
+		{"fractional depth shallow", 37.5, 101.26, 103, model.SignalNone},
+		{"zero depth upper inclusive", 0, 102, 103, model.SignalBuy},
+		{"zero depth above upper", 0, 102.01, 103, model.SignalNone},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p := testParams()

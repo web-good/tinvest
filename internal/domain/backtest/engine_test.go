@@ -861,3 +861,50 @@ func TestHTFDecisionOffsetRunAndTrace(t *testing.T) {
 		})
 	}
 }
+
+// Reentry at 1 makes the next position quantity equal to the cash released by
+// the exit, exposing Trace's fill price through its real portfolio state.
+func TestEngineSLCloseAndEmergencyFills(t *testing.T) {
+	for _, tc := range []struct {
+		name, reason         string
+		stop, open, wantExit float64
+		wantQty              int64
+	}{
+		{"close confirmed", "SL_CLOSE", 100, 99, 98.5, 985},
+		{"emergency intrabar", "SL_EMERGENCY", 98, 99, 98, 980},
+		{"emergency gap", "SL_EMERGENCY", 100, 99, 99, 990},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			candles := flatCandles([]float64{100, 98.5, 1, 1})
+			candles[1].Open, candles[1].High, candles[1].Low = tc.open, 101, 97
+			cfg := Config{InitialCash: 1000, Fraction: 1, Lot: 1}
+			for _, trace := range []bool{false, true} {
+				var qty int64
+				s := scriptedStrategy{lookback: 1, decide: func(md strategy.MarketData) model.Signal {
+					switch md.Times[0] {
+					case candles[0].Time, candles[2].Time:
+						return model.Signal{Kind: model.SignalBuy}
+					case candles[1].Time:
+						return model.Signal{Kind: model.SignalSell, Reason: tc.reason, StopLoss: tc.stop}
+					case candles[3].Time:
+						if md.Position != nil {
+							qty = md.Position.Quantity
+						}
+					}
+					return model.Signal{}
+				}}
+				if trace {
+					Trace(s, candles, nil, nil, cfg, candles[3].Time)
+				} else {
+					res := Run(s, candles, nil, nil, cfg)
+					if len(res.Trades) != 1 || res.Trades[0].ExitPrice != tc.wantExit {
+						t.Errorf("Run trades=%+v, want exit %v", res.Trades, tc.wantExit)
+					}
+				}
+				if qty != tc.wantQty {
+					t.Errorf("trace=%v: reentry quantity=%d, want %d", trace, qty, tc.wantQty)
+				}
+			}
+		})
+	}
+}
