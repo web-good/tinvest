@@ -246,6 +246,11 @@ func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 		if s.p.TakeProfitR > 0 && md.Highs[k] >= target {
 			sig.Kind, sig.Reason, sig.TakeProfit = model.SignalSell, "TP", target
 			sig.ExitReason = fmt.Sprintf("FVG target %.4f (%.2fR from fill)", target, s.p.TakeProfitR)
+			return sig
+		}
+		if s.p.MaxHoldBars > 0 && pos.BarsHeld >= s.p.MaxHoldBars {
+			sig.Kind, sig.Reason = model.SignalSell, "TIME"
+			sig.ExitReason = fmt.Sprintf("FVG time exit after %d bars", s.p.MaxHoldBars)
 		}
 		return sig
 	}

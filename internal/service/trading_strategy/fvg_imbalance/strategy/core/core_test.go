@@ -322,6 +322,50 @@ func TestPosition(t *testing.T) {
 	}
 }
 
+func TestPositionTimeExit(t *testing.T) {
+	tests := []struct {
+		name        string
+		limit, held int
+		low, high   float64
+		wantReason  string
+	}{
+		{"disabled", 0, 9, 101, 109, ""},
+		{"before limit", 3, 2, 101, 109, ""},
+		{"at limit", 3, 3, 101, 109, "TIME"},
+		{"past limit", 3, 4, 101, 109, "TIME"},
+		{"stop wins at limit", 3, 3, 99, 111, "SL"},
+		{"target wins at limit", 3, 3, 101, 111, "TP"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := testParams()
+			p.MaxHoldBars = tt.limit
+			p.HTFTrendEMA = 2
+			p.RequireBullishBOS = 1
+			p.RequireLiquiditySweep = 1
+			md := snapshot(bar{104, tt.high, tt.low, 105})
+			// No H4 or formation history: exit decisions must bypass entry gates.
+			md.Position = &strategy.Position{PurchasePrice: 104, StopLoss: 100, BarsHeld: tt.held}
+			sig := NewWithParams("TEST", step, p).Decide(md)
+			if sig.Reason != tt.wantReason {
+				t.Fatalf("reason=%q, want %q: %+v", sig.Reason, tt.wantReason, sig)
+			}
+			if tt.wantReason == "" {
+				if sig.Kind != model.SignalNone {
+					t.Fatalf("unexpected exit: %+v", sig)
+				}
+				return
+			}
+			if sig.Kind != model.SignalSell || sig.ExitReason == "" {
+				t.Fatalf("missing descriptive sell signal: %+v", sig)
+			}
+			if tt.wantReason == "TIME" && (!strings.Contains(sig.ExitReason, "FVG") || !strings.Contains(sig.ExitReason, "3 bars")) {
+				t.Fatalf("time exit reason lacks bar limit: %+v", sig)
+			}
+		})
+	}
+}
+
 // A zone must retain the same formation ATR and qualification when the engine
 // drops the oldest candle. Period 2 exercises Wilder smoothing, unlike period 1.
 func TestRetestFormationATRStableAcrossSlidingWindows(t *testing.T) {

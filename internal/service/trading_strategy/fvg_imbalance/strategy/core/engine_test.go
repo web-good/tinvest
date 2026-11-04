@@ -85,6 +85,29 @@ func TestEngineTargetOnFillBar(t *testing.T) {
 	}
 }
 
+func TestEngineTimeExitAtExactBarCountUsesClose(t *testing.T) {
+	p := testParams()
+	p.MaxHoldBars = 2
+	candles := engineCandles(
+		bar{104, 106, 102, 104}, // next-open fill; BarsHeld = 0
+		bar{104, 107, 102, 105}, // BarsHeld = 1
+		bar{105, 108, 102, 106}, // BarsHeld = 2, exit at close
+	)
+	result := bt.Run(NewWithParams("TEST", step, p), candles, nil, nil, bt.Config{InitialCash: 100000, Fraction: 1, Lot: 1, EntryAtNextOpen: true})
+	if len(result.Trades) != 1 {
+		t.Fatalf("trades=%+v", result.Trades)
+	}
+	tr := result.Trades[0]
+	entry := candles[len(candles)-3].Time
+	exit := candles[len(candles)-1].Time
+	if tr.EntryPrice != 104 || tr.ExitPrice != 106 || tr.BarsHeld != 2 || tr.Reason != "TIME" || !tr.EntryTime.Equal(entry) || !tr.ExitTime.Equal(exit) {
+		t.Fatalf("wrong time exit: %+v; entry=%v exit=%v", tr, entry, exit)
+	}
+	if tr.ExitReason == "" {
+		t.Fatalf("missing time exit description: %+v", tr)
+	}
+}
+
 func TestEngineBufferedTargetAndGapThroughStop(t *testing.T) {
 	p := testParams()
 	p.StopBufferATR = .5
