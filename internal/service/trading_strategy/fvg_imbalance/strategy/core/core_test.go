@@ -115,6 +115,13 @@ func TestFVGFormationRealGAZP20261015(t *testing.T) {
 	}
 }
 
+func TestDefaultParams(t *testing.T) {
+	p := DefaultParams()
+	if p.RequireFirstRetest != 0 || p.RequireBullishBOS != 0 || p.RequireLiquiditySweep != 0 || p.SwingK != 2 || p.StructureLookbackBars != 48 || p.MaxSweepToFVGBars != 8 || p.HTFTrendEMA != 0 || p.MaxEntryDistanceATR != 0 || p.MaxHoldBars != 0 || p.StopBufferATR != 0 {
+		t.Fatalf("unexpected defaults: %+v", p)
+	}
+}
+
 func TestValidateParams(t *testing.T) {
 	if err := ValidateParams(DefaultParams()); err != nil {
 		t.Fatal(err)
@@ -123,6 +130,15 @@ func TestValidateParams(t *testing.T) {
 		name   string
 		change func(*Params)
 	}{
+		{"first retest negative", func(p *Params) { p.RequireFirstRetest = -1 }}, {"first retest large", func(p *Params) { p.RequireFirstRetest = 2 }},
+		{"BOS negative", func(p *Params) { p.RequireBullishBOS = -1 }}, {"BOS large", func(p *Params) { p.RequireBullishBOS = 2 }},
+		{"sweep negative", func(p *Params) { p.RequireLiquiditySweep = -1 }}, {"sweep large", func(p *Params) { p.RequireLiquiditySweep = 2 }},
+		{"zero swing", func(p *Params) { p.SwingK = 0 }}, {"negative swing", func(p *Params) { p.SwingK = -1 }},
+		{"zero structure lookback", func(p *Params) { p.StructureLookbackBars = 0 }}, {"negative structure lookback", func(p *Params) { p.StructureLookbackBars = -1 }},
+		{"zero sweep age", func(p *Params) { p.MaxSweepToFVGBars = 0 }}, {"negative sweep age", func(p *Params) { p.MaxSweepToFVGBars = -1 }},
+		{"negative EMA", func(p *Params) { p.HTFTrendEMA = -1 }}, {"negative hold", func(p *Params) { p.MaxHoldBars = -1 }},
+		{"negative distance", func(p *Params) { p.MaxEntryDistanceATR = -1 }}, {"NaN distance", func(p *Params) { p.MaxEntryDistanceATR = math.NaN() }}, {"infinite distance", func(p *Params) { p.MaxEntryDistanceATR = math.Inf(1) }},
+		{"negative buffer", func(p *Params) { p.StopBufferATR = -1 }}, {"NaN buffer", func(p *Params) { p.StopBufferATR = math.NaN() }}, {"infinite buffer", func(p *Params) { p.StopBufferATR = math.Inf(-1) }},
 		{"zero ATR", func(p *Params) { p.ATRPeriod = 0 }}, {"negative ATR", func(p *Params) { p.ATRPeriod = -1 }},
 		{"zero retest bars", func(p *Params) { p.MaxRetestBars = 0 }}, {"negative retest bars", func(p *Params) { p.MaxRetestBars = -1 }},
 		{"negative gap", func(p *Params) { p.MinGapATR = -1 }}, {"negative target", func(p *Params) { p.TakeProfitR = -1 }},
@@ -365,5 +381,95 @@ func TestRetestFormationATRRetainedThroughExpiry(t *testing.T) {
 		if sig.Kind != model.SignalBuy || sig.ATR != 2.5 {
 			t.Fatalf("age %d, lookback %d: want buy with formation ATR 2.5, got %+v", age, s.Lookback(), sig)
 		}
+	}
+}
+
+func TestSwing(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		values     []float64
+		i, k       int
+		high, want bool
+	}{
+		{"high", []float64{1, 3, 5, 4, 2}, 2, 2, true, true},
+		{"low", []float64{5, 3, 1, 2, 4}, 2, 2, false, true},
+		{"equal high", []float64{1, 5, 5, 4, 2}, 2, 2, true, false},
+		{"equal low", []float64{5, 1, 1, 2, 4}, 2, 2, false, false},
+		{"missing left", []float64{5, 4, 3}, 0, 1, true, false},
+		{"missing right confirmation", []float64{1, 5}, 1, 1, true, false},
+		{"invalid k", []float64{1, 5, 1}, 1, 0, true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var got bool
+			if tc.high {
+				got = swingHighAt(tc.values, tc.i, tc.k)
+			} else {
+				got = swingLowAt(tc.values, tc.i, tc.k)
+			}
+			if got != tc.want {
+				t.Fatalf("got %v want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestLookback(t *testing.T) {
+	p := DefaultParams()
+	p.ATRPeriod = 2
+	p.MaxRetestBars = 8
+	p.StructureLookbackBars = 10
+	p.SwingK = 2
+	s := NewWithParams("TEST", step, p)
+	if got := s.Lookback(); got != 12 {
+		t.Fatalf("legacy %d", got)
+	}
+	p.RequireBullishBOS = 1
+	s = NewWithParams("TEST", step, p)
+	if got := s.Lookback(); got != 25 {
+		t.Fatalf("BOS %d", got)
+	}
+	p.RequireBullishBOS = 0
+	p.RequireLiquiditySweep = 1
+	s = NewWithParams("TEST", step, p)
+	if got := s.Lookback(); got != 25 {
+		t.Fatalf("sweep %d", got)
+	}
+}
+
+func TestStructure(t *testing.T) {
+	base := []bar{{10, 10, 10, 10}, {10, 11, 9, 10}, {10, 12, 8, 10}, {10, 11, 9, 10}, {10, 10, 10, 10}, {10, 11, 7, 10}, {10, 14, 10, 13}, {10, 11, 10, 10}, {10, 11, 10, 10}}
+	for _, tc := range []struct {
+		name       string
+		sweep, bos int
+		change     func([]bar, *Params)
+		want       bool
+	}{
+		{"both ordered", 1, 1, func([]bar, *Params) {}, true},
+		{"standalone sweep", 1, 0, func(b []bar, _ *Params) { b[6].c = 10 }, true},
+		{"standalone BOS", 0, 1, func(b []bar, _ *Params) { b[5].l = 9; b[7].c = 15 }, true},
+		{"wick without reclaim", 1, 0, func(b []bar, _ *Params) { b[5].c = 7 }, false},
+		{"reclaim equality", 1, 0, func(b []bar, _ *Params) { b[5].c = 8 }, false},
+		{"sweep equality", 1, 0, func(b []bar, _ *Params) { b[5].l = 8 }, false},
+		{"expired sweep", 1, 0, func(_ []bar, p *Params) { p.MaxSweepToFVGBars = 2 }, false},
+		{"age boundary", 1, 0, func(_ []bar, p *Params) { p.MaxSweepToFVGBars = 3 }, true},
+		{"wick only BOS", 1, 1, func(b []bar, _ *Params) { b[6].c = 12 }, false},
+		{"BOS before sweep", 1, 1, func(b []bar, _ *Params) { b[4].c = 13; b[6].c = 10 }, false},
+		{"sweep and BOS same bar", 1, 1, func(b []bar, _ *Params) { b[5].h = 14; b[5].c = 13; b[6].c = 10 }, true},
+		{"late confirmation unavailable", 1, 0, func(b []bar, _ *Params) { b[2].l = 9; b[4].l = 8; b[5].l = 7 }, false},
+		{"standalone BOS on b", 0, 1, func(b []bar, _ *Params) { b[6].c = 10; b[7].c = 13 }, true},
+		{"standalone BOS before b", 0, 1, func(b []bar, _ *Params) { b[6].c = 13; b[7].c = 10 }, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			b := append([]bar(nil), base...)
+			p := testParams()
+			p.SwingK = 1
+			p.RequireLiquiditySweep = tc.sweep
+			p.RequireBullishBOS = tc.bos
+			tc.change(b, &p)
+			got := NewWithParams("TEST", step, p).structurePasses(snapshot(b...), zone{formed: 8})
+			if got != tc.want {
+				t.Fatalf("got %v want %v", got, tc.want)
+			}
+		})
 	}
 }
