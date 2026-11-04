@@ -84,3 +84,29 @@ func TestEngineTargetOnFillBar(t *testing.T) {
 		t.Fatalf("want fill-bar TP at 110: %+v", tr)
 	}
 }
+
+func TestEngineBufferedTargetAndGapThroughStop(t *testing.T) {
+	p := testParams()
+	p.StopBufferATR = .5
+	for _, tc := range []struct {
+		name        string
+		later       []bar
+		entry, exit float64
+		reason      string
+	}{
+		{"actual fill target", []bar{{104, 110, 100, 105}, {105, 112, 100, 110}}, 104, 111.5, "TP"},
+		{"gap through buffered stop", []bar{{98, 104, 97, 103}}, 98, 98, "SL"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			candles := engineCandles(tc.later...)
+			result := bt.Run(NewWithParams("TEST", step, p), candles, nil, nil, bt.Config{InitialCash: 100000, Fraction: 1, Lot: 1, EntryAtNextOpen: true})
+			if len(result.Trades) != 1 {
+				t.Fatalf("trades=%+v", result.Trades)
+			}
+			tr := result.Trades[0]
+			if tr.EntryPrice != tc.entry || tr.ExitPrice != tc.exit || tr.Reason != tc.reason {
+				t.Fatalf("trade=%+v", tr)
+			}
+		})
+	}
+}

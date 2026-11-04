@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -471,5 +472,201 @@ func TestStructure(t *testing.T) {
 				t.Fatalf("got %v want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestFirstRetest(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		later   []bar
+		enabled int
+		want    model.SignalKind
+	}{
+		{"first touch", []bar{{103, 104, 101, 103}}, 1, model.SignalBuy},
+		{"second protected touch", []bar{{103, 104, 101, 103}, {103, 104, 101, 103}}, 1, model.SignalNone},
+		{"first touch fails close confirmation", []bar{{103, 104, 101, 101.5}, {103, 104, 101, 103}}, 1, model.SignalNone},
+		{"disabled allows second touch", []bar{{103, 104, 101, 103}, {103, 104, 101, 103}}, 0, model.SignalBuy},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := testParams()
+			p.RequireFirstRetest = tc.enabled
+			sig := NewWithParams("TEST", step, p).Decide(snapshot(append(formation(), tc.later...)...))
+			if sig.Kind != tc.want {
+				t.Fatalf("signal=%+v, want %v", sig, tc.want)
+			}
+		})
+	}
+	t.Run("weekend or missing fill slot consumes first touch", func(t *testing.T) {
+		p := testParams()
+		p.RequireFirstRetest = 1
+		md := snapshot(append(formation(), bar{103, 104, 101, 103}, bar{103, 104, 101, 103})...)
+		md.Times[3] = time.Date(2026, 11, 6, 23, 30, 0, 0, time.UTC)
+		md.Times[4] = time.Date(2026, 11, 9, 10, 0, 0, 0, time.UTC)
+		s := NewWithParams("TEST", step, p)
+		first := md
+		first.Closes = md.Closes[:4]
+		first.Opens = md.Opens[:4]
+		first.Highs = md.Highs[:4]
+		first.Lows = md.Lows[:4]
+		first.Times = md.Times[:4]
+		if sig := s.Decide(first); sig.Kind != model.SignalNone {
+			t.Fatalf("weekend signal=%+v", sig)
+		}
+		if sig := s.Decide(md); sig.Kind != model.SignalNone {
+			t.Fatalf("later signal=%+v", sig)
+		}
+	})
+	t.Run("missing next slot consumes first touch", func(t *testing.T) {
+		p := testParams()
+		p.RequireFirstRetest = 1
+		md := snapshot(append(formation(), bar{103, 104, 101, 103}, bar{103, 104, 101, 103})...)
+		md.Times[4] = md.Times[4].Add(step)
+		if sig := NewWithParams("TEST", step, p).Decide(md); sig.Kind != model.SignalNone {
+			t.Fatalf("later signal=%+v", sig)
+		}
+	})
+	t.Run("first touch failing H4 still consumes", func(t *testing.T) {
+		p := testParams()
+		p.RequireFirstRetest, p.HTFTrendEMA = 1, 3
+		md := snapshot(append(formation(), bar{103, 104, 101, 103}, bar{103, 104, 101, 103})...)
+		first := md
+		first.Closes, first.Opens, first.Highs, first.Lows, first.Times = md.Closes[:4], md.Opens[:4], md.Highs[:4], md.Lows[:4], md.Times[:4]
+		first.HTFCloses = []float64{3, 2, 1}
+		md.HTFCloses = []float64{1, 2, 3}
+		s := NewWithParams("TEST", step, p)
+		if sig := s.Decide(first); sig.Kind != model.SignalNone {
+			t.Fatalf("first signal=%+v", sig)
+		}
+		if sig := s.Decide(md); sig.Kind != model.SignalNone {
+			t.Fatalf("later signal=%+v", sig)
+		}
+	})
+	t.Run("consumed newer zone does not hide older", func(t *testing.T) {
+		// Synthetic OHLC allows overlapping reconstructed zones while keeping the older untouched.
+		b := append(formation(), bar{101, 101, 102.5, 101}, bar{101, 104, 102.5, 103}, bar{104, 105, 103, 104}, bar{104, 105, 102.5, 104}, bar{103, 105, 101.5, 104})
+		p := testParams()
+		p.RequireFirstRetest = 1
+		s := NewWithParams("TEST", step, p)
+		md := snapshot(b...)
+		zones := s.discover(md)
+		if len(zones) < 2 || zones[len(zones)-1].lower != 101 {
+			t.Fatalf("expected newer zone: %+v", zones)
+		}
+		legacy := p
+		legacy.RequireFirstRetest = 0
+		if sig := NewWithParams("TEST", step, legacy).Decide(md); sig.Kind != model.SignalBuy || sig.StopLoss != 101 {
+			t.Fatalf("newer zone should otherwise qualify: %+v", sig)
+		}
+		sig := s.Decide(md)
+		if sig.Kind != model.SignalBuy || sig.StopLoss != 100 {
+			t.Fatalf("older zone signal=%+v", sig)
+		}
+	})
+}
+
+func TestEntryStructureGates(t *testing.T) {
+	base := []bar{{10, 10, 10, 10}, {10, 11, 9, 10}, {10, 12, 8, 10}, {10, 11, 9, 10}, {10, 10, 10, 10}, {10, 11, 7, 10}, {10, 14, 10, 13}, {14, 17, 14, 16}, {16, 17, 16, 16.5}, {16, 17, 15, 16.5}}
+	for _, tc := range []struct {
+		name       string
+		sweep, bos int
+		change     func([]bar)
+		want       model.SignalKind
+	}{
+		{"disabled", 0, 0, func([]bar) {}, model.SignalBuy},
+		{"sweep passes", 1, 0, func([]bar) {}, model.SignalBuy},
+		{"sweep fails", 1, 0, func(b []bar) { b[5].l = 8 }, model.SignalNone},
+		{"BOS passes without sweep", 0, 1, func(b []bar) { b[5].l = 9 }, model.SignalBuy},
+		{"BOS fails", 0, 1, func(b []bar) { b[2].h = 18 }, model.SignalNone},
+		{"combined passes", 1, 1, func([]bar) {}, model.SignalBuy},
+		{"combined fails sweep", 1, 1, func(b []bar) { b[5].l = 8 }, model.SignalNone},
+		{"combined fails BOS", 1, 1, func(b []bar) { b[2].h = 18 }, model.SignalNone},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			b := append([]bar(nil), base...)
+			tc.change(b)
+			p := testParams()
+			p.SwingK = 1
+			p.RequireLiquiditySweep = tc.sweep
+			p.RequireBullishBOS = tc.bos
+			sig := NewWithParams("TEST", step, p).Decide(snapshot(b...))
+			if sig.Kind != tc.want {
+				t.Fatalf("signal=%+v, want %v", sig, tc.want)
+			}
+		})
+	}
+}
+
+func TestHTFTrend(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		period int
+		closes []float64
+		want   model.SignalKind
+	}{
+		{"disabled nil", 0, nil, model.SignalBuy},
+		{"disabled nonfinite", 0, []float64{math.NaN()}, model.SignalBuy},
+		{"enabled nil", 3, nil, model.SignalNone},
+		{"enabled short", 3, []float64{1, 2}, model.SignalNone},
+		{"enabled NaN", 3, []float64{1, math.NaN(), 3}, model.SignalNone},
+		{"enabled infinite", 3, []float64{1, 2, math.Inf(1)}, model.SignalNone},
+		{"equality", 3, []float64{2, 2, 2}, model.SignalNone},
+		{"downtrend", 3, []float64{3, 2, 1}, model.SignalNone},
+		{"strict uptrend", 3, []float64{1, 2, 3}, model.SignalBuy},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := testParams()
+			p.HTFTrendEMA = tc.period
+			md := snapshot(append(formation(), bar{103, 104, 101, 103})...)
+			md.HTFCloses = tc.closes
+			sig := NewWithParams("TEST", step, p).Decide(md)
+			if sig.Kind != tc.want {
+				t.Fatalf("signal=%+v, want %v", sig, tc.want)
+			}
+			if tc.period > 0 && sig.Kind == model.SignalBuy && !strings.Contains(sig.EntryReason, "H4") {
+				t.Fatalf("missing H4 verdict: %+v", sig)
+			}
+		})
+	}
+	t.Run("position exit ignores missing H4", func(t *testing.T) {
+		p := testParams()
+		p.HTFTrendEMA = 3
+		md := snapshot(bar{104, 105, 99, 104})
+		md.Position = &strategy.Position{PurchasePrice: 104, StopLoss: 100}
+		sig := NewWithParams("TEST", step, p).Decide(md)
+		if sig.Kind != model.SignalSell || sig.Reason != "SL" {
+			t.Fatalf("signal=%+v", sig)
+		}
+	})
+}
+
+func TestEntryDistance(t *testing.T) {
+	for _, tc := range []struct{ distance, want float64 }{{0, 0}, {.5, 103}} {
+		p := testParams()
+		p.MaxEntryDistanceATR = tc.distance
+		md := snapshot(append(formation(), bar{103, 200, 102.5, 103}, bar{103, 104, 101, 103})...)
+		sig := NewWithParams("TEST", step, p).Decide(md)
+		if sig.Kind != model.SignalBuy || sig.MaxEntryPrice != tc.want || sig.ATR != 2 {
+			t.Fatalf("distance %v: %+v", tc.distance, sig)
+		}
+		if tc.distance > 0 && !strings.Contains(sig.EntryReason, "max entry") {
+			t.Fatalf("missing limit: %+v", sig)
+		}
+	}
+}
+
+func TestStopBuffer(t *testing.T) {
+	p := testParams()
+	p.StopBufferATR = .5
+	md := snapshot(append(formation(), bar{103, 200, 102.5, 103}, bar{103, 104, 101, 103})...)
+	s := NewWithParams("TEST", step, p)
+	sig := s.Decide(md)
+	if sig.Kind != model.SignalBuy || sig.StopLoss != 99 || sig.TakeProfit != 109 || !strings.Contains(sig.EntryReason, "stop 99.0000") {
+		t.Fatalf("buffered entry: %+v", sig)
+	}
+	md.Position = &strategy.Position{PurchasePrice: 104, StopLoss: sig.StopLoss}
+	md.Highs[len(md.Highs)-1] = 111.5
+	sig = s.Decide(md)
+	if sig.Kind != model.SignalSell || sig.Reason != "TP" || sig.TakeProfit != 111.5 {
+		t.Fatalf("actual-fill target: %+v", sig)
 	}
 }

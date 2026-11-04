@@ -7,6 +7,7 @@ import (
 	"math"
 	"time"
 
+	"tinvest/internal/domain/ema"
 	"tinvest/internal/service/trading_strategy/scalping/model"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 	"tinvest/pkg/indicators"
@@ -205,6 +206,25 @@ func (s *Strategy) discover(md strategy.MarketData) []zone {
 	return zones
 }
 
+// htfTrendOK evaluates the completed higher-timeframe closes supplied by the engine.
+func (s *Strategy) htfTrendOK(md strategy.MarketData) (ok bool, close, value float64) {
+	if s.p.HTFTrendEMA == 0 {
+		return true, 0, 0
+	}
+	if len(md.HTFCloses) < s.p.HTFTrendEMA {
+		return false, 0, 0
+	}
+	for _, v := range md.HTFCloses {
+		if math.IsNaN(v) || math.IsInf(v, 0) {
+			return false, 0, 0
+		}
+	}
+	close = md.HTFCloses[len(md.HTFCloses)-1]
+	values := ema.Compute(md.HTFCloses, s.p.HTFTrendEMA)
+	value = values[len(values)-1]
+	return !math.IsNaN(value) && !math.IsInf(value, 0) && close > value, close, value
+}
+
 // Decide reconstructs zones from completed bars and never mutates the snapshot.
 func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 	sig := model.Signal{Ticker: s.ticker, Price: md.Price}
@@ -238,12 +258,16 @@ func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 		}
 		invalid := false
 		for j := z.formed + 1; j <= k; j++ {
-			if md.Lows[j] <= z.lower {
+			if md.Lows[j] <= z.lower || (s.p.RequireFirstRetest == 1 && j < k && md.Lows[j] <= z.upper) {
 				invalid = true
 				break
 			}
 		}
-		if invalid || md.Lows[k] > z.upper || (s.p.RequireCloseAboveZone == 1 && md.Closes[k] <= z.upper) {
+		if invalid || !s.structurePasses(md, z) || md.Lows[k] > z.upper || (s.p.RequireCloseAboveZone == 1 && md.Closes[k] <= z.upper) {
+			continue
+		}
+		htfOK, htfClose, htfEMA := s.htfTrendOK(md)
+		if !htfOK {
 			continue
 		}
 		fillBy := md.Times[k].Add(s.step)
@@ -251,12 +275,33 @@ func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 			return sig
 		}
 		sig.Kind = model.SignalBuy
-		sig.StopLoss, sig.ATR, sig.Level = z.lower, z.atr, z.upper
+		sig.StopLoss, sig.ATR, sig.Level = z.lower-s.p.StopBufferATR*z.atr, z.atr, z.upper
+		if s.p.MaxEntryDistanceATR > 0 {
+			sig.MaxEntryPrice = z.upper + s.p.MaxEntryDistanceATR*z.atr
+		}
 		if s.p.TakeProfitR > 0 {
-			sig.TakeProfit = md.Closes[k] + s.p.TakeProfitR*(md.Closes[k]-z.lower)
+			sig.TakeProfit = md.Closes[k] + s.p.TakeProfitR*(md.Closes[k]-sig.StopLoss)
 		}
 		sig.FillBy = fillBy
 		sig.EntryReason = fmt.Sprintf("M30 bullish FVG [%.4f, %.4f] protected retest, ATR %.4f", z.lower, z.upper, z.atr)
+		if s.p.RequireFirstRetest == 1 {
+			sig.EntryReason += "; first retest"
+		}
+		if s.p.RequireLiquiditySweep == 1 {
+			sig.EntryReason += "; liquidity sweep passed"
+		}
+		if s.p.RequireBullishBOS == 1 {
+			sig.EntryReason += "; bullish BOS passed"
+		}
+		if s.p.RequireFirstRetest == 1 || s.p.RequireLiquiditySweep == 1 || s.p.RequireBullishBOS == 1 || s.p.HTFTrendEMA > 0 || s.p.MaxEntryDistanceATR > 0 || s.p.StopBufferATR > 0 {
+			sig.EntryReason += fmt.Sprintf("; stop %.4f", sig.StopLoss)
+		}
+		if s.p.MaxEntryDistanceATR > 0 {
+			sig.EntryReason += fmt.Sprintf("; max entry %.4f", sig.MaxEntryPrice)
+		}
+		if s.p.HTFTrendEMA > 0 {
+			sig.EntryReason += fmt.Sprintf("; H4 close %.4f > EMA(%d) %.4f", htfClose, s.p.HTFTrendEMA, htfEMA)
+		}
 		return sig
 	}
 	return sig
