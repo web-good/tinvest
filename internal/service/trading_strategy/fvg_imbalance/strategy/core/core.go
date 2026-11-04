@@ -56,8 +56,14 @@ func NewWithParams(ticker string, step time.Duration, p Params) *Strategy {
 }
 func (s *Strategy) Ticker() string { return s.ticker }
 
-// Lookback includes ATR warmup before the oldest potentially live formation.
-func (s *Strategy) Lookback() int { return s.p.ATRPeriod + s.p.MaxRetestBars + 3 }
+// Lookback retains the complete formation ATR history through the last eligible
+// retest, together with all three formation candles even when ATRPeriod is 1.
+func (s *Strategy) Lookback() int { return max(3, s.atrBars()) + s.p.MaxRetestBars }
+
+// atrBars fixes the Wilder seed relative to the formation, never to the moving
+// beginning of MarketData. Two periods of candles provide the seed and period-1
+// smoothing steps. Every reconstruction of a zone therefore uses identical bars.
+func (s *Strategy) atrBars() int { return 2 * s.p.ATRPeriod }
 
 type zone struct {
 	lower, upper, atr float64
@@ -70,7 +76,7 @@ func (s *Strategy) discover(md strategy.MarketData) []zone {
 		return nil
 	}
 	var zones []zone
-	for c := max(2, s.p.ATRPeriod); c < n; c++ {
+	for c := max(2, s.atrBars()-1); c < n; c++ {
 		a, b := c-2, c-1
 		if !md.Times[b].Equal(md.Times[a].Add(s.step)) || !md.Times[c].Equal(md.Times[b].Add(s.step)) {
 			continue
@@ -79,7 +85,8 @@ func (s *Strategy) discover(md strategy.MarketData) []zone {
 		if md.Closes[b] <= md.Opens[b] || lower >= upper || md.Opens[b] < lower || md.Closes[b] > upper {
 			continue
 		}
-		atr := indicators.ATR(md.Highs[:c+1], md.Lows[:c+1], md.Closes[:c+1], s.p.ATRPeriod)
+		start := c + 1 - s.atrBars()
+		atr := indicators.ATR(md.Highs[start:c+1], md.Lows[start:c+1], md.Closes[start:c+1], s.p.ATRPeriod)
 		if atr <= 0 || upper-lower < s.p.MinGapATR*atr {
 			continue
 		}

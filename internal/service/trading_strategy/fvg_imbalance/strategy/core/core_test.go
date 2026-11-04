@@ -211,3 +211,66 @@ func TestPosition(t *testing.T) {
 		})
 	}
 }
+
+// A zone must retain the same formation ATR and qualification when the engine
+// drops the oldest candle. Period 2 exercises Wilder smoothing, unlike period 1.
+func TestRetestFormationATRStableAcrossSlidingWindows(t *testing.T) {
+	bars := make([]bar, 8)
+	for i := range bars {
+		bars[i] = bar{99, 100, 98, 99}
+	}
+	bars[1].h = 1124
+	bars = append(bars, formation()...)
+	bars = append(bars, bar{103, 104, 101, 103}, bar{103, 104, 101, 103}, bar{103, 104, 101, 103})
+	full := snapshot(bars...)
+	for _, tc := range []struct {
+		name   string
+		minGap float64
+		want   model.SignalKind
+	}{
+		{"qualified stays qualified", .5, model.SignalBuy},
+		{"rejected stays rejected", .9, model.SignalNone},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := testParams()
+			p.ATRPeriod = 2
+			p.MinGapATR = tc.minGap
+			// Same zone formed at absolute index 10; the windows end on later retests.
+			for offset := 0; offset < 2; offset++ {
+				md := snapshot(bars[offset : offset+13]...)
+				md.Times = full.Times[offset : offset+13]
+				sig := NewWithParams("TEST", step, p).Decide(md)
+				if sig.Kind != tc.want {
+					t.Fatalf("window [%d:%d]: kind %v, want %v; signal %+v", offset, offset+13, sig.Kind, tc.want, sig)
+				}
+				// The fixed four-bar formation history has TRs 2,4,2: seed 3,
+				// then Wilder-smoothed (3+2)/2 = 2.5, independent of later bars.
+				if tc.want == model.SignalBuy && sig.ATR != 2.5 {
+					t.Fatalf("window [%d:%d]: formation ATR %v, want 2.5", offset, offset+13, sig.ATR)
+				}
+			}
+		})
+	}
+}
+
+func TestRetestFormationATRRetainedThroughExpiry(t *testing.T) {
+	p := testParams()
+	p.ATRPeriod = 2
+	p.MinGapATR = .5
+	s := NewWithParams("TEST", step, p)
+	bars := make([]bar, 8)
+	for i := range bars {
+		bars[i] = bar{99, 100, 98, 99}
+	}
+	bars[1].h = 1124
+	bars = append(bars, formation()...)
+	for age := 1; age <= p.MaxRetestBars; age++ {
+		bars = append(bars, bar{103, 104, 101, 103})
+		// This is the same fixed-size truncation performed by backtest.Run.
+		md := snapshot(bars[len(bars)-s.Lookback():]...)
+		sig := s.Decide(md)
+		if sig.Kind != model.SignalBuy || sig.ATR != 2.5 {
+			t.Fatalf("age %d, lookback %d: want buy with formation ATR 2.5, got %+v", age, s.Lookback(), sig)
+		}
+	}
+}
