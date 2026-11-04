@@ -1,0 +1,14 @@
+{
+  "_comment": "M30 bullish FVG: formation gap size, retest lifetime, close confirmation and actual-fill target in R.",
+  "phases": [
+    {
+      "name": "fvg",
+      "grid": {
+        "MinGapATR": [0.15, 0.25, 0.5],
+        "MaxRetestBars": [4, 8, 12],
+        "RequireCloseAboveZone": [0, 1],
+        "TakeProfitR": [1, 1.5, 2]
+      }
+    }
+  ]
+}

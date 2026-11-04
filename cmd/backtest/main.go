@@ -40,7 +40,7 @@ func main() {
 	var (
 		ticker       = flag.String("ticker", "", "ticker, e.g. RUAL (required)")
 		intervalS    = flag.String("interval", "Hour1", "candle timeframe: Minutes5|Minutes15|Minutes30|Hour1|Hour4|Day1|Week1")
-		strategyName = flag.String("strategy", "scalping", "strategy engine: scalping|reversion|scalping_rsimacd|rsi_ema|vwap_rev|rsi_pullback|rsi_zone|gap_fade|drop_bounce|pdl_reclaim|pdl_zone|hammer|pdl_rsi|pdl_rsi_m30")
+		strategyName = flag.String("strategy", "scalping", "strategy engine: scalping|reversion|scalping_rsimacd|rsi_ema|vwap_rev|rsi_pullback|rsi_zone|gap_fade|drop_bounce|pdl_reclaim|pdl_zone|hammer|pdl_rsi|pdl_rsi_m30|fvg_imbalance")
 		months       = flag.Int("months", 12, "lookback period in months")
 		cash         = flag.Float64("cash", 100000, "starting mock cash")
 		fraction     = flag.Float64("fraction", 1.0, "fraction of cash per Buy")
@@ -56,7 +56,7 @@ func main() {
 		outDir       = flag.String("out", "reports", "report output directory")
 		refresh      = flag.Bool("refresh", false, "force candle refetch (ignore cache)")
 		explain      = flag.String("explain", "", "diagnose one bar: MSK time 'YYYY-MM-DD HH:MM'; prints why the strategy did/didn't enter")
-		riskPct      = flag.Float64("risk-pct", 0, "risk-based sizing: risk this %% of equity per trade off the entry stop (needs a stop on the buy signal: reversion CatStopATRMult>0, drop_bounce/pdl_reclaim StopDailyATR>0, pdl_zone, hammer, pdl_rsi and pdl_rsi_m30 always; 0 = fixed -fraction sizing)")
+		riskPct      = flag.Float64("risk-pct", 0, "risk-based sizing: risk this %% of equity per trade off the entry stop (needs a stop on the buy signal: reversion CatStopATRMult>0, drop_bounce/pdl_reclaim StopDailyATR>0, pdl_zone, hammer, pdl_rsi, pdl_rsi_m30 and fvg_imbalance always; 0 = fixed -fraction sizing)")
 		screen       = flag.String("screen", "", "screen mode: comma-separated tickers; ranks them by variance ratio (ignores -ticker/-strategy)")
 		volRank      = flag.Bool("volrank", false, "screener mode: rank the liquid RUB universe by Hour1 pullback-in-trend fitness (ignores -ticker/-strategy/-interval)")
 		minTurnover  = flag.Float64("min-turnover", 50, "volrank: minimum mean daily turnover in millions of RUB")
@@ -158,62 +158,9 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 	if ticker == "" {
 		return fmt.Errorf("-ticker is required")
 	}
-	var binding svc.Binding
-	switch strategyName {
-	case "reversion":
-		binding = svc.ReversionLookupOrGeneric(ticker)
-	case "scalping":
-		binding = svc.LookupOrGeneric(ticker)
-	case "scalping_rsimacd":
-		binding = svc.ScalpingRSIMACDLookupOrGeneric(ticker)
-	case "rsi_ema":
-		binding = svc.RSIEMALookupOrGeneric(ticker)
-	case "vwap_rev":
-		binding = svc.VWAPRevLookupOrGeneric(ticker)
-	case "rsi_pullback":
-		binding = svc.RSIPullbackLookupOrGeneric(ticker)
-	case "rsi_zone":
-		binding = svc.RSIZoneLookupOrGeneric(ticker)
-	case "gap_fade":
-		binding = svc.GapFadeLookupOrGeneric(ticker)
-	case "drop_bounce":
-		b, err := svc.DropBounceLookupOrGeneric(ticker, interval)
-		if err != nil {
-			return err
-		}
-		binding = b
-	case "pdl_reclaim":
-		b, err := svc.PDLReclaimLookupOrGeneric(ticker, interval)
-		if err != nil {
-			return err
-		}
-		binding = b
-	case "pdl_zone":
-		b, err := svc.PDLZoneLookupOrGeneric(ticker, interval)
-		if err != nil {
-			return err
-		}
-		binding = b
-	case "hammer":
-		b, err := svc.HammerLookupOrGeneric(ticker, interval)
-		if err != nil {
-			return err
-		}
-		binding = b
-	case "pdl_rsi":
-		b, err := svc.PDLRSILookupOrGeneric(ticker, interval)
-		if err != nil {
-			return err
-		}
-		binding = b
-	case "pdl_rsi_m30":
-		b, err := svc.PDLRSIM30LookupOrGeneric(ticker, interval)
-		if err != nil {
-			return err
-		}
-		binding = b
-	default:
-		return fmt.Errorf("unknown strategy %q (want scalping|reversion|scalping_rsimacd|rsi_ema|vwap_rev|rsi_pullback|rsi_zone|gap_fade|drop_bounce|pdl_reclaim|pdl_zone|hammer|pdl_rsi|pdl_rsi_m30)", strategyName)
+	binding, entryAtNextOpen, err := selectStrategy(ticker, strategyName, interval)
+	if err != nil {
+		return err
 	}
 
 	share, err := resolveShare(ctx, client, ticker)
@@ -275,9 +222,9 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 
 	cfg := domain.Config{InitialCash: cash, Fraction: fraction, Commission: commission, Lot: share.Lot, RiskFractionPct: riskPct, HTFInterval: htfInterval,
 		// gap_fade triggers on the opening-auction print itself, drop_bounce, pdl_reclaim, pdl_zone, hammer
-		// pdl_rsi and pdl_rsi_m30 on a bar's close; either way the first price an order can get is the
+		// pdl_rsi, pdl_rsi_m30 and fvg_imbalance on a bar's close; either way the first price an order can get is the
 		// next bar's open.
-		EntryAtNextOpen: strategyName == "gap_fade" || strategyName == "drop_bounce" || strategyName == "pdl_reclaim" || strategyName == "pdl_zone" || strategyName == "hammer" || strategyName == "pdl_rsi" || strategyName == "pdl_rsi_m30"}
+		EntryAtNextOpen: entryAtNextOpen}
 	periodDays := to.Sub(from).Hours() / 24
 
 	if explain != "" {
@@ -310,6 +257,75 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 
 	return runSingle(binding, paramsPath, candles, dailyCandles, htfCandles, cfg, periodDays, base,
 		metaCommon(ticker, interval, from, to, cfg))
+}
+
+// selectStrategy resolves the CLI binding and its entry execution policy.
+func selectStrategy(ticker, strategyName string, interval enum.Interval) (svc.Binding, bool, error) {
+	var binding svc.Binding
+	switch strategyName {
+	case "reversion":
+		binding = svc.ReversionLookupOrGeneric(ticker)
+	case "scalping":
+		binding = svc.LookupOrGeneric(ticker)
+	case "scalping_rsimacd":
+		binding = svc.ScalpingRSIMACDLookupOrGeneric(ticker)
+	case "rsi_ema":
+		binding = svc.RSIEMALookupOrGeneric(ticker)
+	case "vwap_rev":
+		binding = svc.VWAPRevLookupOrGeneric(ticker)
+	case "rsi_pullback":
+		binding = svc.RSIPullbackLookupOrGeneric(ticker)
+	case "rsi_zone":
+		binding = svc.RSIZoneLookupOrGeneric(ticker)
+	case "gap_fade":
+		binding = svc.GapFadeLookupOrGeneric(ticker)
+	case "drop_bounce":
+		b, err := svc.DropBounceLookupOrGeneric(ticker, interval)
+		if err != nil {
+			return svc.Binding{}, false, err
+		}
+		binding = b
+	case "pdl_reclaim":
+		b, err := svc.PDLReclaimLookupOrGeneric(ticker, interval)
+		if err != nil {
+			return svc.Binding{}, false, err
+		}
+		binding = b
+	case "pdl_zone":
+		b, err := svc.PDLZoneLookupOrGeneric(ticker, interval)
+		if err != nil {
+			return svc.Binding{}, false, err
+		}
+		binding = b
+	case "hammer":
+		b, err := svc.HammerLookupOrGeneric(ticker, interval)
+		if err != nil {
+			return svc.Binding{}, false, err
+		}
+		binding = b
+	case "fvg_imbalance":
+		b, err := svc.FVGImbalanceLookupOrGeneric(ticker, interval)
+		if err != nil {
+			return svc.Binding{}, false, err
+		}
+		binding = b
+	case "pdl_rsi":
+		b, err := svc.PDLRSILookupOrGeneric(ticker, interval)
+		if err != nil {
+			return svc.Binding{}, false, err
+		}
+		binding = b
+	case "pdl_rsi_m30":
+		b, err := svc.PDLRSIM30LookupOrGeneric(ticker, interval)
+		if err != nil {
+			return svc.Binding{}, false, err
+		}
+		binding = b
+	default:
+		return svc.Binding{}, false, fmt.Errorf("unknown strategy %q (want scalping|reversion|scalping_rsimacd|rsi_ema|vwap_rev|rsi_pullback|rsi_zone|gap_fade|drop_bounce|pdl_reclaim|pdl_zone|hammer|pdl_rsi|pdl_rsi_m30|fvg_imbalance)", strategyName)
+	}
+
+	return binding, strategyName == "gap_fade" || strategyName == "drop_bounce" || strategyName == "pdl_reclaim" || strategyName == "pdl_zone" || strategyName == "hammer" || strategyName == "pdl_rsi" || strategyName == "pdl_rsi_m30" || strategyName == "fvg_imbalance", nil
 }
 
 // loadParams resolves the strategy Params for a run: b.DefaultParams() when paramsPath

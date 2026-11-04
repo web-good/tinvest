@@ -7,7 +7,9 @@ import (
 	"time"
 
 	domain "tinvest/internal/domain/backtest"
+	"tinvest/internal/enum"
 	svc "tinvest/internal/service/backtest"
+	fvg "tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/core"
 )
 
 func TestHTFCoverageLines_EmptySeriesErrors(t *testing.T) {
@@ -163,5 +165,42 @@ func TestLoadParams_MissingFileErrors(t *testing.T) {
 
 	if err == nil {
 		t.Fatal("expected an error for a missing params file, got nil")
+	}
+}
+
+// A missing/wrong CLI branch, interval bypass, or same-close fill breaks these routes.
+func TestSelectStrategyFVGImbalance(t *testing.T) {
+	for _, ticker := range []string{"GAZP", "UNKNOWN"} {
+		t.Run(ticker, func(t *testing.T) {
+			binding, nextOpen, err := selectStrategy(ticker, "fvg_imbalance", enum.Minutes30)
+			if err != nil {
+				t.Fatal(err)
+			}
+			params, ok := binding.DefaultParams().(fvg.Params)
+			if !ok {
+				t.Fatalf("expected FVG params, got %T", binding.DefaultParams())
+			}
+			strat := binding.Build(params)
+			if _, ok := strat.(*fvg.Strategy); !ok {
+				t.Fatalf("expected FVG core, got %T", strat)
+			}
+			if strat.Ticker() != ticker {
+				t.Errorf("ticker = %q, want %q", strat.Ticker(), ticker)
+			}
+			if !nextOpen {
+				t.Error("FVG retest must fill at the next open")
+			}
+		})
+	}
+}
+
+func TestSelectStrategyFVGImbalanceRejectsNonM30(t *testing.T) {
+	for _, interval := range []enum.Interval{enum.Minutes15, enum.Hour1, enum.Day1} {
+		t.Run(interval.String(), func(t *testing.T) {
+			_, _, err := selectStrategy("GAZP", "fvg_imbalance", interval)
+			if err == nil || !strings.Contains(err.Error(), "FVG imbalance runs on Minutes30") {
+				t.Fatalf("expected registry interval error, got %v", err)
+			}
+		})
 	}
 }
