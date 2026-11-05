@@ -1,5 +1,5 @@
 {
-  "_comment": "Staged M30 FVG baseline, context, execution and holding calibration.",
+  "_comment": "Staged M30 FVG baseline, H4 context and stop-buffer calibration.",
   "phases": [
     {
       "name": "fvg",
@@ -12,30 +12,39 @@
       }
     },
     {
+      "name": "formation",
+      "keepTop": 8,
+      "grid": {
+        "RequireThirdCandleHigherHigh": [0, 1]
+      }
+    },
+    {
+      "name": "retest_mode",
+      "keepTop": 8,
+      "grid": {
+        "RetestDepthByBody": [0, 1]
+      }
+    },
+    {
       "name": "context",
       "keepTop": 8,
       "grid": {
-        "RequireFirstRetest": [0, 1],
-        "RequireBullishBOS": [0, 1],
-        "RequireLiquiditySweep": [0, 1],
-        "HTFTrendEMA": [0, 20, 50, 100, 150, 200],
-        "SwingK": [2],
-        "StructureLookbackBars": [48],
-        "MaxSweepToFVGBars": [8]
+        "HTFTrendEMA": [0, 20, 50, 100, 150, 200]
       }
     },
     {
       "name": "execution",
       "keepTop": 8,
       "grid": {
-        "MaxEntryDistanceATR": [0, 0.25, 0.5, 1.0],
         "StopBufferATR": [0, 0.1, 0.25, 0.5]
       }
     },
     {
-      "name": "holding",
+      "name": "stochastic",
       "keepTop": 8,
-      "grid": {"MaxHoldBars": [0, 8, 16, 32, 48]}
+      "grid": {
+        "UseStochFilter": [0, 1]
+      }
     }
   ]
 }

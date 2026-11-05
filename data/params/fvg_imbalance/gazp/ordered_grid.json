@@ -1,14 +1,14 @@
 {
-  "_comment": "GAZP staged calibration on 2026-11-04. ATRPeriod=14 and MaxHoldBars=0 stay fixed; MaxRetestBars is a small separate grid around the current literal 12. The best training candidate had zero intermediate validation trades; three rolling OOS folds pooled PF 0.530 on 22 trades. No new parameter set was promoted. The last three months were excluded from selection; prior runs have already viewed them, so they are not a pristine holdout for future calibration.",
+  "_comment": "GAZP calibration 2026-11-05. ATRPeriod=14 stayed fixed. Training winner: MinGapATR=0.8, MaxRetestBars=8, MinRetestDepthPct=0, TakeProfitR=2, RequireThirdCandleHigherHigh=0, RetestDepthByBody=1, HTFTrendEMA=0, StopBufferATR=1 (PF 1.485/80 trades). Six-month validation PF 1.107/27; rolling OOS pooled PF 1.043/47 with unstable parameters; final three-month holdout PF 0.709/16 versus old literal PF 4.922/7. Promoted only by explicit operator choice despite failed holdout. Prior runs had viewed overlapping recent periods, so the holdout was not pristine.",
   "phases": [
     {"name": "gap", "keepTop": 4, "grid": {"MinGapATR": [0.25, 0.5, 0.8, 1.0]}},
     {"name": "retest_window", "keepTop": 4, "grid": {"MaxRetestBars": [8, 12, 16]}},
     {"name": "retest_depth", "keepTop": 4, "grid": {"MinRetestDepthPct": [0, 50, 100]}},
-    {"name": "first_retest", "keepTop": 4, "grid": {"RequireFirstRetest": [0, 1]}},
+    {"name": "formation", "keepTop": 4, "grid": {"RequireThirdCandleHigherHigh": [0, 1]}},
+    {"name": "retest_mode", "keepTop": 4, "grid": {"RetestDepthByBody": [0, 1]}},
     {"name": "h4_trend", "keepTop": 4, "grid": {"HTFTrendEMA": [0, 20, 50, 100, 150, 200]}},
-    {"name": "structure", "keepTop": 4, "grid": {"RequireLiquiditySweep": [0, 1], "RequireBullishBOS": [0, 1]}},
-    {"name": "stop", "keepTop": 4, "grid": {"StopBufferATR": [0, 0.1, 0.25, 0.5]}},
+    {"name": "stop", "keepTop": 4, "grid": {"StopBufferATR": [0, 0.1, 0.25, 0.5, 1]}},
     {"name": "target", "keepTop": 4, "grid": {"TakeProfitR": [1, 1.5, 2]}},
-    {"name": "swing_k_sensitivity", "keepTop": 4, "grid": {"SwingK": [2, 3, 4]}}
+    {"name": "stochastic", "keepTop": 4, "grid": {"UseStochFilter": [0, 1]}}
   ]
 }

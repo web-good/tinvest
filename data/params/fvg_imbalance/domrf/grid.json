@@ -1,0 +1,40 @@
+{
+  "_comment": "DOMRF starting grid, not calibrated. ATRPeriod=14 and MaxRetestBars=8 stay fixed. Inspect each phase and validate on untouched history before changing the literal.",
+  "phases": [
+    {
+      "name": "gap",
+      "keepTop": 8,
+      "grid": {"MinGapATR": [0.25, 0.5, 0.8, 1.0]}
+    },
+    {
+      "name": "formation",
+      "keepTop": 8,
+      "grid": {"RequireThirdCandleHigherHigh": [0, 1]}
+    },
+    {
+      "name": "retest_mode",
+      "keepTop": 8,
+      "grid": {"RetestDepthByBody": [0, 1]}
+    },
+    {
+      "name": "h4_trend",
+      "keepTop": 8,
+      "grid": {"HTFTrendEMA": [0, 20, 50, 100, 150, 200]}
+    },
+    {
+      "name": "stop",
+      "keepTop": 8,
+      "grid": {"StopBufferATR": [0, 0.1, 0.25, 0.5]}
+    },
+    {
+      "name": "target",
+      "keepTop": 8,
+      "grid": {"TakeProfitR": [1, 1.5, 2]}
+    },
+    {
+      "name": "stochastic",
+      "keepTop": 8,
+      "grid": {"UseStochFilter": [0, 1]}
+    }
+  ]
+}
