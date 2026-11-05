@@ -210,6 +210,43 @@ func TestStochasticWaitsAfterDepthWithoutNewTouch(t *testing.T) {
 	}
 }
 
+func TestStochasticWeekendConfirmationDoesNotCarry(t *testing.T) {
+	p := testParams()
+	p.UseStochFilter = 1
+	s := NewWithParams("TEST", step, p)
+	b := append(stochasticFormation(), bar{103, 104, 100.5, 101}, bar{104, 105, 103, 103})
+	md := snapshot(b...)
+	first := time.Date(2026, 11, 6, 23, 30, 0, 0, time.UTC) // Friday
+	for i := range md.Times {
+		md.Times[i] = first.Add(time.Duration(i-14) * step)
+	}
+	md.Times[len(md.Times)-1] = time.Date(2026, 11, 9, 10, 0, 0, 0, time.UTC)
+	early := snapshot(b[:len(b)-1]...)
+	early.Times = md.Times[:len(md.Times)-1]
+	if sig := s.Decide(early); sig.Kind != model.SignalNone {
+		t.Fatalf("Saturday FillBy must reject confirmation: %+v", sig)
+	}
+	if sig := s.Decide(md); sig.Kind != model.SignalNone {
+		t.Fatalf("rejected weekend confirmation carried to Monday: %+v", sig)
+	}
+}
+
+func TestStochasticMissingFillSlotDoesNotCarry(t *testing.T) {
+	p := testParams()
+	p.UseStochFilter = 1
+	s := NewWithParams("TEST", step, p)
+	b := append(stochasticFormation(), bar{103, 104, 100.5, 101}, bar{104, 105, 103, 103})
+	md := snapshot(b...)
+	md.Times[len(md.Times)-1] = md.Times[len(md.Times)-2].Add(2 * step)
+	early := snapshot(b[:len(b)-1]...)
+	if sig := s.Decide(early); sig.Kind != model.SignalBuy {
+		t.Fatalf("weekday confirmation should signal for the exact next slot: %+v", sig)
+	}
+	if sig := s.Decide(md); sig.Kind != model.SignalNone {
+		t.Fatalf("unfilled confirmation carried across missing slot: %+v", sig)
+	}
+}
+
 func TestStochasticBreachAfterDepthInvalidates(t *testing.T) {
 	p := testParams()
 	p.UseStochFilter = 1

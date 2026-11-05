@@ -171,13 +171,17 @@ func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 		return sig
 	}
 	zones := s.discover(md)
+	var ks []float64
+	if s.p.UseStochFilter == 1 {
+		ks, _ = indicators.StochasticSeries(md.Highs, md.Lows, md.Closes, 14, 3)
+	}
 	for i := len(zones) - 1; i >= 0; i-- {
 		z := zones[i]
 		age := k - z.formed
 		if age < 1 || age > s.p.MaxRetestBars {
 			continue
 		}
-		invalid, depthReached := false, false
+		invalid, depthReached, confirmedAt := false, false, -1
 		for j := z.formed + 1; j <= k; j++ {
 			if md.Lows[j] < z.lower {
 				invalid = true
@@ -186,22 +190,24 @@ func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 			if j != k && s.p.UseStochFilter == 0 {
 				continue
 			}
-			depthPrice := md.Lows[j]
-			if s.p.RetestDepthByBody == 1 {
-				depthPrice = min(md.Opens[j], md.Closes[j])
+			if !depthReached {
+				depthPrice := md.Lows[j]
+				if s.p.RetestDepthByBody == 1 {
+					depthPrice = min(md.Opens[j], md.Closes[j])
+				}
+				depthReached = md.Lows[j] <= z.upper && depthPrice <= z.upper-s.p.MinRetestDepthPct/100*(z.upper-z.lower)
 			}
-			if md.Lows[j] <= z.upper && depthPrice <= z.upper-s.p.MinRetestDepthPct/100*(z.upper-z.lower) {
-				depthReached = true
+			// %K is right-aligned: ks[0] belongs to candle 13.
+			if s.p.UseStochFilter == 1 && depthReached && confirmedAt < 0 && j >= 13 && ks[j-13] < 20 {
+				confirmedAt = j
 			}
 		}
 		if invalid || !depthReached {
 			continue
 		}
-		if s.p.UseStochFilter == 1 {
-			ks, _ := indicators.StochasticSeries(md.Highs, md.Lows, md.Closes, 14, 3)
-			if len(ks) == 0 || !(ks[len(ks)-1] < 20) {
-				continue
-			}
+		if s.p.UseStochFilter == 1 && confirmedAt != k {
+			// A prior confirmation had one exact next-open slot; never carry it forward.
+			continue
 		}
 		htfOK, htfClose, htfEMA := s.htfTrendOK(md)
 		if !htfOK {
