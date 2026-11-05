@@ -80,7 +80,7 @@ func (s *Strategy) HTFDecisionOffset() time.Duration { return s.step }
 func (s *Strategy) Lookback() int {
 	formation := max(3, s.atrBars())
 	if s.p.UseStochFilter == 1 {
-		formation = max(formation, 14)
+		formation = max(formation, 16)
 	}
 	return formation + s.p.MaxRetestBars
 }
@@ -139,6 +139,25 @@ func (s *Strategy) htfTrendOK(md strategy.MarketData) (ok bool, close, value flo
 	return !math.IsNaN(value) && !math.IsInf(value, 0) && close > value, close, value
 }
 
+// htfTrendOKAt reconstructs the H4 gate at an earlier M30 decision close.
+// Without aligned completion times a prior H4 pass cannot be established, so
+// it must not consume the zone. The current gate still uses the supplied closes.
+func (s *Strategy) htfTrendOKAt(md strategy.MarketData, bar int) bool {
+	if s.p.HTFTrendEMA > 0 && bar < len(md.Closes)-1 {
+		if len(md.HTFClosedAt) != len(md.HTFCloses) {
+			return false
+		}
+		decision := md.Times[bar].Add(s.step)
+		n := 0
+		for n < len(md.HTFClosedAt) && !md.HTFClosedAt[n].After(decision) {
+			n++
+		}
+		md.HTFCloses = md.HTFCloses[:n]
+	}
+	ok, _, _ := s.htfTrendOK(md)
+	return ok
+}
+
 // Decide reconstructs zones from completed bars and never mutates the snapshot.
 func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 	sig := model.Signal{Ticker: s.ticker, Price: md.Price}
@@ -171,9 +190,9 @@ func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 		return sig
 	}
 	zones := s.discover(md)
-	var ks []float64
+	var slowK []float64
 	if s.p.UseStochFilter == 1 {
-		ks, _ = indicators.StochasticSeries(md.Highs, md.Lows, md.Closes, 14, 3)
+		_, slowK = indicators.StochasticSeries(md.Highs, md.Lows, md.Closes, 14, 3)
 	}
 	for i := len(zones) - 1; i >= 0; i-- {
 		z := zones[i]
@@ -197,8 +216,9 @@ func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 				}
 				depthReached = md.Lows[j] <= z.upper && depthPrice <= z.upper-s.p.MinRetestDepthPct/100*(z.upper-z.lower)
 			}
-			// %K is right-aligned: ks[0] belongs to candle 13.
-			if s.p.UseStochFilter == 1 && depthReached && confirmedAt < 0 && j >= 13 && ks[j-13] < 20 {
+			// The API returns raw K then SMA(3) of raw K: the latter is slow K.
+			// It is fully smoothed and right-aligned: slowK[0] belongs to candle 15.
+			if s.p.UseStochFilter == 1 && depthReached && confirmedAt < 0 && j >= 15 && slowK[j-15] < 20 && s.htfTrendOKAt(md, j) {
 				confirmedAt = j
 			}
 		}
@@ -206,7 +226,8 @@ func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 			continue
 		}
 		if s.p.UseStochFilter == 1 && confirmedAt != k {
-			// A prior confirmation had one exact next-open slot; never carry it forward.
+			// A prior stochastic + H4 confirmation had one exact next-open slot;
+			// never carry it forward, even after a weekend or missing fill candle.
 			continue
 		}
 		htfOK, htfClose, htfEMA := s.htfTrendOK(md)

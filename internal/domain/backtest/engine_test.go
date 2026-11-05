@@ -214,7 +214,7 @@ func TestVisibleCompletedHTF(t *testing.T) {
 	// На 09:00 закрылись бары 00:00 (→04:00) и 04:00 (→08:00); бар 08:00
 	// закроется только в 12:00, текущий формирующийся невидим.
 	cur := base.Add(9 * time.Hour)
-	closes, highs, lows := visibleCompletedHTF(htf, cur, 4*time.Hour)
+	closes, highs, lows, closedAt := visibleCompletedHTF(htf, cur, 4*time.Hour)
 	if len(closes) != 2 || closes[0] != 10 || closes[1] != 20 {
 		t.Fatalf("closes на 09:00 = %v, want [10 20]", closes)
 	}
@@ -222,14 +222,18 @@ func TestVisibleCompletedHTF(t *testing.T) {
 		t.Fatalf("highs/lows на 09:00 = %v/%v, want выровнены с closes", highs, lows)
 	}
 
+	if len(closedAt) != 2 || !closedAt[0].Equal(base.Add(4*time.Hour)) || !closedAt[1].Equal(base.Add(8*time.Hour)) {
+		t.Fatalf("HTF completion times = %v", closedAt)
+	}
+
 	// Ровно на границе закрытия (08:00) видим оба бара: бар 00:00 закрылся в 04:00,
 	// бар 04:00 закрывается ровно в 08:00 включительно (правило c.Time.Add(interval) <= cur).
-	if c, _, _ := visibleCompletedHTF(htf, base.Add(8*time.Hour), 4*time.Hour); len(c) != 2 {
+	if c, _, _, _ := visibleCompletedHTF(htf, base.Add(8*time.Hour), 4*time.Hour); len(c) != 2 {
 		t.Fatalf("на 08:00 видимы %v, want 2 (бары 00:00 и 04:00 закрыты)", c)
 	}
 
 	// До первого закрытия — пусто.
-	if c, _, _ := visibleCompletedHTF(htf, base.Add(time.Hour), 4*time.Hour); len(c) != 0 {
+	if c, _, _, _ := visibleCompletedHTF(htf, base.Add(time.Hour), 4*time.Hour); len(c) != 0 {
 		t.Fatalf("на 01:00 видимы %v, want пусто", c)
 	}
 }
@@ -716,8 +720,11 @@ func TestHTFCursorMatchesVisibleCompletedHTF(t *testing.T) {
 
 	cur := newHTFCursor(htf, interval)
 	for _, at := range curs {
-		gotC, gotH, gotL := cur.visible(at)
-		wantC, wantH, wantL := visibleCompletedHTF(htf, at, interval)
+		gotC, gotH, gotL, gotT := cur.visible(at)
+		wantC, wantH, wantL, wantT := visibleCompletedHTF(htf, at, interval)
+		if !reflect.DeepEqual(gotT, wantT) {
+			t.Fatalf("completion times at %v: got %v, want %v", at, gotT, wantT)
+		}
 		if !reflect.DeepEqual(gotC, wantC) {
 			t.Fatalf("cur=%v closes = %v, want %v", at, gotC, wantC)
 		}
@@ -737,8 +744,8 @@ func TestHTFCursorNilForEmptyHTF(t *testing.T) {
 	if cur != nil {
 		t.Fatalf("newHTFCursor(nil, ...) = %v, want nil cursor", cur)
 	}
-	c, h, l := cur.visible(time.Now())
-	if c != nil || h != nil || l != nil {
+	c, h, l, ts := cur.visible(time.Now())
+	if c != nil || h != nil || l != nil || ts != nil {
 		t.Fatalf("nil cursor visible() = %v/%v/%v, want nil/nil/nil", c, h, l)
 	}
 }

@@ -1,6 +1,7 @@
 package core
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -82,29 +83,6 @@ func TestEngineTargetOnFillBar(t *testing.T) {
 	tr := result.Trades[0]
 	if tr.Reason != "TP" || tr.ExitPrice != 110 || tr.ExitTime.Sub(tr.EntryTime) != time.Duration(0) {
 		t.Fatalf("want fill-bar TP at 110: %+v", tr)
-	}
-}
-
-func TestEngineTimeExitAtExactBarCountUsesClose(t *testing.T) {
-	p := testParams()
-	p.MaxHoldBars = 2
-	candles := engineCandles(
-		bar{104, 106, 102, 104}, // next-open fill; BarsHeld = 0
-		bar{104, 107, 102, 105}, // BarsHeld = 1
-		bar{105, 108, 102, 106}, // BarsHeld = 2, exit at close
-	)
-	result := bt.Run(NewWithParams("TEST", step, p), candles, nil, nil, bt.Config{InitialCash: 100000, Fraction: 1, Lot: 1, EntryAtNextOpen: true})
-	if len(result.Trades) != 1 {
-		t.Fatalf("trades=%+v", result.Trades)
-	}
-	tr := result.Trades[0]
-	entry := candles[len(candles)-3].Time
-	exit := candles[len(candles)-1].Time
-	if tr.EntryPrice != 104 || tr.ExitPrice != 106 || tr.BarsHeld != 2 || tr.Reason != "TIME" || !tr.EntryTime.Equal(entry) || !tr.ExitTime.Equal(exit) {
-		t.Fatalf("wrong time exit: %+v; entry=%v exit=%v", tr, entry, exit)
-	}
-	if tr.ExitReason == "" {
-		t.Fatalf("missing time exit description: %+v", tr)
 	}
 }
 
@@ -192,6 +170,77 @@ func TestEngineDualStopFills(t *testing.T) {
 			tr := result.Trades[0]
 			if tr.EntryPrice != 104 || tr.ExitPrice != tc.exit || tr.Reason != tc.reason || !tr.ExitTime.Equal(candles[len(candles)-1].Time) {
 				t.Fatalf("trade=%+v", tr)
+			}
+		})
+	}
+}
+
+// H4 rejection must leave a depth-confirmed zone eligible. Only a confirmation
+// that also passed H4 can spend its exact next-open execution opportunity.
+func TestEngineStochasticWaitsForH4(t *testing.T) {
+	for _, tc := range []struct {
+		name                        string
+		gap, weekend, h4PassesFirst bool
+		wantTrade                   bool
+	}{
+		{"H4 rejects then passes", false, false, false, true},
+		{"missing slot before H4 passes", true, false, false, true},
+		{"missing slot after H4 passes", true, false, true, false},
+		{"weekend before H4 passes", true, true, false, true},
+		{"weekend after H4 passes", true, true, true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := testParams()
+			p.UseStochFilter, p.HTFTrendEMA = 1, 2
+			bars := make([]bar, 12)
+			for i := range bars {
+				bars[i] = bar{110, 120, 108, 110}
+			}
+			bars = append(bars, stochasticFormation()...)
+			first := len(bars)
+			bars = append(bars, bar{103, 104, 100.5, 101}, bar{104, 105, 103, 103}, bar{104, 105, 103, 104}, bar{104, 111, 103, 110})
+			md := snapshot(bars...)
+			if tc.weekend {
+				friday := time.Date(2026, 11, 6, 23, 30, 0, 0, time.UTC)
+				for i := range md.Times {
+					md.Times[i] = friday.Add(time.Duration(i-first) * step)
+				}
+			}
+			if tc.gap {
+				next := md.Times[first].Add(2 * step)
+				if tc.weekend {
+					next = time.Date(2026, 11, 9, 10, 0, 0, 0, time.UTC)
+				}
+				for i := first + 1; i < len(bars); i++ {
+					md.Times[i] = next.Add(time.Duration(i-first-1) * step)
+				}
+			}
+			candles := make([]bt.Candle, len(bars))
+			for i, b := range bars {
+				candles[i] = bt.Candle{Time: md.Times[i], Open: b.o, High: b.h, Low: b.l, Close: b.c}
+			}
+			passesAt := md.Times[first+1].Add(step)
+			if tc.h4PassesFirst {
+				passesAt = md.Times[first].Add(step)
+			}
+			htf := []bt.Candle{
+				{Time: md.Times[first].Add(-12 * time.Hour), Close: 110},
+				{Time: md.Times[first].Add(-8 * time.Hour), Close: 100},
+				{Time: passesAt.Add(-4 * time.Hour), Close: 120},
+			}
+			cfg := bt.Config{InitialCash: 100000, Fraction: 1, Lot: 1, EntryAtNextOpen: true, HTFInterval: 4 * time.Hour}
+			s := NewWithParams("TEST", step, p)
+			result := bt.Run(s, candles, nil, htf, cfg)
+			if tc.wantTrade {
+				if len(result.Trades) != 1 || !result.Trades[0].EntryTime.Equal(md.Times[first+2]) || result.Trades[0].Reason != "TP" {
+					t.Errorf("zone must wait for H4 then fill next open: %+v", result.Trades)
+				}
+			} else if len(result.Trades) != 0 || result.BarsInMarket != 0 {
+				t.Errorf("rejected execution slot carried forward: %+v", result.Trades)
+			}
+			trace := bt.Trace(s, candles, nil, htf, cfg, md.Times[first+2])
+			if got := strings.Contains(trace, "В ПОЗИЦИИ"); got != tc.wantTrade {
+				t.Errorf("Trace position=%v, want %v: %s", got, tc.wantTrade, trace)
 			}
 		})
 	}

@@ -109,27 +109,28 @@ func (d *dailyCursor) visible(t time.Time) (closes, highs, lows []float64, times
 	return d.closes[:d.idx:d.idx], d.highs[:d.idx:d.idx], d.lows[:d.idx:d.idx], d.times[:d.idx:d.idx], d.volumes[:d.idx:d.idx]
 }
 
-// visibleCompletedHTF returns closes/highs/lows of higher-timeframe candles that have
+// visibleCompletedHTF returns closes/highs/lows and completion times of higher-timeframe candles that have
 // FULLY closed by cur. A bar opening at c.Time spanning `interval` is closed once
 // c.Time.Add(interval) <= cur; the current, still-forming HTF bar is never visible
-// (no-lookahead). The three series are index-aligned, oldest-first, so the last element
+// (no-lookahead). The four series are index-aligned, oldest-first, so the last element
 // is the most recent HTF bar closed at/before cur.
-func visibleCompletedHTF(htf []Candle, cur time.Time, interval time.Duration) (closes, highs, lows []float64) {
+func visibleCompletedHTF(htf []Candle, cur time.Time, interval time.Duration) (closes, highs, lows []float64, closedAt []time.Time) {
 	for _, c := range htf {
 		if !c.Time.Add(interval).After(cur) { // c.Time+interval <= cur
 			closes = append(closes, c.Close)
 			highs = append(highs, c.High)
 			lows = append(lows, c.Low)
+			closedAt = append(closedAt, c.Time.Add(interval))
 		}
 	}
-	return closes, highs, lows
+	return closes, highs, lows, closedAt
 }
 
 // htfCursor produces the same series visibleCompletedHTF would return, but amortized
 // O(1) per bar instead of O(len(htf)) per bar: since Run/Trace advance cur
 // monotonically, the completed-prefix boundary only ever moves forward, so each call
 // resumes scanning where the previous one left off instead of rescanning from the
-// start. The closes/highs/lows backing arrays are precomputed once; each call returns
+// start. The price/time backing arrays are precomputed once; each call returns
 // a prefix slice of them (no per-bar allocation). A nil *htfCursor is a valid
 // zero-cost no-op for the no-HTF case.
 //
@@ -142,6 +143,7 @@ func visibleCompletedHTF(htf []Candle, cur time.Time, interval time.Duration) (c
 type htfCursor struct {
 	htf                 []Candle
 	closes, highs, lows []float64
+	closedAt            []time.Time
 	interval            time.Duration
 	idx                 int // number of htf bars confirmed visible so far (monotonic non-decreasing)
 }
@@ -155,32 +157,34 @@ func newHTFCursor(htf []Candle, interval time.Duration) *htfCursor {
 	closes := make([]float64, len(htf))
 	highs := make([]float64, len(htf))
 	lows := make([]float64, len(htf))
+	closedAt := make([]time.Time, len(htf))
 	for i, c := range htf {
 		closes[i] = c.Close
 		highs[i] = c.High
 		lows[i] = c.Low
+		closedAt[i] = c.Time.Add(interval)
 	}
-	return &htfCursor{htf: htf, closes: closes, highs: highs, lows: lows, interval: interval}
+	return &htfCursor{htf: htf, closes: closes, highs: highs, lows: lows, closedAt: closedAt, interval: interval}
 }
 
-// visible returns the same (closes, highs, lows) visibleCompletedHTF(htf, cur, interval)
+// visible returns the same (closes, highs, lows, closedAt) visibleCompletedHTF(htf, cur, interval)
 // would, provided cur is non-decreasing across calls (Run/Trace's bar loop). Returns
-// nil, nil, nil for a nil cursor or an empty prefix, matching visibleCompletedHTF.
-func (h *htfCursor) visible(cur time.Time) (closes, highs, lows []float64) {
+// nil, nil, nil, nil for a nil cursor or an empty prefix, matching visibleCompletedHTF.
+func (h *htfCursor) visible(cur time.Time) (closes, highs, lows []float64, closedAt []time.Time) {
 	if h == nil {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 	for h.idx < len(h.htf) && !h.htf[h.idx].Time.Add(h.interval).After(cur) {
 		h.idx++
 	}
 	if h.idx == 0 {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 	// Full slice expressions cap the returned prefix at its own length, so a caller
 	// appending to it (e.g. md.HTFCloses = append(md.HTFCloses, x)) forces a new backing
 	// array instead of silently overwriting the shared closes/highs/lows arrays that
 	// later bars still read from.
-	return h.closes[:h.idx:h.idx], h.highs[:h.idx:h.idx], h.lows[:h.idx:h.idx]
+	return h.closes[:h.idx:h.idx], h.highs[:h.idx:h.idx], h.lows[:h.idx:h.idx], h.closedAt[:h.idx:h.idx]
 }
 
 // TodayExtent returns the high and low of the MSK calendar day that bar i belongs to,
@@ -244,7 +248,7 @@ func Run(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Candl
 		pending = fillPending(p, pending, candles[i])
 		md := buildMarketData(candles[i-l+1 : i+1])
 		md.DailyCloses, md.DailyHighs, md.DailyLows, md.DailyTimes, md.DailyVolumes = daily.visible(candles[i].Time)
-		md.HTFCloses, md.HTFHighs, md.HTFLows = htf.visible(htfDecisionTime(s, candles[i].Time))
+		md.HTFCloses, md.HTFHighs, md.HTFLows, md.HTFClosedAt = htf.visible(htfDecisionTime(s, candles[i].Time))
 		md.TodayHigh, md.TodayLow = todayExtentIn(candles, i, mskLoc)
 		if p.qty != 0 {
 			p.mark(candles[i].Close)
@@ -336,7 +340,7 @@ func Trace(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Can
 		pending = fillPending(p, pending, candles[i])
 		md := buildMarketData(candles[i-l+1 : i+1])
 		md.DailyCloses, md.DailyHighs, md.DailyLows, md.DailyTimes, md.DailyVolumes = daily.visible(candles[i].Time)
-		md.HTFCloses, md.HTFHighs, md.HTFLows = htf.visible(htfDecisionTime(s, candles[i].Time))
+		md.HTFCloses, md.HTFHighs, md.HTFLows, md.HTFClosedAt = htf.visible(htfDecisionTime(s, candles[i].Time))
 		md.TodayHigh, md.TodayLow = todayExtentIn(candles, i, mskLoc)
 		if p.qty != 0 {
 			p.mark(candles[i].Close)
@@ -440,6 +444,6 @@ func AssembleMarketData(window, daily, htf []Candle, cur time.Time) strategy.Mar
 func AssembleMarketDataWithHTFInterval(window, daily, htf []Candle, cur time.Time, htfSpan time.Duration) strategy.MarketData {
 	md := buildMarketData(window)
 	md.DailyCloses, md.DailyHighs, md.DailyLows, md.DailyTimes, md.DailyVolumes = visibleDaily(daily, cur, mskLoc)
-	md.HTFCloses, md.HTFHighs, md.HTFLows = visibleCompletedHTF(htf, cur, htfSpan)
+	md.HTFCloses, md.HTFHighs, md.HTFLows, md.HTFClosedAt = visibleCompletedHTF(htf, cur, htfSpan)
 	return md
 }

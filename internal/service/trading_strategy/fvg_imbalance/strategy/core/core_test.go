@@ -176,9 +176,9 @@ func TestValidateParams(t *testing.T) {
 }
 
 // The high near the middle of the warm-up keeps the latest 14-bar range at
-// [98, 130]. Thus closes 107 and 103 produce %K above and below 20.
+// [98, 130]. The last three raw values determine slow %K(14,3).
 func stochasticFormation() []bar {
-	b := make([]bar, 11)
+	b := make([]bar, 13)
 	for i := range b {
 		b[i] = bar{110, 120, 108, 110}
 	}
@@ -186,10 +186,60 @@ func stochasticFormation() []bar {
 	return append(b, formation()...)
 }
 
+// Raw K is already oversold, but its three-value average is still above 20.
+func TestStochasticRejectsRawKBelow20WhenSlowKAbove(t *testing.T) {
+	p := testParams()
+	p.UseStochFilter = 1
+	b := append(stochasticFormation(), bar{101, 121, 100.5, 120}, bar{104, 105, 103, 103})
+	// Raw K = 100*(103-98)/32 = 15.625; slow K = (15.625+68.75+15.625)/3.
+	if sig := NewWithParams("TEST", step, p).Decide(snapshot(b...)); sig.Kind != model.SignalNone {
+		t.Fatalf("raw K below 20 must not bypass slow K above 20: %+v", sig)
+	}
+}
+
+func TestStochasticInsufficientSmoothingHistory(t *testing.T) {
+	for _, n := range []int{14, 15} {
+		t.Run(fmt.Sprint(n), func(t *testing.T) {
+			p := testParams()
+			p.UseStochFilter = 1
+			b := append(stochasticFormation(), bar{103, 104, 100.5, 101})
+			// One or two raw K values exist, but no fully smoothed slow K.
+			if sig := NewWithParams("TEST", step, p).Decide(snapshot(b[len(b)-n:]...)); sig.Kind != model.SignalNone {
+				t.Fatalf("%d bars must fail closed until 16 bars exist: %+v", n, sig)
+			}
+		})
+	}
+}
+
+func TestStochasticSlowKStrictBoundary(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		close float64
+		want  model.SignalKind
+	}{
+		{"below", 100.97, model.SignalBuy},
+		{"equal", 101, model.SignalNone},
+		{"above", 101.03, model.SignalNone},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := testParams()
+			p.UseStochFilter = 1
+			b := stochasticFormation()
+			b[5].h = 198 // range [98,198]: raw K equals close-98.
+			b = append(b, bar{101, 151, 100.5, 150}, bar{103, 104, 100.5, tc.close})
+			// Previous slow K = (4+5+52)/3 >20. Current = (5+52+3)/3 =20 at equality.
+			if sig := NewWithParams("TEST", step, p).Decide(snapshot(b...)); sig.Kind != tc.want {
+				t.Fatalf("slow K boundary: %+v, want %v", sig, tc.want)
+			}
+		})
+	}
+}
+
 func TestStochasticSameCandleConfirmation(t *testing.T) {
 	p := testParams()
 	p.UseStochFilter = 1
-	md := snapshot(append(stochasticFormation(), bar{103, 104, 100.5, 101})...)
+	b := append(stochasticFormation(), bar{103, 104, 100.5, 101})
+	md := snapshot(b[len(b)-16:]...)
 	if sig := NewWithParams("TEST", step, p).Decide(md); sig.Kind != model.SignalBuy {
 		t.Fatalf("depth candle with %%K below 20: %+v", sig)
 	}
@@ -199,9 +249,16 @@ func TestStochasticWaitsAfterDepthWithoutNewTouch(t *testing.T) {
 	p := testParams()
 	p.UseStochFilter = 1
 	s := NewWithParams("TEST", step, p)
-	b := append(stochasticFormation(), bar{101, 108, 100.5, 107})
+	b := append(stochasticFormation(), bar{101, 110, 100.5, 109})
 	if sig := s.Decide(snapshot(b...)); sig.Kind != model.SignalNone {
 		t.Fatalf("depth reached with %%K above 20: %+v", sig)
+	}
+	// Two more closes leave slow K above 20; no new touch is needed.
+	for range 2 {
+		b = append(b, bar{104, 105, 103, 103})
+		if sig := s.Decide(snapshot(b...)); sig.Kind != model.SignalNone {
+			t.Fatalf("slow K still above 20: %+v", sig)
+		}
 	}
 	b = append(b, bar{104, 105, 103, 103})
 	md := snapshot(b...)
@@ -218,7 +275,7 @@ func TestStochasticWeekendConfirmationDoesNotCarry(t *testing.T) {
 	md := snapshot(b...)
 	first := time.Date(2026, 11, 6, 23, 30, 0, 0, time.UTC) // Friday
 	for i := range md.Times {
-		md.Times[i] = first.Add(time.Duration(i-14) * step)
+		md.Times[i] = first.Add(time.Duration(i-(len(b)-2)) * step)
 	}
 	md.Times[len(md.Times)-1] = time.Date(2026, 11, 9, 10, 0, 0, 0, time.UTC)
 	early := snapshot(b[:len(b)-1]...)
@@ -250,9 +307,13 @@ func TestStochasticMissingFillSlotDoesNotCarry(t *testing.T) {
 func TestStochasticBreachAfterDepthInvalidates(t *testing.T) {
 	p := testParams()
 	p.UseStochFilter = 1
-	b := append(stochasticFormation(), bar{101, 108, 100.5, 107}, bar{101, 105, 99, 103}, bar{104, 105, 103, 103})
+	b := append(stochasticFormation(), bar{101, 110, 100.5, 109}, bar{101, 105, 99, 103}, bar{104, 105, 103, 103}, bar{104, 105, 103, 103})
 	if sig := NewWithParams("TEST", step, p).Decide(snapshot(b...)); sig.Kind != model.SignalNone {
 		t.Fatalf("breached zone must stay invalid: %+v", sig)
+	}
+	b[len(b)-3].l = 100 // The same later slow K would confirm without the breach.
+	if sig := NewWithParams("TEST", step, p).Decide(snapshot(b...)); sig.Kind != model.SignalBuy {
+		t.Fatalf("unbreached control must confirm: %+v", sig)
 	}
 }
 
@@ -268,7 +329,7 @@ func TestStochasticInsufficientHistory(t *testing.T) {
 func TestStochasticDisabledEntersImmediately(t *testing.T) {
 	p := testParams()
 	p.UseStochFilter = 0
-	b := append(stochasticFormation(), bar{101, 108, 100.5, 107})
+	b := append(stochasticFormation(), bar{101, 110, 100.5, 109})
 	if sig := NewWithParams("TEST", step, p).Decide(snapshot(b...)); sig.Kind != model.SignalBuy {
 		t.Fatalf("disabled filter must enter on retest: %+v", sig)
 	}
@@ -277,18 +338,22 @@ func TestStochasticDisabledEntersImmediately(t *testing.T) {
 func TestStochasticExpiryWhileWaiting(t *testing.T) {
 	p := testParams()
 	p.UseStochFilter = 1
-	p.MaxRetestBars = 1
-	b := append(stochasticFormation(), bar{101, 108, 100.5, 107}, bar{104, 105, 103, 103})
+	p.MaxRetestBars = 3
+	b := append(stochasticFormation(), bar{101, 110, 100.5, 109}, bar{104, 105, 103, 103}, bar{104, 105, 103, 103}, bar{104, 105, 103, 103})
 	if sig := NewWithParams("TEST", step, p).Decide(snapshot(b...)); sig.Kind != model.SignalNone {
 		t.Fatalf("expired zone must not enter: %+v", sig)
+	}
+	p.MaxRetestBars = 4 // The last eligible candle is inclusive.
+	if sig := NewWithParams("TEST", step, p).Decide(snapshot(b...)); sig.Kind != model.SignalBuy {
+		t.Fatalf("unexpired control must confirm at MaxRetestBars: %+v", sig)
 	}
 }
 
 func TestStochasticLookback(t *testing.T) {
 	p := testParams()
 	p.UseStochFilter = 1
-	if got := NewWithParams("TEST", step, p).Lookback(); got != 22 {
-		t.Fatalf("lookback %d, want 22", got)
+	if got := NewWithParams("TEST", step, p).Lookback(); got != 24 {
+		t.Fatalf("lookback %d, want 24", got)
 	}
 }
 

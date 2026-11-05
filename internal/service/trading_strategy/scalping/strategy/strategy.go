@@ -80,6 +80,10 @@ type MarketData struct {
 	// it (4H for reversion, 1H for scalping_rsimacd), and the completeness test uses that
 	// same span. Empty if no HTF data is supplied or the filter is disabled.
 	HTFCloses []float64
+	// HTFClosedAt are the completion times of the same HTF candles, aligned with
+	// HTFCloses. Historical entry gates use these to exclude later closes. Empty
+	// when the runner does not supply timing; historical eligibility is then unknown.
+	HTFClosedAt []time.Time
 	// HTFHighs / HTFLows are oldest-first highs/lows of the same COMPLETED HTF candles
 	// as HTFCloses (aligned index-for-index). Empty when no HTF data.
 	HTFHighs []float64
