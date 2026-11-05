@@ -48,6 +48,8 @@ func TestFVGFormation(t *testing.T) {
 		{"body ends above zone", func(b []bar) { b[1].c = 102.5 }, .25, 1},
 		{"body starts above lower boundary", func(b []bar) { b[1].o = 100.5 }, .25, 0},
 		{"body ends below upper boundary", func(b []bar) { b[1].c = 101.5 }, .25, 0},
+		{"third high equals second high", func(b []bar) { b[2].h = b[1].h }, .25, 0},
+		{"third high below second high", func(b []bar) { b[1].h = 104; b[2].h = 103.5 }, .25, 0},
 		{"gap below formation ATR threshold", func([]bar) {}, 1.01, 0},
 	}
 	for _, tt := range tests {
@@ -64,6 +66,17 @@ func TestFVGFormation(t *testing.T) {
 				t.Fatalf("zone=%+v", zones[0])
 			}
 		})
+	}
+}
+
+func TestFVGFormationHigherHighIsOptional(t *testing.T) {
+	b := formation()
+	b[2].h = b[1].h
+	p := testParams()
+	p.RequireThirdCandleHigherHigh = 0
+	zones := NewWithParams("TEST", step, p).discover(snapshot(b...))
+	if len(zones) != 1 {
+		t.Fatalf("zones=%+v, want one zone when third-candle higher-high filter is disabled", zones)
 	}
 }
 
@@ -118,7 +131,7 @@ func TestFVGFormationRealGAZP20261015(t *testing.T) {
 
 func TestDefaultParams(t *testing.T) {
 	p := DefaultParams()
-	if p.MinRetestDepthPct != 50 || p.RequireFirstRetest != 0 || p.RequireBullishBOS != 0 || p.RequireLiquiditySweep != 0 || p.SwingK != 2 || p.StructureLookbackBars != 48 || p.MaxSweepToFVGBars != 8 || p.HTFTrendEMA != 0 || p.MaxEntryDistanceATR != 0 || p.MaxHoldBars != 0 || p.StopBufferATR != 0 {
+	if p.MinRetestDepthPct != 50 || p.RequireThirdCandleHigherHigh != 1 || p.RetestDepthByBody != 1 || p.HTFTrendEMA != 0 || p.StopBufferATR != 0 || p.UseStochFilter != 0 {
 		t.Fatalf("unexpected defaults: %+v", p)
 	}
 }
@@ -131,14 +144,10 @@ func TestValidateParams(t *testing.T) {
 		name   string
 		change func(*Params)
 	}{
-		{"first retest negative", func(p *Params) { p.RequireFirstRetest = -1 }}, {"first retest large", func(p *Params) { p.RequireFirstRetest = 2 }},
-		{"BOS negative", func(p *Params) { p.RequireBullishBOS = -1 }}, {"BOS large", func(p *Params) { p.RequireBullishBOS = 2 }},
-		{"sweep negative", func(p *Params) { p.RequireLiquiditySweep = -1 }}, {"sweep large", func(p *Params) { p.RequireLiquiditySweep = 2 }},
-		{"zero swing", func(p *Params) { p.SwingK = 0 }}, {"negative swing", func(p *Params) { p.SwingK = -1 }},
-		{"zero structure lookback", func(p *Params) { p.StructureLookbackBars = 0 }}, {"negative structure lookback", func(p *Params) { p.StructureLookbackBars = -1 }},
-		{"zero sweep age", func(p *Params) { p.MaxSweepToFVGBars = 0 }}, {"negative sweep age", func(p *Params) { p.MaxSweepToFVGBars = -1 }},
-		{"negative EMA", func(p *Params) { p.HTFTrendEMA = -1 }}, {"negative hold", func(p *Params) { p.MaxHoldBars = -1 }},
-		{"negative distance", func(p *Params) { p.MaxEntryDistanceATR = -1 }}, {"NaN distance", func(p *Params) { p.MaxEntryDistanceATR = math.NaN() }}, {"infinite distance", func(p *Params) { p.MaxEntryDistanceATR = math.Inf(1) }},
+		{"negative EMA", func(p *Params) { p.HTFTrendEMA = -1 }},
+		{"negative higher-high switch", func(p *Params) { p.RequireThirdCandleHigherHigh = -1 }}, {"large higher-high switch", func(p *Params) { p.RequireThirdCandleHigherHigh = 2 }},
+		{"negative retest-depth mode", func(p *Params) { p.RetestDepthByBody = -1 }}, {"large retest-depth mode", func(p *Params) { p.RetestDepthByBody = 2 }},
+		{"negative stochastic switch", func(p *Params) { p.UseStochFilter = -1 }}, {"large stochastic switch", func(p *Params) { p.UseStochFilter = 2 }},
 		{"negative buffer", func(p *Params) { p.StopBufferATR = -1 }}, {"NaN buffer", func(p *Params) { p.StopBufferATR = math.NaN() }}, {"infinite buffer", func(p *Params) { p.StopBufferATR = math.Inf(-1) }},
 		{"zero ATR", func(p *Params) { p.ATRPeriod = 0 }}, {"negative ATR", func(p *Params) { p.ATRPeriod = -1 }},
 		{"zero retest bars", func(p *Params) { p.MaxRetestBars = 0 }}, {"negative retest bars", func(p *Params) { p.MaxRetestBars = -1 }},
@@ -160,38 +169,142 @@ func TestValidateParams(t *testing.T) {
 	p.MinGapATR = 0
 	p.TakeProfitR = 0
 	p.MinRetestDepthPct = 0
+	p.UseStochFilter = 1
 	if err := ValidateParams(p); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// The high near the middle of the warm-up keeps the latest 14-bar range at
+// [98, 130]. Thus closes 107 and 103 produce %K above and below 20.
+func stochasticFormation() []bar {
+	b := make([]bar, 11)
+	for i := range b {
+		b[i] = bar{110, 120, 108, 110}
+	}
+	b[5].h = 130
+	return append(b, formation()...)
+}
+
+func TestStochasticSameCandleConfirmation(t *testing.T) {
+	p := testParams()
+	p.UseStochFilter = 1
+	md := snapshot(append(stochasticFormation(), bar{103, 104, 100.5, 101})...)
+	if sig := NewWithParams("TEST", step, p).Decide(md); sig.Kind != model.SignalBuy {
+		t.Fatalf("depth candle with %%K below 20: %+v", sig)
+	}
+}
+
+func TestStochasticWaitsAfterDepthWithoutNewTouch(t *testing.T) {
+	p := testParams()
+	p.UseStochFilter = 1
+	s := NewWithParams("TEST", step, p)
+	b := append(stochasticFormation(), bar{101, 108, 100.5, 107})
+	if sig := s.Decide(snapshot(b...)); sig.Kind != model.SignalNone {
+		t.Fatalf("depth reached with %%K above 20: %+v", sig)
+	}
+	b = append(b, bar{104, 105, 103, 103})
+	md := snapshot(b...)
+	if sig := s.Decide(md); sig.Kind != model.SignalBuy || !sig.FillBy.Equal(md.Times[len(md.Times)-1].Add(step)) {
+		t.Fatalf("later %%K below 20 without new touch: %+v", sig)
+	}
+}
+
+func TestStochasticBreachAfterDepthInvalidates(t *testing.T) {
+	p := testParams()
+	p.UseStochFilter = 1
+	b := append(stochasticFormation(), bar{101, 108, 100.5, 107}, bar{101, 105, 99, 103}, bar{104, 105, 103, 103})
+	if sig := NewWithParams("TEST", step, p).Decide(snapshot(b...)); sig.Kind != model.SignalNone {
+		t.Fatalf("breached zone must stay invalid: %+v", sig)
+	}
+}
+
+func TestStochasticInsufficientHistory(t *testing.T) {
+	p := testParams()
+	p.UseStochFilter = 1
+	md := snapshot(append(formation(), bar{103, 104, 100.5, 101})...)
+	if sig := NewWithParams("TEST", step, p).Decide(md); sig.Kind != model.SignalNone {
+		t.Fatalf("four bars cannot supply 14-bar %%K: %+v", sig)
+	}
+}
+
+func TestStochasticDisabledEntersImmediately(t *testing.T) {
+	p := testParams()
+	p.UseStochFilter = 0
+	b := append(stochasticFormation(), bar{101, 108, 100.5, 107})
+	if sig := NewWithParams("TEST", step, p).Decide(snapshot(b...)); sig.Kind != model.SignalBuy {
+		t.Fatalf("disabled filter must enter on retest: %+v", sig)
+	}
+}
+
+func TestStochasticExpiryWhileWaiting(t *testing.T) {
+	p := testParams()
+	p.UseStochFilter = 1
+	p.MaxRetestBars = 1
+	b := append(stochasticFormation(), bar{101, 108, 100.5, 107}, bar{104, 105, 103, 103})
+	if sig := NewWithParams("TEST", step, p).Decide(snapshot(b...)); sig.Kind != model.SignalNone {
+		t.Fatalf("expired zone must not enter: %+v", sig)
+	}
+}
+
+func TestStochasticLookback(t *testing.T) {
+	p := testParams()
+	p.UseStochFilter = 1
+	if got := NewWithParams("TEST", step, p).Lookback(); got != 22 {
+		t.Fatalf("lookback %d, want 22", got)
+	}
+}
+
+func TestRetestDepthCanUseWick(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		open, low, close float64
+		want             model.SignalKind
+	}{
+		{"wick reaches midpoint while body stays above", 103, 101, 103, model.SignalBuy},
+		{"wick stays above midpoint", 103, 101.01, 103, model.SignalNone},
+		{"lower boundary inclusive", 103, 100, 103, model.SignalBuy},
+		{"lower boundary breach invalidates", 103, 99.99, 103, model.SignalNone},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := testParams()
+			p.RetestDepthByBody = 0
+			md := snapshot(append(formation(), bar{tc.open, 104, tc.low, tc.close})...)
+			if sig := NewWithParams("TEST", step, p).Decide(md); sig.Kind != tc.want {
+				t.Fatalf("signal=%+v, want %v", sig, tc.want)
+			}
+		})
 	}
 }
 
 // Compile-time assertion also pins the consumer interface.
 var _ strategy.Strategy = (*Strategy)(nil)
 
-// Reject shallow wicks while keeping inclusive depth boundaries and lower-wick protection.
-func TestRetestDepthUsesWick(t *testing.T) {
+// Require the candle body to reach the configured depth while preserving
+// inclusive boundaries and lower-wick invalidation.
+func TestRetestDepthUsesBody(t *testing.T) {
 	for _, tc := range []struct {
-		name              string
-		depth, low, close float64
-		want              model.SignalKind
+		name                    string
+		depth, open, low, close float64
+		want                    model.SignalKind
 	}{
-		{"midpoint inclusive with close above zone", 50, 101, 103, model.SignalBuy},
-		{"above midpoint with high close", 50, 101.01, 103, model.SignalNone},
-		{"above midpoint with low close", 50, 101.01, 101.01, model.SignalNone},
-		{"lower inclusive", 50, 100, 103, model.SignalBuy},
-		{"lower breached", 50, 99.99, 103, model.SignalNone},
-		{"full depth lower inclusive", 100, 100, 103, model.SignalBuy},
-		{"full depth lower breached", 100, 99.99, 103, model.SignalNone},
-		{"full depth above lower", 100, 100.01, 103, model.SignalNone},
-		{"fractional depth inclusive", 37.5, 101.25, 103, model.SignalBuy},
-		{"fractional depth shallow", 37.5, 101.26, 103, model.SignalNone},
-		{"zero depth upper inclusive", 0, 102, 103, model.SignalBuy},
-		{"zero depth above upper", 0, 102.01, 103, model.SignalNone},
+		{"wick reaches midpoint but body stays above", 50, 103, 101, 103, model.SignalNone},
+		{"bearish body reaches midpoint", 50, 103, 100.5, 101, model.SignalBuy},
+		{"bullish body starts at midpoint", 50, 101, 100.5, 103, model.SignalBuy},
+		{"body stays above midpoint", 50, 103, 101, 101.01, model.SignalNone},
+		{"lower body boundary inclusive", 50, 103, 100, 100, model.SignalBuy},
+		{"lower wick breach invalidates", 50, 103, 99.99, 100, model.SignalNone},
+		{"full depth lower body inclusive", 100, 103, 100, 100, model.SignalBuy},
+		{"full depth body above lower", 100, 103, 100, 100.01, model.SignalNone},
+		{"fractional depth body inclusive", 37.5, 103, 101, 101.25, model.SignalBuy},
+		{"fractional depth body shallow", 37.5, 103, 101, 101.26, model.SignalNone},
+		{"zero depth upper body inclusive", 0, 103, 102, 102, model.SignalBuy},
+		{"zero depth wick only", 0, 103, 102, 103, model.SignalNone},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p := testParams()
 			p.MinRetestDepthPct = tc.depth
-			md := snapshot(append(formation(), bar{103, 104, tc.low, tc.close})...)
+			md := snapshot(append(formation(), bar{tc.open, 104, tc.low, tc.close})...)
 			sig := NewWithParams("TEST", step, p).Decide(md)
 			if sig.Kind != tc.want {
 				t.Fatalf("signal=%+v, want %v", sig, tc.want)
@@ -211,7 +324,7 @@ func TestRetest(t *testing.T) {
 	}{
 		{"formation cannot retest itself", nil, model.SignalNone},
 		{"lower breach invalidates", []bar{{103, 104, 99, 101}, {103, 104, 101, 101}}, model.SignalNone},
-		{"lower touch remains valid", []bar{{103, 104, 100, 102}, {103, 104, 101, 101}}, model.SignalBuy},
+		{"second protected retest remains valid", []bar{{103, 104, 100, 102}, {103, 104, 101, 101}}, model.SignalBuy},
 		{"no touch", []bar{{103, 104, 102.5, 101}}, model.SignalNone},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -343,50 +456,6 @@ func TestPosition(t *testing.T) {
 	}
 }
 
-func TestPositionTimeExit(t *testing.T) {
-	tests := []struct {
-		name        string
-		limit, held int
-		low, high   float64
-		wantReason  string
-	}{
-		{"disabled", 0, 9, 101, 109, ""},
-		{"before limit", 3, 2, 101, 109, ""},
-		{"at limit", 3, 3, 101, 109, "TIME"},
-		{"past limit", 3, 4, 101, 109, "TIME"},
-		{"stop wins at limit", 3, 3, 99, 111, "SL_EMERGENCY"},
-		{"target wins at limit", 3, 3, 101, 111, "TP"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			p := testParams()
-			p.MaxHoldBars = tt.limit
-			p.HTFTrendEMA = 2
-			p.RequireBullishBOS = 1
-			p.RequireLiquiditySweep = 1
-			md := snapshot(bar{104, tt.high, tt.low, 105})
-			// No H4 or formation history: exit decisions must bypass entry gates.
-			md.Position = &strategy.Position{PurchasePrice: 104, StopLoss: 100, BarsHeld: tt.held}
-			sig := NewWithParams("TEST", step, p).Decide(md)
-			if sig.Reason != tt.wantReason {
-				t.Fatalf("reason=%q, want %q: %+v", sig.Reason, tt.wantReason, sig)
-			}
-			if tt.wantReason == "" {
-				if sig.Kind != model.SignalNone {
-					t.Fatalf("unexpected exit: %+v", sig)
-				}
-				return
-			}
-			if sig.Kind != model.SignalSell || sig.ExitReason == "" {
-				t.Fatalf("missing descriptive sell signal: %+v", sig)
-			}
-			if tt.wantReason == "TIME" && (!strings.Contains(sig.ExitReason, "FVG") || !strings.Contains(sig.ExitReason, "3 bars")) {
-				t.Fatalf("time exit reason lacks bar limit: %+v", sig)
-			}
-		})
-	}
-}
-
 // A zone must retain the same formation ATR and qualification when the engine
 // drops the oldest candle. Period 2 exercises Wilder smoothing, unlike period 1.
 func TestRetestFormationATRStableAcrossSlidingWindows(t *testing.T) {
@@ -450,221 +519,13 @@ func TestRetestFormationATRRetainedThroughExpiry(t *testing.T) {
 	}
 }
 
-func TestSwing(t *testing.T) {
-	for _, tc := range []struct {
-		name       string
-		values     []float64
-		i, k       int
-		high, want bool
-	}{
-		{"high", []float64{1, 3, 5, 4, 2}, 2, 2, true, true},
-		{"low", []float64{5, 3, 1, 2, 4}, 2, 2, false, true},
-		{"equal high", []float64{1, 5, 5, 4, 2}, 2, 2, true, false},
-		{"equal low", []float64{5, 1, 1, 2, 4}, 2, 2, false, false},
-		{"missing left", []float64{5, 4, 3}, 0, 1, true, false},
-		{"missing right confirmation", []float64{1, 5}, 1, 1, true, false},
-		{"invalid k", []float64{1, 5, 1}, 1, 0, true, false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			var got bool
-			if tc.high {
-				got = swingHighAt(tc.values, tc.i, tc.k)
-			} else {
-				got = swingLowAt(tc.values, tc.i, tc.k)
-			}
-			if got != tc.want {
-				t.Fatalf("got %v want %v", got, tc.want)
-			}
-		})
-	}
-}
-
 func TestLookback(t *testing.T) {
 	p := DefaultParams()
 	p.ATRPeriod = 2
 	p.MaxRetestBars = 8
-	p.StructureLookbackBars = 10
-	p.SwingK = 2
 	s := NewWithParams("TEST", step, p)
 	if got := s.Lookback(); got != 12 {
-		t.Fatalf("legacy %d", got)
-	}
-	p.RequireBullishBOS = 1
-	s = NewWithParams("TEST", step, p)
-	if got := s.Lookback(); got != 25 {
-		t.Fatalf("BOS %d", got)
-	}
-	p.RequireBullishBOS = 0
-	p.RequireLiquiditySweep = 1
-	s = NewWithParams("TEST", step, p)
-	if got := s.Lookback(); got != 25 {
-		t.Fatalf("sweep %d", got)
-	}
-}
-
-func TestStructure(t *testing.T) {
-	base := []bar{{10, 10, 10, 10}, {10, 11, 9, 10}, {10, 12, 8, 10}, {10, 11, 9, 10}, {10, 10, 10, 10}, {10, 11, 7, 10}, {10, 14, 10, 13}, {10, 11, 10, 10}, {10, 11, 10, 10}}
-	for _, tc := range []struct {
-		name       string
-		sweep, bos int
-		change     func([]bar, *Params)
-		want       bool
-	}{
-		{"both ordered", 1, 1, func([]bar, *Params) {}, true},
-		{"standalone sweep", 1, 0, func(b []bar, _ *Params) { b[6].c = 10 }, true},
-		{"standalone BOS", 0, 1, func(b []bar, _ *Params) { b[5].l = 9; b[7].c = 15 }, true},
-		{"wick without reclaim", 1, 0, func(b []bar, _ *Params) { b[5].c = 7 }, false},
-		{"reclaim equality", 1, 0, func(b []bar, _ *Params) { b[5].c = 8 }, false},
-		{"sweep equality", 1, 0, func(b []bar, _ *Params) { b[5].l = 8 }, false},
-		{"expired sweep", 1, 0, func(_ []bar, p *Params) { p.MaxSweepToFVGBars = 2 }, false},
-		{"age boundary", 1, 0, func(_ []bar, p *Params) { p.MaxSweepToFVGBars = 3 }, true},
-		{"wick only BOS", 1, 1, func(b []bar, _ *Params) { b[6].c = 12 }, false},
-		{"BOS before sweep", 1, 1, func(b []bar, _ *Params) { b[4].c = 13; b[6].c = 10 }, false},
-		{"sweep and BOS same bar", 1, 1, func(b []bar, _ *Params) { b[5].h = 14; b[5].c = 13; b[6].c = 10 }, true},
-		{"late confirmation unavailable", 1, 0, func(b []bar, _ *Params) { b[2].l = 9; b[4].l = 8; b[5].l = 7 }, false},
-		{"standalone BOS on b", 0, 1, func(b []bar, _ *Params) { b[6].c = 10; b[7].c = 13 }, true},
-		{"standalone BOS before b", 0, 1, func(b []bar, _ *Params) { b[6].c = 13; b[7].c = 10 }, false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			b := append([]bar(nil), base...)
-			p := testParams()
-			p.SwingK = 1
-			p.RequireLiquiditySweep = tc.sweep
-			p.RequireBullishBOS = tc.bos
-			tc.change(b, &p)
-			got := NewWithParams("TEST", step, p).structurePasses(snapshot(b...), zone{formed: 8})
-			if got != tc.want {
-				t.Fatalf("got %v want %v", got, tc.want)
-			}
-		})
-	}
-}
-
-func TestFirstRetest(t *testing.T) {
-	for _, tc := range []struct {
-		name    string
-		later   []bar
-		enabled int
-		want    model.SignalKind
-	}{
-		{"first touch", []bar{{103, 104, 101, 101}}, 1, model.SignalBuy},
-		{"second protected touch", []bar{{103, 104, 101, 101}, {103, 104, 101, 101}}, 1, model.SignalNone},
-		{"first touch fails depth", []bar{{103, 104, 101.5, 101.5}, {103, 104, 101, 101}}, 1, model.SignalNone},
-		{"disabled allows second touch", []bar{{103, 104, 101, 101}, {103, 104, 101, 101}}, 0, model.SignalBuy},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			p := testParams()
-			p.RequireFirstRetest = tc.enabled
-			if tc.name == "first touch fails depth" {
-				p.MinRetestDepthPct = 50
-				first := snapshot(append(formation(), tc.later[0])...)
-				if sig := NewWithParams("TEST", step, p).Decide(first); sig.Kind != model.SignalNone {
-					t.Fatalf("shallow first-touch signal=%+v, want no entry", sig)
-				}
-			}
-			sig := NewWithParams("TEST", step, p).Decide(snapshot(append(formation(), tc.later...)...))
-			if sig.Kind != tc.want {
-				t.Fatalf("signal=%+v, want %v", sig, tc.want)
-			}
-		})
-	}
-	t.Run("weekend or missing fill slot consumes first touch", func(t *testing.T) {
-		p := testParams()
-		p.RequireFirstRetest = 1
-		md := snapshot(append(formation(), bar{103, 104, 101, 101}, bar{103, 104, 101, 101})...)
-		md.Times[3] = time.Date(2026, 11, 6, 23, 30, 0, 0, time.UTC)
-		md.Times[4] = time.Date(2026, 11, 9, 10, 0, 0, 0, time.UTC)
-		s := NewWithParams("TEST", step, p)
-		first := md
-		first.Closes = md.Closes[:4]
-		first.Opens = md.Opens[:4]
-		first.Highs = md.Highs[:4]
-		first.Lows = md.Lows[:4]
-		first.Times = md.Times[:4]
-		if sig := s.Decide(first); sig.Kind != model.SignalNone {
-			t.Fatalf("weekend signal=%+v", sig)
-		}
-		if sig := s.Decide(md); sig.Kind != model.SignalNone {
-			t.Fatalf("later signal=%+v", sig)
-		}
-	})
-	t.Run("missing next slot consumes first touch", func(t *testing.T) {
-		p := testParams()
-		p.RequireFirstRetest = 1
-		md := snapshot(append(formation(), bar{103, 104, 101, 101}, bar{103, 104, 101, 101})...)
-		md.Times[4] = md.Times[4].Add(step)
-		if sig := NewWithParams("TEST", step, p).Decide(md); sig.Kind != model.SignalNone {
-			t.Fatalf("later signal=%+v", sig)
-		}
-	})
-	t.Run("first touch failing H4 still consumes", func(t *testing.T) {
-		p := testParams()
-		p.RequireFirstRetest, p.HTFTrendEMA = 1, 3
-		md := snapshot(append(formation(), bar{103, 104, 101, 101}, bar{103, 104, 101, 101})...)
-		first := md
-		first.Closes, first.Opens, first.Highs, first.Lows, first.Times = md.Closes[:4], md.Opens[:4], md.Highs[:4], md.Lows[:4], md.Times[:4]
-		first.HTFCloses = []float64{3, 2, 1}
-		md.HTFCloses = []float64{1, 2, 3}
-		s := NewWithParams("TEST", step, p)
-		if sig := s.Decide(first); sig.Kind != model.SignalNone {
-			t.Fatalf("first signal=%+v", sig)
-		}
-		if sig := s.Decide(md); sig.Kind != model.SignalNone {
-			t.Fatalf("later signal=%+v", sig)
-		}
-	})
-	t.Run("consumed newer zone does not hide older", func(t *testing.T) {
-		// Synthetic OHLC allows overlapping reconstructed zones while keeping the older untouched.
-		b := append(formation(), bar{101, 101, 102.5, 101}, bar{101, 104, 102.5, 103}, bar{104, 105, 103, 104}, bar{104, 105, 102.5, 104}, bar{103, 105, 101, 101})
-		p := testParams()
-		p.RequireFirstRetest = 1
-		s := NewWithParams("TEST", step, p)
-		md := snapshot(b...)
-		zones := s.discover(md)
-		if len(zones) < 2 || zones[len(zones)-1].lower != 101 {
-			t.Fatalf("expected newer zone: %+v", zones)
-		}
-		legacy := p
-		legacy.RequireFirstRetest = 0
-		if sig := NewWithParams("TEST", step, legacy).Decide(md); sig.Kind != model.SignalBuy || sig.StopLoss != 101 {
-			t.Fatalf("newer zone should otherwise qualify: %+v", sig)
-		}
-		sig := s.Decide(md)
-		if sig.Kind != model.SignalBuy || sig.StopLoss != 100 {
-			t.Fatalf("older zone signal=%+v", sig)
-		}
-	})
-}
-
-func TestEntryStructureGates(t *testing.T) {
-	base := []bar{{10, 10, 10, 10}, {10, 11, 9, 10}, {10, 12, 8, 10}, {10, 11, 9, 10}, {10, 10, 10, 10}, {10, 11, 7, 10}, {10, 14, 10, 13}, {14, 17, 14, 16}, {16, 17, 16, 16.5}, {16, 17, 15, 15}}
-	for _, tc := range []struct {
-		name       string
-		sweep, bos int
-		change     func([]bar)
-		want       model.SignalKind
-	}{
-		{"disabled", 0, 0, func([]bar) {}, model.SignalBuy},
-		{"sweep passes", 1, 0, func([]bar) {}, model.SignalBuy},
-		{"sweep fails", 1, 0, func(b []bar) { b[5].l = 8 }, model.SignalNone},
-		{"BOS passes without sweep", 0, 1, func(b []bar) { b[5].l = 9 }, model.SignalBuy},
-		{"BOS fails", 0, 1, func(b []bar) { b[2].h = 18 }, model.SignalNone},
-		{"combined passes", 1, 1, func([]bar) {}, model.SignalBuy},
-		{"combined fails sweep", 1, 1, func(b []bar) { b[5].l = 8 }, model.SignalNone},
-		{"combined fails BOS", 1, 1, func(b []bar) { b[2].h = 18 }, model.SignalNone},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			b := append([]bar(nil), base...)
-			tc.change(b)
-			p := testParams()
-			p.SwingK = 1
-			p.RequireLiquiditySweep = tc.sweep
-			p.RequireBullishBOS = tc.bos
-			sig := NewWithParams("TEST", step, p).Decide(snapshot(b...))
-			if sig.Kind != tc.want {
-				t.Fatalf("signal=%+v, want %v", sig, tc.want)
-			}
-		})
+		t.Fatalf("lookback %d, want 12", got)
 	}
 }
 
@@ -709,21 +570,6 @@ func TestHTFTrend(t *testing.T) {
 			t.Fatalf("signal=%+v", sig)
 		}
 	})
-}
-
-func TestEntryDistance(t *testing.T) {
-	for _, tc := range []struct{ distance, want float64 }{{0, 0}, {.5, 103}} {
-		p := testParams()
-		p.MaxEntryDistanceATR = tc.distance
-		md := snapshot(append(formation(), bar{103, 200, 102.5, 103}, bar{103, 104, 101, 101})...)
-		sig := NewWithParams("TEST", step, p).Decide(md)
-		if sig.Kind != model.SignalBuy || sig.MaxEntryPrice != tc.want || sig.ATR != 2 {
-			t.Fatalf("distance %v: %+v", tc.distance, sig)
-		}
-		if tc.distance > 0 && !strings.Contains(sig.EntryReason, "max entry") {
-			t.Fatalf("missing limit: %+v", sig)
-		}
-	}
 }
 
 func TestStopBuffer(t *testing.T) {
