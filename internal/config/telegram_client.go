@@ -1,16 +1,17 @@
 package config
 
 type TelegramClient struct {
-	Token            string `config:"TELEGRAM"`
-	GroupChatID      int64  `config:"TELEGRAM_GROUP_CHAT_ID"`
-	TopicGoldenX     int    `config:"TELEGRAM_TOPIC_GOLDEN_X"`
-	TopicReversion   int    `config:"TELEGRAM_TOPIC_REVERSION"`
-	TopicRSIPullback int    `config:"TELEGRAM_TOPIC_RSI_PULLBACK"`
-	TopicRSIZone     int    `config:"TELEGRAM_TOPIC_RSI_ZONE"`
-	TopicGapFade     int    `config:"TELEGRAM_TOPIC_GAP_FADE"`
-	TopicPDLRSI      int    `config:"TELEGRAM_TOPIC_PDL_RSI"`
-	TopicNews        int    `config:"TELEGRAM_TOPIC_NEWS"`
-	AllowedUserIDs   []int64
+	Token             string `config:"TELEGRAM"`
+	GroupChatID       int64  `config:"TELEGRAM_GROUP_CHAT_ID"`
+	TopicGoldenX      int    `config:"TELEGRAM_TOPIC_GOLDEN_X"`
+	TopicReversion    int    `config:"TELEGRAM_TOPIC_REVERSION"`
+	TopicRSIPullback  int    `config:"TELEGRAM_TOPIC_RSI_PULLBACK"`
+	TopicRSIZone      int    `config:"TELEGRAM_TOPIC_RSI_ZONE"`
+	TopicGapFade      int    `config:"TELEGRAM_TOPIC_GAP_FADE"`
+	TopicPDLRSI       int    `config:"TELEGRAM_TOPIC_PDL_RSI"`
+	TopicFVGImbalance int    `config:"TELEGRAM_TOPIC_FVG_IMBALANCE"`
+	TopicNews         int    `config:"TELEGRAM_TOPIC_NEWS"`
+	AllowedUserIDs    []int64
 }
 
 func NewTelegramClientConfig() *TelegramClient {

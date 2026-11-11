@@ -4,6 +4,7 @@ import (
 	"testing"
 	"tinvest/internal/enum"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/core"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/domrf"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/gazp"
 )
 
@@ -16,6 +17,9 @@ func TestFVGImbalanceDefaultsAndOverrides(t *testing.T) {
 		wantDefaults := core.DefaultParams()
 		if ticker == "GAZP" {
 			wantDefaults = gazp.Params()
+		}
+		if ticker == "DOMRF" {
+			wantDefaults = domrf.Params()
 		}
 		if b.DefaultParams() != wantDefaults {
 			t.Fatalf("%s defaults: %+v, want %+v", ticker, b.DefaultParams(), wantDefaults)

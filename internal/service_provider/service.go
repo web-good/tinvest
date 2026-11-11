@@ -13,6 +13,7 @@ import (
 	"tinvest/internal/service/screener/dividend"
 	"tinvest/internal/service/telegram_commands"
 	"tinvest/internal/service/trading_strategy/bonds"
+	fvglive "tinvest/internal/service/trading_strategy/fvg_imbalance/live"
 	gaplive "tinvest/internal/service/trading_strategy/gap_fade/live"
 	"tinvest/internal/service/trading_strategy/golden_x"
 	"tinvest/internal/service/trading_strategy/livecore/adapter"
@@ -223,6 +224,10 @@ func (*ServiceProvider) GetRSIPullbackLiveService() rsipullbacklive.Service {
 		if pdl := serviceProvider.appConfig.PDLRSI; pdl.Enabled() {
 			pdlTG, _ := serviceProvider.GetPDLRSISender()
 			guests = append(guests, pdlrsilive.New(pdl, pdlTG))
+		}
+		if fvg := serviceProvider.appConfig.FVGImbalance; fvg != nil && fvg.Enabled() {
+			fvgTG, _ := serviceProvider.GetFVGImbalanceSender()
+			guests = append(guests, fvglive.New(fvg, fvgTG))
 		}
 		serviceProvider.service.rsiPullbackLiveService = rsipullbacklive.NewService(
 			grpcClient.InstrumentsServiceClient(),

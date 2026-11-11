@@ -115,6 +115,10 @@ func (s *ServiceProvider) GetPDLRSISender() (telegram.Client, error) {
 	return s.topicSender(s.appConfig.TelegramClient.TopicPDLRSI, "pdl_rsi")
 }
 
+func (s *ServiceProvider) GetFVGImbalanceSender() (telegram.Client, error) {
+	return s.topicSender(s.appConfig.TelegramClient.TopicFVGImbalance, "fvg_imbalance")
+}
+
 func (s *ServiceProvider) GetNewsSender() (telegram.Client, error) {
 	return s.topicSender(s.appConfig.TelegramClient.TopicNews, "news")
 }

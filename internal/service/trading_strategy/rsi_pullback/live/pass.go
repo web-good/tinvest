@@ -389,6 +389,10 @@ func (s *service) buy(ctx context.Context, pc *passCtx, sl *slot, ticker string,
 	if sig.Kind != model.SignalBuy {
 		return false, nil
 	}
+	if !entrySignalExecutable(sig, pc.now) {
+		sl.strat.Notify(notifier.Skip(sl.strat.Label(), ticker, "сигнал просрочен"))
+		return false, nil
+	}
 
 	// Вето стратегии (дивидендная отсечка у gap_fade) — до сайзинга и ордера. Бар не
 	// расходуется (signaled=false): следующая по приоритету стратегия всё равно спрашивается.
@@ -469,13 +473,14 @@ func (s *service) buy(ctx context.Context, pc *passCtx, sl *slot, ticker string,
 	}
 	qty := filledLots * int64(sh.Lot)
 
+	stopLoss, takeProfit := fillLevels(sig, fillPrice)
 	pc.state[ticker] = statestore.Entry{
 		Ticker:     ticker,
 		EntryTime:  pc.now,
 		EntryPrice: fillPrice,
 		EntryATR:   sig.ATR, // дневной ATR: им же меряются стоп, цель и обе границы гейта дня
-		TakeProfit: sig.TakeProfit,
-		StopLoss:   sig.StopLoss,
+		TakeProfit: takeProfit,
+		StopLoss:   stopLoss,
 		MaxFav:     fillPrice,
 		Quantity:   qty,
 		Strategy:   sl.strat.Name(),
@@ -492,7 +497,26 @@ func (s *service) buy(ctx context.Context, pc *passCtx, sl *slot, ticker string,
 	sl.strat.Notify(withNote(notifier.Entry(sl.strat.Label(), ticker, fillPrice, filledLots, qty, !res.Placed), note))
 
 	pc.state[ticker] = s.placeInitialStop(ctx, pc, sl, ticker, sh, pc.state[ticker])
+	if sig.MinEntryPrice > 0 && fillPrice < sig.MinEntryPrice {
+		sl.alert(ticker, fmt.Sprintf("цена исполнения %.4f ниже границы FVG %.4f; позиция сопровождается", fillPrice, sig.MinEntryPrice))
+	}
 	return true, nil
+}
+
+// fillLevels freezes distance-based exits at the actual fill; absolute levels remain unchanged.
+func fillLevels(sig model.Signal, price float64) (float64, float64) {
+	stop, target := sig.StopLoss, sig.TakeProfit
+	if sig.StopDistance > 0 {
+		stop = price - sig.StopDistance
+	}
+	if sig.TargetDistance > 0 {
+		target = price + sig.TargetDistance
+	}
+	return stop, target
+}
+
+func entrySignalExecutable(sig model.Signal, now time.Time) bool {
+	return sig.FillBy.IsZero() || (now.Sub(sig.FillBy) >= 0 && now.Sub(sig.FillBy) < cronStep)
 }
 
 // placeInitialStop puts the protective exchange stop right after a fill so the position is

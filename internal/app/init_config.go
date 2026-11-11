@@ -48,6 +48,7 @@ func (a *App) initConfig(ctx context.Context) error {
 		RSIZone:        config.NewRSIZoneConfig(),
 		GapFade:        config.NewGapFadeConfig(),
 		PDLRSI:         config.NewPDLRSIConfig(),
+		FVGImbalance:   config.NewFVGImbalanceConfig(),
 		DropBounce:     config.NewDropBounceConfig(),
 		PDLReclaim:     config.NewPDLReclaimConfig(),
 		News:           config.NewNewsConfig(),

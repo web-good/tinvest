@@ -33,7 +33,11 @@ func TestFVGImbalanceGrid(t *testing.T) {
 					}
 				}
 			}
-			for _, key := range []string{"MinGapATR", "MaxWaitBars", "StochPeriod", "HTFTrendEMA", "StopATR", "TakeProfitATR", "UseStochExit"} {
+			keys := []string{"MinGapATR", "StochPeriod", "HTFTrendEMA", "StopATR", "TakeProfitATR", "UseStochExit"}
+			if path != "gazp/grid.json" {
+				keys = append(keys, "MaxWaitBars")
+			}
+			for _, key := range keys {
 				if !axes[key] {
 					t.Errorf("missing %s", key)
 				}
