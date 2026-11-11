@@ -1,0 +1,43 @@
+{
+  "_comment": "LKOH stage 2 candidate 4, no-stoch exit branch; explicit inherited entry params; training [2023-11-11, 2025-11-11); choose only after annual trade gate.",
+  "phases": [
+    {
+      "name": "stage-2-candidate-4-no-stoch",
+      "grid": {
+        "ATRPeriod": [
+          14
+        ],
+        "MinGapATR": [
+          0.1
+        ],
+        "MaxWaitBars": [
+          30
+        ],
+        "StochPeriod": [
+          21
+        ],
+        "UseStochExit": [
+          0
+        ],
+        "StopATR": [
+          0.5,
+          1,
+          1.5,
+          2
+        ],
+        "TakeProfitATR": [
+          0,
+          1,
+          2,
+          1.5
+        ],
+        "HTFTrendEMA": [
+          50
+        ],
+        "RequireEntryAboveFVGLower": [
+          1
+        ]
+      }
+    }
+  ]
+}

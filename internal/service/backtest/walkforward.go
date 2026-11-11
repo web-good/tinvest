@@ -108,6 +108,7 @@ type WalkForwardFold struct {
 	TestTo         time.Time
 	InSampleMetric float64              // ranking-metric value of the train winner
 	InSamplePF     float64              // train winner's profit factor (for the train-vs-OOS column)
+	InSample       backtest.Metrics     // complete training metrics of the selected candidate
 	OOS            backtest.Metrics     // trade-based metrics over this fold's OOS trades
 	OOSNetPnLPct   float64              // sum(OOS PnL) / InitialCash
 	OOSMaxDDPct    float64              // drawdown fraction from replaying OOS trades
@@ -262,10 +263,16 @@ func RunWalkForward(b Binding, phases []Phase, candles, dailyCandles, htfCandles
 			summary.Folds = append(summary.Folds, fold)
 			continue
 		}
+		if results[0].Metrics.TotalTrades < minTrades {
+			fold.Note = fmt.Sprintf("нет комбинации с ≥ %d сделками", minTrades)
+			summary.Folds = append(summary.Folds, fold)
+			continue
+		}
 
 		best := results[0]
 		fold.InSampleMetric = metricValue(best.Metrics, metric)
 		fold.InSamplePF = best.Metrics.ProfitFactor
+		fold.InSample = best.Metrics
 		fold.WinnerParams = best.Params
 		fold.WinnerRows = ParamRows(best.Params)
 
@@ -309,6 +316,7 @@ func RenderWalkForwardMarkdown(ticker, metric string, s WalkForwardSummary, trai
 	fmt.Fprintf(&b, "# Walk-forward %s\n\n", ticker)
 	fmt.Fprintf(&b, "- Train-окно: %d мес; OOS-фолд: %d мес; шаг: %d мес (встык)\n", trainMonths, testMonths, testMonths)
 	fmt.Fprintf(&b, "- Фолдов: %d; калибровка ранжировалась по: %s\n\n", len(s.Folds), metric)
+	b.WriteString("> OOS-прогон включает торговлю на train-окне для прогрева: капитал и открытая позиция могут перейти через границу фолда. Сумма учитывает только сделки с входом в OOS. Это ограничение влияет на сравнение и доходность.\n\n")
 
 	m := s.PooledOOS
 	b.WriteString("## Пул сделок (агрегат OOS)\n\n")
@@ -355,6 +363,18 @@ func RenderWalkForwardMarkdown(ticker, metric string, s WalkForwardSummary, trai
 			f.OOS.GrossProfit, f.OOS.GrossLoss)
 	}
 
+	b.WriteString("\n## Параметры и метрики победителей\n\n")
+	for _, f := range s.Folds {
+		if f.WinnerRows == nil {
+			continue
+		}
+		fmt.Fprintf(&b, "### Фолд %d\n\nTrain: сделок %d, выигрышных / проигрышных %d / %d; PF %.3f; Net PnL %.2f; Max DD %.2f%%.\n\n", f.Index, f.InSample.TotalTrades, f.InSample.Wins, f.InSample.Losses, f.InSample.ProfitFactor, f.InSample.NetPnL, f.InSample.MaxDrawdownPct*100)
+		b.WriteString("| Параметр | Значение |\n|---|---|\n")
+		for _, row := range f.WinnerRows {
+			fmt.Fprintf(&b, "| %s | %s |\n", row.Name, row.Value)
+		}
+		b.WriteString("\n")
+	}
 	b.WriteString("\n## Стабильность параметров\n\n")
 	stable, varied := paramStability(s.Folds)
 	if len(stable) > 0 {

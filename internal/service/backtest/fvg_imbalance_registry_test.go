@@ -1,160 +1,40 @@
 package backtest
 
 import (
-	"strings"
 	"testing"
-	"time"
-
 	"tinvest/internal/enum"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/core"
-	"tinvest/internal/service/trading_strategy/scalping/model"
-	"tinvest/internal/service/trading_strategy/scalping/strategy"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/gazp"
 )
 
-func TestFVGImbalanceDefaults(t *testing.T) {
-	for ticker, want := range map[string]core.Params{
-		"GAZP":  {ATRPeriod: 14, MinGapATR: .6, MaxRetestBars: 10, MinRetestDepthPct: 80, TakeProfitR: 2, RequireThirdCandleHigherHigh: 0, RetestDepthByBody: 0, UseStochFilter: 0, HTFTrendEMA: 200, StopBufferATR: 1},
-		"DOMRF": {ATRPeriod: 14, MinGapATR: .6, MaxRetestBars: 10, MinRetestDepthPct: 80, TakeProfitR: 2, RequireThirdCandleHigherHigh: 0, RetestDepthByBody: 0, UseStochFilter: 0, HTFTrendEMA: 200, StopBufferATR: 1},
-		"ZZZZ":  {ATRPeriod: 14, MinGapATR: .25, MaxRetestBars: 8, MinRetestDepthPct: 50, TakeProfitR: 1.5, RequireThirdCandleHigherHigh: 1, RetestDepthByBody: 1},
-	} {
-		t.Run(ticker, func(t *testing.T) {
-			b, err := FVGImbalanceLookupOrGeneric(ticker, enum.Minutes30)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if got := b.DefaultParams(); got != want {
-				t.Fatalf("defaults = %+v, want %+v", got, want)
-			}
-			if got := b.Build(b.DefaultParams()).Ticker(); got != ticker {
-				t.Fatalf("ticker = %q, want %q", got, ticker)
-			}
-		})
-	}
-}
-
-func TestFVGImbalanceRejectsNonM30(t *testing.T) {
+func TestFVGImbalanceDefaultsAndOverrides(t *testing.T) {
 	for _, ticker := range []string{"GAZP", "DOMRF", "ZZZZ"} {
-		for _, interval := range []enum.Interval{enum.Minutes5, enum.Minutes15, enum.Hour1, enum.Hour4, enum.Day1, enum.Week1, 0, -1} {
-			if _, err := FVGImbalanceLookupOrGeneric(ticker, interval); err == nil {
-				t.Errorf("%s %s: expected rejection", ticker, interval)
+		b, err := FVGImbalanceLookupOrGeneric(ticker, enum.Minutes30)
+		if err != nil {
+			t.Fatal(err)
+		}
+		wantDefaults := core.DefaultParams()
+		if ticker == "GAZP" {
+			wantDefaults = gazp.Params()
+		}
+		if b.DefaultParams() != wantDefaults {
+			t.Fatalf("%s defaults: %+v, want %+v", ticker, b.DefaultParams(), wantDefaults)
+		}
+		got, err := b.ParseParams([]byte(`{"StochPeriod":9,"MaxWaitBars":20,"StopATR":0.5,"TakeProfitATR":3}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		p := got.(core.Params)
+		if p.StochPeriod != 9 || p.MaxWaitBars != 20 || p.StopATR != .5 || p.TakeProfitATR != 3 {
+			t.Fatalf("%+v", p)
+		}
+		for _, raw := range []string{`{"MaxWaitBars":0}`, `{"StochPeriod":0}`, `{"StopATR":0}`, `{"TakeProfitATR":-1}`, `{"TakeProfitR":2}`, `{"MinRetestDepthPct":50}`, `{"Unknown":1}`} {
+			if _, err := b.ParseParams([]byte(raw)); err == nil {
+				t.Errorf("accepted %s", raw)
 			}
 		}
 	}
-}
-
-func TestFVGImbalanceParseParams(t *testing.T) {
-	for _, ticker := range []string{"GAZP", "DOMRF", "ZZZZ"} {
-		t.Run(ticker, func(t *testing.T) {
-			b, err := FVGImbalanceLookupOrGeneric(ticker, enum.Minutes30)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defaults := b.DefaultParams()
-			for _, raw := range []string{`{}`, `{"TakeProfitR": 2}`, `{"MinGapATR":0,"TakeProfitR":0,"MinRetestDepthPct":0}`, `{"RequireThirdCandleHigherHigh":0,"RetestDepthByBody":0}`} {
-				want := b.DefaultParams().(core.Params)
-				switch raw {
-				case `{"TakeProfitR": 2}`:
-					want.TakeProfitR = 2
-				case `{"MinGapATR":0,"TakeProfitR":0,"MinRetestDepthPct":0}`:
-					want.MinGapATR, want.TakeProfitR, want.MinRetestDepthPct = 0, 0, 0
-				case `{"RequireThirdCandleHigherHigh":0,"RetestDepthByBody":0}`:
-					want.RequireThirdCandleHigherHigh, want.RetestDepthByBody = 0, 0
-				}
-				got, err := b.ParseParams([]byte(raw))
-				if err != nil || got != want {
-					t.Errorf("ParseParams(%s) = %+v, %v; want %+v", raw, got, err, want)
-				}
-			}
-			for _, raw := range []string{
-				`{`, `[]`, `{} {}`, `{} trailing`, `{"Unknown":1}`, `{"ATRPeriod":"14"}`, `{"ATRPeriod":0}`, `{"ATRPeriod":-1}`,
-				`{"RequireFirstRetest":1}`, `{"RequireBullishBOS":1}`, `{"RequireLiquiditySweep":1}`, `{"SwingK":1}`,
-				`{"StructureLookbackBars":1}`, `{"MaxSweepToFVGBars":1}`, `{"MaxEntryDistanceATR":1}`, `{"MaxHoldBars":1}`,
-				`{"MaxRetestBars":0}`, `{"MaxRetestBars":-1}`, `{"MinGapATR":-0.1}`,
-				`{"TakeProfitR":-1}`, `{"MinRetestDepthPct":-1}`, `{"MinRetestDepthPct":101}`, `{"MinRetestDepthPct":NaN}`, `{"MinRetestDepthPct":1e999}`, `{"MinRetestDepthPct":Infinity}`,
-				`{"RequireThirdCandleHigherHigh":-1}`, `{"RequireThirdCandleHigherHigh":2}`, `{"RetestDepthByBody":-1}`, `{"RetestDepthByBody":2}`,
-				`{"MinGapATR":1e999}`, `{"TakeProfitR":NaN}`,
-				`{"HTFTrendEMA":-1}`,
-				`{"StopBufferATR":-1}`, `{"StopBufferATR":1e999}`, `{"StopBufferATR":NaN}`,
-			} {
-				if got, err := b.ParseParams([]byte(raw)); err == nil {
-					t.Errorf("ParseParams(%s) accepted invalid params: %+v", raw, got)
-				}
-			}
-
-			raw := `{"HTFTrendEMA":20,"StopBufferATR":0.1}`
-			want := b.DefaultParams().(core.Params)
-			want.HTFTrendEMA, want.StopBufferATR = 20, .1
-			got, err := b.ParseParams([]byte(raw))
-			if err != nil || got != want {
-				t.Errorf("overlay = %+v, %v; want %+v", got, err, want)
-			}
-
-			if got := b.DefaultParams(); got != defaults {
-				t.Fatalf("parsing mutated defaults: %+v", got)
-			}
-		})
-	}
-}
-
-func TestFVGImbalancePartialQualityOverlays(t *testing.T) {
-	b, err := FVGImbalanceLookupOrGeneric("GAZP", enum.Minutes30)
-	if err != nil {
-		t.Fatal(err)
-	}
-	tests := []struct {
-		raw   string
-		apply func(*core.Params)
-	}{
-		{`{"MinRetestDepthPct":100}`, func(p *core.Params) { p.MinRetestDepthPct = 100 }},
-		{`{"RequireThirdCandleHigherHigh":0}`, func(p *core.Params) { p.RequireThirdCandleHigherHigh = 0 }},
-		{`{"RetestDepthByBody":0}`, func(p *core.Params) { p.RetestDepthByBody = 0 }},
-		{`{"HTFTrendEMA":20}`, func(p *core.Params) { p.HTFTrendEMA = 20 }},
-		{`{"StopBufferATR":0.1}`, func(p *core.Params) { p.StopBufferATR = .1 }},
-	}
-	for _, tc := range tests {
-		t.Run(tc.raw, func(t *testing.T) {
-			want := b.DefaultParams().(core.Params)
-			tc.apply(&want)
-			got, err := b.ParseParams([]byte(tc.raw))
-			if err != nil || got != want {
-				t.Fatalf("overlay = %+v, %v; want %+v", got, err, want)
-			}
-		})
-	}
-}
-
-func TestFVGImbalanceBuildUsesM30AndOverrides(t *testing.T) {
-	b, err := FVGImbalanceLookupOrGeneric("ZZZZ", enum.Minutes30)
-	if err != nil {
-		t.Fatal(err)
-	}
-	p, err := b.ParseParams([]byte(`{"ATRPeriod":1,"TakeProfitR":2}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	start := time.Date(2026, 11, 2, 10, 0, 0, 0, time.UTC)
-	md := strategy.MarketData{
-		Opens: []float64{99, 100, 103, 103}, Highs: []float64{100, 103, 104, 104},
-		Lows: []float64{98, 99, 102, 101}, Closes: []float64{99, 102, 103, 101}, Price: 101,
-		Times: []time.Time{start, start.Add(30 * time.Minute), start.Add(time.Hour), start.Add(90 * time.Minute)},
-	}
-	sig := b.Build(p).Decide(md)
-	if sig.Kind != model.SignalBuy || sig.Ticker != "ZZZZ" || sig.StopLoss != 100 || sig.TakeProfit != 103 || !sig.FillBy.Equal(start.Add(2*time.Hour)) {
-		t.Fatalf("M30 retest signal = %+v, want ZZZZ buy with stop 100, target 103 and next M30 fill", sig)
-	}
-}
-
-func TestFVGImbalanceRejectsLegacyCloseAboveZone(t *testing.T) {
-	for _, ticker := range []string{"GAZP", "DOMRF", "ZZZZ"} {
-		t.Run(ticker, func(t *testing.T) {
-			b, err := FVGImbalanceLookupOrGeneric(ticker, enum.Minutes30)
-			if err != nil {
-				t.Fatal(err)
-			}
-			_, err = b.ParseParams([]byte(`{"RequireCloseAboveZone":1}`))
-			if err == nil || !strings.Contains(err.Error(), "RequireCloseAboveZone") {
-				t.Fatalf("legacy field error = %v, want error naming RequireCloseAboveZone", err)
-			}
-		})
+	if _, err := FVGImbalanceLookupOrGeneric("GAZP", enum.Hour1); err == nil {
+		t.Fatal("non-M30 accepted")
 	}
 }

@@ -1,0 +1,17 @@
+{
+  "_comment": "Exploratory joint grid: includes the earlier LKOH baseline. Exhaustive Cartesian product, not a validated calibration. Holdout already inspected; prospective validation is required.",
+  "phases": [{
+    "name": "joint",
+    "grid": {
+      "ATRPeriod": [14],
+      "MaxWaitBars": [30, 40],
+      "HTFTrendEMA": [0, 150, 200],
+      "RequireEntryAboveFVGLower": [0, 1],
+      "MinGapATR": [0.25, 0.3, 0.4],
+      "StochPeriod": [10, 12, 14],
+      "StopATR": [0.4, 0.5, 0.6, 0.3],
+      "TakeProfitATR": [1.5, 1.8, 2],
+      "UseStochExit": [0, 1]
+    }
+  }]
+}

@@ -167,3 +167,69 @@ func TestEntryAtNextOpenMaxEntryPrice(t *testing.T) {
 		})
 	}
 }
+
+func TestEntryRelativeLevelsUseNextOpen(t *testing.T) {
+	candles := openCandles([]float64{10, 100, 105, 120}, []float64{10, 100, 110, 120})
+	var seen *strategy.Position
+	s := scriptedStrategy{lookback: 1, decide: func(md strategy.MarketData) model.Signal {
+		if md.Position == nil && md.Price == 100 {
+			return model.Signal{Kind: model.SignalBuy, StopDistance: 2, TargetDistance: 4, ATR: 2}
+		}
+		if md.Position != nil {
+			seen = md.Position
+		}
+		return model.Signal{}
+	}}
+	Run(s, candles, nil, nil, nextOpenCfg)
+	if seen == nil || seen.PurchasePrice != 105 || seen.StopLoss != 103 || seen.TakeProfit != 109 {
+		t.Fatalf("position = %+v", seen)
+	}
+}
+
+func TestEntryRelativeStopMustRemainPositiveAtFill(t *testing.T) {
+	candles := openCandles([]float64{10, 100, 1, 2}, []float64{10, 100, 1, 2})
+	s := scriptedStrategy{lookback: 1, decide: func(md strategy.MarketData) model.Signal {
+		if md.Position == nil && md.Price == 100 {
+			return model.Signal{Kind: model.SignalBuy, StopDistance: 2}
+		}
+		return model.Signal{}
+	}}
+	result := Run(s, candles, nil, nil, nextOpenCfg)
+	if result.BarsInMarket != 0 {
+		t.Fatalf("opened with non-positive stop: %+v", result)
+	}
+}
+
+func TestEntryAtNextOpenMinEntryPrice(t *testing.T) {
+	cases := []struct {
+		name          string
+		minEntryPrice float64
+		wantOpen      bool
+	}{
+		{"zero limit", 0, true},
+		{"open below limit", 106, false},
+		{"open equal to limit", 105, true},
+		{"open above limit", 104, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			candles := openCandles([]float64{10, 100, 105}, []float64{10, 100, 105})
+			s := scriptedStrategy{lookback: 1, decide: func(md strategy.MarketData) model.Signal {
+				if md.Position == nil && md.Price == 100 {
+					return model.Signal{Kind: model.SignalBuy, MinEntryPrice: tc.minEntryPrice}
+				}
+				return model.Signal{}
+			}}
+			res := Run(s, candles, nil, nil, nextOpenCfg)
+			if opened := res.BarsInMarket > 0; opened != tc.wantOpen {
+				t.Fatalf("opened = %v (bars in market %d), want %v", opened, res.BarsInMarket, tc.wantOpen)
+			}
+			if len(res.Trades) != 0 {
+				t.Fatalf("trades = %d, want 0", len(res.Trades))
+			}
+			if !tc.wantOpen && res.FinalEquity != nextOpenCfg.InitialCash {
+				t.Fatalf("final equity = %.2f, want %.2f", res.FinalEquity, nextOpenCfg.InitialCash)
+			}
+		})
+	}
+}

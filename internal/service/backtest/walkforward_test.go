@@ -231,6 +231,26 @@ func TestRunWalkForward(t *testing.T) {
 	}
 }
 
+func TestRunWalkForwardSkipsWhenNoCandidateMeetsMinimum(t *testing.T) {
+	from, to := date(2025, time.January, 1), date(2025, time.July, 1)
+	cfg := backtest.Config{InitialCash: 100000, Fraction: 1, Lot: 1}
+	s, err := RunWalkForward(fakeBinding(), []Phase{{Grid: Grid{"Threshold": {1}}}}, genHourly(from, to), nil, nil, cfg, "profit_factor", 1000000, from, to, 3, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(s.Folds) != 1 || s.Folds[0].WinnerRows != nil || s.Folds[0].Note == "" {
+		t.Fatalf("expected skipped fold, got %+v", s.Folds)
+	}
+}
+
+func TestWalkForwardReportShowsEachWinner(t *testing.T) {
+	s := WalkForwardSummary{Folds: []WalkForwardFold{{Index: 1, WinnerRows: []backtest.ParamLine{{Name: "Threshold", Value: "7"}}}}}
+	md := RenderWalkForwardMarkdown("T", "profit_factor", s, 3, 3)
+	if !strings.Contains(md, "| Threshold | 7 |") {
+		t.Fatalf("missing fold parameters: %s", md)
+	}
+}
+
 // hungryStrategy's lookback grows with BOTH params, so a grid-aware bound has to accumulate
 // across fields instead of taking the best single override. Trading behaviour matches
 // alternatingStrategy so runs stay non-degenerate.

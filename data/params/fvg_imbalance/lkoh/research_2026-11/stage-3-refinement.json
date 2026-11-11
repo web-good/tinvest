@@ -1,0 +1,42 @@
+{
+  "_comment": "LKOH stage 3; selected stage-2 candidate 8 no-stochastic branch; training only, windows fixed per plan.",
+  "phases": [
+    {
+      "name": "stage-3-refinement",
+      "grid": {
+        "ATRPeriod": [
+          14
+        ],
+        "MinGapATR": [
+          0.1,
+          0.25,
+          0.3
+        ],
+        "MaxWaitBars": [
+          30
+        ],
+        "StochPeriod": [
+          9
+        ],
+        "UseStochExit": [
+          0
+        ],
+        "StopATR": [
+          0.5,
+          1
+        ],
+        "TakeProfitATR": [
+          1.5,
+          2
+        ],
+        "HTFTrendEMA": [
+          0
+        ],
+        "RequireEntryAboveFVGLower": [
+          0,
+          1
+        ]
+      }
+    }
+  ]
+}

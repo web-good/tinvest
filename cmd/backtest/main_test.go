@@ -244,8 +244,8 @@ func TestFVGHTFCoverageLabels(t *testing.T) {
 	}
 }
 
-// A single run and every evaluated calibration phase determine whether H4 is needed.
-func TestFVGSelectedInputsRequireHTF(t *testing.T) {
+// FVG uses daily candles for its optional trend EMA, so it never needs H4 input.
+func TestFVGSelectedInputsDoNotRequireHTF(t *testing.T) {
 	binding, _, err := selectStrategy("GAZP", "fvg_imbalance", enum.Minutes30)
 	if err != nil {
 		t.Fatal(err)
@@ -254,12 +254,12 @@ func TestFVGSelectedInputsRequireHTF(t *testing.T) {
 		name, params, grid string
 		want               bool
 	}{
-		{"default", "", "", true},
-		{"partial params inherit H4", `{ "MinGapATR": 0.8 }`, "", true},
-		{"params enabled", `{ "HTFTrendEMA": 20 }`, "", true},
+		{"default", "", "", false},
+		{"partial params inherit disabled H4", `{ "MinGapATR": 0.8 }`, "", false},
+		{"daily EMA params enabled", `{ "HTFTrendEMA": 20 }`, "", false},
 		{"flat grid disabled", "", `{ "HTFTrendEMA": [0] }`, false},
-		{"flat grid enabled", "", `{ "HTFTrendEMA": [0, 20] }`, true},
-		{"later phase enabled", "", `{ "phases": [{"grid": {"MinGapATR": [0.8]}}, {"grid": {"HTFTrendEMA": [0, 20]}}] }`, true},
+		{"flat grid enabled", "", `{ "HTFTrendEMA": [0, 20] }`, false},
+		{"later phase enabled", "", `{ "phases": [{"grid": {"MinGapATR": [0.8]}}, {"grid": {"HTFTrendEMA": [0, 20]}}] }`, false},
 		{"all phases disabled", "", `{ "phases": [{"grid": {"HTFTrendEMA": [0]}}, {"grid": {"MinGapATR": [0.8]}}] }`, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -285,7 +285,7 @@ func TestFVGSelectedInputsRequireHTF(t *testing.T) {
 	}
 }
 
-func TestFVGGridInheritsAndOverridesEnabledDefaults(t *testing.T) {
+func TestFVGGridNeverRequiresHTF(t *testing.T) {
 	p := fvg.DefaultParams()
 	p.HTFTrendEMA = 20
 	for _, tc := range []struct {
@@ -293,9 +293,9 @@ func TestFVGGridInheritsAndOverridesEnabledDefaults(t *testing.T) {
 		phases []svc.Phase
 		want   bool
 	}{
-		{"inherited", []svc.Phase{{Grid: svc.Grid{"MinGapATR": {0.8}}}}, true},
+		{"inherited", []svc.Phase{{Grid: svc.Grid{"MinGapATR": {0.8}}}}, false},
 		{"disabled before first run", []svc.Phase{{Grid: svc.Grid{"HTFTrendEMA": {0}}}, {Grid: svc.Grid{"MinGapATR": {0.8}}}}, false},
-		{"enabled before later disable", []svc.Phase{{Grid: svc.Grid{"MinGapATR": {0.8}}}, {Grid: svc.Grid{"HTFTrendEMA": {0}}}}, true},
+		{"enabled before later disable", []svc.Phase{{Grid: svc.Grid{"MinGapATR": {0.8}}}, {Grid: svc.Grid{"HTFTrendEMA": {0}}}}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := requiresHTF("fvg_imbalance", p, tc.phases); got != tc.want {

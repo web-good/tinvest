@@ -57,8 +57,8 @@ func TestComputeBasicCounts(t *testing.T) {
 func TestComputeProfitFactorNoLosses(t *testing.T) {
 	r := Result{Trades: []Trade{{PnL: 50}, {PnL: 30}}, InitialCash: 1000, FinalEquity: 1080}
 	m := Compute(r, 0, 0, 0)
-	if !approx(m.ProfitFactor, 80) { // GrossLoss==0, GrossProfit>0 -> GrossProfit
-		t.Fatalf("profit factor = %f, want 80", m.ProfitFactor)
+	if !math.IsInf(m.ProfitFactor, 1) {
+		t.Fatalf("profit factor = %f, want +Inf", m.ProfitFactor)
 	}
 }
 

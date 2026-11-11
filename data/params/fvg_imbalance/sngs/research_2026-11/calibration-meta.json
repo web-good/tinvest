@@ -1,0 +1,14 @@
+{
+  "_comment": "SNGS M30 FVG calibration. Train [2023-11-11, 2025-11-11), final [2025-11-11, 2026-11-11). Locked UseStochExit=1 candidate passed both annual training blocks (11/12 trades) and final criteria (13 trades, net +8053.51, PF 4.425, Max DD 2.54%). Details and report paths are in outcome.md; keep this run-specific record out of shared mechanics docs.",
+  "final_params": {
+    "ATRPeriod": 14,
+    "MinGapATR": 0.1,
+    "MaxWaitBars": 30,
+    "StochPeriod": 21,
+    "UseStochExit": 1,
+    "StopATR": 1.7,
+    "TakeProfitATR": 0,
+    "HTFTrendEMA": 120,
+    "RequireEntryAboveFVGLower": 1
+  }
+}

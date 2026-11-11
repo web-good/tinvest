@@ -1,0 +1,100 @@
+{
+  "_comment": "LKOH exploratory calibration, not calibrated. ATRPeriod fixed at baseline 14. keepTop=8 is heuristic, not proof of robustness. Last phase jointly rechecks stop/target/exit. Primary metric expectancy; minimum annualized 11 trades: ceil(11*9/12)=9 per 9-month training window; reject DD >10%, negative validation, or insufficient samples. Commission 0.0005 per side, fixed fraction 1, risk-pct 0. Last 3 months excluded but already seen in prior user run: NOT virgin holdout. Require future forward test before adoption.",
+  "phases": [
+    {
+      "name": "gap",
+      "keepTop": 8,
+      "grid": {
+        "MinGapATR": [
+          0.25,
+          0.5,
+          0.8,
+          1
+        ]
+      }
+    },
+    {
+      "name": "window",
+      "keepTop": 8,
+      "grid": {
+        "MaxWaitBars": [
+          15,
+          30,
+          45
+        ]
+      }
+    },
+    {
+      "name": "stochastic",
+      "keepTop": 8,
+      "grid": {
+        "StochPeriod": [
+          9,
+          11,
+          14,
+          21
+        ]
+      }
+    },
+    {
+      "name": "trend",
+      "keepTop": 8,
+      "grid": {
+        "HTFTrendEMA": [
+          0,
+          50,
+          100,
+          200
+        ]
+      }
+    },
+    {
+      "name": "stop",
+      "keepTop": 8,
+      "grid": {
+        "StopATR": [
+          0.4,
+          0.5,
+          0.7,
+          1,
+          1.5,
+          2
+        ]
+      }
+    },
+    {
+      "name": "target",
+      "keepTop": 8,
+      "grid": {
+        "TakeProfitATR": [
+          0,
+          1,
+          1.5,
+          1.9,
+          2,
+          3
+        ]
+      }
+    },
+    {
+      "name": "exit_interaction",
+      "keepTop": 8,
+      "grid": {
+        "StopATR": [
+          0.4,
+          1,
+          2
+        ],
+        "TakeProfitATR": [
+          0,
+          1.9,
+          3
+        ],
+        "UseStochExit": [
+          0,
+          1
+        ]
+      }
+    }
+  ]
+}

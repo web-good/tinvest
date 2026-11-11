@@ -1,26 +1,22 @@
-// Package gazp holds the GAZP baseline for the backtest-only M30 FVG strategy.
-// The 2026-11-05 ordered calibration selected this literal on the 27-month
-// training window (PF 1.485 on 80 trades). Its six-month validation was weak
-// (PF 1.107 on 27 trades), rolling OOS was unstable (pooled PF 1.043 on 47
-// trades), and the final three-month holdout lost (PF 0.709 on 16 trades).
-// It is promoted by explicit operator choice despite failing the holdout.
+// Package gazp provides walk-forward parameters for GAZP.
 package gazp
 
 import "tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/core"
 
-// Params returns the explicit ticker literal, independent of future core defaults.
+// Params returns the research candidate selected for GAZP.
+// Calibrated on 2024-11-11 through 2026-11-11 (24 months); annual trade counts
+// were 12/20, with expectancy 2241, net PnL 71723.06, PF 2.508, and max DD 9.59%.
+// This candidate has not had an independent following-year validation.
 func Params() core.Params {
 	return core.Params{
-		ATRPeriod:                    14,  // Период Wilder ATR на M30-свечах.
-		MinGapATR:                    0.6, // Минимальная высота FVG в ATR при формировании.
-		MaxRetestBars:                10,  // Сколько M30-свечей после формирования зона остаётся активной.
-		MinRetestDepthPct:            80,  // Минимальная глубина ретеста от верхней границы FVG, %.
-		TakeProfitR:                  2,   // Тейк-профит в R от риска сделки; 0 отключает цель.
-		RequireThirdCandleHigherHigh: 0,   // 1 — high третьей свечи должен быть выше high средней; 0 — не требовать.
-		RetestDepthByBody:            0,   // 1 — считать глубину по телу ретеста; 0 — по тени.
-		UseStochFilter:               0,   // 1 — ждать медленный %K(14,3) < 20 после ретеста.
-
-		HTFTrendEMA:   200, // Период EMA на H4; вход разрешён только если последний закрытый H4 close выше EMA. 0 — фильтр выключен.
-		StopBufferATR: 1,   // Дополнительный отступ стопа ниже нижней границы FVG в ATR; 0 — без буфера.
+		ATRPeriod:                 14,   // Период дневного ATR.
+		MinGapATR:                 0.25, // Минимальный размер FVG в дневных ATR.
+		MaxWaitBars:               30,   // Сколько M30-баров ждать сигнал после FVG.
+		StochPeriod:               12,   // Период стохастика %K.
+		UseStochExit:              0,    // Выход по пересечению %K уровня 80; 0 отключает.
+		StopATR:                   0.5,  // Walk-forward: стоп выбран по фолду 1.
+		TakeProfitATR:             2,    // Цель в дневных ATR.
+		HTFTrendEMA:               0,    // Период дневной EMA; 0 отключает фильтр тренда.
+		RequireEntryAboveFVGLower: 1,    // Закрытие и исполнение не ниже нижней границы FVG.
 	}
 }

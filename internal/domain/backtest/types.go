@@ -84,7 +84,7 @@ type Metrics struct {
 	LossRate       float64
 	GrossProfit    float64 // sum of positive PnL
 	GrossLoss      float64 // sum of |negative PnL|
-	ProfitFactor   float64 // GrossProfit/GrossLoss; if GrossLoss==0 and GrossProfit>0 -> GrossProfit
+	ProfitFactor   float64 // GrossProfit/GrossLoss; +Inf if profitable with no losses
 	NetPnL         float64 // FinalEquity - InitialCash
 	NetPnLPct      float64
 	MaxDrawdown    float64 // absolute, from the equity curve

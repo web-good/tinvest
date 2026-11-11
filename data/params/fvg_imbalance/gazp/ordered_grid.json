@@ -1,14 +1,82 @@
 {
-  "_comment": "GAZP calibration 2026-11-05. ATRPeriod=14 stayed fixed. Training winner: MinGapATR=0.8, MaxRetestBars=8, MinRetestDepthPct=0, TakeProfitR=2, RequireThirdCandleHigherHigh=0, RetestDepthByBody=1, HTFTrendEMA=0, StopBufferATR=1 (PF 1.485/80 trades). Six-month validation PF 1.107/27; rolling OOS pooled PF 1.043/47 with unstable parameters; final three-month holdout PF 0.709/16 versus old literal PF 4.922/7. Promoted only by explicit operator choice despite failed holdout. Prior runs had viewed overlapping recent periods, so the holdout was not pristine.",
+  "_comment": "Initial grid for stochastic FVG; not calibrated. The gap phase jointly sweeps MinGapATR and RequireEntryAboveFVGLower; later phases retain the selected filter value.",
   "phases": [
-    {"name": "gap", "keepTop": 4, "grid": {"MinGapATR": [0.25, 0.5, 0.8, 1.0]}},
-    {"name": "retest_window", "keepTop": 4, "grid": {"MaxRetestBars": [8, 12, 16]}},
-    {"name": "retest_depth", "keepTop": 4, "grid": {"MinRetestDepthPct": [0, 50, 100]}},
-    {"name": "formation", "keepTop": 4, "grid": {"RequireThirdCandleHigherHigh": [0, 1]}},
-    {"name": "retest_mode", "keepTop": 4, "grid": {"RetestDepthByBody": [0, 1]}},
-    {"name": "h4_trend", "keepTop": 4, "grid": {"HTFTrendEMA": [0, 20, 50, 100, 150, 200]}},
-    {"name": "stop", "keepTop": 4, "grid": {"StopBufferATR": [0, 0.1, 0.25, 0.5, 1]}},
-    {"name": "target", "keepTop": 4, "grid": {"TakeProfitR": [1, 1.5, 2]}},
-    {"name": "stochastic", "keepTop": 4, "grid": {"UseStochFilter": [0, 1]}}
+    {
+      "name": "gap",
+      "keepTop": 4,
+      "grid": {
+        "RequireEntryAboveFVGLower": [0, 1],
+        "MinGapATR": [
+          0.25,
+          0.5,
+          0.8,
+          1
+        ]
+      }
+    },
+    {
+      "name": "window",
+      "keepTop": 4,
+      "grid": {
+        "MaxWaitBars": [
+          30,
+          40
+        ]
+      }
+    },
+    {
+      "name": "stochastic",
+      "keepTop": 4,
+      "grid": {
+        "StochPeriod": [
+          9,
+          14,
+          21
+        ]
+      }
+    },
+    {
+      "name": "trend",
+      "keepTop": 4,
+      "grid": {
+        "HTFTrendEMA": [
+          0,
+          50,
+          100,
+          200
+        ]
+      }
+    },
+    {
+      "name": "stop",
+      "keepTop": 4,
+      "grid": {
+        "StopATR": [
+          0.5,
+          1,
+          1.5,
+          2
+        ]
+      }
+    },
+    {
+      "name": "target",
+      "keepTop": 4,
+      "grid": {
+        "TakeProfitATR": [
+          0,
+          1,
+          2,
+          3
+        ]
+      }
+    },
+    {
+      "name": "stochastic_exit",
+      "keepTop": 4,
+      "grid": {
+        "UseStochExit": [0, 1]
+      }
+    }
   ]
 }

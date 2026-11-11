@@ -15,46 +15,33 @@ import (
 
 // Params holds numeric fields suitable for reflection-based parameter grids.
 type Params struct {
-	ATRPeriod                    int
-	MinGapATR                    float64
-	MaxRetestBars                int
-	MinRetestDepthPct            float64
-	TakeProfitR                  float64
-	RequireThirdCandleHigherHigh int
-	RetestDepthByBody            int
-	UseStochFilter               int
-	HTFTrendEMA                  int
-	StopBufferATR                float64
+	ATRPeriod                 int
+	MinGapATR                 float64
+	MaxWaitBars               int
+	StochPeriod               int
+	UseStochExit              int
+	StopATR                   float64
+	TakeProfitATR             float64
+	HTFTrendEMA               int
+	RequireEntryAboveFVGLower int // 0 disables; 1 requires signal close and fill >= FVG lower bound.
 }
 
-// DefaultParams returns the baseline M30 FVG settings.
 func DefaultParams() Params {
-	return Params{ATRPeriod: 14, MinGapATR: .25, MaxRetestBars: 8, MinRetestDepthPct: 50, TakeProfitR: 1.5, RequireThirdCandleHigherHigh: 1, RetestDepthByBody: 1, UseStochFilter: 0}
+	return Params{ATRPeriod: 14, MinGapATR: .25, MaxWaitBars: 30, StochPeriod: 14, UseStochExit: 1, StopATR: 1, TakeProfitATR: 2}
 }
 
-// ValidateParams rejects invalid domains, including non-finite grid values.
 func ValidateParams(p Params) error {
 	switch {
-	case p.RequireThirdCandleHigherHigh != 0 && p.RequireThirdCandleHigherHigh != 1:
-		return fmt.Errorf("RequireThirdCandleHigherHigh must be 0 or 1")
-	case p.RetestDepthByBody != 0 && p.RetestDepthByBody != 1:
-		return fmt.Errorf("RetestDepthByBody must be 0 or 1")
-	case p.UseStochFilter != 0 && p.UseStochFilter != 1:
-		return fmt.Errorf("UseStochFilter must be 0 or 1")
-	case p.HTFTrendEMA < 0:
-		return fmt.Errorf("HTFTrendEMA must be non-negative")
-	case p.StopBufferATR < 0 || math.IsNaN(p.StopBufferATR) || math.IsInf(p.StopBufferATR, 0):
-		return fmt.Errorf("StopBufferATR must be finite and non-negative")
-	case p.ATRPeriod <= 0:
-		return fmt.Errorf("ATRPeriod must be positive")
-	case p.MaxRetestBars <= 0:
-		return fmt.Errorf("MaxRetestBars must be positive")
+	case p.RequireEntryAboveFVGLower != 0 && p.RequireEntryAboveFVGLower != 1:
+		return fmt.Errorf("invalid RequireEntryAboveFVGLower: expected 0 or 1")
+	case p.ATRPeriod <= 0 || p.MaxWaitBars <= 0 || p.StochPeriod <= 0 || p.HTFTrendEMA < 0 || (p.UseStochExit != 0 && p.UseStochExit != 1):
+		return fmt.Errorf("invalid period or waiting window")
 	case p.MinGapATR < 0 || math.IsNaN(p.MinGapATR) || math.IsInf(p.MinGapATR, 0):
-		return fmt.Errorf("MinGapATR must be finite and non-negative")
-	case p.TakeProfitR < 0 || math.IsNaN(p.TakeProfitR) || math.IsInf(p.TakeProfitR, 0):
-		return fmt.Errorf("TakeProfitR must be finite and non-negative")
-	case p.MinRetestDepthPct < 0 || p.MinRetestDepthPct > 100 || math.IsNaN(p.MinRetestDepthPct) || math.IsInf(p.MinRetestDepthPct, 0):
-		return fmt.Errorf("MinRetestDepthPct must be finite and in 0..100")
+		return fmt.Errorf("invalid MinGapATR")
+	case p.StopATR <= 0 || math.IsNaN(p.StopATR) || math.IsInf(p.StopATR, 0):
+		return fmt.Errorf("invalid StopATR")
+	case p.TakeProfitATR < 0 || math.IsNaN(p.TakeProfitATR) || math.IsInf(p.TakeProfitATR, 0):
+		return fmt.Errorf("invalid TakeProfitATR")
 	}
 	return nil
 }
@@ -75,20 +62,50 @@ func (s *Strategy) Ticker() string { return s.ticker }
 // HTFDecisionOffset makes completed H4 data visible at the M30 decision close.
 func (s *Strategy) HTFDecisionOffset() time.Duration { return s.step }
 
-// Lookback retains the complete formation ATR history through the last eligible
-// retest, together with all three formation candles even when ATRPeriod is 1.
+// Lookback retains the formation, waiting window, and stochastic history.
+// ATR history is supplied separately as daily candles.
 func (s *Strategy) Lookback() int {
-	formation := max(3, s.atrBars())
-	if s.p.UseStochFilter == 1 {
-		formation = max(formation, 16)
-	}
-	return formation + s.p.MaxRetestBars
+	return max(3+s.p.MaxWaitBars, s.p.StochPeriod+1)
 }
 
-// atrBars fixes the Wilder seed relative to the formation, never to the moving
-// beginning of MarketData. Two periods of candles provide the seed and period-1
-// smoothing steps. Every reconstruction of a zone therefore uses identical bars.
+// atrBars supplies the Wilder seed and period-1 smoothing steps for a daily ATR.
 func (s *Strategy) atrBars() int { return 2 * s.p.ATRPeriod }
+
+var mskLoc = func() *time.Location {
+	loc, err := time.LoadLocation("Europe/Moscow")
+	if err != nil {
+		return time.UTC
+	}
+	return loc
+}()
+
+// dailyATRAt returns the ATR of weekday daily candles completed before the M30
+// formation candle. DailyTimes is required to exclude candles completed later.
+func (s *Strategy) dailyATRAt(md strategy.MarketData, formed time.Time) float64 {
+	n := len(md.DailyCloses)
+	if n == 0 || len(md.DailyHighs) != n || len(md.DailyLows) != n || len(md.DailyTimes) != n {
+		return 0
+	}
+	local := formed.In(mskLoc)
+	bound := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, mskLoc)
+	highs, lows, closes := make([]float64, 0, n), make([]float64, 0, n), make([]float64, 0, n)
+	for i, day := range md.DailyTimes {
+		if !day.Before(bound) {
+			break
+		}
+		weekday := day.In(mskLoc).Weekday()
+		if weekday == time.Saturday || weekday == time.Sunday {
+			continue
+		}
+		highs = append(highs, md.DailyHighs[i])
+		lows = append(lows, md.DailyLows[i])
+		closes = append(closes, md.DailyCloses[i])
+	}
+	if len(closes) < s.atrBars() {
+		return 0
+	}
+	return indicators.ATR(highs, lows, closes, s.p.ATRPeriod)
+}
 
 type zone struct {
 	lower, upper, atr float64
@@ -101,17 +118,16 @@ func (s *Strategy) discover(md strategy.MarketData) []zone {
 		return nil
 	}
 	var zones []zone
-	for c := max(2, s.atrBars()-1); c < n; c++ {
+	for c := 2; c < n; c++ {
 		a, b := c-2, c-1
 		if !md.Times[b].Equal(md.Times[a].Add(s.step)) || !md.Times[c].Equal(md.Times[b].Add(s.step)) {
 			continue
 		}
 		lower, upper := md.Highs[a], md.Lows[c]
-		if md.Closes[b] <= md.Opens[b] || (s.p.RequireThirdCandleHigherHigh == 1 && md.Highs[c] <= md.Highs[b]) || lower >= upper || md.Opens[b] > lower || md.Closes[b] < upper {
+		if md.Closes[b] <= md.Opens[b] || lower >= upper || md.Opens[b] > lower || md.Closes[b] < upper {
 			continue
 		}
-		start := c + 1 - s.atrBars()
-		atr := indicators.ATR(md.Highs[start:c+1], md.Lows[start:c+1], md.Closes[start:c+1], s.p.ATRPeriod)
+		atr := s.dailyATRAt(md, md.Times[c])
 		if atr <= 0 || upper-lower < s.p.MinGapATR*atr {
 			continue
 		}
@@ -120,45 +136,40 @@ func (s *Strategy) discover(md strategy.MarketData) []zone {
 	return zones
 }
 
-// htfTrendOK evaluates the completed higher-timeframe closes supplied by the engine.
+// htfTrendOK evaluates the completed daily closes supplied by the engine.
 func (s *Strategy) htfTrendOK(md strategy.MarketData) (ok bool, close, value float64) {
 	if s.p.HTFTrendEMA == 0 {
 		return true, 0, 0
 	}
-	if len(md.HTFCloses) < s.p.HTFTrendEMA {
+	if len(md.DailyCloses) < s.p.HTFTrendEMA {
 		return false, 0, 0
 	}
-	for _, v := range md.HTFCloses {
+	for _, v := range md.DailyCloses {
 		if math.IsNaN(v) || math.IsInf(v, 0) {
 			return false, 0, 0
 		}
 	}
-	close = md.HTFCloses[len(md.HTFCloses)-1]
-	values := ema.Compute(md.HTFCloses, s.p.HTFTrendEMA)
+	close = md.DailyCloses[len(md.DailyCloses)-1]
+	values := ema.Compute(md.DailyCloses, s.p.HTFTrendEMA)
 	value = values[len(values)-1]
 	return !math.IsNaN(value) && !math.IsInf(value, 0) && close > value, close, value
 }
 
-// htfTrendOKAt reconstructs the H4 gate at an earlier M30 decision close.
-// Without aligned completion times a prior H4 pass cannot be established, so
-// it must not consume the zone. The current gate still uses the supplied closes.
-func (s *Strategy) htfTrendOKAt(md strategy.MarketData, bar int) bool {
-	if s.p.HTFTrendEMA > 0 && bar < len(md.Closes)-1 {
-		if len(md.HTFClosedAt) != len(md.HTFCloses) {
-			return false
+// crossedBelowSince reports whether a zone has already had an entry trigger.
+// An FVG is a one-shot setup: later stochastic recrosses must not reuse it.
+func crossedBelowSince(ks []float64, period, formed, current int) bool {
+	first := max(formed+1, period)
+	for bar := first; bar < current; bar++ {
+		cur := bar - period + 1
+		prev := cur - 1
+		if prev >= 0 && ks[prev] >= 20 && ks[cur] < 20 {
+			return true
 		}
-		decision := md.Times[bar].Add(s.step)
-		n := 0
-		for n < len(md.HTFClosedAt) && !md.HTFClosedAt[n].After(decision) {
-			n++
-		}
-		md.HTFCloses = md.HTFCloses[:n]
 	}
-	ok, _, _ := s.htfTrendOK(md)
-	return ok
+	return false
 }
 
-// Decide reconstructs zones from completed bars and never mutates the snapshot.
+// Decide evaluates completed candles without retaining mutable state.
 func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 	sig := model.Signal{Ticker: s.ticker, Price: md.Price}
 	n := len(md.Closes)
@@ -166,95 +177,74 @@ func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 		return sig
 	}
 	k := n - 1
+	ks, _ := indicators.StochasticSeries(md.Highs, md.Lows, md.Closes, s.p.StochPeriod, 1)
 	if pos := md.Position; pos != nil {
-		if pos.StopLoss <= 0 {
+		if pos.StopLoss > 0 && md.Lows[k] <= pos.StopLoss {
+			sig.Kind = model.SignalSell
+			sig.Reason = "SL"
+			sig.StopLoss = pos.StopLoss
+			sig.ExitReason = fmt.Sprintf("FVG stop %.4f", pos.StopLoss)
 			return sig
 		}
-		emergency := pos.StopLoss - 2*s.p.StopBufferATR*pos.EntryATR
-		if md.Lows[k] <= emergency {
-			sig.Kind, sig.Reason, sig.StopLoss = model.SignalSell, "SL_EMERGENCY", emergency
-			sig.ExitReason = fmt.Sprintf("FVG emergency stop %.4f", emergency)
+		if pos.TakeProfit > 0 && md.Highs[k] >= pos.TakeProfit {
+			sig.Kind = model.SignalSell
+			sig.Reason = "TP"
+			sig.TakeProfit = pos.TakeProfit
+			sig.ExitReason = fmt.Sprintf("FVG target %.4f", pos.TakeProfit)
 			return sig
 		}
-		if md.Closes[k] <= pos.StopLoss {
-			sig.Kind, sig.Reason, sig.StopLoss = model.SignalSell, "SL_CLOSE", pos.StopLoss
-			sig.ExitReason = fmt.Sprintf("FVG close-confirmed stop %.4f", pos.StopLoss)
-			return sig
-		}
-		target := pos.PurchasePrice + s.p.TakeProfitR*(pos.PurchasePrice-pos.StopLoss)
-		if s.p.TakeProfitR > 0 && md.Highs[k] >= target {
-			sig.Kind, sig.Reason, sig.TakeProfit = model.SignalSell, "TP", target
-			sig.ExitReason = fmt.Sprintf("FVG target %.4f (%.2fR from fill)", target, s.p.TakeProfitR)
+		if s.p.UseStochExit == 1 && len(ks) >= 2 && ks[len(ks)-2] <= 80 && ks[len(ks)-1] > 80 {
+			sig.Kind = model.SignalSell
+			sig.Reason = "STOCH_EXIT"
+			sig.ExitReason = fmt.Sprintf("FVG stochastic %%K(%d) crossed above 80", s.p.StochPeriod)
 			return sig
 		}
 		return sig
 	}
-	zones := s.discover(md)
-	var slowK []float64
-	if s.p.UseStochFilter == 1 {
-		_, slowK = indicators.StochasticSeries(md.Highs, md.Lows, md.Closes, 14, 3)
+	if len(ks) < 2 || ks[len(ks)-2] < 20 || ks[len(ks)-1] >= 20 {
+		return sig
 	}
+	zones := s.discover(md)
 	for i := len(zones) - 1; i >= 0; i-- {
 		z := zones[i]
 		age := k - z.formed
-		if age < 1 || age > s.p.MaxRetestBars {
+		if age < 1 || age > s.p.MaxWaitBars {
 			continue
 		}
-		invalid, depthReached, confirmedAt := false, false, -1
-		for j := z.formed + 1; j <= k; j++ {
-			if md.Lows[j] < z.lower {
-				invalid = true
-				break
-			}
-			if j != k && s.p.UseStochFilter == 0 {
-				continue
-			}
-			if !depthReached {
-				depthPrice := md.Lows[j]
-				if s.p.RetestDepthByBody == 1 {
-					depthPrice = min(md.Opens[j], md.Closes[j])
-				}
-				depthReached = md.Lows[j] <= z.upper && depthPrice <= z.upper-s.p.MinRetestDepthPct/100*(z.upper-z.lower)
-			}
-			// The API returns raw K then SMA(3) of raw K: the latter is slow K.
-			// It is fully smoothed and right-aligned: slowK[0] belongs to candle 15.
-			if s.p.UseStochFilter == 1 && depthReached && confirmedAt < 0 && j >= 15 && slowK[j-15] < 20 && s.htfTrendOKAt(md, j) {
-				confirmedAt = j
-			}
-		}
-		if invalid || !depthReached {
+		if s.p.RequireEntryAboveFVGLower == 1 && md.Closes[k] < z.lower {
 			continue
 		}
-		if s.p.UseStochFilter == 1 && confirmedAt != k {
-			// A prior stochastic + H4 confirmation had one exact next-open slot;
-			// never carry it forward, even after a weekend or missing fill candle.
+		if crossedBelowSince(ks, s.p.StochPeriod, z.formed, k) {
 			continue
 		}
-		htfOK, htfClose, htfEMA := s.htfTrendOK(md)
-		if !htfOK {
+		if ok, _, _ := s.htfTrendOK(md); !ok {
 			continue
 		}
 		fillBy := md.Times[k].Add(s.step)
 		if day := fillBy.Weekday(); day == time.Saturday || day == time.Sunday {
 			return sig
 		}
-		stop := z.lower - s.p.StopBufferATR*z.atr
-		if stop <= 0 || math.IsNaN(stop) || math.IsInf(stop, 0) {
+		atr := s.dailyATRAt(md, md.Times[k])
+		if atr <= 0 {
 			continue
 		}
+		if s.p.RequireEntryAboveFVGLower == 1 {
+			sig.MinEntryPrice = z.lower
+		}
 		sig.Kind = model.SignalBuy
-		sig.StopLoss, sig.ATR, sig.Level = stop, z.atr, z.upper
-		if s.p.TakeProfitR > 0 {
-			sig.TakeProfit = md.Closes[k] + s.p.TakeProfitR*(md.Closes[k]-sig.StopLoss)
+		sig.ATR = atr
+		sig.Level = z.upper
+		sig.StopLoss = md.Closes[k] - s.p.StopATR*atr
+		if sig.StopLoss <= 0 {
+			return model.Signal{Ticker: s.ticker, Price: md.Price}
 		}
+		if s.p.TakeProfitATR > 0 {
+			sig.TakeProfit = md.Closes[k] + s.p.TakeProfitATR*atr
+		}
+		sig.StopDistance = s.p.StopATR * atr
+		sig.TargetDistance = s.p.TakeProfitATR * atr
 		sig.FillBy = fillBy
-		sig.EntryReason = fmt.Sprintf("M30 bullish FVG [%.4f, %.4f] protected retest, ATR %.4f", z.lower, z.upper, z.atr)
-		if s.p.HTFTrendEMA > 0 || s.p.StopBufferATR > 0 {
-			sig.EntryReason += fmt.Sprintf("; stop %.4f", sig.StopLoss)
-		}
-		if s.p.HTFTrendEMA > 0 {
-			sig.EntryReason += fmt.Sprintf("; H4 close %.4f > EMA(%d) %.4f", htfClose, s.p.HTFTrendEMA, htfEMA)
-		}
+		sig.EntryReason = fmt.Sprintf("M30 bullish FVG [%.4f, %.4f], stochastic crossed below 20", z.lower, z.upper)
 		return sig
 	}
 	return sig

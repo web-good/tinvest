@@ -1,0 +1,39 @@
+{
+  "_comment": "LKOH stage 3; selected stage-2 candidate 8 no-stochastic branch; training only, windows fixed per plan.",
+  "phases": [
+    {
+      "name": "sensitivity-maxwait",
+      "grid": {
+        "ATRPeriod": [
+          14
+        ],
+        "MinGapATR": [
+          0.25
+        ],
+        "MaxWaitBars": [
+          15,
+          30,
+          45
+        ],
+        "StochPeriod": [
+          9
+        ],
+        "UseStochExit": [
+          0
+        ],
+        "StopATR": [
+          0.5
+        ],
+        "TakeProfitATR": [
+          2
+        ],
+        "HTFTrendEMA": [
+          0
+        ],
+        "RequireEntryAboveFVGLower": [
+          1
+        ]
+      }
+    }
+  ]
+}

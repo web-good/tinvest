@@ -43,7 +43,7 @@ func Compute(r Result, barsInMarket, totalBars int, periodDays float64) Metrics 
 	case m.GrossLoss > 0:
 		m.ProfitFactor = m.GrossProfit / m.GrossLoss
 	case m.GrossProfit > 0:
-		m.ProfitFactor = m.GrossProfit
+		m.ProfitFactor = math.Inf(1)
 	default:
 		m.ProfitFactor = 0
 	}

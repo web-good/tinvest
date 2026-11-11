@@ -7,9 +7,14 @@ import (
 	"io"
 
 	"tinvest/internal/enum"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/bspb"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/core"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/domrf"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/gazp"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/lkoh"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/sber"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/sngs"
+	tickerT "tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/t"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 )
 
@@ -41,8 +46,13 @@ func fvgImbalanceBindingFor(ticker string, interval enum.Interval, defaults func
 }
 
 var fvgImbalanceRegistry = map[string]func() core.Params{
+	"BSPB":  bspb.Params,
 	"DOMRF": domrf.Params,
 	"GAZP":  gazp.Params,
+	"LKOH":  lkoh.Params,
+	"SBER":  sber.Params,
+	"SNGS":  sngs.Params,
+	"T":     tickerT.Params,
 }
 
 // FVGImbalanceLookupOrGeneric returns a backtest-only M30 binding using the ticker

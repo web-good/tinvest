@@ -264,7 +264,7 @@ func Run(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Candl
 					pending = &sig
 					break
 				}
-				p.open(c.Close, c.Time, sig.Level, sig.TakeProfit, sig.ATR, sig.StopLoss, sig.EntryReason)
+				openSignal(p, sig, c.Close, c.Time)
 			}
 		case model.SignalSell:
 			if p.qty != 0 {
@@ -300,6 +300,23 @@ func Run(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Candl
 	return res
 }
 
+// openSignal resolves optional distances using the actual execution price.
+func openSignal(p *portfolio, sig model.Signal, price float64, at time.Time) {
+	if sig.MinEntryPrice > 0 && price < sig.MinEntryPrice {
+		return
+	}
+	if sig.StopDistance > 0 && price <= sig.StopDistance {
+		return
+	}
+	if sig.StopDistance > 0 {
+		sig.StopLoss = price - sig.StopDistance
+	}
+	if sig.TargetDistance > 0 {
+		sig.TakeProfit = price + sig.TargetDistance
+	}
+	p.open(price, at, sig.Level, sig.TakeProfit, sig.ATR, sig.StopLoss, sig.EntryReason)
+}
+
 // fillPending opens a Buy deferred by Config.EntryAtNextOpen at bar c's open, before the bar is
 // managed, and clears it. A pending Buy with a position already open is dropped, and so is one
 // whose non-zero FillBy is before c's open (the slot it was meant for is missing from the data:
@@ -311,7 +328,7 @@ func fillPending(p *portfolio, pending *model.Signal, c Candle) *model.Signal {
 		return nil
 	}
 	if p.qty == 0 {
-		p.open(c.Open, c.Time, pending.Level, pending.TakeProfit, pending.ATR, pending.StopLoss, pending.EntryReason)
+		openSignal(p, *pending, c.Open, c.Time)
 	}
 	return nil
 }
@@ -379,7 +396,7 @@ func Trace(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Can
 					pending = &sig
 					break
 				}
-				p.open(c.Close, c.Time, sig.Level, sig.TakeProfit, sig.ATR, sig.StopLoss, sig.EntryReason)
+				openSignal(p, sig, c.Close, c.Time)
 			}
 		case model.SignalSell:
 			if p.qty != 0 {

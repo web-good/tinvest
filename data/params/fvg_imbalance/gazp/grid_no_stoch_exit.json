@@ -1,0 +1,65 @@
+{
+  "_comment": "Independent staged branch, UseStochExit=0. Stochastic entry remains mandatory. The entry phase jointly sweeps the FVG lower-bound filter, gap size and stochastic period. Run both branch files separately on identical windows. 40+16+80=136 evaluations per training window. Early pruning is heuristic and may discard useful entry/exit interactions. ATRPeriod and MaxWaitBars retain ticker defaults. Not calibrated.",
+  "phases": [
+    {
+      "name": "entry",
+      "keepTop": 4,
+      "grid": {
+        "RequireEntryAboveFVGLower": [0, 1],
+        "MinGapATR": [
+          0.25,
+          0.3,
+          0.4,
+          0.5,
+          0.6
+        ],
+        "StochPeriod": [
+          10,
+          14,
+          12,
+          13
+        ],
+        "UseStochExit": [
+          0
+        ]
+      }
+    },
+    {
+      "name": "trend",
+      "keepTop": 4,
+      "grid": {
+        "HTFTrendEMA": [
+          0,
+          100,
+          150,
+          200
+        ],
+        "UseStochExit": [
+          0
+        ]
+      }
+    },
+    {
+      "name": "exits",
+      "keepTop": 4,
+      "grid": {
+        "StopATR": [
+          0.5,
+          0.3,
+          0.4,
+          0.2,
+          0.6
+        ],
+        "TakeProfitATR": [
+          1.5,
+          2,
+          1.7,
+          1.8
+        ],
+        "UseStochExit": [
+          0
+        ]
+      }
+    }
+  ]
+}

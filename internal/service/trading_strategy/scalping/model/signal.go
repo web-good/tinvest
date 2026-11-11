@@ -18,6 +18,8 @@ type Signal struct {
 	InstrumentName string
 	Ticker         string
 	Price          float64
+	StopDistance   float64 // optional fill-relative stop distance
+	TargetDistance float64 // optional fill-relative target distance
 	TakeProfit     float64
 	StopLoss       float64
 	RSI            float64
@@ -33,6 +35,9 @@ type Signal struct {
 	// MaxEntryPrice caps the next-open fill price for a deferred Buy. Zero means
 	// no limit; an open equal to the limit may fill.
 	MaxEntryPrice float64
+	// MinEntryPrice is the minimum execution price; zero disables the floor.
+	// An execution exactly at the floor is allowed.
+	MinEntryPrice float64
 }
 
 // IsCloseConfirmedStopReason reports whether an exit requires a completed candle

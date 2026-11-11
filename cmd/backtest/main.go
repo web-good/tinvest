@@ -12,6 +12,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -22,7 +23,6 @@ import (
 	domain "tinvest/internal/domain/backtest"
 	"tinvest/internal/enum"
 	svc "tinvest/internal/service/backtest"
-	fvg "tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/core"
 	grpcclient "tinvest/pkg/client/grpc"
 	"tinvest/pkg/logger"
 	"tinvest/pkg/semaphore"
@@ -41,7 +41,7 @@ func main() {
 	var (
 		ticker       = flag.String("ticker", "", "ticker, e.g. RUAL (required)")
 		intervalS    = flag.String("interval", "Hour1", "candle timeframe: Minutes5|Minutes15|Minutes30|Hour1|Hour4|Day1|Week1")
-		strategyName = flag.String("strategy", "scalping", "strategy engine: scalping|reversion|scalping_rsimacd|rsi_ema|vwap_rev|rsi_pullback|rsi_zone|gap_fade|drop_bounce|pdl_reclaim|pdl_zone|hammer|pdl_rsi|pdl_rsi_m30|fvg_imbalance")
+		strategyName = flag.String("strategy", "scalping", "strategy engine: scalping|reversion|scalping_rsimacd|rsi_ema|vwap_rev|rsi_pullback|rsi_zone|gap_fade|drop_bounce|pdl_reclaim|pdl_zone|hammer|pdl_rsi|fvg_imbalance")
 		months       = flag.Int("months", 12, "lookback period in months")
 		cash         = flag.Float64("cash", 100000, "starting mock cash")
 		fraction     = flag.Float64("fraction", 1.0, "fraction of cash per Buy")
@@ -57,11 +57,12 @@ func main() {
 		outDir       = flag.String("out", "reports", "report output directory")
 		refresh      = flag.Bool("refresh", false, "force candle refetch (ignore cache)")
 		explain      = flag.String("explain", "", "diagnose one bar: MSK time 'YYYY-MM-DD HH:MM'; prints why the strategy did/didn't enter")
-		riskPct      = flag.Float64("risk-pct", 0, "risk-based sizing: risk this %% of equity per trade off the entry stop (needs a stop on the buy signal: reversion CatStopATRMult>0, drop_bounce/pdl_reclaim StopDailyATR>0, pdl_zone, hammer, pdl_rsi, pdl_rsi_m30 and fvg_imbalance always; 0 = fixed -fraction sizing)")
+		riskPct      = flag.Float64("risk-pct", 0, "risk-based sizing: risk this %% of equity per trade off the entry stop (needs a stop on the buy signal: reversion CatStopATRMult>0, drop_bounce/pdl_reclaim StopDailyATR>0, pdl_zone, hammer, pdl_rsi and fvg_imbalance always; 0 = fixed -fraction sizing)")
 		screen       = flag.String("screen", "", "screen mode: comma-separated tickers; ranks them by variance ratio (ignores -ticker/-strategy)")
 		volRank      = flag.Bool("volrank", false, "screener mode: rank the liquid RUB universe by Hour1 pullback-in-trend fitness (ignores -ticker/-strategy/-interval)")
 		minTurnover  = flag.Float64("min-turnover", 50, "volrank: minimum mean daily turnover in millions of RUB")
 		atrPeriod    = flag.Int("atr-period", 14, "volrank: ATR period for the Hour1 reference column (not in Score)")
+		cpu          = flag.Int("cpu", 2, "maximum Go CPUs used by this backtest process (0 = leave runtime default)")
 		topN         = flag.Int("top", 50, "volrank: rows in the report (0 = all)")
 		wRecov       = flag.Float64("w-recov", 0.5, "volrank: composite weight on recovery-rate percentile")
 		wFreq        = flag.Float64("w-freq", 0.3, "volrank: composite weight on event-frequency percentile")
@@ -72,6 +73,12 @@ func main() {
 		recoverRSI   = flag.Float64("recover-rsi", 50, "volrank: RSI level marking a recovered dip")
 	)
 	flag.Parse()
+	if *cpu < 0 {
+		log.Fatalf("backtest: -cpu must be >= 0")
+	}
+	if *cpu > 0 {
+		runtime.GOMAXPROCS(*cpu)
+	}
 	logger.Init() // candle fetcher logs chunk errors via the package logger
 
 	interval, err := parseInterval(*intervalS)
@@ -228,7 +235,7 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 
 	cfg := domain.Config{InitialCash: cash, Fraction: fraction, Commission: commission, Lot: share.Lot, RiskFractionPct: riskPct, HTFInterval: htfInterval,
 		// gap_fade triggers on the opening-auction print itself, drop_bounce, pdl_reclaim, pdl_zone, hammer
-		// pdl_rsi, pdl_rsi_m30 and fvg_imbalance on a bar's close; either way the first price an order can get is the
+		// pdl_rsi and fvg_imbalance on a bar's close; either way the first price an order can get is the
 		// next bar's open.
 		EntryAtNextOpen: entryAtNextOpen}
 	periodDays := to.Sub(from).Hours() / 24
@@ -329,17 +336,11 @@ func selectStrategy(ticker, strategyName string, interval enum.Interval) (svc.Bi
 			return svc.Binding{}, false, err
 		}
 		binding = b
-	case "pdl_rsi_m30":
-		b, err := svc.PDLRSIM30LookupOrGeneric(ticker, interval)
-		if err != nil {
-			return svc.Binding{}, false, err
-		}
-		binding = b
 	default:
-		return svc.Binding{}, false, fmt.Errorf("unknown strategy %q (want scalping|reversion|scalping_rsimacd|rsi_ema|vwap_rev|rsi_pullback|rsi_zone|gap_fade|drop_bounce|pdl_reclaim|pdl_zone|hammer|pdl_rsi|pdl_rsi_m30|fvg_imbalance)", strategyName)
+		return svc.Binding{}, false, fmt.Errorf("unknown strategy %q (want scalping|reversion|scalping_rsimacd|rsi_ema|vwap_rev|rsi_pullback|rsi_zone|gap_fade|drop_bounce|pdl_reclaim|pdl_zone|hammer|pdl_rsi|fvg_imbalance)", strategyName)
 	}
 
-	return binding, strategyName == "gap_fade" || strategyName == "drop_bounce" || strategyName == "pdl_reclaim" || strategyName == "pdl_zone" || strategyName == "hammer" || strategyName == "pdl_rsi" || strategyName == "pdl_rsi_m30" || strategyName == "fvg_imbalance", nil
+	return binding, strategyName == "gap_fade" || strategyName == "drop_bounce" || strategyName == "pdl_reclaim" || strategyName == "pdl_zone" || strategyName == "hammer" || strategyName == "pdl_rsi" || strategyName == "fvg_imbalance", nil
 }
 
 // resolveRunInputs reads the selected inputs once before deciding which data to load.
@@ -356,31 +357,10 @@ func resolveRunInputs(b svc.Binding, paramsPath, gridPath string) (any, []svc.Ph
 	return b.DefaultParams(), phases, err
 }
 
-// requiresHTF keeps existing routing for other strategies. For staged FVG grids,
-// each phase can override the inherited EMA setting before that phase is run.
-func requiresHTF(strategyName string, params any, phases []svc.Phase) bool {
-	if strategyName != "fvg_imbalance" {
-		return true
-	}
-	enabled := params.(fvg.Params).HTFTrendEMA > 0
-	if phases == nil {
-		return enabled
-	}
-	for _, phase := range phases {
-		if values, ok := phase.Grid["HTFTrendEMA"]; ok {
-			enabled = false
-			for _, value := range values {
-				if int64(value) > 0 {
-					enabled = true
-					break
-				}
-			}
-		}
-		if enabled {
-			return true
-		}
-	}
-	return false
+// requiresHTF keeps existing routing for strategies that use an intraday HTF series.
+// FVG trend filtering uses completed daily candles, loaded separately.
+func requiresHTF(strategyName string, _ any, _ []svc.Phase) bool {
+	return strategyName != "fvg_imbalance"
 }
 
 // loadParams resolves the strategy Params for a run: b.DefaultParams() when paramsPath
@@ -486,7 +466,7 @@ func runCalibration(b svc.Binding, phases []svc.Phase, candles []domain.Candle, 
 	}
 
 	// Also emit the full single-run report for the best combination.
-	if len(results) > 0 {
+	if len(results) > 0 && results[0].Metrics.TotalTrades >= minTrades {
 		best := results[0].Params
 		res := domain.Run(b.Build(best), bestCandles, bestDaily, bestHTF, cfg)
 		m := domain.Compute(res, res.BarsInMarket, len(res.Equity), bestDays)
@@ -499,6 +479,8 @@ func runCalibration(b svc.Binding, phases []svc.Phase, candles []domain.Candle, 
 		if err := writeFile(base+"_best.md", domain.RenderMarkdown(bestMeta, m, res.Trades, res.Equity)); err != nil {
 			return err
 		}
+	} else {
+		fmt.Printf("no calibration candidate has at least %d trades; no best report generated\n", minTrades)
 	}
 	fmt.Printf("calibration: %s (combos=%d, test_months=%d)\n", calibPath, len(results), testMonths)
 	return nil
@@ -577,19 +559,6 @@ func openPosition(res domain.Result) bool {
 		closedBars += t.BarsHeld
 	}
 	return res.BarsInMarket > closedBars
-}
-
-func resolveShare(ctx context.Context, client grpcclient.GrpcClient, ticker string) (shareInfo, error) {
-	shares, err := client.InstrumentsServiceClient().Shares(ctx)
-	if err != nil {
-		return shareInfo{}, fmt.Errorf("load shares: %w", err)
-	}
-	for _, s := range shares {
-		if s.Ticker == ticker {
-			return shareInfo{ID: s.ID, Lot: s.Lot}, nil
-		}
-	}
-	return shareInfo{}, fmt.Errorf("ticker %q not found in Shares()", ticker)
 }
 
 type shareInfo struct {

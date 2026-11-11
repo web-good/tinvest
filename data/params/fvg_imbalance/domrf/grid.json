@@ -1,40 +1,82 @@
 {
-  "_comment": "DOMRF starting grid, not calibrated. ATRPeriod=14 and MaxRetestBars=8 stay fixed. Inspect each phase and validate on untouched history before changing the literal.",
+  "_comment": "Initial grid for stochastic FVG; not calibrated.",
   "phases": [
     {
       "name": "gap",
       "keepTop": 8,
-      "grid": {"MinGapATR": [0.25, 0.5, 0.8, 1.0]}
+      "grid": {
+        "MinGapATR": [
+          0.25,
+          0.5,
+          0.8,
+          1
+        ]
+      }
     },
     {
-      "name": "formation",
+      "name": "window",
       "keepTop": 8,
-      "grid": {"RequireThirdCandleHigherHigh": [0, 1]}
-    },
-    {
-      "name": "retest_mode",
-      "keepTop": 8,
-      "grid": {"RetestDepthByBody": [0, 1]}
-    },
-    {
-      "name": "h4_trend",
-      "keepTop": 8,
-      "grid": {"HTFTrendEMA": [0, 20, 50, 100, 150, 200]}
-    },
-    {
-      "name": "stop",
-      "keepTop": 8,
-      "grid": {"StopBufferATR": [0, 0.1, 0.25, 0.5]}
-    },
-    {
-      "name": "target",
-      "keepTop": 8,
-      "grid": {"TakeProfitR": [1, 1.5, 2]}
+      "grid": {
+        "MaxWaitBars": [
+          15,
+          30,
+          45
+        ]
+      }
     },
     {
       "name": "stochastic",
       "keepTop": 8,
-      "grid": {"UseStochFilter": [0, 1]}
+      "grid": {
+        "StochPeriod": [
+          9,
+          14,
+          21
+        ]
+      }
+    },
+    {
+      "name": "trend",
+      "keepTop": 8,
+      "grid": {
+        "HTFTrendEMA": [
+          0,
+          50,
+          100,
+          200
+        ]
+      }
+    },
+    {
+      "name": "stop",
+      "keepTop": 8,
+      "grid": {
+        "StopATR": [
+          0.5,
+          1,
+          1.5,
+          2
+        ]
+      }
+    },
+    {
+      "name": "target",
+      "keepTop": 8,
+      "grid": {
+        "TakeProfitATR": [
+          0,
+          1,
+          2,
+          3
+        ]
+      }
+    },
+    {
+      "name": "stochastic_exit",
+      "keepTop": 8,
+      "grid": {
+        "UseStochExit": [0, 1]
+      }
     }
   ]
 }

@@ -1,0 +1,42 @@
+{
+  "_comment": "One bounded stage-3 joint rerun prompted by eligible MaxWaitBars=45 sensitivity; all other local ranges retained from the original stage-3 grid. Training only.",
+  "phases": [
+    {
+      "name": "stage-3-rerun-maxwait45",
+      "grid": {
+        "ATRPeriod": [
+          14
+        ],
+        "MinGapATR": [
+          0.1,
+          0.25,
+          0.3
+        ],
+        "MaxWaitBars": [
+          45
+        ],
+        "StochPeriod": [
+          9
+        ],
+        "UseStochExit": [
+          0
+        ],
+        "StopATR": [
+          0.5,
+          1
+        ],
+        "TakeProfitATR": [
+          1.5,
+          2
+        ],
+        "HTFTrendEMA": [
+          0
+        ],
+        "RequireEntryAboveFVGLower": [
+          0,
+          1
+        ]
+      }
+    }
+  ]
+}
