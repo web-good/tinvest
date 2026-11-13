@@ -233,6 +233,9 @@ func (s *service) pass(ctx context.Context) error {
 		// Свободный тикер: стратегии по приоритету; первая с BUY входит, остальных на
 		// этом баре не спрашивают.
 		for _, c := range ready {
+			if !accountEntryAllowed(c.sl.strat.Name(), now) {
+				continue
+			}
 			if w, ok := c.sl.strat.(adapter.EntryWindow); ok && !w.EntryPossible(now) {
 				continue // окно входа закрыто: ни свечей, ни вопроса стратегии
 			}
@@ -374,6 +377,26 @@ func (s *service) universeSlots(ticker string) []*slot {
 		}
 	}
 	return out
+}
+
+// accountEntryAllowed checks the actual order time for the two RSI strategies.
+func accountEntryAllowed(name string, now time.Time) bool {
+	if name != adapter.LegacyOwner && name != "rsi_zone" {
+		return true
+	}
+	loc, err := time.LoadLocation("Europe/Moscow")
+	if err != nil {
+		loc = time.FixedZone("MSK", 3*60*60)
+	}
+	local := now.In(loc)
+	switch local.Weekday() {
+	case time.Saturday, time.Sunday:
+		return false
+	case time.Friday:
+		return local.Hour() < 14
+	default:
+		return true
+	}
 }
 
 // buy opens a long when the core signals one: size from the configured percentage of the

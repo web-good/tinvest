@@ -1,6 +1,6 @@
 // legacy_golden_test.go pins the trades the rsi_zone entry produced BEFORE the stochastic gate
 // existed, replayed through the real backtest engine on a seeded synthetic history for the core
-// baseline and every calibrated ticker literal. With UseStoch left at zero the gate must be
+// baseline and every calibrated ticker literal, updated for the Friday entry cutoff. With UseStoch left at zero the gate must be
 // invisible: any change to entries, exits, prices or journal text fails here. Regenerate only
 // deliberately: go test ./internal/service/trading_strategy/rsi_zone/strategy/core/ -run TestLegacyTradesGolden -update
 package core_test

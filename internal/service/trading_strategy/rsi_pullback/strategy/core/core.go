@@ -181,17 +181,14 @@ func (s *Strategy) dailyATR(md strategy.MarketData) float64 {
 	return indicators.ATR(h, l, c, s.p.DailyATRPeriod)
 }
 
-// tradingDay reports whether an entry may be opened on bar-time t. The only calendar restriction
-// left is the weekday one: any bar of a Mon-Fri MSK day can open a trade unless the optional
-// entry block window (entryBlocked) refuses it. Weekend bars stay excluded because MOEX weekend sessions are 3-4x narrower
-// and 8-17x thinner than weekday ones — an entry priced off them is priced off a different market
-// than the daily ATR that sizes its stop. A zero time skips the gate — never block on missing
-// data.
+// tradingDay allows entries before 14:00 MSK on Friday and on other weekdays.
+// It uses the 30-minute bar close; zero time skips the gate.
 func (s *Strategy) tradingDay(t time.Time) bool {
 	if t.IsZero() {
 		return true
 	}
-	return !isWeekend(t.In(mskLoc))
+	closeTime := t.Add(30 * time.Minute).In(mskLoc)
+	return !isWeekend(closeTime) && (closeTime.Weekday() != time.Friday || closeTime.Hour() < 14)
 }
 
 // barDuration is the strategy's bar: it runs on 30-minute candles only.
@@ -416,7 +413,7 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	if n < 2 || len(md.Highs) != n || len(md.Lows) != n {
 		return sig
 	}
-	// 1. weekday, outside the entry block window (off by default); weekends never.
+	// 1. weekday before the Friday cutoff, outside the optional entry block window.
 	if barT := s.barTime(md); !s.tradingDay(barT) || s.entryBlocked(barT) {
 		return sig
 	}
@@ -628,7 +625,7 @@ func (s *Strategy) Explain(md strategy.MarketData) string {
 	}
 	i := n - 1
 	barT := s.barTime(md)
-	fmt.Fprintf(&sb, "день: вход разрешён? %v (бар %v, выходные закрыты)\n", s.tradingDay(barT), barT)
+	fmt.Fprintf(&sb, "день: вход разрешён? %v (бар %v, выходные и пятница с 14:00 закрыты)\n", s.tradingDay(barT), barT)
 	if s.p.EntryBlockFrom >= 0 && s.p.EntryBlockFrom < s.p.EntryBlockTo {
 		fmt.Fprintf(&sb, "окно запрета покупок %04d–%04d MSK по закрытию бара (только Пн–Чт: %v): покупка в окне? %v\n",
 			s.p.EntryBlockFrom, s.p.EntryBlockTo, s.p.EntryBlockMonThu != 0, s.entryBlocked(barT))

@@ -1541,3 +1541,25 @@ func TestTrailIsAStopReason(t *testing.T) {
 		t.Fatal(`model.IsStopReason("TRAIL") = false: движок зальёт трейл по close`)
 	}
 }
+
+func TestTradingDayFridayCutoff(t *testing.T) {
+	s := NewWithParams("TEST", DefaultParams())
+	for _, tc := range []struct {
+		name    string
+		at      time.Time
+		allowed bool
+	}{
+		{"friday before cutoff", time.Date(2026, 6, 5, 13, 0, 0, 0, msk), true},
+		{"friday close at cutoff", time.Date(2026, 6, 5, 13, 30, 0, 0, msk), false},
+		{"friday evening", time.Date(2026, 6, 5, 18, 0, 0, 0, msk), false},
+		{"saturday", time.Date(2026, 6, 6, 12, 0, 0, 0, msk), false},
+		{"sunday", time.Date(2026, 6, 7, 12, 0, 0, 0, msk), false},
+		{"monday", time.Date(2026, 6, 8, 14, 0, 0, 0, msk), true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := s.tradingDay(tc.at); got != tc.allowed {
+				t.Errorf("tradingDay(%v) = %v, want %v", tc.at, got, tc.allowed)
+			}
+		})
+	}
+}

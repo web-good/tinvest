@@ -190,13 +190,14 @@ func (s *Strategy) dailyATR(md strategy.MarketData) float64 {
 	return indicators.ATR(h, l, c, s.p.DailyATRPeriod)
 }
 
-// tradingDay reports whether an entry may be opened on bar-time t: any bar of a Mon-Fri MSK
-// day. A zero time skips the gate — never block on missing data.
+// tradingDay allows entries before 14:00 MSK on Friday and on other weekdays.
+// It uses the 30-minute bar close; zero time skips the gate.
 func (s *Strategy) tradingDay(t time.Time) bool {
 	if t.IsZero() {
 		return true
 	}
-	return !isWeekend(t.In(mskLoc))
+	closeTime := t.Add(30 * time.Minute).In(mskLoc)
+	return !isWeekend(closeTime) && (closeTime.Weekday() != time.Friday || closeTime.Hour() < 14)
 }
 
 // entryBlocked reports whether bar-time t opens inside the entry block window. A zero time or
@@ -358,7 +359,7 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	if n < 2 || len(md.Highs) != n || len(md.Lows) != n || s.p.RSIPeriod <= 0 || s.p.EMAPeriod <= 0 {
 		return sig
 	}
-	// 1. weekday: any time of a trading day will do, weekends will not.
+	// 1. weekday and before the Friday cutoff.
 	if !s.tradingDay(s.barTime(md)) {
 		return sig
 	}
