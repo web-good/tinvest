@@ -46,6 +46,14 @@ func (a *App) Run(ctx context.Context) error {
 
 	logger.Info("starting App", slog.String("APP_ENV", a.config.AppEnv))
 
+	densityService, err := a.sp.GetDensityService()
+	if err != nil {
+		return err
+	}
+	if densityService != nil {
+		defer startDensityWorker(ctx, densityService)()
+	}
+
 	if a.config.AppEnv == "prod" {
 		a.runProd(ctx)
 
@@ -214,4 +222,18 @@ func (a *App) runProd(ctx context.Context) {
 		}
 	}()
 	wg.Wait()
+}
+
+type densityWorker interface{ Run(context.Context) error }
+
+func startDensityWorker(ctx context.Context, worker densityWorker) func() {
+	workerCtx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if err := worker.Run(workerCtx); err != nil && workerCtx.Err() == nil {
+			logger.ErrorContext(ctx, "density worker failed", err.Error())
+		}
+	}()
+	return func() { cancel(); <-done }
 }

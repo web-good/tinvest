@@ -52,6 +52,7 @@ func (a *App) initConfig(ctx context.Context) error {
 		DropBounce:     config.NewDropBounceConfig(),
 		PDLReclaim:     config.NewPDLReclaimConfig(),
 		News:           config.NewNewsConfig(),
+		Density:        config.NewDensityConfig(),
 	}
 	err = confita.NewLoader(
 		env.NewBackend(),
@@ -61,6 +62,9 @@ func (a *App) initConfig(ctx context.Context) error {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
+	if err := cfg.Density.Validate(); err != nil {
+		return fmt.Errorf("density configuration: %w", err)
+	}
 	a.config = cfg
 	logger.InfoContext(ctx, "Finish initializing configuration")
 

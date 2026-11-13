@@ -17,4 +17,5 @@ type Config struct {
 	DropBounce     *DropBounceConfig
 	PDLReclaim     *PDLReclaimConfig
 	News           *NewsConfig
+	Density        *DensityConfig
 }
