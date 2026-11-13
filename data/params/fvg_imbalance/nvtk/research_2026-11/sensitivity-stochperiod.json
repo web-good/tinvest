@@ -1,0 +1,32 @@
+{
+  "_comment": "Single-axis sensitivity around stage-2 rank 7; only StochPeriod varies.",
+  "ATRPeriod": [
+    14
+  ],
+  "MinGapATR": [
+    0.25
+  ],
+  "MaxWaitBars": [
+    30
+  ],
+  "StochPeriod": [
+    11,
+    14,
+    21
+  ],
+  "UseStochExit": [
+    1
+  ],
+  "StopATR": [
+    1
+  ],
+  "TakeProfitATR": [
+    2
+  ],
+  "HTFTrendEMA": [
+    0
+  ],
+  "RequireEntryAboveFVGLower": [
+    0
+  ]
+}

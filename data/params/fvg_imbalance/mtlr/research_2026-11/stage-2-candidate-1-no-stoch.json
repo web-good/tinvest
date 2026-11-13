@@ -1,0 +1,36 @@
+{
+  "ATRPeriod": [
+    14
+  ],
+  "MinGapATR": [
+    0.25
+  ],
+  "MaxWaitBars": [
+    30
+  ],
+  "StochPeriod": [
+    10
+  ],
+  "UseStochExit": [
+    0
+  ],
+  "StopATR": [
+    0.5,
+    1,
+    1.5,
+    2
+  ],
+  "TakeProfitATR": [
+    0,
+    1,
+    2,
+    1.5
+  ],
+  "HTFTrendEMA": [
+    0
+  ],
+  "RequireEntryAboveFVGLower": [
+    1
+  ],
+  "_comment": "MTLR stage 2 candidate 1, no-stoch exit branch. Input candidate values fixed explicitly; exit ranges copied from stage-2-exit-no-stoch.json. 24m train, 12m holdout reserved; annual thresholds checked from full candidate ledgers."
+}

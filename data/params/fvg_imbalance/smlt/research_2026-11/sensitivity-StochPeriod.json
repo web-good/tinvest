@@ -1,0 +1,32 @@
+{
+  "ATRPeriod": [
+    14
+  ],
+  "MinGapATR": [
+    0.3
+  ],
+  "MaxWaitBars": [
+    30
+  ],
+  "StochPeriod": [
+    10,
+    11,
+    14
+  ],
+  "UseStochExit": [
+    0
+  ],
+  "StopATR": [
+    0.5
+  ],
+  "TakeProfitATR": [
+    1
+  ],
+  "HTFTrendEMA": [
+    0
+  ],
+  "RequireEntryAboveFVGLower": [
+    0
+  ],
+  "_comment": "Проверка чувствительности StochPeriod; прочие поля фиксированы."
+}

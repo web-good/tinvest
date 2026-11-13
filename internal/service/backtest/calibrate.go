@@ -135,8 +135,19 @@ func ParsePhases(raw []byte) ([]Phase, error) {
 	if err := json.Unmarshal(raw, &pg); err == nil && len(pg.Phases) > 0 {
 		return pg.Phases, nil
 	}
+	// Flat grids may include a human-readable _comment field. Remove it before
+	// decoding into Grid, whose values must all be numeric arrays.
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return nil, fmt.Errorf("backtest: parse grid: %w", err)
+	}
+	delete(fields, "_comment")
+	cleaned, err := json.Marshal(fields)
+	if err != nil {
+		return nil, fmt.Errorf("backtest: parse grid: %w", err)
+	}
 	var flat Grid
-	if err := json.Unmarshal(raw, &flat); err != nil {
+	if err := json.Unmarshal(cleaned, &flat); err != nil {
 		return nil, fmt.Errorf("backtest: parse grid: %w", err)
 	}
 	return []Phase{{Grid: flat}}, nil

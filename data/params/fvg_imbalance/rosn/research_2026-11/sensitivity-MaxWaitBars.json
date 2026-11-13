@@ -1,0 +1,32 @@
+{
+  "ATRPeriod": [
+    14
+  ],
+  "MinGapATR": [
+    0.1
+  ],
+  "MaxWaitBars": [
+    15,
+    30,
+    45
+  ],
+  "StochPeriod": [
+    10
+  ],
+  "UseStochExit": [
+    1
+  ],
+  "StopATR": [
+    1
+  ],
+  "TakeProfitATR": [
+    0
+  ],
+  "HTFTrendEMA": [
+    50
+  ],
+  "RequireEntryAboveFVGLower": [
+    1
+  ],
+  "_comment": "Training [2023-11-12, 2025-11-12); one-field sensitivity for MaxWaitBars around the locked stage-3 candidate. See locked-candidate.md."
+}

@@ -1,0 +1,36 @@
+{
+  "ATRPeriod": [
+    14
+  ],
+  "MinGapATR": [
+    0.1,
+    0.25,
+    0.3
+  ],
+  "MaxWaitBars": [
+    30
+  ],
+  "StochPeriod": [
+    10
+  ],
+  "UseStochExit": [
+    1
+  ],
+  "StopATR": [
+    0.5,
+    1,
+    1.2
+  ],
+  "TakeProfitATR": [
+    1.5,
+    2
+  ],
+  "HTFTrendEMA": [
+    0
+  ],
+  "RequireEntryAboveFVGLower": [
+    0,
+    1
+  ],
+  "_comment": "MTLR stage 3 joint local grid (24 combos). Candidate locked for this refinement is stage-2 candidate 1, stoch branch; neighbors are drawn from actual stage-1/2 grids. Same train window/quality gates; holdout remains reserved."
+}

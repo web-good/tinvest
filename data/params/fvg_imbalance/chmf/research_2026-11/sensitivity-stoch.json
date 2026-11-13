@@ -1,0 +1,31 @@
+{
+  "ATRPeriod": [
+    14
+  ],
+  "MinGapATR": [
+    0.3
+  ],
+  "MaxWaitBars": [
+    30
+  ],
+  "StochPeriod": [
+    9,
+    11
+  ],
+  "UseStochExit": [
+    0
+  ],
+  "StopATR": [
+    0.5
+  ],
+  "TakeProfitATR": [
+    1
+  ],
+  "HTFTrendEMA": [
+    0
+  ],
+  "RequireEntryAboveFVGLower": [
+    0
+  ],
+  "_comment": "Stage 3 one-field sensitivity from Stage 2 candidate-4 no-stoch rank 4; training only; varied StochPeriod."
+}

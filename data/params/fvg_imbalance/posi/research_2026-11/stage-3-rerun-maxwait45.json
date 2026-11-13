@@ -1,0 +1,36 @@
+{
+  "ATRPeriod": [
+    14
+  ],
+  "MinGapATR": [
+    0.25,
+    0.3,
+    0.4
+  ],
+  "MaxWaitBars": [
+    45
+  ],
+  "StochPeriod": [
+    9
+  ],
+  "UseStochExit": [
+    1
+  ],
+  "StopATR": [
+    0.5,
+    1,
+    1.2
+  ],
+  "TakeProfitATR": [
+    1.5,
+    2
+  ],
+  "HTFTrendEMA": [
+    0
+  ],
+  "RequireEntryAboveFVGLower": [
+    0,
+    1
+  ],
+  "_comment": "Single permitted joint rerun after MaxWait sensitivity: MaxWaitBars=45."
+}

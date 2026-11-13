@@ -1,0 +1,15 @@
+# AFKS FVG imbalance calibration plan
+
+- Snapshot date: 2026-11-12 (Europe/Moscow); CLI uses its wall-clock `now`, so record actual candle bounds from every report and stop if data windows differ.
+- Train window: `[2023-11-12, 2025-11-12)` (24 months), analysed as `[2023-11-12, 2024-11-12)` and `[2024-11-12, 2025-11-12)` from full-run closed-trade entry dates. Reserved final check: `[2025-11-12, 2026-11-12)`; do not inspect before one candidate is locked.
+- Data: Tinkoff Invest gRPC market candles via `cmd/backtest`/`CandleProvider`, completed M30 and Day1 candles only. Save/report actual first and last timestamps and counts; if the local cache/API cannot cover all 36 months, do not claim independent OOS.
+- Warm-up: daily feed requests 12 months before training start (~250 trading days for EMA); FVG daily ATR is Wilder ATR(14), requiring 28 daily bars; stochastic uses selected `StochPeriod`; grid prehistory is excluded from scored M30 candles. HTF trend uses completed daily closes.
+- Execution/costs: M30 signal at close, fill at next bar open; initial cash 100,000 RUB, fraction 1.0, risk-pct 0 (fixed cash fraction), commission 0.0005 per turnover, instrument lot from API. Same settings for all runs.
+- Baseline: exact AFKS literal (`afks.Params()`, currently `core.DefaultParams()`); separate full-parameter control run. Research baseline template is saved as `baseline.json`; it does not override the ticker literal in `-calibrate`.
+- Primary metric: expectancy. Candidate quality: positive net PnL after commission, PF > 1, max drawdown <= 10% of equity (confirmed engine reports both absolute RUB and percentage; threshold applies to percentage).
+- Eligibility at every training stage/branch: >=20 closed trades over the full 24 months and >=10 closed trades by entry date in each consecutive 12-month block. Open positions do not count. Require >=10 closed trades on the reserved final year.
+- Stage 1: joint entry grid from `stage-1-entry-template.json`, with the ticker's literal values added if absent; stage 1 template actual Cartesian size is 350 before additions. Preserve all combinations in reports (`-combos 0`), examine yearly counts and neighboring values.
+- Stage 2: for each eligible entry candidate, separate `StopATR × TakeProfitATR` grids for both exit branches, explicitly fixing all other fields from that candidate; save independent grid/report dirs.
+- Stage 3: use `referens/stage-3-refinement.md`: local joint refinement <=54 combos, plus one-field sensitivity checks (StochPeriod, HTFTrendEMA, MaxWaitBars); at most one bounded joint rerun if sensitivity changes the finalist. Reapply all eligibility and quality limits.
+- Budget: one control + one stage-1 run; at most 4 entry candidates × 2 branches × one stage-2 grid; one stage-3 joint grid, three separate sensitivity grids, and at most one bounded rerun. Keep all run outputs. No final-year run until a single complete candidate is recorded in `locked-candidate.md`.
+- Do not alter strategy mechanics, core defaults, or other ticker literals during research. Do not change limits after seeing results.

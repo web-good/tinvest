@@ -1,0 +1,36 @@
+{
+  "ATRPeriod": [
+    14
+  ],
+  "MinGapATR": [
+    0.3
+  ],
+  "MaxWaitBars": [
+    30
+  ],
+  "StochPeriod": [
+    9
+  ],
+  "UseStochExit": [
+    0
+  ],
+  "StopATR": [
+    0.5,
+    1,
+    1.5,
+    2
+  ],
+  "TakeProfitATR": [
+    0,
+    1,
+    2,
+    1.5
+  ],
+  "HTFTrendEMA": [
+    0
+  ],
+  "RequireEntryAboveFVGLower": [
+    0
+  ],
+  "_comment": "Stage 2 CHMF candidate 1; training [2023-11-12, 2025-11-12); branch UseStochExit=0; inherited from eligible Stage 1 candidate; all nine fields explicit."
+}

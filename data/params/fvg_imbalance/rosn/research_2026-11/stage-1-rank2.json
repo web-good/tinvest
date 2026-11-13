@@ -1,0 +1,12 @@
+{
+  "ATRPeriod": 14,
+  "MinGapATR": 0.1,
+  "MaxWaitBars": 30,
+  "StochPeriod": 14,
+  "UseStochExit": 1,
+  "StopATR": 1,
+  "TakeProfitATR": 2,
+  "HTFTrendEMA": 50,
+  "RequireEntryAboveFVGLower": 1,
+  "_comment": "Training [2023-11-12, 2025-11-12); 350 joint entry combinations, expectancy ranking. ROSN-specific copy; see plan.md for fixed gates and execution settings."
+}

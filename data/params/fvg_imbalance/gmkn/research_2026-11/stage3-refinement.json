@@ -1,0 +1,37 @@
+{
+  "ATRPeriod": [
+    14
+  ],
+  "MinGapATR": [
+    0,
+    0.1,
+    0.25
+  ],
+  "MaxWaitBars": [
+    30
+  ],
+  "StochPeriod": [
+    14
+  ],
+  "UseStochExit": [
+    1
+  ],
+  "StopATR": [
+    1,
+    1.2,
+    1.5
+  ],
+  "TakeProfitATR": [
+    1,
+    1.5,
+    2
+  ],
+  "HTFTrendEMA": [
+    100
+  ],
+  "RequireEntryAboveFVGLower": [
+    0,
+    1
+  ],
+  "_comment": "Stage 3 local joint grid around stage 2 rank-2 stoch: previously explored adjacent values; TP=1.5 selected among tied outcomes."
+}

@@ -8,9 +8,27 @@ import (
 
 	"tinvest/internal/config"
 	"tinvest/internal/enum"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/afks"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/alrs"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/bspb"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/core"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/fixr"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/gazp"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/gmkn"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/irao"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/magn"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/moex"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/mtlr"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/phor"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/posi"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/rosn"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/sber"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/sberp"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/sngs"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/spbe"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/vtbr"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/x5"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/ydex"
 	"tinvest/internal/service/trading_strategy/livecore/adapter"
 	"tinvest/internal/service/trading_strategy/livecore/rebuild"
 	"tinvest/internal/service/trading_strategy/livecore/statestore"
@@ -35,10 +53,46 @@ func (s *Strategy) TradeEnabled() bool                                 { return 
 func (*Strategy) BarInterval() enum.Interval                           { return enum.Minutes30 }
 func params(ticker string) (core.Params, bool) {
 	switch ticker {
+	case "AFKS":
+		return afks.Params(), true
+	case "ALRS":
+		return alrs.Params(), true
 	case "BSPB":
 		return bspb.Params(), true
+	case "FIXR":
+		return fixr.Params(), true
+	case "GAZP":
+		return gazp.Params(), true
+	case "GMKN":
+		return gmkn.Params(), true
+	case "IRAO":
+		return irao.Params(), true
+	case "MAGN":
+		return magn.Params(), true
+	case "MTLR":
+		return mtlr.Params(), true
+	case "MOEX":
+		return moex.Params(), true
+	case "PHOR":
+		return phor.Params(), true
+	case "POSI":
+		return posi.Params(), true
+	case "ROSN":
+		return rosn.Params(), true
+	case "SBER":
+		return sber.Params(), true
+	case "SBERP":
+		return sberp.Params(), true
 	case "SNGS":
 		return sngs.Params(), true
+	case "SPBE":
+		return spbe.Params(), true
+	case "YDEX":
+		return ydex.Params(), true
+	case "VTBR":
+		return vtbr.Params(), true
+	case "X5":
+		return x5.Params(), true
 	}
 	return core.Params{}, false
 }

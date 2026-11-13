@@ -1,0 +1,32 @@
+{
+  "ATRPeriod": [
+    14
+  ],
+  "MinGapATR": [
+    0.25
+  ],
+  "MaxWaitBars": [
+    15,
+    30,
+    45
+  ],
+  "StochPeriod": [
+    14
+  ],
+  "UseStochExit": [
+    1
+  ],
+  "StopATR": [
+    2.0
+  ],
+  "TakeProfitATR": [
+    2.0
+  ],
+  "HTFTrendEMA": [
+    0
+  ],
+  "RequireEntryAboveFVGLower": [
+    0
+  ],
+  "_comment": "Проверка чувствительности одного параметра при фиксированном полном наборе."
+}

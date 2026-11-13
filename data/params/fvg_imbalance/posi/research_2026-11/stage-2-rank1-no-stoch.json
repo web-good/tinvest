@@ -1,0 +1,36 @@
+{
+  "ATRPeriod": [
+    14
+  ],
+  "MinGapATR": [
+    0.3
+  ],
+  "MaxWaitBars": [
+    30
+  ],
+  "StochPeriod": [
+    9
+  ],
+  "UseStochExit": [
+    0
+  ],
+  "StopATR": [
+    0.5,
+    1,
+    1.5,
+    2
+  ],
+  "TakeProfitATR": [
+    0,
+    1,
+    2,
+    1.5
+  ],
+  "HTFTrendEMA": [
+    0
+  ],
+  "RequireEntryAboveFVGLower": [
+    0
+  ],
+  "_comment": "Stage 2 POSI exit search; all nine parameter fields explicit; see matching report directory under reports/fvg_imbalance/posi/research_2026-11/stage-2/."
+}

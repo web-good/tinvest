@@ -1,0 +1,60 @@
+{
+  "_comment": "Completed ROSN calibration record. All metrics net of 0.0005 per-turnover commission; cash 100000 RUB; fraction 1; risk-pct 0. Final candidate and original both tested once on identical reserved dates.",
+  "ticker": "ROSN",
+  "strategy": "fvg_imbalance",
+  "interval": "Minutes30",
+  "source": "Tinkoff Invest API, local cache data/candles/ROSN_Minutes30.json and ROSN_Day1.json",
+  "execution": {
+    "initial_cash": 100000,
+    "fraction": 1,
+    "risk_pct": 0,
+    "commission": 0.0005,
+    "entry": "next completed M30 open"
+  },
+  "training": {
+    "period": "2023-11-12 13:12 to 2025-11-12 13:12 MSK",
+    "m30_candles": 24056,
+    "daily_candles_including_one_year_lead_in": 819,
+    "closed_trades_by_entry_year": [
+      21,
+      19
+    ],
+    "net_pnl": 17836.71,
+    "profit_factor": 4.565,
+    "max_drawdown_pct": 3.06,
+    "expectancy": 445.92
+  },
+  "holdout": {
+    "period": "2025-11-12 13:13 to 2026-11-12 13:13 MSK",
+    "m30_candles": 13727,
+    "daily_candles_including_one_year_lead_in": 643,
+    "candidate": {
+      "closed_trades": 20,
+      "net_pnl": 4233.02,
+      "profit_factor": 2.372,
+      "max_drawdown_pct": 4.47,
+      "expectancy": 211.65,
+      "open_position": false
+    },
+    "original": {
+      "closed_trades": 20,
+      "net_pnl": 1000.95,
+      "profit_factor": 1.091,
+      "max_drawdown_pct": 6.56,
+      "expectancy": 50.05,
+      "open_position": false
+    }
+  },
+  "parameters": {
+    "ATRPeriod": 14,
+    "MinGapATR": 0.1,
+    "MaxWaitBars": 30,
+    "StochPeriod": 10,
+    "UseStochExit": 1,
+    "StopATR": 1,
+    "TakeProfitATR": 0,
+    "HTFTrendEMA": 50,
+    "RequireEntryAboveFVGLower": 1
+  },
+  "reports_root": "reports/fvg_imbalance/rosn/research_2026-11"
+}

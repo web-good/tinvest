@@ -1,0 +1,32 @@
+{
+  "ATRPeriod": [
+    14
+  ],
+  "MinGapATR": [
+    0.3
+  ],
+  "MaxWaitBars": [
+    30
+  ],
+  "StochPeriod": [
+    9,
+    10,
+    11
+  ],
+  "UseStochExit": [
+    1
+  ],
+  "StopATR": [
+    1.7
+  ],
+  "TakeProfitATR": [
+    2
+  ],
+  "HTFTrendEMA": [
+    0
+  ],
+  "RequireEntryAboveFVGLower": [
+    0
+  ],
+  "_comment": "FIXR stage 3, selected stoch exit; 2026-11-12"
+}

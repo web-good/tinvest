@@ -1,0 +1,36 @@
+{
+  "ATRPeriod": [
+    14
+  ],
+  "MinGapATR": [
+    0.1,
+    0.25,
+    0.3
+  ],
+  "MaxWaitBars": [
+    45
+  ],
+  "StochPeriod": [
+    14
+  ],
+  "UseStochExit": [
+    1
+  ],
+  "StopATR": [
+    1.7,
+    2
+  ],
+  "TakeProfitATR": [
+    0,
+    1,
+    1.5
+  ],
+  "HTFTrendEMA": [
+    0
+  ],
+  "RequireEntryAboveFVGLower": [
+    0,
+    1
+  ],
+  "_comment": "Single bounded joint rerun triggered by admissible MaxWaitBars=45 sensitivity result within 5% of the locked candidate expectancy; all other grid fields follow the original stage-3 local neighbors."
+}

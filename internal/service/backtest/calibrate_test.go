@@ -296,6 +296,20 @@ func TestParsePhasesLegacyFlatFormat(t *testing.T) {
 	}
 }
 
+func TestParsePhasesLegacyFlatFormatWithComment(t *testing.T) {
+	raw := []byte(`{"_comment":"training grid","EMAPeriod":[44,55]}`)
+	phases, err := ParsePhases(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(phases) != 1 {
+		t.Fatalf("phases = %d, want 1", len(phases))
+	}
+	if got := phases[0].Grid["EMAPeriod"]; len(got) != 2 || got[0] != 44 || got[1] != 55 {
+		t.Fatalf("flat grid EMAPeriod = %v, want [44 55]", got)
+	}
+}
+
 func TestParsePhasesMalformedErrors(t *testing.T) {
 	if _, err := ParsePhases([]byte(`{not json`)); err == nil {
 		t.Fatal("expected error for malformed JSON")

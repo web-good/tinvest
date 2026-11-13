@@ -1,0 +1,12 @@
+# CHMF FVG imbalance calibration plan
+
+- Snapshot date: 2026-11-12 (Europe/Moscow); intended training window `[2023-11-12, 2025-11-12)`, final window `[2025-11-12, 2026-11-12)`.
+- Market data: cached T-Invest M30 and Day1 candles; M30 cache currently spans 2023-08-04 22:00 MSK through 2026-10-13 13:00 MSK; daily cache spans 2021-08-12 through 2026-10-26. The final window therefore currently lacks recent M30 coverage and cannot be claimed complete until provider retrieval supplies it.
+- Strategy warmup: M30 history begins before training start; daily history is loaded one year before the requested window by CLI. Core ATR uses 14 completed weekday daily candles with 28-bar lookback requirement; daily EMA uses the selected completed daily closes. Use only completed candles.
+- Execution/costs: T-Invest cached candles, next M30 open entry, cash 100,000 RUB, fraction 1.0, commission 0.0005 per turnover, fixed lot from instrument, risk-pct 0. No mechanic changes.
+- Baseline: `baseline.json` from the calibration skill; CHMF's current literal is saved in `original.json` before any modification.
+- Primary ranking metric: expectancy. Fixed acceptance limits: positive net PnL after commission, PF > 1, Max DD <= 10% (percentage of running peak; engine also emits absolute currency drawdown). At each of three stages and both exit branches, require >=20 closed trades for 24-month training and >=10 closed trades by entry date in each consecutive training year. Final year requires >=10 closed trades and same quality limits.
+- Stage 1: full 120-combination joint entry grid (`MinGapATR`, `RequireEntryAboveFVGLower`, `HTFTrendEMA`, `StochPeriod`), with baseline exits and current full literal separately as control. Save all combinations (`-combos 0`).
+- Stage 2: independent joint StopATR x TakeProfitATR grids for both exit branches for up to four Stage 1 candidates, only after year-by-year eligibility is established.
+- Stage 3: local joint refinement per `stage-3-refinement.md`, then separate sensitivity runs for StochPeriod, HTFTrendEMA, and MaxWaitBars. No final-year access until one complete candidate is locked.
+- Search budget: complete Stage 1; up to four input candidates x both Stage 2 grids (max 320 combinations); one Stage 3 joint grid (max 54), three one-field sensitivity grids, and at most one bounded joint rerun. If the accessible history, provider, or compute budget prevents full coverage, report the exact limitation and do not claim an exhaustive negative result.

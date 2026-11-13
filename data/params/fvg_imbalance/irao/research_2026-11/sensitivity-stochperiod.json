@@ -1,0 +1,32 @@
+{
+  "ATRPeriod": [
+    14
+  ],
+  "MinGapATR": [
+    0.25
+  ],
+  "MaxWaitBars": [
+    30
+  ],
+  "StochPeriod": [
+    11,
+    14,
+    21
+  ],
+  "UseStochExit": [
+    0
+  ],
+  "StopATR": [
+    1.0
+  ],
+  "TakeProfitATR": [
+    1.5
+  ],
+  "HTFTrendEMA": [
+    0
+  ],
+  "RequireEntryAboveFVGLower": [
+    1
+  ],
+  "_comment": "IRAO stage 3 one-field sensitivity grid from the full selected candidate; see plan.md."
+}

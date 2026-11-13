@@ -1,0 +1,38 @@
+{
+  "ATRPeriod": [
+    14
+  ],
+  "MinGapATR": [
+    0.1
+  ],
+  "MaxWaitBars": [
+    30
+  ],
+  "StochPeriod": [
+    10
+  ],
+  "UseStochExit": [
+    1
+  ],
+  "StopATR": [
+    0.5,
+    1,
+    1.2,
+    1.5,
+    1.7,
+    2
+  ],
+  "TakeProfitATR": [
+    0,
+    1,
+    1.5,
+    2
+  ],
+  "HTFTrendEMA": [
+    50
+  ],
+  "RequireEntryAboveFVGLower": [
+    0
+  ],
+  "_comment": "Training [2023-11-12, 2025-11-12); stage 2, entry candidate rank 5, UseStochExit=1; all nine fields pinned/swept explicitly. See plan.md."
+}

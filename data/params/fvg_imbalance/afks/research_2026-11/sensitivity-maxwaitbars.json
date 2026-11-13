@@ -1,0 +1,32 @@
+{
+  "ATRPeriod": [
+    14
+  ],
+  "MinGapATR": [
+    0.3
+  ],
+  "MaxWaitBars": [
+    15,
+    30,
+    45
+  ],
+  "StochPeriod": [
+    11
+  ],
+  "UseStochExit": [
+    0
+  ],
+  "StopATR": [
+    0.5
+  ],
+  "TakeProfitATR": [
+    1.0
+  ],
+  "HTFTrendEMA": [
+    0
+  ],
+  "RequireEntryAboveFVGLower": [
+    1
+  ],
+  "_comment": "One-field sensitivity from stage-3-selected; vary only MaxWaitBars; all scoring/eligibility limits in plan.md."
+}

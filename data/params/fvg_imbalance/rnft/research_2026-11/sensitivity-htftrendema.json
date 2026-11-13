@@ -1,0 +1,31 @@
+{
+  "ATRPeriod": [
+    14
+  ],
+  "MinGapATR": [
+    0.3
+  ],
+  "MaxWaitBars": [
+    30
+  ],
+  "StochPeriod": [
+    9
+  ],
+  "UseStochExit": [
+    1
+  ],
+  "StopATR": [
+    1.5
+  ],
+  "TakeProfitATR": [
+    1.0
+  ],
+  "HTFTrendEMA": [
+    0,
+    50
+  ],
+  "RequireEntryAboveFVGLower": [
+    0
+  ],
+  "_comment": "RNFT stage 3 one-field HTFTrendEMA sensitivity."
+}

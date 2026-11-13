@@ -6,10 +6,11 @@ import (
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/core"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/domrf"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/gazp"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/nvtk"
 )
 
 func TestFVGImbalanceDefaultsAndOverrides(t *testing.T) {
-	for _, ticker := range []string{"GAZP", "DOMRF", "ZZZZ"} {
+	for _, ticker := range []string{"GAZP", "DOMRF", "NVTK", "ZZZZ"} {
 		b, err := FVGImbalanceLookupOrGeneric(ticker, enum.Minutes30)
 		if err != nil {
 			t.Fatal(err)
@@ -20,6 +21,9 @@ func TestFVGImbalanceDefaultsAndOverrides(t *testing.T) {
 		}
 		if ticker == "DOMRF" {
 			wantDefaults = domrf.Params()
+		}
+		if ticker == "NVTK" {
+			wantDefaults = nvtk.Params()
 		}
 		if b.DefaultParams() != wantDefaults {
 			t.Fatalf("%s defaults: %+v, want %+v", ticker, b.DefaultParams(), wantDefaults)

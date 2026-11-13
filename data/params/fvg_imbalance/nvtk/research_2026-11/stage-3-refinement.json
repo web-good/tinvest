@@ -1,0 +1,36 @@
+{
+  "_comment": "Stage 3 local joint refinement around admissible stage-2 rank 7; all nine fields explicit, 36 joint combinations.",
+  "ATRPeriod": [
+    14
+  ],
+  "MinGapATR": [
+    0.1,
+    0.25,
+    0.3
+  ],
+  "MaxWaitBars": [
+    30
+  ],
+  "StochPeriod": [
+    14
+  ],
+  "UseStochExit": [
+    1
+  ],
+  "StopATR": [
+    0.5,
+    1,
+    1.2
+  ],
+  "TakeProfitATR": [
+    1.5,
+    2
+  ],
+  "HTFTrendEMA": [
+    0
+  ],
+  "RequireEntryAboveFVGLower": [
+    0,
+    1
+  ]
+}
