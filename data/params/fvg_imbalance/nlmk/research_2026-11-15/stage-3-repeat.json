@@ -1,0 +1,36 @@
+{
+  "ATRPeriod": [
+    14
+  ],
+  "MinGapATR": [
+    0.1,
+    0.25,
+    0.3
+  ],
+  "MaxWaitBars": [
+    45
+  ],
+  "StochPeriod": [
+    11
+  ],
+  "UseStochExit": [
+    0
+  ],
+  "StopATR": [
+    0.5,
+    1
+  ],
+  "TakeProfitATR": [
+    1,
+    1.5,
+    2
+  ],
+  "HTFTrendEMA": [
+    0
+  ],
+  "RequireEntryAboveFVGLower": [
+    0,
+    1
+  ],
+  "_comment": "One allowed repeat: sensitivity MaxWaitBars45 admissible and improves expectancy 1162.13 vs918.10; same 36 joint neighbors, no further repeats. Frozen train only."
+}

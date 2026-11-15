@@ -1,0 +1,36 @@
+{
+  "ATRPeriod": [
+    14
+  ],
+  "MinGapATR": [
+    0.25,
+    0.3,
+    0.4
+  ],
+  "MaxWaitBars": [
+    30
+  ],
+  "StochPeriod": [
+    21
+  ],
+  "UseStochExit": [
+    1
+  ],
+  "StopATR": [
+    1.5,
+    1.7,
+    2
+  ],
+  "TakeProfitATR": [
+    1.5,
+    2
+  ],
+  "HTFTrendEMA": [
+    0
+  ],
+  "RequireEntryAboveFVGLower": [
+    0,
+    1
+  ],
+  "_comment": "Joint refinement around stage 2 candidate; adjacent tested values."
+}

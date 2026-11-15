@@ -11,12 +11,15 @@ import (
 )
 
 func TestFVGImbalanceDefaultsAndOverrides(t *testing.T) {
-	for _, ticker := range []string{"GAZP", "DOMRF", "MGNT", "NVTK", "RAGR", "ZZZZ"} {
+	for _, ticker := range []string{"AFLT", "GAZP", "DOMRF", "MGNT", "NVTK", "RAGR", "ZZZZ"} {
 		b, err := FVGImbalanceLookupOrGeneric(ticker, enum.Minutes30)
 		if err != nil {
 			t.Fatal(err)
 		}
 		wantDefaults := core.DefaultParams()
+		if ticker == "AFLT" {
+			wantDefaults = core.Params{ATRPeriod: 14, MinGapATR: 0.25, MaxWaitBars: 30, StochPeriod: 14, UseStochExit: 1, StopATR: 0.5, TakeProfitATR: 1.5, HTFTrendEMA: 120, RequireEntryAboveFVGLower: 0}
+		}
 		if ticker == "GAZP" {
 			wantDefaults = gazp.Params()
 		}

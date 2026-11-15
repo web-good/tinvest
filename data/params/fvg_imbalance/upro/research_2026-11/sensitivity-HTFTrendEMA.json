@@ -1,0 +1,32 @@
+{
+  "ATRPeriod": [
+    14
+  ],
+  "MinGapATR": [
+    0.3
+  ],
+  "MaxWaitBars": [
+    30
+  ],
+  "StochPeriod": [
+    10
+  ],
+  "UseStochExit": [
+    1
+  ],
+  "StopATR": [
+    1
+  ],
+  "TakeProfitATR": [
+    2
+  ],
+  "HTFTrendEMA": [
+    0,
+    50,
+    100
+  ],
+  "RequireEntryAboveFVGLower": [
+    1
+  ],
+  "_comment": "Stage 3 sensitivity; all other fields fixed at stage 2 selected candidate."
+}

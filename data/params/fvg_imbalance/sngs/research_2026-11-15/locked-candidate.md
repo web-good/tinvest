@@ -1,0 +1,2 @@
+# Locked research candidate — 2026-11-15
+The stage-3 eligible expectancy winner equals original.json field for field. All one-field sensitivity results were checked; none improves expectancy while passing annual counts and quality. research-candidate.json is the complete chosen set. No further joint rerun required. No new final replay: the nominal test year overlaps the already exposed final period from November 11 and lacks latest cached sessions. Literal unchanged. Earlier final results are historical evidence only, not a fresh independent validation of this selection.

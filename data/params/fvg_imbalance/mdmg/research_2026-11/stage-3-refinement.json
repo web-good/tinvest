@@ -1,0 +1,35 @@
+{
+  "ATRPeriod": [
+    14
+  ],
+  "MinGapATR": [
+    0.1,
+    0.25,
+    0.3
+  ],
+  "MaxWaitBars": [
+    30
+  ],
+  "StochPeriod": [
+    21
+  ],
+  "UseStochExit": [
+    1
+  ],
+  "StopATR": [
+    0.5,
+    1
+  ],
+  "TakeProfitATR": [
+    0,
+    1
+  ],
+  "HTFTrendEMA": [
+    50
+  ],
+  "RequireEntryAboveFVGLower": [
+    0,
+    1
+  ],
+  "_comment": "Stage 3 joint nearest examined neighbors around rank1 stoch #3; no expansion."
+}

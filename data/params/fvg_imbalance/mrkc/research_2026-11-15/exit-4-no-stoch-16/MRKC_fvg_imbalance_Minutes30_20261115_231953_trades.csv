@@ -1,0 +1,4 @@
+idx,entry_time,entry_price,exit_time,exit_price,qty,reason,pnl,pnl_pct,bars_held,support_level,resistance_level,atr,entry_reason,exit_reason,stop_loss
+1,2023-11-22T15:00:00Z,0.600400,2023-12-05T08:30:00Z,0.563642,166000,SL,-6198.366263,-0.062160,158,0.604400,0.000000,0.018379,"M30 bullish FVG [0.5982, 0.6044], stochastic crossed below 20",FVG stop 0.5636,0.563642
+2,2023-12-08T12:00:00Z,0.559400,2024-07-04T07:00:00Z,0.521832,167000,SL,-6364.178615,-0.068090,3580,0.563200,0.000000,0.018784,"M30 bullish FVG [0.5564, 0.5632], stochastic crossed below 20",FVG stop 0.5218,0.521832
+3,2024-11-11T13:00:00Z,0.454200,2024-11-26T12:00:00Z,0.430171,192000,SL,-4698.407552,-0.053850,502,0.451600,0.000000,0.012014,"M30 bullish FVG [0.4446, 0.4516], stochastic crossed below 20",FVG stop 0.4302,0.430171

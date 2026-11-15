@@ -1,0 +1,11 @@
+# AFLT FVG calibration plan — 2026-11-15
+
+Before results: training [2023-11-15, 2025-11-15), annual blocks split 2024-11-15; reserved final [2025-11-15, 2026-11-15). Exact CLI timestamps and coverage must be verified; all comparisons must use identical completed-candle snapshots. Source Tinkoff Invest and local data/candles cache. Cache at planning: M30 2023-10-05 17:00 through 2026-10-15 13:00 MSK (37718); Day1 2021-08-12 through 2026-10-26 (1436). Refresh missing tail where possible; do not treat truncated final year as valid.
+
+Daily lead-in one year; ATR(14) requires 28 completed daily bars; EMA uses completed daily closes and requires its period; stochastic requires period+1 M30 bars, strategy lookback max(33, period+1). M30 signals execute next open. Initial capital 100000 RUB; fraction 1; risk-pct 0; commission 0.0005 per turnover per side; instrument lot from metadata. Same execution and costs throughout.
+
+Primary metric expectancy. Require positive net PnL after commission, PF > 1, MaxDrawdownPct <= 0.10. Engine MaxDrawdown is absolute currency, MaxDrawdownPct is fraction of peak for the maximum absolute drawdown; use engine percentage. Every stage and branch needs >=20 closed trades and >=10 in each consecutive annual block counted by entry date in the same full run; open positions excluded. Final year >=10 closed trades plus identical quality gates. Never inspect final year before locking one candidate.
+
+Stage 1: template 350 combinations (7 x 5 x 5 x 2), including original entry values, all nine fields explicit, original full set separate control. Up to four admissible diverse stable inputs. Stage 2: both exit branches for each admitted input, original templates and all nine fields explicit. Stage 3: local joint refinement and sensitivity per skill, refine both branches if metric within 5%; at most one bounded rerun. Save all combinations and reports. One final test of locked candidate and original; no retry using holdout. If coverage or gates fail, preserve literal. Budget: all stage 1, up to 4 seeds x 2 branches, stage 3 and sensitivities as prescribed.
+
+Actual outcomes, candle coverage, exact report boundaries and final-test rejection: see outcome.md.

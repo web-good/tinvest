@@ -1,0 +1,198 @@
+[
+  {
+    "candidate": 1,
+    "rank": 105,
+    "Params": {
+      "ATRPeriod": 14,
+      "MinGapATR": 0.25,
+      "MaxWaitBars": 30,
+      "StochPeriod": 14,
+      "UseStochExit": 1,
+      "StopATR": 1,
+      "TakeProfitATR": 2,
+      "HTFTrendEMA": 0,
+      "RequireEntryAboveFVGLower": 0
+    },
+    "Metrics": {
+      "TotalTrades": 29,
+      "Wins": 23,
+      "Losses": 6,
+      "WinRate": 0.7931034482758621,
+      "LossRate": 0.20689655172413793,
+      "GrossProfit": 18176.53170000002,
+      "GrossLoss": 6995.757078802897,
+      "ProfitFactor": 2.5982222503229573,
+      "NetPnL": 11180.774621196979,
+      "NetPnLPct": 0.11180774621196979,
+      "MaxDrawdown": 4182.224599999987,
+      "MaxDrawdownPct": 0.041475943110708326,
+      "AvgWin": 790.2839869565227,
+      "AvgLoss": 1165.9595131338162,
+      "Expectancy": 385.5439524550733,
+      "Sortino": 0.6692581077542046,
+      "BestTrade": 2345.515200000009,
+      "WorstTrade": -2239.6277788029547,
+      "ExposurePct": 0.021087120893892294,
+      "CAGR": 0.05434650732083535
+    },
+    "Years": [
+      {
+        "Trades": 18,
+        "Net": 2410.704521197098,
+        "PF": 1.4650347068278664
+      },
+      {
+        "Trades": 11,
+        "Net": 8770.070100000026,
+        "PF": 5.840440113361538
+      }
+    ]
+  },
+  {
+    "candidate": 2,
+    "rank": 118,
+    "Params": {
+      "ATRPeriod": 14,
+      "MinGapATR": 0.3,
+      "MaxWaitBars": 30,
+      "StochPeriod": 10,
+      "UseStochExit": 1,
+      "StopATR": 1,
+      "TakeProfitATR": 2,
+      "HTFTrendEMA": 0,
+      "RequireEntryAboveFVGLower": 0
+    },
+    "Metrics": {
+      "TotalTrades": 24,
+      "Wins": 20,
+      "Losses": 4,
+      "WinRate": 0.8333333333333334,
+      "LossRate": 0.16666666666666666,
+      "GrossProfit": 13262.804800000042,
+      "GrossLoss": 4489.727234379025,
+      "ProfitFactor": 2.954033532024674,
+      "NetPnL": 8773.077565620843,
+      "NetPnLPct": 0.08773077565620843,
+      "MaxDrawdown": 2862.0713343790994,
+      "MaxDrawdownPct": 0.027987107945437944,
+      "AvgWin": 663.1402400000021,
+      "AvgLoss": 1122.4318085947561,
+      "Expectancy": 365.54489856754236,
+      "Sortino": 0.6261524148633536,
+      "BestTrade": 1602.5760000000155,
+      "WorstTrade": -2284.767134379028,
+      "ExposurePct": 0.01016550449466521,
+      "CAGR": 0.04288333535191047
+    },
+    "Years": [
+      {
+        "Trades": 13,
+        "Net": 3085.4375656209595,
+        "PF": 2.313471264925943
+      },
+      {
+        "Trades": 11,
+        "Net": 5687.640000000058,
+        "PF": 3.6569612305760715
+      }
+    ]
+  },
+  {
+    "candidate": 3,
+    "rank": 150,
+    "Params": {
+      "ATRPeriod": 14,
+      "MinGapATR": 0.25,
+      "MaxWaitBars": 30,
+      "StochPeriod": 11,
+      "UseStochExit": 1,
+      "StopATR": 1,
+      "TakeProfitATR": 2,
+      "HTFTrendEMA": 0,
+      "RequireEntryAboveFVGLower": 1
+    },
+    "Metrics": {
+      "TotalTrades": 30,
+      "Wins": 23,
+      "Losses": 7,
+      "WinRate": 0.7666666666666667,
+      "LossRate": 0.23333333333333334,
+      "GrossProfit": 16084.320300000138,
+      "GrossLoss": 7220.0796788028965,
+      "ProfitFactor": 2.2277206091258748,
+      "NetPnL": 8864.240621197081,
+      "NetPnLPct": 0.08864240621197081,
+      "MaxDrawdown": 4182.224599999987,
+      "MaxDrawdownPct": 0.041475943110708326,
+      "AvgWin": 699.3182739130494,
+      "AvgLoss": 1031.4399541146995,
+      "Expectancy": 295.47468737324135,
+      "Sortino": 0.5040230656496368,
+      "BestTrade": 2261.746800000008,
+      "WorstTrade": -2239.9077788029535,
+      "ExposurePct": 0.01680248676804167,
+      "CAGR": 0.04331966787001962
+    },
+    "Years": [
+      {
+        "Trades": 19,
+        "Net": 491.5509211971803,
+        "PF": 1.08798308863899
+      },
+      {
+        "Trades": 11,
+        "Net": 8372.68970000006,
+        "PF": 6.126554731413576
+      }
+    ]
+  },
+  {
+    "candidate": 4,
+    "rank": 169,
+    "Params": {
+      "ATRPeriod": 14,
+      "MinGapATR": 0.1,
+      "MaxWaitBars": 30,
+      "StochPeriod": 11,
+      "UseStochExit": 1,
+      "StopATR": 1,
+      "TakeProfitATR": 2,
+      "HTFTrendEMA": 0,
+      "RequireEntryAboveFVGLower": 1
+    },
+    "Metrics": {
+      "TotalTrades": 113,
+      "Wins": 81,
+      "Losses": 32,
+      "WinRate": 0.7168141592920354,
+      "LossRate": 0.2831858407079646,
+      "GrossProfit": 55316.16760000039,
+      "GrossLoss": 31501.70960103815,
+      "ProfitFactor": 1.7559735106623366,
+      "NetPnL": 23814.457998961545,
+      "NetPnLPct": 0.23814457998961544,
+      "MaxDrawdown": 9959.32413379359,
+      "MaxDrawdownPct": 0.09718019234287409,
+      "AvgWin": 682.9156493827209,
+      "AvgLoss": 984.4284250324422,
+      "Expectancy": 210.74741592001985,
+      "Sortino": 0.2897020480908887,
+      "BestTrade": 2345.515200000009,
+      "WorstTrade": -3845.321967244774,
+      "ExposurePct": 0.06443753675543981,
+      "CAGR": 0.11255688408354891
+    },
+    "Years": [
+      {
+        "Trades": 53,
+        "Net": 1562.140466206707,
+        "PF": 1.0894018750091323
+      },
+      {
+        "Trades": 60,
+        "Net": 22252.317532755536,
+        "PF": 2.586225654851596
+      }
+    ]
+  }
+]

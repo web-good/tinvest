@@ -1,0 +1,37 @@
+{
+  "ATRPeriod": [
+    14
+  ],
+  "MinGapATR": [
+    0.25,
+    0.3,
+    0.4
+  ],
+  "MaxWaitBars": [
+    30
+  ],
+  "StochPeriod": [
+    14
+  ],
+  "UseStochExit": [
+    0
+  ],
+  "StopATR": [
+    0.25,
+    0.5,
+    1
+  ],
+  "TakeProfitATR": [
+    1.5,
+    2,
+    2.5
+  ],
+  "HTFTrendEMA": [
+    0
+  ],
+  "RequireEntryAboveFVGLower": [
+    0,
+    1
+  ],
+  "_comment": "Локальная сетка; одно расширение границ StopATR до 0.25 и TakeProfitATR до 2.5."
+}

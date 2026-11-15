@@ -1,0 +1,71 @@
+{
+  "status": "rejected_final_validation",
+  "window": [
+    "2025-11-15T00:00:00+03:00",
+    "2026-11-15T00:00:00+03:00"
+  ],
+  "candidate": {
+    "ATRPeriod": 14,
+    "MinGapATR": 0.25,
+    "MaxWaitBars": 45,
+    "StochPeriod": 11,
+    "UseStochExit": 0,
+    "StopATR": 0.5,
+    "TakeProfitATR": 1.5,
+    "HTFTrendEMA": 0,
+    "RequireEntryAboveFVGLower": 1
+  },
+  "reasons": [
+    "NetPnL <= 0",
+    "ProfitFactor <= 1",
+    "MaxDrawdownPct > 0.10"
+  ],
+  "candidate_metrics": {
+    "TotalTrades": 20,
+    "Wins": 5,
+    "Losses": 15,
+    "WinRate": 0.25,
+    "LossRate": 0.75,
+    "GrossProfit": 21391.226832352928,
+    "GrossLoss": 22961.847848672463,
+    "ProfitFactor": 0.9315986663324947,
+    "NetPnL": -1570.6210163196374,
+    "NetPnLPct": -0.015706210163196375,
+    "MaxDrawdown": 16025.719829994996,
+    "MaxDrawdownPct": 0.15482836454920434,
+    "AvgWin": 4278.245366470585,
+    "AvgLoss": 1530.7898565781643,
+    "Expectancy": -78.53105081597678,
+    "Sortino": -0.05705422530313361,
+    "BestTrade": 6540.773315794737,
+    "WorstTrade": -2385.5235184469348,
+    "ExposurePct": 0.15869613423017223,
+    "CAGR": -0.0157062101631964
+  },
+  "original_metrics": {
+    "TotalTrades": 23,
+    "Wins": 16,
+    "Losses": 7,
+    "WinRate": 0.6956521739130435,
+    "LossRate": 0.30434782608695654,
+    "GrossProfit": 10900.341200000024,
+    "GrossLoss": 16733.204732181286,
+    "ProfitFactor": 0.6514198191238584,
+    "NetPnL": -5832.863532181349,
+    "NetPnLPct": -0.05832863532181349,
+    "MaxDrawdown": 11078.132332181325,
+    "MaxDrawdownPct": 0.1078179847184823,
+    "AvgWin": 681.2713250000015,
+    "AvgLoss": 2390.457818883041,
+    "Expectancy": -253.6027622687505,
+    "Sortino": -0.16780095525561772,
+    "BestTrade": 1363.335500000001,
+    "WorstTrade": -4856.949244673233,
+    "ExposurePct": 0.03536621382161843,
+    "CAGR": -0.05832863532181354
+  },
+  "candidate_open_position": false,
+  "original_open_position": false,
+  "literal_updated": false,
+  "final_closed_trades": 20
+}

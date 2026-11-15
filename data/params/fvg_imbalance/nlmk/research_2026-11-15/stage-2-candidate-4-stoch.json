@@ -1,0 +1,38 @@
+{
+  "ATRPeriod": [
+    14
+  ],
+  "MinGapATR": [
+    0.1
+  ],
+  "MaxWaitBars": [
+    30
+  ],
+  "StochPeriod": [
+    11
+  ],
+  "UseStochExit": [
+    1
+  ],
+  "StopATR": [
+    0.5,
+    1,
+    1.2,
+    1.5,
+    1.7,
+    2
+  ],
+  "TakeProfitATR": [
+    0,
+    1,
+    1.5,
+    2
+  ],
+  "HTFTrendEMA": [
+    0
+  ],
+  "RequireEntryAboveFVGLower": [
+    1
+  ],
+  "_comment": "NLMK fixed train 2023-11-15/2025-11-15; stage-1 rank 169, input candidate 4; all entry fields including StochPeriod explicitly fixed; branch stoch. All rows retained."
+}

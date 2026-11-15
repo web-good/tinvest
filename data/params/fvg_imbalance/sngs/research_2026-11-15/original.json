@@ -1,0 +1,11 @@
+{
+  "ATRPeriod": 14,
+  "MinGapATR": 0.1,
+  "MaxWaitBars": 30,
+  "StochPeriod": 21,
+  "UseStochExit": 1,
+  "StopATR": 1.7,
+  "TakeProfitATR": 0,
+  "HTFTrendEMA": 120,
+  "RequireEntryAboveFVGLower": 1
+}

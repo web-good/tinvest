@@ -1,0 +1,5 @@
+# Candidate fixed before final-year access
+
+2026-11-15 22:39 MSK. Candidate is `locked-candidate.json`: stochastic exit, daily ATR stop 1.5 and target 1.0, entry gap 0.25, stochastic 14, daily EMA 120, entry-lower filter off, wait 30, ATR 14. Training closed trades 26, 16/10 by entry across consecutive years; net +20,741.04 RUB, PF 3.268, expectancy 797.73, MaxDrawdownPct 4.71%, no open position. Stage 3 neighbors stop 1.2 and 1.7 are positive and similar; sensitivity EMA 200 and wait 45 remain viable, stochastic 11 remains profitable but weaker. The best eligible non-stochastic exit has expectancy 756.67 and DD 9.12%; difference exceeds 5% of 797.73. The first year's counts are based on full-run ledgers or verified recent trades using matching candle boundaries, not independent annual runs. Original training 44 trades, 25/19, +17,109.41, PF 1.655, DD 9.51%.
+
+Final year reserved [2025-11-15, 2026-11-15); run only this candidate and original once with identical execution and verify coverage. If unavailable or failed, no literal update or second candidate.

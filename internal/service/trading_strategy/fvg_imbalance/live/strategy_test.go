@@ -4,6 +4,7 @@ import (
 	"testing"
 	"tinvest/internal/config"
 	"tinvest/internal/enum"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/aflt"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/fixr"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/gmkn"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/irao"
@@ -95,6 +96,19 @@ func TestStrategyRegistryAndProtection(t *testing.T) {
 	}
 	if stop, reason := s.DesiredStop("VTBR", statestore.Entry{EntryPrice: 100, EntryATR: 10}); stop != 90 || reason != "SL" {
 		t.Fatalf("VTBR stop=%v reason=%q, want 90/SL", stop, reason)
+	}
+}
+
+func TestAFLTLiveParameters(t *testing.T) {
+	s := New(config.NewFVGImbalanceConfig(), nil)
+	if _, ok := s.Decider("AFLT"); !ok {
+		t.Fatal("AFLT is not registered")
+	}
+	if p, ok := params("AFLT"); !ok || p != aflt.Params() {
+		t.Errorf("AFLT params=%+v, registered=%v", p, ok)
+	}
+	if stop, reason := s.DesiredStop("AFLT", statestore.Entry{EntryPrice: 100, EntryATR: 10}); stop != 100-aflt.Params().StopATR*10 || reason != "SL" {
+		t.Errorf("AFLT stop=%v reason=%q, want stop from ticker parameters", stop, reason)
 	}
 }
 

@@ -1,0 +1,36 @@
+{
+  "ATRPeriod": [
+    14
+  ],
+  "MinGapATR": [
+    0,
+    0.1,
+    0.25
+  ],
+  "MaxWaitBars": [
+    30
+  ],
+  "StochPeriod": [
+    21
+  ],
+  "UseStochExit": [
+    1
+  ],
+  "StopATR": [
+    1.5,
+    1.7,
+    2
+  ],
+  "TakeProfitATR": [
+    0,
+    1
+  ],
+  "HTFTrendEMA": [
+    120
+  ],
+  "RequireEntryAboveFVGLower": [
+    0,
+    1
+  ],
+  "_comment": "SNGS stage 3: 36 joint combinations. Neighbors of stage-2 winner from actual grids; TP at lower boundary, no expansion. Fixed stoch exit, stoch21, EMA120, ATR14, wait30. Annual eligibility and quality per plan.md."
+}

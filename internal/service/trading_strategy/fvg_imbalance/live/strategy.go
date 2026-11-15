@@ -9,6 +9,7 @@ import (
 	"tinvest/internal/config"
 	"tinvest/internal/enum"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/afks"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/aflt"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/alrs"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/bspb"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/core"
@@ -21,11 +22,13 @@ import (
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/magn"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/mgnt"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/moex"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/mrkc"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/mtlr"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/phor"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/posi"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/reni"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/rosn"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/rtkm"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/sber"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/sberp"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/sngs"
@@ -60,6 +63,8 @@ func params(ticker string) (core.Params, bool) {
 	switch ticker {
 	case "AFKS":
 		return afks.Params(), true
+	case "AFLT":
+		return aflt.Params(), true
 	case "ALRS":
 		return alrs.Params(), true
 	case "BSPB":
@@ -84,6 +89,8 @@ func params(ticker string) (core.Params, bool) {
 		return mtlr.Params(), true
 	case "MOEX":
 		return moex.Params(), true
+	case "MRKC":
+		return mrkc.Params(), true
 	case "PHOR":
 		return phor.Params(), true
 	case "POSI":
@@ -92,6 +99,8 @@ func params(ticker string) (core.Params, bool) {
 		return reni.Params(), true
 	case "ROSN":
 		return rosn.Params(), true
+	case "RTKM":
+		return rtkm.Params(), true
 	case "SBER":
 		return sber.Params(), true
 	case "SBERP":
