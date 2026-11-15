@@ -16,7 +16,7 @@ func TestUPROFVGDefaultParams(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := core.Params{ATRPeriod: 14, MinGapATR: 0.3, MaxWaitBars: 30, StochPeriod: 10, UseStochExit: 1, StopATR: 1, TakeProfitATR: 2, HTFTrendEMA: 0, RequireEntryAboveFVGLower: 1}
+	want := core.Params{ATRPeriod: 14, MinGapATR: 0.4, MaxWaitBars: 30, StochPeriod: 10, UseStochExit: 0, StopATR: 0.5, TakeProfitATR: 1.5, HTFTrendEMA: 0, RequireEntryAboveFVGLower: 1}
 	if got != want {
 		t.Fatalf("default UPRO params = %+v, want %+v", got, want)
 	}
