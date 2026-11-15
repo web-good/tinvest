@@ -43,7 +43,7 @@ func TestFileStore_LoadMissingFileIsEmpty(t *testing.T) {
 func TestEntryRoundTripsTakeProfit(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.json")
 	s := New(path)
-	want := map[string]Entry{"UGLD": {Ticker: "UGLD", EntryPrice: 0.6, TakeProfit: 0.72}}
+	want := map[string]Entry{"UGLD": {Ticker: "UGLD", EntryPrice: 0.6, TakeProfit: 0.72, TakeProfitOrderID: "tp-123"}}
 	if err := s.Save(want); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -51,7 +51,7 @@ func TestEntryRoundTripsTakeProfit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if got["UGLD"].TakeProfit != 0.72 {
+	if got["UGLD"].TakeProfit != 0.72 || got["UGLD"].TakeProfitOrderID != "tp-123" {
 		t.Fatalf("TakeProfit = %v, want 0.72", got["UGLD"].TakeProfit)
 	}
 }

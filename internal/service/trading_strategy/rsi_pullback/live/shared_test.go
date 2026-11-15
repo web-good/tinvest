@@ -145,6 +145,33 @@ var (
 	sharedLastBar = time.Date(2026, 3, 10, 11, 30, 0, 0, msk)
 )
 
+func TestFVGHasFirstEntryPriority(t *testing.T) {
+	fvg := guestFake("fvg_imbalance", model.SignalBuy, "GAZP")
+	other := guestFake("pdl_rsi", model.SignalBuy, "GAZP")
+	e := newSharedEnv(t, sharedNow, []string{"GAZP"}, nil, other, fvg)
+	slots := e.svc.universeSlots("GAZP")
+	if slots[0].strat.Name() != "fvg_imbalance" {
+		t.Fatalf("first strategy = %s, want fvg_imbalance", slots[0].strat.Name())
+	}
+}
+
+func TestFVGBlockedSignalsNotifyBothDirections(t *testing.T) {
+	for _, owner := range []string{"fvg_imbalance", "pdl_rsi"} {
+		t.Run(owner, func(t *testing.T) {
+			fvg := guestFake("fvg_imbalance", model.SignalBuy, "GAZP")
+			other := guestFake("pdl_rsi", model.SignalBuy, "GAZP")
+			fvg.trade, other.trade = true, true
+			e := newSharedEnv(t, sharedNow, nil, nil, fvg, other)
+			e.expectCandles(flatAt30m(sharedLastBar, 400, 100), dailies(sharedNow, 60))
+			sh := sharesOf("GAZP")[0]
+			e.svc.alertBlockedEntries(context.Background(), "GAZP", sh, owner, sharedNow)
+			if !fvg.said("GAZP") || !fvg.said(owner) {
+				t.Fatalf("missing blocked signal alert: %q", fvg.msgs)
+			}
+		})
+	}
+}
+
 // Оба дают BUY по свободному тикеру на одном баре — входит rsi_pullback, гостя не спрашивают.
 func TestPullbackWinsTheSameBarBuy(t *testing.T) {
 	zone := zoneFake(model.SignalBuy, "GAZP")

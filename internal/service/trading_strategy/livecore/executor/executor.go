@@ -17,6 +17,7 @@ import (
 
 // OrdersClient is the slice of the orders client the executor needs.
 type OrdersClient interface {
+	GetOrderState(ctx context.Context, in *investapi.GetOrderStateRequest, opts ...grpc.CallOption) (*investapi.OrderState, error)
 	PostOrder(ctx context.Context, in *investapi.PostOrderRequest, opts ...grpc.CallOption) (*investapi.PostOrderResponse, error)
 }
 
@@ -24,6 +25,7 @@ type OrdersClient interface {
 // caller falls back to the signal's price and the requested quantity.
 type Result struct {
 	Placed     bool
+	OrderID    string
 	FilledLots int64
 	FillPrice  float64
 }
@@ -38,6 +40,18 @@ type Executor struct {
 // New returns an Executor bound to an account.
 func New(c OrdersClient, accountID string, tradeEnabled bool) *Executor {
 	return &Executor{client: c, accountID: accountID, tradeEnabled: tradeEnabled}
+}
+
+// OrderState retrieves execution progress of a broker-created order.
+func (e *Executor) OrderState(ctx context.Context, orderID string) (*investapi.OrderState, error) {
+	if !e.tradeEnabled {
+		return nil, fmt.Errorf("order state unavailable in dry run")
+	}
+	state, err := e.client.GetOrderState(ctx, &investapi.GetOrderStateRequest{AccountId: e.accountID, OrderId: orderID})
+	if err != nil {
+		return nil, fmt.Errorf("get order state: %w", err)
+	}
+	return state, nil
 }
 
 // Buy places a market BUY of `lots` lots (or dry-runs).
@@ -67,7 +81,7 @@ func (e *Executor) place(ctx context.Context, instrumentID string, lots int64, d
 	if err != nil {
 		return Result{}, withBrokerDetails(err, header, trailer)
 	}
-	res := Result{Placed: true, FilledLots: resp.GetLotsExecuted()}
+	res := Result{Placed: true, OrderID: resp.GetOrderId(), FilledLots: resp.GetLotsExecuted()}
 	if p := resp.GetExecutedOrderPrice(); p != nil {
 		res.FillPrice = utils.CombinePrice(p.GetUnits(), p.GetNano())
 	}

@@ -1,0 +1,38 @@
+{
+  "ATRPeriod": [
+    14
+  ],
+  "MinGapATR": [
+    0.3
+  ],
+  "MaxWaitBars": [
+    30
+  ],
+  "StochPeriod": [
+    14
+  ],
+  "UseStochExit": [
+    1
+  ],
+  "StopATR": [
+    0.5,
+    1,
+    1.2,
+    1.5,
+    1.7,
+    2
+  ],
+  "TakeProfitATR": [
+    0,
+    1,
+    1.5,
+    2
+  ],
+  "HTFTrendEMA": [
+    0
+  ],
+  "RequireEntryAboveFVGLower": [
+    0
+  ],
+  "_comment": "RAGR; stage-1 eligible candidate #1; all fixed entry fields inherited explicitly; common training snapshot."
+}

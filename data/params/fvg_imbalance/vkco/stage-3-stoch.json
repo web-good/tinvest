@@ -1,0 +1,37 @@
+{
+  "ATRPeriod": [
+    14
+  ],
+  "MinGapATR": [
+    0.1,
+    0.25,
+    0.3
+  ],
+  "MaxWaitBars": [
+    30
+  ],
+  "StochPeriod": [
+    9
+  ],
+  "UseStochExit": [
+    1
+  ],
+  "StopATR": [
+    0.5,
+    1,
+    1.2
+  ],
+  "TakeProfitATR": [
+    1,
+    1.5,
+    2
+  ],
+  "HTFTrendEMA": [
+    0
+  ],
+  "RequireEntryAboveFVGLower": [
+    0,
+    1
+  ],
+  "_comment": "Этап 3: локальные соседи входа #1 и выходов; стохастическая ветка; цель 2 сохранена при равенстве результатов."
+}

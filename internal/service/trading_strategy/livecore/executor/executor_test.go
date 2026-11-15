@@ -141,3 +141,14 @@ func TestBuy_DryRunPlacesNoOrder(t *testing.T) {
 	// m has no expectations set; NewMockOrdersClient(t) asserts on cleanup that
 	// PostOrder was never called, preserving "must not be called in dry-run".
 }
+
+func TestOrderStateReturnsExecutionDetails(t *testing.T) {
+	m := mocks.NewMockOrdersClient(t)
+	m.EXPECT().GetOrderState(mock.Anything, mock.MatchedBy(func(in *investapi.GetOrderStateRequest) bool {
+		return in.GetAccountId() == "acc" && in.GetOrderId() == "exchange"
+	})).Return(&investapi.OrderState{LotsRequested: 10, LotsExecuted: 4, ExecutionReportStatus: investapi.OrderExecutionReportStatus_EXECUTION_REPORT_STATUS_PARTIALLYFILL}, nil)
+	state, err := New(m, "acc", true).OrderState(context.Background(), "exchange")
+	if err != nil || state.GetLotsExecuted() != 4 || state.GetLotsRequested() != 10 || state.GetExecutionReportStatus() != investapi.OrderExecutionReportStatus_EXECUTION_REPORT_STATUS_PARTIALLYFILL {
+		t.Fatalf("state=%+v err=%v", state, err)
+	}
+}

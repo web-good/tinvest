@@ -15,7 +15,7 @@ func TestEngineActualFillSetsATRLevels(t *testing.T) {
 	}{
 		{"target on fill bar", []bar{{105, 110, 104, 109}}, "TP", 109},
 		{"gap through stop", []bar{{105, 108, 104, 104}, {100, 102, 99, 101}}, "SL", 100},
-		{"gap through target", []bar{{105, 108, 104, 104}, {112, 113, 111, 112}}, "TP", 112},
+		{"gap through target", []bar{{105, 108, 104, 104}, {112, 113, 111, 112}}, "TP", 109},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			bars := make([]bar, 30)

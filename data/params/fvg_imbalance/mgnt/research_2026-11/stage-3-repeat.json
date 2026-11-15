@@ -1,0 +1,37 @@
+{
+  "ATRPeriod": [
+    14
+  ],
+  "MinGapATR": [
+    0.1,
+    0.25,
+    0.3
+  ],
+  "MaxWaitBars": [
+    45
+  ],
+  "StochPeriod": [
+    9
+  ],
+  "UseStochExit": [
+    0
+  ],
+  "StopATR": [
+    0.5,
+    1,
+    1.5
+  ],
+  "TakeProfitATR": [
+    0,
+    1,
+    1.5
+  ],
+  "HTFTrendEMA": [
+    0
+  ],
+  "RequireEntryAboveFVGLower": [
+    0,
+    1
+  ],
+  "_comment": "Single bounded repeat joint grid centered on the better year-qualified MaxWaitBars=45 sensitivity result; all rules and neighboring values follow stage-3 protocol."
+}

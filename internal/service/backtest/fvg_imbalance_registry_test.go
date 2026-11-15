@@ -6,11 +6,12 @@ import (
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/core"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/domrf"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/gazp"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/mgnt"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/nvtk"
 )
 
 func TestFVGImbalanceDefaultsAndOverrides(t *testing.T) {
-	for _, ticker := range []string{"GAZP", "DOMRF", "NVTK", "ZZZZ"} {
+	for _, ticker := range []string{"GAZP", "DOMRF", "MGNT", "NVTK", "RAGR", "ZZZZ"} {
 		b, err := FVGImbalanceLookupOrGeneric(ticker, enum.Minutes30)
 		if err != nil {
 			t.Fatal(err)
@@ -22,8 +23,24 @@ func TestFVGImbalanceDefaultsAndOverrides(t *testing.T) {
 		if ticker == "DOMRF" {
 			wantDefaults = domrf.Params()
 		}
+		if ticker == "MGNT" {
+			wantDefaults = mgnt.Params()
+		}
 		if ticker == "NVTK" {
 			wantDefaults = nvtk.Params()
+		}
+		if ticker == "RAGR" {
+			wantDefaults = core.Params{
+				ATRPeriod:                 14,
+				MinGapATR:                 0.3,
+				MaxWaitBars:               45,
+				StochPeriod:               14,
+				UseStochExit:              0,
+				StopATR:                   1,
+				TakeProfitATR:             1,
+				HTFTrendEMA:               0,
+				RequireEntryAboveFVGLower: 0,
+			}
 		}
 		if b.DefaultParams() != wantDefaults {
 			t.Fatalf("%s defaults: %+v, want %+v", ticker, b.DefaultParams(), wantDefaults)

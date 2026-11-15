@@ -26,7 +26,15 @@ type Entry struct {
 	// (strategy.Position.TakeProfit), а живой раннер обязан пережить её через перезапуск,
 	// иначе close-модель TP не с чем сравнивать high бара. reversion её не пишет —
 	// omitempty оставляет формат файла прежним.
-	TakeProfit float64 `json:"takeProfit,omitempty"`
+	TakeProfit         float64   `json:"takeProfit,omitempty"`
+	TakeProfitOrderID  string    `json:"takeProfitOrderId,omitempty"`
+	FVGExitOrderID     string    `json:"fvgExitOrderId,omitempty"`
+	FVGStopPendingAt   time.Time `json:"fvgStopPendingAt,omitzero"`
+	FVGTargetPendingAt time.Time `json:"fvgTargetPendingAt,omitzero"`
+	FVGStopPending     bool      `json:"fvgStopPending,omitempty"`
+	FVGTargetPending   bool      `json:"fvgTargetPending,omitempty"`
+	FVGRecovering      bool      `json:"fvgRecovering,omitempty"`
+	FVGExitStopID      string    `json:"fvgExitStopId,omitempty"`
 	// StopLoss — уровень стопа, замороженный на входе от цены сигнала (gap_fade меряет стоп от
 	// close сигнального бара, а не от цены исполнения, поэтому из EntryPrice его не вывести).
 	// Стратегии, считающие стоп от входа, его не читают — omitempty оставляет их записи прежними.

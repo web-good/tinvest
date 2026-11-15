@@ -48,12 +48,15 @@ func TestFVGFillBelowFloorKeepsPositionWithFillBasedProtection(t *testing.T) {
 	e.stops.EXPECT().PostStopOrder(mock.Anything, mock.MatchedBy(func(in *investapi.PostStopOrderRequest) bool {
 		return math.Abs(utils.CombinePrice(in.GetStopPrice().GetUnits(), in.GetStopPrice().GetNano())-84) < 0.001
 	})).Return(&investapi.PostStopOrderResponse{StopOrderId: "fvg-stop"}, nil).Once()
+	e.stops.EXPECT().PostStopOrder(mock.Anything, mock.MatchedBy(func(in *investapi.PostStopOrderRequest) bool {
+		return in.GetStopOrderType() == investapi.StopOrderType_STOP_ORDER_TYPE_TAKE_PROFIT && math.Abs(utils.CombinePrice(in.GetStopPrice().GetUnits(), in.GetStopPrice().GetNano())-109) < 0.001
+	})).Return(&investapi.PostStopOrderResponse{StopOrderId: "fvg-tp"}, nil).Once()
 	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
 	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
 		t.Fatal(err)
 	}
 	entry := e.state(t)["BSPB"]
-	if entry.Strategy != "fvg_imbalance" || entry.EntryPrice != 99 || entry.StopLoss != 84 || entry.TakeProfit != 109 || entry.StopOrderID != "fvg-stop" {
+	if entry.Strategy != "fvg_imbalance" || entry.EntryPrice != 99 || entry.StopLoss != 84 || entry.TakeProfit != 109 || entry.StopOrderID != "fvg-stop" || entry.TakeProfitOrderID != "fvg-tp" {
 		t.Fatalf("unexpected entry: %+v", entry)
 	}
 }

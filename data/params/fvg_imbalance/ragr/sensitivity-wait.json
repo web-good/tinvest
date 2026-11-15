@@ -1,0 +1,32 @@
+{
+  "ATRPeriod": [
+    14
+  ],
+  "MinGapATR": [
+    0.3
+  ],
+  "MaxWaitBars": [
+    15,
+    30,
+    45
+  ],
+  "StochPeriod": [
+    14
+  ],
+  "UseStochExit": [
+    0
+  ],
+  "StopATR": [
+    0.5
+  ],
+  "TakeProfitATR": [
+    1
+  ],
+  "HTFTrendEMA": [
+    0
+  ],
+  "RequireEntryAboveFVGLower": [
+    0
+  ],
+  "_comment": "RAGR stage 3 one-field sensitivity; baseline is full candidate."
+}

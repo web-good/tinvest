@@ -1,0 +1,38 @@
+{
+  "ATRPeriod": [
+    14
+  ],
+  "MaxWaitBars": [
+    30
+  ],
+  "UseStochExit": [
+    1
+  ],
+  "MinGapATR": [
+    0.25
+  ],
+  "StochPeriod": [
+    9
+  ],
+  "HTFTrendEMA": [
+    0
+  ],
+  "RequireEntryAboveFVGLower": [
+    1
+  ],
+  "StopATR": [
+    0.5,
+    1,
+    1.2,
+    1.5,
+    1.7,
+    2
+  ],
+  "TakeProfitATR": [
+    0,
+    1,
+    1.5,
+    2
+  ],
+  "_comment": "Stage 2 MGNT stage-1 rank 6; fixed fields inherited explicitly from candidate; stoch exit branch."
+}

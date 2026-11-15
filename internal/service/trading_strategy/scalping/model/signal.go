@@ -13,21 +13,22 @@ const (
 
 // Signal is a rendered trade alert for one instrument.
 type Signal struct {
-	Kind           SignalKind
-	InstrumentID   string
-	InstrumentName string
-	Ticker         string
-	Price          float64
-	StopDistance   float64 // optional fill-relative stop distance
-	TargetDistance float64 // optional fill-relative target distance
-	TakeProfit     float64
-	StopLoss       float64
-	RSI            float64
-	Level          float64 // entry support level (HVN); 0 when n/a
-	ATR            float64 // ATR at entry; 0 when n/a
-	Reason         string  // exit reason code, e.g. "TP", "SL", "TRAIL", "ATRSL", "OB", "RSI50"; drives backtest fill pricing (see IsStopReason); ignored for entries
-	EntryReason    string  // human-readable entry rationale (set on Buy); empty for sells
-	ExitReason     string  // human-readable exit rationale (set on Sell); empty for buys
+	Kind            SignalKind
+	InstrumentID    string
+	InstrumentName  string
+	Ticker          string
+	Price           float64
+	StopDistance    float64 // optional fill-relative stop distance
+	TargetDistance  float64 // optional fill-relative target distance
+	TakeProfit      float64
+	ExactTargetFill bool // backtest fills the target without gap improvement
+	StopLoss        float64
+	RSI             float64
+	Level           float64 // entry support level (HVN); 0 when n/a
+	ATR             float64 // ATR at entry; 0 when n/a
+	Reason          string  // exit reason code, e.g. "TP", "SL", "TRAIL", "ATRSL", "OB", "RSI50"; drives backtest fill pricing (see IsStopReason); ignored for entries
+	EntryReason     string  // human-readable entry rationale (set on Buy); empty for sells
+	ExitReason      string  // human-readable exit rationale (set on Sell); empty for buys
 	// FillBy is, for a Buy deferred by backtest Config.EntryAtNextOpen, the latest candle open
 	// time at which it may still fill; a pending Buy whose next candle opens later is dropped.
 	// Zero means no expiry.

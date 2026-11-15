@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -22,6 +23,7 @@ type Client interface {
 
 // ActiveStop describes one active SELL stop-order returned by List.
 type ActiveStop struct {
+	Type          investapi.StopOrderType
 	InstrumentUID string
 	StopOrderID   string
 	StopPrice     float64
@@ -85,6 +87,28 @@ func (e *Executor) Place(ctx context.Context, instrumentID string, lots int64, s
 	return Result{Placed: true, OrderID: resp.GetStopOrderId()}, nil
 }
 
+// PlaceTakeProfit posts a market sell triggered at the target, rounded up to a valid tick.
+func (e *Executor) PlaceTakeProfit(ctx context.Context, instrumentID string, lots int64, target, increment float64) (Result, error) {
+	if !e.tradeEnabled {
+		return Result{}, nil
+	}
+	if increment > 0 {
+		target = math.Ceil(target/increment-1e-9) * increment
+	}
+	units, nano := utils.SplitPrice(target)
+	resp, err := e.client.PostStopOrder(ctx, &investapi.PostStopOrderRequest{
+		InstrumentId: instrumentID, Quantity: lots, StopPrice: &investapi.Quotation{Units: units, Nano: nano},
+		Direction: investapi.StopOrderDirection_STOP_ORDER_DIRECTION_SELL, AccountId: e.accountID,
+		ExpirationType:    investapi.StopOrderExpirationType_STOP_ORDER_EXPIRATION_TYPE_GOOD_TILL_CANCEL,
+		StopOrderType:     investapi.StopOrderType_STOP_ORDER_TYPE_TAKE_PROFIT,
+		ExchangeOrderType: investapi.ExchangeOrderType_EXCHANGE_ORDER_TYPE_MARKET, OrderId: uuid.NewString(),
+	})
+	if err != nil {
+		return Result{}, fmt.Errorf("post take profit: %w", err)
+	}
+	return Result{Placed: true, OrderID: resp.GetStopOrderId()}, nil
+}
+
 // Cancel cancels a previously placed stop order, or no-ops when tradeEnabled is false.
 func (e *Executor) Cancel(ctx context.Context, stopOrderID string) error {
 	if !e.tradeEnabled {
@@ -103,22 +127,28 @@ func (e *Executor) Cancel(ctx context.Context, stopOrderID string) error {
 // the fired-check for a stop that vanished from the ACTIVE list (fired vs cancelled
 // externally). Dry-run always reports false.
 func (e *Executor) Executed(ctx context.Context, stopOrderID string) (bool, error) {
+	_, found, err := e.Triggered(ctx, stopOrderID)
+	return found, err
+}
+
+// Triggered returns the exchange order ID produced by a triggered stop. A found
+// stop with an empty exchange ID must be treated as unresolved, not as a fill.
+func (e *Executor) Triggered(ctx context.Context, stopOrderID string) (string, bool, error) {
 	if !e.tradeEnabled {
-		return false, nil
+		return "", false, nil
 	}
 	resp, err := e.client.GetStopOrders(ctx, &investapi.GetStopOrdersRequest{
-		AccountId: e.accountID,
-		Status:    investapi.StopOrderStatusOption_STOP_ORDER_STATUS_EXECUTED,
+		AccountId: e.accountID, Status: investapi.StopOrderStatusOption_STOP_ORDER_STATUS_EXECUTED,
 	})
 	if err != nil {
-		return false, fmt.Errorf("get executed stop orders: %w", err)
+		return "", false, fmt.Errorf("get executed stop orders: %w", err)
 	}
 	for _, so := range resp.GetStopOrders() {
 		if so.GetStopOrderId() == stopOrderID {
-			return true, nil
+			return so.GetExchangeOrderId(), true, nil
 		}
 	}
-	return false, nil
+	return "", false, nil
 }
 
 // List returns the account's active SELL stop-orders, or (nil, nil) when
@@ -141,10 +171,35 @@ func (e *Executor) List(ctx context.Context) ([]ActiveStop, error) {
 		}
 		out = append(out, ActiveStop{
 			InstrumentUID: so.GetInstrumentUid(),
+			Type:          so.GetOrderType(),
 			StopOrderID:   so.GetStopOrderId(),
 			StopPrice:     utils.CombinePrice(so.GetStopPrice().GetUnits(), so.GetStopPrice().GetNano()),
 			Lots:          so.GetLotsRequested(),
 		})
+	}
+	return out, nil
+}
+
+// TriggeredSince returns executed sell stops for an instrument since its entry.
+func (e *Executor) TriggeredSince(ctx context.Context, instrumentID string, since time.Time) ([]*investapi.StopOrder, error) {
+	if !e.tradeEnabled {
+		return nil, nil
+	}
+	resp, err := e.client.GetStopOrders(ctx, &investapi.GetStopOrdersRequest{AccountId: e.accountID, Status: investapi.StopOrderStatusOption_STOP_ORDER_STATUS_EXECUTED})
+	if err != nil {
+		return nil, fmt.Errorf("get executed stop orders: %w", err)
+	}
+	var out []*investapi.StopOrder
+	for _, order := range resp.GetStopOrders() {
+		if order.GetInstrumentUid() != instrumentID || order.GetDirection() != investapi.StopOrderDirection_STOP_ORDER_DIRECTION_SELL {
+			continue
+		}
+		if order.GetActivationDateTime() == nil {
+			return nil, fmt.Errorf("executed stop %s has no activation time", order.GetStopOrderId())
+		}
+		if !order.GetActivationDateTime().AsTime().Before(since) {
+			out = append(out, order)
+		}
 	}
 	return out, nil
 }

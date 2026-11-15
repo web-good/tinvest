@@ -88,6 +88,7 @@ func TestListReturnsOnlyActiveSellStops(t *testing.T) {
 		{StopOrderId: "so-1", InstrumentUid: "uid-1",
 			Direction:     investapi.StopOrderDirection_STOP_ORDER_DIRECTION_SELL,
 			StopPrice:     &investapi.MoneyValue{Units: 107},
+			OrderType:     investapi.StopOrderType_STOP_ORDER_TYPE_TAKE_PROFIT,
 			LotsRequested: 6},
 		{StopOrderId: "so-2", InstrumentUid: "uid-2",
 			Direction: investapi.StopOrderDirection_STOP_ORDER_DIRECTION_BUY,
@@ -96,7 +97,32 @@ func TestListReturnsOnlyActiveSellStops(t *testing.T) {
 
 	e := New(c, "acc", true)
 	list, err := e.List(context.Background())
-	if err != nil || len(list) != 1 || list[0].StopOrderID != "so-1" || list[0].StopPrice != 107 || list[0].Lots != 6 {
+	if err != nil || len(list) != 1 || list[0].StopOrderID != "so-1" || list[0].StopPrice != 107 || list[0].Lots != 6 || list[0].Type != investapi.StopOrderType_STOP_ORDER_TYPE_TAKE_PROFIT {
 		t.Fatalf("list=%v err=%v", list, err)
+	}
+}
+
+func TestPlaceTakeProfitUsesMarketSell(t *testing.T) {
+	c := mocks.NewMockClient(t)
+	var got *investapi.PostStopOrderRequest
+	c.EXPECT().PostStopOrder(mock.Anything, mock.Anything).Run(func(_ context.Context, in *investapi.PostStopOrderRequest, _ ...grpc.CallOption) { got = in }).Return(&investapi.PostStopOrderResponse{StopOrderId: "tp"}, nil)
+	result, err := New(c, "acc", true).PlaceTakeProfit(context.Background(), "uid", 2, 110.02, 0.05)
+	if err != nil || result.OrderID != "tp" {
+		t.Fatalf("result=%+v err=%v", result, err)
+	}
+	if got.GetStopOrderType() != investapi.StopOrderType_STOP_ORDER_TYPE_TAKE_PROFIT || got.GetDirection() != investapi.StopOrderDirection_STOP_ORDER_DIRECTION_SELL || got.GetExchangeOrderType() != investapi.ExchangeOrderType_EXCHANGE_ORDER_TYPE_MARKET || got.GetStopPrice().GetUnits() != 110 || got.GetStopPrice().GetNano() != 50000000 {
+		t.Fatalf("request: %+v", got)
+	}
+}
+
+func TestTriggeredReturnsExchangeOrderID(t *testing.T) {
+	c := mocks.NewMockClient(t)
+	exchangeID := "exchange-1"
+	c.EXPECT().GetStopOrders(mock.Anything, mock.MatchedBy(func(in *investapi.GetStopOrdersRequest) bool {
+		return in.GetAccountId() == "acc" && in.GetStatus() == investapi.StopOrderStatusOption_STOP_ORDER_STATUS_EXECUTED
+	})).Return(&investapi.GetStopOrdersResponse{StopOrders: []*investapi.StopOrder{{StopOrderId: "tp-1", ExchangeOrderId: &exchangeID}}}, nil)
+	id, found, err := New(c, "acc", true).Triggered(context.Background(), "tp-1")
+	if err != nil || !found || id != exchangeID {
+		t.Fatalf("id=%q found=%v err=%v", id, found, err)
 	}
 }

@@ -1,0 +1,32 @@
+{
+  "ATRPeriod": [
+    14
+  ],
+  "MinGapATR": [
+    0.25
+  ],
+  "MaxWaitBars": [
+    15,
+    30,
+    45
+  ],
+  "StochPeriod": [
+    9
+  ],
+  "UseStochExit": [
+    0
+  ],
+  "StopATR": [
+    0.5
+  ],
+  "TakeProfitATR": [
+    1
+  ],
+  "HTFTrendEMA": [
+    0
+  ],
+  "RequireEntryAboveFVGLower": [
+    1
+  ],
+  "_comment": "One-field sensitivity around stage-3 best year-qualified candidate. Other fields fixed."
+}

@@ -9,6 +9,7 @@ import (
 )
 
 type OrdersServiceClient interface {
+	GetOrderState(ctx context.Context, in *investapi.GetOrderStateRequest, opts ...grpc.CallOption) (*investapi.OrderState, error)
 	PostOrder(ctx context.Context, in *investapi.PostOrderRequest, opts ...grpc.CallOption) (*investapi.PostOrderResponse, error)
 }
 
@@ -30,4 +31,11 @@ func (c *ordersServiceClient) PostOrder(ctx context.Context, in *investapi.PostO
 
 	opts = append(opts, NewRPCCredential(c.auth))
 	return c.orderAPI.PostOrder(ctx, in, opts...)
+}
+
+func (c *ordersServiceClient) GetOrderState(ctx context.Context, in *investapi.GetOrderStateRequest, opts ...grpc.CallOption) (*investapi.OrderState, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	opts = append(opts, NewRPCCredential(c.auth))
+	return c.orderAPI.GetOrderState(ctx, in, opts...)
 }

@@ -16,16 +16,21 @@ import (
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/gazp"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/gmkn"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/irao"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/ivat"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/lsrg"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/magn"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/mgnt"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/moex"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/mtlr"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/phor"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/posi"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/reni"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/rosn"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/sber"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/sberp"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/sngs"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/spbe"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/vkco"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/vtbr"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/x5"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/ydex"
@@ -67,8 +72,14 @@ func params(ticker string) (core.Params, bool) {
 		return gmkn.Params(), true
 	case "IRAO":
 		return irao.Params(), true
+	case "IVAT":
+		return ivat.Params(), true
+	case "LSRG":
+		return lsrg.Params(), true
 	case "MAGN":
 		return magn.Params(), true
+	case "MGNT":
+		return mgnt.Params(), true
 	case "MTLR":
 		return mtlr.Params(), true
 	case "MOEX":
@@ -77,6 +88,8 @@ func params(ticker string) (core.Params, bool) {
 		return phor.Params(), true
 	case "POSI":
 		return posi.Params(), true
+	case "RENI":
+		return reni.Params(), true
 	case "ROSN":
 		return rosn.Params(), true
 	case "SBER":
@@ -91,6 +104,8 @@ func params(ticker string) (core.Params, bool) {
 		return ydex.Params(), true
 	case "VTBR":
 		return vtbr.Params(), true
+	case "VKCO":
+		return vkco.Params(), true
 	case "X5":
 		return x5.Params(), true
 	}

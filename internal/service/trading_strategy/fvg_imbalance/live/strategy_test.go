@@ -7,11 +7,15 @@ import (
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/fixr"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/gmkn"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/irao"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/lsrg"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/magn"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/mgnt"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/mtlr"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/phor"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/posi"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/reni"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/sberp"
+	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/vkco"
 	"tinvest/internal/service/trading_strategy/fvg_imbalance/strategy/x5"
 	"tinvest/internal/service/trading_strategy/livecore/statestore"
 )
@@ -21,7 +25,7 @@ func TestStrategyRegistryAndProtection(t *testing.T) {
 	if s.BarInterval() != enum.Minutes30 {
 		t.Fatal("wrong interval")
 	}
-	for _, ticker := range []string{"AFKS", "ALRS", "BSPB", "FIXR", "GAZP", "GMKN", "IRAO", "MAGN", "MTLR", "PHOR", "POSI", "ROSN", "SBER", "SBERP", "SNGS", "VTBR", "YDEX"} {
+	for _, ticker := range []string{"AFKS", "ALRS", "BSPB", "FIXR", "GAZP", "GMKN", "IRAO", "LSRG", "MAGN", "MGNT", "MTLR", "PHOR", "POSI", "RENI", "ROSN", "SBER", "SBERP", "SNGS", "VTBR", "VKCO", "YDEX"} {
 		if _, ok := s.Decider(ticker); !ok {
 			t.Errorf("missing %s", ticker)
 		}
@@ -38,6 +42,12 @@ func TestStrategyRegistryAndProtection(t *testing.T) {
 	if p, ok := params("FIXR"); !ok || p != fixr.Params() {
 		t.Errorf("FIXR params=%+v, registered=%v", p, ok)
 	}
+	if p, ok := params("LSRG"); !ok || p != lsrg.Params() {
+		t.Errorf("LSRG params=%+v, registered=%v", p, ok)
+	}
+	if p, ok := params("VKCO"); !ok || p != vkco.Params() {
+		t.Errorf("VKCO params=%+v, registered=%v", p, ok)
+	}
 	if stop, reason := s.DesiredStop("FIXR", statestore.Entry{EntryPrice: 100, EntryATR: 10}); stop != 83 || reason != "SL" {
 		t.Errorf("FIXR stop=%v reason=%q, want 83/SL", stop, reason)
 	}
@@ -53,6 +63,12 @@ func TestStrategyRegistryAndProtection(t *testing.T) {
 	if p, ok := params("MAGN"); !ok || p != magn.Params() {
 		t.Errorf("MAGN params=%+v, registered=%v", p, ok)
 	}
+	if p, ok := params("MGNT"); !ok || p != mgnt.Params() {
+		t.Errorf("MGNT params=%+v, registered=%v", p, ok)
+	}
+	if stop, reason := s.DesiredStop("MGNT", statestore.Entry{EntryPrice: 100, EntryATR: 10}); stop != 95 || reason != "SL" {
+		t.Errorf("MGNT stop=%v reason=%q, want 95/SL", stop, reason)
+	}
 	if stop, reason := s.DesiredStop("MAGN", statestore.Entry{EntryPrice: 100, EntryATR: 10}); stop != 95 || reason != "SL" {
 		t.Errorf("MAGN stop=%v reason=%q, want 95/SL", stop, reason)
 	}
@@ -64,6 +80,9 @@ func TestStrategyRegistryAndProtection(t *testing.T) {
 	}
 	if p, ok := params("POSI"); !ok || p != posi.Params() {
 		t.Errorf("POSI params=%+v, registered=%v", p, ok)
+	}
+	if p, ok := params("RENI"); !ok || p != reni.Params() {
+		t.Errorf("RENI params=%+v, registered=%v", p, ok)
 	}
 	if p, ok := params("SBERP"); !ok || p != sberp.Params() {
 		t.Errorf("SBERP params=%+v, registered=%v", p, ok)

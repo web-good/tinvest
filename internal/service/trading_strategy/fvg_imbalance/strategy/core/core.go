@@ -190,6 +190,7 @@ func (s *Strategy) Decide(md strategy.MarketData) model.Signal {
 			sig.Kind = model.SignalSell
 			sig.Reason = "TP"
 			sig.TakeProfit = pos.TakeProfit
+			sig.ExactTargetFill = true
 			sig.ExitReason = fmt.Sprintf("FVG target %.4f", pos.TakeProfit)
 			return sig
 		}

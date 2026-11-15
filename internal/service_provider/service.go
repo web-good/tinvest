@@ -220,7 +220,7 @@ func (*ServiceProvider) GetRSIPullbackLiveService() rsipullbacklive.Service {
 		}
 		// pdl_rsi — четвёртый гость, часовой (docs/pdl_rsi/live.md): тот же счёт и файл
 		// стейта, своя тема Telegram; раннер собирает ему Hour1-бары. Слот последний по
-		// приоритету: тикер, занятый другой стратегией, он не берёт.
+		// приоритету после FVG и остальных стратегий: занятый тикер он не берёт.
 		if pdl := serviceProvider.appConfig.PDLRSI; pdl.Enabled() {
 			pdlTG, _ := serviceProvider.GetPDLRSISender()
 			guests = append(guests, pdlrsilive.New(pdl, pdlTG))
