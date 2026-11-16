@@ -61,7 +61,7 @@ func (s *Strategy) DesiredStop(ticker string, e statestore.Entry) (float64, stri
 }
 
 // Reconstruct поднимает вход по API: средняя цена брокера, последняя BUY-сделка, дневной
-// ATR по будним дневкам до дня входа. Цели и трейла у стратегии нет — TakeProfit 0,
+// ATR по будним дневкам до дня входа. Цель восстанавливается от входа и этого ATR,
 // MaxFav равен цене входа и ядром не читается.
 func (s *Strategy) Reconstruct(ctx context.Context, in adapter.ReconstructInput) (statestore.Entry, error) {
 	p, ok := ParamsFor(in.Ticker)
@@ -88,6 +88,7 @@ func (s *Strategy) Reconstruct(ctx context.Context, in adapter.ReconstructInput)
 		EntryTime:  entryTime,
 		EntryPrice: in.PurchasePrice,
 		EntryATR:   atr,
+		TakeProfit: core.TargetLevel(p, in.PurchasePrice, atr),
 		MaxFav:     in.PurchasePrice,
 	}, nil
 }

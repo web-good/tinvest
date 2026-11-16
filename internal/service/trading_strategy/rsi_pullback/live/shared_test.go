@@ -591,6 +591,8 @@ func TestHeldSharedTickerMixedModeIsReconstructedByLivePullback(t *testing.T) {
 	})).Return(&investapi.PostStopOrderResponse{StopOrderId: "so-rec"}, nil).Once()
 	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
 
+	expectTakeProfit(t, e, 50, 0)
+
 	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}

@@ -20,13 +20,16 @@ func TestParamsAreTheCoreBaselineByDesign(t *testing.T) {
 		EMAPeriod:      200,
 		DailyATRPeriod: 14,
 		StopDailyATR:   1.0,
+		TPDailyATR:     1.5,
 		ProfitExitBars: 0,
 		ProfitExitPct:  0,
 	}
 	if got := DefaultParams(); got != want {
 		t.Fatalf("литерал VSMO изменился без калибровки:\n got: %+v\nwant: %+v", got, want)
 	}
-	if got := core.DefaultParams(); got != want {
+	baseline := core.DefaultParams()
+	baseline.TPDailyATR = 1.5 // отдельное решение о TP от 2026-11-16
+	if got := baseline; got != want {
 		t.Fatalf("дефолты ядра изменились — VSMO заведён на дефолтах 2026-10-05, перекалибруй:\n got: %+v\nwant: %+v", got, want)
 	}
 }

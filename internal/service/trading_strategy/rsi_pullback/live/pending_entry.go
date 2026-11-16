@@ -6,7 +6,9 @@ import (
 	"fmt"
 	imodel "tinvest/internal/model"
 	pb "tinvest/internal/pb/v1"
+	"tinvest/internal/service/trading_strategy/livecore/adapter"
 	"tinvest/internal/service/trading_strategy/livecore/stoporders"
+	"tinvest/internal/utils"
 )
 
 func validateOwnedOrder(o *pb.OrderState, uid string, direction pb.OrderDirection, maxLots int64) error {
@@ -52,6 +54,22 @@ func (s *service) pendingEntryAttempt(ctx context.Context, pc *passCtx, sl *slot
 	filled := buy.GetLotsExecuted() * int64(sh.Lot)
 	if filled < e.EntryFilledQuantity {
 		return false, fmt.Errorf("entry cumulative executions decreased")
+	}
+	if owner, ok := sl.strat.(adapter.BrokerTakeProfit); ok && filled > 0 {
+		if average := buy.GetAveragePositionPrice(); average != nil {
+			if price := utils.CombinePrice(average.GetUnits(), average.GetNano()); price > 0 {
+				// A pending BUY's average can change as more lots fill. No TP is
+				// submitted until that BUY is terminal; freeze from its confirmed average.
+				e.EntryPrice = price
+				if e.EntryFilledQuantity == 0 {
+					e.MaxFav = price
+				} else {
+					e.MaxFav = max(e.MaxFav, price)
+				}
+				e.TakeProfit = 0
+				e.TakeProfit = owner.TakeProfit(ticker, e)
+			}
+		}
 	}
 	e.EntryOrderID = buy.GetOrderId()
 	e.EntryFilledQuantity = filled

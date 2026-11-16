@@ -78,6 +78,7 @@ func DefaultParams() core.Params {
 		EMAPeriod:      30,
 		DailyATRPeriod: 14,
 		StopDailyATR:   1.0,
+		TPDailyATR:     1.5,
 		ProfitExitBars: 0,
 		ProfitExitPct:  0,
 		// Окно запрета входа Пн–Чт 10:00–14:00 MSK (2026-10-06): общее решение по вселенной

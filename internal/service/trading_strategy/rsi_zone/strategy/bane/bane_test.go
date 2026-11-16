@@ -16,6 +16,7 @@ func TestCalibratedLiteralIsPinned(t *testing.T) {
 		EMAPeriod:        75,
 		DailyATRPeriod:   14,
 		StopDailyATR:     1.0,
+		TPDailyATR:       1.5,
 		ProfitExitBars:   0,
 		ProfitExitPct:    0,
 		EntryBlockFrom:   1000,

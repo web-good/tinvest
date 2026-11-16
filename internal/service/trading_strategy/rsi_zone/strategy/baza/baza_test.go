@@ -16,6 +16,7 @@ func TestCalibratedLiteralIsPinned(t *testing.T) {
 		EMAPeriod:        200,
 		DailyATRPeriod:   14,
 		StopDailyATR:     1.0,
+		TPDailyATR:       1.5,
 		ProfitExitBars:   3,
 		ProfitExitPct:    0.5,
 		EntryBlockFrom:   1000,
@@ -34,6 +35,7 @@ func TestCalibratedLiteralIsPinned(t *testing.T) {
 // дефолты.
 func TestParamsAreTheCoreBaselineByDesign(t *testing.T) {
 	want := core.DefaultParams()
+	want.TPDailyATR = 1.5
 	want.ProfitExitBars, want.ProfitExitPct = 3, 0.5
 	want.EntryBlockFrom, want.EntryBlockTo, want.EntryBlockMonThu = 1000, 1400, 1
 	if got := DefaultParams(); got != want {

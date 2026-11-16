@@ -5,7 +5,8 @@
 // touched. Optionally (StuckExitBars > 0) it also sells when RSI has sat below the lower band on
 // every one of the first StuckExitBars bars after the entry: the bounce never started. Optionally
 // (ProfitExitPct > 0) it locks a profit: past ProfitExitBars bars after the entry, the first close
-// at least ProfitExitPct percent above the entry sells. There is no fixed target, no trail and no
+// at least ProfitExitPct percent above the entry sells. TPDailyATR optionally adds a fixed
+// intrabar target. There is no trail and no
 // end-of-day close: the position is held across nights and weekends
 // until an exit fires. The decision logic is pure, stateless between bars and ticker-agnostic. The reference timeframe is 30 minutes. Run with
 // `-strategy rsi_zone -interval Minutes30`.
@@ -34,6 +35,7 @@ type Params struct {
 	EMAPeriod      int     // trend EMA period; the entry needs close > EMA (grid; default 200)
 	DailyATRPeriod int     // daily ATR length, over WEEKDAY completed dailies (fixed; default 14)
 	StopDailyATR   float64 // stop = entry - StopDailyATR*dailyATR; 0 disables it (grid; never 0 in the grid)
+	TPDailyATR     float64 // target = entry + TPDailyATR*dailyATR; 0 disables it; live literals use 1.5
 	StuckExitBars  int     // exit when RSI stayed below RSILower on this many bars after the entry bar without ever leaving the zone; 0 disables it (grid: stuck)
 
 	// Profit lock (theme profit). Once more than ProfitExitBars bars have closed after the entry
@@ -328,6 +330,14 @@ func StopLevel(p Params, entry, entryATR float64) float64 {
 	return level
 }
 
+// TargetLevel freezes the optional profit target from the entry and its daily ATR.
+func TargetLevel(p Params, entry, entryATR float64) float64 {
+	if p.TPDailyATR <= 0 || entry <= 0 || entryATR <= 0 {
+		return 0
+	}
+	return entry + p.TPDailyATR*entryATR
+}
+
 // CatastropheStop returns the intrabar safety-net level armed under StopOnClose=1:
 // entry - CatStopMult*StopDailyATR*entryATR. It is 0 (no stop) in the intrabar stop mode, when
 // either multiplier is non-positive, without the ATR, or when the level lands at or below zero.
@@ -415,6 +425,10 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	}
 	sig.Kind = model.SignalBuy
 	sig.StopLoss = stop
+	sig.TakeProfit = TargetLevel(s.p, entry, atr)
+	if sig.TakeProfit > 0 {
+		sig.TargetDistance = s.p.TPDailyATR * atr
+	}
 	sig.ATR = atr
 	sig.RSI = rsi[i]
 	sig.EntryReason = s.entryReason(rsi[i], trend[i], entry, stop, atr)
@@ -448,8 +462,8 @@ func (s *Strategy) entryReason(rsiNow, emaNow, entry, stop, atr float64) string 
 	)
 }
 
-// manage handles an open long. It exits on one of up to four signals, evaluated in precedence
-// order SL → RSI → STUCK → PROFIT (the last two only when switched on). The stop triggers INTRABAR (the bar's low touching the level), because a real stop
+// manage handles an open long. Exit precedence is SL → TP → RSI → STUCK → PROFIT
+// (the last two only when switched on). The stop triggers INTRABAR (the bar's low touching the level), because a real stop
 // order fills as soon as price trades through it; the engine prices that fill via
 // model.IsStopReason. It wins a same-bar tie with the RSI exit: the intrabar order is unknowable
 // from OHLC, and assuming the worse outcome is the honest choice. The stop level is rebuilt from
@@ -474,16 +488,22 @@ func (s *Strategy) manage(md strategy.MarketData, sig model.Signal) model.Signal
 			sig.ExitReason = fmt.Sprintf("CATSL: low %.4f ≤ аварийный стоп %.4f (вход %.4f)", low, cat, pos.PurchasePrice)
 			return sig
 		}
-		if level > 0 && closeP <= level {
-			sig.Kind, sig.Reason = model.SignalSell, "SLC"
-			sig.StopLoss = level
-			sig.ExitReason = fmt.Sprintf("SLC: close %.4f ≤ стоп %.4f (вход %.4f)", closeP, level, pos.PurchasePrice)
-			return sig
-		}
 	} else if level > 0 && low <= level {
 		sig.Kind, sig.Reason = model.SignalSell, "SL"
 		sig.StopLoss = level
 		sig.ExitReason = fmt.Sprintf("SL: low %.4f ≤ стоп %.4f (вход %.4f)", low, level, pos.PurchasePrice)
+		return sig
+	}
+	// Intrabar TP precedes close-based exits. With no frozen target it is disabled.
+	if target := pos.TakeProfit; target > 0 && len(md.Highs) == n && md.Highs[i] >= target {
+		sig.Kind, sig.Reason, sig.TakeProfit = model.SignalSell, "TP", target
+		sig.ExitReason = fmt.Sprintf("TP: high %.4f ≥ цель %.4f (вход %.4f)", md.Highs[i], target, pos.PurchasePrice)
+		return sig
+	}
+	if s.p.StopOnClose == 1 && level > 0 && closeP <= level {
+		sig.Kind, sig.Reason = model.SignalSell, "SLC"
+		sig.StopLoss = level
+		sig.ExitReason = fmt.Sprintf("SLC: close %.4f ≤ стоп %.4f (вход %.4f)", closeP, level, pos.PurchasePrice)
 		return sig
 	}
 	// 2. RSI crosses UP through the upper band — the bounce reached the upper critical zone.

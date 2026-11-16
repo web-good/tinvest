@@ -14,6 +14,8 @@ import (
 
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"tinvest/internal/config"
 	"tinvest/internal/enum"
@@ -108,6 +110,7 @@ func emptyStopList() *investapi.GetStopOrdersResponse { return &investapi.GetSto
 func activeList(instrumentUID, id string, price float64, lots int64) *investapi.GetStopOrdersResponse {
 	return &investapi.GetStopOrdersResponse{StopOrders: []*investapi.StopOrder{{
 		StopOrderId: id, InstrumentUid: instrumentUID,
+		OrderType:     investapi.StopOrderType_STOP_ORDER_TYPE_STOP_LOSS,
 		Direction:     investapi.StopOrderDirection_STOP_ORDER_DIRECTION_SELL,
 		StopPrice:     &investapi.MoneyValue{Units: int64(price)},
 		LotsRequested: lots,
@@ -131,8 +134,10 @@ func statusIs(st investapi.StopOrderStatusOption) func(*investapi.GetStopOrdersR
 // filledOrder — ответ на рыночный ордер: биржа отчиталась об исполнении lots лотов по price.
 func filledOrder(lots int64, price int64) *investapi.PostOrderResponse {
 	return &investapi.PostOrderResponse{
-		LotsExecuted:       lots,
-		ExecutedOrderPrice: &investapi.MoneyValue{Units: price},
+		OrderId:               "filled-order",
+		ExecutionReportStatus: investapi.OrderExecutionReportStatus_EXECUTION_REPORT_STATUS_FILL,
+		LotsExecuted:          lots,
+		ExecutedOrderPrice:    &investapi.MoneyValue{Units: price},
 	}
 }
 
@@ -352,6 +357,8 @@ func TestLiveBuyPlacesRealOrderAndStopFromTheFill(t *testing.T) {
 	})).Return(&investapi.PostStopOrderResponse{StopOrderId: "so-1"}, nil).Once()
 	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
 
+	expectTakeProfit(t, e, 40, 108)
+
 	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -431,6 +438,8 @@ func TestNoSecondEntryWhenBrokerAlreadyHolds(t *testing.T) {
 		Return(activeList("uid-GAZP", "so-1", gazpStopFromSignal, 10), nil)
 	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
 
+	expectTakeProfit(t, e, 10, 200)
+
 	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -463,6 +472,8 @@ func TestHeldPositionWithoutStateIsReconstructed(t *testing.T) {
 			utils.CombinePrice(in.GetStopPrice().GetUnits(), in.GetStopPrice().GetNano()) == gazpStopFromSignal
 	})).Return(&investapi.PostStopOrderResponse{StopOrderId: "so-rec"}, nil).Once()
 	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
+
+	expectTakeProfit(t, e, 50, 0)
 
 	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -570,7 +581,7 @@ func TestRejectedBuyLeavesStateUntouched(t *testing.T) {
 	e.ops.EXPECT().GetPortfolioTotal(mock.Anything, mock.Anything).Return(1_000_000.0, nil)
 	e.ops.EXPECT().GetAvailableCash(mock.Anything, mock.Anything).Return(1_000_000.0, nil)
 	e.stops.EXPECT().GetStopOrders(mock.Anything, mock.Anything).Return(emptyStopList(), nil)
-	e.orders.EXPECT().PostOrder(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil, fmt.Errorf("rejected")).Once()
+	e.orders.EXPECT().PostOrder(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil, status.Error(codes.PermissionDenied, "rejected")).Once()
 	// Строгое (не Maybe()) ожидание: тест не должен проходить вакуумно, если сигнала не было.
 	e.tg.EXPECT().SendMessage(mock.MatchedBy(func(s string) bool {
 		return strings.Contains(s, "ордер на покупку отклонён")
@@ -872,6 +883,8 @@ func TestTrailDecisionUsesPrevMaxFavorable(t *testing.T) {
 	})).Return(&investapi.PostStopOrderResponse{StopOrderId: "so-new"}, nil).Once()
 	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
 
+	expectTakeProfit(t, e, 10, 200)
+
 	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -925,6 +938,8 @@ func TestTrailRepostCancelsBeforePlacing(t *testing.T) {
 	}).Return(&investapi.PostStopOrderResponse{StopOrderId: "so-2"}, nil).Once()
 	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
 
+	expectTakeProfit(t, e, 10, 200)
+
 	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -959,6 +974,8 @@ func TestOversizedStopIsRepostedAtTheSameLevel(t *testing.T) {
 			utils.CombinePrice(in.GetStopPrice().GetUnits(), in.GetStopPrice().GetNano()) == gazpStopFromSignal
 	})).Return(&investapi.PostStopOrderResponse{StopOrderId: "so-new"}, nil).Once()
 	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
+
+	expectTakeProfit(t, e, 6, 107)
 
 	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -1102,6 +1119,8 @@ func TestShrunkPositionReconcilesQuantity(t *testing.T) {
 	e.tg.EXPECT().SendMessage(mock.MatchedBy(func(s string) bool {
 		return strings.Contains(s, "стоп-заявка SL")
 	})).Return(nil).Once()
+
+	expectTakeProfit(t, e, 6, 107)
 
 	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -1253,11 +1272,13 @@ func TestStopIsNeverMovedDown(t *testing.T) {
 		Return(activeList("uid-GAZP", "so-1", 98, 10), nil) // на бирже ВЫШЕ желаемого
 	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
 
+	expectTakeProfit(t, e, 10, 107)
+
 	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	e.stops.AssertNotCalled(t, "CancelStopOrder", mock.Anything, mock.Anything)
-	e.stops.AssertNotCalled(t, "PostStopOrder", mock.Anything, mock.Anything)
+	// Only the newly introduced TP was posted; the higher stop stayed in place.
 }
 
 // MaxFav монотонен: он держит максимум закрытий за всю жизнь позиции, и падение цены его
@@ -1282,6 +1303,8 @@ func TestMaxFavNeverDropsOnALowerClose(t *testing.T) {
 	e.stops.EXPECT().GetStopOrders(mock.Anything, mock.MatchedBy(statusIs(investapi.StopOrderStatusOption_STOP_ORDER_STATUS_ACTIVE))).
 		Return(activeList("uid-UGLD", "so-1", 107, 10), nil)
 	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
+
+	expectTakeProfit(t, e, 10, 200)
 
 	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
 		t.Fatalf("Run: %v", err)

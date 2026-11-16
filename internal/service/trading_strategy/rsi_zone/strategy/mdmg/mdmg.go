@@ -78,6 +78,7 @@ func DefaultParams() core.Params {
 		EMAPeriod:      100,
 		DailyATRPeriod: 5,
 		StopDailyATR:   1.0,
+		TPDailyATR:     1.5,
 		ProfitExitBars: 0,
 		ProfitExitPct:  0,
 	}

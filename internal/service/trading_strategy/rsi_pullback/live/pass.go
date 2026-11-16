@@ -224,7 +224,7 @@ func (s *service) pass(ctx context.Context) error {
 			}
 		}
 		entry, hasState := state[ticker]
-		if shared && hasState && entry.EntryRequestID != "" {
+		if hasState && entry.EntryRequestID != "" {
 			sh := shares[ticker]
 			owner := s.slotByName(adapter.Owner(entry))
 			if sh == nil || owner == nil {
@@ -377,14 +377,14 @@ func (s *service) pass(ctx context.Context) error {
 
 		// A lost state and stale/flat portfolio can hide an exit in flight. An
 		// orphaned sell stop must block every strategy on this shared ticker.
-		fvgTicker := false
+		pairedTicker := false
 		for _, c := range ready {
-			if c.sl.strat.Name() == "fvg_imbalance" && c.sl.strat.TradeEnabled() {
-				fvgTicker = true
+			if pairedOrders(c.sl) && c.sl.strat.TradeEnabled() {
+				pairedTicker = true
 				break
 			}
 		}
-		if fvgTicker || pc.shared {
+		if pairedTicker || pc.shared {
 			blocked := pc.listErr != nil
 			for _, order := range pc.stopByID {
 				if order.InstrumentUID == sh.ID {
@@ -675,6 +675,9 @@ func (s *service) buy(ctx context.Context, pc *passCtx, sl *slot, ticker string,
 		}
 	}
 
+	_, rsiTarget := sl.strat.(adapter.BrokerTakeProfit)
+	trackEntry := sl.strat.TradeEnabled() && (pc.shared || rsiTarget)
+
 	total, err := s.ops.GetPortfolioTotal(ctx, s.cfg.AccountID)
 	if err != nil {
 		return true, fmt.Errorf("%s: portfolio total: %w", sl.strat.Name(), err)
@@ -718,8 +721,11 @@ func (s *service) buy(ctx context.Context, pc *passCtx, sl *slot, ticker string,
 	}
 	var res executor.Result
 	entryRequestID := ""
-	if pc.shared && sl.strat.TradeEnabled() {
-		entryRequestID = pc.claims[ticker].Key
+	if trackEntry {
+		entryRequestID = uuid.NewString()
+		if claim, ok := pc.claims[ticker]; ok {
+			entryRequestID = claim.Key
+		}
 		stopLoss, takeProfit := fillLevels(sig, sig.Price)
 		pc.state[ticker] = statestore.Entry{Ticker: ticker, EntryRequestID: entryRequestID, EntryRequestedLots: lots, Strategy: sl.strat.Name(), EntryTime: pc.now, EntryPrice: sig.Price, EntryATR: sig.ATR, MaxFav: sig.Price, StopLoss: stopLoss, TakeProfit: takeProfit}
 		if err := pc.store.Save(pc.state); err != nil {
@@ -730,14 +736,14 @@ func (s *service) buy(ctx context.Context, pc *passCtx, sl *slot, ticker string,
 		res, err = sl.exec.Buy(ctx, sh.ID, lots)
 	}
 	if err != nil {
-		if s.coordinator != nil && definitelyRejectedOrder(err) {
-			if pc.shared {
+		if definitelyRejectedOrder(err) {
+			if trackEntry {
 				delete(pc.state, ticker)
 				if saveErr := pc.store.Save(pc.state); saveErr != nil {
 					return true, saveErr
 				}
 			}
-			if claim, ok := pc.claims[ticker]; ok {
+			if claim, ok := pc.claims[ticker]; ok && s.coordinator != nil {
 				if releaseErr := s.coordinator.Remove(pc.lease, claim); releaseErr != nil {
 					return true, releaseErr
 				}
@@ -749,7 +755,7 @@ func (s *service) buy(ctx context.Context, pc *passCtx, sl *slot, ticker string,
 		return true, nil // state unchanged; retried next tick
 	}
 
-	if pc.shared && res.Placed {
+	if trackEntry && res.Placed {
 		if res.FilledLots < 0 || res.FilledLots > lots || res.OrderID == "" {
 			return true, fmt.Errorf("BUY response identity or quantity mismatch")
 		}
@@ -773,7 +779,21 @@ func (s *service) buy(ctx context.Context, pc *passCtx, sl *slot, ticker string,
 		// входит только боевая или единственная бумажная, так что это она). На тикере двух
 		// боевых стратегий — алерт «владелец неизвестен» и ручная разметка стейта.
 		if res.FilledLots == 0 {
-			if pc.shared {
+			if trackEntry && res.Terminal {
+				delete(pc.state, ticker)
+				if err := pc.store.Save(pc.state); err != nil {
+					return true, err
+				}
+				if claim, ok := pc.claims[ticker]; ok && s.coordinator != nil {
+					if err := s.coordinator.Remove(pc.lease, claim); err != nil {
+						return true, err
+					}
+					delete(pc.claims, ticker)
+				}
+				sl.alert(ticker, "ордер принят, но не исполнен (0 лотов) — стейт не создан")
+				return true, nil
+			}
+			if trackEntry {
 				done, err := s.reconcilePendingEntry(ctx, pc, sl, ticker, sh)
 				if err != nil {
 					return true, err
@@ -789,6 +809,9 @@ func (s *service) buy(ctx context.Context, pc *passCtx, sl *slot, ticker string,
 						}
 						delete(pc.claims, ticker)
 					}
+				}
+				if done && pc.state[ticker].Quantity > 0 {
+					return true, s.placeTarget(ctx, pc, sl, ticker, sh)
 				}
 				return true, nil
 			}
@@ -823,7 +846,10 @@ func (s *service) buy(ctx context.Context, pc *passCtx, sl *slot, ticker string,
 		if err := pc.store.Save(pc.state); err != nil {
 			return true, err
 		}
-		_, err := s.reconcilePendingEntry(ctx, pc, sl, ticker, sh)
+		done, err := s.reconcilePendingEntry(ctx, pc, sl, ticker, sh)
+		if err == nil && done && pc.state[ticker].Quantity > 0 {
+			err = s.placeTarget(ctx, pc, sl, ticker, sh)
+		}
 		return true, err
 	}
 	if hasBarInterval(sl) {
@@ -838,10 +864,8 @@ func (s *service) buy(ctx context.Context, pc *passCtx, sl *slot, ticker string,
 	sl.strat.Notify(withNote(notifier.Entry(sl.strat.Label(), ticker, fillPrice, filledLots, qty, !res.Placed), note))
 
 	pc.state[ticker] = s.placeInitialStop(ctx, pc, sl, ticker, sh, pc.state[ticker])
-	if sl.strat.Name() == "fvg_imbalance" {
-		if err := s.placeFVGTarget(ctx, pc, sl, ticker, sh); err != nil {
-			return true, err
-		}
+	if err := s.placeTarget(ctx, pc, sl, ticker, sh); err != nil {
+		return true, err
 	}
 	if sig.MinEntryPrice > 0 && fillPrice < sig.MinEntryPrice {
 		sl.alert(ticker, fmt.Sprintf("цена исполнения %.4f ниже границы FVG %.4f; позиция сопровождается", fillPrice, sig.MinEntryPrice))
@@ -884,9 +908,9 @@ func (s *service) placeInitialStop(ctx context.Context, pc *passCtx, sl *slot, t
 	return entry
 }
 
-// replaceStopSafely records an FVG submission before the broker can accept it.
+// replaceStopSafely records paired-order submissions before the broker can accept them.
 func (s *service) replaceStopSafely(ctx context.Context, pc *passCtx, sl *slot, ticker string, sh *imodel.Share, entry statestore.Entry, level float64, reason string) statestore.Entry {
-	if (sl.strat.Name() != "fvg_imbalance" && !pc.shared) || !sl.strat.TradeEnabled() {
+	if (!pairedOrders(sl) && !pc.shared) || !sl.strat.TradeEnabled() {
 		return s.replaceStop(ctx, sl, ticker, sh, entry, level, reason)
 	}
 	if entry.FVGStopPending {
@@ -949,7 +973,7 @@ func (s *service) manage(ctx context.Context, pc *passCtx, sl *slot, ticker stri
 	dec adapter.Decider, md strategy.MarketData, pos *grpcmodel.Position, isHeld bool) error {
 
 	if !isHeld {
-		if sl.strat.Name() == "fvg_imbalance" || pc.shared {
+		if pairedPosition(sl, pc.state[ticker]) || pc.shared {
 			return s.reconcileFVG(ctx, pc, sl, ticker, sh, nil)
 		}
 		s.settleGonePosition(ctx, pc, sl, ticker)
@@ -978,7 +1002,7 @@ func (s *service) manage(ctx context.Context, pc *passCtx, sl *slot, ticker stri
 			return nil
 		}
 		rebuilt.Strategy = sl.strat.Name()
-		if rebuilt.Strategy == "fvg_imbalance" {
+		if pairedOrders(sl) {
 			rebuilt.FVGRecovering = true
 		}
 		rebuilt.Quantity = pos.Quantity
@@ -992,7 +1016,16 @@ func (s *service) manage(ctx context.Context, pc *passCtx, sl *slot, ticker stri
 			entry.EntryPrice, entry.EntryTime.Format("02.01 15:04"), entry.EntryATR, entry.TakeProfit))
 	}
 
-	if sl.strat.Name() == "fvg_imbalance" || pc.shared {
+	// Upgrade pre-TP entries using their frozen entry ATR, then persist once.
+	if owner, ok := sl.strat.(adapter.BrokerTakeProfit); ok && entry.TakeProfit == 0 {
+		entry.TakeProfit = owner.TakeProfit(ticker, entry)
+		pc.state[ticker] = entry
+		if err := pc.store.Save(pc.state); err != nil {
+			return err
+		}
+	}
+
+	if pairedPosition(sl, entry) || pc.shared {
 		if err := s.reconcileFVG(ctx, pc, sl, ticker, sh, pos); err != nil {
 			return err
 		}
@@ -1036,7 +1069,7 @@ func (s *service) manage(ctx context.Context, pc *passCtx, sl *slot, ticker stri
 	// продавать рыночным ордером бумаги, которых уже нет — отказ брокера в лучшем
 	// случае, шорт на марже в худшем. Синхронизация возможна только при работающем List.
 	strayCancelFailed := false
-	if pc.listErr == nil {
+	if pc.listErr == nil && !pairedPosition(sl, entry) && !pc.shared {
 		if entry.StopOrderID != "" {
 			if _, alive := pc.stopByID[entry.StopOrderID]; !alive {
 				// Заявки нет в ACTIVE: сработала или снята вне раннера. Различить
@@ -1196,10 +1229,7 @@ func (s *service) manage(ctx context.Context, pc *passCtx, sl *slot, ticker stri
 			return fmt.Errorf("%s: save stop state %s: %w", sl.strat.Name(), ticker, err)
 		}
 	}
-	if sl.strat.Name() == "fvg_imbalance" {
-		return s.placeFVGTarget(ctx, pc, sl, ticker, sh)
-	}
-	return nil
+	return s.placeTarget(ctx, pc, sl, ticker, sh)
 }
 
 // catModeChanged — заявка выставлена в одном режиме стопа, а литерал требует другого: на бирже
@@ -1221,6 +1251,7 @@ func catModeChanged(placed, wanted string) bool {
 func (s *service) sell(ctx context.Context, pc *passCtx, sl *slot, ticker string, sh *imodel.Share,
 	entry statestore.Entry, pos *grpcmodel.Position, sig model.Signal) error {
 
+	pair := pairedPosition(sl, entry)
 	// Причина не должна быть пустой: "" в PendingExit неотличимо от «выхода не ждём».
 	pending := sig.Reason
 	if pending == "" {
@@ -1246,7 +1277,7 @@ func (s *service) sell(ctx context.Context, pc *passCtx, sl *slot, ticker string
 		return nil
 	}
 
-	if sl.strat.Name() == "fvg_imbalance" && entry.TakeProfitOrderID != "" {
+	if entry.TakeProfitOrderID != "" {
 		if err := sl.stops.Cancel(ctx, entry.TakeProfitOrderID); err != nil {
 			remember()
 			return fmt.Errorf("cancel take profit before sell: %w", err)
@@ -1272,7 +1303,7 @@ func (s *service) sell(ctx context.Context, pc *passCtx, sl *slot, ticker string
 	}
 
 	lots := pos.Quantity / int64(sh.Lot)
-	if (sl.strat.Name() == "fvg_imbalance" || pc.shared) && sl.strat.TradeEnabled() {
+	if (pair || pc.shared) && sl.strat.TradeEnabled() {
 		// Persist intent before submitting: a timeout or crash can leave the broker
 		// outcome unknown, so never retry blindly.
 		entry.PendingExit = pending
@@ -1293,7 +1324,7 @@ func (s *service) sell(ctx context.Context, pc *passCtx, sl *slot, ticker string
 		res, err = sl.exec.Sell(ctx, sh.ID, lots)
 	}
 	if err != nil {
-		if (sl.strat.Name() == "fvg_imbalance" || pc.shared) && sl.strat.TradeEnabled() {
+		if (pair || pc.shared) && sl.strat.TradeEnabled() {
 			return fmt.Errorf("market sell outcome unknown; manual reconciliation required: %w", err)
 		}
 		sl.alert(ticker, "ордер на продажу отклонён: "+err.Error())
@@ -1313,7 +1344,7 @@ func (s *service) sell(ctx context.Context, pc *passCtx, sl *slot, ticker string
 		return nil // повтор на следующем тике — по отметке PendingExit, а не по сигналу
 	}
 
-	if (sl.strat.Name() == "fvg_imbalance" || pc.shared) && res.Placed {
+	if (pair || pc.shared) && res.Placed {
 		entry.PendingExit = pending
 		entry.FVGExitOrderID = res.OrderID
 		entry.FVGExitStopID = "market"

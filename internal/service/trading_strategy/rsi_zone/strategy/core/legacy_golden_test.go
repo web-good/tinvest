@@ -73,12 +73,14 @@ func legacyCases() []struct {
 	name string
 	p    core.Params
 } {
+	legacyDOMRF := domrf.DefaultParams()
+	legacyDOMRF.TPDailyATR = 0 // replay of the historical algorithm before broker TP
 	return []struct {
 		name string
 		p    core.Params
 	}{
 		{"core", core.DefaultParams()},
-		{domrf.Ticker, domrf.DefaultParams()},
+		{domrf.Ticker, legacyDOMRF},
 	}
 }
 

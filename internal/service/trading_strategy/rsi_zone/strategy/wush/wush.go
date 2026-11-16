@@ -85,6 +85,7 @@ func DefaultParams() core.Params {
 		EMAPeriod:      50,
 		DailyATRPeriod: 14,
 		StopDailyATR:   1.0,
+		TPDailyATR:     1.5,
 		UseStoch:       1,
 		StochKPeriod:   5,
 		StochDSmooth:   3,

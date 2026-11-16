@@ -114,7 +114,7 @@ func TestDeciderUsesTickerParams(t *testing.T) {
 	}
 }
 
-func TestReconstructRebuildsEntryWithoutTarget(t *testing.T) {
+func TestReconstructRebuildsEntryWithTarget(t *testing.T) {
 	s := New(&config.RSIZoneConfig{}, nil)
 	now := time.Date(2026, 3, 10, 15, 0, 0, 0, msk) // вторник
 	buy := time.Date(2026, 3, 10, 11, 30, 0, 0, msk)
@@ -137,8 +137,8 @@ func TestReconstructRebuildsEntryWithoutTarget(t *testing.T) {
 	if e.Ticker != "AFKS" || !e.EntryTime.Equal(buy) {
 		t.Errorf("Ticker/EntryTime = %s/%v, want AFKS/%v", e.Ticker, e.EntryTime, buy)
 	}
-	if e.TakeProfit != 0 {
-		t.Errorf("TakeProfit = %v, want 0", e.TakeProfit)
+	if want := e.EntryPrice + 1.5*e.EntryATR; e.TakeProfit != want {
+		t.Errorf("TakeProfit = %v, want %v", e.TakeProfit, want)
 	}
 	if e.EntryPrice != 123.5 || e.MaxFav != 123.5 {
 		t.Errorf("EntryPrice/MaxFav = %v/%v, want 123.5/123.5", e.EntryPrice, e.MaxFav)

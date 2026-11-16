@@ -213,6 +213,15 @@ func TestEnterBuysThePullback(t *testing.T) {
 	}
 }
 
+func TestEntryCarriesTargetDistanceForActualFill(t *testing.T) {
+	p := entryParams()
+	md := withDay(entryFixture(), 10.0, 101, 100)
+	sig := NewWithParams("T", p).Decide(md)
+	if sig.Kind != model.SignalBuy || sig.TargetDistance != p.TPDailyATR*sig.ATR {
+		t.Fatalf("target must follow actual fill by TPDailyATR*ATR: %+v", sig)
+	}
+}
+
 // TestEnterGates breaks exactly one precondition at a time and requires no entry. Every case
 // attaches a daily series via withDay (atr=10, TodayHigh/TodayLow=101/100, the same "day just
 // started" shape TestEnterBuysThePullback uses) AFTER the tweak runs, so the daily-ATR gate (4)

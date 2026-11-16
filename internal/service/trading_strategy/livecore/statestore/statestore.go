@@ -31,10 +31,11 @@ type Entry struct {
 
 	// TakeProfit — цель, замороженная на входе. Бэктест хранит её на позиции
 	// (strategy.Position.TakeProfit), а живой раннер обязан пережить её через перезапуск,
-	// иначе close-модель TP не с чем сравнивать high бара. reversion её не пишет —
+	// иначе брокерскую заявку и резервную проверку high бара не из чего восстановить. reversion её не пишет —
 	// omitempty оставляет формат файла прежним.
-	TakeProfit         float64   `json:"takeProfit,omitempty"`
-	TakeProfitOrderID  string    `json:"takeProfitOrderId,omitempty"`
+	TakeProfit        float64 `json:"takeProfit,omitempty"`
+	TakeProfitOrderID string  `json:"takeProfitOrderId,omitempty"`
+	// FVG-prefixed fields also track RSI SL/TP pairs; JSON names remain compatible.
 	FVGExitOrderID     string    `json:"fvgExitOrderId,omitempty"`
 	FVGStopPendingAt   time.Time `json:"fvgStopPendingAt,omitzero"`
 	FVGTargetPendingAt time.Time `json:"fvgTargetPendingAt,omitzero"`

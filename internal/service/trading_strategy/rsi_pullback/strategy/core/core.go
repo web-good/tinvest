@@ -457,6 +457,7 @@ func (s *Strategy) enter(md strategy.MarketData, sig model.Signal) model.Signal 
 	}
 	if s.p.TPDailyATR > 0 {
 		target = entry + s.p.TPDailyATR*atr
+		sig.TargetDistance = s.p.TPDailyATR * atr
 	}
 	sig.Kind = model.SignalBuy
 	sig.StopLoss = stop

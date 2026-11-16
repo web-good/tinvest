@@ -73,6 +73,8 @@ func TestCloseStopEntryPlacesTheCatastropheOrder(t *testing.T) {
 	})).Return(&investapi.PostStopOrderResponse{StopOrderId: "so-cat"}, nil).Once()
 	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
 
+	expectTakeProfit(t, e, 40, 108)
+
 	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -146,6 +148,8 @@ func TestCloseStopIgnoresAWickThroughTheLevel(t *testing.T) {
 		Return(activeList("uid-GAZP", "so-1", cat, 10), nil)
 	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
 
+	expectTakeProfit(t, e, 10, 107)
+
 	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -201,6 +205,8 @@ func TestReconstructedCloseStopPositionGetsTheCatastropheOrder(t *testing.T) {
 	e.stops.EXPECT().PostStopOrder(mock.Anything, mock.Anything).
 		Return(&investapi.PostStopOrderResponse{StopOrderId: "so-rec"}, nil).Once()
 	e.tg.EXPECT().SendMessage(mock.Anything).Return(nil).Maybe()
+
+	expectTakeProfit(t, e, 50, 0)
 
 	if err := e.svc.Run(context.Background(), dto.Run{}); err != nil {
 		t.Fatalf("Run: %v", err)

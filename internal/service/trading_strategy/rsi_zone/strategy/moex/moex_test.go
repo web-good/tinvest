@@ -16,6 +16,7 @@ func TestCalibratedLiteralIsPinned(t *testing.T) {
 		EMAPeriod:        200,
 		DailyATRPeriod:   5,
 		StopDailyATR:     2.0,
+		TPDailyATR:       1.5,
 		UseStoch:         1,
 		StochKPeriod:     14,
 		StochDSmooth:     3,

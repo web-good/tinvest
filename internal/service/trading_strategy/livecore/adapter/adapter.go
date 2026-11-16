@@ -8,8 +8,10 @@ import (
 	"time"
 
 	"tinvest/internal/enum"
+	imodel "tinvest/internal/model"
 	"tinvest/internal/service/trading_strategy/livecore/candles"
 	"tinvest/internal/service/trading_strategy/livecore/statestore"
+	"tinvest/internal/service/trading_strategy/livecore/stoporders"
 	"tinvest/internal/service/trading_strategy/scalping/model"
 	"tinvest/internal/service/trading_strategy/scalping/strategy"
 	grpcmodel "tinvest/pkg/client/grpc/model"
@@ -67,6 +69,13 @@ type Strategy interface {
 	TradeEnabled() bool
 	// Notify — своя тема Telegram и свой рубильник NotifyEnabled.
 	Notify(msg string)
+}
+
+// BrokerTakeProfit lets a strategy own its target calculation and placement. The
+// account runner only persists submission intent and reconciles the SL/TP pair.
+type BrokerTakeProfit interface {
+	TakeProfit(ticker string, entry statestore.Entry) float64
+	PlaceTakeProfit(ctx context.Context, stops *stoporders.Executor, share *imodel.Share, entry statestore.Entry) (stoporders.Result, error)
 }
 
 // EntryWindow — необязательная подсказка стратегии: может ли она войти на пассе в момент now.
