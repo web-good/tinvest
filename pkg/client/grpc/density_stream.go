@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"time"
 	investapi "tinvest/internal/pb/v1"
 	"tinvest/internal/service/screener/density"
 
@@ -92,7 +93,11 @@ func densityEvents(r *investapi.MarketDataResponse, lots map[string]int64) []den
 	}
 	if v := r.GetTrade(); v != nil && v.GetTradeSource() == investapi.TradeSourceType_TRADE_SOURCE_EXCHANGE && v.GetPrice() != nil {
 		q := v.GetPrice()
-		out = append(out, density.Event{Kind: density.EventTrade, InstrumentID: v.GetInstrumentUid(), Price: density.Price{Units: q.GetUnits(), Nano: q.GetNano()}, Quantity: v.GetQuantity()})
+		var at time.Time
+		if v.GetTime() != nil && v.GetTime().CheckValid() == nil {
+			at = v.GetTime().AsTime()
+		}
+		out = append(out, density.Event{Kind: density.EventTrade, InstrumentID: v.GetInstrumentUid(), Price: density.Price{Units: q.GetUnits(), Nano: q.GetNano()}, Quantity: v.GetQuantity(), Time: at})
 	}
 	if v := r.GetTradingStatus(); v != nil {
 		out = append(out, density.Event{Kind: density.EventTradingStatus, InstrumentID: v.GetInstrumentUid(), TradingOpen: v.GetTradingStatus() == investapi.SecurityTradingStatus_SECURITY_TRADING_STATUS_NORMAL_TRADING && v.GetLimitOrderAvailableFlag()})

@@ -7,6 +7,7 @@ package statestore
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -15,12 +16,18 @@ import (
 
 // Entry is the persisted entry-state for one open position.
 type Entry struct {
-	Ticker     string    `json:"ticker"`
-	EntryTime  time.Time `json:"entryTime"`
-	EntryPrice float64   `json:"entryPrice"`
-	EntryATR   float64   `json:"entryATR"`
-	MaxFav     float64   `json:"maxFav"`
-	Quantity   int64     `json:"quantity"`
+	EntryFilledQuantity int64     `json:"entryFilledQuantity,omitempty"`
+	EntrySoldQuantity   int64     `json:"entrySoldQuantity,omitempty"`
+	EntryRequestedLots  int64     `json:"entryRequestedLots,omitempty"`
+	EntryOrderID        string    `json:"entryOrderId,omitempty"`
+	EntryRequestID      string    `json:"entryRequestId,omitempty"`
+	ExitRequestID       string    `json:"exitRequestId,omitempty"`
+	Ticker              string    `json:"ticker"`
+	EntryTime           time.Time `json:"entryTime"`
+	EntryPrice          float64   `json:"entryPrice"`
+	EntryATR            float64   `json:"entryATR"`
+	MaxFav              float64   `json:"maxFav"`
+	Quantity            int64     `json:"quantity"`
 
 	// TakeProfit — цель, замороженная на входе. Бэктест хранит её на позиции
 	// (strategy.Position.TakeProfit), а живой раннер обязан пережить её через перезапуск,
@@ -64,7 +71,8 @@ type Entry struct {
 	LastBar time.Time `json:"lastBar,omitzero"`
 }
 
-// Store loads and saves the full per-ticker entry-state map.
+// Store loads and saves the full per-ticker entry-state map. A successful Save
+// must durably persist the owner before a temporary account reservation is removed.
 type Store interface {
 	Load() (map[string]Entry, error)
 	Save(map[string]Entry) error
@@ -72,7 +80,8 @@ type Store interface {
 
 // FileStore persists the map as a single JSON file with atomic writes.
 type FileStore struct {
-	path string
+	path     string
+	syncFile func(*os.File) error
 }
 
 // New returns a FileStore backed by path.
@@ -97,7 +106,7 @@ func (s *FileStore) Load() (map[string]Entry, error) {
 	return out, nil
 }
 
-// Save writes the map atomically: marshal to a temp file in the same dir, then rename.
+// Save syncs the temp file before its atomic rename, then syncs directory entries.
 func (s *FileStore) Save(m map[string]Entry) error {
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
 		return err
@@ -111,7 +120,19 @@ func (s *FileStore) Save(m map[string]Entry) error {
 		return err
 	}
 	tmpName := tmp.Name()
-	if _, err := tmp.Write(b); err != nil {
+	if n, err := tmp.Write(b); err != nil || n != len(b) {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+		if err != nil {
+			return err
+		}
+		return io.ErrShortWrite
+	}
+	syncFile := s.syncFile
+	if syncFile == nil {
+		syncFile = func(f *os.File) error { return f.Sync() }
+	}
+	if err := syncFile(tmp); err != nil {
 		_ = tmp.Close()
 		_ = os.Remove(tmpName)
 		return err
@@ -120,5 +141,27 @@ func (s *FileStore) Save(m map[string]Entry) error {
 		_ = os.Remove(tmpName)
 		return err
 	}
-	return os.Rename(tmpName, s.path)
+	if err := os.Rename(tmpName, s.path); err != nil {
+		_ = os.Remove(tmpName)
+		return err
+	}
+	dir, err := filepath.Abs(filepath.Dir(s.path))
+	if err != nil {
+		return err
+	}
+	for {
+		f, err := os.Open(dir)
+		if err != nil {
+			return err
+		}
+		err = errors.Join(f.Sync(), f.Close())
+		if err != nil {
+			return err
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return nil
+		}
+		dir = parent
+	}
 }

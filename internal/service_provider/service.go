@@ -16,6 +16,7 @@ import (
 	fvglive "tinvest/internal/service/trading_strategy/fvg_imbalance/live"
 	gaplive "tinvest/internal/service/trading_strategy/gap_fade/live"
 	"tinvest/internal/service/trading_strategy/golden_x"
+	"tinvest/internal/service/trading_strategy/livecore/accountcoord"
 	"tinvest/internal/service/trading_strategy/livecore/adapter"
 	pdlrsilive "tinvest/internal/service/trading_strategy/pdl_rsi/live"
 	"tinvest/internal/service/trading_strategy/reversion/live"
@@ -23,9 +24,11 @@ import (
 	rsizonelive "tinvest/internal/service/trading_strategy/rsi_zone/live"
 	"tinvest/pkg/client/rss"
 	"tinvest/pkg/client/telegram"
+	"tinvest/pkg/logger"
 )
 
 type service struct {
+	accountCoordinator     *accountcoord.Coordinator
 	purchaseSharesService  purchase_shares.PurchaseShares
 	reversionLiveService   live.Service
 	rsiPullbackLiveService rsipullbacklive.Service
@@ -201,7 +204,7 @@ func (*ServiceProvider) GetReversionLiveService() live.Service {
 // either with reversion would let one strategy see the other's position in the portfolio and
 // manage it as its own, since the two overlap on tickers. rsi_pullback owns the account;
 // rsi_zone, gap_fade and pdl_rsi join it as guests (same client and state file, its own Telegram topic).
-func (*ServiceProvider) GetRSIPullbackLiveService() rsipullbacklive.Service {
+func (s *ServiceProvider) GetRSIPullbackLiveService() rsipullbacklive.Service {
 	if serviceProvider.service.rsiPullbackLiveService == nil {
 		grpcClient, _ := serviceProvider.GetRSIPullbackGrpcClient()
 		tgClient, _ := serviceProvider.GetRSIPullbackSender()
@@ -229,7 +232,7 @@ func (*ServiceProvider) GetRSIPullbackLiveService() rsipullbacklive.Service {
 			fvgTG, _ := serviceProvider.GetFVGImbalanceSender()
 			guests = append(guests, fvglive.New(fvg, fvgTG))
 		}
-		serviceProvider.service.rsiPullbackLiveService = rsipullbacklive.NewService(
+		accountService := rsipullbacklive.NewService(
 			grpcClient.InstrumentsServiceClient(),
 			grpcClient.MarketDataServiceClient(),
 			grpcClient.OperationsServiceClient(),
@@ -239,6 +242,11 @@ func (*ServiceProvider) GetRSIPullbackLiveService() rsipullbacklive.Service {
 			serviceProvider.appConfig.RSIPullback,
 			guests...,
 		)
+		externalLive := s.appConfig.DensityLiveError == nil && s.appConfig.DensityLive != nil && s.appConfig.DensityLive.Enabled && s.appConfig.DensityLive.TradeEnabled
+		if err := accountService.SetAccountCoordinator(s.GetAccountCoordinator(), externalLive); err != nil {
+			logger.ErrorContext(s.ctx, "shared account coordinator initialization failed", err.Error())
+		}
+		serviceProvider.service.rsiPullbackLiveService = accountService
 	}
 
 	return serviceProvider.service.rsiPullbackLiveService

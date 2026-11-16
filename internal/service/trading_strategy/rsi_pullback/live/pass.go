@@ -8,9 +8,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"tinvest/internal/enum"
 	imodel "tinvest/internal/model"
+	"tinvest/internal/service/trading_strategy/livecore/accountcoord"
 	"tinvest/internal/service/trading_strategy/livecore/adapter"
+	"tinvest/internal/service/trading_strategy/livecore/executor"
 	"tinvest/internal/service/trading_strategy/livecore/notifier"
 	"tinvest/internal/service/trading_strategy/livecore/sizing"
 	"tinvest/internal/service/trading_strategy/livecore/statestore"
@@ -103,6 +107,11 @@ func entryBarTime(fill time.Time, iv enum.Interval) time.Time {
 // берётся ОДИН раз на пасс, иначе повторный Cancel одной и той же заявки в одном тике
 // дал бы ложный алерт.
 type passCtx struct {
+	claims           map[string]accountcoord.Claim
+	shared           bool
+	foreignStops     map[string]bool
+	brokerQuant      map[string]int64
+	lease            *accountcoord.Lease
 	state            map[string]statestore.Entry
 	store            statestore.Store
 	stopByID         map[string]stoporders.ActiveStop
@@ -117,6 +126,32 @@ type passCtx struct {
 }
 
 func (s *service) pass(ctx context.Context) error {
+	// Exclusion snapshot precedes portfolio loading and remains immutable for
+	// density, even if its continuous worker completes while this pass is running.
+	claims := map[string]accountcoord.Claim{}
+	if s.coordinator != nil {
+		var err error
+		claims, err = s.coordinator.CandleClaims(ctx)
+		if err != nil {
+			return fmt.Errorf("shared ownership unavailable: %w", err)
+		}
+	}
+	var density map[string]accountcoord.DensityPosition
+	shared := false
+	if s.coordinator != nil {
+		var err error
+		density, err = s.coordinator.DensitySnapshot(ctx)
+		if err != nil {
+			return fmt.Errorf("density snapshot: %w", err)
+		}
+		shared = density != nil
+		if !shared {
+			claims, err = s.coordinator.Claims(ctx)
+			if err != nil {
+				return err
+			}
+		}
+	}
 	shares, err := s.sharesByTicker(ctx)
 	if err != nil {
 		return err
@@ -125,19 +160,39 @@ func (s *service) pass(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	brokerQuant := map[string]int64{}
+	for uid, p := range held {
+		brokerQuant[uid] = p.Quantity
+	}
 	store := s.stateStore()
 	state, err := store.Load()
 	if err != nil {
 		return fmt.Errorf("rsi_pullback: load state: %w", err)
 	}
 
+	blockedOrders := map[string]error{}
+	if shared {
+		blockedOrders, err = s.sharedOrderBlocks(ctx, shares, state, density)
+		if err != nil {
+			return err
+		}
+	}
 	activeStops, listErr := s.accountStops.List(ctx) // один вызов на весь пасс
 	if listErr != nil {
 		s.notify(notifier.Alert(alertLabel, "", "GetStopOrders недоступен: "+listErr.Error()))
 	}
 	stopByInstrument := map[string]stoporders.ActiveStop{}
 	stopByID := map[string]stoporders.ActiveStop{}
+	foreignStops := map[string]bool{}
+	for _, d := range density {
+		for _, id := range d.StopIDs {
+			foreignStops[id] = true
+		}
+	}
 	for _, a := range activeStops {
+		if foreignStops[a.StopOrderID] {
+			continue
+		}
 		stopByInstrument[a.InstrumentUID] = a
 		stopByID[a.StopOrderID] = a
 	}
@@ -148,12 +203,94 @@ func (s *service) pass(ctx context.Context) error {
 	// пассе, пока держится причина (сбой записи стейта повторится и завтра). Наверх ошибка
 	// всё равно уходит, чтобы планировщик её залогировал.
 	pc := &passCtx{
+		claims: claims, lease: s.entryLease, shared: shared, foreignStops: foreignStops, brokerQuant: brokerQuant,
 		state: state, store: store, stopByID: stopByID,
 		stopByInstrument: stopByInstrument, listErr: listErr, now: now,
 	}
 	var failed []string
-	for _, ticker := range s.passTickers(state) {
+	tickers := s.passTickers(state)
+	for ticker := range claims {
+		if !slices.Contains(tickers, ticker) {
+			tickers = append(tickers, ticker)
+		}
+	}
+	slices.Sort(tickers)
+	for _, ticker := range tickers {
+		if sh := shares[ticker]; sh != nil {
+			if err := blockedOrders[sh.ID]; err != nil {
+				s.slots[0].alert(ticker, err.Error())
+				failed = append(failed, ticker)
+				continue
+			}
+		}
 		entry, hasState := state[ticker]
+		if shared && hasState && entry.EntryRequestID != "" {
+			sh := shares[ticker]
+			owner := s.slotByName(adapter.Owner(entry))
+			if sh == nil || owner == nil {
+				failed = append(failed, ticker)
+				continue
+			}
+			done, err := s.reconcilePendingEntry(ctx, pc, owner, ticker, sh)
+			if err != nil {
+				owner.alert(ticker, err.Error())
+				failed = append(failed, ticker)
+				continue
+			}
+			entry = state[ticker]
+			if !done {
+				continue
+			}
+			if entry.Quantity == 0 {
+				delete(state, ticker)
+				if err := store.Save(state); err != nil {
+					return err
+				}
+				if claim, ok := claims[ticker]; ok {
+					if err := s.coordinator.Remove(pc.lease, claim); err != nil {
+						return err
+					}
+					delete(claims, ticker)
+				}
+				continue
+			}
+		}
+		if shared {
+			sh := shares[ticker]
+			if sh != nil {
+				broker := held[sh.ID]
+				if !hasState {
+					if d, ok := density[ticker]; ok && broker != nil && broker.Quantity == d.Quantity {
+						delete(held, sh.ID)
+					} else if broker != nil {
+						continue
+					} // cannot reconstruct ownership from account inventory
+				} else if broker != nil {
+					own := *broker
+					own.Quantity = entry.Quantity
+					held[sh.ID] = &own
+				}
+			}
+		}
+		claim, claimed := claims[ticker]
+		if claimed && claim.Owner == "density" {
+			if claim.Status == "closed" && !hasState && held[claim.InstrumentID] == nil && listErr == nil {
+				if _, stopped := stopByInstrument[claim.InstrumentID]; !stopped {
+					if err := s.coordinator.Remove(pc.lease, claim); err != nil {
+						failed = append(failed, ticker)
+					}
+				}
+			}
+			continue // never adopt or buy from this pass's older account snapshot
+		}
+		if claimed && !hasState && held[claim.InstrumentID] == nil {
+			s.slots[0].alert(ticker, "незавершённая покупка стратегии "+claim.Owner+" — новый вход заблокирован")
+			continue
+		}
+		if claimed && hasState && adapter.Owner(entry) != claim.Owner {
+			s.slots[0].alert(ticker, "конфликт владельцев в общем учёте — действия пропущены")
+			continue
+		}
 
 		// Кто вправе действовать по тикеру. Запись в стейте — владелец из неё; иначе —
 		// стратегии, в чьей вселенной тикер, по приоритету.
@@ -162,6 +299,13 @@ func (s *service) pass(ctx context.Context) error {
 			owner := s.slotByName(adapter.Owner(entry))
 			if owner == nil {
 				s.slots[0].alert(ticker, fmt.Sprintf("позиция принадлежит неизвестной стратегии %q — сопровождение пропущено", adapter.Owner(entry)))
+				continue
+			}
+			cands = []*slot{owner}
+		} else if claimed {
+			owner := s.slotByName(claim.Owner)
+			if owner == nil {
+				s.slots[0].alert(ticker, "неизвестный владелец резерва — действия пропущены")
 				continue
 			}
 			cands = []*slot{owner}
@@ -240,7 +384,7 @@ func (s *service) pass(ctx context.Context) error {
 				break
 			}
 		}
-		if fvgTicker {
+		if fvgTicker || pc.shared {
 			blocked := pc.listErr != nil
 			for _, order := range pc.stopByID {
 				if order.InstrumentUID == sh.ID {
@@ -283,6 +427,27 @@ func (s *service) pass(ctx context.Context) error {
 					s.alertBlockedEntries(ctx, ticker, sh, adapter.Owner(entry), now)
 				}
 				break
+			}
+		}
+	}
+	if s.coordinator != nil {
+		durable, err := pc.store.Load()
+		if err != nil {
+			return fmt.Errorf("verify durable ownership handoff: %w", err)
+		}
+		for ticker, claim := range pc.claims {
+			if slices.Contains(failed, ticker) {
+				continue
+			}
+			if claim.Owner == "density" {
+				continue
+			}
+			if entry, ok := durable[ticker]; ok && entry.Quantity > 0 && adapter.Owner(entry) == claim.Owner {
+				if owner := s.slotByName(claim.Owner); owner != nil && owner.strat.TradeEnabled() {
+					if err := s.coordinator.Remove(pc.lease, claim); err != nil {
+						failed = append(failed, ticker)
+					}
+				}
 			}
 		}
 	}
@@ -544,13 +709,58 @@ func (s *service) buy(ctx context.Context, pc *passCtx, sl *slot, ticker string,
 		return false, nil
 	}
 
-	res, err := sl.exec.Buy(ctx, sh.ID, lots)
+	if s.coordinator != nil && sl.strat.TradeEnabled() {
+		claim := accountcoord.Claim{Ticker: ticker, InstrumentID: sh.ID, Owner: sl.strat.Name(), Key: uuid.NewString()}
+		if err := s.coordinator.Reserve(pc.lease, claim); err != nil {
+			return true, fmt.Errorf("reserve ownership before BUY: %w", err)
+		}
+		pc.claims[ticker] = claim
+	}
+	var res executor.Result
+	entryRequestID := ""
+	if pc.shared && sl.strat.TradeEnabled() {
+		entryRequestID = pc.claims[ticker].Key
+		stopLoss, takeProfit := fillLevels(sig, sig.Price)
+		pc.state[ticker] = statestore.Entry{Ticker: ticker, EntryRequestID: entryRequestID, EntryRequestedLots: lots, Strategy: sl.strat.Name(), EntryTime: pc.now, EntryPrice: sig.Price, EntryATR: sig.ATR, MaxFav: sig.Price, StopLoss: stopLoss, TakeProfit: takeProfit}
+		if err := pc.store.Save(pc.state); err != nil {
+			return true, err
+		}
+		res, err = sl.exec.BuyWithKey(ctx, sh.ID, lots, entryRequestID)
+	} else {
+		res, err = sl.exec.Buy(ctx, sh.ID, lots)
+	}
 	if err != nil {
+		if s.coordinator != nil && definitelyRejectedOrder(err) {
+			if pc.shared {
+				delete(pc.state, ticker)
+				if saveErr := pc.store.Save(pc.state); saveErr != nil {
+					return true, saveErr
+				}
+			}
+			if claim, ok := pc.claims[ticker]; ok {
+				if releaseErr := s.coordinator.Remove(pc.lease, claim); releaseErr != nil {
+					return true, releaseErr
+				}
+				delete(pc.claims, ticker)
+			}
+		}
 		sl.alert(ticker, "ордер на покупку отклонён: "+err.Error())
 		logger.ErrorContext(ctx, fmt.Sprintf("%s: %s buy rejected: %v", sl.strat.Name(), ticker, err))
 		return true, nil // state unchanged; retried next tick
 	}
 
+	if pc.shared && res.Placed {
+		if res.FilledLots < 0 || res.FilledLots > lots || res.OrderID == "" {
+			return true, fmt.Errorf("BUY response identity or quantity mismatch")
+		}
+		pending := pc.state[ticker]
+		pending.EntryOrderID = res.OrderID
+		pending.Quantity = res.FilledLots * int64(sh.Lot)
+		pc.state[ticker] = pending
+		if err := pc.store.Save(pc.state); err != nil {
+			return true, err
+		}
+	}
 	fillPrice := sig.Price
 	filledLots := lots
 	if res.Placed {
@@ -563,6 +773,25 @@ func (s *service) buy(ctx context.Context, pc *passCtx, sl *slot, ticker string,
 		// входит только боевая или единственная бумажная, так что это она). На тикере двух
 		// боевых стратегий — алерт «владелец неизвестен» и ручная разметка стейта.
 		if res.FilledLots == 0 {
+			if pc.shared {
+				done, err := s.reconcilePendingEntry(ctx, pc, sl, ticker, sh)
+				if err != nil {
+					return true, err
+				}
+				if done && pc.state[ticker].Quantity == 0 {
+					delete(pc.state, ticker)
+					if err := pc.store.Save(pc.state); err != nil {
+						return true, err
+					}
+					if claim, ok := pc.claims[ticker]; ok {
+						if err := s.coordinator.Remove(pc.lease, claim); err != nil {
+							return true, err
+						}
+						delete(pc.claims, ticker)
+					}
+				}
+				return true, nil
+			}
 			sl.alert(ticker, "ордер принят, но не исполнен (0 лотов) — стейт не создан")
 			logger.ErrorContext(ctx, fmt.Sprintf("%s: %s buy accepted with zero fill", sl.strat.Name(), ticker))
 			return true, nil
@@ -573,10 +802,14 @@ func (s *service) buy(ctx context.Context, pc *passCtx, sl *slot, ticker string,
 		filledLots = res.FilledLots
 	}
 	qty := filledLots * int64(sh.Lot)
+	if res.Terminal {
+		entryRequestID = ""
+	}
 
 	stopLoss, takeProfit := fillLevels(sig, fillPrice)
 	pc.state[ticker] = statestore.Entry{
-		Ticker:     ticker,
+		Ticker:         ticker,
+		EntryRequestID: entryRequestID, EntryOrderID: res.OrderID, EntryRequestedLots: lots, EntryFilledQuantity: qty,
 		EntryTime:  pc.now,
 		EntryPrice: fillPrice,
 		EntryATR:   sig.ATR, // дневной ATR: им же меряются стоп, цель и обе границы гейта дня
@@ -585,6 +818,13 @@ func (s *service) buy(ctx context.Context, pc *passCtx, sl *slot, ticker string,
 		MaxFav:     fillPrice,
 		Quantity:   qty,
 		Strategy:   sl.strat.Name(),
+	}
+	if entryRequestID != "" {
+		if err := pc.store.Save(pc.state); err != nil {
+			return true, err
+		}
+		_, err := s.reconcilePendingEntry(ctx, pc, sl, ticker, sh)
+		return true, err
 	}
 	if hasBarInterval(sl) {
 		// Сигнальный бар решён: на пассе :31 сопровождение не спросит по нему ядро повторно.
@@ -646,7 +886,7 @@ func (s *service) placeInitialStop(ctx context.Context, pc *passCtx, sl *slot, t
 
 // replaceStopSafely records an FVG submission before the broker can accept it.
 func (s *service) replaceStopSafely(ctx context.Context, pc *passCtx, sl *slot, ticker string, sh *imodel.Share, entry statestore.Entry, level float64, reason string) statestore.Entry {
-	if sl.strat.Name() != "fvg_imbalance" || !sl.strat.TradeEnabled() {
+	if (sl.strat.Name() != "fvg_imbalance" && !pc.shared) || !sl.strat.TradeEnabled() {
 		return s.replaceStop(ctx, sl, ticker, sh, entry, level, reason)
 	}
 	if entry.FVGStopPending {
@@ -709,7 +949,7 @@ func (s *service) manage(ctx context.Context, pc *passCtx, sl *slot, ticker stri
 	dec adapter.Decider, md strategy.MarketData, pos *grpcmodel.Position, isHeld bool) error {
 
 	if !isHeld {
-		if sl.strat.Name() == "fvg_imbalance" {
+		if sl.strat.Name() == "fvg_imbalance" || pc.shared {
 			return s.reconcileFVG(ctx, pc, sl, ticker, sh, nil)
 		}
 		s.settleGonePosition(ctx, pc, sl, ticker)
@@ -752,11 +992,21 @@ func (s *service) manage(ctx context.Context, pc *passCtx, sl *slot, ticker stri
 			entry.EntryPrice, entry.EntryTime.Format("02.01 15:04"), entry.EntryATR, entry.TakeProfit))
 	}
 
-	if sl.strat.Name() == "fvg_imbalance" {
+	if sl.strat.Name() == "fvg_imbalance" || pc.shared {
 		if err := s.reconcileFVG(ctx, pc, sl, ticker, sh, pos); err != nil {
 			return err
 		}
-		entry = pc.state[ticker]
+		var exists bool
+		entry, exists = pc.state[ticker]
+		if !exists {
+			return nil
+		}
+		if pc.shared {
+			if entry.Quantity > pc.brokerQuant[sh.ID] {
+				return fmt.Errorf("own inventory exceeds broker holdings; reconciliation required")
+			}
+			pos.Quantity = entry.Quantity
+		}
 		if entry.FVGExitOrderID != "" || entry.FVGExitStopID != "" {
 			return nil
 		}
@@ -1022,19 +1272,28 @@ func (s *service) sell(ctx context.Context, pc *passCtx, sl *slot, ticker string
 	}
 
 	lots := pos.Quantity / int64(sh.Lot)
-	if sl.strat.Name() == "fvg_imbalance" && sl.strat.TradeEnabled() {
+	if (sl.strat.Name() == "fvg_imbalance" || pc.shared) && sl.strat.TradeEnabled() {
 		// Persist intent before submitting: a timeout or crash can leave the broker
 		// outcome unknown, so never retry blindly.
 		entry.PendingExit = pending
 		entry.FVGExitStopID = "market"
+		if pc.shared {
+			entry.ExitRequestID = uuid.NewString()
+		}
 		pc.state[ticker] = entry
 		if err := pc.store.Save(pc.state); err != nil {
 			return err
 		}
 	}
-	res, err := sl.exec.Sell(ctx, sh.ID, lots)
+	var res executor.Result
+	var err error
+	if pc.shared {
+		res, err = sl.exec.SellWithKey(ctx, sh.ID, lots, entry.ExitRequestID)
+	} else {
+		res, err = sl.exec.Sell(ctx, sh.ID, lots)
+	}
 	if err != nil {
-		if sl.strat.Name() == "fvg_imbalance" && sl.strat.TradeEnabled() {
+		if (sl.strat.Name() == "fvg_imbalance" || pc.shared) && sl.strat.TradeEnabled() {
 			return fmt.Errorf("market sell outcome unknown; manual reconciliation required: %w", err)
 		}
 		sl.alert(ticker, "ордер на продажу отклонён: "+err.Error())
@@ -1054,7 +1313,7 @@ func (s *service) sell(ctx context.Context, pc *passCtx, sl *slot, ticker string
 		return nil // повтор на следующем тике — по отметке PendingExit, а не по сигналу
 	}
 
-	if sl.strat.Name() == "fvg_imbalance" && res.Placed {
+	if (sl.strat.Name() == "fvg_imbalance" || pc.shared) && res.Placed {
 		entry.PendingExit = pending
 		entry.FVGExitOrderID = res.OrderID
 		entry.FVGExitStopID = "market"

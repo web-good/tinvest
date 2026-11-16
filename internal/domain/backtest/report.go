@@ -16,6 +16,9 @@ func RenderMarkdown(meta Meta, m Metrics, trades []Trade, equity []EquityPoint) 
 	fmt.Fprintf(&b, "- Период: %s — %s\n", meta.From.Format(tsLayout), meta.To.Format(tsLayout))
 	fmt.Fprintf(&b, "- Стартовый кэш: %.2f\n", meta.InitialCash)
 	fmt.Fprintf(&b, "- Fraction: %.4g; Commission: %.4g\n", meta.Fraction, meta.Commission)
+	if meta.ExecutionAssumptions != "" {
+		fmt.Fprintf(&b, "- %s\n", meta.ExecutionAssumptions)
+	}
 	if meta.OpenPosition {
 		b.WriteString("- ⚠️ На конце прогона осталась открытая позиция (оценена mark-to-market)\n")
 	}

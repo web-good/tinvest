@@ -17,6 +17,8 @@ import (
 
 // OrdersClient is the slice of the orders client the executor needs.
 type OrdersClient interface {
+	GetOrders(context.Context, *investapi.GetOrdersRequest, ...grpc.CallOption) (*investapi.GetOrdersResponse, error)
+	CancelOrder(context.Context, *investapi.CancelOrderRequest, ...grpc.CallOption) (*investapi.CancelOrderResponse, error)
 	GetOrderState(ctx context.Context, in *investapi.GetOrderStateRequest, opts ...grpc.CallOption) (*investapi.OrderState, error)
 	PostOrder(ctx context.Context, in *investapi.PostOrderRequest, opts ...grpc.CallOption) (*investapi.PostOrderResponse, error)
 }
@@ -24,6 +26,7 @@ type OrdersClient interface {
 // Result reports the effect of an order attempt. When Placed is false (dry-run) the
 // caller falls back to the signal's price and the requested quantity.
 type Result struct {
+	Terminal   bool
 	Placed     bool
 	OrderID    string
 	FilledLots int64
@@ -56,15 +59,25 @@ func (e *Executor) OrderState(ctx context.Context, orderID string) (*investapi.O
 
 // Buy places a market BUY of `lots` lots (or dry-runs).
 func (e *Executor) Buy(ctx context.Context, instrumentID string, lots int64) (Result, error) {
-	return e.place(ctx, instrumentID, lots, investapi.OrderDirection_ORDER_DIRECTION_BUY)
+	return e.BuyWithKey(ctx, instrumentID, lots, uuid.NewString())
 }
 
 // Sell places a market SELL of `lots` lots (or dry-runs).
 func (e *Executor) Sell(ctx context.Context, instrumentID string, lots int64) (Result, error) {
-	return e.place(ctx, instrumentID, lots, investapi.OrderDirection_ORDER_DIRECTION_SELL)
+	return e.SellWithKey(ctx, instrumentID, lots, uuid.NewString())
 }
 
-func (e *Executor) place(ctx context.Context, instrumentID string, lots int64, dir investapi.OrderDirection) (Result, error) {
+func (e *Executor) RequestState(ctx context.Context, key string) (*investapi.OrderState, error) {
+	kind := investapi.OrderIdType_ORDER_ID_TYPE_REQUEST
+	return e.client.GetOrderState(ctx, &investapi.GetOrderStateRequest{AccountId: e.accountID, OrderId: key, OrderIdType: &kind})
+}
+func (e *Executor) BuyWithKey(ctx context.Context, id string, lots int64, key string) (Result, error) {
+	return e.place(ctx, id, lots, investapi.OrderDirection_ORDER_DIRECTION_BUY, key)
+}
+func (e *Executor) SellWithKey(ctx context.Context, id string, lots int64, key string) (Result, error) {
+	return e.place(ctx, id, lots, investapi.OrderDirection_ORDER_DIRECTION_SELL, key)
+}
+func (e *Executor) place(ctx context.Context, instrumentID string, lots int64, dir investapi.OrderDirection, key string) (Result, error) {
 	if !e.tradeEnabled {
 		return Result{Placed: false}, nil
 	}
@@ -74,14 +87,16 @@ func (e *Executor) place(ctx context.Context, instrumentID string, lots int64, d
 		Direction:    dir,
 		AccountId:    e.accountID,
 		OrderType:    investapi.OrderType_ORDER_TYPE_MARKET,
-		OrderId:      uuid.NewString(),
+		OrderId:      key,
 	}
 	var header, trailer metadata.MD
 	resp, err := e.client.PostOrder(ctx, req, grpc.Header(&header), grpc.Trailer(&trailer))
 	if err != nil {
 		return Result{}, withBrokerDetails(err, header, trailer)
 	}
-	res := Result{Placed: true, OrderID: resp.GetOrderId(), FilledLots: resp.GetLotsExecuted()}
+	status := resp.GetExecutionReportStatus()
+	terminal := status == investapi.OrderExecutionReportStatus_EXECUTION_REPORT_STATUS_FILL || status == investapi.OrderExecutionReportStatus_EXECUTION_REPORT_STATUS_CANCELLED || status == investapi.OrderExecutionReportStatus_EXECUTION_REPORT_STATUS_REJECTED
+	res := Result{Terminal: terminal, Placed: true, OrderID: resp.GetOrderId(), FilledLots: resp.GetLotsExecuted()}
 	if p := resp.GetExecutedOrderPrice(); p != nil {
 		res.FillPrice = utils.CombinePrice(p.GetUnits(), p.GetNano())
 	}
@@ -104,4 +119,17 @@ func withBrokerDetails(err error, header, trailer metadata.MD) error {
 		return err
 	}
 	return fmt.Errorf("%w (message: %q, tracking-id: %s)", err, msg, trackingID)
+}
+
+func (e *Executor) Cancel(ctx context.Context, id string) error {
+	_, err := e.client.CancelOrder(ctx, &investapi.CancelOrderRequest{AccountId: e.accountID, OrderId: id})
+	return err
+}
+
+func (e *Executor) ActiveOrders(ctx context.Context) ([]*investapi.OrderState, error) {
+	resp, err := e.client.GetOrders(ctx, &investapi.GetOrdersRequest{AccountId: e.accountID})
+	if err != nil {
+		return nil, err
+	}
+	return resp.GetOrders(), nil
 }

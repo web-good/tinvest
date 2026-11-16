@@ -19,6 +19,17 @@ type Detector struct {
 	cfg          Config
 	observations map[key]observation
 	timestamps   map[string]time.Time
+	instruments  map[string]Instrument
+}
+
+// SetInstruments installs a fresh history snapshot and restarts confirmations.
+func (d *Detector) SetInstruments(instruments []Instrument) {
+	d.instruments = make(map[string]Instrument, len(instruments))
+	for _, i := range instruments {
+		i.Supports = append([]Support(nil), i.Supports...)
+		d.instruments[i.ID] = i
+	}
+	clear(d.observations)
 }
 
 func NewDetector(cfg Config) *Detector {
@@ -34,7 +45,7 @@ func (d *Detector) Reset(id string) {
 }
 func (d *Detector) Expire(now time.Time) {
 	for k, v := range d.observations {
-		if now.Sub(v.last) > d.cfg.Freshness || now.Sub(v.bookTime) > d.cfg.Freshness {
+		if now.Sub(v.last) > d.cfg.Freshness || now.Sub(v.bookTime) > d.cfg.Freshness || (!v.signal.ProfileUntil.IsZero() && !now.Before(v.signal.ProfileUntil)) {
 			delete(d.observations, k)
 		}
 	}
@@ -92,7 +103,8 @@ func (d *Detector) Update(b Book, now time.Time) []Signal {
 		price := value(l.Price)
 		distance := (best - price) / best
 		amount := price * float64(l.Quantity) * float64(b.Lot)
-		if distance > d.cfg.MaxDistance+1e-12 || amount < d.cfg.MinRubles || math.IsInf(amount, 0) || math.IsNaN(amount) {
+		threshold, support, allowed := d.historicalFilter(b.InstrumentID, price, now)
+		if !allowed || distance > d.cfg.MaxDistance+1e-12 || amount < threshold || math.IsInf(amount, 0) || math.IsNaN(amount) {
 			continue
 		}
 		type neighbor struct {
@@ -137,6 +149,10 @@ func (d *Detector) Update(b Book, now time.Time) []Signal {
 		o.last = now
 		o.bookTime = b.Time
 		o.signal = Signal{InstrumentID: b.InstrumentID, Price: l.Price, Quantity: l.Quantity, Rubles: amount, Multiple: multiple, Distance: distance, Since: o.since}
+		o.signal.MinRubles, o.signal.SupportPrice, o.signal.SupportTouches = threshold, support.Price, support.Touches
+		if d.cfg.TurnoverFraction > 0 || d.cfg.Support.Enabled {
+			o.signal.ProfileUntil = d.instruments[b.InstrumentID].ProfileAt.Add(ProfileLifetime)
+		}
 		d.observations[k] = o
 		if now.Sub(o.since) >= d.cfg.Persistence {
 			signals = append(signals, o.signal)

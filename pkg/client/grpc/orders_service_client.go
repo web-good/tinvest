@@ -9,6 +9,8 @@ import (
 )
 
 type OrdersServiceClient interface {
+	GetOrders(context.Context, *investapi.GetOrdersRequest, ...grpc.CallOption) (*investapi.GetOrdersResponse, error)
+	CancelOrder(ctx context.Context, in *investapi.CancelOrderRequest, opts ...grpc.CallOption) (*investapi.CancelOrderResponse, error)
 	GetOrderState(ctx context.Context, in *investapi.GetOrderStateRequest, opts ...grpc.CallOption) (*investapi.OrderState, error)
 	PostOrder(ctx context.Context, in *investapi.PostOrderRequest, opts ...grpc.CallOption) (*investapi.PostOrderResponse, error)
 }
@@ -38,4 +40,18 @@ func (c *ordersServiceClient) GetOrderState(ctx context.Context, in *investapi.G
 	defer cancel()
 	opts = append(opts, NewRPCCredential(c.auth))
 	return c.orderAPI.GetOrderState(ctx, in, opts...)
+}
+
+func (c *ordersServiceClient) CancelOrder(ctx context.Context, in *investapi.CancelOrderRequest, opts ...grpc.CallOption) (*investapi.CancelOrderResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	opts = append(opts, NewRPCCredential(c.auth))
+	return c.orderAPI.CancelOrder(ctx, in, opts...)
+}
+
+func (c *ordersServiceClient) GetOrders(ctx context.Context, in *investapi.GetOrdersRequest, opts ...grpc.CallOption) (*investapi.GetOrdersResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	opts = append(opts, NewRPCCredential(c.auth))
+	return c.orderAPI.GetOrders(ctx, in, opts...)
 }

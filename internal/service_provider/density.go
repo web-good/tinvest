@@ -39,6 +39,15 @@ func (s *ServiceProvider) GetDensityService() (*density.Service, error) {
 	market := internalgrpc.NewDensityMarketData(client.Connection(), s.appConfig.GrpcClient.TokenProd)
 	cfg := density.DefaultConfig()
 	cfg.MinRubles = c.MinRubles
+	cfg.TurnoverFraction = c.TurnoverFraction
+	cfg.Support.Enabled = c.SupportEnabled
+	cfg.Support.LookbackDays = c.SupportLookbackDays
+	cfg.Support.PivotBars = c.SupportPivotBars
+	cfg.Support.MinTouches = c.SupportMinTouches
+	cfg.Support.MinSeparation = c.SupportMinSeparation
+	cfg.Support.BounceFraction = c.SupportBounceFraction
+	cfg.Support.BounceBars = c.SupportBounceBars
+	cfg.Support.Tolerance = c.SupportTolerance
 	cfg.MinMultiple = c.MinMultiple
 	cfg.MaxDistance = c.MaxDistance
 	cfg.MinNeighbors = c.MinNeighbors

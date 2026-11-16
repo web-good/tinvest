@@ -25,6 +25,80 @@ func (_m *MockOrdersClient) EXPECT() *MockOrdersClient_Expecter {
 	return &MockOrdersClient_Expecter{mock: &_m.Mock}
 }
 
+// CancelOrder provides a mock function with given fields: _a0, _a1, _a2
+func (_m *MockOrdersClient) CancelOrder(_a0 context.Context, _a1 *investapi.CancelOrderRequest, _a2 ...grpc.CallOption) (*investapi.CancelOrderResponse, error) {
+	_va := make([]interface{}, len(_a2))
+	for _i := range _a2 {
+		_va[_i] = _a2[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, _a0, _a1)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CancelOrder")
+	}
+
+	var r0 *investapi.CancelOrderResponse
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, *investapi.CancelOrderRequest, ...grpc.CallOption) (*investapi.CancelOrderResponse, error)); ok {
+		return rf(_a0, _a1, _a2...)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, *investapi.CancelOrderRequest, ...grpc.CallOption) *investapi.CancelOrderResponse); ok {
+		r0 = rf(_a0, _a1, _a2...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*investapi.CancelOrderResponse)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, *investapi.CancelOrderRequest, ...grpc.CallOption) error); ok {
+		r1 = rf(_a0, _a1, _a2...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockOrdersClient_CancelOrder_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CancelOrder'
+type MockOrdersClient_CancelOrder_Call struct {
+	*mock.Call
+}
+
+// CancelOrder is a helper method to define mock.On call
+//   - _a0 context.Context
+//   - _a1 *investapi.CancelOrderRequest
+//   - _a2 ...grpc.CallOption
+func (_e *MockOrdersClient_Expecter) CancelOrder(_a0 interface{}, _a1 interface{}, _a2 ...interface{}) *MockOrdersClient_CancelOrder_Call {
+	return &MockOrdersClient_CancelOrder_Call{Call: _e.mock.On("CancelOrder",
+		append([]interface{}{_a0, _a1}, _a2...)...)}
+}
+
+func (_c *MockOrdersClient_CancelOrder_Call) Run(run func(_a0 context.Context, _a1 *investapi.CancelOrderRequest, _a2 ...grpc.CallOption)) *MockOrdersClient_CancelOrder_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]grpc.CallOption, len(args)-2)
+		for i, a := range args[2:] {
+			if a != nil {
+				variadicArgs[i] = a.(grpc.CallOption)
+			}
+		}
+		run(args[0].(context.Context), args[1].(*investapi.CancelOrderRequest), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *MockOrdersClient_CancelOrder_Call) Return(_a0 *investapi.CancelOrderResponse, _a1 error) *MockOrdersClient_CancelOrder_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockOrdersClient_CancelOrder_Call) RunAndReturn(run func(context.Context, *investapi.CancelOrderRequest, ...grpc.CallOption) (*investapi.CancelOrderResponse, error)) *MockOrdersClient_CancelOrder_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetOrderState provides a mock function with given fields: ctx, in, opts
 func (_m *MockOrdersClient) GetOrderState(ctx context.Context, in *investapi.GetOrderStateRequest, opts ...grpc.CallOption) (*investapi.OrderState, error) {
 	_va := make([]interface{}, len(opts))
@@ -95,6 +169,80 @@ func (_c *MockOrdersClient_GetOrderState_Call) Return(_a0 *investapi.OrderState,
 }
 
 func (_c *MockOrdersClient_GetOrderState_Call) RunAndReturn(run func(context.Context, *investapi.GetOrderStateRequest, ...grpc.CallOption) (*investapi.OrderState, error)) *MockOrdersClient_GetOrderState_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetOrders provides a mock function with given fields: _a0, _a1, _a2
+func (_m *MockOrdersClient) GetOrders(_a0 context.Context, _a1 *investapi.GetOrdersRequest, _a2 ...grpc.CallOption) (*investapi.GetOrdersResponse, error) {
+	_va := make([]interface{}, len(_a2))
+	for _i := range _a2 {
+		_va[_i] = _a2[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, _a0, _a1)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetOrders")
+	}
+
+	var r0 *investapi.GetOrdersResponse
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, *investapi.GetOrdersRequest, ...grpc.CallOption) (*investapi.GetOrdersResponse, error)); ok {
+		return rf(_a0, _a1, _a2...)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, *investapi.GetOrdersRequest, ...grpc.CallOption) *investapi.GetOrdersResponse); ok {
+		r0 = rf(_a0, _a1, _a2...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*investapi.GetOrdersResponse)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, *investapi.GetOrdersRequest, ...grpc.CallOption) error); ok {
+		r1 = rf(_a0, _a1, _a2...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockOrdersClient_GetOrders_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetOrders'
+type MockOrdersClient_GetOrders_Call struct {
+	*mock.Call
+}
+
+// GetOrders is a helper method to define mock.On call
+//   - _a0 context.Context
+//   - _a1 *investapi.GetOrdersRequest
+//   - _a2 ...grpc.CallOption
+func (_e *MockOrdersClient_Expecter) GetOrders(_a0 interface{}, _a1 interface{}, _a2 ...interface{}) *MockOrdersClient_GetOrders_Call {
+	return &MockOrdersClient_GetOrders_Call{Call: _e.mock.On("GetOrders",
+		append([]interface{}{_a0, _a1}, _a2...)...)}
+}
+
+func (_c *MockOrdersClient_GetOrders_Call) Run(run func(_a0 context.Context, _a1 *investapi.GetOrdersRequest, _a2 ...grpc.CallOption)) *MockOrdersClient_GetOrders_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]grpc.CallOption, len(args)-2)
+		for i, a := range args[2:] {
+			if a != nil {
+				variadicArgs[i] = a.(grpc.CallOption)
+			}
+		}
+		run(args[0].(context.Context), args[1].(*investapi.GetOrdersRequest), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *MockOrdersClient_GetOrders_Call) Return(_a0 *investapi.GetOrdersResponse, _a1 error) *MockOrdersClient_GetOrders_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockOrdersClient_GetOrders_Call) RunAndReturn(run func(context.Context, *investapi.GetOrdersRequest, ...grpc.CallOption) (*investapi.GetOrdersResponse, error)) *MockOrdersClient_GetOrders_Call {
 	_c.Call.Return(run)
 	return _c
 }

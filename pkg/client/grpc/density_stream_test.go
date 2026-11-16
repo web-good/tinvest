@@ -107,3 +107,12 @@ type fakeDensityStream struct {
 }
 
 func (f *fakeDensityStream) Send(r *investapi.MarketDataRequest) error { f.sent = r; return nil }
+
+func TestDensityTradeRetainsExchangeTimestamp(t *testing.T) {
+	at := timestamppb.Now()
+	r := &investapi.MarketDataResponse{Payload: &investapi.MarketDataResponse_Trade{Trade: &investapi.Trade{InstrumentUid: "x", Price: &investapi.Quotation{Units: 100}, Quantity: 2, Time: at, TradeSource: investapi.TradeSourceType_TRADE_SOURCE_EXCHANGE}}}
+	events := densityEvents(r, nil)
+	if len(events) != 1 || !events[0].Time.Equal(at.AsTime()) {
+		t.Fatal("trade timestamp missing")
+	}
+}

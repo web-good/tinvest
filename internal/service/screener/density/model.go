@@ -27,8 +27,14 @@ type Signal struct {
 	Age                        time.Duration
 	TradeLots                  int64
 	TradeCoverage              time.Duration
+	MinRubles                  float64
+	SupportPrice               Price
+	SupportTouches             int
+	ProfileUntil               time.Time
 }
 type Config struct {
+	TurnoverFraction                    float64
+	Support                             SupportConfig
 	MinRubles, MinMultiple, MaxDistance float64
 	MinNeighbors, MaxNeighbors          int
 	Persistence, Freshness              time.Duration

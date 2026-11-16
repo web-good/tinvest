@@ -55,5 +55,5 @@ func RefreshUniverse(ctx context.Context, source UniverseSource, cfg Config, int
 			return nil, fmt.Errorf("history %s: %w", inputs[i].Instrument.ID, err)
 		}
 	}
-	return SelectUniverse(inputs, cfg), nil
+	return RefreshProfiles(ctx, source, SelectUniverse(inputs, cfg), cfg, interval, time.Now())
 }

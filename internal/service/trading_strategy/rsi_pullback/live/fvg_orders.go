@@ -22,6 +22,9 @@ func (s *service) reconcileFVG(ctx context.Context, pc *passCtx, sl *slot, ticke
 		return fmt.Errorf("cannot reconcile FVG orders: %w", pc.listErr)
 	}
 	save := func() error { pc.state[ticker] = e; return pc.store.Save(pc.state) }
+	if pc.shared && (e.FVGRecovering || e.FVGStopPending || e.FVGTargetPending) {
+		return fmt.Errorf("shared position has ambiguous stop ownership; reconciliation required")
+	}
 	if e.FVGRecovering {
 		triggered, err := sl.stops.TriggeredSince(ctx, sh.ID, e.EntryTime)
 		if err != nil {
@@ -46,6 +49,9 @@ func (s *service) reconcileFVG(ctx context.Context, pc *passCtx, sl *slot, ticke
 	for _, a := range pc.stopByID {
 		if a.InstrumentUID != sh.ID {
 			continue
+		}
+		if pc.shared && a.StopOrderID != e.StopOrderID && a.StopOrderID != e.TakeProfitOrderID {
+			return fmt.Errorf("unknown stop on shared instrument; reconciliation required")
 		}
 		switch a.Type {
 		case pb.StopOrderType_STOP_ORDER_TYPE_STOP_LOSS:
@@ -181,12 +187,33 @@ func (s *service) reconcileFVG(ctx context.Context, pc *passCtx, sl *slot, ticke
 				}
 			}
 		}
+		if e.FVGExitOrderID == "" && e.ExitRequestID != "" {
+			order, err := sl.exec.RequestState(ctx, e.ExitRequestID)
+			if err != nil {
+				return err
+			}
+			e.FVGExitOrderID = order.GetOrderId()
+			if err := save(); err != nil {
+				return err
+			}
+		}
 		if e.FVGExitOrderID == "" {
 			return fmt.Errorf("triggered FVG order has no exchange order ID")
 		}
 		state, err := sl.exec.OrderState(ctx, e.FVGExitOrderID)
 		if err != nil {
 			return err
+		}
+		if sh.Lot <= 0 {
+			return fmt.Errorf("invalid lot size")
+		}
+		if pc.shared {
+			if state.GetOrderId() != e.FVGExitOrderID {
+				return fmt.Errorf("exit order ID mismatch")
+			}
+			if err := validateOwnedOrder(state, sh.ID, pb.OrderDirection_ORDER_DIRECTION_SELL, e.Quantity/int64(sh.Lot)); err != nil {
+				return err
+			}
 		}
 		switch state.GetExecutionReportStatus() {
 		case pb.OrderExecutionReportStatus_EXECUTION_REPORT_STATUS_FILL, pb.OrderExecutionReportStatus_EXECUTION_REPORT_STATUS_CANCELLED, pb.OrderExecutionReportStatus_EXECUTION_REPORT_STATUS_REJECTED:
@@ -200,7 +227,7 @@ func (s *service) reconcileFVG(ctx context.Context, pc *passCtx, sl *slot, ticke
 		if remaining < 0 {
 			return fmt.Errorf("FVG execution exceeds recorded position")
 		}
-		if pos == nil && remaining == 0 {
+		if (pos == nil || pc.shared) && remaining == 0 {
 			reason, price := e.StopReason, e.StopPrice
 			if e.FVGExitStopID == e.TakeProfitOrderID {
 				reason, price = "TP", e.TakeProfit
@@ -220,6 +247,11 @@ func (s *service) reconcileFVG(ctx context.Context, pc *passCtx, sl *slot, ticke
 			sl.strat.Notify(notifier.Exit(sl.strat.Label(), ticker, reason, price, e.Quantity, false))
 			return nil
 		}
+		if pc.shared && pos != nil {
+			copyPosition := *pos
+			copyPosition.Quantity = remaining
+			pos = &copyPosition
+		}
 		if pos == nil || pos.Quantity > remaining {
 			return nil
 		}
@@ -231,10 +263,13 @@ func (s *service) reconcileFVG(ctx context.Context, pc *passCtx, sl *slot, ticke
 		if e.TakeProfitOrderID == e.FVGExitStopID {
 			e.TakeProfitOrderID = ""
 		}
-		e.FVGExitOrderID, e.FVGExitStopID = "", ""
+		e.FVGExitOrderID, e.FVGExitStopID, e.ExitRequestID = "", "", ""
 		return save()
 	}
 	if pos == nil {
+		if pc.shared {
+			return fmt.Errorf("broker snapshot has no owned inventory and no confirmed own sale; reconciliation required")
+		}
 		if pc.now.Sub(e.EntryTime) < freshEntryGrace {
 			return nil
 		}

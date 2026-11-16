@@ -1,6 +1,9 @@
 package density
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 type EventKind uint8
 
@@ -20,6 +23,7 @@ type Event struct {
 	Book                 Book
 	Price                Price
 	Quantity             int64
+	Time                 time.Time
 	TradingOpen, Success bool
 }
 type Stream interface {

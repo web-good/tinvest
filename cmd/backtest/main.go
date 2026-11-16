@@ -39,6 +39,8 @@ const (
 
 func main() {
 	var (
+		tpFill       = flag.String("tp-fill", "touch", "RSI_PULLBACK TP execution: touch|bar-close (close approximates delayed live)")
+		tpSlippage   = flag.Float64("tp-slippage-bps", 0, "RSI_PULLBACK adverse TP fill slippage in basis points; scenario assumption")
 		ticker       = flag.String("ticker", "", "ticker, e.g. RUAL (required)")
 		intervalS    = flag.String("interval", "Hour1", "candle timeframe: Minutes5|Minutes15|Minutes30|Hour1|Hour4|Day1|Week1")
 		strategyName = flag.String("strategy", "scalping", "strategy engine: scalping|reversion|scalping_rsimacd|rsi_ema|vwap_rev|rsi_pullback|rsi_zone|gap_fade|drop_bounce|pdl_reclaim|pdl_zone|hammer|pdl_rsi|fvg_imbalance")
@@ -89,7 +91,7 @@ func main() {
 	if err := run(*ticker, *strategyName, interval, *months, *cash, *fraction, *commission,
 		*paramsPath, *calibrate, *metric, *minTrades, *testMonths, *trainMonths, *holdout, *combosN, *outDir, *refresh, *explain,
 		*riskPct, *screen,
-		*volRank, *minTurnover, *atrPeriod, *topN, *wRecov, *wFreq, *wLiq, *rsiPeriodS, *rsiOversold, *recoverBars, *recoverRSI); err != nil {
+		*volRank, *minTurnover, *atrPeriod, *topN, *wRecov, *wFreq, *wLiq, *rsiPeriodS, *rsiOversold, *recoverBars, *recoverRSI, domain.TPExecution{Mode: *tpFill, SlippageBPS: *tpSlippage}); err != nil {
 		log.Fatalf("backtest: %v", err)
 	}
 }
@@ -120,7 +122,18 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 	paramsPath, calibratePath, metric string, minTrades, testMonths, trainMonths, holdoutMonths, combosN int, outDir string, refresh bool, explain string,
 	riskPct float64, screenCSV string,
 	volRank bool, minTurnoverM float64, atrPeriod, topN int, wRecov, wFreq, wLiq float64, rsiPeriodS int, rsiOversold float64, recoverBars int, recoverRSI float64,
+	tpOptions ...domain.TPExecution,
 ) error {
+	var tpExecution domain.TPExecution
+	if len(tpOptions) > 0 {
+		tpExecution = tpOptions[0]
+	}
+	if err := tpExecution.Validate(strategyName); err != nil {
+		return err
+	}
+	if (screenCSV != "" || volRank) && (tpExecution.Mode == "bar-close" || tpExecution.SlippageBPS != 0) {
+		return fmt.Errorf("custom TP execution is unavailable in screening modes")
+	}
 	if paramsPath != "" && calibratePath != "" {
 		return fmt.Errorf("-params and -calibrate are mutually exclusive")
 	}
@@ -233,7 +246,7 @@ func run(ticker, strategyName string, interval enum.Interval, months int, cash, 
 		}
 	}
 
-	cfg := domain.Config{InitialCash: cash, Fraction: fraction, Commission: commission, Lot: share.Lot, RiskFractionPct: riskPct, HTFInterval: htfInterval,
+	cfg := domain.Config{TPExecution: tpExecution, InitialCash: cash, Fraction: fraction, Commission: commission, Lot: share.Lot, RiskFractionPct: riskPct, HTFInterval: htfInterval,
 		// gap_fade triggers on the opening-auction print itself, drop_bounce, pdl_reclaim, pdl_zone, hammer
 		// pdl_rsi and fvg_imbalance on a bar's close; either way the first price an order can get is the
 		// next bar's open.
@@ -540,13 +553,14 @@ func reportHTFCoverage(htf []domain.Candle, leadInFrom time.Time, label string) 
 
 func metaCommon(ticker string, interval enum.Interval, from, to time.Time, cfg domain.Config) domain.Meta {
 	return domain.Meta{
-		Ticker:      ticker,
-		Interval:    interval.String(),
-		From:        from,
-		To:          to,
-		InitialCash: cfg.InitialCash,
-		Fraction:    cfg.Fraction,
-		Commission:  cfg.Commission,
+		ExecutionAssumptions: cfg.TPExecution.Description(),
+		Ticker:               ticker,
+		Interval:             interval.String(),
+		From:                 from,
+		To:                   to,
+		InitialCash:          cfg.InitialCash,
+		Fraction:             cfg.Fraction,
+		Commission:           cfg.Commission,
 	}
 }
 

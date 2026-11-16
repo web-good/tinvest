@@ -57,3 +57,33 @@ func TestDensityConfigLoadsEnvironment(t *testing.T) {
 		t.Fatalf("config %+v", cfg)
 	}
 }
+
+func TestDensityHistoryFilterEnvironmentAndValidation(t *testing.T) {
+	t.Setenv("DENSITY_TURNOVER_FRACTION", "0.005")
+	t.Setenv("DENSITY_SUPPORT_ENABLED", "true")
+	t.Setenv("DENSITY_SUPPORT_LOOKBACK_DAYS", "60")
+	t.Setenv("DENSITY_SUPPORT_TOLERANCE", "0.002")
+	c := NewDensityConfig()
+	if err := confita.NewLoader(env.NewBackend()).Load(context.Background(), c); err != nil {
+		t.Fatal(err)
+	}
+	if c.TurnoverFraction != .005 || !c.SupportEnabled || c.SupportLookbackDays != 60 || c.SupportTolerance != .002 {
+		t.Fatalf("history config %+v", c)
+	}
+	if err := c.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	for _, change := range []func(*DensityConfig){
+		func(c *DensityConfig) { c.TurnoverFraction = -.1 },
+		func(c *DensityConfig) { c.SupportLookbackDays = 91 },
+		func(c *DensityConfig) { c.SupportTolerance = 0 },
+		func(c *DensityConfig) { c.SupportMinTouches = 1 },
+		func(c *DensityConfig) { c.SupportBounceBars = 1 },
+	} {
+		copy := *c
+		change(&copy)
+		if copy.Validate() == nil {
+			t.Fatal("invalid history config accepted")
+		}
+	}
+}

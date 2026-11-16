@@ -53,6 +53,14 @@ func (a *App) Run(ctx context.Context) error {
 	if densityService != nil {
 		defer startDensityWorker(ctx, densityService)()
 	}
+	// The continuous participant uses the same account/coordinator as the candle
+	// runner. Its startup failure does not stop management of other strategies.
+	densityLive, liveErr := a.sp.GetDensityLiveService()
+	if liveErr != nil {
+		logger.ErrorContext(ctx, "density live initialization failed", liveErr.Error())
+	} else if densityLive != nil {
+		defer startDensityWorker(ctx, densityLive)()
+	}
 
 	if a.config.AppEnv == "prod" {
 		a.runProd(ctx)
@@ -231,9 +239,13 @@ func startDensityWorker(ctx context.Context, worker densityWorker) func() {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		if err := worker.Run(workerCtx); err != nil && workerCtx.Err() == nil {
+		if err := worker.Run(workerCtx); shouldLogDensityWorkerError(err, workerCtx.Err()) {
 			logger.ErrorContext(ctx, "density worker failed", err.Error())
 		}
 	}()
 	return func() { cancel(); <-done }
+}
+
+func shouldLogDensityWorkerError(err, ctxErr error) bool {
+	return err != nil && (ctxErr == nil || err != context.Canceled && err != context.DeadlineExceeded)
 }

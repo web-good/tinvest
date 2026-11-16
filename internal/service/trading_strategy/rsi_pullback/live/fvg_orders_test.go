@@ -3,6 +3,7 @@ package live
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -233,5 +234,39 @@ func TestFVGPendingTargetIgnoresEarlierPartialExit(t *testing.T) {
 	err := env.svc.reconcileFVG(context.Background(), pc, env.svc.slotByName("fvg_imbalance"), "GAZP", &imodel.Share{ID: "uid-GAZP", Lot: 1}, held("GAZP", 6))
 	if err == nil || !pc.state["GAZP"].FVGTargetPending || pc.state["GAZP"].FVGExitOrderID != "" {
 		t.Fatalf("old partial exit adopted: %+v %v", pc.state, err)
+	}
+}
+
+func TestSharedExitReconcilesOwnFillsDespiteDensityResidual(t *testing.T) {
+	for _, qty := range []int64{4, 10} {
+		t.Run(fmt.Sprint(qty), func(t *testing.T) {
+			f := &fakeStrategy{name: "fvg_imbalance", trade: true}
+			env := newSharedEnv(t, sharedNow, nil, nil, f)
+			pc := &passCtx{shared: true, state: map[string]statestore.Entry{"GAZP": {Quantity: 10, FVGExitStopID: "market", FVGExitOrderID: "own-child"}}, store: env.svc.stateStore(), stopByID: map[string]stoporders.ActiveStop{}}
+			env.orders.EXPECT().GetOrderState(mock.Anything, mock.Anything).Return(&pb.OrderState{OrderId: "own-child", InstrumentUid: "uid-GAZP", Direction: pb.OrderDirection_ORDER_DIRECTION_SELL, LotsRequested: 10, ExecutionReportStatus: pb.OrderExecutionReportStatus_EXECUTION_REPORT_STATUS_CANCELLED, LotsExecuted: qty}, nil).Once()
+			if err := env.svc.reconcileFVG(context.Background(), pc, env.svc.slotByName("fvg_imbalance"), "GAZP", &imodel.Share{ID: "uid-GAZP", Lot: 1}, held("GAZP", 11)); err != nil {
+				t.Fatal(err)
+			}
+			e, exists := pc.state["GAZP"]
+			if qty == 10 && exists {
+				t.Fatal("density residual kept candle position alive")
+			}
+			if qty == 4 && (!exists || e.Quantity != 6 || e.FVGExitOrderID != "") {
+				t.Fatalf("wrong residual: %+v", e)
+			}
+		})
+	}
+}
+
+func TestSharedFlatSnapshotWithoutOwnSaleRetainsInventoryAndProtection(t *testing.T) {
+	f := &fakeStrategy{name: "fvg_imbalance", trade: true}
+	env := newSharedEnv(t, sharedNow, nil, nil, f)
+	pc := &passCtx{shared: true, state: map[string]statestore.Entry{"GAZP": {Ticker: "GAZP", Quantity: 10, EntryTime: sharedNow.Add(-48 * time.Hour), StopOrderID: "protect"}}, store: env.svc.stateStore(), now: sharedNow, stopByID: map[string]stoporders.ActiveStop{"protect": {StopOrderID: "protect", InstrumentUID: "uid-GAZP", Lots: 10, Type: pb.StopOrderType_STOP_ORDER_TYPE_STOP_LOSS}}}
+	err := env.svc.reconcileFVG(context.Background(), pc, env.svc.slotByName("fvg_imbalance"), "GAZP", &imodel.Share{ID: "uid-GAZP", Lot: 1}, nil)
+	if err == nil {
+		t.Fatal("flat snapshot treated as confirmed own exit")
+	}
+	if got := pc.state["GAZP"]; got.Quantity != 10 || got.StopOrderID != "protect" {
+		t.Fatalf("lost inventory/protection: %+v", got)
 	}
 }

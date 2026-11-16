@@ -8,6 +8,7 @@ package live
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"sync"
@@ -15,6 +16,7 @@ import (
 
 	"tinvest/internal/config"
 	imodel "tinvest/internal/model"
+	"tinvest/internal/service/trading_strategy/livecore/accountcoord"
 	"tinvest/internal/service/trading_strategy/livecore/adapter"
 	"tinvest/internal/service/trading_strategy/livecore/candles"
 	"tinvest/internal/service/trading_strategy/livecore/executor"
@@ -56,6 +58,9 @@ type Service interface {
 }
 
 type service struct {
+	coordinator     *accountcoord.Coordinator
+	entryLease      *accountcoord.Lease
+	coordinationErr error
 	// mu serializes passes: the cron fires every half hour and shares one *service
 	// instance (memoized in service_provider). Without the lock a delayed pass could
 	// interleave its Load→mutate→Save cycle with the next one and silently drop its
@@ -142,11 +147,34 @@ func NewService(
 
 // Run makes the single pass. The mutex is held for the whole pass so that two overlapping
 // cron invocations cannot interleave their Load→mutate→Save cycles.
-func (s *service) Run(ctx context.Context, _ dto.Run) error {
+func (s *service) Run(ctx context.Context, _ dto.Run) (retErr error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.coordinationErr != nil {
+		return s.coordinationErr
+	}
+	if s.coordinator != nil {
+		lease, err := s.coordinator.Lock(ctx)
+		if err != nil {
+			return err
+		}
+		s.entryLease = lease
+		defer func() { s.entryLease = nil; retErr = errors.Join(retErr, lease.Close()) }()
+	}
 
 	return s.pass(ctx)
+}
+
+// SetAccountCoordinator is called once by DI before any account workers start.
+func (s *service) SetAccountCoordinator(c *accountcoord.Coordinator, externalLive bool) error {
+	if c == nil || !c.MatchesAccount(s.cfg.AccountID) {
+		s.coordinationErr = fmt.Errorf("shared coordinator belongs to another account")
+		return s.coordinationErr
+	}
+	s.coordinator = c
+	// A paper candle strategy must not persist a fake position beside live density.
+	s.anyLive = s.anyLive || externalLive
+	return nil
 }
 
 // notify шлёт счётное сообщение (не привязанное к стратегии) в тему rsi_pullback.

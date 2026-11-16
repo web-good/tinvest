@@ -282,12 +282,7 @@ func Run(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Candl
 						exitPrice = min(sig.StopLoss, c.Open)
 					}
 				case sig.Reason == "TP":
-					if sig.TakeProfit > 0 {
-						exitPrice = sig.TakeProfit
-						if !sig.ExactTargetFill {
-							exitPrice = max(sig.TakeProfit, c.Open)
-						}
-					}
+					exitPrice = cfg.TPExecution.price(sig, c)
 				}
 				res.Trades = append(res.Trades, p.close(exitPrice, c.Time, sig.Reason, sig.ExitReason))
 			}
@@ -412,12 +407,7 @@ func Trace(s strategy.Strategy, candles []Candle, dailyCandles, htfCandles []Can
 						exitPrice = min(sig.StopLoss, c.Open)
 					}
 				case sig.Reason == "TP":
-					if sig.TakeProfit > 0 {
-						exitPrice = sig.TakeProfit
-						if !sig.ExactTargetFill {
-							exitPrice = max(sig.TakeProfit, c.Open)
-						}
-					}
+					exitPrice = cfg.TPExecution.price(sig, c)
 				}
 				p.close(exitPrice, c.Time, sig.Reason, sig.ExitReason)
 			}

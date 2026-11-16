@@ -53,6 +53,7 @@ func (a *App) initConfig(ctx context.Context) error {
 		PDLReclaim:     config.NewPDLReclaimConfig(),
 		News:           config.NewNewsConfig(),
 		Density:        config.NewDensityConfig(),
+		DensityLive:    config.NewDensityLiveConfig(),
 	}
 	err = confita.NewLoader(
 		env.NewBackend(),
@@ -65,10 +66,29 @@ func (a *App) initConfig(ctx context.Context) error {
 	if err := cfg.Density.Validate(); err != nil {
 		return fmt.Errorf("density configuration: %w", err)
 	}
+	loadDensityLiveConfig(ctx, cfg)
 	a.config = cfg
 	logger.InfoContext(ctx, "Finish initializing configuration")
 
 	return nil
+}
+
+// Optional participant parsing must not abort management of existing positions.
+func loadDensityLiveConfig(ctx context.Context, cfg *config.Config) {
+	if cfg.DensityLive == nil {
+		cfg.DensityLive = config.NewDensityLiveConfig()
+	}
+	// Preserve the journal location even if parsing an earlier boolean fails.
+	if dir, ok := os.LookupEnv("DENSITY_LIVE_STATE_DIR"); ok {
+		cfg.DensityLive.StateDir = dir
+	}
+	err := confita.NewLoader(env.NewBackend()).Load(ctx, cfg.DensityLive)
+	if err == nil {
+		err = cfg.DensityLive.Validate()
+	}
+	if err != nil {
+		cfg.DensityLiveError = fmt.Errorf("density live configuration: %w", err)
+	}
 }
 
 func load(path string) error {
