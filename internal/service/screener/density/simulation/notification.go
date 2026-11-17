@@ -16,6 +16,9 @@ func FormatFill(r paper.Record) string {
 		action = "Продали бы"
 	}
 	msg := fmt.Sprintf("СИМУЛЯЦИЯ — реальных заявок нет\nDensity %s\n%s по %.4f ₽\nВремя: %s", r.Order.Ticker, action, r.FillRubles, r.At.Format("2006-01-02 15:04:05 MST"))
+	if r.Kind == "entry_filled" {
+		msg += fmt.Sprintf("\nСтоп-лосс: %.4f ₽\nТейк-профит: %.4f ₽", r.StopRubles, r.TakeRubles)
+	}
 	if r.Kind == "exit_filled" {
 		msg += fmt.Sprintf("\nПричина: %s", density.ExitReasonText(r.Detail))
 	}

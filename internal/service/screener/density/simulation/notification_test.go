@@ -37,8 +37,11 @@ func TestOutboxOnlyQueuesFillsAndSurvivesRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(q.pending) != 1 || !strings.Contains(q.pending[0].Text, "СИМУЛЯЦИЯ") || !strings.Contains(q.pending[0].Text, "Купили бы") || !strings.Contains(q.pending[0].Text, "250.0000") {
+	if len(q.pending) != 1 || !strings.Contains(q.pending[0].Text, "СИМУЛЯЦИЯ") || !strings.Contains(q.pending[0].Text, "Купили бы") || !strings.Contains(q.pending[0].Text, "250.0000") || !strings.Contains(q.pending[0].Text, "Стоп-лосс: 249.0000 ₽") {
 		t.Fatalf("pending %+v", q.pending)
+	}
+	if !strings.Contains(q.pending[0].Text, "Тейк-профит: 252.0000 ₽") {
+		t.Fatalf("take-profit missing from notification: %s", q.pending[0].Text)
 	}
 }
 
