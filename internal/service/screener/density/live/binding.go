@@ -50,14 +50,14 @@ func CheckSharedBinding(journalDir, account, coordinatorRoot string) error {
 	return nil
 }
 
-// ReadPositions returns a durable snapshot; it never opens a journal writer.
+// ReadPositions returns a durable snapshot, or nil if there is no real journal.
 func ReadPositions(journalDir string) (map[string]accountcoord.DensityPosition, error) {
 	state, exists, err := lastJournalState(filepath.Join(journalDir, "events.jsonl"))
 	if err != nil {
 		return nil, err
 	}
 	if !exists {
-		return map[string]accountcoord.DensityPosition{}, nil
+		return nil, nil
 	}
 	state, err = migrateState(state)
 	if err != nil {

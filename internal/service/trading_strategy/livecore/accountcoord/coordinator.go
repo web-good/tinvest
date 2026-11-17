@@ -52,6 +52,15 @@ func New(root, account string, legacy statestore.Store) *Coordinator {
 }
 func (c *Coordinator) Root() string { return c.root }
 
+// HasDensityBinding reports whether a real Density writer has reserved its journal.
+func (c *Coordinator) HasDensityBinding() (bool, error) {
+	_, err := os.Stat(filepath.Join(c.root, "density.lock"))
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
 // SetGuard installs a read-only binding check before either account participant
 // may obtain an entry lease. Configure it before starting workers.
 func (c *Coordinator) SetGuard(guard func() error) { c.guard = guard }

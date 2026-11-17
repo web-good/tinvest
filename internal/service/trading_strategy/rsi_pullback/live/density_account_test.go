@@ -343,3 +343,42 @@ func TestSharedUnknownOrdersAndStopsBlockCandleEntry(t *testing.T) {
 		})
 	}
 }
+
+func TestConfirmedCandleSaleReleasesOnlyCandleReservation(t *testing.T) {
+	ctx := context.Background()
+	guest := zoneFake(model.SignalNone, "GAZP")
+	guest.trade = true
+	e := newSharedEnv(t, sharedNow, nil, nil, guest)
+	c := sharedCoordinator(t, e)
+	candle := reserveTicker(t, c, "rsi_zone")
+	density := reserveTicker(t, c, "density")
+	lease, err := c.Lock(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lease.Close()
+	state := map[string]statestore.Entry{
+		"GAZP": {Strategy: candle.Owner, Quantity: 10, FVGExitStopID: "market", FVGExitOrderID: "candle-exit"},
+	}
+	pc := &passCtx{shared: true, state: state, store: e.svc.stateStore(), lease: lease, claims: map[string]accountcoord.Claim{"GAZP": candle}}
+	e.orders.EXPECT().GetOrderState(mock.Anything, mock.Anything).Return(&investapi.OrderState{
+		OrderId: "candle-exit", InstrumentUid: candle.InstrumentID, Direction: investapi.OrderDirection_ORDER_DIRECTION_SELL,
+		LotsRequested: 10, LotsExecuted: 10, ExecutionReportStatus: investapi.OrderExecutionReportStatus_EXECUTION_REPORT_STATUS_FILL,
+	}, nil).Once()
+	share := shareFor("GAZP")[0]
+	share.Lot = 1
+	if err := e.svc.reconcileFVG(ctx, pc, e.svc.slotByName(candle.Owner), "GAZP", share, held("GAZP", 5)); err != nil {
+		t.Fatal(err)
+	}
+	claims, err := c.CandleClaims(ctx)
+	if err != nil || len(claims) != 0 {
+		t.Fatalf("candle reservation survived closure: %v, %v", claims, err)
+	}
+	densityClaims, err := c.DensityClaims(ctx)
+	if err != nil || densityClaims["GAZP"].Key != density.Key {
+		t.Fatalf("density reservation changed: %v, %v", densityClaims, err)
+	}
+	if _, ok := e.state(t)["GAZP"]; ok {
+		t.Fatal("confirmed candle position is still open")
+	}
+}

@@ -243,8 +243,7 @@ func (s *ServiceProvider) GetRSIPullbackLiveService() rsipullbacklive.Service {
 			serviceProvider.appConfig.RSIPullback,
 			guests...,
 		)
-		externalLive := s.appConfig.DensityLiveError == nil && s.appConfig.DensityLive != nil && s.appConfig.DensityLive.Enabled && s.appConfig.DensityLive.TradeEnabled
-		if err := accountService.SetAccountCoordinator(s.GetAccountCoordinator(), externalLive); err != nil {
+		if err := accountService.SetAccountCoordinator(s.GetAccountCoordinator(), s.densityTradingEnabled()); err != nil {
 			logger.ErrorContext(s.ctx, "shared account coordinator initialization failed", err.Error())
 		}
 		serviceProvider.service.rsiPullbackLiveService = accountService

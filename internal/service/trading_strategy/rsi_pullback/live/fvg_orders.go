@@ -207,7 +207,7 @@ func (s *service) reconcileFVG(ctx context.Context, pc *passCtx, sl *slot, ticke
 		if sh.Lot <= 0 {
 			return fmt.Errorf("invalid lot size")
 		}
-		if pc.shared {
+		if pc.shared || e.ExitRequestID != "" {
 			if state.GetOrderId() != e.FVGExitOrderID {
 				return fmt.Errorf("exit order ID mismatch")
 			}
@@ -240,8 +240,19 @@ func (s *service) reconcileFVG(ctx context.Context, pc *passCtx, sl *slot, ticke
 					price = average
 				}
 			}
+			if claim, ok := pc.claims[ticker]; ok {
+				if claim.Owner != sl.strat.Name() || claim.InstrumentID != sh.ID {
+					return fmt.Errorf("candle reservation does not match the confirmed exit")
+				}
+				// The durable entry still excludes other candle strategies if saving the close fails.
+				if err := s.coordinator.Remove(pc.lease, claim); err != nil {
+					return err
+				}
+				delete(pc.claims, ticker)
+			}
 			delete(pc.state, ticker)
 			if err := pc.store.Save(pc.state); err != nil {
+				pc.state[ticker] = e
 				return err
 			}
 			sl.strat.Notify(notifier.Exit(sl.strat.Label(), ticker, reason, price, e.Quantity, false))

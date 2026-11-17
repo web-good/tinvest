@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -134,5 +136,65 @@ func TestDensityLiveSenderUsesConfiguredTopic(t *testing.T) {
 	}
 	if got.ChatID != -100123 || got.TopicID != 42 || got.Text != densitylive.FormatNotification(n) {
 		t.Fatalf("wrong destination or body: %+v", got)
+	}
+}
+
+func TestMissingDensityJournalSelectsMode(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		cfg := &config.Config{
+			DensityLive: config.NewDensityLiveConfig(),
+			RSIPullback: &config.RSIPullbackConfig{AccountID: "test-account"},
+		}
+		cfg.DensityLive.StateDir = t.TempDir()
+		cfg.DensityLive.Enabled = true
+		cfg.DensityLive.TradeEnabled = enabled
+		s := &ServiceProvider{appConfig: cfg}
+		snapshot, err := s.GetAccountCoordinator().DensitySnapshot(context.Background())
+		if err != nil || (snapshot != nil) != enabled {
+			t.Fatalf("live=%v: positions=%v, err=%v", enabled, snapshot, err)
+		}
+	}
+}
+
+func TestSimulationKeepsSharedModeWithRealJournal(t *testing.T) {
+	cfg := &config.Config{
+		DensityLive: config.NewDensityLiveConfig(),
+		RSIPullback: &config.RSIPullbackConfig{AccountID: "test-account"},
+	}
+	cfg.DensityLive.StateDir = t.TempDir()
+	cfg.DensityLive.Enabled = true
+	dir := filepath.Join(cfg.DensityLive.StateDir, densitylive.AccountHash(cfg.RSIPullback.AccountID))
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	frame := `{"State":{"Version":2}}` + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(frame), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s := &ServiceProvider{appConfig: cfg}
+	snapshot, err := s.GetAccountCoordinator().DensitySnapshot(context.Background())
+	if err != nil || snapshot == nil {
+		t.Fatalf("real journal requires shared accounting: positions=%v, err=%v", snapshot, err)
+	}
+}
+
+func TestSimulationFailsClosedWhenBoundDensityJournalIsMissing(t *testing.T) {
+	t.Chdir(t.TempDir())
+	cfg := &config.Config{
+		DensityLive: config.NewDensityLiveConfig(),
+		RSIPullback: &config.RSIPullbackConfig{AccountID: "test-bound-account"},
+	}
+	cfg.DensityLive.StateDir = t.TempDir()
+	s := &ServiceProvider{appConfig: cfg}
+	coord := s.GetAccountCoordinator()
+	lease, err := coord.LockDensity(context.Background(), cfg.DensityLive.StateDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := lease.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := coord.DensitySnapshot(context.Background()); err == nil {
+		t.Fatal("a missing bound real journal switched the runner to ordinary reconciliation")
 	}
 }

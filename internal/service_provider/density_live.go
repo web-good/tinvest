@@ -48,13 +48,32 @@ func (s *ServiceProvider) GetAccountCoordinator() *accountcoord.Coordinator {
 		}
 		coordinator := s.service.accountCoordinator
 		coordinator.SetDensitySnapshot(func(context.Context) (map[string]accountcoord.DensityPosition, error) {
-			return densitylive.ReadPositions(filepath.Join(stateDir, densitylive.AccountHash(account)))
+			positions, err := densitylive.ReadPositions(filepath.Join(stateDir, densitylive.AccountHash(account)))
+			if err != nil || positions != nil {
+				return positions, err
+			}
+			if s.densityTradingEnabled() {
+				return map[string]accountcoord.DensityPosition{}, nil
+			}
+			bound, err := coordinator.HasDensityBinding()
+			if err != nil {
+				return nil, err
+			}
+			if bound {
+				return nil, fmt.Errorf("real density journal is missing for the bound account")
+			}
+			return nil, nil
 		})
 		coordinator.SetGuard(func() error {
 			return densitylive.CheckSharedBinding(filepath.Join(stateDir, densitylive.AccountHash(account)), account, coordinator.Root())
 		})
 	}
 	return s.service.accountCoordinator
+}
+
+func (s *ServiceProvider) densityTradingEnabled() bool {
+	cfg := s.appConfig.DensityLive
+	return s.appConfig.DensityLiveError == nil && cfg != nil && cfg.Enabled && cfg.TradeEnabled
 }
 
 func (s *ServiceProvider) GetDensityLiveService() (*densitylive.Participant, error) {
