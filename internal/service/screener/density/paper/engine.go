@@ -131,7 +131,7 @@ func (e *Engine) Observe(s density.Signal, now time.Time) {
 	if !s.ProfileUntil.IsZero() && !now.Before(s.ProfileUntil) {
 		return
 	}
-	if e.err != nil || !e.fresh(s.InstrumentID, now) || now.Before(e.cooldown[s.InstrumentID]) {
+	if e.err != nil || e.entryHoursBlocked(now) || !e.fresh(s.InstrumentID, now) || now.Before(e.cooldown[s.InstrumentID]) {
 		return
 	}
 	if o := e.orders[s.InstrumentID]; o != nil && active(o) {
@@ -236,6 +236,9 @@ func (e *Engine) OnBookWithCandidates(b density.Book, candidates []density.Signa
 		e.mark(now)
 		return
 	}
+	if e.cancelEntryOutsideHours(o, now) {
+		return
+	}
 	if o.State == "pending" && now.Sub(o.Created) >= e.cfg.EntryTTL {
 		e.cancel(o, "entry_timeout", now)
 		return
@@ -297,6 +300,9 @@ func (e *Engine) OnTrade(t density.Event, now time.Time) {
 	e.lastTrade[t.InstrumentID] = t.Time
 	o := e.orders[t.InstrumentID]
 	if o == nil || !active(o) {
+		return
+	}
+	if e.cancelEntryOutsideHours(o, now) {
 		return
 	}
 	if o.State == "open" && price(t.Price) <= o.Stop {
@@ -444,6 +450,9 @@ func (e *Engine) Tick(now time.Time) {
 	for _, id := range ids {
 		o := e.orders[id]
 		if !active(o) {
+			continue
+		}
+		if e.cancelEntryOutsideHours(o, now) {
 			continue
 		}
 		if !e.fresh(id, now) {

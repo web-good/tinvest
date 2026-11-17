@@ -3,6 +3,7 @@ package simulation
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 	"tinvest/internal/service/screener/density"
@@ -58,7 +59,7 @@ func (s *streamFake) Receive() ([]density.Event, error) {
 		}
 		return append(events, density.Event{Kind: density.EventBook, InstrumentID: "x", Book: b}), nil
 	}
-	if s.step == 2 {
+	if s.step == 2 || s.step == 3 {
 		timer := time.NewTimer(30 * time.Millisecond)
 		defer timer.Stop()
 		select {
@@ -66,13 +67,17 @@ func (s *streamFake) Receive() ([]density.Event, error) {
 		case <-s.ctx.Done():
 			return nil, s.ctx.Err()
 		}
-		return []density.Event{{Kind: density.EventTrade, InstrumentID: "x", Time: time.Now(), Price: density.Price{Units: 100}, Quantity: 10}}, nil
+		price := int64(100)
+		if s.step == 3 {
+			price = 108
+		}
+		return []density.Event{{Kind: density.EventTrade, InstrumentID: "x", Time: time.Now(), Price: density.Price{Units: price}, Quantity: 10}}, nil
 	}
 	<-s.ctx.Done()
 	return nil, s.ctx.Err()
 }
 
-func TestServiceStartsAndAlertsOnlyOnVirtualFill(t *testing.T) {
+func TestServiceAlertsOnlyAfterVirtualTakeClosesTrade(t *testing.T) {
 	cfg := paper.DefaultConfig()
 	cfg.MaxEntryLots = 1
 	cfg.Latency = 10 * time.Millisecond
@@ -85,7 +90,12 @@ func TestServiceStartsAndAlertsOnlyOnVirtualFill(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- service.Run(ctx) }()
 	select {
-	case <-sent:
+	case msg := <-sent:
+		if !strings.Contains(msg, "Купили бы") || !strings.Contains(msg, "Продали бы") || !strings.Contains(msg, "Причина: Тейк-профит") {
+			cancel()
+			<-done
+			t.Fatalf("incomplete trade alert: %s", msg)
+		}
 	case <-time.After(2 * time.Second):
 		cancel()
 		t.Fatalf("no execution alert, service error: %v", <-done)

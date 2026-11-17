@@ -8,6 +8,7 @@ import (
 )
 
 type Config struct {
+	RestrictEntryHours                              bool  // Block buys at 07:00–12:00 and 15:00–18:00 Moscow time.
 	BookExecution                                   bool  // Execute against visible books without a trade subscription.
 	IgnoreCapital                                   bool  // Price-only simulation does not allocate a virtual balance.
 	MaxEntryLots                                    int64 // Zero keeps allocation-based sizing; live simulation uses one lot.

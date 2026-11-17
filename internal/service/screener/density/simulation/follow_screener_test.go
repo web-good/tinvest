@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -65,6 +67,10 @@ func (s *expandedStream) Receive() ([]density.Event, error) {
 		}
 		b.Bids = append(b.Bids, density.Level{Price: density.Price{Units: 100 - n}, Quantity: qty})
 	}
+	if s.step >= 3 {
+		b.Bids = append([]density.Level{{Price: density.Price{Units: 110}, Quantity: 10}}, b.Bids...)
+		b.Asks[0].Price = density.Price{Units: 111}
+	}
 	events := []density.Event{{Kind: density.EventBook, InstrumentID: "10", Book: b}}
 	if s.step == 1 {
 		events = append([]density.Event{{Kind: density.EventBookAck, InstrumentID: "10", Success: true}, {Kind: density.EventInfoAck, InstrumentID: "10", Success: true}, {Kind: density.EventTradingStatus, InstrumentID: "10", TradingOpen: true}}, events...)
@@ -83,6 +89,7 @@ func TestSimulationFollowsAdditionalTickerInUniverseLargerThanTen(t *testing.T) 
 	detector := density.DefaultConfig()
 	detector.Persistence = 0
 	sent := make(chan string, 1)
+	root := t.TempDir()
 	service := Service{Market: market, FollowScreener: true, AllowEntry: func(i density.Instrument, _ density.Signal) bool {
 		allow := admitted.Load() && i.ID == "10"
 		select {
@@ -90,7 +97,7 @@ func TestSimulationFollowsAdditionalTickerInUniverseLargerThanTen(t *testing.T) 
 		default:
 		}
 		return allow
-	}, Config: cfg, Detector: detector, Tickers: []string{"BASE"}, Root: t.TempDir(), HistoryInterval: time.Nanosecond, Notify: func(_ context.Context, msg string) error { sent <- msg; return nil }}
+	}, Config: cfg, Detector: detector, Tickers: []string{"BASE"}, Root: root, HistoryInterval: time.Nanosecond, Notify: func(_ context.Context, msg string) error { sent <- msg; return nil }}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- service.Run(ctx) }()
@@ -115,13 +122,46 @@ func TestSimulationFollowsAdditionalTickerInUniverseLargerThanTen(t *testing.T) 
 	}
 	admitted.Store(true)
 	market.next <- struct{}{}
+	// Observe the persisted entry before creating the take execution snapshot.
+	ticker := time.NewTicker(time.Millisecond)
+	defer ticker.Stop()
+	deadline := time.NewTimer(2 * time.Second)
+	defer deadline.Stop()
+entry:
+	for {
+		select {
+		case <-ticker.C:
+			paths, err := filepath.Glob(filepath.Join(root, "paper", "*", "events.jsonl"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, path := range paths {
+				data, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if strings.Contains(string(data), `"kind":"entry_filled"`) {
+					break entry
+				}
+			}
+		case <-deadline.C:
+			t.Fatal("admitted entry was not filled")
+		}
+	}
 	select {
 	case msg := <-sent:
-		if !strings.Contains(msg, "EXTRA10") || !strings.Contains(msg, "100.20") {
+		t.Fatalf("alert before trade closure: %s", msg)
+	default:
+	}
+	market.next <- struct{}{}
+
+	select {
+	case msg := <-sent:
+		if !strings.Contains(msg, "EXTRA10") || !strings.Contains(msg, "100.20") || !strings.Contains(msg, "Причина: Тейк-профит") {
 			t.Fatal(msg)
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("no entry for admitted additional ticker")
+		t.Fatal("no completed trade for admitted additional ticker")
 	}
 	if market.tradeCalls.Load() != 0 {
 		t.Fatal("expanded mode subscribed to tape")

@@ -3,27 +3,29 @@ package simulation
 
 import (
 	"fmt"
+	"time"
 	"tinvest/internal/service/screener/density"
 	"tinvest/internal/service/screener/density/paper"
 )
 
 func FormatFill(r paper.Record) string {
-	if r.Order == nil || (r.Kind != "entry_filled" && r.Kind != "exit_filled") {
+	if r.Order == nil || r.Kind != "exit_filled" || r.Order.State != "closed" || r.Order.OpenLots != 0 {
 		return ""
 	}
-	action := "Купили бы"
-	if r.Kind == "exit_filled" {
-		action = "Продали бы"
+	o := r.Order
+	exit := r.FillRubles
+	if o.FilledLots > 0 && o.Lot > 0 && r.EntryRubles > 0 {
+		// GrossPnL includes every exit fill, before commissions.
+		exit = r.EntryRubles + o.GrossPnL/(float64(o.FilledLots)*float64(o.Lot))
 	}
-	msg := fmt.Sprintf("СИМУЛЯЦИЯ — реальных заявок нет\nDensity %s\n%s по %.4f ₽\nВремя: %s", r.Order.Ticker, action, r.FillRubles, r.At.Format("2006-01-02 15:04:05 MST"))
-	if r.Kind == "entry_filled" {
-		msg += fmt.Sprintf("\nСтоп-лосс: %.4f ₽\nТейк-профит: %.4f ₽", r.StopRubles, r.TakeRubles)
-	}
-	if r.Kind == "exit_filled" {
-		msg += fmt.Sprintf("\nПричина: %s", density.ExitReasonText(r.Detail))
-		if r.EntryRubles > 0 {
-			msg += fmt.Sprintf("\nРезультат: %+.2f%%", (r.FillRubles-r.EntryRubles)/r.EntryRubles*100)
-		}
+	moscow := time.FixedZone("МСК", 3*60*60)
+	const layout = "2006-01-02 15:04:05 MST"
+	msg := fmt.Sprintf("СИМУЛЯЦИЯ — реальных заявок нет\nDensity %s — Сделка завершена\nКупили бы по %.4f ₽\nВремя покупки: %s\nПлотность при входе: %.4f ₽\nРазмер плотности: %d лотов\nСтоп-лосс: %.4f ₽\nТейк-профит: %.4f ₽\nПродали бы по %.4f ₽\nВремя продажи: %s\nПричина: %s",
+		o.Ticker, r.EntryRubles, o.Opened.In(moscow).Format(layout),
+		float64(o.Density)/1e9, o.DensityLots, r.StopRubles, r.TakeRubles,
+		exit, o.Closed.In(moscow).Format(layout), density.ExitReasonText(r.Detail))
+	if r.EntryRubles > 0 {
+		msg += fmt.Sprintf("\nРезультат: %+.2f%%", (exit-r.EntryRubles)/r.EntryRubles*100)
 	}
 	return msg
 }

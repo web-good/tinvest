@@ -99,8 +99,8 @@ func (s *Service) Run(parent context.Context) (retErr error) {
 	return errors.Join(runErr, engine.Err(), summaryErr)
 }
 
-// The outbox commits the complete fill and its alert together before the
-// diagnostic session log: a crash between writes cannot lose a fill alert.
+// The outbox commits the closed trade and its alert together before the
+// diagnostic session log: a crash between writes cannot lose a completed-trade alert.
 func recordEvent(journal *paper.Journal, outbox *Outbox, r paper.Record) error {
 	if err := outbox.Record(r); err != nil {
 		return err

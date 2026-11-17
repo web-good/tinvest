@@ -34,6 +34,22 @@ func OpenOutbox(path string) (*Outbox, error) {
 		if err = json.Unmarshal(data, &q.pending); err != nil {
 			return nil, fmt.Errorf("simulation outbox: %w", err)
 		}
+		// Upgrade structured alerts from the old per-fill format. Entry and
+		// partial-exit alerts must not be delivered after the format change.
+		pending := make([]message, 0, len(q.pending))
+		for _, m := range q.pending {
+			if m.Fill != nil {
+				m.Text = FormatFill(*m.Fill)
+				if m.Text == "" {
+					continue
+				}
+			}
+			pending = append(pending, m)
+		}
+		if err = q.save(pending); err != nil {
+			return nil, fmt.Errorf("simulation outbox upgrade: %w", err)
+		}
+		q.pending = pending
 	}
 	return q, nil
 }
@@ -63,7 +79,7 @@ func (q *Outbox) save(pending []message) (retErr error) {
 	return errors.Join(dir.Sync(), dir.Close())
 }
 
-// Record durably queues fills; market processing never waits for Telegram.
+// Record durably queues completed trades; market processing never waits for Telegram.
 func (q *Outbox) Record(r paper.Record) error {
 	text := FormatFill(r)
 	if text == "" {
