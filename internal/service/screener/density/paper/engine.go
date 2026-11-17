@@ -152,6 +152,7 @@ func (e *Engine) Observe(s density.Signal, now time.Time) {
 	}
 	e.orders[o.InstrumentID] = o
 	e.emit("entry_placed", o, now, "", 0, 0)
+	e.executeEntry(o, now)
 }
 
 func (e *Engine) plan(s density.Signal, now time.Time, released float64) *Order {
@@ -175,12 +176,12 @@ func (e *Engine) plan(s density.Signal, now time.Time, released float64) *Order 
 	if densityLots <= 0 {
 		return nil
 	}
-	entry, err := density.EntryPrice(level, step, e.cfg.EntryTicks, e.cfg.EntryPct)
+	entry, err := density.EntryLimit(level, step, e.cfg.EntryTicks, e.cfg.EntryPct, price(b.Asks[0].Price))
 	if err != nil {
 		return nil
 	}
 	stop := level - e.cfg.StopTicks*step
-	if stop <= 0 || entry >= price(b.Asks[0].Price) {
+	if stop <= 0 {
 		return nil
 	}
 	targetTicks := math.Ceil(float64(entry-stop) / float64(step) * e.cfg.RewardRisk)
@@ -281,6 +282,8 @@ func (e *Engine) OnBookWithCandidates(b density.Book, candidates []density.Signa
 			}
 		}
 	}
+	e.executeEntry(o, now)
+	e.executeTake(o, now)
 	e.executeExit(o, now)
 	e.mark(now)
 }
@@ -300,18 +303,7 @@ func (e *Engine) OnTrade(t density.Event, now time.Time) {
 		e.requestExit(o, "position_timeout", now)
 	}
 	if o.State == "pending" && !now.Before(o.ActiveAt) && !t.Time.Before(o.ActiveAt) && now.Sub(o.Created) < e.cfg.EntryTTL && price(t.Price) < o.Entry {
-		lots := min(t.Quantity, o.PlannedLots)
-		cost := rub(o.Entry) * float64(lots) * float64(o.Lot)
-		fee := cost * e.cfg.Commission
-		e.cash -= cost + fee
-		e.fees += fee
-		o.EntryFees = fee
-		o.FilledLots = lots
-		o.OpenLots = lots
-		o.Opened = now
-		o.TakeActive = now.Add(e.cfg.Latency)
-		o.State = "open"
-		e.emit("entry_filled", o, now, "unfilled entry remainder canceled", lots, rub(o.Entry))
+		e.fillEntry(o, min(t.Quantity, o.PlannedLots), o.Entry, now)
 		if price(t.Price) <= o.Stop {
 			e.requestExit(o, "stop", now)
 		}
@@ -320,6 +312,61 @@ func (e *Engine) OnTrade(t density.Event, now time.Time) {
 	}
 	e.mark(now)
 }
+
+// executeEntry models a marketable percentage entry using visible ask liquidity.
+// Passive tick-offset orders continue to require a trade through their limit.
+func (e *Engine) executeEntry(o *Order, now time.Time) {
+	if e.err != nil || (e.cfg.EntryPct <= 0 && !e.cfg.BookExecution) || o.State != "pending" || now.Before(o.ActiveAt) || now.Sub(o.Created) >= e.cfg.EntryTTL {
+		return
+	}
+	b := e.books[o.InstrumentID]
+	if (e.cfg.Latency > 0 && b.book.Time.Before(o.ActiveAt)) || b.consumed.Equal(b.book.Time) {
+		return
+	}
+	ask := b.book.Asks[0]
+	if price(ask.Price) > o.Entry {
+		return
+	}
+	e.fillEntry(o, min(ask.Quantity, o.PlannedLots), price(ask.Price), now)
+	b.consumed = b.book.Time
+	e.books[o.InstrumentID] = b
+}
+
+// executeTake uses visible bid liquidity only in book execution mode.
+func (e *Engine) executeTake(o *Order, now time.Time) {
+	if e.err != nil || !e.cfg.BookExecution || o.State != "open" || now.Before(o.TakeActive) {
+		return
+	}
+	b := e.books[o.InstrumentID]
+	if b.book.Time.Before(o.TakeActive) || b.consumed.Equal(b.book.Time) {
+		return
+	}
+	bid := b.book.Bids[0]
+	if price(bid.Price) < o.Take {
+		return
+	}
+	e.sell(o, min(bid.Quantity, o.OpenLots), o.Take, "take_profit", now)
+	b.consumed = b.book.Time
+	e.books[o.InstrumentID] = b
+}
+
+func (e *Engine) fillEntry(o *Order, lots, entry int64, now time.Time) {
+	o.Entry = entry
+	step := price(e.instruments[o.InstrumentID].PriceStep)
+	o.Take = entry + int64(math.Ceil(float64(entry-o.Stop)/float64(step)*e.cfg.RewardRisk))*step
+	cost := rub(entry) * float64(lots) * float64(o.Lot)
+	fee := cost * e.cfg.Commission
+	e.cash -= cost + fee
+	e.fees += fee
+	o.EntryFees = fee
+	o.FilledLots = lots
+	o.OpenLots = lots
+	o.Opened = now
+	o.TakeActive = now.Add(e.cfg.Latency)
+	o.State = "open"
+	e.emit("entry_filled", o, now, "unfilled entry remainder canceled", lots, rub(entry))
+}
+
 func (e *Engine) cancel(o *Order, reason string, now time.Time) {
 	o.State = "canceled"
 	o.Closed = now

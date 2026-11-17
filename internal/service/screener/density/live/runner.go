@@ -9,6 +9,8 @@ import (
 )
 
 type Runner struct {
+	BookOnly        bool
+	AllowEntry      func(density.Instrument, density.Signal) bool
 	HistorySource   density.UniverseSource
 	HistoryInterval time.Duration
 	profileUpdates  <-chan []density.Instrument
@@ -27,8 +29,12 @@ type receivedBatch struct {
 }
 
 func (r *Runner) Run(parent context.Context) error {
-	if r.Source == nil || r.Feed == nil || r.Engine == nil || len(r.Universe) < 1 || len(r.Universe) > 10 {
-		return fmt.Errorf("live runner requires 1..10 instruments and market/execution dependencies")
+	limit := 10
+	if r.BookOnly {
+		limit = 80
+	}
+	if r.Source == nil || r.Feed == nil || r.Engine == nil || len(r.Universe) < 1 || len(r.Universe) > limit {
+		return fmt.Errorf("live runner requires a supported universe and market/execution dependencies")
 	}
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
@@ -115,9 +121,11 @@ func (r *Runner) connection(parent context.Context) error {
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 	lots := map[string]int64{}
+	instruments := map[string]density.Instrument{}
 	var ids []string
 	for _, i := range r.Universe {
 		lots[i.ID] = i.Lot
+		instruments[i.ID] = i
 		ids = append(ids, i.ID)
 	}
 	stream, err := r.Source.OpenStream(ctx, lots)
@@ -131,8 +139,10 @@ func (r *Runner) connection(parent context.Context) error {
 	if err = stream.SubscribeInfo(ids, true); err != nil {
 		return err
 	}
-	if err = stream.SubscribeTrades(ids, true); err != nil {
-		return err
+	if !r.BookOnly {
+		if err = stream.SubscribeTrades(ids, true); err != nil {
+			return err
+		}
 	}
 	received := make(chan receivedBatch, 1)
 	done := make(chan struct{})
@@ -156,7 +166,7 @@ func (r *Runner) connection(parent context.Context) error {
 	detector := density.NewDetector(r.Detector)
 	detector.SetInstruments(r.Universe)
 	ready := func(id string, now time.Time) bool {
-		return books[id] && info[id] && open[id] && !trades[id].IsZero() && now.Sub(trades[id]) >= r.Detector.TradeReadiness
+		return books[id] && info[id] && open[id] && (r.BookOnly || (!trades[id].IsZero() && now.Sub(trades[id]) >= r.Detector.TradeReadiness))
 	}
 	for {
 		select {
@@ -223,6 +233,15 @@ func (r *Runner) connection(parent context.Context) error {
 						signals = detector.Update(event.Book, now)
 					} else {
 						detector.Reset(id)
+					}
+					if r.BookOnly && r.AllowEntry != nil {
+						var admitted []density.Signal
+						for _, signal := range signals {
+							if r.AllowEntry(instruments[id], signal) {
+								admitted = append(admitted, signal)
+							}
+						}
+						signals = admitted
 					}
 					r.Feed.BookWithCandidates(event.Book, signals, detector.Candidates(), now)
 				case density.EventTrade:

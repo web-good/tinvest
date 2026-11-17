@@ -14,10 +14,14 @@ type densitySender struct {
 	bot     *tgbot.Bot
 	chatID  int64
 	topicID int
+	onSent  func(density.Signal)
 }
 
 func (s densitySender) Send(ctx context.Context, signal density.Signal) error {
 	_, err := s.bot.SendMessage(ctx, &tgbot.SendMessageParams{ChatID: s.chatID, MessageThreadID: s.topicID, Text: density.FormatSignal(signal), ParseMode: models.ParseModeHTML})
+	if err == nil && s.onSent != nil {
+		s.onSent(signal)
+	}
 	return err
 }
 func (s *ServiceProvider) GetDensityService() (*density.Service, error) {
@@ -59,5 +63,5 @@ func (s *ServiceProvider) GetDensityService() (*density.Service, error) {
 	cfg.MaxBooks = c.MaxBooks
 	cfg.MaxTrades = c.MaxTrades
 	cfg.BookDepth = int32(c.BookDepth)
-	return density.NewService(cfg, market, market, densitySender{bot: bot.API(), chatID: c.ChatID, topicID: c.TopicID}, c.HistoryInterval), nil
+	return density.NewService(cfg, market, market, densitySender{bot: bot.API(), chatID: c.ChatID, topicID: c.TopicID, onSent: s.service.densityAlerts.Record}, c.HistoryInterval), nil
 }

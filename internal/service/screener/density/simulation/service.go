@@ -20,6 +20,8 @@ type Market interface {
 }
 
 type Service struct {
+	FollowScreener  bool
+	AllowEntry      func(density.Instrument, density.Signal) bool
 	Market          Market
 	Config          paper.Config
 	Detector        density.Config
@@ -33,6 +35,12 @@ type Service struct {
 func (s *Service) Run(parent context.Context) (retErr error) {
 	if s.Market == nil || s.Notify == nil || s.Root == "" || len(s.Tickers) < 1 || len(s.Tickers) > 10 {
 		return fmt.Errorf("simulation requires market data, recipient, state directory and 1..10 tickers")
+	}
+	if s.FollowScreener {
+		if s.AllowEntry == nil {
+			return fmt.Errorf("following density screener requires an entry admission filter")
+		}
+		s.Config.BookExecution = true
 	}
 	if err := s.Config.Validate(); err != nil {
 		return err
@@ -58,7 +66,7 @@ func (s *Service) Run(parent context.Context) (retErr error) {
 	deliveryDone := make(chan struct{})
 	go func() { defer close(deliveryDone); outbox.Run(ctx, s.Notify, s.Warn) }()
 	defer func() { cancel(); <-deliveryDone }()
-	source := selectedMarket{Market: s.Market, tickers: s.Tickers}
+	source := selectedMarket{Market: s.Market, tickers: s.Tickers, followScreener: s.FollowScreener}
 	instruments, err := density.RefreshUniverse(ctx, source, s.Detector, s.HistoryInterval)
 	if err != nil {
 		return err
@@ -81,7 +89,7 @@ func (s *Service) Run(parent context.Context) (retErr error) {
 	if err = journal.Session(s.Config, s.Detector, instruments); err != nil {
 		return err
 	}
-	runner := paper.Runner{Source: s.Market, Universe: instruments, Engine: engine, Detector: s.Detector, HistorySource: source, HistoryInterval: s.HistoryInterval, Report: journal.WriteSummary}
+	runner := paper.Runner{AllowEntry: s.AllowEntry, Source: s.Market, Universe: instruments, Engine: engine, Detector: s.Detector, HistorySource: source, HistoryInterval: s.HistoryInterval, Report: journal.WriteSummary}
 	runErr := runner.Run(ctx)
 	engine.Stop(time.Now())
 	summaryErr := journal.WriteSummary(engine.Summary(time.Now()))
@@ -102,10 +110,14 @@ func recordEvent(journal *paper.Journal, outbox *Outbox, r paper.Record) error {
 
 type selectedMarket struct {
 	Market
-	tickers []string
+	tickers        []string
+	followScreener bool
 }
 
 func (s selectedMarket) Instruments(ctx context.Context) ([]density.UniverseInput, error) {
+	if s.followScreener {
+		return s.Market.Instruments(ctx)
+	}
 	return s.InstrumentsByTickers(ctx, s.tickers)
 }
 func (s selectedMarket) SupportCandles(ctx context.Context, id string, days int) ([]density.SupportCandle, error) {

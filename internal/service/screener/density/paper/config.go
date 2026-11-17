@@ -8,6 +8,7 @@ import (
 )
 
 type Config struct {
+	BookExecution                                   bool  // Execute against visible books without a trade subscription.
 	IgnoreCapital                                   bool  // Price-only simulation does not allocate a virtual balance.
 	MaxEntryLots                                    int64 // Zero keeps allocation-based sizing; live simulation uses one lot.
 	InitialCash, PositionRubles, Commission         float64

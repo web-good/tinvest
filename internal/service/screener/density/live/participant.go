@@ -17,6 +17,8 @@ type SharedMarket interface {
 	InstrumentByID(context.Context, string) (density.Instrument, error)
 }
 type Participant struct {
+	FollowScreener    bool
+	AllowEntry        func(density.Instrument, density.Signal) bool
 	RunPaper          func(context.Context) error
 	Account, StateDir string
 	Tickers           []string
@@ -42,6 +44,9 @@ func (p *Participant) Run(ctx context.Context) (retErr error) {
 	if p.Market == nil || p.NewBroker == nil || p.Coordinator == nil || !p.Coordinator.MatchesAccount(p.Account) {
 		return fmt.Errorf("density requires the shared account coordinator and transport")
 	}
+	if p.FollowScreener && p.AllowEntry == nil {
+		return fmt.Errorf("following density screener requires an entry admission filter")
+	}
 	if err := p.Config.Validate(); err != nil {
 		return err
 	}
@@ -58,7 +63,7 @@ func (p *Participant) Run(ctx context.Context) (retErr error) {
 	if err = p.recover(ctx, store); err != nil {
 		return err
 	}
-	source := selectedSharedMarket{SharedMarket: p.Market}
+	source := selectedSharedMarket{SharedMarket: p.Market, followScreener: p.FollowScreener}
 	for _, t := range p.Tickers {
 		source.tickers = append(source.tickers, strings.ToUpper(strings.TrimSpace(t)))
 	}
@@ -86,7 +91,7 @@ func (p *Participant) Run(ctx context.Context) (retErr error) {
 			return err
 		}
 	}
-	runner := Runner{Source: p.Market, Universe: instruments, Detector: p.Detector, Feed: feed, Engine: engine, Report: p.Report, Warn: p.Warn, Notify: p.Notify, HistorySource: source, HistoryInterval: p.HistoryInterval}
+	runner := Runner{BookOnly: p.FollowScreener, AllowEntry: p.AllowEntry, Source: p.Market, Universe: instruments, Detector: p.Detector, Feed: feed, Engine: engine, Report: p.Report, Warn: p.Warn, Notify: p.Notify, HistorySource: source, HistoryInterval: p.HistoryInterval}
 	runErr := runner.Run(ctx)
 	cleanupCtx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
@@ -149,10 +154,14 @@ func (p *Participant) flushNotifications(engine *Engine) error {
 
 type selectedSharedMarket struct {
 	SharedMarket
-	tickers []string
+	tickers        []string
+	followScreener bool
 }
 
 func (m selectedSharedMarket) Instruments(ctx context.Context) ([]density.UniverseInput, error) {
+	if m.followScreener {
+		return m.SharedMarket.Instruments(ctx)
+	}
 	return m.InstrumentsByTickers(ctx, m.tickers)
 }
 

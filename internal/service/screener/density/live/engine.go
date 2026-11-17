@@ -345,10 +345,15 @@ func (e *Engine) begin(ctx context.Context, now time.Time) (retErr error) {
 		if !allowed {
 			continue
 		}
+		checkedPrice := ep.EntryPrice
 		ep, err = e.feed.Prepare(i, c.Signal, e.Now())
 		if err != nil {
 			return nil
 		} // confirmation can expire during read-only broker checks
+		if ep.EntryPrice > checkedPrice {
+			e.feed.Unwatch(i.ID)
+			return nil
+		}
 		if reason := e.feed.Reason(e.Now()); reason != "" {
 			e.feed.Watch(nil, e.Now())
 			return nil

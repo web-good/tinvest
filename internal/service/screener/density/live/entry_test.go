@@ -9,43 +9,40 @@ import (
 
 func TestPlanPercentageEntry(t *testing.T) {
 	now := time.Now()
-	i := density.Instrument{ID: "x", Ticker: "X", Lot: 1, PriceStep: density.Price{Nano: 10_000_000}}
-	s := density.Signal{InstrumentID: "x", Price: density.Price{Units: 100}}
-	b := density.Book{InstrumentID: "x", Lot: 1, Time: now,
-		Bids: []density.Level{{Price: s.Price, Quantity: 100}},
-		Asks: []density.Level{{Price: density.Price{Units: 101}, Quantity: 1}}}
+	i := density.Instrument{ID: "x", Ticker: "VTBR", Lot: 1, PriceStep: density.Price{Nano: 10_000_000}}
+	signal := density.Signal{InstrumentID: "x", Price: priceFromNano(60_390_000_000)}
 	for _, tc := range []struct {
-		name string
-		pct  float64
-		want int64
+		name     string
+		ask      int64
+		accepted bool
 	}{
-		{"ticks fallback", 0, 100_010_000_000},
-		{"percentage replaces ticks", .3, 100_300_000_000},
-		{"round down to step", .305, 100_300_000_000},
-		{"at least one tick", .001, 100_010_000_000},
+		{"inside zone", 60_460_000_000, true},
+		{"at boundary", 60_570_000_000, true},
+		{"above boundary", 60_580_000_000, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := DefaultConfig()
-			cfg.EntryPct = tc.pct
-			ep, err := Plan(cfg, i, s, b, now)
+			cfg.EntryPct = .3
+			cfg.RewardRisk = 1.5
+			b := density.Book{InstrumentID: "x", Lot: 1, Time: now, Bids: []density.Level{{Price: signal.Price, Quantity: 100}}, Asks: []density.Level{{Price: priceFromNano(tc.ask), Quantity: 10}}}
+			ep, err := Plan(cfg, i, signal, b, now)
+			if !tc.accepted {
+				if err == nil {
+					t.Fatal("entry outside zone accepted")
+				}
+				return
+			}
 			if err != nil {
 				t.Fatal(err)
 			}
-			if ep.EntryPrice != tc.want {
-				t.Fatalf("entry = %d, want %d", ep.EntryPrice, tc.want)
+			if ep.EntryPrice != tc.ask || ep.StopPrice != 60_370_000_000 {
+				t.Fatalf("wrong entry/protection: %+v", ep)
 			}
-			if ep.StopPrice != 99_980_000_000 {
-				t.Fatalf("stop moved: %d", ep.StopPrice)
-			}
-			if ep.TakePrice != ep.EntryPrice+2*(ep.EntryPrice-ep.StopPrice) {
-				t.Fatalf("wrong take: %d", ep.TakePrice)
+			wantTake := tc.ask + int64(math.Ceil(float64(tc.ask-ep.StopPrice)/10_000_000*1.5))*10_000_000
+			if ep.TakePrice != wantTake {
+				t.Fatalf("take=%d want %d", ep.TakePrice, wantTake)
 			}
 		})
-	}
-	cfg := DefaultConfig()
-	cfg.EntryPct = 1
-	if _, err := Plan(cfg, i, s, b, now); err == nil {
-		t.Fatal("entry at ask accepted")
 	}
 }
 

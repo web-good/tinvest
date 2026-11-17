@@ -103,6 +103,10 @@ func (s *ServiceProvider) GetDensityLiveService() (*densitylive.Participant, err
 	detector.MinTurnover = d.MinTurnover
 	detector.MaxLotPrice = d.MaxLotPrice
 	detector.MaxBooks = min(len(c.Tickers), d.MaxBooks)
+	if c.FollowScreener {
+		detector.MaxBooks = d.MaxBooks
+	}
+	detector.MaxTrades = d.MaxTrades
 	detector.BookDepth = int32(d.BookDepth)
 	lc := densitylive.DefaultConfig()
 	lc.EntryTicks = c.EntryTicks
@@ -125,7 +129,7 @@ func (s *ServiceProvider) GetDensityLiveService() (*densitylive.Participant, err
 	if err != nil {
 		return nil, err
 	}
-	p := &densitylive.Participant{Account: account, StateDir: c.StateDir, Tickers: c.Tickers, TradeEnabled: c.TradeEnabled, Config: lc, Detector: detector, HistoryInterval: d.HistoryInterval, Market: marketgrpc.NewDensityMarketData(client.Connection(), token), Coordinator: s.GetAccountCoordinator()}
+	p := &densitylive.Participant{FollowScreener: c.FollowScreener, AllowEntry: s.densityEntryFilter(c.Tickers), Account: account, StateDir: c.StateDir, Tickers: c.Tickers, TradeEnabled: c.TradeEnabled, Config: lc, Detector: detector, HistoryInterval: d.HistoryInterval, Market: marketgrpc.NewDensityMarketData(client.Connection(), token), Coordinator: s.GetAccountCoordinator()}
 	if c.TradeEnabled {
 		bot, botErr := s.GetTelegramBot()
 		if botErr != nil {

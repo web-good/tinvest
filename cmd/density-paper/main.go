@@ -51,7 +51,7 @@ func run(ctx context.Context, args []string, out io.Writer) (retErr error) {
 	fs.Float64Var(&pc.Commission, "commission", pc.Commission, "commission per side as fraction: 0.0005 = 0.05%")
 	fs.IntVar(&pc.MaxPositions, "max-positions", pc.MaxPositions, "maximum concurrent pending/held instruments")
 	fs.Int64Var(&pc.EntryTicks, "entry-ticks", pc.EntryTicks, "entry above density in instrument price steps")
-	fs.Float64Var(&pc.EntryPct, "entry-pct", pc.EntryPct, "entry above density in percent: 0.3 = 0.3%; 0 uses entry-ticks")
+	fs.Float64Var(&pc.EntryPct, "entry-pct", pc.EntryPct, "buy interest zone above density in percent: buy at ask within 0.3%; 0 uses entry-ticks")
 	fs.Int64Var(&pc.StopTicks, "stop-ticks", pc.StopTicks, "stop below original density in price steps")
 	fs.Float64Var(&pc.RewardRisk, "rr", pc.RewardRisk, "take distance / entry-to-stop distance")
 	fs.Float64Var(&pc.MinRemaining, "min-remaining", pc.MinRemaining, "minimum retained density fraction before cancel/exit")

@@ -52,13 +52,13 @@ func Plan(c Config, i density.Instrument, s density.Signal, b density.Book, now 
 	if c.EntryTicks > (math.MaxInt64-level)/step || c.StopTicks >= (level+step-1)/step {
 		return nil, fmt.Errorf("entry or stop offset exceeds price range")
 	}
-	entry, err := density.EntryPrice(level, step, c.EntryTicks, c.EntryPct)
+	entry, err := density.EntryLimit(level, step, c.EntryTicks, c.EntryPct, Price(b.Asks[0].Price))
 	if err != nil {
 		return nil, err
 	}
 	stop := level - c.StopTicks*step
 	ticks := math.Ceil(float64(entry-stop) / float64(step) * c.RewardRisk)
-	if stop <= 0 || entry >= Price(b.Asks[0].Price) || ticks > float64(math.MaxInt64-entry)/float64(step) {
+	if stop <= 0 || ticks > float64(math.MaxInt64-entry)/float64(step) {
 		return nil, fmt.Errorf("entry crosses ask or invalid protection prices")
 	}
 	var qty int64

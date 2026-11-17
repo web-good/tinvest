@@ -70,10 +70,21 @@ func TestReplacementUsesPercentageEntry(t *testing.T) {
 	x.i.PriceStep = density.Price{Nano: 10_000_000}
 	x.e.instruments[x.i.ID] = x.i
 	x.e.cfg.EntryPct, x.f.cfg.EntryPct = .3, .3
+	setBook := func(level, ask int64, confirmed bool) {
+		x.now = x.now.Add(time.Millisecond)
+		signal := density.Signal{InstrumentID: x.i.ID, Price: priceFromNano(level), Quantity: 1000, Since: x.now}
+		b := density.Book{InstrumentID: x.i.ID, Lot: x.i.Lot, Time: x.now, Bids: []density.Level{{Price: signal.Price, Quantity: 1000}}, Asks: []density.Level{{Price: priceFromNano(ask), Quantity: 10}}}
+		var signals []density.Signal
+		if confirmed {
+			signals = []density.Signal{signal}
+		}
+		x.f.BookWithCandidates(b, signals, []density.Signal{signal}, x.now)
+	}
+	setBook(100*Nano, 100_200_000_000, true)
 	runStep(t, x)
-	x.relocatedBook(101, 1000, true)
+	setBook(101*Nano, 101_100_000_000, false)
 	runStep(t, x)
-	if len(x.b.posts) != 2 || x.b.posts[1].Price != 101_300_000_000 {
+	if len(x.b.posts) != 2 || x.b.posts[0].Price != 100_200_000_000 || x.b.posts[1].Price != 101_100_000_000 {
 		t.Fatalf("wrong percentage replacement: %+v", x.b.posts)
 	}
 }

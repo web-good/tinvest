@@ -28,6 +28,7 @@ import (
 )
 
 type service struct {
+	densityAlerts          densityAlerts
 	accountCoordinator     *accountcoord.Coordinator
 	purchaseSharesService  purchase_shares.PurchaseShares
 	reversionLiveService   live.Service

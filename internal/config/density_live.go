@@ -9,18 +9,19 @@ import (
 
 // DensityLiveConfig joins the existing RSI account; it has no separate credentials.
 type DensityLiveConfig struct {
-	Enabled      bool          `config:"DENSITY_LIVE_ENABLED,backend=env"`
-	TradeEnabled bool          `config:"DENSITY_LIVE_TRADE_ENABLED,backend=env"`
-	Tickers      []string      `config:"DENSITY_LIVE_TICKERS,backend=env"`
-	StateDir     string        `config:"DENSITY_LIVE_STATE_DIR,backend=env"`
-	EntryTicks   int64         `config:"DENSITY_LIVE_ENTRY_TICKS,backend=env"`
-	EntryPct     float64       `config:"DENSITY_LIVE_ENTRY_PCT,backend=env"`
-	StopTicks    int64         `config:"DENSITY_LIVE_STOP_TICKS,backend=env"`
-	RewardRisk   float64       `config:"DENSITY_LIVE_RR,backend=env"`
-	MinRemaining float64       `config:"DENSITY_LIVE_MIN_REMAINING,backend=env"`
-	EntryTTL     time.Duration `config:"DENSITY_LIVE_ENTRY_TTL,backend=env"`
-	MaxHold      time.Duration `config:"DENSITY_LIVE_MAX_HOLD,backend=env"`
-	Cooldown     time.Duration `config:"DENSITY_LIVE_COOLDOWN,backend=env"`
+	FollowScreener bool          `config:"DENSITY_LIVE_FOLLOW_SCREENER,backend=env"`
+	Enabled        bool          `config:"DENSITY_LIVE_ENABLED,backend=env"`
+	TradeEnabled   bool          `config:"DENSITY_LIVE_TRADE_ENABLED,backend=env"`
+	Tickers        []string      `config:"DENSITY_LIVE_TICKERS,backend=env"`
+	StateDir       string        `config:"DENSITY_LIVE_STATE_DIR,backend=env"`
+	EntryTicks     int64         `config:"DENSITY_LIVE_ENTRY_TICKS,backend=env"`
+	EntryPct       float64       `config:"DENSITY_LIVE_ENTRY_PCT,backend=env"`
+	StopTicks      int64         `config:"DENSITY_LIVE_STOP_TICKS,backend=env"`
+	RewardRisk     float64       `config:"DENSITY_LIVE_RR,backend=env"`
+	MinRemaining   float64       `config:"DENSITY_LIVE_MIN_REMAINING,backend=env"`
+	EntryTTL       time.Duration `config:"DENSITY_LIVE_ENTRY_TTL,backend=env"`
+	MaxHold        time.Duration `config:"DENSITY_LIVE_MAX_HOLD,backend=env"`
+	Cooldown       time.Duration `config:"DENSITY_LIVE_COOLDOWN,backend=env"`
 }
 
 func NewDensityLiveConfig() *DensityLiveConfig {

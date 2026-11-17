@@ -9,6 +9,7 @@ import (
 )
 
 type Runner struct {
+	AllowEntry      func(density.Instrument, density.Signal) bool
 	HistorySource   density.UniverseSource
 	HistoryInterval time.Duration
 	profileUpdates  <-chan []density.Instrument
@@ -28,8 +29,12 @@ type batch struct {
 func (r *Runner) Run(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	if r.Source == nil || r.Engine == nil || len(r.Universe) == 0 || len(r.Universe) > 10 {
-		return fmt.Errorf("paper runner requires 1..10 instruments and market data source")
+	limit := 10
+	if r.Engine != nil && r.Engine.cfg.BookExecution {
+		limit = 80
+	}
+	if r.Source == nil || r.Engine == nil || len(r.Universe) == 0 || len(r.Universe) > limit {
+		return fmt.Errorf("paper runner requires a supported universe and market data source")
 	}
 	if r.ReportInterval <= 0 {
 		r.ReportInterval = 10 * time.Second
@@ -93,8 +98,10 @@ func (r *Runner) connection(parent context.Context) error {
 	if err = stream.SubscribeInfo(ids, true); err != nil {
 		return err
 	}
-	if err = stream.SubscribeTrades(ids, true); err != nil {
-		return err
+	if !r.Engine.cfg.BookExecution {
+		if err = stream.SubscribeTrades(ids, true); err != nil {
+			return err
+		}
 	}
 	received := make(chan batch, 1)
 	done := make(chan struct{})
@@ -121,7 +128,7 @@ func (r *Runner) connection(parent context.Context) error {
 	detector.SetInstruments(r.Universe)
 	ready := func(id string, now time.Time) bool {
 		at := tradeAck[id]
-		return bookAck[id] && infoAck[id] && open[id] && !at.IsZero() && now.Sub(at) >= r.Detector.TradeReadiness
+		return bookAck[id] && infoAck[id] && open[id] && (r.Engine.cfg.BookExecution || (!at.IsZero() && now.Sub(at) >= r.Detector.TradeReadiness))
 	}
 	tick := time.NewTicker(100 * time.Millisecond)
 	defer tick.Stop()
@@ -201,6 +208,9 @@ func (r *Runner) connection(parent context.Context) error {
 					signals := detector.Update(event.Book, now)
 					r.Engine.OnBookWithCandidates(event.Book, detector.Candidates(), now)
 					for _, s := range signals {
+						if r.Engine.cfg.BookExecution && r.AllowEntry != nil && !r.AllowEntry(r.Engine.instruments[id], s) {
+							continue
+						}
 						r.Engine.Observe(s, now)
 					}
 				case density.EventTrade:

@@ -52,3 +52,14 @@ func TestDensityLiveEntryPercentageEnvironment(t *testing.T) {
 		}
 	}
 }
+
+func TestDensityLiveFollowScreenerEnvironment(t *testing.T) {
+	t.Setenv("DENSITY_LIVE_FOLLOW_SCREENER", "true")
+	c := NewDensityLiveConfig()
+	if err := confita.NewLoader(env.NewBackend()).Load(context.Background(), c); err != nil {
+		t.Fatal(err)
+	}
+	if !c.FollowScreener {
+		t.Fatal("follow screener flag not loaded")
+	}
+}

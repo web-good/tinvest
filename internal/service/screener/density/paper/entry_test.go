@@ -11,28 +11,36 @@ func TestPercentageEntryAndFill(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.EntryPct = .3
 	cfg.Latency = 0
-	e, err := New(cfg, []density.Instrument{{ID: "x", Ticker: "X", Lot: 1, PriceStep: density.Price{Nano: 10_000_000}}}, nil)
+	cfg.MaxEntryLots = 1
+	var fills []Record
+	e, err := New(cfg, []density.Instrument{{ID: "x", Ticker: "VTBR", Lot: 1, PriceStep: density.Price{Nano: 10_000_000}}}, func(r Record) error {
+		if r.Kind == "entry_filled" {
+			fills = append(fills, r)
+		}
+		return nil
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	e.OnBook(book(start, 100), start)
-	e.Observe(density.Signal{InstrumentID: "x", Price: p(100), Quantity: 100}, start)
+	q := func(n int64) density.Price { return density.Price{Units: n / nano, Nano: int32(n % nano)} }
+	b := density.Book{InstrumentID: "x", Lot: 1, Time: start, Bids: []density.Level{{Price: q(60_390_000_000), Quantity: 100}}, Asks: []density.Level{{Price: q(60_580_000_000), Quantity: 10}}}
+	signal := density.Signal{InstrumentID: "x", Price: b.Bids[0].Price, Quantity: 100}
+	e.OnBook(b, start)
+	e.Observe(signal, start)
+	if e.orders["x"] != nil {
+		t.Fatal("placed entry above interest zone")
+	}
+	b.Time = start.Add(time.Millisecond)
+	b.Asks[0].Price = q(60_460_000_000)
+	received := b.Time.Add(100 * time.Millisecond)
+	e.OnBook(b, received)
+	e.Observe(signal, received)
 	o := e.orders["x"]
-	if o == nil {
-		t.Fatal("no entry")
+	if o == nil || o.State != "open" || o.Entry != 60_460_000_000 || o.Stop != 60_370_000_000 || o.Take != 60_640_000_000 {
+		t.Fatalf("wrong fill: %+v", o)
 	}
-	if o.Entry != 100_300_000_000 {
-		t.Fatalf("entry = %d, want 100.30 RUB", o.Entry)
-	}
-	at := start.Add(time.Millisecond)
-	e.OnTrade(density.Event{InstrumentID: "x", Price: density.Price{Units: 100, Nano: 300_000_000}, Quantity: 1, Time: at}, at)
-	if o.State != "pending" {
-		t.Fatal("touch filled entry")
-	}
-	at = at.Add(time.Millisecond)
-	e.OnTrade(density.Event{InstrumentID: "x", Price: density.Price{Units: 100, Nano: 290_000_000}, Quantity: 1, Time: at}, at)
-	if o.State != "open" || o.Entry != 100_300_000_000 {
-		t.Fatalf("percentage entry not filled: %+v", o)
+	if len(fills) != 1 || fills[0].FillRubles != 60.46 {
+		t.Fatalf("missing fill alert: %+v", fills)
 	}
 }
 
@@ -43,5 +51,57 @@ func TestConfigRejectsInvalidEntryPct(t *testing.T) {
 		if cfg.Validate() == nil {
 			t.Fatalf("accepted entry percentage %v", pct)
 		}
+	}
+}
+
+func TestPercentageEntryWaitsForLatencyAndUsesAvailableAsk(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.EntryPct = .3
+	cfg.Latency = time.Second
+	cfg.MaxEntryLots = 1
+	e, err := New(cfg, []density.Instrument{{ID: "x", Ticker: "X", Lot: 1, PriceStep: density.Price{Nano: 10_000_000}}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := book(start, 100)
+	b.Bids = b.Bids[1:]
+	b.Asks[0].Price = density.Price{Units: 100, Nano: 200_000_000}
+	e.OnBook(b, start)
+	e.Observe(density.Signal{InstrumentID: "x", Price: p(100), Quantity: 100}, start)
+	if o := e.orders["x"]; o == nil || o.State != "pending" {
+		t.Fatalf("latency bypassed: %+v", o)
+	}
+	b.Time = start.Add(time.Second)
+	b.Asks[0].Price = density.Price{Units: 100, Nano: 100_000_000}
+	e.OnBook(b, b.Time)
+	o := e.orders["x"]
+	if o.State != "open" || o.Entry != 100_100_000_000 || o.Take != 100_340_000_000 {
+		t.Fatalf("wrong delayed fill: %+v", o)
+	}
+}
+
+func TestBookExecutionFillsPassiveEntryAndTakeWithoutTape(t *testing.T) {
+	e := engine(t)
+	e.cfg.BookExecution = true
+	e.cfg.Latency = 0
+	e.cfg.MaxEntryLots = 1
+	place(t, e)
+	o := e.orders["x"]
+	if o.State != "pending" {
+		t.Fatal("entry filled above its limit")
+	}
+	b := book(start.Add(time.Millisecond), 100)
+	b.Asks[0].Price = p(101)
+	b.Bids = b.Bids[1:]
+	e.OnBook(b, b.Time)
+	if o.State != "open" || o.Entry != 101*nano {
+		t.Fatalf("no book entry: %+v", o)
+	}
+	b.Time = b.Time.Add(time.Millisecond)
+	b.Bids = []density.Level{{Price: p(107), Quantity: 1}, {Price: p(100), Quantity: 100}}
+	b.Asks[0].Price = p(108)
+	e.OnBook(b, b.Time)
+	if o.OpenLots != 0 || o.ExitReason != "take_profit" {
+		t.Fatalf("no book take: %+v", o)
 	}
 }
