@@ -404,7 +404,11 @@ func (e *Engine) invalidate(id, reason string, now time.Time) {
 		e.cancel(o, reason, now)
 	} else {
 		o.Uncertain = true
-		e.requestExit(o, reason, now)
+		// Data gaps suspend execution until a fresh valid book arrives.
+		// Keep the position and any previously requested strategy exit intact.
+		if reason == "trading_closed" {
+			e.requestExit(o, reason, now)
+		}
 		e.emit("data_gap", o, now, reason, 0, 0)
 	}
 }

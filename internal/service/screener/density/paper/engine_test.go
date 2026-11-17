@@ -134,7 +134,7 @@ func TestGapMarksUncertainDoesNotInventFill(t *testing.T) {
 	e := engine(t)
 	place(t, e)
 	trade(e, start.Add(time.Second), 100, 2)
-	e.Gap("disconnect", start.Add(2*time.Second))
+	e.Gap("stream_disconnected", start.Add(2*time.Second))
 	s := e.Summary(start.Add(2 * time.Second))
 	if s.DataComplete || s.OpenPositions != 1 || s.ClosedTrades != 0 || s.ValuationFresh {
 		t.Fatalf("summary %+v", s)
@@ -144,8 +144,49 @@ func TestGapMarksUncertainDoesNotInventFill(t *testing.T) {
 		t.Fatal("filled through missing book")
 	}
 	e.OnBook(book(start.Add(4*time.Second), 100), start.Add(4*time.Second))
-	if e.orders["x"].State != "closed" {
-		t.Fatal("did not liquidate on recovery")
+	if e.orders["x"].State != "open" || e.orders["x"].OpenLots != 2 {
+		t.Fatal("data recovery liquidated position")
+	}
+}
+
+func TestDataProblemsKeepPositionOpenAndStopResumesAfterRecovery(t *testing.T) {
+	for _, problem := range []string{"stale_book", "invalid_book", "off_tick_book", "stream_disconnected"} {
+		t.Run(problem, func(t *testing.T) {
+			e := engine(t)
+			place(t, e)
+			trade(e, start.Add(time.Second), 100, 2)
+			at := start.Add(20 * time.Second)
+			switch problem {
+			case "stale_book":
+				e.Tick(at)
+			case "invalid_book":
+				b := book(at, 100)
+				b.Asks = nil
+				e.OnBook(b, at)
+			case "off_tick_book":
+				b := book(at, 100)
+				b.Asks[0].Price.Nano = 1
+				e.OnBook(b, at)
+			case "stream_disconnected":
+				e.Gap(problem, at)
+			}
+			o := e.orders["x"]
+			if o.State != "open" || o.OpenLots != 2 || o.ExitReason != "" {
+				t.Fatalf("data problem requested exit: %+v", o)
+			}
+			e.OnBook(book(at.Add(time.Second), 100), at.Add(time.Second))
+			if o.State != "open" || o.OpenLots != 2 {
+				t.Fatalf("recovery liquidated position: %+v", o)
+			}
+			trade(e, at.Add(2*time.Second), 97, 1)
+			if o.State != "exiting" || o.ExitReason != "stop" {
+				t.Fatalf("stop did not resume: %+v", o)
+			}
+			e.OnBook(book(at.Add(3*time.Second), 100), at.Add(3*time.Second))
+			if o.State != "closed" || o.ExitReason != "stop" {
+				t.Fatalf("stop exit not executed: %+v", o)
+			}
+		})
 	}
 }
 func TestCapitalReservationAndBadData(t *testing.T) {
@@ -285,6 +326,11 @@ func TestPreGapSnapshotCannotExecuteTwice(t *testing.T) {
 	e.OnBook(b, start.Add(3200*time.Millisecond))
 	if e.orders["x"].OpenLots != 4 {
 		t.Fatal("replayed liquidity executed twice")
+	}
+	b.Time = start.Add(4 * time.Second)
+	e.OnBook(b, b.Time)
+	if e.orders["x"].OpenLots != 3 || e.orders["x"].ExitReason != "stop" {
+		t.Fatal("data gap discarded previously requested stop exit")
 	}
 }
 func TestTradeTriggersStopBeforeNextBook(t *testing.T) {
