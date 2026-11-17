@@ -47,7 +47,7 @@ func (s *ServiceProvider) densitySimulationParticipant(c *config.DensityLiveConf
 		cfg.MinRemaining = lc.MinRemaining
 		cfg.Freshness = lc.Freshness
 		cfg.EntryTTL = lc.EntryTTL
-		cfg.MaxHold = lc.MaxHold
+		cfg.MaxHold = 0 // Alert simulation holds positions until a strategy exit.
 		cfg.Cooldown = lc.Cooldown
 		tickers := make([]string, len(c.Tickers))
 		for n, t := range c.Tickers {

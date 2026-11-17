@@ -104,10 +104,17 @@ func TestDensityLossCancelsPendingAndExitsPosition(t *testing.T) {
 	place(t, e)
 	trade(e, start.Add(time.Second), 100, 2)
 	e.OnBook(book(start.Add(2*time.Second), 49), start.Add(2*time.Second))
+	if e.orders["x"].State != "open" {
+		t.Fatal("reduced density volume triggered exit")
+	}
+	b := book(start.Add(3*time.Second), 100)
+	b.Bids = []density.Level{{Price: p(101), Quantity: 10}, {Price: p(99), Quantity: 100}}
+	e.OnBook(b, b.Time)
 	if e.orders["x"].State != "exiting" {
 		t.Fatal("missing density-loss exit")
 	}
-	e.OnBook(book(start.Add(3*time.Second), 49), start.Add(3*time.Second))
+	b.Time = start.Add(4 * time.Second)
+	e.OnBook(b, b.Time)
 	if e.orders["x"].State != "closed" {
 		t.Fatal("exit not executed")
 	}
@@ -340,5 +347,34 @@ func TestTradeTriggersStopBeforeNextBook(t *testing.T) {
 	trade(e, start.Add(2*time.Second), 97, 1)
 	if e.orders["x"].State != "exiting" || e.orders["x"].ExitReason != "stop" {
 		t.Fatal("stop ignored trade below threshold")
+	}
+}
+
+func TestZeroMaxHoldKeepsPositionUntilStrategyExit(t *testing.T) {
+	for _, source := range []string{"tick", "trade"} {
+		t.Run(source, func(t *testing.T) {
+			e := engine(t)
+			e.cfg.MaxHold = 0
+			if err := e.cfg.Validate(); err != nil {
+				t.Fatal(err)
+			}
+			place(t, e)
+			trade(e, start.Add(time.Second), 100, 2)
+			at := start.Add(time.Hour)
+			e.OnBook(book(at, 100), at)
+			if source == "tick" {
+				e.Tick(at)
+			} else {
+				trade(e, at, 102, 1)
+			}
+			o := e.orders["x"]
+			if o.State != "open" || o.OpenLots != 2 {
+				t.Fatalf("holding time closed position: %+v", o)
+			}
+			trade(e, at.Add(time.Second), 97, 1)
+			if o.State != "exiting" || o.ExitReason != "stop" {
+				t.Fatalf("stop no longer works: %+v", o)
+			}
+		})
 	}
 }

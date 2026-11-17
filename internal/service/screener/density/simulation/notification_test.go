@@ -97,6 +97,39 @@ func TestFormatExitExplainsReason(t *testing.T) {
 	}
 }
 
+func TestFormatExitShowsReturnFromEntry(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		exit float64
+		want string
+	}{
+		{name: "profit", exit: 252, want: "Результат: +0.80%"},
+		{name: "loss", exit: 247, want: "Результат: -1.20%"},
+		{name: "unchanged", exit: 250, want: "Результат: +0.00%"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := fillRecord()
+			r.Kind = "exit_filled"
+			r.FillRubles = tc.exit
+			if text := FormatFill(r); !strings.Contains(text, tc.want) {
+				t.Fatal(text)
+			}
+		})
+	}
+}
+
+func TestFormatFillOmitsReturnWithoutExitOrEntryPrice(t *testing.T) {
+	r := fillRecord()
+	if text := FormatFill(r); strings.Contains(text, "Результат:") {
+		t.Fatal(text)
+	}
+	r.Kind = "exit_filled"
+	r.EntryRubles = 0
+	if text := FormatFill(r); strings.Contains(text, "Результат:") {
+		t.Fatal(text)
+	}
+}
+
 func TestFillOutboxSurvivesSessionJournalFailure(t *testing.T) {
 	root := t.TempDir()
 	journal, err := paper.NewJournal(root)

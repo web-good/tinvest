@@ -21,6 +21,9 @@ func FormatFill(r paper.Record) string {
 	}
 	if r.Kind == "exit_filled" {
 		msg += fmt.Sprintf("\nПричина: %s", density.ExitReasonText(r.Detail))
+		if r.EntryRubles > 0 {
+			msg += fmt.Sprintf("\nРезультат: %+.2f%%", (r.FillRubles-r.EntryRubles)/r.EntryRubles*100)
+		}
 	}
 	return msg
 }

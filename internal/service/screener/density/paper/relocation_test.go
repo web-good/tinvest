@@ -52,7 +52,17 @@ func TestOpenPositionKeepsProtectionWhenDensityMoves(t *testing.T) {
 	}
 	b, _ = relocationBook(b.Time.Add(time.Millisecond), 102, 49)
 	e.OnBookWithCandidates(b, nil, b.Time)
-	if o.State != "exiting" || o.ExitReason != "density_lost" {
+	if o.State != "open" {
+		t.Fatalf("volume reduction triggered exit: %+v", o)
+	}
+	b, _ = relocationBook(b.Time.Add(time.Millisecond), 102, 1)
+	e.OnBookWithCandidates(b, nil, b.Time)
+	if o.State != "open" {
+		t.Fatalf("remaining density triggered exit: %+v", o)
+	}
+	b, _ = relocationBook(b.Time.Add(time.Millisecond), 103, 100)
+	e.OnBookWithCandidates(b, nil, b.Time)
+	if o.State != "exiting" || o.ExitReason != "density_disappeared" {
 		t.Fatalf("no early exit: %+v", o)
 	}
 }

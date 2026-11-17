@@ -3,6 +3,8 @@ package density
 // ExitReasonText translates journal reason codes for trading notifications.
 func ExitReasonText(reason string) string {
 	switch reason {
+	case "density_disappeared":
+		return "Плотность исчезла"
 	case "density_lost":
 		return "Плотность исчезла или её объём упал ниже порога"
 	case "stop", "stop_loss", "stop_price", "stop_trade", "broker_stop":

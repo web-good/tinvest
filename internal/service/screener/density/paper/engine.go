@@ -253,10 +253,13 @@ func (e *Engine) OnBookWithCandidates(b density.Book, candidates []density.Signa
 			}
 		}
 		reason := ""
-		if float64(retained) < float64(o.DensityLots)*e.cfg.MinRemaining {
+		if retained == 0 || (o.State == "pending" && float64(retained) < float64(o.DensityLots)*e.cfg.MinRemaining) {
 			moved, ok := density.Relocation(b, density.Price{Units: anchor / nano, Nano: int32(anchor % nano)}, o.DensityLots, e.cfg.MinRemaining, candidates, now)
 			if !ok {
 				reason = "density_lost"
+				if o.OpenLots > 0 {
+					reason = "density_disappeared"
+				}
 			} else if o.State == "pending" {
 				released := float64(o.PlannedLots) * float64(o.Lot) * rub(o.Entry) * (1 + e.cfg.Commission)
 				next := e.plan(moved, now, released)
@@ -299,7 +302,7 @@ func (e *Engine) OnTrade(t density.Event, now time.Time) {
 	if o.State == "open" && price(t.Price) <= o.Stop {
 		e.requestExit(o, "stop", now)
 	}
-	if o.State == "open" && now.Sub(o.Opened) >= e.cfg.MaxHold {
+	if e.cfg.MaxHold > 0 && o.State == "open" && now.Sub(o.Opened) >= e.cfg.MaxHold {
 		e.requestExit(o, "position_timeout", now)
 	}
 	if o.State == "pending" && !now.Before(o.ActiveAt) && !t.Time.Before(o.ActiveAt) && now.Sub(o.Created) < e.cfg.EntryTTL && price(t.Price) < o.Entry {
@@ -443,7 +446,7 @@ func (e *Engine) Tick(now time.Time) {
 		if o.State == "pending" && now.Sub(o.Created) >= e.cfg.EntryTTL {
 			e.cancel(o, "entry_timeout", now)
 		}
-		if o.OpenLots > 0 && o.State != "exiting" && now.Sub(o.Opened) >= e.cfg.MaxHold {
+		if e.cfg.MaxHold > 0 && o.OpenLots > 0 && o.State != "exiting" && now.Sub(o.Opened) >= e.cfg.MaxHold {
 			e.requestExit(o, "position_timeout", now)
 		}
 		e.executeExit(o, now)

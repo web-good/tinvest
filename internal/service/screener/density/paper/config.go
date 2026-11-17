@@ -33,7 +33,7 @@ func (c Config) Validate() error {
 		return fmt.Errorf("maximum entry lots cannot be negative")
 	}
 	positive := func(v float64) bool { return v > 0 && !math.IsNaN(v) && !math.IsInf(v, 0) }
-	if !positive(c.InitialCash) || !positive(c.PositionRubles) || c.PositionRubles > c.InitialCash || c.MaxPositions < 1 || c.EntryTicks < 1 || c.StopTicks < 1 || c.EntryTicks > 1000000 || c.StopTicks > 1000000 || !positive(c.RewardRisk) || c.RewardRisk > 100 || !positive(c.MinRemaining) || c.MinRemaining > 1 || math.IsNaN(c.Commission) || math.IsInf(c.Commission, 0) || c.Commission < 0 || c.Commission >= 1 || c.Latency < 0 || c.Freshness <= 0 || c.EntryTTL <= c.Latency || c.MaxHold <= c.Latency || c.Cooldown < 0 {
+	if !positive(c.InitialCash) || !positive(c.PositionRubles) || c.PositionRubles > c.InitialCash || c.MaxPositions < 1 || c.EntryTicks < 1 || c.StopTicks < 1 || c.EntryTicks > 1000000 || c.StopTicks > 1000000 || !positive(c.RewardRisk) || c.RewardRisk > 100 || !positive(c.MinRemaining) || c.MinRemaining > 1 || math.IsNaN(c.Commission) || math.IsInf(c.Commission, 0) || c.Commission < 0 || c.Commission >= 1 || c.Latency < 0 || c.Freshness <= 0 || c.EntryTTL <= c.Latency || (c.MaxHold != 0 && c.MaxHold <= c.Latency) || c.Cooldown < 0 {
 		return fmt.Errorf("invalid paper configuration")
 	}
 	return nil
