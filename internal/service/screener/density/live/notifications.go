@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"time"
+	"tinvest/internal/service/screener/density"
 )
 
 // Notification is a durable, immutable snapshot of a confirmed trade event.
@@ -44,7 +45,17 @@ func queueClosedNotification(state *State, ep *Episode, realized, fees int64, co
 			priceKnown = false
 		}
 	}
-	queueNotification(state, Notification{ID: ep.Entry.Key + ":sell", Side: "SELL", TradeID: ep.Entry.Key, Ticker: ep.Instrument.Ticker, Reason: ep.Reason,
+	// A requested exit can race a previously executed broker stop/take. Report
+	// the confirmed sale source, while keeping the request in the episode journal.
+	reason := ep.Reason
+	if ep.Exit == nil || ep.Exit.Filled == 0 {
+		if ep.Stop.Child != nil && ep.Stop.Child.Filled > 0 {
+			reason = "stop"
+		} else if ep.Take.Child != nil && ep.Take.Child.Filled > 0 {
+			reason = "take_profit"
+		}
+	}
+	queueNotification(state, Notification{ID: ep.Entry.Key + ":sell", Side: "SELL", TradeID: ep.Entry.Key, Ticker: ep.Instrument.Ticker, Reason: reason,
 		Lots: ep.Entry.Filled, Units: ep.Entry.Filled * ep.Instrument.Lot, Amount: sales, Fees: fees, Realized: realized, Complete: complete, PriceKnown: priceKnown})
 }
 
@@ -65,7 +76,7 @@ func FormatNotification(n Notification) string {
 	}
 	text := fmt.Sprintf("Density %s %s\nСредняя цена: %s\nЛоты: %d; акции: %d\nСделка: %s", n.Side, n.Ticker, price, n.Lots, n.Units, n.TradeID)
 	if n.Side == "SELL" {
-		text += fmt.Sprintf("\nПричина: %s\nРезультат с комиссиями: %+.2f RUB\nКомиссии: %.2f RUB", n.Reason, float64(n.Realized)/1e9, float64(n.Fees)/1e9)
+		text += fmt.Sprintf("\nПричина: %s\nРезультат с комиссиями: %+.2f RUB\nКомиссии: %.2f RUB", density.ExitReasonText(n.Reason), float64(n.Realized)/1e9, float64(n.Fees)/1e9)
 	}
 	if !n.Complete {
 		text += "\nДанные неполные: цена, результат или комиссии требуют сверки"

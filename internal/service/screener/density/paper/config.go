@@ -13,6 +13,7 @@ type Config struct {
 	InitialCash, PositionRubles, Commission         float64
 	MaxPositions                                    int
 	EntryTicks, StopTicks                           int64
+	EntryPct                                        float64
 	RewardRisk, MinRemaining                        float64
 	Latency, Freshness, EntryTTL, MaxHold, Cooldown time.Duration
 }
@@ -21,6 +22,9 @@ func DefaultConfig() Config {
 	return Config{InitialCash: 100000, PositionRubles: 10000, Commission: .0005, MaxPositions: 3, EntryTicks: 1, StopTicks: 2, RewardRisk: 2, MinRemaining: .5, Latency: 250 * time.Millisecond, Freshness: 3 * time.Second, EntryTTL: 2 * time.Minute, MaxHold: 10 * time.Minute, Cooldown: 5 * time.Minute}
 }
 func (c Config) Validate() error {
+	if math.IsNaN(c.EntryPct) || math.IsInf(c.EntryPct, 0) || c.EntryPct < 0 || c.EntryPct > 100 {
+		return fmt.Errorf("invalid paper entry percentage")
+	}
 	if c.IgnoreCapital && c.MaxEntryLots < 1 {
 		return fmt.Errorf("price-only simulation requires a fixed maximum entry size")
 	}

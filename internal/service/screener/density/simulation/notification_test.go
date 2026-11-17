@@ -79,8 +79,18 @@ func TestFormatExitShowsPriceWithoutPositionSize(t *testing.T) {
 	r.Detail = "take_profit"
 	r.Order.NetPnL = 17.49
 	text := FormatFill(r)
-	if !strings.Contains(text, "Продали бы по 252.0000") || !strings.Contains(text, "take_profit") || strings.Contains(text, "Лоты") || strings.Contains(text, "комисси") {
+	if !strings.Contains(text, "Продали бы по 252.0000") || !strings.Contains(text, "Тейк-профит") || strings.Contains(text, "Лоты") || strings.Contains(text, "комисси") {
 		t.Fatal(text)
+	}
+}
+
+func TestFormatExitExplainsReason(t *testing.T) {
+	for reason, want := range map[string]string{"density_lost": "Плотность исчезла", "stop": "Стоп-лосс", "take_profit": "Тейк-профит", "position_timeout": "Истекло время удержания", "future_reason": "future_reason"} {
+		r := fillRecord()
+		r.Kind, r.Detail = "exit_filled", reason
+		if text := FormatFill(r); !strings.Contains(text, "Причина: "+want) {
+			t.Fatalf("%s: %s", reason, text)
+		}
 	}
 }
 

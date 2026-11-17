@@ -224,7 +224,7 @@ func (r *Runner) connection(parent context.Context) error {
 					} else {
 						detector.Reset(id)
 					}
-					r.Feed.Book(event.Book, signals, now)
+					r.Feed.BookWithCandidates(event.Book, signals, detector.Candidates(), now)
 				case density.EventTrade:
 					if ready(id, now) {
 						r.Feed.Trade(event, now)

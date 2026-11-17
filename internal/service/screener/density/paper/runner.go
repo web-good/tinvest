@@ -198,8 +198,8 @@ func (r *Runner) connection(parent context.Context) error {
 						detector.Reset(id)
 						continue
 					}
-					r.Engine.OnBook(event.Book, now)
 					signals := detector.Update(event.Book, now)
+					r.Engine.OnBookWithCandidates(event.Book, detector.Candidates(), now)
 					for _, s := range signals {
 						r.Engine.Observe(s, now)
 					}

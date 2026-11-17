@@ -24,6 +24,9 @@ func (e *Engine) applyOrder(dst *Order, got Order) error {
 	dst.FeesKnown = got.FeesKnown
 	dst.Terminal = got.Terminal
 	dst.Status = got.Status
+	if dst == &e.episode.Entry && dst.Filled > 0 {
+		e.feed.filled(e.episode, e.Now())
+	}
 	queueFillNotification(&e.state, e.episode, dst, previousFilled)
 	return e.save("order_status:" + dst.Kind)
 }

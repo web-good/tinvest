@@ -14,6 +14,7 @@ type DensityLiveConfig struct {
 	Tickers      []string      `config:"DENSITY_LIVE_TICKERS,backend=env"`
 	StateDir     string        `config:"DENSITY_LIVE_STATE_DIR,backend=env"`
 	EntryTicks   int64         `config:"DENSITY_LIVE_ENTRY_TICKS,backend=env"`
+	EntryPct     float64       `config:"DENSITY_LIVE_ENTRY_PCT,backend=env"`
 	StopTicks    int64         `config:"DENSITY_LIVE_STOP_TICKS,backend=env"`
 	RewardRisk   float64       `config:"DENSITY_LIVE_RR,backend=env"`
 	MinRemaining float64       `config:"DENSITY_LIVE_MIN_REMAINING,backend=env"`
@@ -28,6 +29,9 @@ func NewDensityLiveConfig() *DensityLiveConfig {
 func (c *DensityLiveConfig) Validate() error {
 	if c == nil {
 		return fmt.Errorf("density live configuration missing")
+	}
+	if math.IsNaN(c.EntryPct) || math.IsInf(c.EntryPct, 0) || c.EntryPct < 0 || c.EntryPct > 100 {
+		return fmt.Errorf("invalid DENSITY_LIVE_ENTRY_PCT: must be between 0 and 100")
 	}
 	finite := func(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) }
 

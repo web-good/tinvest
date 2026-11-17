@@ -8,7 +8,11 @@ import (
 )
 
 func episodeClaim(ep *Episode) accountcoord.Claim {
-	return accountcoord.Claim{Ticker: ep.Instrument.Ticker, InstrumentID: ep.Instrument.ID, Owner: "density", Key: ep.Entry.Key}
+	key := ep.ClaimKey
+	if key == "" {
+		key = ep.Entry.Key
+	}
+	return accountcoord.Claim{Ticker: ep.Instrument.Ticker, InstrumentID: ep.Instrument.ID, Owner: "density", Key: key}
 }
 
 // AttachCoordinator must run before the continuous worker starts making decisions.
@@ -41,7 +45,7 @@ func (e *Engine) AttachCoordinator(ctx context.Context, c *accountcoord.Coordina
 	for _, claim := range claims {
 		if claim.Owner == "density" && claim.Status == "active" {
 			ep := e.state.Episodes[claim.InstrumentID]
-			if ep == nil || claim.Ticker != ep.Instrument.Ticker || claim.InstrumentID != ep.Instrument.ID || claim.Key != ep.Entry.Key {
+			if ep == nil || claim.Ticker != ep.Instrument.Ticker || claim.InstrumentID != ep.Instrument.ID || claim.Key != episodeClaim(ep).Key {
 				return fmt.Errorf("shared registry contains a density episode absent from this journal")
 			}
 		}

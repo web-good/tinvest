@@ -35,3 +35,20 @@ func TestDensityLiveRejectsInvalidLimits(t *testing.T) {
 		}
 	}
 }
+
+func TestDensityLiveEntryPercentageEnvironment(t *testing.T) {
+	t.Setenv("DENSITY_LIVE_ENTRY_PCT", "0.3")
+	c := NewDensityLiveConfig()
+	if err := confita.NewLoader(env.NewBackend()).Load(context.Background(), c); err != nil {
+		t.Fatal(err)
+	}
+	if c.EntryPct != .3 {
+		t.Fatalf("entry percentage = %v", c.EntryPct)
+	}
+	for _, pct := range []float64{-1, math.NaN(), math.Inf(1), 101} {
+		c.EntryPct = pct
+		if c.Validate() == nil {
+			t.Fatalf("accepted entry percentage %v", pct)
+		}
+	}
+}

@@ -157,6 +157,9 @@ func (e *Engine) Step(ctx context.Context, now time.Time) error {
 func (e *Engine) stepEpisode(ctx context.Context, now time.Time) error {
 	ep := e.episode
 	e.feed.Select(ep.Instrument.ID)
+	if ep.Entry.Filled == 0 && (ep.Repricing || e.feed.moved(ep, now)) {
+		e.next = time.Time{}
+	}
 	if err := e.reason(now); err != nil {
 		return err
 	}
@@ -181,7 +184,21 @@ func (e *Engine) stepEpisode(ctx context.Context, now time.Time) error {
 			return err
 		}
 	}
+	if ep.Entry.Filled == 0 && ep.Reason == "" && e.feed.moved(ep, e.Now()) {
+		if !ep.Repricing {
+			ep.Repricing = true
+			if err := e.save("entry_reprice_requested"); err != nil {
+				return err
+			}
+		}
+		if !ep.Entry.Terminal {
+			if err := e.cancelOrder(ctx, &ep.Entry); err != nil {
+				return err
+			}
+		}
+	}
 	if ep.Entry.Filled > 0 && ep.Opened.IsZero() {
+		ep.Repricing = false
 		ep.Opened = e.Now()
 		if err := e.save("entry_filled"); err != nil {
 			return err
@@ -195,6 +212,9 @@ func (e *Engine) stepEpisode(ctx context.Context, now time.Time) error {
 		return nil
 	}
 	if ep.Entry.Filled == 0 {
+		if ep.Repricing && ep.Reason == "" {
+			return e.replaceEntry(ctx)
+		}
 		return e.finish(ctx, now)
 	}
 	if err := e.reason(e.Now()); err != nil {
@@ -208,6 +228,11 @@ func (e *Engine) stepEpisode(ctx context.Context, now time.Time) error {
 	}
 	if ep.Remaining() == 0 && ep.Reason == "" {
 		ep.Reason = "broker_exit"
+		if ep.Stop.Child != nil && ep.Stop.Child.Filled > 0 {
+			ep.Reason = "stop"
+		} else if ep.Take.Child != nil && ep.Take.Child.Filled > 0 {
+			ep.Reason = "take_profit"
+		}
 		if err := e.save("broker_exit"); err != nil {
 			return err
 		}
@@ -349,35 +374,7 @@ func (e *Engine) begin(ctx context.Context, now time.Time) (retErr error) {
 			ep.Entry.Status = "not_submitted"
 			return e.finish(ctx, now)
 		}
-		order, err := e.broker.PostOrder(ctx, OrderRequest{Key: ep.Entry.Key, InstrumentID: i.ID, Kind: "buy", Lots: 1, Price: ep.EntryPrice})
-		if err != nil {
-			if errors.Is(err, ErrRejected) {
-				ep.Entry.Terminal = true
-				ep.Entry.Status = "rejected"
-				if saveErr := e.save("entry_rejected"); saveErr != nil {
-					return saveErr
-				}
-				return e.finish(ctx, now)
-			}
-			return fmt.Errorf("entry result unknown; request UUID retained: %w", err)
-		}
-		if err = e.applyOrder(&ep.Entry, order); err != nil {
-			return err
-		}
-		if err = e.reason(e.Now()); err != nil {
-			return err
-		}
-		// Immediately protect an entry that was filled in the placement response.
-		if ep.Entry.Filled > 0 {
-			e.next = time.Time{}
-			return e.stepEpisode(ctx, e.Now())
-		}
-		// Loss during PostOrder is acted on before another polling interval.
-		if ep.Reason != "" {
-			e.next = time.Time{}
-			return e.stepEpisode(ctx, e.Now())
-		}
-		return nil
+		return e.submitEntry(ctx)
 	}
 	return nil
 }
@@ -484,6 +481,39 @@ func (e *Engine) Shutdown(ctx context.Context) error {
 			return errors.Join(fmt.Errorf("shutdown incomplete; broker state retained"), ctx.Err(), last)
 		case <-timer.C:
 		}
+	}
+	return nil
+}
+
+func (e *Engine) submitEntry(ctx context.Context) error {
+	ep := e.episode
+	order, err := e.broker.PostOrder(ctx, OrderRequest{Key: ep.Entry.Key, InstrumentID: ep.Instrument.ID, Kind: "buy", Lots: 1, Price: ep.EntryPrice})
+	if err != nil {
+		if errors.Is(err, ErrRejected) {
+			ep.Entry.Terminal = true
+			ep.Entry.Status = "rejected"
+			if saveErr := e.save("entry_rejected"); saveErr != nil {
+				return saveErr
+			}
+			return e.finish(ctx, e.Now())
+		}
+		return fmt.Errorf("entry result unknown; request UUID retained: %w", err)
+	}
+	if err = e.applyOrder(&ep.Entry, order); err != nil {
+		return err
+	}
+	if err = e.reason(e.Now()); err != nil {
+		return err
+	}
+	// Immediately protect an entry that was filled in the placement response.
+	if ep.Entry.Filled > 0 {
+		e.next = time.Time{}
+		return e.stepEpisode(ctx, e.Now())
+	}
+	// Loss during PostOrder is acted on before another polling interval.
+	if ep.Reason != "" {
+		e.next = time.Time{}
+		return e.stepEpisode(ctx, e.Now())
 	}
 	return nil
 }

@@ -27,6 +27,14 @@ func TestBrokerStopAndTakeExecutionCannotCauseSecondSale(t *testing.T) {
 			if len(x.b.posts) != 1 || x.e.State().Closed != 1 || x.e.State().Episodes["uid"] != nil || x.e.State().Realized != 58*Nano {
 				t.Fatalf("duplicate sale or wrong result: %+v posts=%+v", x.e.State(), x.b.posts)
 			}
+			want := "stop"
+			if kind == "take" {
+				want = "take_profit"
+			}
+			pending := x.e.PendingNotifications()
+			if len(pending) != 2 || pending[1].Reason != want {
+				t.Fatalf("wrong broker exit reason: %+v", pending)
+			}
 		})
 	}
 }

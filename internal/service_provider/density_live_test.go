@@ -39,6 +39,7 @@ func TestDensityDIReusesRSITransportAndCoordinator(t *testing.T) {
 	cfg := &config.Config{DensityLive: config.NewDensityLiveConfig(), Density: config.NewDensityConfig(), RSIPullback: &config.RSIPullbackConfig{AccountID: "shared", Token: "shared-secret"}}
 	cfg.DensityLive.Enabled = true
 	cfg.DensityLive.TradeEnabled = true
+	cfg.DensityLive.EntryPct = .3
 	cfg.Density.ChatID = -100123
 	s := &ServiceProvider{appConfig: cfg}
 	serviceProvider = s
@@ -52,11 +53,15 @@ func TestDensityDIReusesRSITransportAndCoordinator(t *testing.T) {
 	if p.Account != "shared" || p.Coordinator != s.GetAccountCoordinator() || transport.connections != 1 || !p.TradeEnabled {
 		t.Fatal("participant was not bound to RSI transport and coordinator")
 	}
+	if p.Config.EntryPct != .3 {
+		t.Fatalf("live entry percentage = %v", p.Config.EntryPct)
+	}
 }
 
 func TestDensitySimulationNeedsNoRealAccountOrBroker(t *testing.T) {
 	cfg := &config.Config{DensityLive: config.NewDensityLiveConfig(), Density: config.NewDensityConfig()}
 	cfg.DensityLive.Enabled = true
+	cfg.DensityLive.EntryPct = .3
 	cfg.Density.ChatID = -100123
 	s := &ServiceProvider{appConfig: cfg}
 	p, err := s.GetDensityLiveService()
@@ -65,6 +70,9 @@ func TestDensitySimulationNeedsNoRealAccountOrBroker(t *testing.T) {
 	}
 	if p.TradeEnabled || p.RunPaper == nil || p.NewBroker != nil || p.Coordinator != nil || p.Account != "" {
 		t.Fatal("simulation depends on real trading")
+	}
+	if p.Config.EntryPct != .3 {
+		t.Fatalf("simulation entry percentage = %v", p.Config.EntryPct)
 	}
 	if s.client.rsiPullbackGrpcClient != nil || s.client.grpcClient != nil {
 		t.Fatal("factory opened account transport")

@@ -22,6 +22,9 @@ type Stop struct {
 }
 
 type Episode struct {
+	ClaimKey                                               string // Stable across replacement order UUIDs; empty in legacy journals.
+	Repricing                                              bool
+	RetiredEntries                                         []Order
 	Instrument                                             density.Instrument
 	Density, DensityLots, EntryPrice, StopPrice, TakePrice int64
 	Created, Opened                                        time.Time

@@ -26,6 +26,7 @@ func (f *Feed) Prepare(i density.Instrument, original density.Signal, now time.T
 		copy := *ep
 		f.selected = i.ID
 		f.watches[i.ID] = &copy
+		f.anchors[i.ID] = s
 		delete(f.reasons, i.ID)
 		f.check(now)
 		if f.reasons[i.ID] != "" {
@@ -42,6 +43,8 @@ type Feed struct {
 	cfg        Config
 	books      map[string]density.Book
 	signals    map[string][]density.Signal
+	candidates map[string][]density.Signal
+	anchors    map[string]density.Signal
 	ready      map[string]bool
 	watermarks map[string]time.Time
 	trades     map[string]time.Time
@@ -59,10 +62,11 @@ func (f *Feed) ClearSignals() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	clear(f.signals)
+	clear(f.candidates)
 }
 
 func NewFeed(c Config) *Feed {
-	return &Feed{cfg: c, books: map[string]density.Book{}, signals: map[string][]density.Signal{}, ready: map[string]bool{}, watermarks: map[string]time.Time{}, trades: map[string]time.Time{}, watches: map[string]*Episode{}, reasons: map[string]string{}}
+	return &Feed{cfg: c, books: map[string]density.Book{}, signals: map[string][]density.Signal{}, candidates: map[string][]density.Signal{}, anchors: map[string]density.Signal{}, ready: map[string]bool{}, watermarks: map[string]time.Time{}, trades: map[string]time.Time{}, watches: map[string]*Episode{}, reasons: map[string]string{}}
 }
 
 func (f *Feed) Trade(event density.Event, now time.Time) {
@@ -72,7 +76,7 @@ func (f *Feed) Trade(event density.Event, now time.Time) {
 		return
 	}
 	f.trades[event.InstrumentID] = event.Time
-	if ep := f.watches[event.InstrumentID]; ep != nil && f.reasons[event.InstrumentID] == "" && Price(event.Price) <= ep.StopPrice {
+	if ep := f.watches[event.InstrumentID]; ep != nil && (ep.Entry.Filled > 0 || Price(f.anchors[event.InstrumentID].Price) == ep.Density) && f.reasons[event.InstrumentID] == "" && Price(event.Price) <= ep.StopPrice {
 		f.reasons[event.InstrumentID] = "stop_trade"
 	}
 }
@@ -88,6 +92,7 @@ func (f *Feed) Watch(ep *Episode, now time.Time) {
 	if f.watches[f.selected] == nil {
 		copy := *ep
 		f.watches[f.selected] = &copy
+		f.anchors[f.selected] = density.Signal{InstrumentID: f.selected, Price: priceFromNano(ep.Density), Quantity: ep.DensityLots}
 		delete(f.reasons, f.selected)
 	}
 	f.check(now)
@@ -101,6 +106,7 @@ func (f *Feed) Unwatch(id string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	delete(f.watches, id)
+	delete(f.anchors, id)
 	delete(f.reasons, id)
 }
 func (f *Feed) SetReady(id string, ready bool) {
@@ -109,6 +115,7 @@ func (f *Feed) SetReady(id string, ready bool) {
 	f.ready[id] = ready
 	if !ready {
 		delete(f.signals, id)
+		delete(f.candidates, id)
 		if f.watches[id] != nil && f.reasons[id] == "" {
 			f.reasons[id] = "data_unavailable"
 		}
@@ -122,6 +129,7 @@ func (f *Feed) Gap(now time.Time) {
 		f.watermarks[id] = now
 	}
 	clear(f.signals)
+	clear(f.candidates)
 	for id := range f.watches {
 		if f.reasons[id] == "" {
 			f.reasons[id] = "data_gap"
@@ -129,6 +137,10 @@ func (f *Feed) Gap(now time.Time) {
 	}
 }
 func (f *Feed) Book(b density.Book, signals []density.Signal, now time.Time) {
+	f.BookWithCandidates(b, signals, signals, now)
+}
+
+func (f *Feed) BookWithCandidates(b density.Book, signals, candidates []density.Signal, now time.Time) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if !b.Time.After(f.watermarks[b.InstrumentID]) {
@@ -136,6 +148,7 @@ func (f *Feed) Book(b density.Book, signals []density.Signal, now time.Time) {
 	}
 	if !validBook(b, now, f.cfg.Freshness) {
 		delete(f.signals, b.InstrumentID)
+		delete(f.candidates, b.InstrumentID)
 		if f.watches[b.InstrumentID] != nil && f.reasons[b.InstrumentID] == "" {
 			f.reasons[b.InstrumentID] = "invalid_book"
 		}
@@ -149,8 +162,10 @@ func (f *Feed) Book(b density.Book, signals []density.Signal, now time.Time) {
 	f.watermarks[b.InstrumentID] = b.Time
 	if f.ready[b.InstrumentID] {
 		f.signals[b.InstrumentID] = append([]density.Signal(nil), signals...)
+		f.candidates[b.InstrumentID] = append([]density.Signal(nil), candidates...)
 	} else {
 		delete(f.signals, b.InstrumentID)
+		delete(f.candidates, b.InstrumentID)
 	}
 	f.check(now)
 }
@@ -165,17 +180,22 @@ func (f *Feed) check(now time.Time) {
 			continue
 		}
 		var qty int64
+		anchor := f.anchors[id]
 		for _, l := range b.Bids {
-			if Price(l.Price) == ep.Density {
+			if l.Price == anchor.Price {
 				qty = l.Quantity
 				break
 			}
 		}
 		if float64(qty) < float64(ep.DensityLots)*f.cfg.MinRemaining {
-			f.reasons[id] = "density_lost"
-			continue
+			moved, ok := density.Relocation(b, anchor.Price, ep.DensityLots, f.cfg.MinRemaining, f.candidates[id], now)
+			if !ok {
+				f.reasons[id] = "density_lost"
+				continue
+			}
+			f.anchors[id] = moved
 		}
-		if Price(b.Bids[0].Price) <= ep.StopPrice {
+		if (ep.Entry.Filled > 0 || Price(f.anchors[id].Price) == ep.Density) && Price(b.Bids[0].Price) <= ep.StopPrice {
 			f.reasons[id] = "stop_price"
 		}
 	}
@@ -202,4 +222,63 @@ func (f *Feed) Candidates(now time.Time) []Candidate {
 		}
 	}
 	return result
+}
+
+func priceFromNano(p int64) density.Price {
+	return density.Price{Units: p / Nano, Nano: int32(p % Nano)}
+}
+
+func (f *Feed) moved(ep *Episode, now time.Time) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.check(now)
+	return f.reasons[ep.Instrument.ID] == "" && Price(f.anchors[ep.Instrument.ID].Price) != ep.Density
+}
+
+func (f *Feed) filled(ep *Episode, now time.Time) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if watch := f.watches[ep.Instrument.ID]; watch != nil {
+		watch.Entry.Filled = ep.Entry.Filled
+	}
+	f.check(now)
+}
+
+func (f *Feed) replacement(ep *Episode, now time.Time) (*Episode, density.Signal, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.check(now)
+	id := ep.Instrument.ID
+	if f.reasons[id] != "" || !f.ready[id] {
+		return nil, density.Signal{}, fmt.Errorf("replacement market unavailable")
+	}
+	for _, s := range f.candidates[id] {
+		if s.InstrumentID != id || s.Price != f.anchors[id].Price {
+			continue
+		}
+		plan, err := Plan(f.cfg, ep.Instrument, s, f.books[id], now)
+		return plan, s, err
+	}
+	return nil, density.Signal{}, fmt.Errorf("replacement no longer qualifies")
+}
+
+// rebase installs new pending protection only while the selected candidate is
+// still current. It never clears a latched data gap or actual density loss.
+func (f *Feed) rebase(ep *Episode, s density.Signal, now time.Time) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.check(now)
+	id := ep.Instrument.ID
+	if f.reasons[id] != "" || f.anchors[id].Price != s.Price {
+		return false
+	}
+	for _, current := range f.candidates[id] {
+		if current.InstrumentID == id && current.Price == s.Price && current.Since.Equal(s.Since) {
+			copy := *ep
+			f.watches[id] = &copy
+			f.anchors[id] = current
+			return true
+		}
+	}
+	return false
 }

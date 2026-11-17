@@ -19,6 +19,7 @@ func price(p density.Price) int64 {
 func rub(p int64) float64 { return float64(p) / float64(nano) }
 
 type Order struct {
+	TrackedDensity                                        int64  // Monitoring anchor; fixed trade levels stay unchanged after fill.
 	InstrumentID                                          string `json:"instrument_id"`
 	Ticker                                                string `json:"ticker"`
 	State                                                 string `json:"state"`
@@ -145,14 +146,23 @@ func (e *Engine) Observe(s density.Signal, now time.Time) {
 	if count >= e.cfg.MaxPositions {
 		return
 	}
+	o := e.plan(s, now, 0)
+	if o == nil {
+		return
+	}
+	e.orders[o.InstrumentID] = o
+	e.emit("entry_placed", o, now, "", 0, 0)
+}
+
+func (e *Engine) plan(s density.Signal, now time.Time, released float64) *Order {
 	i, ok := e.instruments[s.InstrumentID]
 	if !ok || s.Quantity <= 0 {
-		return
+		return nil
 	}
 	level := price(s.Price)
 	step := price(i.PriceStep)
 	if level <= 0 || level%step != 0 {
-		return
+		return nil
 	}
 	b := e.books[i.ID].book
 	var densityLots int64
@@ -163,34 +173,40 @@ func (e *Engine) Observe(s density.Signal, now time.Time) {
 		}
 	}
 	if densityLots <= 0 {
-		return
+		return nil
 	}
-	entry := level + e.cfg.EntryTicks*step
+	entry, err := density.EntryPrice(level, step, e.cfg.EntryTicks, e.cfg.EntryPct)
+	if err != nil {
+		return nil
+	}
 	stop := level - e.cfg.StopTicks*step
 	if stop <= 0 || entry >= price(b.Asks[0].Price) {
-		return
+		return nil
 	}
 	targetTicks := math.Ceil(float64(entry-stop) / float64(step) * e.cfg.RewardRisk)
 	if targetTicks > float64(math.MaxInt64-entry)/float64(step) {
-		return
+		return nil
 	}
 	take := entry + int64(targetTicks)*step
-	available := math.Min(e.cfg.PositionRubles, e.cash-e.reserved())
+	available := math.Min(e.cfg.PositionRubles, e.cash-e.reserved()+released)
 	lots := int64(math.Floor(available / (rub(entry) * float64(i.Lot) * (1 + e.cfg.Commission))))
 	if e.cfg.IgnoreCapital {
 		lots = e.cfg.MaxEntryLots
 	}
 	if lots < 1 {
-		return
+		return nil
 	}
 	if e.cfg.MaxEntryLots > 0 {
 		lots = min(lots, e.cfg.MaxEntryLots)
 	}
-	o := &Order{InstrumentID: i.ID, Ticker: i.Ticker, State: "pending", Density: level, Entry: entry, Stop: stop, Take: take, DensityLots: densityLots, PlannedLots: lots, Lot: i.Lot, Created: now, ActiveAt: now.Add(e.cfg.Latency)}
-	e.orders[i.ID] = o
-	e.emit("entry_placed", o, now, "", 0, 0)
+	o := &Order{InstrumentID: i.ID, Ticker: i.Ticker, State: "pending", Density: level, TrackedDensity: level, Entry: entry, Stop: stop, Take: take, DensityLots: densityLots, PlannedLots: lots, Lot: i.Lot, Created: now, ActiveAt: now.Add(e.cfg.Latency)}
+	return o
 }
 func (e *Engine) OnBook(b density.Book, now time.Time) {
+	e.OnBookWithCandidates(b, nil, now)
+}
+
+func (e *Engine) OnBookWithCandidates(b density.Book, candidates []density.Signal, now time.Time) {
 	i, known := e.instruments[b.InstrumentID]
 	if !known {
 		return
@@ -219,17 +235,40 @@ func (e *Engine) OnBook(b density.Book, now time.Time) {
 		e.mark(now)
 		return
 	}
+	if o.State == "pending" && now.Sub(o.Created) >= e.cfg.EntryTTL {
+		e.cancel(o, "entry_timeout", now)
+		return
+	}
 	if o.State != "exiting" {
+		anchor := o.TrackedDensity
+		if anchor == 0 {
+			anchor = o.Density
+		}
 		var retained int64
 		for _, l := range b.Bids {
-			if price(l.Price) == o.Density {
+			if price(l.Price) == anchor {
 				retained = l.Quantity
 				break
 			}
 		}
 		reason := ""
 		if float64(retained) < float64(o.DensityLots)*e.cfg.MinRemaining {
-			reason = "density_lost"
+			moved, ok := density.Relocation(b, density.Price{Units: anchor / nano, Nano: int32(anchor % nano)}, o.DensityLots, e.cfg.MinRemaining, candidates, now)
+			if !ok {
+				reason = "density_lost"
+			} else if o.State == "pending" {
+				released := float64(o.PlannedLots) * float64(o.Lot) * rub(o.Entry) * (1 + e.cfg.Commission)
+				next := e.plan(moved, now, released)
+				if next == nil {
+					reason = "replacement_unavailable"
+				} else {
+					next.Created = o.Created
+					*o = *next
+					e.emit("entry_replaced", o, now, "density_relocated", 0, 0)
+				}
+			} else {
+				o.TrackedDensity = price(moved.Price)
+			}
 		}
 		if o.OpenLots > 0 && price(b.Bids[0].Price) <= o.Stop {
 			reason = "stop"

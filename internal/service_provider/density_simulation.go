@@ -37,6 +37,7 @@ func (s *ServiceProvider) densitySimulationParticipant(c *config.DensityLiveConf
 		cfg.MaxEntryLots = 1
 		cfg.MaxPositions = len(c.Tickers)
 		cfg.EntryTicks = lc.EntryTicks
+		cfg.EntryPct = lc.EntryPct
 		cfg.StopTicks = lc.StopTicks
 		cfg.RewardRisk = lc.RewardRisk
 		cfg.MinRemaining = lc.MinRemaining

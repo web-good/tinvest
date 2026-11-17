@@ -14,9 +14,10 @@ func rememberOwnership(state *State) {
 	}
 	for _, ep := range state.Episodes {
 		owned := state.Ownership[ep.Instrument.Ticker]
-		if previous := state.OwnershipKeys[ep.Instrument.Ticker]; previous != ep.Entry.Key {
+		key := episodeClaim(ep).Key
+		if previous := state.OwnershipKeys[ep.Instrument.Ticker]; previous != key {
 			owned = accountcoord.DensityPosition{}
-			state.OwnershipKeys[ep.Instrument.Ticker] = ep.Entry.Key
+			state.OwnershipKeys[ep.Instrument.Ticker] = key
 		}
 		owned.InstrumentID = ep.Instrument.ID
 		owned.Quantity = ep.Remaining() * ep.Instrument.Lot

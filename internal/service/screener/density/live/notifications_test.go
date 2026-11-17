@@ -36,13 +36,41 @@ func TestNotificationsConfirmedFillsAndClose(t *testing.T) {
 		t.Fatalf("duplicate close events: %+v", state.Notifications)
 	}
 	sell := state.Notifications[1]
-	if sell.Amount != 2600*1e9 || sell.Reason != "take" || sell.Realized != 90*1e9 || sell.Fees != 10*1e9 || sell.Complete {
+	if sell.Amount != 2600*1e9 || sell.Reason != "take_profit" || sell.Realized != 90*1e9 || sell.Fees != 10*1e9 || sell.Complete {
 		t.Fatalf("wrong SELL: %+v", sell)
 	}
 	text := FormatNotification(sell)
-	for _, s := range []string{"Density SELL", "SBER", "260.0000", "take", "неполные", "trade"} {
+	for _, s := range []string{"Density SELL", "SBER", "260.0000", "Тейк-профит", "неполные", "trade"} {
 		if !strings.Contains(text, s) {
 			t.Errorf("missing %q in %s", s, text)
+		}
+	}
+}
+
+func TestFormatNotificationExplainsExitReason(t *testing.T) {
+	for reason, want := range map[string]string{"density_lost": "Плотность исчезла", "stop_price": "Стоп-лосс", "take_profit": "Тейк-профит", "max_hold": "Истекло время удержания"} {
+		text := FormatNotification(Notification{Side: "SELL", Reason: reason})
+		if !strings.Contains(text, "Причина: "+want) {
+			t.Fatalf("%s: %s", reason, text)
+		}
+	}
+}
+
+func TestConfirmedBrokerExitOverridesRequestedReason(t *testing.T) {
+	for _, requested := range []string{"density_lost", "restart_reconcile"} {
+		for _, kind := range []string{"stop", "take_profit"} {
+			ep := &Episode{Instrument: density.Instrument{Ticker: "T", Lot: 10}, Entry: Order{Key: "trade", Filled: 1}, Reason: requested}
+			child := &Order{Filled: 1, Amount: 1000 * Nano}
+			if kind == "stop" {
+				ep.Stop.Child = child
+			} else {
+				ep.Take.Child = child
+			}
+			state := State{}
+			queueClosedNotification(&state, ep, 0, 0, false)
+			if len(state.Notifications) != 1 || state.Notifications[0].Reason != kind {
+				t.Fatalf("%s %s: %+v", requested, kind, state.Notifications)
+			}
 		}
 	}
 }
