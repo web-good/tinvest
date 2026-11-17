@@ -184,7 +184,7 @@ func (e *Engine) plan(s density.Signal, now time.Time, released float64) *Order 
 	if stop <= 0 {
 		return nil
 	}
-	targetTicks := math.Ceil(float64(entry-stop) / float64(step) * e.cfg.RewardRisk)
+	targetTicks := takeProfitTicks(entry, stop, step, e.cfg.RewardRisk)
 	if targetTicks > float64(math.MaxInt64-entry)/float64(step) {
 		return nil
 	}
@@ -353,10 +353,17 @@ func (e *Engine) executeTake(o *Order, now time.Time) {
 	e.books[o.InstrumentID] = b
 }
 
+// takeProfitTicks keeps the target at least 0.3% above entry, rounded up to a tick.
+func takeProfitTicks(entry, stop, step int64, rewardRisk float64) float64 {
+	minProfit := (entry*3 + 999) / 1000
+	minTicks := (minProfit + step - 1) / step
+	return math.Max(math.Ceil(float64(entry-stop)/float64(step)*rewardRisk), float64(minTicks))
+}
+
 func (e *Engine) fillEntry(o *Order, lots, entry int64, now time.Time) {
 	o.Entry = entry
 	step := price(e.instruments[o.InstrumentID].PriceStep)
-	o.Take = entry + int64(math.Ceil(float64(entry-o.Stop)/float64(step)*e.cfg.RewardRisk))*step
+	o.Take = entry + int64(takeProfitTicks(entry, o.Stop, step, e.cfg.RewardRisk))*step
 	cost := rub(entry) * float64(lots) * float64(o.Lot)
 	fee := cost * e.cfg.Commission
 	e.cash -= cost + fee

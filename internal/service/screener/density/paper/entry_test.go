@@ -36,10 +36,10 @@ func TestPercentageEntryAndFill(t *testing.T) {
 	e.OnBook(b, received)
 	e.Observe(signal, received)
 	o := e.orders["x"]
-	if o == nil || o.State != "open" || o.Entry != 60_460_000_000 || o.Stop != 60_370_000_000 || o.Take != 60_640_000_000 {
+	if o == nil || o.State != "open" || o.Entry != 60_460_000_000 || o.Stop != 60_370_000_000 || o.Take != 60_650_000_000 {
 		t.Fatalf("wrong fill: %+v", o)
 	}
-	if len(fills) != 1 || fills[0].FillRubles != 60.46 {
+	if len(fills) != 1 || fills[0].FillRubles != 60.46 || fills[0].TakeRubles != 60.65 {
 		t.Fatalf("missing fill alert: %+v", fills)
 	}
 }
@@ -71,12 +71,50 @@ func TestPercentageEntryWaitsForLatencyAndUsesAvailableAsk(t *testing.T) {
 	if o := e.orders["x"]; o == nil || o.State != "pending" {
 		t.Fatalf("latency bypassed: %+v", o)
 	}
+	if e.orders["x"].Take != 100_640_000_000 {
+		t.Fatalf("wrong planned take: %+v", e.orders["x"])
+	}
 	b.Time = start.Add(time.Second)
 	b.Asks[0].Price = density.Price{Units: 100, Nano: 100_000_000}
 	e.OnBook(b, b.Time)
 	o := e.orders["x"]
-	if o.State != "open" || o.Entry != 100_100_000_000 || o.Take != 100_340_000_000 {
+	if o.State != "open" || o.Entry != 100_100_000_000 || o.Take != 100_410_000_000 {
 		t.Fatalf("wrong delayed fill: %+v", o)
+	}
+}
+
+func TestTakeProfitHasMinimumReturnRoundedUpToPriceStep(t *testing.T) {
+	for _, tc := range []struct {
+		name                    string
+		entry, stop, step, want int64
+	}{
+		{name: "minimum exactly on tick", entry: 100_000_000_000, stop: 99_990_000_000, step: 10_000_000, want: 100_300_000_000},
+		{name: "minimum rounded up", entry: 100_010_000_000, stop: 100_000_000_000, step: 10_000_000, want: 100_320_000_000},
+		{name: "larger reward risk target preserved", entry: 100_000_000_000, stop: 99_000_000_000, step: 10_000_000, want: 102_000_000_000},
+		{name: "coarser price step", entry: 100_050_000_000, stop: 100_000_000_000, step: 50_000_000, want: 100_400_000_000},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := engine(t)
+			i := e.instruments["x"]
+			i.PriceStep = density.Price{Nano: int32(tc.step)}
+			e.instruments["x"] = i
+			o := &Order{InstrumentID: "x", Stop: tc.stop, Lot: 1}
+			e.fillEntry(o, 1, tc.entry, start)
+			if o.Take != tc.want {
+				t.Fatalf("take = %d, want %d", o.Take, tc.want)
+			}
+		})
+	}
+}
+
+func TestPlannedTakeProfitHasMinimumReturn(t *testing.T) {
+	e := engine(t)
+	i := e.instruments["x"]
+	i.PriceStep = density.Price{Nano: 10_000_000}
+	e.instruments["x"] = i
+	place(t, e)
+	if o := e.orders["x"]; o.Entry != 100_010_000_000 || o.Take != 100_320_000_000 {
+		t.Fatalf("wrong planned target: %+v", o)
 	}
 }
 
