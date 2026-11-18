@@ -1,15 +1,14 @@
 package paper
 
 import (
-	"math"
 	"testing"
 	"time"
 	"tinvest/internal/service/screener/density"
 )
 
-func TestPercentageEntryAndFill(t *testing.T) {
+func TestEntryZoneAndFill(t *testing.T) {
 	cfg := DefaultConfig()
-	cfg.EntryPct = .3
+	cfg.EntryZoneTicks = 18
 	cfg.Latency = 0
 	cfg.MaxEntryLots = 1
 	var fills []Record
@@ -44,19 +43,19 @@ func TestPercentageEntryAndFill(t *testing.T) {
 	}
 }
 
-func TestConfigRejectsInvalidEntryPct(t *testing.T) {
-	for _, pct := range []float64{-1, math.NaN(), math.Inf(1), 101} {
+func TestConfigRejectsInvalidEntryZoneTicks(t *testing.T) {
+	for _, ticks := range []int64{-1, 1000001} {
 		cfg := DefaultConfig()
-		cfg.EntryPct = pct
+		cfg.EntryZoneTicks = ticks
 		if cfg.Validate() == nil {
-			t.Fatalf("accepted entry percentage %v", pct)
+			t.Fatalf("accepted entry zone ticks %d", ticks)
 		}
 	}
 }
 
-func TestPercentageEntryWaitsForLatencyAndUsesAvailableAsk(t *testing.T) {
+func TestEntryZoneWaitsForLatencyAndUsesAvailableAsk(t *testing.T) {
 	cfg := DefaultConfig()
-	cfg.EntryPct = .3
+	cfg.EntryZoneTicks = 20
 	cfg.Latency = time.Second
 	cfg.MaxEntryLots = 1
 	e, err := New(cfg, []density.Instrument{{ID: "x", Ticker: "X", Lot: 1, PriceStep: density.Price{Nano: 10_000_000}}}, nil)

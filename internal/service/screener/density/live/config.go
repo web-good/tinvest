@@ -11,8 +11,7 @@ import (
 const Nano int64 = 1000000000
 
 type Config struct {
-	EntryTicks, StopTicks                                int64
-	EntryPct                                             float64
+	EntryTicks, EntryZoneTicks, StopTicks                int64
 	RewardRisk, MinRemaining                             float64
 	Freshness, EntryTTL, MaxHold, Cooldown, PollInterval time.Duration
 }
@@ -22,8 +21,8 @@ func DefaultConfig() Config {
 }
 
 func (c Config) Validate() error {
-	if math.IsNaN(c.EntryPct) || math.IsInf(c.EntryPct, 0) || c.EntryPct < 0 || c.EntryPct > 100 {
-		return fmt.Errorf("invalid live entry percentage")
+	if c.EntryZoneTicks < 0 || c.EntryZoneTicks > 1000000 {
+		return fmt.Errorf("invalid live entry zone ticks")
 	}
 	if c.EntryTicks < 1 || c.EntryTicks > 1000000 || c.StopTicks < 1 || c.StopTicks > 1000000 || math.IsNaN(c.RewardRisk) || math.IsInf(c.RewardRisk, 0) || c.RewardRisk <= 0 || c.RewardRisk > 100 || math.IsNaN(c.MinRemaining) || c.MinRemaining <= 0 || c.MinRemaining > 1 || c.Freshness <= 0 || c.EntryTTL <= 0 || c.MaxHold <= 0 || c.Cooldown < 0 || c.PollInterval < time.Second {
 		return fmt.Errorf("invalid live configuration")
@@ -49,10 +48,10 @@ func Plan(c Config, i density.Instrument, s density.Signal, b density.Book, now 
 	if i.ID == "" || i.Ticker == "" || i.Lot <= 0 || step <= 0 || step > 1000000*Nano || level <= 0 || level%step != 0 || i.ID != s.InstrumentID || !validBook(b, now, c.Freshness) || b.InstrumentID != i.ID || b.Lot != i.Lot {
 		return nil, fmt.Errorf("invalid entry metadata or book")
 	}
-	if c.EntryTicks > (math.MaxInt64-level)/step || c.StopTicks >= (level+step-1)/step {
-		return nil, fmt.Errorf("entry or stop offset exceeds price range")
+	if c.StopTicks >= (level+step-1)/step {
+		return nil, fmt.Errorf("stop offset exceeds price range")
 	}
-	entry, err := density.EntryLimit(level, step, c.EntryTicks, c.EntryPct, Price(b.Asks[0].Price))
+	entry, err := density.EntryLimit(level, step, c.EntryTicks, c.EntryZoneTicks, Price(b.Asks[0].Price))
 	if err != nil {
 		return nil, err
 	}

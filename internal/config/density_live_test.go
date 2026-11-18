@@ -36,19 +36,19 @@ func TestDensityLiveRejectsInvalidLimits(t *testing.T) {
 	}
 }
 
-func TestDensityLiveEntryPercentageEnvironment(t *testing.T) {
-	t.Setenv("DENSITY_LIVE_ENTRY_PCT", "0.3")
+func TestDensityLiveEntryZoneTicksEnvironment(t *testing.T) {
+	t.Setenv("DENSITY_LIVE_ENTRY_ZONE_TICKS", "18")
 	c := NewDensityLiveConfig()
 	if err := confita.NewLoader(env.NewBackend()).Load(context.Background(), c); err != nil {
 		t.Fatal(err)
 	}
-	if c.EntryPct != .3 {
-		t.Fatalf("entry percentage = %v", c.EntryPct)
+	if c.EntryZoneTicks != 18 {
+		t.Fatalf("entry zone ticks = %v", c.EntryZoneTicks)
 	}
-	for _, pct := range []float64{-1, math.NaN(), math.Inf(1), 101} {
-		c.EntryPct = pct
+	for _, ticks := range []int64{-1, 1000001} {
+		c.EntryZoneTicks = ticks
 		if c.Validate() == nil {
-			t.Fatalf("accepted entry percentage %v", pct)
+			t.Fatalf("accepted entry zone ticks %d", ticks)
 		}
 	}
 }

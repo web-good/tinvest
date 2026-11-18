@@ -83,7 +83,7 @@ func TestSimulationFollowsAdditionalTickerInUniverseLargerThanTen(t *testing.T) 
 	var admitted atomic.Bool
 	checked := make(chan struct{}, 2)
 	cfg := paper.DefaultConfig()
-	cfg.EntryPct = .3
+	cfg.EntryZoneTicks = 20
 	cfg.Latency = 0
 	cfg.MaxEntryLots = 1
 	detector := density.DefaultConfig()

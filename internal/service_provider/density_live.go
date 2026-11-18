@@ -129,7 +129,7 @@ func (s *ServiceProvider) GetDensityLiveService() (*densitylive.Participant, err
 	detector.BookDepth = int32(d.BookDepth)
 	lc := densitylive.DefaultConfig()
 	lc.EntryTicks = c.EntryTicks
-	lc.EntryPct = c.EntryPct
+	lc.EntryZoneTicks = c.EntryZoneTicks
 	lc.StopTicks = c.StopTicks
 	lc.RewardRisk = c.RewardRisk
 	lc.MinRemaining = c.MinRemaining

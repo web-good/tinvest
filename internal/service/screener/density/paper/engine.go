@@ -179,7 +179,7 @@ func (e *Engine) plan(s density.Signal, now time.Time, released float64) *Order 
 	if densityLots <= 0 {
 		return nil
 	}
-	entry, err := density.EntryLimit(level, step, e.cfg.EntryTicks, e.cfg.EntryPct, price(b.Asks[0].Price))
+	entry, err := density.EntryLimit(level, step, e.cfg.EntryTicks, e.cfg.EntryZoneTicks, price(b.Asks[0].Price))
 	if err != nil {
 		return nil
 	}
@@ -331,10 +331,10 @@ func (e *Engine) OnTrade(t density.Event, now time.Time) {
 	e.mark(now)
 }
 
-// executeEntry models a marketable percentage entry using visible ask liquidity.
+// executeEntry models a marketable entry inside the zone using visible ask liquidity.
 // Passive tick-offset orders continue to require a trade through their limit.
 func (e *Engine) executeEntry(o *Order, now time.Time) {
-	if e.err != nil || (e.cfg.EntryPct <= 0 && !e.cfg.BookExecution) || o.State != "pending" || now.Before(o.ActiveAt) || now.Sub(o.Created) >= e.cfg.EntryTTL {
+	if e.err != nil || (e.cfg.EntryZoneTicks <= 0 && !e.cfg.BookExecution) || o.State != "pending" || now.Before(o.ActiveAt) || now.Sub(o.Created) >= e.cfg.EntryTTL {
 		return
 	}
 	b := e.books[o.InstrumentID]

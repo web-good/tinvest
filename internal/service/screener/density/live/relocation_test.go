@@ -65,11 +65,11 @@ func TestUnconfirmedCandidatesDoNotStartFirstEntry(t *testing.T) {
 	}
 }
 
-func TestReplacementUsesPercentageEntry(t *testing.T) {
+func TestReplacementUsesEntryZone(t *testing.T) {
 	x := setup(t)
 	x.i.PriceStep = density.Price{Nano: 10_000_000}
 	x.e.instruments[x.i.ID] = x.i
-	x.e.cfg.EntryPct, x.f.cfg.EntryPct = .3, .3
+	x.e.cfg.EntryZoneTicks, x.f.cfg.EntryZoneTicks = 20, 20
 	setBook := func(level, ask int64, confirmed bool) {
 		x.now = x.now.Add(time.Millisecond)
 		signal := density.Signal{InstrumentID: x.i.ID, Price: priceFromNano(level), Quantity: 1000, Since: x.now}
@@ -85,7 +85,7 @@ func TestReplacementUsesPercentageEntry(t *testing.T) {
 	setBook(101*Nano, 101_100_000_000, false)
 	runStep(t, x)
 	if len(x.b.posts) != 2 || x.b.posts[0].Price != 100_200_000_000 || x.b.posts[1].Price != 101_100_000_000 {
-		t.Fatalf("wrong percentage replacement: %+v", x.b.posts)
+		t.Fatalf("wrong entry zone replacement: %+v", x.b.posts)
 	}
 }
 

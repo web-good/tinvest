@@ -7,7 +7,7 @@ import (
 	"tinvest/internal/service/screener/density"
 )
 
-func TestPlanPercentageEntry(t *testing.T) {
+func TestPlanEntryZone(t *testing.T) {
 	now := time.Now()
 	i := density.Instrument{ID: "x", Ticker: "VTBR", Lot: 1, PriceStep: density.Price{Nano: 10_000_000}}
 	signal := density.Signal{InstrumentID: "x", Price: priceFromNano(60_390_000_000)}
@@ -22,7 +22,7 @@ func TestPlanPercentageEntry(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := DefaultConfig()
-			cfg.EntryPct = .3
+			cfg.EntryZoneTicks = 18
 			cfg.RewardRisk = 1.5
 			b := density.Book{InstrumentID: "x", Lot: 1, Time: now, Bids: []density.Level{{Price: signal.Price, Quantity: 100}}, Asks: []density.Level{{Price: priceFromNano(tc.ask), Quantity: 10}}}
 			ep, err := Plan(cfg, i, signal, b, now)
@@ -46,12 +46,12 @@ func TestPlanPercentageEntry(t *testing.T) {
 	}
 }
 
-func TestConfigRejectsInvalidEntryPct(t *testing.T) {
-	for _, pct := range []float64{-1, math.NaN(), math.Inf(1), 101} {
+func TestConfigRejectsInvalidEntryZoneTicks(t *testing.T) {
+	for _, ticks := range []int64{-1, 1000001} {
 		cfg := DefaultConfig()
-		cfg.EntryPct = pct
+		cfg.EntryZoneTicks = ticks
 		if cfg.Validate() == nil {
-			t.Fatalf("accepted entry percentage %v", pct)
+			t.Fatalf("accepted entry zone ticks %d", ticks)
 		}
 	}
 }

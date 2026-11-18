@@ -15,7 +15,7 @@ type DensityLiveConfig struct {
 	Tickers        []string      `config:"DENSITY_LIVE_TICKERS,backend=env"`
 	StateDir       string        `config:"DENSITY_LIVE_STATE_DIR,backend=env"`
 	EntryTicks     int64         `config:"DENSITY_LIVE_ENTRY_TICKS,backend=env"`
-	EntryPct       float64       `config:"DENSITY_LIVE_ENTRY_PCT,backend=env"`
+	EntryZoneTicks int64         `config:"DENSITY_LIVE_ENTRY_ZONE_TICKS,backend=env"`
 	StopTicks      int64         `config:"DENSITY_LIVE_STOP_TICKS,backend=env"`
 	RewardRisk     float64       `config:"DENSITY_LIVE_RR,backend=env"`
 	MinRemaining   float64       `config:"DENSITY_LIVE_MIN_REMAINING,backend=env"`
@@ -36,8 +36,8 @@ func (c *DensityLiveConfig) Validate() error {
 	if c.SimulationTopicID < 0 {
 		return fmt.Errorf("DENSITY_SIMULATION_TOPIC_ID must be nonnegative")
 	}
-	if math.IsNaN(c.EntryPct) || math.IsInf(c.EntryPct, 0) || c.EntryPct < 0 || c.EntryPct > 100 {
-		return fmt.Errorf("invalid DENSITY_LIVE_ENTRY_PCT: must be between 0 and 100")
+	if c.EntryZoneTicks < 0 || c.EntryZoneTicks > 1000000 {
+		return fmt.Errorf("invalid DENSITY_LIVE_ENTRY_ZONE_TICKS: must be between 0 and 1000000")
 	}
 	finite := func(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) }
 

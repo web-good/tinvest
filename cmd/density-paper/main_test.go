@@ -24,7 +24,7 @@ func TestHelpDoesNotNeedTokenOrConnect(t *testing.T) {
 func TestInvalidConfigurationFailsBeforeConnecting(t *testing.T) {
 	t.Setenv("T_BANK", "")
 	var out bytes.Buffer
-	for _, args := range [][]string{{"-commission", "NaN"}, {"-instruments", "11"}, {"-cash", "-1"}, {"-entry-pct", "NaN"}, {"-entry-pct", "-0.3"}, {"-entry-pct", "101"}} {
+	for _, args := range [][]string{{"-commission", "NaN"}, {"-instruments", "11"}, {"-cash", "-1"}, {"-entry-zone-ticks", "0.3"}, {"-entry-zone-ticks", "-1"}, {"-entry-zone-ticks", "1000001"}} {
 		if err := run(context.Background(), args, &out); err == nil || strings.Contains(err.Error(), "T_BANK") {
 			t.Fatalf("%v: %v", args, err)
 		}
