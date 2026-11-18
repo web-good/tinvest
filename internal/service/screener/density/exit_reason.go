@@ -9,6 +9,8 @@ func ExitReasonText(reason string) string {
 		return "Плотность исчезла или её объём упал ниже порога"
 	case "stop", "stop_loss", "stop_price", "stop_trade", "broker_stop":
 		return "Стоп-лосс"
+	case ExitRSIProfit:
+		return "Ранний выход по RSI(6) на 1м"
 	case "take", "take_profit":
 		return "Тейк-профит"
 	case "max_hold", "position_timeout":

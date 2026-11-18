@@ -3,8 +3,22 @@ package indicators
 import "math"
 
 func RSISeries(closes []float64, period int) []float64 {
+	return rsiSeries(closes, period, wilderRSI)
+}
+
+// WilderRSISeries returns unrounded RSI with 100 for positive gains and zero losses.
+func WilderRSISeries(closes []float64, period int) []float64 {
+	return rsiSeries(closes, period, func(gain, loss float64) float64 {
+		if gain == 0 && loss == 0 {
+			return 50
+		}
+		return 100 * gain / (gain + loss)
+	})
+}
+
+func rsiSeries(closes []float64, period int, value func(float64, float64) float64) []float64 {
 	out := make([]float64, len(closes))
-	if len(closes) <= period {
+	if period <= 0 || len(closes) <= period {
 		return out
 	}
 
@@ -20,7 +34,7 @@ func RSISeries(closes []float64, period int) []float64 {
 	}
 	avgGain /= p
 	avgLoss /= p
-	out[period] = wilderRSI(avgGain, avgLoss)
+	out[period] = value(avgGain, avgLoss)
 
 	for i := period + 1; i < len(closes); i++ {
 		ch := closes[i] - closes[i-1]
@@ -32,7 +46,7 @@ func RSISeries(closes []float64, period int) []float64 {
 		}
 		avgGain = (avgGain*(p-1) + g) / p
 		avgLoss = (avgLoss*(p-1) + l) / p
-		out[i] = wilderRSI(avgGain, avgLoss)
+		out[i] = value(avgGain, avgLoss)
 	}
 	return out
 }

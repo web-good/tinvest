@@ -3,6 +3,7 @@ package grpc
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -42,7 +43,8 @@ func TestDensityCandlesConversion(t *testing.T) {
 
 type densityMarketFake struct {
 	investapi.MarketDataServiceClient
-	req *investapi.GetCandlesRequest
+	req     *investapi.GetCandlesRequest
+	candles []*investapi.HistoricCandle
 }
 
 func TestDensitySupportCandlesUsesHourlyHistory(t *testing.T) {
@@ -60,6 +62,9 @@ func TestDensitySupportCandlesUsesHourlyHistory(t *testing.T) {
 
 func (f *densityMarketFake) GetCandles(ctx context.Context, req *investapi.GetCandlesRequest, opts ...googlegrpc.CallOption) (*investapi.GetCandlesResponse, error) {
 	f.req = req
+	if f.candles != nil {
+		return &investapi.GetCandlesResponse{Candles: f.candles}, nil
+	}
 	return &investapi.GetCandlesResponse{Candles: []*investapi.HistoricCandle{{Time: timestamppb.New(time.Date(2025, 12, 30, 0, 0, 0, 0, time.UTC)), Low: &investapi.Quotation{Units: 99}, High: &investapi.Quotation{Units: 101}, Close: &investapi.Quotation{Units: 100, Nano: 250000000}, Volume: 50, IsComplete: true}, {}}}, nil
 }
 
@@ -108,5 +113,32 @@ func TestDensityTargetedTickersPropagateError(t *testing.T) {
 	got, err := d.InstrumentsByTickers(context.Background(), []string{"T"})
 	if len(got) != 0 || !errors.Is(err, context.DeadlineExceeded) || !strings.Contains(err.Error(), "T") {
 		t.Fatalf("%+v %v", got, err)
+	}
+}
+
+func TestDensityMinuteClosesRequireLatestCompletedMinute(t *testing.T) {
+	end := time.Date(2026, 11, 18, 12, 0, 0, 0, time.FixedZone("MSK", 3*60*60))
+	candle := func(offset time.Duration, close int64, complete bool) *investapi.HistoricCandle {
+		return &investapi.HistoricCandle{Time: timestamppb.New(end.Add(offset)), Close: &investapi.Quotation{Units: close}, IsComplete: complete}
+	}
+	f := &densityMarketFake{candles: []*investapi.HistoricCandle{
+		candle(-time.Minute, 102, true),
+		candle(0, 103, false),
+		candle(-2*time.Minute, 101, true),
+		candle(-2*time.Hour, 55, true),
+	}}
+	d := &DensityMarketData{market: f, auth: NewAuth("test")}
+	got, err := d.MinuteCloses(t.Context(), "uid", end)
+	if err != nil || !slices.Equal(got, []float64{101e9, 102e9}) {
+		t.Fatalf("minute closes=%v err=%v", got, err)
+	}
+	if f.req.GetInterval() != investapi.CandleInterval_CANDLE_INTERVAL_1_MIN ||
+		f.req.GetInstrumentId() != "uid" || !f.req.GetTo().AsTime().Equal(end) {
+		t.Fatalf("request=%v", f.req)
+	}
+	f.candles[0].IsComplete = false
+	got, err = d.MinuteCloses(t.Context(), "uid", end)
+	if err != nil || len(got) != 0 {
+		t.Fatalf("incomplete latest candle: closes=%v err=%v", got, err)
 	}
 }

@@ -138,6 +138,9 @@ func (s *ServiceProvider) GetDensityLiveService() (*densitylive.Participant, err
 	lc.MaxHold = c.MaxHold
 	lc.Cooldown = c.Cooldown
 	if !c.TradeEnabled {
+		if d.Enabled && max(c.SimulationTopicID, 1) == max(d.TopicID, 1) {
+			return nil, fmt.Errorf("DENSITY_SIMULATION_TOPIC_ID must select a different topic than DENSITY_TOPIC_ID")
+		}
 		return s.densitySimulationParticipant(c, d, detector, lc), nil
 	}
 	account, token, err := densityLiveAccount(s.appConfig)

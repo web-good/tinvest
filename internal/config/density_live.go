@@ -22,6 +22,8 @@ type DensityLiveConfig struct {
 	EntryTTL       time.Duration `config:"DENSITY_LIVE_ENTRY_TTL,backend=env"`
 	MaxHold        time.Duration `config:"DENSITY_LIVE_MAX_HOLD,backend=env"`
 	Cooldown       time.Duration `config:"DENSITY_LIVE_COOLDOWN,backend=env"`
+
+	SimulationTopicID int `config:"DENSITY_SIMULATION_TOPIC_ID,backend=env"`
 }
 
 func NewDensityLiveConfig() *DensityLiveConfig {
@@ -30,6 +32,9 @@ func NewDensityLiveConfig() *DensityLiveConfig {
 func (c *DensityLiveConfig) Validate() error {
 	if c == nil {
 		return fmt.Errorf("density live configuration missing")
+	}
+	if c.SimulationTopicID < 0 {
+		return fmt.Errorf("DENSITY_SIMULATION_TOPIC_ID must be nonnegative")
 	}
 	if math.IsNaN(c.EntryPct) || math.IsInf(c.EntryPct, 0) || c.EntryPct < 0 || c.EntryPct > 100 {
 		return fmt.Errorf("invalid DENSITY_LIVE_ENTRY_PCT: must be between 0 and 100")

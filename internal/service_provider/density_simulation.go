@@ -54,7 +54,7 @@ func (s *ServiceProvider) densitySimulationParticipant(c *config.DensityLiveConf
 		for n, t := range c.Tickers {
 			tickers[n] = strings.ToUpper(strings.TrimSpace(t))
 		}
-		service := simulation.Service{FollowScreener: c.FollowScreener, AllowEntry: p.AllowEntry, Market: marketgrpc.NewDensityMarketData(client.Connection(), s.appConfig.GrpcClient.TokenProd), Config: cfg, Detector: detector, Tickers: tickers, Root: c.StateDir, HistoryInterval: d.HistoryInterval, Notify: (densityLiveSender{bot: bot.API(), chatID: d.ChatID, topicID: d.TopicID}).SendText, Warn: func(err error) { logger.ErrorContext(context.Background(), "density simulation: "+err.Error()) }}
+		service := simulation.Service{FollowScreener: c.FollowScreener, AllowEntry: p.AllowEntry, Market: marketgrpc.NewDensityMarketData(client.Connection(), s.appConfig.GrpcClient.TokenProd), Config: cfg, Detector: detector, Tickers: tickers, Root: c.StateDir, HistoryInterval: d.HistoryInterval, Notify: (densityLiveSender{bot: bot.API(), chatID: d.ChatID, topicID: c.SimulationTopicID}).SendText, Warn: func(err error) { logger.ErrorContext(context.Background(), "density simulation: "+err.Error()) }}
 		logger.Info("density simulation started: real orders disabled; alerts only on virtual fills")
 		return service.Run(ctx)
 	}

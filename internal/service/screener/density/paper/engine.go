@@ -56,6 +56,7 @@ type Engine struct {
 	cash, realized, fees, peak, maxDrawdown float64
 	closed, wins, canceled, gaps            int
 	complete                                bool
+	rsiExit                                 func(string, int64, int64, time.Time) bool
 	record                                  func(Record) error
 	err                                     error
 }
@@ -290,6 +291,11 @@ func (e *Engine) OnBookWithCandidates(b density.Book, candidates []density.Signa
 	}
 	e.executeEntry(o, now)
 	e.executeTake(o, now)
+	bid := price(b.Bids[0].Price)
+	if e.err == nil && o.State == "open" && bid < o.Take && (e.cfg.MaxHold == 0 || now.Sub(o.Opened) < e.cfg.MaxHold) &&
+		e.rsiExit != nil && e.rsiExit(o.InstrumentID, o.Entry, bid, now) {
+		e.requestExit(o, density.ExitRSIProfit, now)
+	}
 	e.executeExit(o, now)
 	e.mark(now)
 }

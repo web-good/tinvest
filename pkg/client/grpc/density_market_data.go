@@ -111,3 +111,43 @@ func (d *DensityMarketData) SupportCandles(ctx context.Context, id string, days 
 	}
 	return result, nil
 }
+
+// MinuteCloses returns up to an hour of completed minute closes before end.
+func (d *DensityMarketData) MinuteCloses(ctx context.Context, id string, end time.Time) ([]float64, error) {
+	from := end.Add(-time.Hour)
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+	resp, err := d.market.GetCandles(ctx, &investapi.GetCandlesRequest{
+		InstrumentId: &id,
+		From:         timestamppb.New(from),
+		To:           timestamppb.New(end),
+		Interval:     investapi.CandleInterval_CANDLE_INTERVAL_1_MIN,
+	}, NewRPCCredential(d.auth))
+	if err != nil {
+		return nil, fmt.Errorf("minute candles: %w", err)
+	}
+	closes := make(map[time.Time]float64)
+	for _, c := range resp.GetCandles() {
+		if !c.GetIsComplete() || c.GetTime() == nil || c.GetTime().CheckValid() != nil || c.GetClose() == nil {
+			continue
+		}
+		q := c.GetClose()
+		if q.GetUnits() < 0 || q.GetNano() < 0 || q.GetNano() >= 1e9 {
+			continue
+		}
+		price := float64(q.GetUnits())*1e9 + float64(q.GetNano())
+		if price > 0 {
+			closes[c.GetTime().AsTime()] = price
+		}
+	}
+	if closes[end.Add(-time.Minute).UTC()] <= 0 {
+		return nil, nil
+	}
+	result := make([]float64, 0, len(closes))
+	for at := from.UTC(); at.Before(end); at = at.Add(time.Minute) {
+		if price := closes[at]; price > 0 {
+			result = append(result, price)
+		}
+	}
+	return result, nil
+}

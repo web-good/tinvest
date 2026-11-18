@@ -378,3 +378,24 @@ func TestZeroMaxHoldKeepsPositionUntilStrategyExit(t *testing.T) {
 		})
 	}
 }
+
+func TestRSIProfitExitUsesNextBook(t *testing.T) {
+	e := engine(t)
+	e.rsiExit = func(id string, entry, bid int64, _ time.Time) bool {
+		return id == "x" && entry == 101*nano && bid == 102*nano
+	}
+	place(t, e)
+	trade(e, start.Add(time.Second), 100, 2)
+	b := book(start.Add(2*time.Second), 100)
+	b.Bids[0].Price = p(102)
+	e.OnBook(b, b.Time)
+	o := e.orders["x"]
+	if o.State != "exiting" || o.ExitReason != "rsi_profit" || o.OpenLots != 2 {
+		t.Fatalf("expected RSI exit request with no fill on the trigger book: %+v", o)
+	}
+	b.Time = start.Add(3 * time.Second)
+	e.OnBook(b, b.Time)
+	if o.State != "closed" || o.ExitReason != "rsi_profit" {
+		t.Fatalf("expected RSI exit fill on the next book: %+v", o)
+	}
+}

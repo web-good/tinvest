@@ -198,3 +198,23 @@ func TestSimulationFailsClosedWhenBoundDensityJournalIsMissing(t *testing.T) {
 		t.Fatal("a missing bound real journal switched the runner to ordinary reconciliation")
 	}
 }
+
+func TestSimulationTopicMustDifferFromScreenerTopic(t *testing.T) {
+	cfg := &config.Config{DensityLive: config.NewDensityLiveConfig(), Density: config.NewDensityConfig()}
+	cfg.Density.Enabled = true
+	cfg.DensityLive.Enabled = true
+	cfg.Density.ChatID = -100123
+	cfg.Density.TopicID = 42
+	s := &ServiceProvider{appConfig: cfg}
+	for _, topic := range []int{0, 42, 43} {
+		cfg.DensityLive.SimulationTopicID = topic
+		service, err := s.GetDensityLiveService()
+		if topic == cfg.Density.TopicID {
+			if err == nil || !strings.Contains(err.Error(), "DENSITY_SIMULATION_TOPIC_ID") {
+				t.Fatalf("shared topic %d: service=%v err=%v", topic, service, err)
+			}
+		} else if err != nil || service == nil {
+			t.Fatalf("separate topic %d: service=%v err=%v", topic, service, err)
+		}
+	}
+}

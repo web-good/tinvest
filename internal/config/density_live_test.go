@@ -63,3 +63,18 @@ func TestDensityLiveFollowScreenerEnvironment(t *testing.T) {
 		t.Fatal("follow screener flag not loaded")
 	}
 }
+
+func TestDensitySimulationTopicEnvironment(t *testing.T) {
+	t.Setenv("DENSITY_SIMULATION_TOPIC_ID", "42")
+	c := NewDensityLiveConfig()
+	if err := confita.NewLoader(env.NewBackend()).Load(context.Background(), c); err != nil {
+		t.Fatal(err)
+	}
+	if c.SimulationTopicID != 42 {
+		t.Fatalf("simulation topic = %d", c.SimulationTopicID)
+	}
+	c.SimulationTopicID = -1
+	if c.Validate() == nil {
+		t.Fatal("accepted a negative simulation topic")
+	}
+}

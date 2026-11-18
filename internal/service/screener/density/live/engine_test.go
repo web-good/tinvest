@@ -303,3 +303,37 @@ func TestRestartDoesNotRepostUncertainBuy(t *testing.T) {
 		t.Fatal("replayed uncertain buy")
 	}
 }
+
+func TestRSIProfitExitReconcilesProtectionBeforeSelling(t *testing.T) {
+	x := setup(t)
+	x.step(t)
+	x.fill()
+	x.step(t)
+	x.e.rsiExit = func(id string, entry, bid int64, _ time.Time) bool {
+		return id == x.i.ID && entry == 101*Nano && bid == 102*Nano
+	}
+	x.now = x.now.Add(time.Millisecond)
+	x.f.Book(density.Book{
+		InstrumentID: x.i.ID, Lot: x.i.Lot, Time: x.now,
+		Bids: []density.Level{
+			{Price: density.Price{Units: 102}, Quantity: 10},
+			{Price: density.Price{Units: 100}, Quantity: 1000},
+		},
+		Asks: []density.Level{{Price: density.Price{Units: 103}, Quantity: 10}},
+	}, nil, x.now)
+	x.b.onPost = func() {
+		for _, s := range x.b.stops {
+			if s.Status == "active" {
+				t.Error("exit posted before protection was canceled")
+			}
+		}
+	}
+	x.step(t)
+	if len(x.b.posts) != 2 || x.b.posts[1].Kind != "exit" {
+		t.Fatalf("expected market exit, got %+v", x.b.posts)
+	}
+	notes := x.e.PendingNotifications()
+	if len(notes) != 2 || notes[1].Reason != "rsi_profit" {
+		t.Fatalf("expected confirmed RSI sale notification, got %+v", notes)
+	}
+}
