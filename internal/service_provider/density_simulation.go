@@ -31,6 +31,7 @@ func (s *ServiceProvider) densitySimulationParticipant(c *config.DensityLiveConf
 			return err
 		}
 		cfg := paper.DefaultConfig()
+		cfg.PinbarEntries = lc.PinbarEntries
 		cfg.RestrictEntryHours = true
 		cfg.IgnoreCapital = true
 		cfg.Commission = 0

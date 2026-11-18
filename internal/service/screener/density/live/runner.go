@@ -139,6 +139,11 @@ func (r *Runner) connection(parent context.Context) error {
 	if err = stream.SubscribeInfo(ids, true); err != nil {
 		return err
 	}
+	if r.Feed.cfg.PinbarEntries {
+		if err = density.SubscribeClosedCandles(stream, ids); err != nil {
+			return err
+		}
+	}
 	if !r.BookOnly {
 		if err = stream.SubscribeTrades(ids, true); err != nil {
 			return err
@@ -163,6 +168,7 @@ func (r *Runner) connection(parent context.Context) error {
 	defer func() { cancel(); _ = stream.Close(); <-done }()
 	books, info, open := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	trades := map[string]time.Time{}
+	candles := map[string]bool{}
 	detector := density.NewDetector(r.Detector)
 	detector.SetInstruments(r.Universe)
 	ready := func(id string, now time.Time) bool {
@@ -199,7 +205,7 @@ func (r *Runner) connection(parent context.Context) error {
 					continue
 				}
 				switch event.Kind {
-				case density.EventBookAck, density.EventInfoAck, density.EventTradeAck:
+				case density.EventBookAck, density.EventInfoAck, density.EventTradeAck, density.EventCandleAck:
 					if !event.Success {
 						return fmt.Errorf("market subscription rejected")
 					}
@@ -210,6 +216,8 @@ func (r *Runner) connection(parent context.Context) error {
 						info[id] = true
 					case density.EventTradeAck:
 						trades[id] = now
+					case density.EventCandleAck:
+						candles[id] = true
 					}
 				case density.EventTradingStatus:
 					open[id] = event.TradingOpen
@@ -243,7 +251,11 @@ func (r *Runner) connection(parent context.Context) error {
 						}
 						signals = admitted
 					}
-					r.Feed.BookWithCandidates(event.Book, signals, detector.Candidates(), now)
+					r.Feed.bookWithCandidates(event.Book, signals, detector.Candidates(), instruments[id].PriceStep, now)
+				case density.EventCandle:
+					if candles[id] && ready(id, now) {
+						r.Feed.candle(id, event.Candle, now)
+					}
 				case density.EventTrade:
 					if ready(id, now) {
 						r.Feed.Trade(event, now)

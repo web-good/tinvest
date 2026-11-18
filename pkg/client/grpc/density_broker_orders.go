@@ -20,6 +20,9 @@ func (b *DensityBroker) PostOrder(parent context.Context, r live.OrderRequest) (
 		return live.Order{}, err
 	}
 	req := &investapi.PostOrderRequest{AccountId: b.account, InstrumentId: r.InstrumentID, OrderId: r.Key, Quantity: 1, Direction: investapi.OrderDirection_ORDER_DIRECTION_BUY, OrderType: investapi.OrderType_ORDER_TYPE_LIMIT, Price: quote(r.Price)}
+	if r.Immediate {
+		req.TimeInForce = investapi.TimeInForceType_TIME_IN_FORCE_FILL_AND_KILL
+	}
 	if r.Kind == "exit" {
 		req.Direction = investapi.OrderDirection_ORDER_DIRECTION_SELL
 		req.OrderType = investapi.OrderType_ORDER_TYPE_MARKET

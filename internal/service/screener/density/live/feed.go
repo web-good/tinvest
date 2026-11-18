@@ -10,16 +10,32 @@ import (
 // Prepare atomically revalidates the uninterrupted detector observation and
 // installs the loss watcher after potentially slow account/allocation RPCs.
 func (f *Feed) Prepare(i density.Instrument, original density.Signal, now time.Time) (*Episode, error) {
+	return f.prepare(i, Candidate{Signal: original}, now)
+}
+
+func (f *Feed) prepare(i density.Instrument, c Candidate, now time.Time) (*Episode, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if !f.ready[i.ID] {
 		return nil, fmt.Errorf("market no longer ready")
 	}
-	for _, s := range f.signals[i.ID] {
-		if s.Price != original.Price || !s.Since.Equal(original.Since) {
+	signals := f.signals[i.ID]
+	if !c.EntryUntil.IsZero() {
+		watch := f.pinbars[i.ID]
+		if watch == nil {
+			return nil, fmt.Errorf("pinbar confirmation lost")
+		}
+		s, until, ok := watch.Ready(now)
+		if !ok || !until.Equal(c.EntryUntil) {
+			return nil, fmt.Errorf("pinbar confirmation expired")
+		}
+		signals = []density.Signal{s}
+	}
+	for _, s := range signals {
+		if c.EntryUntil.IsZero() && (s.Price != c.Signal.Price || !s.Since.Equal(c.Signal.Since)) {
 			continue
 		}
-		ep, err := Plan(f.cfg, i, s, f.books[i.ID], now)
+		ep, err := plan(f.cfg, i, s, f.books[i.ID], now, c.EntryUntil)
 		if err != nil {
 			return nil, err
 		}
@@ -51,10 +67,12 @@ type Feed struct {
 	watches    map[string]*Episode
 	reasons    map[string]string
 	selected   string
+	pinbars    map[string]*density.PinbarWatch
 }
 type Candidate struct {
-	Signal density.Signal
-	Book   density.Book
+	Signal     density.Signal
+	Book       density.Book
+	EntryUntil time.Time
 }
 
 // ClearSignals resets entry confirmations without interrupting position watchers.
@@ -63,10 +81,11 @@ func (f *Feed) ClearSignals() {
 	defer f.mu.Unlock()
 	clear(f.signals)
 	clear(f.candidates)
+	clear(f.pinbars)
 }
 
 func NewFeed(c Config) *Feed {
-	return &Feed{cfg: c, books: map[string]density.Book{}, signals: map[string][]density.Signal{}, candidates: map[string][]density.Signal{}, anchors: map[string]density.Signal{}, ready: map[string]bool{}, watermarks: map[string]time.Time{}, trades: map[string]time.Time{}, watches: map[string]*Episode{}, reasons: map[string]string{}}
+	return &Feed{cfg: c, books: map[string]density.Book{}, signals: map[string][]density.Signal{}, candidates: map[string][]density.Signal{}, anchors: map[string]density.Signal{}, ready: map[string]bool{}, watermarks: map[string]time.Time{}, trades: map[string]time.Time{}, watches: map[string]*Episode{}, reasons: map[string]string{}, pinbars: map[string]*density.PinbarWatch{}}
 }
 
 func (f *Feed) Trade(event density.Event, now time.Time) {
@@ -116,9 +135,8 @@ func (f *Feed) SetReady(id string, ready bool) {
 	if !ready {
 		delete(f.signals, id)
 		delete(f.candidates, id)
-		if f.watches[id] != nil && f.reasons[id] == "" {
-			f.reasons[id] = "data_unavailable"
-		}
+		delete(f.pinbars, id)
+		f.dataLoss(id, "data_unavailable")
 	}
 }
 func (f *Feed) Gap(now time.Time) {
@@ -130,10 +148,9 @@ func (f *Feed) Gap(now time.Time) {
 	}
 	clear(f.signals)
 	clear(f.candidates)
+	clear(f.pinbars)
 	for id := range f.watches {
-		if f.reasons[id] == "" {
-			f.reasons[id] = "data_gap"
-		}
+		f.dataLoss(id, "data_gap")
 	}
 }
 func (f *Feed) Book(b density.Book, signals []density.Signal, now time.Time) {
@@ -141,6 +158,10 @@ func (f *Feed) Book(b density.Book, signals []density.Signal, now time.Time) {
 }
 
 func (f *Feed) BookWithCandidates(b density.Book, signals, candidates []density.Signal, now time.Time) {
+	f.bookWithCandidates(b, signals, candidates, density.Price{}, now)
+}
+
+func (f *Feed) bookWithCandidates(b density.Book, signals, candidates []density.Signal, step density.Price, now time.Time) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if !b.Time.After(f.watermarks[b.InstrumentID]) {
@@ -149,13 +170,15 @@ func (f *Feed) BookWithCandidates(b density.Book, signals, candidates []density.
 	if !validBook(b, now, f.cfg.Freshness) {
 		delete(f.signals, b.InstrumentID)
 		delete(f.candidates, b.InstrumentID)
-		if f.watches[b.InstrumentID] != nil && f.reasons[b.InstrumentID] == "" {
-			f.reasons[b.InstrumentID] = "invalid_book"
-		}
+		delete(f.pinbars, b.InstrumentID)
+		f.dataLoss(b.InstrumentID, "invalid_book")
 		return
 	}
 	// Preserve a stale interval even when data resumes during a blocking broker RPC.
 	f.check(now)
+	if previous, ok := f.books[b.InstrumentID]; ok && now.Sub(previous.Time) > f.cfg.Freshness {
+		delete(f.pinbars, b.InstrumentID)
+	}
 	b.Bids = append([]density.Level(nil), b.Bids...)
 	b.Asks = append([]density.Level(nil), b.Asks...)
 	f.books[b.InstrumentID] = b
@@ -163,9 +186,18 @@ func (f *Feed) BookWithCandidates(b density.Book, signals, candidates []density.
 	if f.ready[b.InstrumentID] {
 		f.signals[b.InstrumentID] = append([]density.Signal(nil), signals...)
 		f.candidates[b.InstrumentID] = append([]density.Signal(nil), candidates...)
+		if f.cfg.PinbarEntries {
+			watch := f.pinbars[b.InstrumentID]
+			if watch == nil {
+				watch = &density.PinbarWatch{}
+				f.pinbars[b.InstrumentID] = watch
+			}
+			watch.Book(b, signals, candidates, step, f.cfg.MinRemaining, now)
+		}
 	} else {
 		delete(f.signals, b.InstrumentID)
 		delete(f.candidates, b.InstrumentID)
+		delete(f.pinbars, b.InstrumentID)
 	}
 	f.check(now)
 }
@@ -176,7 +208,7 @@ func (f *Feed) check(now time.Time) {
 		}
 		b, ok := f.books[id]
 		if !ok || !f.ready[id] || !validBook(b, now, f.cfg.Freshness) {
-			f.reasons[id] = "data_unavailable"
+			f.dataLoss(id, "data_unavailable")
 			continue
 		}
 		var qty int64
@@ -213,6 +245,14 @@ func (f *Feed) Candidates(now time.Time) []Candidate {
 	for id, signals := range f.signals {
 		b := f.books[id]
 		if f.ready[id] && validBook(b, now, f.cfg.Freshness) {
+			if f.cfg.PinbarEntries {
+				if watch := f.pinbars[id]; watch != nil {
+					if s, until, ok := watch.Ready(now); ok {
+						result = append(result, Candidate{Signal: s, Book: b, EntryUntil: until})
+					}
+				}
+				continue
+			}
 			for _, s := range signals {
 				if !s.ProfileUntil.IsZero() && !now.Before(s.ProfileUntil) {
 					continue
@@ -281,4 +321,34 @@ func (f *Feed) rebase(ep *Episode, s density.Signal, now time.Time) bool {
 		}
 	}
 	return false
+}
+
+func (f *Feed) dataLoss(id, reason string) {
+	if ep := f.watches[id]; ep != nil && f.reasons[id] == "" && (!f.cfg.PinbarEntries || ep.Entry.Filled == 0) {
+		f.reasons[id] = reason
+	}
+}
+
+func (f *Feed) candle(id string, candle density.Candle, now time.Time) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	b := f.books[id]
+	if watch := f.pinbars[id]; watch != nil && f.ready[id] && validBook(b, now, f.cfg.Freshness) {
+		watch.Candle(candle, b, f.candidates[id], f.cfg.EntryZoneTicks, f.cfg.MinRemaining, now)
+	}
+}
+
+func (f *Feed) claimPinbar(id string, until, now time.Time) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	watch := f.pinbars[id]
+	if watch == nil || f.reasons[id] != "" || !f.ready[id] || !validBook(f.books[id], now, f.cfg.Freshness) {
+		return false
+	}
+	_, expires, ready := watch.Ready(now)
+	if !ready || !expires.Equal(until) {
+		return false
+	}
+	watch.Consume()
+	return true
 }

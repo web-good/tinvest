@@ -27,6 +27,7 @@ type Order struct {
 	DensityLots, PlannedLots, FilledLots, OpenLots        int64
 	Lot                                                   int64
 	Created, ActiveAt, Opened, TakeActive, ExitAt, Closed time.Time
+	entryUntil                                            time.Time
 	ExitReason                                            string
 	EntryFees, ExitFees, GrossPnL, NetPnL                 float64
 	Uncertain                                             bool
@@ -44,14 +45,16 @@ type Record struct {
 	FillRubles                          float64 `json:"fill_rubles,omitempty"`
 }
 type marketBook struct {
-	book     density.Book
-	received time.Time
-	consumed time.Time
+	book       density.Book
+	received   time.Time
+	consumed   time.Time
+	candidates []density.Signal
 }
 type Engine struct {
 	cfg                                     Config
 	instruments                             map[string]density.Instrument
 	orders                                  map[string]*Order
+	pinbars                                 map[string]*density.PinbarWatch
 	books                                   map[string]marketBook
 	lastTrade                               map[string]time.Time
 	lastBook                                map[string]time.Time
@@ -67,7 +70,7 @@ func New(cfg Config, instruments []density.Instrument, record func(Record) error
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
-	e := &Engine{cfg: cfg, instruments: make(map[string]density.Instrument), orders: make(map[string]*Order), books: make(map[string]marketBook), lastTrade: make(map[string]time.Time), lastBook: make(map[string]time.Time), cooldown: make(map[string]time.Time), cash: cfg.InitialCash, peak: cfg.InitialCash, complete: true, record: record}
+	e := &Engine{cfg: cfg, instruments: make(map[string]density.Instrument), orders: make(map[string]*Order), pinbars: make(map[string]*density.PinbarWatch), books: make(map[string]marketBook), lastTrade: make(map[string]time.Time), lastBook: make(map[string]time.Time), cooldown: make(map[string]time.Time), cash: cfg.InitialCash, peak: cfg.InitialCash, complete: true, record: record}
 	for _, i := range instruments {
 		if i.ID == "" || i.Ticker == "" || i.Lot <= 0 || price(i.PriceStep) <= 0 {
 			return nil, fmt.Errorf("invalid instrument metadata for %s", i.Ticker)
@@ -131,14 +134,20 @@ func (e *Engine) fresh(id string, now time.Time) bool {
 	return ok && now.Sub(b.received) <= e.cfg.Freshness && now.Sub(b.book.Time) <= e.cfg.Freshness
 }
 func (e *Engine) Observe(s density.Signal, now time.Time) {
+	if !e.cfg.PinbarEntries {
+		e.observe(s, now, time.Time{})
+	}
+}
+
+func (e *Engine) observe(s density.Signal, now, entryUntil time.Time) bool {
 	if !s.ProfileUntil.IsZero() && !now.Before(s.ProfileUntil) {
-		return
+		return false
 	}
 	if e.err != nil || e.entryHoursBlocked(now) || !e.fresh(s.InstrumentID, now) || now.Before(e.cooldown[s.InstrumentID]) {
-		return
+		return false
 	}
 	if o := e.orders[s.InstrumentID]; o != nil && active(o) {
-		return
+		return false
 	}
 	count := 0
 	for _, o := range e.orders {
@@ -147,18 +156,19 @@ func (e *Engine) Observe(s density.Signal, now time.Time) {
 		}
 	}
 	if count >= e.cfg.MaxPositions {
-		return
+		return false
 	}
-	o := e.plan(s, now, 0)
+	o := e.plan(s, now, 0, entryUntil)
 	if o == nil {
-		return
+		return false
 	}
 	e.orders[o.InstrumentID] = o
 	e.emit("entry_placed", o, now, "", 0, 0)
 	e.executeEntry(o, now)
+	return true
 }
 
-func (e *Engine) plan(s density.Signal, now time.Time, released float64) *Order {
+func (e *Engine) plan(s density.Signal, now time.Time, released float64, entryUntil time.Time) *Order {
 	i, ok := e.instruments[s.InstrumentID]
 	if !ok || s.Quantity <= 0 {
 		return nil
@@ -179,19 +189,34 @@ func (e *Engine) plan(s density.Signal, now time.Time, released float64) *Order 
 	if densityLots <= 0 {
 		return nil
 	}
-	entry, err := density.EntryLimit(level, step, e.cfg.EntryTicks, e.cfg.EntryZoneTicks, price(b.Asks[0].Price))
-	if err != nil {
+	entry := price(b.Asks[0].Price)
+	if entryUntil.IsZero() {
+		var err error
+		entry, err = density.EntryLimit(level, step, e.cfg.EntryTicks, e.cfg.EntryZoneTicks, entry)
+		if err != nil {
+			return nil
+		}
+	} else if !now.Add(e.cfg.Latency).Before(entryUntil) || entry <= level {
 		return nil
 	}
 	stop := level - e.cfg.StopTicks*step
 	if stop <= 0 {
 		return nil
 	}
-	targetTicks := takeProfitTicks(entry, stop, step, e.cfg.RewardRisk)
-	if targetTicks > float64(math.MaxInt64-entry)/float64(step) {
-		return nil
+	var take int64
+	if entryUntil.IsZero() {
+		targetTicks := takeProfitTicks(entry, stop, step, e.cfg.RewardRisk)
+		if targetTicks > float64(math.MaxInt64-entry)/float64(step) {
+			return nil
+		}
+		take = entry + int64(targetTicks)*step
+	} else {
+		var ok bool
+		take, ok = density.TakeProfit(entry, stop, step, e.cfg.RewardRisk)
+		if !ok {
+			return nil
+		}
 	}
-	take := entry + int64(targetTicks)*step
 	available := math.Min(e.cfg.PositionRubles, e.cash-e.reserved()+released)
 	lots := int64(math.Floor(available / (rub(entry) * float64(i.Lot) * (1 + e.cfg.Commission))))
 	if e.cfg.IgnoreCapital {
@@ -203,7 +228,7 @@ func (e *Engine) plan(s density.Signal, now time.Time, released float64) *Order 
 	if e.cfg.MaxEntryLots > 0 {
 		lots = min(lots, e.cfg.MaxEntryLots)
 	}
-	o := &Order{InstrumentID: i.ID, Ticker: i.Ticker, State: "pending", Density: level, TrackedDensity: level, Entry: entry, Stop: stop, Take: take, DensityLots: densityLots, PlannedLots: lots, Lot: i.Lot, Created: now, ActiveAt: now.Add(e.cfg.Latency)}
+	o := &Order{InstrumentID: i.ID, Ticker: i.Ticker, State: "pending", Density: level, TrackedDensity: level, Entry: entry, Stop: stop, Take: take, DensityLots: densityLots, PlannedLots: lots, Lot: i.Lot, Created: now, entryUntil: entryUntil, ActiveAt: now.Add(e.cfg.Latency)}
 	return o
 }
 func (e *Engine) OnBook(b density.Book, now time.Time) {
@@ -232,8 +257,11 @@ func (e *Engine) OnBookWithCandidates(b density.Book, candidates []density.Signa
 	}
 	b.Bids = append([]density.Level(nil), b.Bids...)
 	b.Asks = append([]density.Level(nil), b.Asks...)
+	if previous, ok := e.books[b.InstrumentID]; ok && now.Sub(previous.book.Time) > e.cfg.Freshness {
+		delete(e.pinbars, b.InstrumentID)
+	}
 	e.lastBook[b.InstrumentID] = b.Time
-	e.books[b.InstrumentID] = marketBook{book: b, received: now}
+	e.books[b.InstrumentID] = marketBook{book: b, received: now, candidates: candidates}
 	o := e.orders[b.InstrumentID]
 	if o == nil || !active(o) {
 		e.mark(now)
@@ -242,7 +270,7 @@ func (e *Engine) OnBookWithCandidates(b density.Book, candidates []density.Signa
 	if e.cancelEntryOutsideHours(o, now) {
 		return
 	}
-	if o.State == "pending" && now.Sub(o.Created) >= e.cfg.EntryTTL {
+	if o.State == "pending" && e.entryExpired(o, now) {
 		e.cancel(o, "entry_timeout", now)
 		return
 	}
@@ -266,9 +294,9 @@ func (e *Engine) OnBookWithCandidates(b density.Book, candidates []density.Signa
 				if o.OpenLots > 0 {
 					reason = "density_disappeared"
 				}
-			} else if o.State == "pending" {
+			} else if o.State == "pending" && o.entryUntil.IsZero() {
 				released := float64(o.PlannedLots) * float64(o.Lot) * rub(o.Entry) * (1 + e.cfg.Commission)
-				next := e.plan(moved, now, released)
+				next := e.plan(moved, now, released, time.Time{})
 				if next == nil {
 					reason = "replacement_unavailable"
 				} else {
@@ -292,7 +320,7 @@ func (e *Engine) OnBookWithCandidates(b density.Book, candidates []density.Signa
 		}
 	}
 	e.executeEntry(o, now)
-	if e.err == nil && o.State == "open" && b.Time.After(o.Opened) {
+	if !e.cfg.PinbarEntries && e.err == nil && o.State == "open" && b.Time.After(o.Opened) {
 		e.updateSellLimit(o, b, now)
 	}
 	e.executeTake(o, now)
@@ -317,7 +345,7 @@ func (e *Engine) OnTrade(t density.Event, now time.Time) {
 	if e.cfg.MaxHold > 0 && o.State == "open" && now.Sub(o.Opened) >= e.cfg.MaxHold {
 		e.requestExit(o, "position_timeout", now)
 	}
-	if o.State == "pending" && !now.Before(o.ActiveAt) && !t.Time.Before(o.ActiveAt) && now.Sub(o.Created) < e.cfg.EntryTTL && price(t.Price) < o.Entry {
+	if o.State == "pending" && o.entryUntil.IsZero() && !now.Before(o.ActiveAt) && !t.Time.Before(o.ActiveAt) && now.Sub(o.Created) < e.cfg.EntryTTL && price(t.Price) < o.Entry {
 		e.fillEntry(o, min(t.Quantity, o.PlannedLots), o.Entry, now)
 		if price(t.Price) <= o.Stop {
 			e.requestExit(o, "stop", now)
@@ -331,10 +359,10 @@ func (e *Engine) OnTrade(t density.Event, now time.Time) {
 	e.mark(now)
 }
 
-// executeEntry models a marketable entry inside the zone using visible ask liquidity.
+// executeEntry models a marketable entry using visible ask liquidity.
 // Passive tick-offset orders continue to require a trade through their limit.
 func (e *Engine) executeEntry(o *Order, now time.Time) {
-	if e.err != nil || (e.cfg.EntryZoneTicks <= 0 && !e.cfg.BookExecution) || o.State != "pending" || now.Before(o.ActiveAt) || now.Sub(o.Created) >= e.cfg.EntryTTL {
+	if e.err != nil || (o.entryUntil.IsZero() && e.cfg.EntryZoneTicks <= 0 && !e.cfg.BookExecution) || o.State != "pending" || now.Before(o.ActiveAt) || e.entryExpired(o, now) {
 		return
 	}
 	b := e.books[o.InstrumentID]
@@ -343,6 +371,9 @@ func (e *Engine) executeEntry(o *Order, now time.Time) {
 	}
 	ask := b.book.Asks[0]
 	if price(ask.Price) > o.Entry {
+		if !o.entryUntil.IsZero() {
+			e.cancel(o, "entry_unfilled", now)
+		}
 		return
 	}
 	e.fillEntry(o, min(ask.Quantity, o.PlannedLots), price(ask.Price), now)
@@ -379,7 +410,11 @@ func takeProfitTicks(entry, stop, step int64, rewardRisk float64) float64 {
 func (e *Engine) fillEntry(o *Order, lots, entry int64, now time.Time) {
 	o.Entry = entry
 	step := price(e.instruments[o.InstrumentID].PriceStep)
-	o.Take = entry + int64(takeProfitTicks(entry, o.Stop, step, e.cfg.RewardRisk))*step
+	if o.entryUntil.IsZero() {
+		o.Take = entry + int64(takeProfitTicks(entry, o.Stop, step, e.cfg.RewardRisk))*step
+	} else if take, ok := density.TakeProfit(entry, o.Stop, step, e.cfg.RewardRisk); ok {
+		o.Take = take
+	}
 	cost := rub(entry) * float64(lots) * float64(o.Lot)
 	fee := cost * e.cfg.Commission
 	e.cash -= cost + fee
@@ -388,7 +423,9 @@ func (e *Engine) fillEntry(o *Order, lots, entry int64, now time.Time) {
 	o.FilledLots = lots
 	o.OpenLots = lots
 	o.Opened = now
-	o.sellWalls = newSellWalls(e.books[o.InstrumentID].book.Asks, o.DensityLots)
+	if !e.cfg.PinbarEntries {
+		o.sellWalls = newSellWalls(e.books[o.InstrumentID].book.Asks, o.DensityLots)
+	}
 	o.TakeActive = now.Add(e.cfg.Latency)
 	o.State = "open"
 	e.emit("entry_filled", o, now, "unfilled entry remainder canceled", lots, rub(entry))
@@ -419,6 +456,7 @@ func (e *Engine) requestExit(o *Order, reason string, now time.Time) {
 func (e *Engine) invalidate(id, reason string, now time.Time) {
 	_, hadBook := e.books[id]
 	delete(e.books, id)
+	delete(e.pinbars, id)
 	if now.After(e.lastBook[id]) {
 		e.lastBook[id] = now
 	}
@@ -435,7 +473,7 @@ func (e *Engine) invalidate(id, reason string, now time.Time) {
 		o.Uncertain = true
 		// Data gaps suspend execution until a fresh valid book arrives.
 		// Keep the position and any previously requested strategy exit intact.
-		if reason == "trading_closed" {
+		if reason == "trading_closed" && !e.cfg.PinbarEntries {
 			e.requestExit(o, reason, now)
 		}
 		e.emit("data_gap", o, now, reason, 0, 0)
@@ -472,7 +510,7 @@ func (e *Engine) Tick(now time.Time) {
 			e.invalidate(id, "stale_book", now)
 			continue
 		}
-		if o.State == "pending" && now.Sub(o.Created) >= e.cfg.EntryTTL {
+		if o.State == "pending" && e.entryExpired(o, now) {
 			e.cancel(o, "entry_timeout", now)
 		}
 		if e.cfg.MaxHold > 0 && o.OpenLots > 0 && o.State != "exiting" && now.Sub(o.Opened) >= e.cfg.MaxHold {
@@ -481,4 +519,36 @@ func (e *Engine) Tick(now time.Time) {
 		e.executeExit(o, now)
 	}
 	e.mark(now)
+}
+
+func (e *Engine) entryExpired(o *Order, now time.Time) bool {
+	return now.Sub(o.Created) >= e.cfg.EntryTTL || !o.entryUntil.IsZero() && !now.Before(o.entryUntil)
+}
+
+func (e *Engine) pinbarBook(b density.Book, signals []density.Signal, now time.Time) {
+	current, ok := e.books[b.InstrumentID]
+	if !ok || !current.book.Time.Equal(b.Time) || !current.received.Equal(now) {
+		return
+	}
+	watch := e.pinbars[b.InstrumentID]
+	if watch == nil {
+		watch = &density.PinbarWatch{}
+		e.pinbars[b.InstrumentID] = watch
+	}
+	watch.Book(b, signals, current.candidates, e.instruments[b.InstrumentID].PriceStep, e.cfg.MinRemaining, now)
+	e.tryPinbar(watch, now)
+}
+
+func (e *Engine) candle(id string, candle density.Candle, now time.Time) {
+	if watch := e.pinbars[id]; watch != nil && e.fresh(id, now) {
+		b := e.books[id]
+		watch.Candle(candle, b.book, b.candidates, e.cfg.EntryZoneTicks, e.cfg.MinRemaining, now)
+		e.tryPinbar(watch, now)
+	}
+}
+
+func (e *Engine) tryPinbar(watch *density.PinbarWatch, now time.Time) {
+	if s, until, ok := watch.Ready(now); ok && e.observe(s, now, until) {
+		watch.Consume()
+	}
 }

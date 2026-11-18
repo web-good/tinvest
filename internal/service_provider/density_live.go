@@ -128,6 +128,7 @@ func (s *ServiceProvider) GetDensityLiveService() (*densitylive.Participant, err
 	detector.MaxTrades = d.MaxTrades
 	detector.BookDepth = int32(d.BookDepth)
 	lc := densitylive.DefaultConfig()
+	lc.PinbarEntries = true
 	lc.EntryTicks = c.EntryTicks
 	lc.EntryZoneTicks = c.EntryZoneTicks
 	lc.StopTicks = c.StopTicks

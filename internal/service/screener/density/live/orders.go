@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"time"
+	"tinvest/internal/service/screener/density"
 
 	"github.com/google/uuid"
 )
@@ -24,8 +25,15 @@ func (e *Engine) applyOrder(dst *Order, got Order) error {
 	dst.FeesKnown = got.FeesKnown
 	dst.Terminal = got.Terminal
 	dst.Status = got.Status
-	if dst == &e.episode.Entry && dst.Filled > 0 {
-		e.feed.filled(e.episode, e.Now())
+	if ep := e.episode; dst == &ep.Entry && dst.Filled > 0 {
+		if !ep.EntryUntil.IsZero() && !ep.Take.Sent && dst.Amount > 0 {
+			step := Price(ep.Instrument.PriceStep)
+			entry := dst.Amount / ep.Instrument.Lot / dst.Filled
+			if take, ok := density.TakeProfit(entry, ep.StopPrice, step, e.cfg.RewardRisk); ok && entry%step == 0 {
+				ep.TakePrice = take
+			}
+		}
+		e.feed.filled(ep, e.Now())
 	}
 	queueFillNotification(&e.state, e.episode, dst, previousFilled)
 	return e.save("order_status:" + dst.Kind)

@@ -11,6 +11,7 @@ import (
 const Nano int64 = 1000000000
 
 type Config struct {
+	PinbarEntries                                        bool
 	EntryTicks, EntryZoneTicks, StopTicks                int64
 	RewardRisk, MinRemaining                             float64
 	Freshness, EntryTTL, MaxHold, Cooldown, PollInterval time.Duration
@@ -38,6 +39,10 @@ func Price(p density.Price) int64 {
 }
 
 func Plan(c Config, i density.Instrument, s density.Signal, b density.Book, now time.Time) (*Episode, error) {
+	return plan(c, i, s, b, now, time.Time{})
+}
+
+func plan(c Config, i density.Instrument, s density.Signal, b density.Book, now, entryUntil time.Time) (*Episode, error) {
 	if !s.ProfileUntil.IsZero() && !now.Before(s.ProfileUntil) {
 		return nil, fmt.Errorf("density history profile expired")
 	}
@@ -51,13 +56,19 @@ func Plan(c Config, i density.Instrument, s density.Signal, b density.Book, now 
 	if c.StopTicks >= (level+step-1)/step {
 		return nil, fmt.Errorf("stop offset exceeds price range")
 	}
-	entry, err := density.EntryLimit(level, step, c.EntryTicks, c.EntryZoneTicks, Price(b.Asks[0].Price))
-	if err != nil {
-		return nil, err
+	entry := Price(b.Asks[0].Price)
+	if entryUntil.IsZero() {
+		var err error
+		entry, err = density.EntryLimit(level, step, c.EntryTicks, c.EntryZoneTicks, entry)
+		if err != nil {
+			return nil, err
+		}
+	} else if !now.Before(entryUntil) || entry <= level || entry%step != 0 {
+		return nil, fmt.Errorf("invalid pinbar entry quote or expired signal")
 	}
 	stop := level - c.StopTicks*step
-	ticks := math.Ceil(float64(entry-stop) / float64(step) * c.RewardRisk)
-	if stop <= 0 || ticks > float64(math.MaxInt64-entry)/float64(step) {
+	take, validTake := density.TakeProfit(entry, stop, step, c.RewardRisk)
+	if !validTake {
 		return nil, fmt.Errorf("entry crosses ask or invalid protection prices")
 	}
 	var qty int64
@@ -70,7 +81,7 @@ func Plan(c Config, i density.Instrument, s density.Signal, b density.Book, now 
 	if qty <= 0 || entry > math.MaxInt64/i.Lot {
 		return nil, fmt.Errorf("density missing or lot value overflows")
 	}
-	return &Episode{Instrument: i, Density: level, DensityLots: qty, EntryPrice: entry, StopPrice: stop, TakePrice: entry + int64(ticks)*step, Created: now, Entry: Order{Kind: "buy", Lots: 1}}, nil
+	return &Episode{Instrument: i, Density: level, DensityLots: qty, EntryPrice: entry, StopPrice: stop, TakePrice: take, Created: now, EntryUntil: entryUntil, Entry: Order{Kind: "buy", Lots: 1}}, nil
 }
 
 func validBook(b density.Book, now time.Time, fresh time.Duration) bool {

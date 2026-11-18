@@ -83,6 +83,22 @@ func densityEvents(r *investapi.MarketDataResponse, lots map[string]int64) []den
 			}
 		}
 	}
+	if v := r.GetSubscribeCandlesResponse(); v != nil {
+		for _, sub := range v.GetCandlesSubscriptions() {
+			if sub != nil {
+				out = append(out, density.Event{Kind: density.EventCandleAck, InstrumentID: sub.GetInstrumentUid(), Success: sub.GetSubscriptionStatus() == investapi.SubscriptionStatus_SUBSCRIPTION_STATUS_SUCCESS && sub.GetWaitingClose()})
+			}
+		}
+	}
+	if v := r.GetCandle(); v != nil && v.GetInterval() == investapi.SubscriptionInterval_SUBSCRIPTION_INTERVAL_ONE_MINUTE &&
+		v.GetTime() != nil && v.GetTime().CheckValid() == nil && v.GetVolume() > 0 {
+		price := func(q *investapi.Quotation) density.Price {
+			return density.Price{Units: q.GetUnits(), Nano: q.GetNano()}
+		}
+		out = append(out, density.Event{Kind: density.EventCandle, InstrumentID: v.GetInstrumentUid(), Candle: density.Candle{
+			Time: v.GetTime().AsTime(), Open: price(v.GetOpen()), High: price(v.GetHigh()), Low: price(v.GetLow()), Close: price(v.GetClose()),
+		}})
+	}
 	if v := r.GetOrderbook(); v != nil {
 		b, ok := densityBook(v, lots[v.GetInstrumentUid()])
 		kind := density.EventBook
@@ -137,6 +153,16 @@ func (s *densityStream) SubscribeTrades(ids []string, subscribe bool) error {
 }
 func (s *densityStream) SubscribeInfo(ids []string, subscribe bool) error {
 	return s.stream.Send(densityInfoSubscription(ids, subscribe))
+}
+func (s *densityStream) SubscribeClosedCandles(ids []string) error {
+	instruments := make([]*investapi.CandleInstrument, 0, len(ids))
+	for _, uid := range ids {
+		instruments = append(instruments, &investapi.CandleInstrument{InstrumentId: uid, Interval: investapi.SubscriptionInterval_SUBSCRIPTION_INTERVAL_ONE_MINUTE})
+	}
+	source := investapi.GetCandlesRequest_CANDLE_SOURCE_EXCHANGE
+	return s.stream.Send(&investapi.MarketDataRequest{Payload: &investapi.MarketDataRequest_SubscribeCandlesRequest{SubscribeCandlesRequest: &investapi.SubscribeCandlesRequest{
+		SubscriptionAction: densityAction(true), Instruments: instruments, WaitingClose: true, CandleSourceType: &source,
+	}}})
 }
 func (s *densityStream) Receive() ([]density.Event, error) {
 	r, err := s.stream.Recv()

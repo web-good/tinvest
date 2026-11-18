@@ -2,6 +2,7 @@ package density
 
 import (
 	"context"
+	"fmt"
 	"time"
 )
 
@@ -15,12 +16,15 @@ const (
 	EventBookAck
 	EventTradeAck
 	EventInfoAck
+	EventCandle
+	EventCandleAck
 )
 
 type Event struct {
 	Kind                 EventKind
 	InstrumentID         string
 	Book                 Book
+	Candle               Candle
 	Price                Price
 	Quantity             int64
 	Time                 time.Time
@@ -35,4 +39,13 @@ type Stream interface {
 }
 type StreamSource interface {
 	OpenStream(context.Context, map[string]int64) (Stream, error)
+}
+
+// SubscribeClosedCandles requests exchange M1 bars after the minute ends.
+func SubscribeClosedCandles(stream Stream, ids []string) error {
+	source, ok := stream.(interface{ SubscribeClosedCandles([]string) error })
+	if !ok {
+		return fmt.Errorf("market stream does not support closed minute candles")
+	}
+	return source.SubscribeClosedCandles(ids)
 }

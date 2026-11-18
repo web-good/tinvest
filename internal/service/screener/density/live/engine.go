@@ -92,10 +92,10 @@ func (e *Engine) reason(now time.Time) error {
 		return nil
 	}
 	reason := e.feed.Reason(now)
-	if reason == "" && ep.Entry.Filled == 0 && now.Sub(ep.Created) >= e.cfg.EntryTTL {
+	if reason == "" && ep.Entry.Filled == 0 && (now.Sub(ep.Created) >= e.cfg.EntryTTL || !ep.EntryUntil.IsZero() && !now.Before(ep.EntryUntil)) {
 		reason = "entry_expired"
 	}
-	if reason == "" && !ep.Opened.IsZero() && now.Sub(ep.Opened) >= e.cfg.MaxHold {
+	if reason == "" && !e.cfg.PinbarEntries && !ep.Opened.IsZero() && now.Sub(ep.Opened) >= e.cfg.MaxHold {
 		reason = "max_hold"
 	}
 	if e.stopping {
@@ -157,7 +157,7 @@ func (e *Engine) Step(ctx context.Context, now time.Time) error {
 func (e *Engine) stepEpisode(ctx context.Context, now time.Time) error {
 	ep := e.episode
 	e.feed.Select(ep.Instrument.ID)
-	if ep.Entry.Filled == 0 && (ep.Repricing || e.feed.moved(ep, now)) {
+	if ep.EntryUntil.IsZero() && ep.Entry.Filled == 0 && (ep.Repricing || e.feed.moved(ep, now)) {
 		e.next = time.Time{}
 	}
 	if err := e.reason(now); err != nil {
@@ -184,7 +184,7 @@ func (e *Engine) stepEpisode(ctx context.Context, now time.Time) error {
 			return err
 		}
 	}
-	if ep.Entry.Filled == 0 && ep.Reason == "" && e.feed.moved(ep, e.Now()) {
+	if ep.EntryUntil.IsZero() && ep.Entry.Filled == 0 && ep.Reason == "" && e.feed.moved(ep, e.Now()) {
 		if !ep.Repricing {
 			ep.Repricing = true
 			if err := e.save("entry_reprice_requested"); err != nil {
@@ -305,7 +305,7 @@ func (e *Engine) begin(ctx context.Context, now time.Time) (retErr error) {
 		if !ok || e.state.Episodes[i.ID] != nil || e.state.Releases[i.ID].Key != "" || now.Before(e.state.Cooldown[i.ID]) {
 			continue
 		}
-		ep, err := Plan(e.cfg, i, c.Signal, c.Book, now)
+		ep, err := plan(e.cfg, i, c.Signal, c.Book, now, c.EntryUntil)
 		if err != nil {
 			continue
 		}
@@ -346,7 +346,7 @@ func (e *Engine) begin(ctx context.Context, now time.Time) (retErr error) {
 			continue
 		}
 		checkedPrice := ep.EntryPrice
-		ep, err = e.feed.Prepare(i, c.Signal, e.Now())
+		ep, err = e.feed.prepare(i, c, e.Now())
 		if err != nil {
 			return nil
 		} // confirmation can expire during read-only broker checks
@@ -374,7 +374,7 @@ func (e *Engine) begin(ctx context.Context, now time.Time) (retErr error) {
 		if err = e.reason(e.Now()); err != nil {
 			return err
 		}
-		if ep.Reason != "" {
+		if ep.Reason != "" || !ep.EntryUntil.IsZero() && !e.feed.claimPinbar(i.ID, ep.EntryUntil, e.Now()) {
 			ep.Entry.Terminal = true
 			ep.Entry.Status = "not_submitted"
 			return e.finish(ctx, now)
@@ -492,7 +492,7 @@ func (e *Engine) Shutdown(ctx context.Context) error {
 
 func (e *Engine) submitEntry(ctx context.Context) error {
 	ep := e.episode
-	order, err := e.broker.PostOrder(ctx, OrderRequest{Key: ep.Entry.Key, InstrumentID: ep.Instrument.ID, Kind: "buy", Lots: 1, Price: ep.EntryPrice})
+	order, err := e.broker.PostOrder(ctx, OrderRequest{Key: ep.Entry.Key, InstrumentID: ep.Instrument.ID, Kind: "buy", Lots: 1, Price: ep.EntryPrice, Immediate: !ep.EntryUntil.IsZero()})
 	if err != nil {
 		if errors.Is(err, ErrRejected) {
 			ep.Entry.Terminal = true

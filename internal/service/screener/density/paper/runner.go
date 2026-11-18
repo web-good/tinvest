@@ -98,6 +98,11 @@ func (r *Runner) connection(parent context.Context) error {
 	if err = stream.SubscribeInfo(ids, true); err != nil {
 		return err
 	}
+	if r.Engine.cfg.PinbarEntries {
+		if err = density.SubscribeClosedCandles(stream, ids); err != nil {
+			return err
+		}
+	}
 	if !r.Engine.cfg.BookExecution {
 		if err = stream.SubscribeTrades(ids, true); err != nil {
 			return err
@@ -124,6 +129,7 @@ func (r *Runner) connection(parent context.Context) error {
 	infoAck := map[string]bool{}
 	tradeAck := map[string]time.Time{}
 	open := map[string]bool{}
+	candles := map[string]bool{}
 	detector := density.NewDetector(r.Detector)
 	detector.SetInstruments(r.Universe)
 	ready := func(id string, now time.Time) bool {
@@ -154,6 +160,7 @@ func (r *Runner) connection(parent context.Context) error {
 				}
 			}
 			detector.SetInstruments(profiles)
+			clear(r.Engine.pinbars)
 		case now := <-tick.C:
 			r.Engine.Tick(now)
 			if r.Engine.Err() != nil {
@@ -191,6 +198,15 @@ func (r *Runner) connection(parent context.Context) error {
 						return fmt.Errorf("trade subscription rejected: %s", id)
 					}
 					tradeAck[id] = now
+				case density.EventCandleAck:
+					if !event.Success {
+						return fmt.Errorf("candle subscription rejected: %s", id)
+					}
+					candles[id] = true
+				case density.EventCandle:
+					if candles[id] && ready(id, now) {
+						r.Engine.candle(id, event.Candle, now)
+					}
 				case density.EventTradingStatus:
 					open[id] = event.TradingOpen
 					if !event.TradingOpen {
@@ -207,11 +223,19 @@ func (r *Runner) connection(parent context.Context) error {
 					}
 					signals := detector.Update(event.Book, now)
 					r.Engine.OnBookWithCandidates(event.Book, detector.Candidates(), now)
+					var admitted []density.Signal
 					for _, s := range signals {
 						if r.Engine.cfg.BookExecution && r.AllowEntry != nil && !r.AllowEntry(r.Engine.instruments[id], s) {
 							continue
 						}
-						r.Engine.Observe(s, now)
+						if r.Engine.cfg.PinbarEntries {
+							admitted = append(admitted, s)
+						} else {
+							r.Engine.Observe(s, now)
+						}
+					}
+					if r.Engine.cfg.PinbarEntries {
+						r.Engine.pinbarBook(event.Book, admitted, now)
 					}
 				case density.EventTrade:
 					if ready(id, now) {

@@ -33,3 +33,15 @@ func EntryLimit(level, step, ticks, zoneTicks, ask int64) (int64, error) {
 	}
 	return boundary, nil
 }
+
+// TakeProfit rounds the reward target up to an exchange tick.
+func TakeProfit(entry, stop, step int64, rewardRisk float64) (int64, bool) {
+	if stop <= 0 || entry <= stop || step <= 0 {
+		return 0, false
+	}
+	ticks := math.Ceil(float64(entry-stop) / float64(step) * rewardRisk)
+	if !(ticks >= 1 && ticks < float64(math.MaxInt64)) || int64(ticks) > (math.MaxInt64-entry)/step {
+		return 0, false
+	}
+	return entry + int64(ticks)*step, true
+}

@@ -18,6 +18,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/test/bufconn"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type localDensityServer struct {
@@ -49,6 +50,22 @@ func (s *localDensityServer) MarketDataStream(stream googlegrpc.BidiStreamingSer
 			response = &investapi.MarketDataResponse{Payload: &investapi.MarketDataResponse_SubscribeInfoResponse{SubscribeInfoResponse: &investapi.SubscribeInfoResponse{InfoSubscriptions: []*investapi.InfoSubscription{{InstrumentUid: "uid", SubscriptionStatus: investapi.SubscriptionStatus_SUBSCRIPTION_STATUS_SUCCESS}}}}}
 		case req.GetSubscribeTradesRequest() != nil:
 			response = &investapi.MarketDataResponse{Payload: &investapi.MarketDataResponse_SubscribeTradesResponse{SubscribeTradesResponse: &investapi.SubscribeTradesResponse{TradeSource: investapi.TradeSourceType_TRADE_SOURCE_EXCHANGE, TradeSubscriptions: []*investapi.TradeSubscription{{InstrumentUid: "uid", SubscriptionStatus: investapi.SubscriptionStatus_SUBSCRIPTION_STATUS_INSTRUMENT_NOT_FOUND}}}}}
+		}
+		if req.GetSubscribeCandlesRequest() != nil {
+			ack := &investapi.CandleSubscription{
+				InstrumentUid: "uid", SubscriptionStatus: investapi.SubscriptionStatus_SUBSCRIPTION_STATUS_SUCCESS, WaitingClose: true,
+			}
+			response = &investapi.MarketDataResponse{Payload: &investapi.MarketDataResponse_SubscribeCandlesResponse{
+				SubscribeCandlesResponse: &investapi.SubscribeCandlesResponse{CandlesSubscriptions: []*investapi.CandleSubscription{ack}},
+			}}
+			if err := stream.Send(response); err != nil {
+				return err
+			}
+			low, high := &investapi.Quotation{Units: 100}, &investapi.Quotation{Units: 105}
+			response = &investapi.MarketDataResponse{Payload: &investapi.MarketDataResponse_Candle{Candle: &investapi.Candle{
+				InstrumentUid: "uid", Interval: investapi.SubscriptionInterval_SUBSCRIPTION_INTERVAL_ONE_MINUTE,
+				Open: high, High: high, Low: low, Close: high, Volume: 3, Time: timestamppb.New(time.Unix(0, 0)),
+			}}}
 		}
 		if response != nil {
 			if err := stream.Send(response); err != nil {
@@ -131,6 +148,23 @@ func TestDensityStreamLocalGRPC(t *testing.T) {
 	}
 	if req := <-fake.received; req.GetSubscribeTradesRequest().GetTradeSource() != investapi.TradeSourceType_TRADE_SOURCE_EXCHANGE {
 		t.Fatal("non-exchange trades")
+	}
+	if err = density.SubscribeClosedCandles(stream, []string{"uid"}); err != nil {
+		t.Fatal(err)
+	}
+	req := (<-fake.received).GetSubscribeCandlesRequest()
+	if !req.GetWaitingClose() || req.GetCandleSourceType() != investapi.GetCandlesRequest_CANDLE_SOURCE_EXCHANGE ||
+		len(req.GetInstruments()) != 1 || req.GetInstruments()[0].GetInterval() != investapi.SubscriptionInterval_SUBSCRIPTION_INTERVAL_ONE_MINUTE {
+		t.Fatalf("incorrect closed M1 subscription: %v", req)
+	}
+	events, err = stream.Receive()
+	if err != nil || len(events) != 1 || events[0].Kind != density.EventCandleAck || !events[0].Success {
+		t.Fatalf("candle ack: %+v %v", events, err)
+	}
+	events, err = stream.Receive()
+	if err != nil || len(events) != 1 || events[0].Kind != density.EventCandle || events[0].InstrumentID != "uid" ||
+		events[0].Candle.Low.Units != 100 || !events[0].Candle.Time.Equal(time.Unix(0, 0)) {
+		t.Fatalf("closed candle: %+v %v", events, err)
 	}
 	cancel()
 	if _, err = stream.Receive(); err == nil {

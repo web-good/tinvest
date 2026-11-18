@@ -27,7 +27,7 @@ type Episode struct {
 	RetiredEntries                                         []Order
 	Instrument                                             density.Instrument
 	Density, DensityLots, EntryPrice, StopPrice, TakePrice int64
-	Created, Opened                                        time.Time
+	Created, Opened, EntryUntil                            time.Time
 	Entry                                                  Order
 	Stop, Take                                             Stop
 	Exit                                                   *Order
@@ -69,6 +69,7 @@ type State struct {
 }
 
 type OrderRequest struct {
+	Immediate               bool
 	Key, InstrumentID, Kind string // buy=limit BUY, exit=market SELL
 	Lots, Price             int64
 }
