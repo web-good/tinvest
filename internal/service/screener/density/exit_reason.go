@@ -1,5 +1,7 @@
 package density
 
+const ExitSellWall = "sell_wall"
+
 // ExitReasonText translates journal reason codes for trading notifications.
 func ExitReasonText(reason string) string {
 	switch reason {
@@ -9,7 +11,9 @@ func ExitReasonText(reason string) string {
 		return "Плотность исчезла или её объём упал ниже порога"
 	case "stop", "stop_loss", "stop_price", "stop_trade", "broker_stop":
 		return "Стоп-лосс"
-	case ExitRSIProfit:
+	case ExitSellWall:
+		return "Лимит перед плотностью на продажу"
+	case "rsi_profit":
 		return "Ранний выход по RSI(6) на 1м"
 	case "take", "take_profit":
 		return "Тейк-профит"

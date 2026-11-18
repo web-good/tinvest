@@ -38,7 +38,6 @@ func (r *Runner) Run(parent context.Context) error {
 	}
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
-	r.Engine.rsiExit = density.NewRSIExit(ctx, r.Source)
 	done := make(chan struct{})
 	go func() { defer close(done); r.market(ctx) }()
 	defer func() { cancel(); <-done }()

@@ -42,7 +42,6 @@ func (r *Runner) Run(ctx context.Context) error {
 	if r.RetryDelay <= 0 {
 		r.RetryDelay = time.Second
 	}
-	r.Engine.rsiExit = density.NewRSIExit(ctx, r.Source)
 	delay := r.RetryDelay
 	r.profileUpdates = density.StreamProfiles(ctx, r.HistorySource, r.Detector, r.HistoryInterval, r.Universe, nil)
 	for {

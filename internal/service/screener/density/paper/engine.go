@@ -30,6 +30,9 @@ type Order struct {
 	ExitReason                                            string
 	EntryFees, ExitFees, GrossPnL, NetPnL                 float64
 	Uncertain                                             bool
+	SellLimit                                             int64 `json:"sell_limit,omitempty"`
+	sellLimitActive                                       time.Time
+	sellWalls                                             sellWalls
 }
 type Record struct {
 	At                                  time.Time `json:"at"`
@@ -56,7 +59,6 @@ type Engine struct {
 	cash, realized, fees, peak, maxDrawdown float64
 	closed, wins, canceled, gaps            int
 	complete                                bool
-	rsiExit                                 func(string, int64, int64, time.Time) bool
 	record                                  func(Record) error
 	err                                     error
 }
@@ -290,12 +292,10 @@ func (e *Engine) OnBookWithCandidates(b density.Book, candidates []density.Signa
 		}
 	}
 	e.executeEntry(o, now)
-	e.executeTake(o, now)
-	bid := price(b.Bids[0].Price)
-	if e.err == nil && o.State == "open" && bid < o.Take && (e.cfg.MaxHold == 0 || now.Sub(o.Opened) < e.cfg.MaxHold) &&
-		e.rsiExit != nil && e.rsiExit(o.InstrumentID, o.Entry, bid, now) {
-		e.requestExit(o, density.ExitRSIProfit, now)
+	if e.err == nil && o.State == "open" && b.Time.After(o.Opened) {
+		e.updateSellLimit(o, b, now)
 	}
+	e.executeTake(o, now)
 	e.executeExit(o, now)
 	e.mark(now)
 }
@@ -322,8 +322,11 @@ func (e *Engine) OnTrade(t density.Event, now time.Time) {
 		if price(t.Price) <= o.Stop {
 			e.requestExit(o, "stop", now)
 		}
-	} else if o.State == "open" && !now.Before(o.TakeActive) && !t.Time.Before(o.TakeActive) && price(t.Price) > o.Take {
-		e.sell(o, min(t.Quantity, o.OpenLots), o.Take, "take_profit", now)
+	} else if o.State == "open" {
+		limit, activeAt, reason := o.takeOrder()
+		if !now.Before(activeAt) && !t.Time.Before(activeAt) && price(t.Price) > limit {
+			e.sell(o, min(t.Quantity, o.OpenLots), limit, reason, now)
+		}
 	}
 	e.mark(now)
 }
@@ -347,20 +350,21 @@ func (e *Engine) executeEntry(o *Order, now time.Time) {
 	e.books[o.InstrumentID] = b
 }
 
-// executeTake uses visible bid liquidity only in book execution mode.
+// executeTake uses visible bids for resting sell limits and book-mode takes.
 func (e *Engine) executeTake(o *Order, now time.Time) {
-	if e.err != nil || !e.cfg.BookExecution || o.State != "open" || now.Before(o.TakeActive) {
+	if e.err != nil || o.State != "open" || (o.SellLimit == 0 && !e.cfg.BookExecution) {
 		return
 	}
+	limit, activeAt, reason := o.takeOrder()
 	b := e.books[o.InstrumentID]
-	if b.book.Time.Before(o.TakeActive) || b.consumed.Equal(b.book.Time) {
+	if now.Before(activeAt) || b.book.Time.Before(activeAt) || b.consumed.Equal(b.book.Time) {
 		return
 	}
 	bid := b.book.Bids[0]
-	if price(bid.Price) < o.Take {
+	if price(bid.Price) < limit {
 		return
 	}
-	e.sell(o, min(bid.Quantity, o.OpenLots), o.Take, "take_profit", now)
+	e.sell(o, min(bid.Quantity, o.OpenLots), limit, reason, now)
 	b.consumed = b.book.Time
 	e.books[o.InstrumentID] = b
 }
@@ -384,6 +388,7 @@ func (e *Engine) fillEntry(o *Order, lots, entry int64, now time.Time) {
 	o.FilledLots = lots
 	o.OpenLots = lots
 	o.Opened = now
+	o.sellWalls = newSellWalls(e.books[o.InstrumentID].book.Asks, o.DensityLots)
 	o.TakeActive = now.Add(e.cfg.Latency)
 	o.State = "open"
 	e.emit("entry_filled", o, now, "unfilled entry remainder canceled", lots, rub(entry))
@@ -401,6 +406,7 @@ func (e *Engine) requestExit(o *Order, reason string, now time.Time) {
 	if o.State == "exiting" {
 		return
 	}
+	e.cancelSellLimit(o, now)
 	o.State = "exiting"
 	o.ExitReason = reason
 	o.ExitAt = now.Add(e.cfg.Latency)
@@ -425,6 +431,7 @@ func (e *Engine) invalidate(id, reason string, now time.Time) {
 	if o.State == "pending" {
 		e.cancel(o, reason, now)
 	} else {
+		e.cancelSellLimit(o, now)
 		o.Uncertain = true
 		// Data gaps suspend execution until a fresh valid book arrives.
 		// Keep the position and any previously requested strategy exit intact.

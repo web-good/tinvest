@@ -22,7 +22,6 @@ type Engine struct {
 	broker      Broker
 	store       *Store
 	feed        *Feed
-	rsiExit     func(string, int64, int64, time.Time) bool
 	instruments map[string]density.Instrument
 	state       State
 	episode     *Episode
@@ -276,18 +275,6 @@ func (e *Engine) stepEpisode(ctx context.Context, now time.Time) error {
 	}
 	if ep.Reason != "" {
 		return e.exit(ctx, now)
-	}
-	if e.rsiExit != nil && ep.Entry.Amount > 0 && ep.Take.Status == "active" && ep.Take.Child == nil {
-		at := e.Now()
-		bid := e.feed.exitBid(ep.Instrument.ID, at)
-		entry := ep.Entry.Amount / ep.Entry.Filled / ep.Instrument.Lot
-		if bid > 0 && bid < ep.TakePrice && e.rsiExit(ep.Instrument.ID, entry, bid, at) {
-			ep.Reason = density.ExitRSIProfit
-			if err := e.save("exit_requested:" + ep.Reason); err != nil {
-				return err
-			}
-			return e.exit(ctx, now)
-		}
 	}
 	return nil
 }

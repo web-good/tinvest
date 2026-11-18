@@ -379,23 +379,52 @@ func TestZeroMaxHoldKeepsPositionUntilStrategyExit(t *testing.T) {
 	}
 }
 
-func TestRSIProfitExitUsesNextBook(t *testing.T) {
-	e := engine(t)
-	e.rsiExit = func(id string, entry, bid int64, _ time.Time) bool {
-		return id == "x" && entry == 101*nano && bid == 102*nano
-	}
-	place(t, e)
-	trade(e, start.Add(time.Second), 100, 2)
-	b := book(start.Add(2*time.Second), 100)
-	b.Bids[0].Price = p(102)
-	e.OnBook(b, b.Time)
-	o := e.orders["x"]
-	if o.State != "exiting" || o.ExitReason != "rsi_profit" || o.OpenLots != 2 {
-		t.Fatalf("expected RSI exit request with no fill on the trigger book: %+v", o)
-	}
-	b.Time = start.Add(3 * time.Second)
-	e.OnBook(b, b.Time)
-	if o.State != "closed" || o.ExitReason != "rsi_profit" {
-		t.Fatalf("expected RSI exit fill on the next book: %+v", o)
+func TestSellWallLimitLifecycle(t *testing.T) {
+	for _, disappears := range []bool{false, true} {
+		e := engine(t)
+		e.cfg.BookExecution = true
+		var exits []Record
+		e.record = func(r Record) error {
+			if r.Kind == "exit_filled" {
+				exits = append(exits, r)
+			}
+			return nil
+		}
+		initial := book(start, 100)
+		initial.Asks = []density.Level{{Price: p(103), Quantity: 10}, {Price: p(104), Quantity: 50}}
+		e.OnBook(initial, start)
+		e.Observe(density.Signal{InstrumentID: "x", Price: p(100), Quantity: 100}, start)
+		trade(e, start.Add(time.Second), 100, 1)
+		update := func(seconds int, bid, ask, lots int64) {
+			b := book(start.Add(time.Duration(seconds)*time.Second), 100)
+			b.Bids[0].Price = p(bid)
+			b.Asks = []density.Level{{Price: p(ask), Quantity: lots}}
+			e.OnBook(b, b.Time)
+		}
+		o := e.orders["x"]
+		update(2, 101, 104, 50)
+		if len(exits) != 0 || o.SellLimit != 0 {
+			t.Fatalf("ask that existed at entry triggered: order=%+v exits=%+v", o, exits)
+		}
+		update(3, 101, 104, 49)
+		update(4, 101, 104, 50)
+		if len(exits) != 0 || o.SellLimit != 102*nano {
+			t.Fatalf("expected limit at 102 before price reaches it: order=%+v exits=%+v", o, exits)
+		}
+		if disappears {
+			update(5, 102, 104, 49)
+			if len(exits) != 0 || o.SellLimit != 0 {
+				t.Fatalf("wall disappearance did not cancel before fill: order=%+v exits=%+v", o, exits)
+			}
+			update(6, 107, 108, 1)
+			if len(exits) != 1 || exits[0].Detail != "take_profit" {
+				t.Fatalf("ordinary take was not restored: %+v", exits)
+			}
+		} else {
+			update(5, 102, 104, 50)
+			if len(exits) != 1 || exits[0].Detail != "sell_wall" || exits[0].FillRubles != 102 {
+				t.Fatalf("expected fill at the wall limit: %+v", exits)
+			}
+		}
 	}
 }

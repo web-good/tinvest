@@ -206,17 +206,6 @@ func (f *Feed) Reason(now time.Time) string {
 	f.check(now)
 	return f.reasons[f.selected]
 }
-func (f *Feed) exitBid(id string, now time.Time) int64 {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.check(now)
-	b := f.books[id]
-	if !f.ready[id] || f.reasons[id] != "" || !validBook(b, now, f.cfg.Freshness) {
-		return 0
-	}
-	return Price(b.Bids[0].Price)
-}
-
 func (f *Feed) Candidates(now time.Time) []Candidate {
 	f.mu.Lock()
 	defer f.mu.Unlock()
