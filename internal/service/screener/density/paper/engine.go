@@ -542,7 +542,7 @@ func (e *Engine) pinbarBook(b density.Book, signals []density.Signal, now time.T
 func (e *Engine) candle(id string, candle density.Candle, now time.Time) {
 	if watch := e.pinbars[id]; watch != nil && e.fresh(id, now) {
 		b := e.books[id]
-		watch.Candle(candle, b.book, b.candidates, e.cfg.EntryZoneTicks, e.cfg.MinRemaining, now)
+		watch.Candle(candle, b.book, b.candidates, e.cfg.EntryZoneTicks, e.cfg.StopTicks, e.cfg.MinRemaining, now)
 		e.tryPinbar(watch, now)
 	}
 }

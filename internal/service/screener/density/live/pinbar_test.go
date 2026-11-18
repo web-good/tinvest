@@ -7,6 +7,54 @@ import (
 	"tinvest/internal/service/screener/density"
 )
 
+func TestPinbarBuyChecksLowAgainstDensityZone(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		low     int64
+		wantBuy bool
+	}{
+		{"lower boundary", 97, true},
+		{"below lower boundary", 96, false},
+		{"upper boundary", 102, true},
+		{"above upper boundary", 103, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			x := setup(t)
+			x.e.cfg.PinbarEntries = true
+			x.e.cfg.StopTicks = 3
+			x.f.cfg.PinbarEntries = true
+			x.f.cfg.EntryZoneTicks = 2
+			x.f.cfg.StopTicks = 3
+
+			minute := x.now.Truncate(time.Minute).Add(time.Minute)
+			closeAt := minute.Add(time.Minute)
+			signal := density.Signal{InstrumentID: x.i.ID, Price: density.Price{Units: 100}, Quantity: 1000, Since: minute}
+			signals := []density.Signal{signal}
+			book := density.Book{
+				InstrumentID: x.i.ID, Lot: x.i.Lot, Time: closeAt.Add(-time.Second),
+				Bids: []density.Level{{Price: signal.Price, Quantity: signal.Quantity}},
+				Asks: []density.Level{{Price: density.Price{Units: 110}, Quantity: 10}},
+			}
+			x.f.bookWithCandidates(book, signals, signals, x.i.PriceStep, book.Time)
+			book.Time = closeAt
+			x.now = closeAt
+			x.f.bookWithCandidates(book, signals, signals, x.i.PriceStep, x.now)
+			x.f.candle(x.i.ID, density.Candle{
+				Time: minute, Low: density.Price{Units: tt.low},
+				Open: density.Price{Units: tt.low + 4}, Close: density.Price{Units: tt.low + 5},
+				High: density.Price{Units: tt.low + 5},
+			}, x.now)
+
+			if err := x.e.Step(context.Background(), x.now); err != nil {
+				t.Fatal(err)
+			}
+			if got := len(x.b.posts); got > 1 || (got == 1) != tt.wantBuy {
+				t.Fatalf("posted %d orders, want buy %v", got, tt.wantBuy)
+			}
+		})
+	}
+}
+
 func TestPinbarBuyRevalidatesRelocationBeforeSubmission(t *testing.T) {
 	for _, tt := range []struct {
 		name    string

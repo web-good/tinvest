@@ -22,14 +22,15 @@ func pinbarPrice(p Price) int64 {
 	return p.Units*1e9 + int64(p.Nano)
 }
 
-func (c Candle) matches(level, step, zoneTicks int64) bool {
+func (c Candle) matches(level, step, zoneTicks, stopTicks int64) bool {
 	low, high, open, closePrice := pinbarPrice(c.Low), pinbarPrice(c.High), pinbarPrice(c.Open), pinbarPrice(c.Close)
 	if low == 0 || high <= low || min(open, closePrice) < low || max(open, closePrice) > high ||
-		level <= 0 || step <= 0 || zoneTicks < 0 || low < level {
+		level <= 0 || step <= 0 || zoneTicks < 0 || stopTicks < 0 {
 		return false
 	}
 	distance := low - level
-	if distance/step > zoneTicks || distance%step != 0 {
+	ticks := distance / step
+	if ticks < -stopTicks || ticks > zoneTicks || distance%step != 0 {
 		return false
 	}
 	span, bodyBottom := high-low, min(open, closePrice)
@@ -37,7 +38,7 @@ func (c Candle) matches(level, step, zoneTicks int64) bool {
 		3*(high-bodyBottom) <= span && 5*(bodyBottom-low) >= 3*span
 }
 
-func (p *pinbarEntry) Confirm(c Candle, signals []Signal, step Price, zoneTicks int64, now time.Time) {
+func (p *pinbarEntry) Confirm(c Candle, signals []Signal, step Price, zoneTicks, stopTicks int64, now time.Time) {
 	closeAt := c.Time.Add(time.Minute)
 	if c.Time.IsZero() || !c.Time.Equal(c.Time.Truncate(time.Minute)) || !c.Time.After(p.lastCandle) ||
 		now.Before(closeAt) || !now.Before(closeAt.Add(time.Minute)) {
@@ -47,7 +48,7 @@ func (p *pinbarEntry) Confirm(c Candle, signals []Signal, step Price, zoneTicks 
 	p.Consume()
 	for _, s := range signals {
 		if s.Quantity <= 0 || !s.Since.Before(closeAt) || (!s.ProfileUntil.IsZero() && !now.Before(s.ProfileUntil)) ||
-			!c.matches(pinbarPrice(s.Price), pinbarPrice(step), zoneTicks) {
+			!c.matches(pinbarPrice(s.Price), pinbarPrice(step), zoneTicks, stopTicks) {
 			continue
 		}
 		if p.expires.IsZero() || comparePrice(s.Price, p.origin) > 0 {
@@ -106,10 +107,10 @@ func (p *PinbarWatch) Book(b Book, signals, candidates []Signal, step Price, fra
 	p.Update(b, candidates, step, fraction, now)
 }
 
-func (p *PinbarWatch) Candle(c Candle, b Book, candidates []Signal, zoneTicks int64, fraction float64, now time.Time) {
+func (p *PinbarWatch) Candle(c Candle, b Book, candidates []Signal, zoneTicks, stopTicks int64, fraction float64, now time.Time) {
 	for _, snap := range []pinbarSnapshot{p.current, p.previous} {
 		if snap.at.Truncate(time.Minute).Equal(c.Time) {
-			p.Confirm(c, snap.signals, p.step, zoneTicks, now)
+			p.Confirm(c, snap.signals, p.step, zoneTicks, stopTicks, now)
 			p.Update(b, candidates, p.step, fraction, now)
 			return
 		}

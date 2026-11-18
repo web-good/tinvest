@@ -334,7 +334,7 @@ func (f *Feed) candle(id string, candle density.Candle, now time.Time) {
 	defer f.mu.Unlock()
 	b := f.books[id]
 	if watch := f.pinbars[id]; watch != nil && f.ready[id] && validBook(b, now, f.cfg.Freshness) {
-		watch.Candle(candle, b, f.candidates[id], f.cfg.EntryZoneTicks, f.cfg.MinRemaining, now)
+		watch.Candle(candle, b, f.candidates[id], f.cfg.EntryZoneTicks, f.cfg.StopTicks, f.cfg.MinRemaining, now)
 	}
 }
 

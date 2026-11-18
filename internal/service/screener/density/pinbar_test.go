@@ -23,7 +23,7 @@ func TestPinbarEntryRelocation(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var entry pinbarEntry
-			entry.Confirm(candle, []Signal{anchor}, step, 1, closeAt)
+			entry.Confirm(candle, []Signal{anchor}, step, 1, 0, closeAt)
 			moved := Signal{InstrumentID: "x", Price: tt.level, Quantity: 100}
 			book := Book{InstrumentID: "x", Bids: []Level{{Price: tt.level, Quantity: 100}}}
 			entry.Update(book, []Signal{moved}, step, .5, closeAt)
@@ -54,7 +54,7 @@ func TestPinbarGeometry(t *testing.T) {
 		{"flat", Candle{Low: q(0), High: q(0), Open: q(0), Close: q(0)}, false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.candle.matches(pinbarPrice(q(0)), 10_000_000, 1); got != tt.want {
+			if got := tt.candle.matches(pinbarPrice(q(0)), 10_000_000, 1, 0); got != tt.want {
 				t.Fatalf("matches = %v, want %v", got, tt.want)
 			}
 		})
@@ -69,7 +69,7 @@ func TestPinbarWaitsForNextMinuteBook(t *testing.T) {
 	c := Candle{Time: minute, Low: s.Price, Open: Price{Units: 104}, Close: Price{Units: 105}, High: Price{Units: 105}}
 	var watch PinbarWatch
 	watch.Book(b, []Signal{s}, []Signal{s}, Price{Units: 1}, .5, b.Time)
-	watch.Candle(c, b, []Signal{s}, 0, .5, closeAt)
+	watch.Candle(c, b, []Signal{s}, 0, 0, .5, closeAt)
 	if _, _, ok := watch.Ready(closeAt); ok {
 		t.Fatal("signal could use a quote from before the candle closed")
 	}
@@ -80,7 +80,7 @@ func TestPinbarWaitsForNextMinuteBook(t *testing.T) {
 		t.Fatal("signal disappeared before the first book of the next minute")
 	}
 	watch.Consume()
-	watch.Candle(c, b, []Signal{s}, 0, .5, b.Time)
+	watch.Candle(c, b, []Signal{s}, 0, 0, .5, b.Time)
 	if _, _, ok := watch.Ready(b.Time); ok {
 		t.Fatal("replayed candle armed another buy attempt")
 	}
