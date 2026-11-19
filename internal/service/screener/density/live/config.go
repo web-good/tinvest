@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"math"
 	"time"
+	"tinvest/internal/service/screener/bounce"
 	"tinvest/internal/service/screener/density"
 )
 
 const Nano int64 = 1000000000
 
 type Config struct {
-	PinbarEntries                                        bool
+	CandleEntries                                        bool
 	EntryTicks, EntryZoneTicks, StopTicks                int64
 	RewardRisk, MinRemaining                             float64
 	Freshness, EntryTTL, MaxHold, Cooldown, PollInterval time.Duration
@@ -43,7 +44,7 @@ func Plan(c Config, i density.Instrument, s density.Signal, b density.Book, now 
 }
 
 func plan(c Config, i density.Instrument, s density.Signal, b density.Book, now, entryUntil time.Time) (*Episode, error) {
-	if !s.ProfileUntil.IsZero() && !now.Before(s.ProfileUntil) {
+	if entryUntil.IsZero() && !s.ProfileUntil.IsZero() && !now.Before(s.ProfileUntil) {
 		return nil, fmt.Errorf("density history profile expired")
 	}
 	step, level := Price(i.PriceStep), Price(s.Price)
@@ -64,7 +65,7 @@ func plan(c Config, i density.Instrument, s density.Signal, b density.Book, now,
 			return nil, err
 		}
 	} else if !now.Before(entryUntil) || entry <= level || entry%step != 0 {
-		return nil, fmt.Errorf("invalid pinbar entry quote or expired signal")
+		return nil, fmt.Errorf("invalid bounce entry quote or expired signal")
 	}
 	stop := level - c.StopTicks*step
 	take, validTake := density.TakeProfit(entry, stop, step, c.RewardRisk)
@@ -78,10 +79,20 @@ func plan(c Config, i density.Instrument, s density.Signal, b density.Book, now,
 			break
 		}
 	}
+	if entryUntil.IsZero() && float64(qty) < s.MinLots {
+		return nil, fmt.Errorf("density volume below candle average")
+	}
 	if qty <= 0 || entry > math.MaxInt64/i.Lot {
 		return nil, fmt.Errorf("density missing or lot value overflows")
 	}
-	return &Episode{Instrument: i, Density: level, DensityLots: qty, EntryPrice: entry, StopPrice: stop, TakePrice: take, Created: now, EntryUntil: entryUntil, Entry: Order{Kind: "buy", Lots: 1}}, nil
+	ep := &Episode{Instrument: i, Density: level, DensityLots: qty, MinDensityLots: s.MinLots, ProfileUntil: s.ProfileUntil, EntryPrice: entry, StopPrice: stop, TakePrice: take, Created: now, EntryUntil: entryUntil, Entry: Order{Kind: "buy", Lots: 1}}
+	if !entryUntil.IsZero() {
+		if !bounce.Retains(float64(s.Quantity), float64(qty)) {
+			return nil, fmt.Errorf("density volume below entry threshold")
+		}
+		ep.EntryDensityLots = s.Quantity
+	}
+	return ep, nil
 }
 
 func validBook(b density.Book, now time.Time, fresh time.Duration) bool {

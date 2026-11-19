@@ -9,6 +9,7 @@ import (
 
 	"tinvest/internal/service/screener/bybitdensity/model"
 	"tinvest/internal/service/screener/bybitdensity/strategy"
+	"tinvest/internal/service/screener/volume"
 )
 
 var minute = time.Date(2026, 11, 19, 12, 0, 0, 0, time.UTC)
@@ -444,4 +445,98 @@ func TestPendingEntryExpiresWithStaleBook(t *testing.T) {
 	s.Expire(at(63))
 	_, fills := s.Apply(model.Event{Book: book(63, model.Bid)}, at(63))
 	require.Empty(t, fills)
+}
+
+func TestAverageVolumeGatesAlertAndPendingEntry(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		average        float64
+		until          time.Time
+		lastQty        float64
+		signals, fills int
+	}{
+		{"missing", 0, time.Time{}, 10, 0, 0},
+		{"below", 11, at(61), 10, 0, 0},
+		{"equal", 10, at(61), 10, 1, 1},
+		{"shrunk", 10, at(61), 9, 1, 0},
+		{"expired", 10, at(60), 10, 1, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := strategy.DefaultConfig()
+			cfg.MinNotional = 500
+			cfg.Persistence = time.Second
+			cfg.RequireAverageVolume = true
+			s := strategy.New(model.Instrument{Key: model.Key{Market: model.Spot, Symbol: "TESTUSDT"}, TickSize: .1, QtyStep: .1}, cfg)
+			s.SetAverageVolume(volume.Average{Quantity: tc.average, Until: tc.until})
+			first := wideBook(58, model.Bid)
+			first.Snapshot = true
+			s.Apply(model.Event{Book: first, TradeReady: true}, at(58))
+			signals, fills := s.Apply(model.Event{Book: wideBook(59, model.Bid)}, at(59))
+			require.Len(t, signals, tc.signals)
+			require.Empty(t, fills)
+			last := book(60, model.Bid)
+			last.Bids[0].Qty = tc.lastQty
+			_, fills = s.Apply(model.Event{Book: last}, at(60))
+			require.Len(t, fills, tc.fills)
+		})
+	}
+}
+
+func TestClosedTradeKeepsEntryAverageVolumeAfterRefresh(t *testing.T) {
+	cfg := strategy.DefaultConfig()
+	cfg.MinNotional = 500
+	cfg.Persistence = time.Second
+	cfg.RequireAverageVolume = true
+	s := strategy.New(model.Instrument{Key: model.Key{Market: model.Spot, Symbol: "TESTUSDT"}, TickSize: .1, QtyStep: .1}, cfg)
+	s.SetAverageVolume(volume.Average{Quantity: 0, Until: at(61)})
+	require.True(t, start(t, s, model.Bid).HasAverageVolume)
+	_, fills := s.Apply(model.Event{Book: book(60, model.Bid)}, at(60))
+	require.Len(t, fills, 1)
+	require.True(t, fills[0].Entry)
+
+	s.SetAverageVolume(volume.Average{Quantity: 100, Until: at(120)})
+	take := book(61, model.Bid)
+	take.Bids = append([]model.Level{{Ticks: 1007, Qty: 1.5}}, take.Bids...)
+	for i := range take.Asks {
+		take.Asks[i].Ticks += 9
+	}
+	_, fills = s.Apply(model.Event{Book: take}, at(61))
+	require.Len(t, fills, 1)
+	require.NotNil(t, fills[0].Closed)
+	require.NotNil(t, fills[0].Closed.AverageVolume)
+	require.Zero(t, *fills[0].Closed.AverageVolume)
+}
+
+func TestBounceBuysAtThirdMinuteAsk(t *testing.T) {
+	cfg := strategy.DefaultConfig()
+	cfg.MinNotional = 500
+	cfg.Persistence = time.Second
+	cfg.Freshness = 70 * time.Second
+	cfg.CandleEntries = true
+	cfg.RequireAverageVolume = true
+	s := strategy.New(model.Instrument{Key: model.Key{Market: model.Spot, Symbol: "TESTUSDT"}, TickSize: .1, QtyStep: .1}, cfg)
+
+	s.SetAverageVolume(volume.Average{Quantity: 9.25, Until: at(180)})
+	first := book(-1, model.Bid)
+	first.Snapshot = true
+	_, fills := s.Apply(model.Event{TradeReady: true, Book: first}, at(-1))
+	require.Empty(t, fills)
+	_, fills = s.Apply(model.Event{Book: book(0, model.Bid)}, at(0))
+	require.Empty(t, fills, "density alone placed an entry")
+	_, fills = s.Apply(model.Event{Candle: &model.Candle{Start: at(0), End: at(60), Low: 995, Close: 1000}}, at(60))
+	require.Empty(t, fills, "touch placed an entry")
+	_, fills = s.Apply(model.Event{Book: book(60, model.Bid)}, at(60))
+	require.Empty(t, fills, "second minute placed an entry")
+	_, fills = s.Apply(model.Event{Candle: &model.Candle{Start: at(60), End: at(120), Low: 1000, Close: 1002}}, at(120))
+	require.Empty(t, fills, "entry used an old quote")
+
+	third := book(120, model.Bid)
+	third.Bids[0].Qty = 3
+	for i := range third.Asks {
+		third.Asks[i].Ticks += 3
+	}
+	_, fills = s.Apply(model.Event{Book: third}, at(120))
+	require.Len(t, fills, 1)
+	require.True(t, fills[0].Entry)
+	require.InDelta(t, 100.4, fills[0].Price, 1e-8)
 }

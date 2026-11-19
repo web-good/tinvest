@@ -27,12 +27,14 @@ type Signal struct {
 	Age                        time.Duration
 	TradeLots                  int64
 	TradeCoverage              time.Duration
-	MinRubles                  float64
+	MinRubles, MinLots         float64
+	HasAverageVolume           bool
 	SupportPrice               Price
 	SupportTouches             int
 	ProfileUntil               time.Time
 }
 type Config struct {
+	RequireAverageVolume                bool
 	TurnoverFraction                    float64
 	Support                             SupportConfig
 	MinRubles, MinMultiple, MaxDistance float64

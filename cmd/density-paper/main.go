@@ -36,6 +36,7 @@ func main() {
 }
 func run(ctx context.Context, args []string, out io.Writer) (retErr error) {
 	pc := paper.DefaultConfig()
+	pc.CandleEntries = true
 	dc := config.NewDensityConfig()
 	fs := flag.NewFlagSet("density-paper", flag.ContinueOnError)
 	fs.SetOutput(out)
@@ -50,8 +51,8 @@ func run(ctx context.Context, args []string, out io.Writer) (retErr error) {
 	fs.Float64Var(&pc.PositionRubles, "position-rubles", pc.PositionRubles, "maximum allocation per entry, including entry commission")
 	fs.Float64Var(&pc.Commission, "commission", pc.Commission, "commission per side as fraction: 0.0005 = 0.05%")
 	fs.IntVar(&pc.MaxPositions, "max-positions", pc.MaxPositions, "maximum concurrent pending/held instruments")
-	fs.Int64Var(&pc.EntryTicks, "entry-ticks", pc.EntryTicks, "entry above density in instrument price steps")
-	fs.Int64Var(&pc.EntryZoneTicks, "entry-zone-ticks", pc.EntryZoneTicks, "maximum price steps above density for buying at best ask; 0 uses entry-ticks")
+	fs.Int64Var(&pc.EntryTicks, "entry-ticks", pc.EntryTicks, "legacy entry offset; candle entries use the current ask")
+	fs.Int64Var(&pc.EntryZoneTicks, "entry-zone-ticks", pc.EntryZoneTicks, "legacy entry zone; candle entries use the current ask")
 	fs.Int64Var(&pc.StopTicks, "stop-ticks", pc.StopTicks, "stop below original density in price steps")
 	fs.Float64Var(&pc.RewardRisk, "rr", pc.RewardRisk, "take distance / entry-to-stop distance")
 	fs.Float64Var(&pc.MinRemaining, "min-remaining", pc.MinRemaining, "minimum retained density fraction before cancel/exit")
@@ -117,6 +118,7 @@ func run(ctx context.Context, args []string, out io.Writer) (retErr error) {
 	defer func() { retErr = errors.Join(retErr, conn.Close()) }()
 	market := marketgrpc.NewDensityMarketData(conn, token)
 	detector := density.DefaultConfig()
+	detector.RequireAverageVolume = true
 	detector.MinRubles = dc.MinRubles
 	detector.TurnoverFraction = dc.TurnoverFraction
 	detector.Support.Enabled = dc.SupportEnabled
@@ -240,4 +242,12 @@ func finishError(runErr, journalErr, summaryErr error) error {
 		runErr = nil
 	}
 	return errors.Join(runErr, journalErr, summaryErr)
+}
+
+func (s filteredSource) AverageVolume(ctx context.Context, id string, from, to time.Time) (float64, error) {
+	source, ok := s.UniverseSource.(density.VolumeSource)
+	if !ok {
+		return 0, fmt.Errorf("density volume history source is required")
+	}
+	return source.AverageVolume(ctx, id, from, to)
 }

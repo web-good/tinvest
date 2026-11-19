@@ -103,6 +103,7 @@ func (s *ServiceProvider) GetDensityLiveService() (*densitylive.Participant, err
 		return nil, err
 	}
 	detector := density.DefaultConfig()
+	detector.RequireAverageVolume = true
 	detector.MinRubles = d.MinRubles
 	detector.TurnoverFraction = d.TurnoverFraction
 	detector.Support.Enabled = d.SupportEnabled
@@ -128,7 +129,7 @@ func (s *ServiceProvider) GetDensityLiveService() (*densitylive.Participant, err
 	detector.MaxTrades = d.MaxTrades
 	detector.BookDepth = int32(d.BookDepth)
 	lc := densitylive.DefaultConfig()
-	lc.PinbarEntries = true
+	lc.CandleEntries = true
 	lc.EntryTicks = c.EntryTicks
 	lc.EntryZoneTicks = c.EntryZoneTicks
 	lc.StopTicks = c.StopTicks

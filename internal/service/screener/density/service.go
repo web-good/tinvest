@@ -41,7 +41,7 @@ func (s *Service) Run(ctx context.Context) error {
 			if err == nil {
 				universe = updated
 				slog.InfoContext(ctx, "density universe refreshed", "instruments", len(universe))
-				refreshAt = time.Now().Add(s.refreshInterval)
+				refreshAt = profileRefreshAt(s.cfg, time.Now(), s.refreshInterval, universe)
 			} else {
 				slog.WarnContext(ctx, "density universe refresh failed", "error", err)
 				refreshAt = time.Now().Add(s.refreshRetry)

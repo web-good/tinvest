@@ -139,7 +139,7 @@ func (r *Runner) connection(parent context.Context) error {
 	if err = stream.SubscribeInfo(ids, true); err != nil {
 		return err
 	}
-	if r.Feed.cfg.PinbarEntries {
+	if r.Feed.cfg.CandleEntries {
 		if err = density.SubscribeClosedCandles(stream, ids); err != nil {
 			return err
 		}

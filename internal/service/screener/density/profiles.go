@@ -5,10 +5,32 @@ import (
 	"fmt"
 	"log/slog"
 	"time"
+
+	"tinvest/internal/service/screener/volume"
 )
 
 type SupportSource interface {
 	SupportCandles(context.Context, string, int) ([]SupportCandle, error)
+}
+
+type VolumeSource interface {
+	AverageVolume(context.Context, string, time.Time, time.Time) (float64, error)
+}
+
+func profileRefreshAt(cfg Config, now time.Time, delay time.Duration, instruments []Instrument) time.Time {
+	next := now.Add(delay)
+	if cfg.RequireAverageVolume {
+		_, _, until := volume.PreviousWeekday(now)
+		if until.Before(next) {
+			next = until
+		}
+		for _, i := range instruments {
+			if !i.AverageVolume.Until.IsZero() && i.AverageVolume.Until.Before(next) {
+				next = i.AverageVolume.Until
+			}
+		}
+	}
+	return next
 }
 
 func waitHistory(ctx context.Context, interval time.Duration) error {
@@ -29,9 +51,24 @@ func RefreshProfiles(ctx context.Context, source UniverseSource, instruments []I
 	if cfg.Support.Enabled && !ok {
 		return nil, fmt.Errorf("density support history source is required")
 	}
+	volumes, ok := source.(VolumeSource)
+	if cfg.RequireAverageVolume && !ok {
+		return nil, fmt.Errorf("density volume history source is required")
+	}
+	from, to, until := volume.PreviousWeekday(now)
 	for n := range result {
 		result[n].ProfileAt = now
 		result[n].Supports = nil
+		if cfg.RequireAverageVolume {
+			if err := waitHistory(ctx, interval); err != nil {
+				return nil, err
+			}
+			quantity, err := volumes.AverageVolume(ctx, result[n].ID, from, to)
+			if err != nil {
+				return nil, fmt.Errorf("volume history %s: %w", result[n].Ticker, err)
+			}
+			result[n].AverageVolume = volume.Average{Quantity: quantity, Until: until}
+		}
 		if !cfg.Support.Enabled {
 			continue
 		}
@@ -50,20 +87,20 @@ func RefreshProfiles(ctx context.Context, source UniverseSource, instruments []I
 // StreamProfiles refreshes entry histories without blocking market data or exits.
 // Failures leave existing profiles to expire; retries do not extend their lifetime.
 func StreamProfiles(ctx context.Context, source UniverseSource, cfg Config, interval time.Duration, initial []Instrument, warn func(error)) <-chan []Instrument {
-	if source == nil || (cfg.TurnoverFraction == 0 && !cfg.Support.Enabled) {
+	if source == nil || (cfg.TurnoverFraction == 0 && !cfg.Support.Enabled && !cfg.RequireAverageVolume) {
 		return nil
 	}
 	updates := make(chan []Instrument, 1)
-	delay := ProfileLifetime
 	now := time.Now()
+	next := profileRefreshAt(cfg, now, ProfileLifetime, initial)
 	for _, i := range initial {
-		if !i.ProfileAt.IsZero() {
-			delay = min(delay, i.ProfileAt.Add(ProfileLifetime).Sub(now))
+		if expires := i.ProfileAt.Add(ProfileLifetime); !i.ProfileAt.IsZero() && expires.Before(next) {
+			next = expires
 		}
 	}
 	go func() {
 		defer close(updates)
-		timer := time.NewTimer(max(delay, time.Millisecond))
+		timer := time.NewTimer(max(time.Until(next), time.Millisecond))
 		defer timer.Stop()
 		for {
 			select {
@@ -89,7 +126,8 @@ func StreamProfiles(ctx context.Context, source UniverseSource, cfg Config, inte
 			case <-ctx.Done():
 				return
 			}
-			timer.Reset(ProfileLifetime)
+			next := profileRefreshAt(cfg, time.Now(), ProfileLifetime, profiles)
+			timer.Reset(max(time.Until(next), time.Millisecond))
 		}
 	}()
 	return updates

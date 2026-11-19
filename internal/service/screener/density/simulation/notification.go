@@ -24,6 +24,9 @@ func FormatFill(r paper.Record) string {
 		o.Ticker, r.EntryRubles, o.Opened.In(moscow).Format(layout),
 		float64(o.Density)/1e9, o.DensityLots, r.StopRubles, r.TakeRubles,
 		exit, o.Closed.In(moscow).Format(layout), density.ExitReasonText(r.Detail))
+	if o.HasAverageVolume {
+		msg += fmt.Sprintf("\nСредний объём M5 при входе: %.8g лотов", o.AverageVolumeLots)
+	}
 	if r.EntryRubles > 0 {
 		msg += fmt.Sprintf("\nРезультат: %+.2f%%", (exit-r.EntryRubles)/r.EntryRubles*100)
 	}

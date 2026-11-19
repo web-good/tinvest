@@ -42,7 +42,8 @@ func TestDensityCandlesConversion(t *testing.T) {
 
 type densityMarketFake struct {
 	investapi.MarketDataServiceClient
-	req *investapi.GetCandlesRequest
+	req     *investapi.GetCandlesRequest
+	candles []*investapi.HistoricCandle
 }
 
 func TestDensitySupportCandlesUsesHourlyHistory(t *testing.T) {
@@ -60,6 +61,9 @@ func TestDensitySupportCandlesUsesHourlyHistory(t *testing.T) {
 
 func (f *densityMarketFake) GetCandles(ctx context.Context, req *investapi.GetCandlesRequest, opts ...googlegrpc.CallOption) (*investapi.GetCandlesResponse, error) {
 	f.req = req
+	if f.candles != nil {
+		return &investapi.GetCandlesResponse{Candles: f.candles}, nil
+	}
 	return &investapi.GetCandlesResponse{Candles: []*investapi.HistoricCandle{{Time: timestamppb.New(time.Date(2025, 12, 30, 0, 0, 0, 0, time.UTC)), Low: &investapi.Quotation{Units: 99}, High: &investapi.Quotation{Units: 101}, Close: &investapi.Quotation{Units: 100, Nano: 250000000}, Volume: 50, IsComplete: true}, {}}}, nil
 }
 
@@ -108,5 +112,27 @@ func TestDensityTargetedTickersPropagateError(t *testing.T) {
 	got, err := d.InstrumentsByTickers(context.Background(), []string{"T"})
 	if len(got) != 0 || !errors.Is(err, context.DeadlineExceeded) || !strings.Contains(err.Error(), "T") {
 		t.Fatalf("%+v %v", got, err)
+	}
+}
+
+func TestDensityAverageVolumeUsesCompletedFiveMinuteLots(t *testing.T) {
+	from := time.Date(2026, 11, 18, 6, 0, 0, 0, time.UTC)
+	to := from.Add(9 * time.Hour)
+	candle := func(at time.Time, lots int64, complete bool) *investapi.HistoricCandle {
+		return &investapi.HistoricCandle{Time: timestamppb.New(at), Volume: lots, IsComplete: complete}
+	}
+	f := &densityMarketFake{candles: []*investapi.HistoricCandle{
+		candle(from.Add(-5*time.Minute), 1000, true),
+		candle(from, 10, true),
+		candle(from.Add(5*time.Minute), 15, true),
+		candle(from.Add(10*time.Minute), 1000, false),
+		candle(to, 1000, true),
+	}}
+	d := &DensityMarketData{market: f, auth: NewAuth("test")}
+	got, err := d.AverageVolume(t.Context(), "uid", from, to)
+	if err != nil || got != 12.5 || f.req.GetInstrumentId() != "uid" ||
+		f.req.GetInterval() != investapi.CandleInterval_CANDLE_INTERVAL_5_MIN ||
+		!f.req.GetFrom().AsTime().Equal(from) || !f.req.GetTo().AsTime().Equal(to) {
+		t.Fatalf("average=%v request=%v err=%v", got, f.req, err)
 	}
 }

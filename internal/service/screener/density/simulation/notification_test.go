@@ -277,7 +277,7 @@ func TestPartialTakeThenStopQueuesOneCompleteTrade(t *testing.T) {
 		Bids: []density.Level{{Price: density.Price{Units: 101}, Quantity: 10}, {Price: density.Price{Units: 100}, Quantity: 100}},
 		Asks: []density.Level{{Price: density.Price{Units: 103}, Quantity: 100}}}
 	e.OnBook(b, at)
-	e.Observe(density.Signal{InstrumentID: "x", Price: density.Price{Units: 100}, Quantity: 100}, at)
+	e.Observe(density.Signal{InstrumentID: "x", Price: density.Price{Units: 100}, Quantity: 100, MinLots: 42.5, HasAverageVolume: true}, at)
 	for n, trade := range []struct{ price, lots int64 }{{100, 3}, {108, 2}, {97, 1}} {
 		now := at.Add(time.Duration(n+1) * time.Second)
 		e.OnTrade(density.Event{InstrumentID: "x", Time: now, Price: density.Price{Units: trade.price}, Quantity: trade.lots}, now)
@@ -293,7 +293,12 @@ func TestPartialTakeThenStopQueuesOneCompleteTrade(t *testing.T) {
 	if len(q.pending) != 1 {
 		t.Fatalf("expected one completed trade: %+v", q.pending)
 	}
-	for _, want := range []string{"Купили бы по 101.0000 ₽", "Продали бы по 105.0000 ₽", "Плотность при входе: 100.0000 ₽", "Размер плотности: 100 лотов", "Стоп-лосс: 98.0000 ₽", "Тейк-профит: 107.0000 ₽", "Причина: Стоп-лосс", "2026-11-17 13:00:01 МСК", "2026-11-17 13:00:04 МСК"} {
+	// Reopening the outbox reconstructs the alert from the stored execution.
+	q, err = OpenOutbox(q.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Купили бы по 101.0000 ₽", "Продали бы по 105.0000 ₽", "Плотность при входе: 100.0000 ₽", "Размер плотности: 100 лотов", "Средний объём M5 при входе: 42.5 лотов", "Стоп-лосс: 98.0000 ₽", "Тейк-профит: 107.0000 ₽", "Причина: Стоп-лосс", "2026-11-17 13:00:01 МСК", "2026-11-17 13:00:04 МСК"} {
 		if !strings.Contains(q.pending[0].Text, want) {
 			t.Fatalf("missing %q: %s", want, q.pending[0].Text)
 		}

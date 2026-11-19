@@ -95,7 +95,7 @@ func (e *Engine) reason(now time.Time) error {
 	if reason == "" && ep.Entry.Filled == 0 && (now.Sub(ep.Created) >= e.cfg.EntryTTL || !ep.EntryUntil.IsZero() && !now.Before(ep.EntryUntil)) {
 		reason = "entry_expired"
 	}
-	if reason == "" && !e.cfg.PinbarEntries && !ep.Opened.IsZero() && now.Sub(ep.Opened) >= e.cfg.MaxHold {
+	if reason == "" && !e.cfg.CandleEntries && !ep.Opened.IsZero() && now.Sub(ep.Opened) >= e.cfg.MaxHold {
 		reason = "max_hold"
 	}
 	if e.stopping {
@@ -374,7 +374,7 @@ func (e *Engine) begin(ctx context.Context, now time.Time) (retErr error) {
 		if err = e.reason(e.Now()); err != nil {
 			return err
 		}
-		if ep.Reason != "" || !ep.EntryUntil.IsZero() && !e.feed.claimPinbar(i.ID, ep.EntryUntil, e.Now()) {
+		if ep.Reason != "" || !ep.EntryUntil.IsZero() && !e.feed.claimBounce(i.ID, ep.Density, ep.EntryUntil, e.Now()) {
 			ep.Entry.Terminal = true
 			ep.Entry.Status = "not_submitted"
 			return e.finish(ctx, now)

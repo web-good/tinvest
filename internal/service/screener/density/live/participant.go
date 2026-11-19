@@ -172,3 +172,11 @@ func (m selectedSharedMarket) SupportCandles(ctx context.Context, id string, day
 	}
 	return source.SupportCandles(ctx, id, days)
 }
+
+func (m selectedSharedMarket) AverageVolume(ctx context.Context, id string, from, to time.Time) (float64, error) {
+	source, ok := m.SharedMarket.(density.VolumeSource)
+	if !ok {
+		return 0, fmt.Errorf("density volume history source is required")
+	}
+	return source.AverageVolume(ctx, id, from, to)
+}

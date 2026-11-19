@@ -5,15 +5,18 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"tinvest/internal/service/screener/volume"
 )
 
 type Instrument struct {
-	ID, Ticker string
-	Lot        int64
-	PriceStep  Price
-	Turnover   float64
-	ProfileAt  time.Time
-	Supports   []Support
+	ID, Ticker    string
+	Lot           int64
+	PriceStep     Price
+	Turnover      float64
+	ProfileAt     time.Time
+	AverageVolume volume.Average
+	Supports      []Support
 }
 type DailyCandle struct {
 	Time     time.Time

@@ -4,6 +4,7 @@ import (
 	"math"
 	"time"
 
+	"tinvest/internal/service/screener/bounce"
 	"tinvest/internal/service/screener/bybitdensity/model"
 )
 
@@ -11,6 +12,7 @@ type setup struct {
 	side            model.Side
 	origin, watched int64
 	baseQty         float64
+	averageVolume   *float64
 	limit           int64
 }
 
@@ -44,6 +46,9 @@ func (s *Strategy) prepareEntry() {
 	stop, target := s.entryPrices(sig.Side, sig.Ticks, limit)
 	if s.validPrice(limit) && s.validPrice(stop) && s.validPrice(target) {
 		s.pending = &setup{side: sig.Side, origin: sig.Ticks, watched: sig.Ticks, baseQty: sig.Qty, limit: limit}
+		if sig.HasAverageVolume {
+			s.pending.averageVolume = &sig.AverageVolume
+		}
 	}
 }
 
@@ -102,8 +107,13 @@ func (s *Strategy) validPrice(ticks int64) bool {
 	return ticks > 0 && v >= math.Nextafter(s.instrument.MinPrice, 0) && (s.instrument.MaxPrice == 0 || v <= math.Nextafter(s.instrument.MaxPrice, math.Inf(1)))
 }
 
-func (s *Strategy) entryIntent(p *setup) (Order, bool) {
-	if quantityAt(levelsOn(s.book, p.side), p.side, p.origin) < .5*p.baseQty {
+func (s *Strategy) entryIntent(p *setup, now time.Time) (Order, bool) {
+	qtyAtDensity := quantityAt(levelsOn(s.book, p.side), p.side, p.origin)
+	retained := bounce.Retains(p.baseQty, qtyAtDensity)
+	if !s.cfg.CandleEntries {
+		retained = qtyAtDensity >= .5*p.baseQty && s.volumeAllows(qtyAtDensity, now)
+	}
+	if !retained {
 		s.pending = nil
 		return Order{}, false
 	}
@@ -157,7 +167,10 @@ func (s *Strategy) execute(now time.Time) []model.Fill {
 		// Keep watching risk while the executor reconciles an earlier IOC.
 		order, ok = s.exitIntent(s.position)
 	case pending != nil:
-		order, ok = s.entryIntent(pending)
+		order, ok = s.entryIntent(pending, now)
+	}
+	if s.cfg.CandleEntries && pending != nil {
+		s.pending = nil
 	}
 	if !ok || s.outstanding != nil {
 		return nil
@@ -215,7 +228,7 @@ func (s *Strategy) ConfirmExecution(m Execution, now time.Time) (model.Fill, boo
 	if !f.Partial {
 		f.Closed = &model.TradeSummary{
 			EntryAt: p.entry.At, EntryPrice: p.entry.Price, ExitPrice: p.exitQuote / p.entry.Qty,
-			DensityPrice: s.instrument.Price(p.origin), DensityQty: p.baseQty,
+			DensityPrice: s.instrument.Price(p.origin), DensityQty: p.baseQty, AverageVolume: p.averageVolume,
 			StopPrice: s.instrument.Price(p.stop), TakePrice: s.instrument.Price(p.target),
 			NetPnL: p.netPnL, NetReturn: p.netPnL / (p.entry.Price * p.entry.Qty), ExitReasons: p.exitReasons,
 		}

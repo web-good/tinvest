@@ -27,6 +27,9 @@ type Episode struct {
 	RetiredEntries                                         []Order
 	Instrument                                             density.Instrument
 	Density, DensityLots, EntryPrice, StopPrice, TakePrice int64
+	EntryDensityLots                                       int64 `json:",omitempty"`
+	MinDensityLots                                         float64
+	ProfileUntil                                           time.Time
 	Created, Opened, EntryUntil                            time.Time
 	Entry                                                  Order
 	Stop, Take                                             Stop

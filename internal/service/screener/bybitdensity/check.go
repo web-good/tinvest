@@ -8,8 +8,6 @@ import (
 
 	"tinvest/internal/service/screener/bybitdensity/feed"
 	"tinvest/internal/service/screener/bybitdensity/model"
-
-	"golang.org/x/sync/errgroup"
 )
 
 var errFeedVerified = errors.New("public feed messages verified")
@@ -26,14 +24,10 @@ func CheckFeed(ctx context.Context, args []string, out io.Writer) error {
 func checkFeed(ctx context.Context, market marketData, op options, out io.Writer) error {
 	ctx, cancel := context.WithTimeout(ctx, op.checkTimeout)
 	defer cancel()
-	group, ctx := errgroup.WithContext(ctx)
-	for _, category := range []model.Market{model.Spot, model.Linear} {
-		group.Go(func() error { return checkMarket(ctx, market, category, op.depth) })
-	}
-	if err := group.Wait(); err != nil {
+	if err := checkMarket(ctx, market, model.Spot, op.depth); err != nil {
 		return err
 	}
-	_, err := fmt.Fprintln(out, "BTCUSDT spot and linear: metadata, snapshot, public trades and closed M1 verified")
+	_, err := fmt.Fprintln(out, "BTCUSDT spot: metadata, snapshot, public trades and closed M1 verified")
 	return err
 }
 

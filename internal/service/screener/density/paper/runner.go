@@ -98,7 +98,7 @@ func (r *Runner) connection(parent context.Context) error {
 	if err = stream.SubscribeInfo(ids, true); err != nil {
 		return err
 	}
-	if r.Engine.cfg.PinbarEntries {
+	if r.Engine.cfg.CandleEntries {
 		if err = density.SubscribeClosedCandles(stream, ids); err != nil {
 			return err
 		}
@@ -160,7 +160,6 @@ func (r *Runner) connection(parent context.Context) error {
 				}
 			}
 			detector.SetInstruments(profiles)
-			clear(r.Engine.pinbars)
 		case now := <-tick.C:
 			r.Engine.Tick(now)
 			if r.Engine.Err() != nil {
@@ -228,14 +227,14 @@ func (r *Runner) connection(parent context.Context) error {
 						if r.Engine.cfg.BookExecution && r.AllowEntry != nil && !r.AllowEntry(r.Engine.instruments[id], s) {
 							continue
 						}
-						if r.Engine.cfg.PinbarEntries {
+						if r.Engine.cfg.CandleEntries {
 							admitted = append(admitted, s)
 						} else {
 							r.Engine.Observe(s, now)
 						}
 					}
-					if r.Engine.cfg.PinbarEntries {
-						r.Engine.pinbarBook(event.Book, admitted, now)
+					if r.Engine.cfg.CandleEntries {
+						r.Engine.bounceBook(event.Book, admitted, now)
 					}
 				case density.EventTrade:
 					if ready(id, now) {

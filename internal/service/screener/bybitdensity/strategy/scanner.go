@@ -15,7 +15,7 @@ type episode struct {
 	entryPlaced             bool
 }
 
-func (s *Strategy) findCandidates(b *model.Book) {
+func (s *Strategy) findCandidates(b *model.Book, now time.Time) {
 	s.candidates = s.candidates[:0]
 	levels := b.Bids
 	for i, l := range levels {
@@ -25,15 +25,19 @@ func (s *Strategy) findCandidates(b *model.Book) {
 		if distance > s.cfg.MaxDistance {
 			break
 		}
-		if value < s.cfg.MinNotional || len(levels) < 6 {
+		if value < s.cfg.MinNotional || len(levels) < 6 || !s.volumeAllows(l.Qty, now) {
 			continue
 		}
 		multiple := value / s.medianNeighbors(levels, i)
 		if multiple < s.cfg.MinMultiple {
 			continue
 		}
-		s.candidates = append(s.candidates, model.Signal{Key: s.instrument.Key, Side: model.Bid, Ticks: l.Ticks, Price: price, Qty: l.Qty, Notional: value, Distance: distance, Multiple: multiple})
+		s.candidates = append(s.candidates, model.Signal{Key: s.instrument.Key, Side: model.Bid, Ticks: l.Ticks, Price: price, Qty: l.Qty, Notional: value, Distance: distance, Multiple: multiple, AverageVolume: s.averageVolume.Quantity, HasAverageVolume: s.cfg.RequireAverageVolume})
 	}
+}
+
+func (s *Strategy) volumeAllows(quantity float64, now time.Time) bool {
+	return !s.cfg.RequireAverageVolume || s.averageVolume.Allows(quantity, now)
 }
 
 func (s *Strategy) observe(b *model.Book, now time.Time) []model.Signal {
@@ -144,7 +148,7 @@ func (s *Strategy) observeTrade(trade model.Trade) {
 func (s *Strategy) Current(signal model.Signal, now time.Time) (model.Signal, bool) {
 	k := priceLevel{signal.Side, signal.Ticks}
 	ep := s.episodes[k]
-	if signal.Key != s.instrument.Key || s.book == nil || !s.fresh(s.book, now) || ep == nil || !ep.signal.Since.Equal(signal.Since) || ep.confirmed.IsZero() || ep.delivered || now.Before(s.sent[k]) {
+	if ep == nil || !s.volumeAllows(ep.signal.Qty, now) || signal.Key != s.instrument.Key || s.book == nil || !s.fresh(s.book, now) || !ep.signal.Since.Equal(signal.Since) || ep.confirmed.IsZero() || ep.delivered || now.Before(s.sent[k]) {
 		return model.Signal{}, false
 	}
 	return ep.signal, true

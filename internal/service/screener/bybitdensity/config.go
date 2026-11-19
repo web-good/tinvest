@@ -20,7 +20,6 @@ type options struct {
 	strategy      strategy.Config
 	stateDir      string
 	spotSymbols   []string
-	linearSymbols []string
 	symbolLimit   int
 	depth         int
 	screener      telegramDestination
@@ -38,9 +37,8 @@ func readOptions(args []string, out io.Writer, checkFeed bool) (options, error) 
 	fs.SetOutput(out)
 	envFile := fs.String("env-file", "", "optional dotenv file")
 	spot := fs.String("spot-symbols", "", "comma-separated spot USDT pairs; empty selects by turnover")
-	linear := fs.String("linear-symbols", "", "comma-separated linear USDT perpetuals; empty selects by turnover")
 	fs.StringVar(&op.stateDir, "state-dir", "reports/bybit-density", "local simulation state directory")
-	fs.IntVar(&op.symbolLimit, "symbol-limit", 20, "number of automatic selections per market")
+	fs.IntVar(&op.symbolLimit, "symbol-limit", 20, "number of automatic spot selections")
 	fs.IntVar(&op.depth, "depth", 200, "Bybit order book depth per side")
 	fs.Int64Var(&op.screener.chatID, "screener-chat-id", 0, "Telegram chat for confirmed densities")
 	fs.IntVar(&op.screener.topicID, "screener-topic-id", 0, "optional Telegram topic for confirmed densities")
@@ -56,9 +54,8 @@ func readOptions(args []string, out io.Writer, checkFeed bool) (options, error) 
 	fs.DurationVar(&cfg.Freshness, "freshness", cfg.Freshness, "maximum age of a book update")
 	fs.Float64Var(&cfg.PaperNotional, "paper-notional", cfg.PaperNotional, "maximum virtual entry notional in USDT")
 	fs.Float64Var(&cfg.SpotFee, "spot-fee", cfg.SpotFee, "simulated spot commission per side as a fraction")
-	fs.Float64Var(&cfg.LinearFee, "linear-fee", cfg.LinearFee, "simulated perpetual commission per side as a fraction")
 	fs.Int64Var(&cfg.StopTicks, "stop-ticks", cfg.StopTicks, "stop distance behind density in price ticks")
-	fs.Int64Var(&cfg.EntryTicks, "entry-ticks", cfg.EntryTicks, "entry limit distance from density toward the market in price ticks")
+	fs.Int64Var(&cfg.EntryTicks, "entry-ticks", cfg.EntryTicks, "legacy entry offset; candle entries use the current ask")
 	fs.Float64Var(&cfg.RewardRisk, "reward-risk", cfg.RewardRisk, "take profit as a multiple of stop distance")
 	fs.Float64Var(&cfg.MinTarget, "min-target", cfg.MinTarget, "minimum take profit distance as a fraction")
 	if err := fs.Parse(args); err != nil {
@@ -106,7 +103,6 @@ func readOptions(args []string, out io.Writer, checkFeed bool) (options, error) 
 		op.telegramToken = strings.TrimSpace(token)
 	}
 	op.spotSymbols = splitSymbols(*spot)
-	op.linearSymbols = splitSymbols(*linear)
 	return op, op.validate(checkFeed)
 }
 
@@ -124,9 +120,9 @@ func splitSymbols(input string) []string {
 func (op options) validate(checkFeed bool) error {
 	switch {
 	case op.symbolLimit < 1 || op.symbolLimit > 100:
-		return fmt.Errorf("symbol-limit must be between 1 and 100 per market")
-	case len(op.spotSymbols) > 100 || len(op.linearSymbols) > 100:
-		return fmt.Errorf("explicit instrument lists must have at most 100 entries per market")
+		return fmt.Errorf("symbol-limit must be between 1 and 100")
+	case len(op.spotSymbols) > 100:
+		return fmt.Errorf("explicit spot instrument list must have at most 100 entries")
 	case op.depth != 50 && op.depth != 200 && op.depth != 1000:
 		return fmt.Errorf("depth must be 50, 200 or 1000")
 	case op.checkTimeout <= 0:
@@ -141,7 +137,7 @@ func (op options) validate(checkFeed bool) error {
 	}
 	cfg := op.strategy
 	for _, value := range []float64{cfg.MinNotional, cfg.MinMultiple, cfg.MaxDistance, cfg.PaperNotional,
-		cfg.SpotFee, cfg.LinearFee, cfg.RewardRisk, cfg.MinTarget} {
+		cfg.SpotFee, cfg.RewardRisk, cfg.MinTarget} {
 		if math.IsNaN(value) || math.IsInf(value, 0) {
 			return fmt.Errorf("strategy parameters must be finite")
 		}
@@ -150,8 +146,8 @@ func (op options) validate(checkFeed bool) error {
 		cfg.Persistence <= 0 || cfg.Freshness <= 0 {
 		return fmt.Errorf("invalid density thresholds or durations")
 	}
-	if cfg.PaperNotional <= 0 || cfg.SpotFee < 0 || cfg.SpotFee >= 1 || cfg.LinearFee < 0 ||
-		cfg.LinearFee >= 1 || cfg.StopTicks <= 0 || cfg.EntryTicks < 1 || cfg.EntryTicks > 1000000 || cfg.RewardRisk <= 0 ||
+	if cfg.PaperNotional <= 0 || cfg.SpotFee < 0 || cfg.SpotFee >= 1 ||
+		cfg.StopTicks <= 0 || cfg.EntryTicks < 1 || cfg.EntryTicks > 1000000 || cfg.RewardRisk <= 0 ||
 		cfg.MinTarget < 0 || cfg.MinTarget >= 1 {
 		return fmt.Errorf("invalid simulation sizing, fees or price parameters")
 	}

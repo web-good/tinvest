@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"tinvest/internal/service/screener/bybitdensity/feed"
 	"tinvest/internal/service/screener/bybitdensity/model"
 	"tinvest/internal/service/screener/bybitdensity/strategy"
 )
@@ -92,7 +93,14 @@ type replayMarket struct {
 }
 
 func (r replayMarket) Instruments(_ context.Context, market model.Market, _ []string, _ int) ([]model.Instrument, error) {
+	if market != model.Spot {
+		return nil, feed.ErrInvalidSymbols
+	}
 	return []model.Instrument{{Key: model.Key{Market: market, Symbol: "BTCUSDT"}, TickSize: .1, QtyStep: .1}}, nil
+}
+
+func (r replayMarket) AverageVolume(context.Context, model.Key, time.Time, time.Time) (float64, error) {
+	return 9.25, nil
 }
 
 func (r replayMarket) Stream(ctx context.Context, instruments []model.Instrument, _ int, emit func(model.Event) error) error {
@@ -113,8 +121,8 @@ func (r replayMarket) Stream(ctx context.Context, instruments []model.Instrument
 		return book
 	}
 	for _, event := range []model.Event{
-		{Book: makeBook(end.Add(-2*time.Second), true), TradeReady: true},
-		{Book: makeBook(end.Add(-time.Second), false)},
+		{Book: makeBook(end.Add(-2*time.Minute-time.Second), true), TradeReady: true},
+		{Book: makeBook(end.Add(-2*time.Minute), false)},
 	} {
 		event.Key = key
 		if err := emit(event); err != nil {
@@ -127,8 +135,16 @@ func (r replayMarket) Stream(ctx context.Context, instruments []model.Instrument
 			return ctx.Err()
 		case <-r.advance:
 		}
-		if err := emit(model.Event{Key: key, Book: makeBook(end, false)}); err != nil {
-			return err
+		for _, event := range []model.Event{
+			{Key: key, Candle: &model.Candle{Start: end.Add(-2 * time.Minute), End: end.Add(-time.Minute), Low: 995, Close: 1000}},
+			{Key: key, Book: makeBook(end.Add(-time.Minute), false)},
+			{Key: key, Book: makeBook(end.Add(-time.Second), false)},
+			{Key: key, Candle: &model.Candle{Start: end.Add(-time.Minute), End: end, Low: 1001, Close: 1002}},
+			{Key: key, Book: makeBook(end, false)},
+		} {
+			if err := emit(event); err != nil {
+				return err
+			}
 		}
 		take := makeBook(end.Add(time.Millisecond), false)
 		take.Bids = append([]model.Level{{Ticks: 1007, Qty: 1.5}}, take.Bids...)
@@ -149,7 +165,7 @@ func TestReplayRoutesConfirmedDensityAndVirtualFills(t *testing.T) {
 	op := options{stateDir: t.TempDir(), depth: 200, symbolLimit: 1, strategy: strategy.DefaultConfig()}
 	op.strategy.MinNotional = 500
 	op.strategy.Persistence = time.Second
-	op.strategy.Freshness = 2 * time.Minute
+	op.strategy.Freshness = 3 * time.Minute
 	advance := make(chan struct{})
 	densities := make(chan string, 4)
 	fills := make(chan string, 4)
@@ -173,18 +189,15 @@ func TestReplayRoutesConfirmedDensityAndVirtualFills(t *testing.T) {
 		}
 		return ""
 	}
-	first, second := wait(densities), wait(densities)
-	combined := first + "\n" + second
-	for _, want := range []string{"Спот · BTCUSDT", "USDT-фьючерс · BTCUSDT"} {
-		if !strings.Contains(combined, want) {
-			t.Fatalf("market alert %q missing in %s", want, combined)
-		}
+	first := wait(densities)
+	if !strings.Contains(first, "Спот · BTCUSDT") || !strings.Contains(first, "Средний объём M5: 9.25 монет") {
+		t.Fatalf("spot market alert missing in %s", first)
 	}
 	close(advance)
 	report := wait(fills)
 	for _, want := range []string{
 		"СИМУЛЯЦИЯ · Спот", "Сделка закрыта", "Купили по 100.1 USDT", "Продали по 100.7 USDT",
-		"Плотность при входе — 100.0 USDT", "Стоп-лосс — 99.8 USDT", "Тейк-профит — 100.7 USDT",
+		"Плотность при входе — 100.0 USDT", "Средний объём M5 при входе: 9.25 монет", "Стоп-лосс — 99.8 USDT", "Тейк-профит — 100.7 USDT",
 		"Причина — тейк", "Результат после комиссий +0.40% (+0.5988 USDT)",
 	} {
 		if !strings.Contains(report, want) {

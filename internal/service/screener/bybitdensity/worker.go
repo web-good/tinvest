@@ -20,6 +20,7 @@ import (
 )
 
 type marketData interface {
+	AverageVolume(context.Context, model.Key, time.Time, time.Time) (float64, error)
 	Instruments(context.Context, model.Market, []string, int) ([]model.Instrument, error)
 	Stream(context.Context, []model.Instrument, int, func(model.Event) error) error
 }
@@ -66,23 +67,33 @@ func serve(ctx context.Context, market marketData, op options, screener, simulat
 	}
 	defer func() { retErr = errors.Join(retErr, session.Close()) }()
 	slog.Info("Bybit Density worker started", "state_dir", op.stateDir)
+	op.strategy.RequireAverageVolume = true
+	op.strategy.CandleEntries = true
 	hub := newAlertHub(op.strategy, session)
 	group, ctx := errgroup.WithContext(ctx)
 	group.Go(func() error { return session.Deliver(ctx, simulation) })
 	group.Go(func() error { return hub.sendSignals(ctx, screener) })
 	group.Go(func() error { return hub.expire(ctx) })
-	group.Go(func() error { return runMarket(ctx, market, model.Spot, op.spotSymbols, op, hub) })
-	group.Go(func() error { return runMarket(ctx, market, model.Linear, op.linearSymbols, op, hub) })
+	group.Go(func() error { return runSpot(ctx, market, op, hub) })
 	return group.Wait()
 }
 
-func runMarket(ctx context.Context, market marketData, category model.Market, symbols []string, op options, hub *alertHub) error {
+func runSpot(ctx context.Context, market marketData, op options, hub *alertHub) error {
+	const category = model.Spot
+	ctx, cancel := context.WithCancel(ctx)
+	var volumeDone chan struct{}
+	defer func() {
+		cancel()
+		if volumeDone != nil {
+			<-volumeDone
+		}
+	}()
 	var instruments []model.Instrument
 	var retry time.Duration
 	for ctx.Err() == nil {
 		if len(instruments) == 0 {
 			var err error
-			instruments, err = market.Instruments(ctx, category, symbols, op.symbolLimit)
+			instruments, err = market.Instruments(ctx, category, op.spotSymbols, op.symbolLimit)
 			if errors.Is(err, feed.ErrInvalidSymbols) {
 				return fmt.Errorf("%s instrument configuration: %w", category, err)
 			}
@@ -98,6 +109,15 @@ func runMarket(ctx context.Context, market marketData, category model.Market, sy
 				continue
 			}
 			hub.add(instruments)
+			loaded := make(map[model.Key]time.Time, len(instruments))
+			delay := refreshVolumes(ctx, market, hub, instruments, loaded)
+			volumeDone = make(chan struct{})
+			go func() {
+				defer close(volumeDone)
+				for waitRetry(ctx, delay) {
+					delay = refreshVolumes(ctx, market, hub, instruments, loaded)
+				}
+			}()
 			retry = 0
 			slog.Info("Bybit instruments selected", "market", category, "count", len(instruments))
 		}

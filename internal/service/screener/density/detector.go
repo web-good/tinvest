@@ -99,7 +99,11 @@ func (d *Detector) Update(b Book, now time.Time) []Signal {
 	d.timestamps[b.InstrumentID] = b.Time
 	seen := make(map[key]bool)
 	var signals []Signal
+	average := d.instruments[b.InstrumentID].AverageVolume
 	for i, l := range b.Bids {
+		if d.cfg.RequireAverageVolume && !average.Allows(float64(l.Quantity), now) {
+			continue
+		}
 		price := value(l.Price)
 		distance := (best - price) / best
 		amount := price * float64(l.Quantity) * float64(b.Lot)
@@ -152,6 +156,13 @@ func (d *Detector) Update(b Book, now time.Time) []Signal {
 		o.signal.MinRubles, o.signal.SupportPrice, o.signal.SupportTouches = threshold, support.Price, support.Touches
 		if d.cfg.TurnoverFraction > 0 || d.cfg.Support.Enabled {
 			o.signal.ProfileUntil = d.instruments[b.InstrumentID].ProfileAt.Add(ProfileLifetime)
+		}
+		if d.cfg.RequireAverageVolume {
+			o.signal.MinLots = average.Quantity
+			o.signal.HasAverageVolume = true
+			if o.signal.ProfileUntil.IsZero() || average.Until.Before(o.signal.ProfileUntil) {
+				o.signal.ProfileUntil = average.Until
+			}
 		}
 		d.observations[k] = o
 		if now.Sub(o.since) >= d.cfg.Persistence {

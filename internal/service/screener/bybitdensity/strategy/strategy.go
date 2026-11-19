@@ -4,10 +4,14 @@ package strategy
 import (
 	"time"
 
+	"tinvest/internal/service/screener/bounce"
 	"tinvest/internal/service/screener/bybitdensity/model"
+	"tinvest/internal/service/screener/volume"
 )
 
 type Config struct {
+	CandleEntries                         bool
+	RequireAverageVolume                  bool
 	MinNotional, MinMultiple, MaxDistance float64
 	Persistence, Freshness                time.Duration
 	PaperNotional, SpotFee, LinearFee     float64
@@ -30,6 +34,8 @@ type priceLevel struct {
 }
 
 type Strategy struct {
+	bounce                   bounce.Watch[model.Signal]
+	averageVolume            volume.Average
 	candidates               []model.Signal
 	instrument               model.Instrument
 	cfg                      Config
@@ -62,6 +68,13 @@ func NewWithExecutor(instrument model.Instrument, cfg Config, executor Executor)
 	}
 }
 
+// SetAverageVolume replaces the reference and restarts entry confirmations.
+func (s *Strategy) SetAverageVolume(average volume.Average) {
+	s.averageVolume = average
+	clear(s.episodes)
+	s.pending = nil
+}
+
 // Expire ends observation and cancels any pending entry on loss of freshness.
 func (s *Strategy) Expire(now time.Time) {
 	if s.book != nil && !s.fresh(s.book, now) {
@@ -78,6 +91,7 @@ func (s *Strategy) Expire(now time.Time) {
 }
 
 func (s *Strategy) clearObservation() {
+	s.bounce = bounce.Watch[model.Signal]{}
 	clear(s.episodes)
 	s.candidates = s.candidates[:0]
 	s.book = nil
@@ -115,10 +129,12 @@ func (s *Strategy) Apply(e model.Event, now time.Time) ([]model.Signal, []model.
 			s.clearObservation()
 		}
 		s.book = b
-		s.findCandidates(b)
+		s.findCandidates(b, now)
 		if s.tradeReady {
 			signals = s.observe(b, now)
-			if s.position == nil && s.pending == nil && s.outstanding == nil {
+			if s.cfg.CandleEntries {
+				s.observeBounceBook(b)
+			} else if s.position == nil && s.pending == nil && s.outstanding == nil {
 				s.prepareEntry()
 			}
 		}
@@ -126,7 +142,15 @@ func (s *Strategy) Apply(e model.Event, now time.Time) ([]model.Signal, []model.
 	for _, trade := range e.Trades {
 		s.observeTrade(trade)
 	}
-	if s.book == nil || e.Book == nil {
+	if s.cfg.CandleEntries && s.book != nil {
+		if c := e.Candle; c != nil && c.End.Equal(c.Start.Add(time.Minute)) {
+			s.bounce.Candle(c.Start, c.Low, c.Close, now)
+		}
+		if (e.Book != nil || e.Candle != nil) && s.position == nil && s.outstanding == nil {
+			s.prepareBounce(now)
+		}
+	}
+	if s.book == nil || (e.Book == nil && s.pending == nil) {
 		return signals, nil
 	}
 	return signals, s.execute(now)

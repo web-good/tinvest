@@ -299,3 +299,25 @@ func TestSpotSubscriptionsRespectBybitTenTopicRequestLimit(t *testing.T) {
 		require.Len(t, batch.Args, 10)
 	}
 }
+
+func TestAverageVolumeUsesSpotBaseQuantityAndSession(t *testing.T) {
+	from := time.Date(2026, 11, 18, 6, 0, 0, 0, time.UTC)
+	to := from.Add(9 * time.Hour)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query()
+		if r.URL.Path != "/v5/market/kline" || query.Get("category") != "spot" || query.Get("symbol") != "BTCUSDT" ||
+			query.Get("interval") != "5" || query.Get("start") != fmt.Sprint(from.UnixMilli()) || query.Get("end") != fmt.Sprint(to.UnixMilli()-1) {
+			t.Errorf("unexpected request %s", r.URL)
+		}
+		fmt.Fprintf(w, `{"retCode":0,"result":{"symbol":"BTCUSDT","category":"spot","list":[
+			["%d","1","1","1","1","999","999"],
+			["%d","1","1","1","1","3.5","350"],
+			["%d","1","1","1","1","1.5","150"]
+		]}}`, to.UnixMilli(), from.Add(5*time.Minute).UnixMilli(), from.UnixMilli())
+	}))
+	defer server.Close()
+
+	got, err := NewClient(server.URL, "").AverageVolume(t.Context(), model.Key{Market: model.Spot, Symbol: "BTCUSDT"}, from, to)
+	require.NoError(t, err)
+	require.Equal(t, 2.5, got)
+}
