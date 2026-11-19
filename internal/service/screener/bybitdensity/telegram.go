@@ -79,33 +79,48 @@ func formatSignal(signal model.Signal, tick float64) string {
 		signal.Observed.Truncate(time.Second), signal.TradeQty, signal.TradeCoverage.Truncate(time.Second))
 }
 
-func formatFill(fill model.Fill, tick float64) string {
-	direction := "лонг"
+var moscowTime = time.FixedZone("МСК", 3*60*60)
+
+func formatClosedTrade(fill model.Fill, tick float64) string {
+	trade := fill.Closed
+	if trade == nil {
+		return ""
+	}
+	direction, entryAction, exitAction := "лонг", "Купили", "Продали"
 	if fill.Side == model.Ask {
-		direction = "шорт"
+		direction, entryAction, exitAction = "шорт", "Продали", "Выкупили"
 	}
-	title := fmt.Sprintf("СИМУЛЯЦИЯ · %s · %s · %s", marketLabel(fill.Key.Market), fill.Key.Symbol, direction)
-	if fill.Entry {
-		return fmt.Sprintf("%s\nВход по %s USDT", title, priceText(fill.Price, tick))
+	const timeLayout = "2006-01-02 15:04:05 MST"
+	reasons := make([]string, len(trade.ExitReasons))
+	for i, reason := range trade.ExitReasons {
+		reasons[i] = exitReasonText(reason)
 	}
-	action := "выход"
-	if fill.Partial {
-		action = "частичный выход"
+	return fmt.Sprintf("СИМУЛЯЦИЯ · %s · %s · %s\nСделка закрыта\n%s по %s USDT · %s\n%s по %s USDT · %s\nПлотность при входе — %s USDT · %.8g монет (%.2f USDT)\nСтоп-лосс — %s USDT\nТейк-профит — %s USDT\nПричина — %s\nРезультат после комиссий %+.2f%% (%+.4f USDT)",
+		marketLabel(fill.Key.Market), fill.Key.Symbol, direction,
+		entryAction, averagePriceText(trade.EntryPrice, tick), trade.EntryAt.In(moscowTime).Format(timeLayout),
+		exitAction, averagePriceText(trade.ExitPrice, tick), fill.At.In(moscowTime).Format(timeLayout),
+		priceText(trade.DensityPrice, tick), trade.DensityQty, trade.DensityPrice*trade.DensityQty,
+		priceText(trade.StopPrice, tick), priceText(trade.TakePrice, tick), strings.Join(reasons, " → "),
+		trade.NetReturn*100, trade.NetPnL)
+}
+
+func averagePriceText(price, tick float64) string {
+	if tick > 0 && math.Abs(price/tick-math.Round(price/tick)) > 1e-7 {
+		weighted := strconv.FormatFloat(price, 'f', pricePrecision(tick)+4, 64)
+		return strings.TrimRight(strings.TrimRight(weighted, "0"), ".")
 	}
-	price := priceText(fill.Price, tick)
-	if tick > 0 && math.Abs(fill.Price/tick-math.Round(fill.Price/tick)) > 1e-7 {
-		weighted := strconv.FormatFloat(fill.Price, 'f', pricePrecision(tick)+4, 64)
-		price = strings.TrimRight(strings.TrimRight(weighted, "0"), ".")
-	}
-	reason := fill.Reason
+	return priceText(price, tick)
+}
+
+func exitReasonText(reason string) string {
 	switch reason {
 	case "stop":
-		reason = "стоп"
+		return "стоп-лосс"
 	case "density_lost":
-		reason = "плотность исчезла"
+		return "плотность исчезла"
 	case "take":
-		reason = "тейк"
+		return "тейк"
+	default:
+		return reason
 	}
-	return fmt.Sprintf("%s\n%s по %s USDT\nПричина — %s\nРезультат после комиссий %+.2f%% (%+.4f USDT)",
-		title, action, price, reason, fill.NetReturn*100, fill.NetPnL)
 }

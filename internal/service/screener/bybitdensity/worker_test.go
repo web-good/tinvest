@@ -87,18 +87,6 @@ func TestOptionsReadBybitEntryAndRiskFromEnv(t *testing.T) {
 	}
 }
 
-func TestFormatFill(t *testing.T) {
-	msg := formatFill(model.Fill{
-		Key:  model.Key{Market: model.Linear, Symbol: "BTCUSDT"},
-		Side: model.Ask, Price: 63900.15, Partial: true, Reason: "take", NetReturn: .002,
-	}, .1)
-	for _, want := range []string{"СИМУЛЯЦИЯ", "BTCUSDT", "шорт", "частичный", "0.20%"} {
-		if !strings.Contains(msg, want) {
-			t.Errorf("missing %q in %q", want, msg)
-		}
-	}
-}
-
 type replayMarket struct {
 	advance <-chan struct{}
 }
@@ -193,10 +181,18 @@ func TestReplayRoutesConfirmedDensityAndVirtualFills(t *testing.T) {
 		}
 	}
 	close(advance)
-	entry, exit := wait(fills), wait(fills)
-	if !strings.Contains(entry, "СИМУЛЯЦИЯ · Спот") || !strings.Contains(entry, "Вход по 100.1") ||
-		!strings.Contains(exit, "выход по 100.7") || !strings.Contains(exit, "Причина — тейк") {
-		t.Fatalf("unexpected execution sequence: %q then %q", entry, exit)
+	report := wait(fills)
+	for _, want := range []string{
+		"СИМУЛЯЦИЯ · Спот", "Сделка закрыта", "Купили по 100.1 USDT", "Продали по 100.7 USDT",
+		"Плотность при входе — 100.0 USDT", "Стоп-лосс — 99.8 USDT", "Тейк-профит — 100.7 USDT",
+		"Причина — тейк", "Результат после комиссий +0.40% (+0.5988 USDT)",
+	} {
+		if !strings.Contains(report, want) {
+			t.Fatalf("missing %q in %q", want, report)
+		}
+	}
+	if strings.Count(report, "МСК") != 2 {
+		t.Fatalf("expected entry and exit timestamps in %q", report)
 	}
 	cancel()
 	if err := <-done; err != nil {

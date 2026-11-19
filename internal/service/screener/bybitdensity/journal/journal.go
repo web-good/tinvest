@@ -154,16 +154,18 @@ func (j *Journal) replay() error {
 	}
 }
 
-// Record commits the fill and its outbox message in the same journal row.
+// Record commits a fill and its optional outbox message in the same journal row.
 func (j *Journal) Record(fill model.Fill, message string) error {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	if err := j.append(record{Kind: fillRecorded, Session: j.session, Fill: &fill, Message: message}); err != nil {
 		return err
 	}
-	select {
-	case j.wake <- struct{}{}:
-	default:
+	if message != "" {
+		select {
+		case j.wake <- struct{}{}:
+		default:
+		}
 	}
 	return nil
 }
@@ -209,8 +211,8 @@ func (j *Journal) validate(r record) error {
 			return errors.New("unexpected session end")
 		}
 	case fillRecorded:
-		if j.session == 0 || r.Session != j.session || r.Fill == nil || r.Message == "" || !(r.Fill.Qty > 0) {
-			return errors.New("invalid fill or missing notification")
+		if j.session == 0 || r.Session != j.session || r.Fill == nil || !(r.Fill.Qty > 0) {
+			return errors.New("invalid fill")
 		}
 		current, exists := j.positions[r.Fill.Key]
 		if r.Fill.Entry == exists || (exists && current.Entry.Side != r.Fill.Side) {
@@ -247,7 +249,9 @@ func (j *Journal) apply(r record) {
 		default:
 			delete(j.positions, fill.Key)
 		}
-		j.pending = append(j.pending, notification{id: r.ID, message: r.Message})
+		if r.Message != "" {
+			j.pending = append(j.pending, notification{id: r.ID, message: r.Message})
+		}
 	case messageSent:
 		j.pending[0] = notification{}
 		j.pending = j.pending[1:]

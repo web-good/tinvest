@@ -16,7 +16,9 @@ type setup struct {
 
 type position struct {
 	setup
-	entry                   float64
+	entry                   model.Fill
+	exitQuote, netPnL       float64
+	exitReasons             []string
 	remaining, stop, target int64 // remaining is measured in quantity steps.
 	forced                  string
 }
@@ -192,20 +194,31 @@ func (s *Strategy) ConfirmExecution(m Execution, now time.Time) (model.Fill, boo
 	if order.Entry {
 		s.pending = nil
 		stop, target := s.entryPrices(pending.side, pending.origin, s.instrument.Ticks(f.Price))
-		s.position = &position{setup: *pending, entry: f.Price, remaining: m.Steps, stop: stop, target: target}
+		s.position = &position{setup: *pending, entry: f, remaining: m.Steps, stop: stop, target: target}
 		return f, true
 	}
 	p := s.position
-	cost := p.entry * qty
+	cost := p.entry.Price * qty
 	gross := m.Quote - cost
 	if p.side == model.Ask {
 		gross = -gross
 	}
 	f.NetPnL = gross - f.Fee - cost*feeRate
 	f.NetReturn = f.NetPnL / cost
+	p.exitQuote += m.Quote
+	p.netPnL += f.NetPnL
+	if n := len(p.exitReasons); n == 0 || p.exitReasons[n-1] != f.Reason {
+		p.exitReasons = append(p.exitReasons, f.Reason)
+	}
 	p.remaining -= m.Steps
 	f.Partial = p.remaining > 0
-	if p.remaining == 0 {
+	if !f.Partial {
+		f.Closed = &model.TradeSummary{
+			EntryAt: p.entry.At, EntryPrice: p.entry.Price, ExitPrice: p.exitQuote / p.entry.Qty,
+			DensityPrice: s.instrument.Price(p.origin), DensityQty: p.baseQty,
+			StopPrice: s.instrument.Price(p.stop), TakePrice: s.instrument.Price(p.target),
+			NetPnL: p.netPnL, NetReturn: p.netPnL / (p.entry.Price * p.entry.Qty), ExitReasons: p.exitReasons,
+		}
 		s.position = nil
 	}
 	return f, true

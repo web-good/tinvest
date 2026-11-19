@@ -127,6 +127,30 @@ func TestOpenRecoversInterruptedSessionAndPendingFills(t *testing.T) {
 	assertDelivery(t, third, []string{"third session entry"})
 }
 
+func TestSilentFillsAndCloseReportSurviveReplay(t *testing.T) {
+	dir := t.TempDir()
+	j := openJournal(t, dir)
+	entry := model.Fill{Key: model.Key{Market: model.Spot, Symbol: "BTCUSDT"}, Side: model.Bid, Entry: true, Price: 100, Qty: 2}
+	part := model.Fill{Key: entry.Key, Side: entry.Side, Price: 101, Qty: 1, Partial: true}
+	exit := model.Fill{Key: entry.Key, Side: entry.Side, Price: 99, Qty: 1}
+	for _, fill := range []model.Fill{entry, part} {
+		if err := j.Record(fill, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := j.Record(exit, "complete report"); err != nil {
+		t.Fatal(err)
+	}
+	if err := j.Close(); err != nil {
+		t.Fatal(err)
+	}
+	reopened := openJournal(t, dir)
+	if len(reopened.pending) != 1 {
+		t.Fatalf("expected one queued report, got %+v", reopened.pending)
+	}
+	assertDelivery(t, reopened, []string{"complete report"})
+}
+
 func TestDeliverRetriesWithoutHoldingUpRecord(t *testing.T) {
 	j := openJournal(t, t.TempDir())
 	entry := model.Fill{Key: model.Key{Market: model.Linear, Symbol: "BTCUSDT"}, Side: model.Ask, Entry: true, Price: 100, Qty: 1}

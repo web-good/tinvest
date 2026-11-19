@@ -254,6 +254,8 @@ func TestPartialTakeThenLoss(t *testing.T) {
 	start(t, s, model.Bid)
 	_, fills := s.Apply(model.Event{Book: book(60, model.Bid)}, at(60))
 	require.Len(t, fills, 1)
+	entry := fills[0]
+	require.Nil(t, entry.Closed)
 	b := book(61, model.Bid)
 	b.Bids[0].Qty = .1
 	b.Bids = append([]model.Level{{Ticks: 1007, Qty: .3}}, b.Bids...)
@@ -264,6 +266,8 @@ func TestPartialTakeThenLoss(t *testing.T) {
 	require.Len(t, fills, 1)
 	require.Equal(t, "take", fills[0].Reason)
 	require.True(t, fills[0].Partial)
+	take := fills[0]
+	require.Nil(t, take.Closed)
 	b = book(62, model.Bid)
 	b.Bids = b.Bids[1:]
 	b.Bids[4].Qty = 6 // 995 is five ticks from the origin.
@@ -277,6 +281,20 @@ func TestPartialTakeThenLoss(t *testing.T) {
 	require.Equal(t, "density_lost", fills[0].Reason)
 	require.InDelta(t, 1.2, fills[0].Qty, 1e-12)
 	require.False(t, fills[0].Partial)
+	exit := fills[0]
+	report := exit.Closed
+	require.NotNil(t, report)
+	require.Equal(t, at(60), report.EntryAt)
+	require.Equal(t, at(63), exit.At)
+	require.Equal(t, entry.Price, report.EntryPrice)
+	require.InDelta(t, (take.Price*take.Qty+exit.Price*exit.Qty)/entry.Qty, report.ExitPrice, 1e-10)
+	require.InDelta(t, 100, report.DensityPrice, 1e-10)
+	require.InDelta(t, 10, report.DensityQty, 1e-10)
+	require.InDelta(t, 99.8, report.StopPrice, 1e-10)
+	require.InDelta(t, 100.7, report.TakePrice, 1e-10)
+	require.InDelta(t, take.NetPnL+exit.NetPnL, report.NetPnL, 1e-10)
+	require.InDelta(t, report.NetPnL/(entry.Price*entry.Qty), report.NetReturn, 1e-10)
+	require.Equal(t, []string{"take", "density_lost"}, report.ExitReasons)
 }
 
 func TestFreshSnapshotAfterDisconnectCanRelocateOpenPositionBeforeTradeAck(t *testing.T) {

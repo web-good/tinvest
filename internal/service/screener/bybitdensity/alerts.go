@@ -75,7 +75,7 @@ func (h *alertHub) apply(event model.Event, now time.Time) error {
 	h.mu.Unlock()
 
 	for _, fill := range fills {
-		if err := h.recorder.Record(fill, formatFill(fill, state.instrument.TickSize)); err != nil {
+		if err := h.recorder.Record(fill, formatClosedTrade(fill, state.instrument.TickSize)); err != nil {
 			return err
 		}
 	}

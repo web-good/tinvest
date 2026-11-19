@@ -99,6 +99,20 @@ type Signal struct {
 	TradeCoverage time.Duration
 }
 
+// TradeSummary describes the whole position and is attached to its final fill.
+type TradeSummary struct {
+	EntryAt      time.Time
+	EntryPrice   float64
+	ExitPrice    float64 // Quantity-weighted average across all exits.
+	DensityPrice float64
+	DensityQty   float64
+	StopPrice    float64
+	TakePrice    float64
+	NetPnL       float64
+	NetReturn    float64
+	ExitReasons  []string
+}
+
 type Fill struct {
 	Key       Key
 	Side      Side // Direction of the position, Bid for long and Ask for short.
@@ -111,4 +125,5 @@ type Fill struct {
 	NetPnL    float64
 	NetReturn float64
 	At        time.Time
+	Closed    *TradeSummary `json:"closed,omitempty"`
 }
