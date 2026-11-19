@@ -45,6 +45,19 @@ func (s *schedulerService) Run(ctx context.Context, in dto.Run) error {
 	s.sh.Start()
 	defer s.sh.Stop()
 
+	if runner, ok := s.service.(interface{ RunCandleStream(context.Context) }); ok {
+		streamCtx, cancel := context.WithCancel(ctx)
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			runner.RunCandleStream(streamCtx)
+		}()
+		defer func() {
+			cancel()
+			<-done
+		}()
+	}
+
 	for {
 		select {
 		case <-ctx.Done():

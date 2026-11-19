@@ -9,13 +9,14 @@ package config
 // реальные позиции. Пока у стратегии нет своего счёта, её раннер должен просто не
 // запускаться (см. Ready), а не ронять всё остальное.
 type RSIPullbackConfig struct {
-	AccountID     string   `config:"RSI_PULLBACK_ACCOUNT_ID,backend=env"`
-	Token         string   `config:"RSI_PULLBACK_TOKEN,backend=env"`
-	Tickers       []string `config:"RSI_PULLBACK_TICKERS,backend=env"`
-	BuyPct        float64  `config:"RSI_PULLBACK_BUY_PCT,backend=env"`
-	TradeEnabled  bool     `config:"RSI_PULLBACK_TRADE_ENABLED,backend=env"`
-	NotifyEnabled bool     `config:"RSI_PULLBACK_NOTIFY_ENABLED,backend=env"`
-	Schedule      string   `config:"RSI_PULLBACK_SCHEDULE,backend=env"`
+	AccountID           string   `config:"RSI_PULLBACK_ACCOUNT_ID,backend=env"`
+	Token               string   `config:"RSI_PULLBACK_TOKEN,backend=env"`
+	Tickers             []string `config:"RSI_PULLBACK_TICKERS,backend=env"`
+	BuyPct              float64  `config:"RSI_PULLBACK_BUY_PCT,backend=env"`
+	TradeEnabled        bool     `config:"RSI_PULLBACK_TRADE_ENABLED,backend=env"`
+	NotifyEnabled       bool     `config:"RSI_PULLBACK_NOTIFY_ENABLED,backend=env"`
+	Schedule            string   `config:"RSI_PULLBACK_SCHEDULE,backend=env"`
+	CandleStreamTickers []string `config:"RSI_PULLBACK_CANDLE_STREAM_TICKERS,backend=env"`
 	// LAG_BOOST_* — увеличенная доля входа rsi_pullback/rsi_zone, когда тикер за LagBoostDays
 	// завершённых дней отстал от IMOEX на LagBoostPct п.п. и больше (docs/rsi_pullback/live.md,
 	// раздел «Буст доли»). Общая настройка счёта, gap_fade не касается. Без `required`:

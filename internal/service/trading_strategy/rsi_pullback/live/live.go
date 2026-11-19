@@ -65,11 +65,13 @@ type service struct {
 	// instance (memoized in service_provider). Without the lock a delayed pass could
 	// interleave its Load→mutate→Save cycle with the next one and silently drop its
 	// state writes.
-	mu          sync.Mutex
-	instruments instrumentsClient
-	market      candles.CandleClient
-	ops         operationsClient
-	cfg         *config.RSIPullbackConfig
+	mu           sync.Mutex
+	closedBars   map[string]closedBarDecision // guarded by mu
+	candleSource ClosedCandleSource
+	instruments  instrumentsClient
+	market       candles.CandleClient
+	ops          operationsClient
+	cfg          *config.RSIPullbackConfig
 	// slots — стратегии счёта в порядке приоритета входа; slots[0] — rsi_pullback.
 	slots []*slot
 	// accountStops читает список активных стоп-заявок счёта — один раз на пасс. Боевой,
@@ -126,6 +128,7 @@ func NewService(
 		cfg:         cfg,
 		statePath:   filepath.Join("data", "state", "rsi_pullback_"+cfg.AccountID+".json"),
 		now:         nowMSK,
+		closedBars:  make(map[string]closedBarDecision),
 	}
 	for _, st := range strats {
 		s.slots = append(s.slots, &slot{
@@ -147,9 +150,16 @@ func NewService(
 
 // Run makes the single pass. The mutex is held for the whole pass so that two overlapping
 // cron invocations cannot interleave their Load→mutate→Save cycles.
-func (s *service) Run(ctx context.Context, _ dto.Run) (retErr error) {
+func (s *service) Run(ctx context.Context, _ dto.Run) error {
+	return s.runPass(ctx, nil)
+}
+
+func (s *service) runPass(ctx context.Context, event *closedCandlePass) (retErr error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if event != nil && !event.freshAt(s.now()) {
+		return nil
+	}
 	if s.coordinationErr != nil {
 		return s.coordinationErr
 	}
@@ -162,7 +172,7 @@ func (s *service) Run(ctx context.Context, _ dto.Run) (retErr error) {
 		defer func() { s.entryLease = nil; retErr = errors.Join(retErr, lease.Close()) }()
 	}
 
-	return s.pass(ctx)
+	return s.passFor(ctx, event)
 }
 
 // SetAccountCoordinator is called once by DI before any account workers start.

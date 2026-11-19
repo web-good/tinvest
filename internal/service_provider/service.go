@@ -22,6 +22,7 @@ import (
 	"tinvest/internal/service/trading_strategy/reversion/live"
 	rsipullbacklive "tinvest/internal/service/trading_strategy/rsi_pullback/live"
 	rsizonelive "tinvest/internal/service/trading_strategy/rsi_zone/live"
+	grpcclient "tinvest/pkg/client/grpc"
 	"tinvest/pkg/client/rss"
 	"tinvest/pkg/client/telegram"
 	"tinvest/pkg/logger"
@@ -243,6 +244,10 @@ func (s *ServiceProvider) GetRSIPullbackLiveService() rsipullbacklive.Service {
 			serviceProvider.appConfig.RSIPullback,
 			guests...,
 		)
+		cfg := serviceProvider.appConfig.RSIPullback
+		if len(cfg.CandleStreamTickers) > 0 {
+			accountService.SetClosedCandleSource(grpcclient.NewM30CandleSource(grpcClient.Connection(), cfg.Token))
+		}
 		if err := accountService.SetAccountCoordinator(s.GetAccountCoordinator(), s.densityTradingEnabled()); err != nil {
 			logger.ErrorContext(s.ctx, "shared account coordinator initialization failed", err.Error())
 		}

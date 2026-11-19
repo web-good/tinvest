@@ -126,6 +126,10 @@ type passCtx struct {
 }
 
 func (s *service) pass(ctx context.Context) error {
+	return s.passFor(ctx, nil)
+}
+
+func (s *service) passFor(ctx context.Context, event *closedCandlePass) error {
 	// Exclusion snapshot precedes portfolio loading and remains immutable for
 	// density, even if its continuous worker completes while this pass is running.
 	claims := map[string]accountcoord.Claim{}
@@ -216,6 +220,20 @@ func (s *service) pass(ctx context.Context) error {
 	}
 	slices.Sort(tickers)
 	for _, ticker := range tickers {
+		if event != nil && (ticker != event.ticker || shares[ticker] == nil || shares[ticker].ID != event.instrumentID) {
+			continue
+		}
+		entry, hasState := state[ticker]
+		fast := s.candleStreamTicker(ticker) && (!hasState || adapter.Owner(entry) == adapter.LegacyOwner)
+		if event != nil && !fast {
+			continue
+		}
+		bar := now.Truncate(barSpan).Add(-barSpan)
+		prev := s.closedBars[ticker]
+		alreadyDecided := fast && !bar.After(prev.bar)
+		if alreadyDecided && (event != nil || (prev.busy && !hasPendingOrder(entry))) {
+			continue
+		}
 		if sh := shares[ticker]; sh != nil {
 			if err := blockedOrders[sh.ID]; err != nil {
 				s.slots[0].alert(ticker, err.Error())
@@ -223,7 +241,6 @@ func (s *service) pass(ctx context.Context) error {
 				continue
 			}
 		}
-		entry, hasState := state[ticker]
 		if hasState && entry.EntryRequestID != "" {
 			sh := shares[ticker]
 			owner := s.slotByName(adapter.Owner(entry))
@@ -273,6 +290,9 @@ func (s *service) pass(ctx context.Context) error {
 			}
 		}
 		claim, claimed := claims[ticker]
+		if event != nil && claimed && claim.Owner != adapter.LegacyOwner {
+			continue
+		}
 		if claimed && claim.Owner == "density" {
 			if claim.Status == "closed" && !hasState && held[claim.InstrumentID] == nil && listErr == nil {
 				if _, stopped := stopByInstrument[claim.InstrumentID]; !stopped {
@@ -341,6 +361,9 @@ func (s *service) pass(ctx context.Context) error {
 			continue
 		}
 		pos, isHeld := held[sh.ID]
+		if event != nil && !hasState && (isHeld || ready[0].sl != s.slots[0]) {
+			continue // leave ownership recovery and higher-priority entries to cron
+		}
 
 		if isHeld || hasState {
 			c := ready[0]
@@ -363,7 +386,7 @@ func (s *service) pass(ctx context.Context) error {
 			if hasState && hasBarInterval(c.sl) {
 				decided = entry.LastBar
 			}
-			md, ok := s.assemble(ctx, c.sl, ticker, sh, c.dec, now, true, decided)
+			md, ok := s.passMarketData(ctx, event, c, ticker, sh, now, true, decided)
 			if !ok {
 				continue
 			}
@@ -371,6 +394,8 @@ func (s *service) pass(ctx context.Context) error {
 				c.sl.alert(ticker, "пасс по тикеру прерван: "+perr.Error())
 				logger.ErrorContext(ctx, fmt.Sprintf("%s: %s pass: %v", c.sl.strat.Name(), ticker, perr))
 				failed = append(failed, ticker)
+			} else if fast {
+				s.closedBars[ticker] = closedBarDecision{bar: md.Times[len(md.Times)-1], busy: true}
 			}
 			continue
 		}
@@ -401,13 +426,17 @@ func (s *service) pass(ctx context.Context) error {
 		// Свободный тикер: стратегии по приоритету; первая с BUY входит, остальных на
 		// этом баре не спрашивают.
 		for _, c := range ready {
+			primary := c.sl == s.slots[0]
+			if (event != nil && !primary) || (primary && alreadyDecided) {
+				continue
+			}
 			if !accountEntryAllowed(c.sl.strat.Name(), now) {
 				continue
 			}
 			if w, ok := c.sl.strat.(adapter.EntryWindow); ok && !w.EntryPossible(now) {
 				continue // окно входа закрыто: ни свечей, ни вопроса стратегии
 			}
-			md, ok := s.assemble(ctx, c.sl, ticker, sh, c.dec, now, false, time.Time{})
+			md, ok := s.passMarketData(ctx, event, c, ticker, sh, now, false, time.Time{})
 			if !ok {
 				continue
 			}
@@ -421,6 +450,8 @@ func (s *service) pass(ctx context.Context) error {
 				c.sl.alert(ticker, "пасс по тикеру прерван: "+perr.Error())
 				logger.ErrorContext(ctx, fmt.Sprintf("%s: %s pass: %v", c.sl.strat.Name(), ticker, perr))
 				failed = append(failed, ticker)
+			} else if fast && primary {
+				s.closedBars[ticker] = closedBarDecision{bar: md.Times[len(md.Times)-1], busy: signaled}
 			}
 			if signaled {
 				if entry, ok := pc.state[ticker]; ok {
@@ -436,6 +467,9 @@ func (s *service) pass(ctx context.Context) error {
 			return fmt.Errorf("verify durable ownership handoff: %w", err)
 		}
 		for ticker, claim := range pc.claims {
+			if event != nil && ticker != event.ticker {
+				continue
+			}
 			if slices.Contains(failed, ticker) {
 				continue
 			}
