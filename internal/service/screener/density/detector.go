@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-const maxDistanceTicks = 10
+const maxDistanceTicks = 25
 
 type key struct {
 	id    string
@@ -80,7 +80,7 @@ func withinTickDistance(best, level, step Price) bool {
 		units--
 		nanos += nanosPerUnit
 	}
-	// Compare whole units in groups of ten before comparing the remainder.
+	// Compare whole units in groups of maxDistanceTicks before comparing the remainder.
 	// This keeps the inclusive boundary exact without scaling the full prices.
 	if groups := units / maxDistanceTicks; groups != step.Units {
 		return groups < step.Units

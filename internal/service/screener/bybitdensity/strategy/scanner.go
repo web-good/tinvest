@@ -8,7 +8,7 @@ import (
 	"tinvest/internal/service/screener/bybitdensity/model"
 )
 
-const maxDistanceTicks = 10
+const maxDistanceTicks = 25
 
 type episode struct {
 	signal                  model.Signal

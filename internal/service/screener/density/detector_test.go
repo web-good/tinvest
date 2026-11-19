@@ -153,15 +153,15 @@ func TestDetectorExpiresByExchangeTimestamp(t *testing.T) {
 	}
 }
 
-func TestDetectorUsesTenTicksFromBestBid(t *testing.T) {
+func TestDetectorUsesTwentyFiveTicksFromBestBid(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		step  Price
-		bid10 Price
-		bid11 Price
+		bid25 Price
+		bid26 Price
 	}{
-		{"fractional step inside former percent limit", Price{Nano: 30_000_000}, Price{Units: 251, Nano: 200_000_000}, Price{Units: 251, Nano: 230_000_000}},
-		{"whole step outside former percent limit", Price{Units: 1}, Price{Units: 260, Nano: 900_000_000}, Price{Units: 261, Nano: 900_000_000}},
+		{"fractional step", Price{Nano: 30_000_000}, Price{Units: 251, Nano: 650_000_000}, Price{Units: 251, Nano: 680_000_000}},
+		{"whole step", Price{Units: 1}, Price{Units: 275, Nano: 900_000_000}, Price{Units: 276, Nano: 900_000_000}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := DefaultConfig()
@@ -172,7 +172,7 @@ func TestDetectorUsesTenTicksFromBestBid(t *testing.T) {
 			level := Price{Units: 250, Nano: 900_000_000}
 			book := Book{
 				InstrumentID: "x", Lot: 100,
-				Asks: []Level{{Price: Price{Units: 263}, Quantity: 1}},
+				Asks: []Level{{Price: Price{Units: 278}, Quantity: 1}},
 				Bids: []Level{{Quantity: 10}, {Price: level, Quantity: 250}},
 			}
 			for offset := range int64(5) {
@@ -183,19 +183,19 @@ func TestDetectorUsesTenTicksFromBestBid(t *testing.T) {
 				book.Bids[0].Price = bid
 				return d.Update(book, book.Time)
 			}
-			update(0, tc.bid11)
+			update(0, tc.bid26)
 			if got := d.Candidates(); len(got) != 0 {
-				t.Fatalf("eleven-tick level tracked: %+v", got)
+				t.Fatalf("26-tick level tracked: %+v", got)
 			}
-			if got := update(1, tc.bid10); len(got) != 0 {
-				t.Fatalf("ten-tick level confirmed before persistence: %+v", got)
+			if got := update(1, tc.bid25); len(got) != 0 {
+				t.Fatalf("25-tick level confirmed before persistence: %+v", got)
 			}
-			if got := update(2, tc.bid10); len(got) != 1 || got[0].Price != level {
-				t.Fatalf("expected ten-tick level, got %+v", got)
+			if got := update(2, tc.bid25); len(got) != 1 || got[0].Price != level {
+				t.Fatalf("expected 25-tick level, got %+v", got)
 			}
-			update(3, tc.bid11)
+			update(3, tc.bid26)
 			if got := d.Candidates(); len(got) != 0 {
-				t.Fatalf("eleven-tick level remained eligible for delivery: %+v", got)
+				t.Fatalf("26-tick level remained eligible for delivery: %+v", got)
 			}
 		})
 	}
