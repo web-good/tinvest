@@ -120,44 +120,38 @@ func TestScannerFilters(t *testing.T) {
 	}
 }
 
-func TestLimitEntryAndTake(t *testing.T) {
-	for _, side := range []model.Side{model.Bid, model.Ask} {
-		t.Run(string(side), func(t *testing.T) {
-			s := engine(model.Linear)
-			sig := start(t, s, side)
+func TestLongLimitEntryAndTake(t *testing.T) {
+	for _, market := range []model.Market{model.Spot, model.Linear} {
+		t.Run(string(market), func(t *testing.T) {
+			s := engine(market)
+			sig := start(t, s, model.Bid)
 			s.MarkSent(sig, at(59))
-			_, fills := s.Apply(model.Event{Book: wideBook(60, side)}, at(60))
+			_, fills := s.Apply(model.Event{Book: wideBook(60, model.Bid)}, at(60))
 			require.Empty(t, fills)
-			_, fills = s.Apply(model.Event{Book: book(61, side)}, at(61))
+			_, fills = s.Apply(model.Event{Book: book(61, model.Bid)}, at(61))
 			require.Len(t, fills, 1)
 			entry := fills[0]
 			require.True(t, entry.Entry)
-			require.Equal(t, side, entry.Side)
+			require.Equal(t, model.Bid, entry.Side)
 			require.Equal(t, 1.5, entry.Qty)
-			wantPrice := sig.Ticks + 1
-			if side == model.Ask {
-				wantPrice = sig.Ticks - 1
-			}
-			require.InDelta(t, float64(wantPrice)*.1, entry.Price, 1e-10)
-			b := book(62, side)
-			if side == model.Bid {
-				b.Bids = append([]model.Level{{Ticks: 1007, Qty: 1.5}}, b.Bids...)
-				for i := range b.Asks {
-					b.Asks[i].Ticks += 9
-				}
-			} else {
-				b.Asks = append([]model.Level{{Ticks: 994, Qty: 1.5}}, b.Asks...)
-				for i := range b.Bids {
-					b.Bids[i].Ticks -= 9
-				}
+			require.InDelta(t, float64(sig.Ticks+1)*.1, entry.Price, 1e-10)
+			b := book(62, model.Bid)
+			b.Bids = append([]model.Level{{Ticks: 1007, Qty: 1.5}}, b.Bids...)
+			for i := range b.Asks {
+				b.Asks[i].Ticks += 9
 			}
 			_, fills = s.Apply(model.Event{Book: b}, at(62))
 			require.Len(t, fills, 1)
 			exit := fills[0]
 			require.Equal(t, "take", exit.Reason)
 			require.False(t, exit.Partial)
-			require.InDelta(t, .9-1.5*(entry.Price+exit.Price)*.00055, exit.NetPnL, 1e-10)
-			require.InDelta(t, exit.Price*1.5*.00055, exit.Fee, 1e-10)
+			cfg := strategy.DefaultConfig()
+			fee := cfg.SpotFee
+			if market == model.Linear {
+				fee = cfg.LinearFee
+			}
+			require.InDelta(t, .9-1.5*(entry.Price+exit.Price)*fee, exit.NetPnL, 1e-10)
+			require.InDelta(t, exit.Price*1.5*fee, exit.Fee, 1e-10)
 		})
 	}
 }
@@ -178,11 +172,16 @@ func TestEntryAtConfiguredOffsetOnConfirmation(t *testing.T) {
 	require.InDelta(t, 100.2, fills[0].Price, 1e-10)
 }
 
-func TestSpotDoesNotShort(t *testing.T) {
-	s := engine(model.Spot)
-	start(t, s, model.Ask)
-	_, fills := s.Apply(model.Event{Book: book(60, model.Ask)}, at(60))
-	require.Empty(t, fills)
+func TestAskDensitySignalsWithoutOpeningShort(t *testing.T) {
+	for _, market := range []model.Market{model.Spot, model.Linear} {
+		t.Run(string(market), func(t *testing.T) {
+			s := engine(market)
+			signal := start(t, s, model.Ask)
+			require.Equal(t, model.Ask, signal.Side)
+			_, fills := s.Apply(model.Event{Book: book(60, model.Ask)}, at(60))
+			require.Empty(t, fills)
+		})
+	}
 }
 
 func TestForcedExitPreservesCauseAndConsumedLiquidity(t *testing.T) {

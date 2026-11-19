@@ -23,12 +23,12 @@ type position struct {
 	forced                  string
 }
 
-// prepareEntry places one simulated limit per confirmed density episode.
+// prepareEntry places one simulated buy limit per confirmed bid density episode.
 func (s *Strategy) prepareEntry() {
 	var best *episode
 	for _, ep := range s.episodes {
 		sig := ep.signal
-		if ep.confirmed.IsZero() || ep.entryPlaced || (sig.Side == model.Ask && s.instrument.Key.Market != model.Linear) {
+		if ep.confirmed.IsZero() || ep.entryPlaced || sig.Side != model.Bid {
 			continue
 		}
 		if best == nil || preferred(sig, best.signal) {
