@@ -10,18 +10,18 @@ import (
 )
 
 type Config struct {
-	CandleEntries                         bool
-	RequireAverageVolume                  bool
-	MinNotional, MinMultiple, MaxDistance float64
-	Persistence, Freshness                time.Duration
-	PaperNotional, SpotFee, LinearFee     float64
-	StopTicks, EntryTicks                 int64
-	RewardRisk, MinTarget                 float64
+	CandleEntries                     bool
+	RequireAverageVolume              bool
+	MinNotional, MinMultiple          float64
+	Persistence, Freshness            time.Duration
+	PaperNotional, SpotFee, LinearFee float64
+	StopTicks, EntryTicks             int64
+	RewardRisk, MinTarget             float64
 }
 
 func DefaultConfig() Config {
 	return Config{
-		MinNotional: 100000, MinMultiple: 5, MaxDistance: .01,
+		MinNotional: 100000, MinMultiple: 5,
 		Persistence: time.Minute, Freshness: 3 * time.Second,
 		PaperNotional: 250, SpotFee: .001, LinearFee: .00055,
 		StopTicks: 2, EntryTicks: 1, RewardRisk: 2, MinTarget: .003,

@@ -115,7 +115,6 @@ func (s *ServiceProvider) GetDensityLiveService() (*densitylive.Participant, err
 	detector.Support.BounceBars = d.SupportBounceBars
 	detector.Support.Tolerance = d.SupportTolerance
 	detector.MinMultiple = d.MinMultiple
-	detector.MaxDistance = d.MaxDistance
 	detector.MinNeighbors = d.MinNeighbors
 	detector.MaxNeighbors = d.MaxNeighbors
 	detector.Persistence = d.Persistence

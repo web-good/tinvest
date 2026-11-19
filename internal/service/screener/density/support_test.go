@@ -91,7 +91,7 @@ func TestDetectorAppliesIndividualSizeAndSupport(t *testing.T) {
 			cfg.Support.Enabled = true
 			cfg.Persistence = 0
 			d := NewDetector(cfg)
-			d.SetInstruments([]Instrument{{ID: "x", Lot: 100, Turnover: tc.turnover, ProfileAt: now.Add(-tc.age), Supports: []Support{{Price: tc.support, Touches: 2}}}})
+			d.SetInstruments([]Instrument{{ID: "x", Lot: 100, PriceStep: Price{Units: 1}, Turnover: tc.turnover, ProfileAt: now.Add(-tc.age), Supports: []Support{{Price: tc.support, Touches: 2}}}})
 			b := Book{InstrumentID: "x", Lot: 100, Time: now, Asks: []Level{{Price: Price{Units: 251}, Quantity: 1}}, Bids: []Level{{Price: Price{Units: 250}, Quantity: tc.qty}, {Price: Price{Units: 249}, Quantity: 10}, {Price: Price{Units: 248}, Quantity: 10}, {Price: Price{Units: 247}, Quantity: 10}, {Price: Price{Units: 246}, Quantity: 10}, {Price: Price{Units: 245}, Quantity: 10}}}
 			got := d.Update(b, now)
 			if len(got) != tc.want {

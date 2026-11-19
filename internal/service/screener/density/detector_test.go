@@ -8,6 +8,7 @@ import (
 func TestDetectorPersistenceAndExpiry(t *testing.T) {
 	cfg := DefaultConfig()
 	d := NewDetector(cfg)
+	d.SetInstruments([]Instrument{{ID: "x", PriceStep: Price{Nano: 250_000_000}}})
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	book := Book{InstrumentID: "x", Lot: 100, Asks: []Level{{Price: Price{Units: 251}, Quantity: 10}}, Bids: []Level{{Price: Price{Units: 250}, Quantity: 100}, {Price: Price{Units: 247, Nano: 500000000}, Quantity: 203}, {Price: Price{Units: 247}, Quantity: 10}, {Price: Price{Units: 246}, Quantity: 10}, {Price: Price{Units: 245}, Quantity: 10}, {Price: Price{Units: 244}, Quantity: 10}, {Price: Price{Units: 243}, Quantity: 10}}}
 	for i := 0; i <= 60; i++ {
@@ -40,6 +41,7 @@ func TestDetectorRejectsInvalidBooksAndResets(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			d := NewDetector(DefaultConfig())
+			d.SetInstruments([]Instrument{{ID: "x", PriceStep: Price{Nano: 250_000_000}}})
 			b := book
 			b.Bids = append([]Level(nil), book.Bids...)
 			b.Asks = append([]Level(nil), book.Asks...)
@@ -58,6 +60,7 @@ func TestDetectorRejectsInvalidBooksAndResets(t *testing.T) {
 func TestDetectorIgnoresReorderedTimestamp(t *testing.T) {
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	d := NewDetector(DefaultConfig())
+	d.SetInstruments([]Instrument{{ID: "x", PriceStep: Price{Nano: 250_000_000}}})
 	b := Book{InstrumentID: "x", Lot: 100, Time: now, Asks: []Level{{Price: Price{Units: 251}, Quantity: 1}}, Bids: []Level{{Price: Price{Units: 250}, Quantity: 300}, {Price: Price{Units: 249}, Quantity: 10}, {Price: Price{Units: 248}, Quantity: 10}, {Price: Price{Units: 247}, Quantity: 10}, {Price: Price{Units: 246}, Quantity: 10}, {Price: Price{Units: 245}, Quantity: 10}}}
 	d.Update(b, now)
 	d.Update(b, now.Add(2*time.Second))
@@ -84,6 +87,7 @@ func TestDetectorExposesCandidatesBeforeMaturity(t *testing.T) {
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	b := Book{InstrumentID: "x", Lot: 100, Time: now, Asks: []Level{{Price: Price{Units: 251}, Quantity: 1}}, Bids: []Level{{Price: Price{Units: 250}, Quantity: 200}, {Price: Price{Units: 249}, Quantity: 10}, {Price: Price{Units: 248}, Quantity: 10}, {Price: Price{Units: 247}, Quantity: 10}, {Price: Price{Units: 246}, Quantity: 10}, {Price: Price{Units: 245}, Quantity: 10}}}
 	d := NewDetector(DefaultConfig())
+	d.SetInstruments([]Instrument{{ID: "x", PriceStep: Price{Nano: 250_000_000}}})
 	if len(d.Update(b, now)) != 0 {
 		t.Fatal("premature")
 	}
@@ -103,6 +107,7 @@ func TestDetectorPriceChangeStartsNewEpisode(t *testing.T) {
 	cfg.Persistence = time.Second
 	b := Book{InstrumentID: "x", Lot: 100, Time: now, Asks: []Level{{Price: Price{Units: 251}, Quantity: 1}}, Bids: []Level{{Price: Price{Units: 250}, Quantity: 250}, {Price: Price{Units: 249}, Quantity: 10}, {Price: Price{Units: 248}, Quantity: 10}, {Price: Price{Units: 247}, Quantity: 10}, {Price: Price{Units: 246}, Quantity: 10}, {Price: Price{Units: 245}, Quantity: 10}}}
 	d := NewDetector(cfg)
+	d.SetInstruments([]Instrument{{ID: "x", PriceStep: Price{Nano: 250_000_000}}})
 	d.Update(b, now)
 	b.Time = now.Add(time.Second)
 	if len(d.Update(b, b.Time)) != 1 {
@@ -124,6 +129,7 @@ func TestDetectorInclusiveVolumeAndMultiple(t *testing.T) {
 	cfg.Persistence = time.Nanosecond
 	b := Book{InstrumentID: "x", Lot: 100, Time: now, Asks: []Level{{Price: Price{Units: 251}, Quantity: 1}}, Bids: []Level{{Price: Price{Units: 250}, Quantity: 200}, {Price: Price{Units: 200}, Quantity: 50}, {Price: Price{Units: 125}, Quantity: 80}, {Price: Price{Units: 100}, Quantity: 100}, {Price: Price{Units: 80}, Quantity: 125}, {Price: Price{Units: 50}, Quantity: 200}}}
 	d := NewDetector(cfg)
+	d.SetInstruments([]Instrument{{ID: "x", PriceStep: Price{Nano: 250_000_000}}})
 	d.Update(b, now)
 	b.Time = now.Add(time.Second)
 	sig := d.Update(b, b.Time)
@@ -136,6 +142,7 @@ func TestDetectorExpiresByExchangeTimestamp(t *testing.T) {
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	b := Book{InstrumentID: "x", Lot: 100, Time: now.Add(-2 * time.Second), Asks: []Level{{Price: Price{Units: 251}, Quantity: 1}}, Bids: []Level{{Price: Price{Units: 250}, Quantity: 200}, {Price: Price{Units: 249}, Quantity: 10}, {Price: Price{Units: 248}, Quantity: 10}, {Price: Price{Units: 247}, Quantity: 10}, {Price: Price{Units: 246}, Quantity: 10}, {Price: Price{Units: 245}, Quantity: 10}}}
 	d := NewDetector(DefaultConfig())
+	d.SetInstruments([]Instrument{{ID: "x", PriceStep: Price{Nano: 250_000_000}}})
 	d.Update(b, now)
 	if len(d.Candidates()) != 1 {
 		t.Fatal("fresh book rejected")
@@ -143,5 +150,53 @@ func TestDetectorExpiresByExchangeTimestamp(t *testing.T) {
 	d.Expire(now.Add(2 * time.Second))
 	if len(d.Candidates()) != 0 {
 		t.Fatal("exchange timestamp expired but observation remains")
+	}
+}
+
+func TestDetectorUsesTenTicksFromBestBid(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		step  Price
+		bid10 Price
+		bid11 Price
+	}{
+		{"fractional step inside former percent limit", Price{Nano: 30_000_000}, Price{Units: 251, Nano: 200_000_000}, Price{Units: 251, Nano: 230_000_000}},
+		{"whole step outside former percent limit", Price{Units: 1}, Price{Units: 260, Nano: 900_000_000}, Price{Units: 261, Nano: 900_000_000}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := DefaultConfig()
+			cfg.Persistence = time.Second
+			d := NewDetector(cfg)
+			d.SetInstruments([]Instrument{{ID: "x", PriceStep: tc.step}})
+			now := time.Date(2026, 11, 19, 10, 0, 0, 0, time.UTC)
+			level := Price{Units: 250, Nano: 900_000_000}
+			book := Book{
+				InstrumentID: "x", Lot: 100,
+				Asks: []Level{{Price: Price{Units: 263}, Quantity: 1}},
+				Bids: []Level{{Quantity: 10}, {Price: level, Quantity: 250}},
+			}
+			for offset := range int64(5) {
+				book.Bids = append(book.Bids, Level{Price: Price{Units: 250 - offset}, Quantity: 10})
+			}
+			update := func(seconds int, bid Price) []Signal {
+				book.Time = now.Add(time.Duration(seconds) * time.Second)
+				book.Bids[0].Price = bid
+				return d.Update(book, book.Time)
+			}
+			update(0, tc.bid11)
+			if got := d.Candidates(); len(got) != 0 {
+				t.Fatalf("eleven-tick level tracked: %+v", got)
+			}
+			if got := update(1, tc.bid10); len(got) != 0 {
+				t.Fatalf("ten-tick level confirmed before persistence: %+v", got)
+			}
+			if got := update(2, tc.bid10); len(got) != 1 || got[0].Price != level {
+				t.Fatalf("expected ten-tick level, got %+v", got)
+			}
+			update(3, tc.bid11)
+			if got := d.Candidates(); len(got) != 0 {
+				t.Fatalf("eleven-tick level remained eligible for delivery: %+v", got)
+			}
+		})
 	}
 }

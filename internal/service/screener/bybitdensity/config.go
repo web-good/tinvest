@@ -49,7 +49,6 @@ func readOptions(args []string, out io.Writer, checkFeed bool) (options, error) 
 	fs.StringVar(&op.wsURL, "ws-url", "", "override the Bybit WebSocket base URL")
 	fs.Float64Var(&cfg.MinNotional, "min-notional", cfg.MinNotional, "minimum density notional in USDT")
 	fs.Float64Var(&cfg.MinMultiple, "min-multiple", cfg.MinMultiple, "minimum multiple of neighbor median")
-	fs.Float64Var(&cfg.MaxDistance, "max-distance", cfg.MaxDistance, "maximum price distance as a fraction")
 	fs.DurationVar(&cfg.Persistence, "persistence", cfg.Persistence, "minimum density confirmation time")
 	fs.DurationVar(&cfg.Freshness, "freshness", cfg.Freshness, "maximum age of a book update")
 	fs.Float64Var(&cfg.PaperNotional, "paper-notional", cfg.PaperNotional, "maximum virtual entry notional in USDT")
@@ -136,13 +135,13 @@ func (op options) validate(checkFeed bool) error {
 		return fmt.Errorf("state-dir must be set")
 	}
 	cfg := op.strategy
-	for _, value := range []float64{cfg.MinNotional, cfg.MinMultiple, cfg.MaxDistance, cfg.PaperNotional,
+	for _, value := range []float64{cfg.MinNotional, cfg.MinMultiple, cfg.PaperNotional,
 		cfg.SpotFee, cfg.RewardRisk, cfg.MinTarget} {
 		if math.IsNaN(value) || math.IsInf(value, 0) {
 			return fmt.Errorf("strategy parameters must be finite")
 		}
 	}
-	if cfg.MinNotional <= 0 || cfg.MinMultiple <= 0 || cfg.MaxDistance <= 0 || cfg.MaxDistance > 1 ||
+	if cfg.MinNotional <= 0 || cfg.MinMultiple <= 0 ||
 		cfg.Persistence <= 0 || cfg.Freshness <= 0 {
 		return fmt.Errorf("invalid density thresholds or durations")
 	}

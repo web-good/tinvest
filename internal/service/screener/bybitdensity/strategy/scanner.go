@@ -8,6 +8,8 @@ import (
 	"tinvest/internal/service/screener/bybitdensity/model"
 )
 
+const maxDistanceTicks = 10
+
 type episode struct {
 	signal                  model.Signal
 	firstReceipt, confirmed time.Time
@@ -19,12 +21,13 @@ func (s *Strategy) findCandidates(b *model.Book, now time.Time) {
 	s.candidates = s.candidates[:0]
 	levels := b.Bids
 	for i, l := range levels {
-		price := s.instrument.Price(l.Ticks)
-		value := price * l.Qty
-		distance := float64(absTicks(l.Ticks-levels[0].Ticks)) / float64(levels[0].Ticks)
-		if distance > s.cfg.MaxDistance {
+		ticks := levels[0].Ticks - l.Ticks
+		if ticks > maxDistanceTicks {
 			break
 		}
+		price := s.instrument.Price(l.Ticks)
+		value := price * l.Qty
+		distance := float64(ticks) / float64(levels[0].Ticks)
 		if value < s.cfg.MinNotional || len(levels) < 6 || !s.volumeAllows(l.Qty, now) {
 			continue
 		}

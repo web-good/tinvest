@@ -63,7 +63,6 @@ func run(ctx context.Context, args []string, out io.Writer) (retErr error) {
 	// Explicit flags override DENSITY_* environment values.
 	minRubles := fs.Float64("min-rubles", dc.MinRubles, "minimum density RUB (otherwise DENSITY_MIN_RUBLES)")
 	minMultiple := fs.Float64("min-multiple", dc.MinMultiple, "minimum median multiple (otherwise DENSITY_MIN_MULTIPLE)")
-	maxDistance := fs.Float64("max-distance", dc.MaxDistance, "relative distance: 0.01 = 1% (otherwise DENSITY_MAX_DISTANCE)")
 	persistence := fs.Duration("persistence", dc.Persistence, "density confirmation time (otherwise DENSITY_PERSISTENCE)")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -92,8 +91,6 @@ func run(ctx context.Context, args []string, out io.Writer) (retErr error) {
 			dc.MinRubles = *minRubles
 		case "min-multiple":
 			dc.MinMultiple = *minMultiple
-		case "max-distance":
-			dc.MaxDistance = *maxDistance
 		case "persistence":
 			dc.Persistence = *persistence
 		}
@@ -130,7 +127,6 @@ func run(ctx context.Context, args []string, out io.Writer) (retErr error) {
 	detector.Support.BounceBars = dc.SupportBounceBars
 	detector.Support.Tolerance = dc.SupportTolerance
 	detector.MinMultiple = dc.MinMultiple
-	detector.MaxDistance = dc.MaxDistance
 	detector.MinNeighbors = dc.MinNeighbors
 	detector.MaxNeighbors = dc.MaxNeighbors
 	detector.Persistence = dc.Persistence

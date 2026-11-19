@@ -34,19 +34,19 @@ type Signal struct {
 	ProfileUntil               time.Time
 }
 type Config struct {
-	RequireAverageVolume                bool
-	TurnoverFraction                    float64
-	Support                             SupportConfig
-	MinRubles, MinMultiple, MaxDistance float64
-	MinNeighbors, MaxNeighbors          int
-	Persistence, Freshness              time.Duration
-	MinTurnover, MaxLotPrice            float64
-	MaxBooks                            int
-	MaxTrades                           int
-	BookDepth                           int32
-	TradeReadiness                      time.Duration
+	RequireAverageVolume       bool
+	TurnoverFraction           float64
+	Support                    SupportConfig
+	MinRubles, MinMultiple     float64
+	MinNeighbors, MaxNeighbors int
+	Persistence, Freshness     time.Duration
+	MinTurnover, MaxLotPrice   float64
+	MaxBooks                   int
+	MaxTrades                  int
+	BookDepth                  int32
+	TradeReadiness             time.Duration
 }
 
 func DefaultConfig() Config {
-	return Config{MinRubles: 5_000_000, MinMultiple: 5, MaxDistance: .01, MinNeighbors: 5, MaxNeighbors: 10, Persistence: time.Minute, Freshness: 3 * time.Second, MinTurnover: 100_000_000, MaxLotPrice: 30_000, MaxBooks: 80, MaxTrades: 10, BookDepth: 50, TradeReadiness: 15 * time.Second}
+	return Config{MinRubles: 5_000_000, MinMultiple: 5, MinNeighbors: 5, MaxNeighbors: 10, Persistence: time.Minute, Freshness: 3 * time.Second, MinTurnover: 100_000_000, MaxLotPrice: 30_000, MaxBooks: 80, MaxTrades: 10, BookDepth: 50, TradeReadiness: 15 * time.Second}
 }

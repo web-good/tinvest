@@ -39,7 +39,7 @@ func TestBookOnlyConnectionGatesAdditionalTickersWithoutTradeSubscriptions(t *te
 	source := &booksOnlySource{events: make(chan []density.Event, 4)}
 	var allowed atomic.Bool
 	checked := make(chan struct{}, 2)
-	r := Runner{Source: source, BookOnly: true, Detector: cfg, Feed: f, Universe: []density.Instrument{{ID: "x", Ticker: "EXTRA", Lot: 1}}, AllowEntry: func(density.Instrument, density.Signal) bool {
+	r := Runner{Source: source, BookOnly: true, Detector: cfg, Feed: f, Universe: []density.Instrument{{ID: "x", Ticker: "EXTRA", Lot: 1, PriceStep: density.Price{Units: 1}}}, AllowEntry: func(density.Instrument, density.Signal) bool {
 		allow := allowed.Load()
 		select {
 		case checked <- struct{}{}:

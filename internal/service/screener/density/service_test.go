@@ -129,7 +129,9 @@ func TestConnectionSendsOnceAfterReadiness(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := make(chan error, 1)
-	go func() { done <- runConnection(ctx, svc, []Instrument{{ID: "x", Ticker: "X", Lot: 100}}) }()
+	go func() {
+		done <- runConnection(ctx, svc, []Instrument{{ID: "x", Ticker: "X", Lot: 100, PriceStep: Price{Nano: 100_000_000}}})
+	}()
 	book := Book{InstrumentID: "x", Lot: 100, Asks: []Level{{Price: Price{Units: 251}, Quantity: 1}}, Bids: []Level{{Price: Price{Units: 250}, Quantity: 200}, {Price: Price{Units: 249}, Quantity: 10}, {Price: Price{Units: 248}, Quantity: 10}, {Price: Price{Units: 247}, Quantity: 10}, {Price: Price{Units: 246}, Quantity: 10}, {Price: Price{Units: 245}, Quantity: 10}}}
 	for i := 0; i < 20; i++ {
 		book.Time = time.Now()
@@ -182,7 +184,9 @@ func TestQueuedSignalDroppedAfterBookInvalidated(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := make(chan error, 1)
-	go func() { done <- runConnection(ctx, svc, []Instrument{{ID: "x", Ticker: "X", Lot: 100}}) }()
+	go func() {
+		done <- runConnection(ctx, svc, []Instrument{{ID: "x", Ticker: "X", Lot: 100, PriceStep: Price{Nano: 100_000_000}}})
+	}()
 	book := Book{InstrumentID: "x", Lot: 100, Asks: []Level{{Price: Price{Units: 251}, Quantity: 1}}, Bids: []Level{{Price: Price{Units: 250}, Quantity: 250}, {Price: Price{Units: 249}, Quantity: 250}, {Price: Price{Units: 248}, Quantity: 10}, {Price: Price{Units: 247}, Quantity: 10}, {Price: Price{Units: 246}, Quantity: 10}, {Price: Price{Units: 245}, Quantity: 10}, {Price: Price{Units: 244}, Quantity: 10}}}
 	started := false
 	for i := 0; i < 40 && !started; i++ {
@@ -224,7 +228,9 @@ func TestConnectionKeepsSuccessDuringShutdown(t *testing.T) {
 	svc := NewService(cfg, emptySource{}, feedSource{feed}, sender, time.Millisecond)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- runConnection(ctx, svc, []Instrument{{ID: "x", Ticker: "X", Lot: 100}}) }()
+	go func() {
+		done <- runConnection(ctx, svc, []Instrument{{ID: "x", Ticker: "X", Lot: 100, PriceStep: Price{Nano: 100_000_000}}})
+	}()
 	book := Book{InstrumentID: "x", Lot: 100, Asks: []Level{{Price: Price{Units: 251}, Quantity: 1}}, Bids: []Level{{Price: Price{Units: 250}, Quantity: 200}, {Price: Price{Units: 249}, Quantity: 10}, {Price: Price{Units: 248}, Quantity: 10}, {Price: Price{Units: 247}, Quantity: 10}, {Price: Price{Units: 246}, Quantity: 10}, {Price: Price{Units: 245}, Quantity: 10}}}
 	started := false
 	for i := 0; i < 40 && !started; i++ {
@@ -287,7 +293,9 @@ func TestSendFailureRetriesWhileEpisodeRemainsCurrent(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := make(chan error, 1)
-	go func() { done <- runConnection(ctx, svc, []Instrument{{ID: "x", Ticker: "X", Lot: 100}}) }()
+	go func() {
+		done <- runConnection(ctx, svc, []Instrument{{ID: "x", Ticker: "X", Lot: 100, PriceStep: Price{Nano: 100_000_000}}})
+	}()
 	book := Book{InstrumentID: "x", Lot: 100, Asks: []Level{{Price: Price{Units: 251}, Quantity: 1}}, Bids: []Level{{Price: Price{Units: 250}, Quantity: 200}, {Price: Price{Units: 249}, Quantity: 10}, {Price: Price{Units: 248}, Quantity: 10}, {Price: Price{Units: 247}, Quantity: 10}, {Price: Price{Units: 246}, Quantity: 10}, {Price: Price{Units: 245}, Quantity: 10}}}
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
@@ -325,7 +333,9 @@ func TestNewEpisodeCooldown(t *testing.T) {
 			svc.sent[key{"x", Price{Units: 250}}] = time.Now().Add(-tc.elapsed)
 			ctx, cancel := context.WithCancel(context.Background())
 			done := make(chan error, 1)
-			go func() { done <- runConnection(ctx, svc, []Instrument{{ID: "x", Ticker: "X", Lot: 100}}) }()
+			go func() {
+				done <- runConnection(ctx, svc, []Instrument{{ID: "x", Ticker: "X", Lot: 100, PriceStep: Price{Nano: 100_000_000}}})
+			}()
 			defer func() { cancel(); <-done }()
 			b := Book{InstrumentID: "x", Lot: 100, Asks: []Level{{Price: Price{Units: 251}, Quantity: 1}}, Bids: []Level{{Price: Price{Units: 250}, Quantity: 200}, {Price: Price{Units: 249}, Quantity: 10}, {Price: Price{Units: 248}, Quantity: 10}, {Price: Price{Units: 247}, Quantity: 10}, {Price: Price{Units: 246}, Quantity: 10}, {Price: Price{Units: 245}, Quantity: 10}}}
 			tick := time.NewTicker(50 * time.Millisecond)
@@ -383,7 +393,9 @@ func TestTradingHaltResetsObservation(t *testing.T) {
 	svc := NewService(cfg, emptySource{}, feedSource{feed}, captureSender{sent}, time.Millisecond)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- runConnection(ctx, svc, []Instrument{{ID: "x", Ticker: "X", Lot: 100}}) }()
+	go func() {
+		done <- runConnection(ctx, svc, []Instrument{{ID: "x", Ticker: "X", Lot: 100, PriceStep: Price{Nano: 100_000_000}}})
+	}()
 	defer func() { cancel(); <-done }()
 	b := Book{InstrumentID: "x", Lot: 100, Asks: []Level{{Price: Price{Units: 251}, Quantity: 1}}, Bids: []Level{{Price: Price{Units: 250}, Quantity: 200}, {Price: Price{Units: 249}, Quantity: 10}, {Price: Price{Units: 248}, Quantity: 10}, {Price: Price{Units: 247}, Quantity: 10}, {Price: Price{Units: 246}, Quantity: 10}, {Price: Price{Units: 245}, Quantity: 10}}}
 	pump := func(d time.Duration) {
@@ -421,7 +433,9 @@ func TestPingDoesNotKeepObservationFresh(t *testing.T) {
 	svc := NewService(cfg, emptySource{}, feedSource{feed}, captureSender{sent}, time.Millisecond)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- runConnection(ctx, svc, []Instrument{{ID: "x", Ticker: "X", Lot: 100}}) }()
+	go func() {
+		done <- runConnection(ctx, svc, []Instrument{{ID: "x", Ticker: "X", Lot: 100, PriceStep: Price{Nano: 100_000_000}}})
+	}()
 	defer func() { cancel(); <-done }()
 	b := Book{InstrumentID: "x", Lot: 100, Asks: []Level{{Price: Price{Units: 251}, Quantity: 1}}, Bids: []Level{{Price: Price{Units: 250}, Quantity: 200}, {Price: Price{Units: 249}, Quantity: 10}, {Price: Price{Units: 248}, Quantity: 10}, {Price: Price{Units: 247}, Quantity: 10}, {Price: Price{Units: 246}, Quantity: 10}, {Price: Price{Units: 245}, Quantity: 10}}}
 	pump := func(d time.Duration, books bool) {

@@ -22,6 +22,7 @@ const (
 	sessionEnded   = "session_ended"
 	fillRecorded   = "fill"
 	messageSent    = "message_sent"
+	journalName    = "events.jsonl"
 )
 
 type position struct {
@@ -57,35 +58,40 @@ type Journal struct {
 	wake         chan struct{}
 	done         chan struct{}
 	isDelivering bool
+	dailyReset   bool
 	failed       error
 }
 
 // Open exclusively owns dir, recovers its journal, and starts a fresh session.
-func Open(dir string) (_ *Journal, err error) {
+func Open(dir string) (*Journal, error) {
 	if dir == "" {
 		return nil, errors.New("bybit journal: state directory is required")
 	}
-	dir, err = filepath.Abs(dir)
+	dir, err := filepath.Abs(dir)
 	if err != nil {
 		return nil, err
 	}
+	return open(dir, dir == dailyResetDir)
+}
+
+func open(dir string, dailyReset bool) (_ *Journal, err error) {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, err
 	}
-	lock, err := os.OpenFile(filepath.Join(dir, "runner.lock"), os.O_CREATE|os.O_RDWR, 0600)
+	lock, err := openLock(dir, dailyReset)
 	if err != nil {
 		return nil, err
 	}
 	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		return nil, errors.Join(fmt.Errorf("lock bybit journal %q: %w", dir, err), lock.Close())
 	}
-	j := &Journal{lock: lock, wake: make(chan struct{}, 1), done: make(chan struct{})}
+	j := &Journal{lock: lock, dailyReset: dailyReset, wake: make(chan struct{}, 1), done: make(chan struct{})}
 	defer func() {
 		if err != nil {
 			err = errors.Join(err, j.release())
 		}
 	}()
-	j.file, err = os.OpenFile(filepath.Join(dir, "events.jsonl"), os.O_CREATE|os.O_RDWR|os.O_APPEND, 0600)
+	j.file, err = os.OpenFile(filepath.Join(dir, journalName), os.O_CREATE|os.O_RDWR|os.O_APPEND, 0600)
 	if err != nil {
 		return nil, err
 	}

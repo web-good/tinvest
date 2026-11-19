@@ -69,6 +69,27 @@ func serve(ctx context.Context, market marketData, op options, screener, simulat
 	slog.Info("Bybit Density worker started", "state_dir", op.stateDir)
 	op.strategy.RequireAverageVolume = true
 	op.strategy.CandleEntries = true
+
+	for {
+		next := session.NextReset(time.Now())
+		if next.IsZero() {
+			return serveSession(ctx, market, op, session, screener, simulation)
+		}
+		runCtx, cancel := context.WithDeadline(ctx, next)
+		err := serveSession(runCtx, market, op, session, screener, simulation)
+		expired := runCtx.Err() == context.DeadlineExceeded
+		cancel()
+		if err != nil || !expired || ctx.Err() != nil {
+			return err
+		}
+		if err := session.Reset(); err != nil {
+			return fmt.Errorf("reset bybit simulation state: %w", err)
+		}
+		slog.Info("Bybit Density state cleared", "state_dir", op.stateDir)
+	}
+}
+
+func serveSession(ctx context.Context, market marketData, op options, session *journal.Journal, screener, simulation sendMessage) error {
 	hub := newAlertHub(op.strategy, session)
 	group, ctx := errgroup.WithContext(ctx)
 	group.Go(func() error { return session.Deliver(ctx, simulation) })

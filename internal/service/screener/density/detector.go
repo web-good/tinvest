@@ -6,6 +6,8 @@ import (
 	"time"
 )
 
+const maxDistanceTicks = 10
+
 type key struct {
 	id    string
 	price Price
@@ -70,6 +72,22 @@ func comparePrice(a, b Price) int {
 	return 1
 }
 func valid(p Price) bool { return p.Units >= 0 && p.Nano >= 0 && p.Nano < 1e9 && value(p) > 0 }
+func withinTickDistance(best, level, step Price) bool {
+	const nanosPerUnit = 1_000_000_000
+	units := best.Units - level.Units
+	nanos := int64(best.Nano) - int64(level.Nano)
+	if nanos < 0 {
+		units--
+		nanos += nanosPerUnit
+	}
+	// Compare whole units in groups of ten before comparing the remainder.
+	// This keeps the inclusive boundary exact without scaling the full prices.
+	if groups := units / maxDistanceTicks; groups != step.Units {
+		return groups < step.Units
+	}
+	return (units%maxDistanceTicks)*nanosPerUnit+nanos <= int64(step.Nano)*maxDistanceTicks
+}
+
 func (d *Detector) Update(b Book, now time.Time) []Signal {
 	d.Expire(now)
 	if b.InstrumentID == "" || b.Lot <= 0 || len(b.Bids) == 0 || len(b.Asks) == 0 || b.Time.IsZero() || now.Sub(b.Time) > d.cfg.Freshness || b.Time.After(now.Add(d.cfg.Freshness)) {
@@ -91,16 +109,21 @@ func (d *Detector) Update(b Book, now time.Time) []Signal {
 			return nil
 		}
 	}
-	best := value(b.Bids[0].Price)
-	if comparePrice(b.Asks[0].Price, b.Bids[0].Price) <= 0 {
+	instrument := d.instruments[b.InstrumentID]
+	bestBid := b.Bids[0].Price
+	best := value(bestBid)
+	if !valid(instrument.PriceStep) || comparePrice(b.Asks[0].Price, bestBid) <= 0 {
 		d.Reset(b.InstrumentID)
 		return nil
 	}
 	d.timestamps[b.InstrumentID] = b.Time
 	seen := make(map[key]bool)
 	var signals []Signal
-	average := d.instruments[b.InstrumentID].AverageVolume
+	average := instrument.AverageVolume
 	for i, l := range b.Bids {
+		if !withinTickDistance(bestBid, l.Price, instrument.PriceStep) {
+			break
+		}
 		if d.cfg.RequireAverageVolume && !average.Allows(float64(l.Quantity), now) {
 			continue
 		}
@@ -108,7 +131,7 @@ func (d *Detector) Update(b Book, now time.Time) []Signal {
 		distance := (best - price) / best
 		amount := price * float64(l.Quantity) * float64(b.Lot)
 		threshold, support, allowed := d.historicalFilter(b.InstrumentID, price, now)
-		if !allowed || distance > d.cfg.MaxDistance+1e-12 || amount < threshold || math.IsInf(amount, 0) || math.IsNaN(amount) {
+		if !allowed || amount < threshold || math.IsInf(amount, 0) || math.IsNaN(amount) {
 			continue
 		}
 		type neighbor struct {

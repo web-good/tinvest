@@ -26,7 +26,7 @@ func TestDetectorRequiresCurrentAverageVolume(t *testing.T) {
 		{99, now, 0},
 	} {
 		d.Reset("test")
-		d.SetInstruments([]Instrument{{ID: "test", AverageVolume: volume.Average{Quantity: tc.average, Until: tc.until}}})
+		d.SetInstruments([]Instrument{{ID: "test", PriceStep: Price{Units: 1}, AverageVolume: volume.Average{Quantity: tc.average, Until: tc.until}}})
 		b := Book{InstrumentID: "test", Lot: 10, Time: now, Asks: []Level{{Price: Price{Units: 1001}, Quantity: 1}}}
 		for offset := range int64(6) {
 			b.Bids = append(b.Bids, Level{Price: Price{Units: 1000 - offset}, Quantity: 1})

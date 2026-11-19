@@ -54,7 +54,6 @@ func (s *ServiceProvider) GetDensityService() (*density.Service, error) {
 	cfg.Support.BounceBars = c.SupportBounceBars
 	cfg.Support.Tolerance = c.SupportTolerance
 	cfg.MinMultiple = c.MinMultiple
-	cfg.MaxDistance = c.MaxDistance
 	cfg.MinNeighbors = c.MinNeighbors
 	cfg.MaxNeighbors = c.MaxNeighbors
 	cfg.Persistence = c.Persistence

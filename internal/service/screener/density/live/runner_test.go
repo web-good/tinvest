@@ -204,7 +204,7 @@ func TestMarketFeedRequiresAcknowledgements(t *testing.T) {
 			dc.TradeReadiness = 0
 			ctx, cancel := context.WithCancel(context.Background())
 			received := make(chan struct{})
-			r := Runner{Source: sourceFake{events: events, received: received}, Feed: f, Universe: []density.Instrument{{ID: "uid", Lot: 10}}, Detector: dc}
+			r := Runner{Source: sourceFake{events: events, received: received}, Feed: f, Universe: []density.Instrument{{ID: "uid", Lot: 10, PriceStep: density.Price{Units: 1}}}, Detector: dc}
 			done := make(chan error, 1)
 			go func() { done <- r.connection(ctx) }()
 			select {

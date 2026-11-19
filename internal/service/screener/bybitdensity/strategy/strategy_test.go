@@ -540,3 +540,39 @@ func TestBounceBuysAtThirdMinuteAsk(t *testing.T) {
 	require.True(t, fills[0].Entry)
 	require.InDelta(t, 100.4, fills[0].Price, 1e-8)
 }
+
+func TestAlertWaitsForBidWithinTenTicks(t *testing.T) {
+	for _, price := range []int64{500, 101_000} {
+		cfg := strategy.DefaultConfig()
+		cfg.MinNotional = 100
+		cfg.Persistence = time.Second
+		cfg.CandleEntries = true
+		s := strategy.New(model.Instrument{TickSize: 1}, cfg)
+
+		update := func(second int, distance int64) []model.Signal {
+			b := wideBook(second, model.Bid)
+			b.Snapshot = second == 0
+			for i := range b.Bids {
+				b.Bids[i].Ticks += price - 1000
+			}
+			bestBid := price + distance
+			b.Bids = append([]model.Level{{Ticks: bestBid, Qty: 1}}, b.Bids...)
+			b.Asks = []model.Level{{Ticks: bestBid + 1, Qty: 1}}
+			signals, _ := s.Apply(model.Event{Book: b, TradeReady: true}, at(second))
+			return signals
+		}
+
+		require.Empty(t, update(0, 11))
+		require.Empty(t, update(1, 11))
+		require.Empty(t, update(2, 10))
+		signals := update(3, 10)
+		require.Len(t, signals, 1)
+		require.Equal(t, at(2), signals[0].Since)
+		_, ok := s.Current(signals[0], at(3))
+		require.True(t, ok)
+
+		require.Empty(t, update(4, 11))
+		_, ok = s.Current(signals[0], at(4))
+		require.False(t, ok)
+	}
+}

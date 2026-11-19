@@ -29,13 +29,13 @@ func TestDensityConfigDestination(t *testing.T) {
 
 func TestDensityConfigLimits(t *testing.T) {
 	cfg := NewDensityConfig()
-	if cfg.MaxBooks != 80 || cfg.MaxTrades != 10 || cfg.BookDepth != 50 || cfg.MinRubles != 5_000_000 || cfg.MaxDistance != .01 {
+	if cfg.MaxBooks != 80 || cfg.MaxTrades != 10 || cfg.BookDepth != 50 || cfg.MinRubles != 5_000_000 {
 		t.Fatalf("unexpected defaults: %+v", cfg)
 	}
 	for _, change := range []func(*DensityConfig){
 		func(c *DensityConfig) { c.MaxBooks = 81 }, func(c *DensityConfig) { c.MaxTrades = 0 },
 		func(c *DensityConfig) { c.MinNeighbors = 0 }, func(c *DensityConfig) { c.Freshness = 0 },
-		func(c *DensityConfig) { c.MinMultiple = -1 }, func(c *DensityConfig) { c.MaxDistance = 2 },
+		func(c *DensityConfig) { c.MinMultiple = -1 },
 	} {
 		c := NewDensityConfig()
 		change(c)
