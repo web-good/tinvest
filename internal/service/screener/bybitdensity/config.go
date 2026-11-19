@@ -58,7 +58,7 @@ func readOptions(args []string, out io.Writer, checkFeed bool) (options, error) 
 	fs.Float64Var(&cfg.SpotFee, "spot-fee", cfg.SpotFee, "simulated spot commission per side as a fraction")
 	fs.Float64Var(&cfg.LinearFee, "linear-fee", cfg.LinearFee, "simulated perpetual commission per side as a fraction")
 	fs.Int64Var(&cfg.StopTicks, "stop-ticks", cfg.StopTicks, "stop distance behind density in price ticks")
-	fs.Int64Var(&cfg.EntryZoneTicks, "entry-zone-ticks", cfg.EntryZoneTicks, "maximum pinbar distance toward the market in price ticks")
+	fs.Int64Var(&cfg.EntryTicks, "entry-ticks", cfg.EntryTicks, "entry limit distance from density toward the market in price ticks")
 	fs.Float64Var(&cfg.RewardRisk, "reward-risk", cfg.RewardRisk, "take profit as a multiple of stop distance")
 	fs.Float64Var(&cfg.MinTarget, "min-target", cfg.MinTarget, "minimum take profit distance as a fraction")
 	if err := fs.Parse(args); err != nil {
@@ -151,7 +151,7 @@ func (op options) validate(checkFeed bool) error {
 		return fmt.Errorf("invalid density thresholds or durations")
 	}
 	if cfg.PaperNotional <= 0 || cfg.SpotFee < 0 || cfg.SpotFee >= 1 || cfg.LinearFee < 0 ||
-		cfg.LinearFee >= 1 || cfg.StopTicks <= 0 || cfg.EntryZoneTicks < 0 || cfg.RewardRisk <= 0 ||
+		cfg.LinearFee >= 1 || cfg.StopTicks <= 0 || cfg.EntryTicks < 1 || cfg.EntryTicks > 1000000 || cfg.RewardRisk <= 0 ||
 		cfg.MinTarget < 0 || cfg.MinTarget >= 1 {
 		return fmt.Errorf("invalid simulation sizing, fees or price parameters")
 	}

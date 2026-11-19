@@ -38,27 +38,31 @@ func book(second int, side model.Side) *model.Book {
 	return b
 }
 
+func wideBook(second int, side model.Side) *model.Book {
+	b := book(second, side)
+	if side == model.Bid {
+		for i := range b.Asks {
+			b.Asks[i].Ticks++
+		}
+	} else {
+		for i := range b.Bids {
+			b.Bids[i].Ticks--
+		}
+	}
+	return b
+}
+
 func start(t *testing.T, s *strategy.Strategy, side model.Side) model.Signal {
 	t.Helper()
-	b := book(58, side)
+	b := wideBook(58, side)
 	b.Snapshot = true
 	signals, fills := s.Apply(model.Event{Book: b, TradeReady: true}, at(58))
 	require.Empty(t, signals)
 	require.Empty(t, fills)
-	signals, _ = s.Apply(model.Event{Book: book(59, side)}, at(59))
+	signals, fills = s.Apply(model.Event{Book: wideBook(59, side)}, at(59))
+	require.Empty(t, fills)
 	require.Len(t, signals, 1)
 	return signals[0]
-}
-
-func candle(side model.Side) *model.Candle {
-	c := &model.Candle{Start: minute, End: at(60), Low: 999, High: 1011, Open: 1008, Close: 1010}
-	if side == model.Ask {
-		c.Low = 990
-		c.High = 1002
-		c.Open = 993
-		c.Close = 991
-	}
-	return c
 }
 
 func TestScannerCoverageFreshnessAndCooldown(t *testing.T) {
@@ -116,21 +120,26 @@ func TestScannerFilters(t *testing.T) {
 	}
 }
 
-func TestPinbarEntryAndTake(t *testing.T) {
+func TestLimitEntryAndTake(t *testing.T) {
 	for _, side := range []model.Side{model.Bid, model.Ask} {
 		t.Run(string(side), func(t *testing.T) {
 			s := engine(model.Linear)
 			sig := start(t, s, side)
 			s.MarkSent(sig, at(59))
-			_, fills := s.Apply(model.Event{Candle: candle(side)}, at(60))
+			_, fills := s.Apply(model.Event{Book: wideBook(60, side)}, at(60))
 			require.Empty(t, fills)
-			_, fills = s.Apply(model.Event{Book: book(60, side)}, at(60))
+			_, fills = s.Apply(model.Event{Book: book(61, side)}, at(61))
 			require.Len(t, fills, 1)
 			entry := fills[0]
 			require.True(t, entry.Entry)
 			require.Equal(t, side, entry.Side)
 			require.Equal(t, 1.5, entry.Qty)
-			b := book(61, side)
+			wantPrice := sig.Ticks + 1
+			if side == model.Ask {
+				wantPrice = sig.Ticks - 1
+			}
+			require.InDelta(t, float64(wantPrice)*.1, entry.Price, 1e-10)
+			b := book(62, side)
 			if side == model.Bid {
 				b.Bids = append([]model.Level{{Ticks: 1007, Qty: 1.5}}, b.Bids...)
 				for i := range b.Asks {
@@ -142,7 +151,7 @@ func TestPinbarEntryAndTake(t *testing.T) {
 					b.Bids[i].Ticks -= 9
 				}
 			}
-			_, fills = s.Apply(model.Event{Book: b}, at(61))
+			_, fills = s.Apply(model.Event{Book: b}, at(62))
 			require.Len(t, fills, 1)
 			exit := fills[0]
 			require.Equal(t, "take", exit.Reason)
@@ -153,33 +162,33 @@ func TestPinbarEntryAndTake(t *testing.T) {
 	}
 }
 
-func TestCandleCannotUseLaterConfirmationOrRepeat(t *testing.T) {
-	s := engine(model.Linear)
-	b := book(60, model.Bid)
+func TestEntryAtConfiguredOffsetOnConfirmation(t *testing.T) {
+	cfg := strategy.DefaultConfig()
+	cfg.MinNotional = 500
+	cfg.Persistence = time.Second
+	cfg.EntryTicks = 2
+	s := strategy.New(model.Instrument{Key: model.Key{Market: model.Spot, Symbol: "TESTUSDT"}, TickSize: .1, QtyStep: .1}, cfg)
+	b := wideBook(58, model.Bid)
 	b.Snapshot = true
-	s.Apply(model.Event{Book: b, TradeReady: true}, at(60))
-	s.Apply(model.Event{Book: book(61, model.Bid)}, at(61))
-	_, fills := s.Apply(model.Event{Candle: candle(model.Bid)}, at(61))
+	_, fills := s.Apply(model.Event{Book: b, TradeReady: true}, at(58))
 	require.Empty(t, fills)
-	s = engine(model.Spot)
+	signals, fills := s.Apply(model.Event{Book: wideBook(59, model.Bid)}, at(59))
+	require.Len(t, signals, 1)
+	require.Len(t, fills, 1)
+	require.InDelta(t, 100.2, fills[0].Price, 1e-10)
+}
+
+func TestSpotDoesNotShort(t *testing.T) {
+	s := engine(model.Spot)
 	start(t, s, model.Ask)
-	_, fills = s.Apply(model.Event{Candle: candle(model.Ask), Book: book(60, model.Ask)}, at(60))
-	require.Empty(t, fills)
-	s = engine(model.Linear)
-	start(t, s, model.Bid)
-	_, fills = s.Apply(model.Event{Candle: candle(model.Bid)}, at(60))
-	require.Empty(t, fills)
-	_, fills = s.Apply(model.Event{Book: book(64, model.Bid)}, at(64))
-	require.Empty(t, fills)
-	s.Apply(model.Event{Book: book(65, model.Bid)}, at(65))
-	_, fills = s.Apply(model.Event{Candle: candle(model.Bid)}, at(65))
+	_, fills := s.Apply(model.Event{Book: book(60, model.Ask)}, at(60))
 	require.Empty(t, fills)
 }
 
 func TestForcedExitPreservesCauseAndConsumedLiquidity(t *testing.T) {
 	s := engine(model.Spot)
 	start(t, s, model.Bid)
-	_, fills := s.Apply(model.Event{Candle: candle(model.Bid), Book: book(60, model.Bid)}, at(60))
+	_, fills := s.Apply(model.Event{Book: book(60, model.Bid)}, at(60))
 	require.Len(t, fills, 1)
 	entry := fills[0]
 	b := book(61, model.Bid)
@@ -225,42 +234,25 @@ func TestForcedExitPreservesCauseAndConsumedLiquidity(t *testing.T) {
 	require.Less(t, math.Abs(fills[0].Qty-.6), 1e-9)
 }
 
-func TestEntryRelocation(t *testing.T) {
-	for _, tc := range []struct {
-		name        string
-		distance    int
-		replacement float64
-		want        bool
-	}{
-		{"two ticks", 2, 6, true}, {"beyond two ticks", 3, 6, false}, {"too small", 1, 4.9, false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			s := engine(model.Spot)
-			start(t, s, model.Bid)
-			s.Apply(model.Event{Candle: candle(model.Bid)}, at(60))
-			b := book(60, model.Bid)
-			b.Bids[0].Qty = 1
-			b.Bids[tc.distance].Qty = tc.replacement
-			_, fills := s.Apply(model.Event{Book: b}, at(60))
-			if !tc.want {
-				require.Empty(t, fills)
-				return
-			}
-			require.Len(t, fills, 1)
-			b = book(61, model.Bid)
-			b.Bids = b.Bids[2:]
-			b.Bids[0].Qty = 6
-			_, fills = s.Apply(model.Event{Book: b}, at(61))
-			require.Len(t, fills, 1)
-			require.Equal(t, "stop", fills[0].Reason)
-		})
+func TestPendingEntryCancelsWhenDensityLeaves(t *testing.T) {
+	for _, qty := range []float64{0, 4.9} {
+		s := engine(model.Spot)
+		start(t, s, model.Bid)
+		b := book(60, model.Bid)
+		b.Bids[0].Qty = qty
+		b.Bids[1].Qty = 9 // A nearby wall does not replace the entry's density.
+		if qty == 0 {
+			b.Bids = b.Bids[1:]
+		}
+		_, fills := s.Apply(model.Event{Book: b}, at(60))
+		require.Empty(t, fills)
 	}
 }
 
 func TestPartialTakeThenLoss(t *testing.T) {
 	s := engine(model.Spot)
 	start(t, s, model.Bid)
-	_, fills := s.Apply(model.Event{Candle: candle(model.Bid), Book: book(60, model.Bid)}, at(60))
+	_, fills := s.Apply(model.Event{Book: book(60, model.Bid)}, at(60))
 	require.Len(t, fills, 1)
 	b := book(61, model.Bid)
 	b.Bids[0].Qty = .1
@@ -290,7 +282,7 @@ func TestPartialTakeThenLoss(t *testing.T) {
 func TestFreshSnapshotAfterDisconnectCanRelocateOpenPositionBeforeTradeAck(t *testing.T) {
 	s := engine(model.Spot)
 	start(t, s, model.Bid)
-	_, fills := s.Apply(model.Event{Candle: candle(model.Bid), Book: book(60, model.Bid)}, at(60))
+	_, fills := s.Apply(model.Event{Book: book(60, model.Bid)}, at(60))
 	require.Len(t, fills, 1)
 	s.Apply(model.Event{Reset: true}, at(61))
 	b := book(62, model.Bid)
@@ -299,35 +291,6 @@ func TestFreshSnapshotAfterDisconnectCanRelocateOpenPositionBeforeTradeAck(t *te
 	b.Bids[4].Qty = 6
 	signals, fills := s.Apply(model.Event{Book: b}, at(62))
 	require.Empty(t, signals)
-	require.Empty(t, fills)
-}
-
-func TestCandleUsesSizeAtCloseForDelayedDelivery(t *testing.T) {
-	s := engine(model.Spot)
-	start(t, s, model.Bid)
-	// The wall doubles on the last millisecond of the candle. The new minute starts with a smaller wall.
-	b := book(60, model.Bid)
-	b.Bids[0].Qty = 20
-	b.At = at(60).Add(-time.Millisecond)
-	b.Received = b.At
-	s.Apply(model.Event{Book: b}, b.At)
-	b = book(60, model.Bid)
-	b.Bids[0].Qty = 9
-	s.Apply(model.Event{Book: b}, at(60))
-	_, fills := s.Apply(model.Event{Candle: candle(model.Bid)}, at(61))
-	require.Empty(t, fills)
-}
-
-func TestFirstCandleBeforeConfirmationIsNeverReevaluated(t *testing.T) {
-	s := engine(model.Linear)
-	b := book(59, model.Bid)
-	b.Snapshot = true
-	s.Apply(model.Event{Book: b, TradeReady: true}, at(59))
-	_, fills := s.Apply(model.Event{Candle: candle(model.Bid)}, at(60))
-	require.Empty(t, fills)
-	// This update's exchange time is exactly the closure, but it arrived afterwards.
-	s.Apply(model.Event{Book: book(60, model.Bid)}, at(60))
-	_, fills = s.Apply(model.Event{Candle: candle(model.Bid)}, at(60))
 	require.Empty(t, fills)
 }
 
@@ -375,7 +338,7 @@ func TestEntryUsesLotSizeAndExchangeBounds(t *testing.T) {
 			cfg.Persistence = time.Second
 			s := strategy.New(model.Instrument{Key: model.Key{Market: model.Spot, Symbol: "TESTUSDT"}, TickSize: .1, QtyStep: .1, MinQty: tc.minQty, MaxQty: tc.maxQty, MinNotional: tc.minNotional, MinPrice: tc.minPrice, MaxPrice: tc.maxPrice}, cfg)
 			start(t, s, model.Bid)
-			_, fills := s.Apply(model.Event{Book: book(60, model.Bid), Candle: candle(model.Bid)}, at(60))
+			_, fills := s.Apply(model.Event{Book: book(60, model.Bid)}, at(60))
 			if tc.wantQty == 0 {
 				require.Empty(t, fills)
 				return
@@ -389,7 +352,6 @@ func TestEntryUsesLotSizeAndExchangeBounds(t *testing.T) {
 func TestUnexpectedFullSnapshotRestartsObservationAndCancelsSetup(t *testing.T) {
 	s := engine(model.Spot)
 	old := start(t, s, model.Bid)
-	s.Apply(model.Event{Candle: candle(model.Bid)}, at(60))
 	b := book(60, model.Bid)
 	b.Snapshot = true
 	signals, fills := s.Apply(model.Event{Book: b}, at(60))
@@ -397,8 +359,9 @@ func TestUnexpectedFullSnapshotRestartsObservationAndCancelsSetup(t *testing.T) 
 	require.Empty(t, fills)
 	_, ok := s.Current(old, at(60))
 	require.False(t, ok)
-	signals, _ = s.Apply(model.Event{Book: book(61, model.Bid)}, at(61))
+	signals, fills = s.Apply(model.Event{Book: book(61, model.Bid)}, at(61))
 	require.Len(t, signals, 1)
+	require.Len(t, fills, 1)
 }
 
 type delayedExecutor struct {
@@ -419,7 +382,7 @@ func TestExternalExecutionConfirmsAndSizesPosition(t *testing.T) {
 	venue := new(delayedExecutor)
 	s := strategy.NewWithExecutor(model.Instrument{Key: model.Key{Market: model.Linear, Symbol: "TESTUSDT"}, TickSize: .1, QtyStep: .1}, cfg, venue)
 	start(t, s, model.Bid)
-	_, fills := s.Apply(model.Event{Book: book(60, model.Bid), Candle: candle(model.Bid)}, at(60))
+	_, fills := s.Apply(model.Event{Book: book(60, model.Bid)}, at(60))
 	require.Empty(t, fills)
 	require.Len(t, venue.orders, 1)
 	entry := venue.orders[0]
@@ -453,11 +416,10 @@ func TestExternalExecutionConfirmsAndSizesPosition(t *testing.T) {
 	require.Same(t, b, venue.lastBook)
 }
 
-func TestConfirmationAtExclusiveEndBelongsToNextCandle(t *testing.T) {
+func TestPendingEntryExpiresWithStaleBook(t *testing.T) {
 	s := engine(model.Spot)
-	b := book(59, model.Bid)
-	b.Snapshot = true
-	s.Apply(model.Event{Book: b, TradeReady: true}, at(59))
-	_, fills := s.Apply(model.Event{Book: book(60, model.Bid), Candle: candle(model.Bid)}, at(60))
+	start(t, s, model.Bid)
+	s.Expire(at(63))
+	_, fills := s.Apply(model.Event{Book: book(63, model.Bid)}, at(63))
 	require.Empty(t, fills)
 }

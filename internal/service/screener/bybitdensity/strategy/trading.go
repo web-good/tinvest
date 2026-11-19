@@ -11,7 +11,7 @@ type setup struct {
 	side            model.Side
 	origin, watched int64
 	baseQty         float64
-	end             time.Time
+	limit           int64
 }
 
 type position struct {
@@ -21,30 +21,27 @@ type position struct {
 	forced                  string
 }
 
-// onCandle evaluates a closure exactly once, using only a currently uninterrupted episode.
-func (s *Strategy) onCandle(c model.Candle, now time.Time) {
-	if !c.Start.After(s.lastCandle) || !c.Start.Truncate(time.Minute).Equal(c.Start) || !c.End.Equal(c.Start.Add(time.Minute)) || now.Before(c.End) {
-		return
-	}
-	s.lastCandle = c.Start
-	if s.position != nil || s.outstanding != nil || s.book == nil || !now.Before(c.End.Add(time.Minute)) {
-		return
-	}
-	var best model.Signal
+// prepareEntry places one simulated limit per confirmed density episode.
+func (s *Strategy) prepareEntry() {
+	var best *episode
 	for _, ep := range s.episodes {
 		sig := ep.signal
-		if ep.confirmed.IsZero() || !ep.confirmed.Before(c.End) || (sig.Side == model.Ask && s.instrument.Key.Market != model.Linear) || !s.pinbar(c, sig) {
+		if ep.confirmed.IsZero() || ep.entryPlaced || (sig.Side == model.Ask && s.instrument.Key.Market != model.Linear) {
 			continue
 		}
-		if ep.lastClose.Equal(c.End) {
-			sig = ep.atClose
-		}
-		if best.Ticks == 0 || preferred(sig, best) {
-			best = sig
+		if best == nil || preferred(sig, best.signal) {
+			best = ep
 		}
 	}
-	if best.Ticks != 0 {
-		s.pending = &setup{side: best.Side, origin: best.Ticks, watched: best.Ticks, baseQty: best.Qty, end: c.End}
+	if best == nil {
+		return
+	}
+	best.entryPlaced = true
+	sig := best.signal
+	limit := sig.Ticks + direction(sig.Side)*s.cfg.EntryTicks
+	stop, target := s.entryPrices(sig.Side, sig.Ticks, limit)
+	if s.validPrice(limit) && s.validPrice(stop) && s.validPrice(target) {
+		s.pending = &setup{side: sig.Side, origin: sig.Ticks, watched: sig.Ticks, baseQty: sig.Qty, limit: limit}
 	}
 }
 
@@ -58,33 +55,14 @@ func preferred(a, b model.Signal) bool {
 	return a.Side == model.Bid && b.Side == model.Ask
 }
 
-func (s *Strategy) pinbar(c model.Candle, signal model.Signal) bool {
-	bottom, top := min(c.Open, c.Close), max(c.Open, c.Close)
-	if c.Low <= 0 || c.High <= c.Low || bottom < c.Low || top > c.High {
-		return false
-	}
-	span := float64(c.High - c.Low)
-	if float64(top-bottom) > span/4 {
-		return false
-	}
-	tail, opposite := float64(bottom-c.Low), float64(c.High-bottom)
-	offset := c.Low - signal.Ticks
-	if signal.Side == model.Ask {
-		tail, opposite = float64(c.High-top), float64(top-c.Low)
-		offset = signal.Ticks - c.High
-	}
-	return offset >= -s.cfg.StopTicks && offset <= s.cfg.EntryZoneTicks && opposite <= span/3 && tail >= .6*span
-}
-
-// follow maintains the watched level separately from the fixed origin of the pinbar.
-func (s *Strategy) follow(p *setup, beforeEntry bool) bool {
-	qty := quantityAt(levelsOn(s.book, p.side), p.side, p.watched)
-	if qty > 0 && (!beforeEntry || qty >= .5*p.baseQty) {
+// follow keeps tracking support for an open position if the wall is relocated.
+func (s *Strategy) follow(p *setup) bool {
+	if quantityAt(levelsOn(s.book, p.side), p.side, p.watched) > 0 {
 		return true
 	}
 	var best model.Signal
 	for _, sig := range s.candidates {
-		if sig.Side != p.side || sig.Qty < .5*p.baseQty || (beforeEntry && absTicks(sig.Ticks-p.origin) > 2) {
+		if sig.Side != p.side || sig.Qty < .5*p.baseQty {
 			continue
 		}
 		if best.Ticks == 0 || absTicks(sig.Ticks-p.watched) < absTicks(best.Ticks-p.watched) ||
@@ -99,12 +77,16 @@ func (s *Strategy) follow(p *setup, beforeEntry bool) bool {
 	return true
 }
 
-func (s *Strategy) entryPrices(p *setup, ticks int64) (stop, target int64) {
-	sign := int64(1)
-	if p.side == model.Ask {
-		sign = -1
+func direction(side model.Side) int64 {
+	if side == model.Ask {
+		return -1
 	}
-	stop = p.origin - sign*s.cfg.StopTicks
+	return 1
+}
+
+func (s *Strategy) entryPrices(side model.Side, origin, ticks int64) (stop, target int64) {
+	sign := direction(side)
+	stop = origin - sign*s.cfg.StopTicks
 	risk := sign * (ticks - stop)
 	if risk <= 0 {
 		return stop, 0
@@ -119,24 +101,15 @@ func (s *Strategy) validPrice(ticks int64) bool {
 }
 
 func (s *Strategy) entryIntent(p *setup) (Order, bool) {
-	if !s.follow(p, true) {
+	if quantityAt(levelsOn(s.book, p.side), p.side, p.origin) < .5*p.baseQty {
 		s.pending = nil
 		return Order{}, false
 	}
-	if s.book.At.Before(p.end) {
-		return Order{}, false
-	}
-	// One IOC attempt per setup, including when available quantity misses the minimum.
-	s.pending = nil
-	if !s.book.At.Before(p.end.Add(time.Minute)) {
-		return Order{}, false
-	}
 	level := levelsOn(s.book, oppositeSide(p.side))[0]
-	stop, target := s.entryPrices(p, level.Ticks)
-	if !s.validPrice(level.Ticks) || !s.validPrice(stop) || !s.validPrice(target) {
+	if direction(p.side)*(level.Ticks-p.limit) > 0 {
 		return Order{}, false
 	}
-	price := s.instrument.Price(level.Ticks)
+	price := s.instrument.Price(max(p.limit, level.Ticks))
 	qty := s.cfg.PaperNotional / price
 	if s.instrument.MaxQty > 0 {
 		qty = min(qty, s.instrument.MaxQty)
@@ -146,7 +119,7 @@ func (s *Strategy) entryIntent(p *setup) (Order, bool) {
 	if steps <= 0 || !meetsMinimum(s.instrument, qty, price) {
 		return Order{}, false
 	}
-	return Order{Entry: true, Reason: "entry", Direction: p.side, Steps: steps, LimitTicks: level.Ticks}, true
+	return Order{Entry: true, Reason: "entry", Direction: p.side, Steps: steps, LimitTicks: p.limit}, true
 }
 
 func (s *Strategy) exitIntent(p *position) (Order, bool) {
@@ -155,7 +128,7 @@ func (s *Strategy) exitIntent(p *position) (Order, bool) {
 		switch {
 		case (p.side == model.Bid && best <= p.stop) || (p.side == model.Ask && best >= p.stop):
 			p.forced = "stop"
-		case !s.follow(&p.setup, false):
+		case !s.follow(&p.setup):
 			p.forced = "density_lost"
 		}
 	}
@@ -217,7 +190,8 @@ func (s *Strategy) ConfirmExecution(m Execution, now time.Time) (model.Fill, boo
 	}
 	f := model.Fill{Key: s.instrument.Key, Side: order.Direction, Entry: order.Entry, Reason: order.Reason, Price: m.Quote / qty, Qty: qty, Fee: m.Quote * feeRate, At: now}
 	if order.Entry {
-		stop, target := s.entryPrices(pending, s.instrument.Ticks(f.Price))
+		s.pending = nil
+		stop, target := s.entryPrices(pending.side, pending.origin, s.instrument.Ticks(f.Price))
 		s.position = &position{setup: *pending, entry: f.Price, remaining: m.Steps, stop: stop, target: target}
 		return f, true
 	}

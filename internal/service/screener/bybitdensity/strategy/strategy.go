@@ -1,4 +1,4 @@
-// Package strategy detects persistent Bybit order book levels and trades pinbars in a paper session.
+// Package strategy detects persistent Bybit order book levels and simulates limit entries.
 package strategy
 
 import (
@@ -11,7 +11,7 @@ type Config struct {
 	MinNotional, MinMultiple, MaxDistance float64
 	Persistence, Freshness                time.Duration
 	PaperNotional, SpotFee, LinearFee     float64
-	StopTicks, EntryZoneTicks             int64
+	StopTicks, EntryTicks                 int64
 	RewardRisk, MinTarget                 float64
 }
 
@@ -20,7 +20,7 @@ func DefaultConfig() Config {
 		MinNotional: 100000, MinMultiple: 5, MaxDistance: .01,
 		Persistence: time.Minute, Freshness: 3 * time.Second,
 		PaperNotional: 250, SpotFee: .001, LinearFee: .00055,
-		StopTicks: 2, RewardRisk: 2, MinTarget: .003,
+		StopTicks: 2, EntryTicks: 1, RewardRisk: 2, MinTarget: .003,
 	}
 }
 
@@ -39,7 +39,6 @@ type Strategy struct {
 	sent                     map[priceLevel]time.Time
 	nextCleanup              time.Time
 	trades                   tradeIDs
-	lastCandle               time.Time
 	pending                  *setup
 	position                 *position
 	executor                 Executor
@@ -67,9 +66,6 @@ func NewWithExecutor(instrument model.Instrument, cfg Config, executor Executor)
 func (s *Strategy) Expire(now time.Time) {
 	if s.book != nil && !s.fresh(s.book, now) {
 		s.clearObservation()
-	}
-	if s.pending != nil && !now.Before(s.pending.end.Add(time.Minute)) {
-		s.pending = nil
 	}
 	if !now.Before(s.nextCleanup) {
 		for level, until := range s.sent {
@@ -122,15 +118,15 @@ func (s *Strategy) Apply(e model.Event, now time.Time) ([]model.Signal, []model.
 		s.findCandidates(b)
 		if s.tradeReady {
 			signals = s.observe(b, now)
+			if s.position == nil && s.pending == nil && s.outstanding == nil {
+				s.prepareEntry()
+			}
 		}
 	}
 	for _, trade := range e.Trades {
 		s.observeTrade(trade)
 	}
-	if e.Candle != nil {
-		s.onCandle(*e.Candle, now)
-	}
-	if s.book == nil || (e.Book == nil && e.Candle == nil) {
+	if s.book == nil || e.Book == nil {
 		return signals, nil
 	}
 	return signals, s.execute(now)

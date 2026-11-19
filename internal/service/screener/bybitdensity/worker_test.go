@@ -71,6 +71,22 @@ func TestOptions(t *testing.T) {
 	}
 }
 
+func TestOptionsReadBybitEntryAndRiskFromEnv(t *testing.T) {
+	t.Setenv("BYBIT_DENSITY_ENTRY_TICKS", "3")
+	t.Setenv("BYBIT_DENSITY_STOP_TICKS", "4")
+	t.Setenv("BYBIT_DENSITY_REWARD_RISK", "5")
+	t.Setenv("DENSITY_LIVE_STOP_TICKS", "8")
+	t.Setenv("DENSITY_LIVE_RR", "9")
+	t.Setenv("DENSITY_LIVE_ENTRY_ZONE_TICKS", "10")
+	op, err := readOptions(nil, io.Discard, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg := op.strategy; cfg.EntryTicks != 3 || cfg.StopTicks != 4 || cfg.RewardRisk != 5 {
+		t.Fatalf("incorrect entry and risk parameters: %+v", cfg)
+	}
+}
+
 func TestFormatFill(t *testing.T) {
 	msg := formatFill(model.Fill{
 		Key:  model.Key{Market: model.Linear, Symbol: "BTCUSDT"},
@@ -101,6 +117,11 @@ func (r replayMarket) Stream(ctx context.Context, instruments []model.Instrument
 			book.Asks = append(book.Asks, model.Level{Ticks: 1001 + n, Qty: 1})
 		}
 		book.Bids[0].Qty, book.Asks[0].Qty = 10, 1.5
+		if at.Before(end) {
+			for i := range book.Asks {
+				book.Asks[i].Ticks++
+			}
+		}
 		return book
 	}
 	for _, event := range []model.Event{
@@ -118,9 +139,7 @@ func (r replayMarket) Stream(ctx context.Context, instruments []model.Instrument
 			return ctx.Err()
 		case <-r.advance:
 		}
-		if err := emit(model.Event{Key: key, Book: makeBook(end, false), Candle: &model.Candle{
-			Start: end.Add(-time.Minute), End: end, Low: 999, High: 1011, Open: 1008, Close: 1010,
-		}}); err != nil {
+		if err := emit(model.Event{Key: key, Book: makeBook(end, false)}); err != nil {
 			return err
 		}
 		take := makeBook(end.Add(time.Millisecond), false)

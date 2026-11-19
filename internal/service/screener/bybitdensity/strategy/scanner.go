@@ -12,9 +12,7 @@ type episode struct {
 	signal                  model.Signal
 	firstReceipt, confirmed time.Time
 	seen, delivered         bool
-	// Keep the last eligible observation before the next M1 interval begins.
-	lastClose, lastBook time.Time
-	atClose             model.Signal
+	entryPlaced             bool
 }
 
 func (s *Strategy) findCandidates(b *model.Book) {
@@ -45,7 +43,6 @@ func (s *Strategy) observe(b *model.Book, now time.Time) []model.Signal {
 		ep.seen = false
 	}
 	var signals []model.Signal
-	boundary := b.At.Truncate(time.Minute)
 	for _, sig := range s.candidates {
 		k := priceLevel{sig.Side, sig.Ticks}
 		ep := s.episodes[k]
@@ -54,14 +51,11 @@ func (s *Strategy) observe(b *model.Book, now time.Time) []model.Signal {
 			s.episodes[k] = ep
 			sig.Since = b.At
 		} else {
-			if ep.lastBook.Before(boundary) {
-				ep.lastClose, ep.atClose = boundary, ep.signal
-			}
 			sig.Since, sig.TradeQty = ep.signal.Since, ep.signal.TradeQty
 		}
 		sig.Observed = min(b.At.Sub(sig.Since), b.Received.Sub(ep.firstReceipt))
 		sig.TradeCoverage = sig.Observed
-		ep.seen, ep.signal, ep.lastBook = true, sig, b.At
+		ep.seen, ep.signal = true, sig
 		if ep.confirmed.IsZero() && sig.Observed >= s.cfg.Persistence {
 			ep.confirmed = b.At
 		}
