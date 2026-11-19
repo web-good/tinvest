@@ -172,13 +172,18 @@ func TestEntryAtConfiguredOffsetOnConfirmation(t *testing.T) {
 	require.InDelta(t, 100.2, fills[0].Price, 1e-10)
 }
 
-func TestAskDensitySignalsWithoutOpeningShort(t *testing.T) {
+func TestScannerIgnoresAskDensity(t *testing.T) {
 	for _, market := range []model.Market{model.Spot, model.Linear} {
 		t.Run(string(market), func(t *testing.T) {
 			s := engine(market)
-			signal := start(t, s, model.Ask)
-			require.Equal(t, model.Ask, signal.Side)
-			_, fills := s.Apply(model.Event{Book: book(60, model.Ask)}, at(60))
+			b := book(58, model.Ask)
+			b.Snapshot = true
+			signals, fills := s.Apply(model.Event{Book: b, TradeReady: true}, at(58))
+			require.Empty(t, signals)
+			require.Empty(t, fills)
+
+			signals, fills = s.Apply(model.Event{Book: book(59, model.Ask)}, at(59))
+			require.Empty(t, signals)
 			require.Empty(t, fills)
 		})
 	}

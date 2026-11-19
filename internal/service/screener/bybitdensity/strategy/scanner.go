@@ -17,24 +17,22 @@ type episode struct {
 
 func (s *Strategy) findCandidates(b *model.Book) {
 	s.candidates = s.candidates[:0]
-	for _, side := range []model.Side{model.Bid, model.Ask} {
-		levels := levelsOn(b, side)
-		for i, l := range levels {
-			price := s.instrument.Price(l.Ticks)
-			value := price * l.Qty
-			distance := float64(absTicks(l.Ticks-levels[0].Ticks)) / float64(levels[0].Ticks)
-			if distance > s.cfg.MaxDistance {
-				break
-			}
-			if value < s.cfg.MinNotional || len(levels) < 6 {
-				continue
-			}
-			multiple := value / s.medianNeighbors(levels, i)
-			if multiple < s.cfg.MinMultiple {
-				continue
-			}
-			s.candidates = append(s.candidates, model.Signal{Key: s.instrument.Key, Side: side, Ticks: l.Ticks, Price: price, Qty: l.Qty, Notional: value, Distance: distance, Multiple: multiple})
+	levels := b.Bids
+	for i, l := range levels {
+		price := s.instrument.Price(l.Ticks)
+		value := price * l.Qty
+		distance := float64(absTicks(l.Ticks-levels[0].Ticks)) / float64(levels[0].Ticks)
+		if distance > s.cfg.MaxDistance {
+			break
 		}
+		if value < s.cfg.MinNotional || len(levels) < 6 {
+			continue
+		}
+		multiple := value / s.medianNeighbors(levels, i)
+		if multiple < s.cfg.MinMultiple {
+			continue
+		}
+		s.candidates = append(s.candidates, model.Signal{Key: s.instrument.Key, Side: model.Bid, Ticks: l.Ticks, Price: price, Qty: l.Qty, Notional: value, Distance: distance, Multiple: multiple})
 	}
 }
 
@@ -138,10 +136,8 @@ func (s *Strategy) observeTrade(trade model.Trade) {
 	if !s.tradeReady || trade.Qty <= 0 || math.IsNaN(trade.Qty) || math.IsInf(trade.Qty, 0) || !s.trades.add(trade.ID) {
 		return
 	}
-	for _, side := range []model.Side{model.Bid, model.Ask} {
-		if ep := s.episodes[priceLevel{side, trade.Ticks}]; ep != nil && !trade.At.Before(ep.signal.Since) {
-			ep.signal.TradeQty += trade.Qty
-		}
+	if ep := s.episodes[priceLevel{model.Bid, trade.Ticks}]; ep != nil && !trade.At.Before(ep.signal.Since) {
+		ep.signal.TradeQty += trade.Qty
 	}
 }
 
