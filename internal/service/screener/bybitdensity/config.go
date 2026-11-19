@@ -1,4 +1,4 @@
-package main
+package bybitdensity
 
 import (
 	"flag"
@@ -26,16 +26,15 @@ type options struct {
 	screener      telegramDestination
 	simulation    telegramDestination
 	telegramToken string
-	checkFeed     bool
 	checkTimeout  time.Duration
 	restURL       string
 	wsURL         string
 }
 
-func readOptions(args []string, out io.Writer) (options, error) {
+func readOptions(args []string, out io.Writer, checkFeed bool) (options, error) {
 	op := options{strategy: strategy.DefaultConfig()}
 	cfg := &op.strategy
-	fs := flag.NewFlagSet("bybit-density", flag.ContinueOnError)
+	fs := flag.NewFlagSet("bybit-check-feed", flag.ContinueOnError)
 	fs.SetOutput(out)
 	envFile := fs.String("env-file", "", "optional dotenv file")
 	spot := fs.String("spot-symbols", "", "comma-separated spot USDT pairs; empty selects by turnover")
@@ -47,7 +46,6 @@ func readOptions(args []string, out io.Writer) (options, error) {
 	fs.IntVar(&op.screener.topicID, "screener-topic-id", 0, "optional Telegram topic for confirmed densities")
 	fs.Int64Var(&op.simulation.chatID, "simulation-chat-id", 0, "Telegram chat for simulated fills")
 	fs.IntVar(&op.simulation.topicID, "simulation-topic-id", 0, "optional Telegram topic for simulated fills")
-	fs.BoolVar(&op.checkFeed, "check-feed", false, "verify public BTCUSDT feeds in both markets and exit")
 	fs.DurationVar(&op.checkTimeout, "check-timeout", 90*time.Second, "timeout for public feed check")
 	fs.StringVar(&op.restURL, "rest-url", "", "override the Bybit REST base URL")
 	fs.StringVar(&op.wsURL, "ws-url", "", "override the Bybit WebSocket base URL")
@@ -109,7 +107,7 @@ func readOptions(args []string, out io.Writer) (options, error) {
 	}
 	op.spotSymbols = splitSymbols(*spot)
 	op.linearSymbols = splitSymbols(*linear)
-	return op, op.validate()
+	return op, op.validate(checkFeed)
 }
 
 func splitSymbols(input string) []string {
@@ -123,7 +121,7 @@ func splitSymbols(input string) []string {
 	return items
 }
 
-func (op options) validate() error {
+func (op options) validate(checkFeed bool) error {
 	switch {
 	case op.symbolLimit < 1 || op.symbolLimit > 100:
 		return fmt.Errorf("symbol-limit must be between 1 and 100 per market")
@@ -133,12 +131,12 @@ func (op options) validate() error {
 		return fmt.Errorf("depth must be 50, 200 or 1000")
 	case op.checkTimeout <= 0:
 		return fmt.Errorf("check-timeout must be positive")
-	case !op.checkFeed && op.telegramToken == "":
+	case !checkFeed && op.telegramToken == "":
 		return fmt.Errorf("set TELEGRAM or %sTELEGRAM_TOKEN", envPrefix)
-	case !op.checkFeed && (op.screener.chatID == 0 || op.simulation.chatID == 0 ||
+	case !checkFeed && (op.screener.chatID == 0 || op.simulation.chatID == 0 ||
 		op.screener.topicID < 0 || op.simulation.topicID < 0 || op.screener == op.simulation):
 		return fmt.Errorf("configure two different Telegram destinations using chat IDs and optional topic IDs")
-	case !op.checkFeed && strings.TrimSpace(op.stateDir) == "":
+	case !checkFeed && strings.TrimSpace(op.stateDir) == "":
 		return fmt.Errorf("state-dir must be set")
 	}
 	cfg := op.strategy

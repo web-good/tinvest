@@ -7,6 +7,7 @@ import (
 	"tinvest/internal/config"
 	"tinvest/internal/enum"
 	newsscheduler "tinvest/internal/service/news/scheduler"
+	"tinvest/internal/service/screener/bybitdensity"
 	goldenx "tinvest/internal/service/trading_strategy/golden_x/dto"
 	gxmodel "tinvest/internal/service/trading_strategy/golden_x/model"
 	"tinvest/internal/service/trading_strategy/golden_x/scheduler"
@@ -51,7 +52,7 @@ func (a *App) Run(ctx context.Context) error {
 		return err
 	}
 	if densityService != nil {
-		defer startDensityWorker(ctx, densityService)()
+		defer startWorker(ctx, "density", densityService)()
 	}
 	// The continuous participant uses the same account/coordinator as the candle
 	// runner. Its startup failure does not stop management of other strategies.
@@ -59,7 +60,12 @@ func (a *App) Run(ctx context.Context) error {
 	if liveErr != nil {
 		logger.ErrorContext(ctx, "density live initialization failed", liveErr.Error())
 	} else if densityLive != nil {
-		defer startDensityWorker(ctx, densityLive)()
+		defer startWorker(ctx, "density", densityLive)()
+	}
+	if bybit, err := bybitdensity.NewWorkerFromEnv(); err != nil {
+		logger.ErrorContext(ctx, "Bybit Density configuration failed", err.Error())
+	} else if bybit != nil {
+		defer startWorker(ctx, "Bybit Density", bybit)()
 	}
 
 	if a.config.AppEnv == "prod" {
@@ -232,20 +238,20 @@ func (a *App) runProd(ctx context.Context) {
 	wg.Wait()
 }
 
-type densityWorker interface{ Run(context.Context) error }
+type appWorker interface{ Run(context.Context) error }
 
-func startDensityWorker(ctx context.Context, worker densityWorker) func() {
+func startWorker(ctx context.Context, name string, worker appWorker) func() {
 	workerCtx, cancel := context.WithCancel(ctx)
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		if err := worker.Run(workerCtx); shouldLogDensityWorkerError(err, workerCtx.Err()) {
-			logger.ErrorContext(ctx, "density worker failed", err.Error())
+		if err := worker.Run(workerCtx); shouldLogWorkerError(err, workerCtx.Err()) {
+			logger.ErrorContext(ctx, name+" worker failed", err.Error())
 		}
 	}()
 	return func() { cancel(); <-done }
 }
 
-func shouldLogDensityWorkerError(err, ctxErr error) bool {
+func shouldLogWorkerError(err, ctxErr error) bool {
 	return err != nil && (ctxErr == nil || err != context.Canceled && err != context.DeadlineExceeded)
 }

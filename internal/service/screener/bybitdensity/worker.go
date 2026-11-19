@@ -1,16 +1,15 @@
-// bybit-density scans public Bybit books and runs a virtual trading session.
-package main
+// Package bybitdensity scans public Bybit books and runs a virtual trading session.
+package bybitdensity
 
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
-	"os/signal"
-	"syscall"
+	"strconv"
+	"strings"
 	"time"
 
 	"tinvest/internal/service/screener/bybitdensity/feed"
@@ -25,24 +24,33 @@ type marketData interface {
 	Stream(context.Context, []model.Instrument, int, func(model.Event) error) error
 }
 
-func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	if err := run(ctx, os.Args[1:], os.Stdout); err != nil && !errors.Is(err, flag.ErrHelp) {
-		fmt.Fprintln(os.Stderr, "bybit-density:", err)
-		os.Exit(1)
-	}
+type Worker struct {
+	options options
 }
 
-func run(ctx context.Context, args []string, out io.Writer) error {
-	op, err := readOptions(args, out)
+// NewWorkerFromEnv loads the Bybit worker only when enabled.
+func NewWorkerFromEnv() (*Worker, error) {
+	value := strings.TrimSpace(os.Getenv(envPrefix + "ENABLED"))
+	if value == "" {
+		return nil, nil
+	}
+	enabled, err := strconv.ParseBool(value)
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("%sENABLED: %w", envPrefix, err)
 	}
+	if !enabled {
+		return nil, nil
+	}
+	op, err := readOptions(nil, io.Discard, false)
+	if err != nil {
+		return nil, err
+	}
+	return &Worker{options: op}, nil
+}
+
+func (w *Worker) Run(ctx context.Context) error {
+	op := w.options
 	market := feed.NewClient(op.restURL, op.wsURL)
-	if op.checkFeed {
-		return checkFeed(ctx, market, op, out)
-	}
 	send, err := telegramSender(op.telegramToken)
 	if err != nil {
 		return err
@@ -57,6 +65,7 @@ func serve(ctx context.Context, market marketData, op options, screener, simulat
 		return fmt.Errorf("open simulation state: %w", err)
 	}
 	defer func() { retErr = errors.Join(retErr, session.Close()) }()
+	slog.Info("Bybit Density worker started", "state_dir", op.stateDir)
 	hub := newAlertHub(op.strategy, session)
 	group, ctx := errgroup.WithContext(ctx)
 	group.Go(func() error { return session.Deliver(ctx, simulation) })
@@ -94,8 +103,15 @@ func runMarket(ctx context.Context, market marketData, category model.Market, sy
 		}
 		started := time.Now()
 		var recordErr error
+		var bookConnected bool
 		err := market.Stream(ctx, instruments, op.depth, func(event model.Event) error {
-			recordErr = hub.apply(event, time.Now())
+			now := time.Now()
+			if book := event.Book; !bookConnected && book != nil && book.Snapshot &&
+				now.Sub(book.At).Abs() <= op.strategy.Freshness {
+				bookConnected = true
+				slog.Info("Bybit order book connected", "market", category, "symbol", event.Key.Symbol)
+			}
+			recordErr = hub.apply(event, now)
 			return recordErr
 		})
 		hub.reset(instruments)

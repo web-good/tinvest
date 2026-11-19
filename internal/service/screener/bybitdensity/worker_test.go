@@ -1,4 +1,4 @@
-package main
+package bybitdensity
 
 import (
 	"context"
@@ -39,12 +39,12 @@ func TestOptions(t *testing.T) {
 	t.Setenv("BYBIT_DENSITY_SCREENER_TOPIC_ID", "0")
 	t.Setenv("BYBIT_DENSITY_SIMULATION_TOPIC_ID", "0")
 	t.Setenv("BYBIT_DENSITY_MIN_NOTIONAL", "150000")
-	_, err := readOptions(nil, io.Discard)
+	_, err := readOptions(nil, io.Discard, false)
 	if err == nil || !strings.Contains(err.Error(), "different") {
 		t.Fatalf("same destination accepted: %v", err)
 	}
 	t.Setenv("BYBIT_DENSITY_SIMULATION_CHAT_ID", "-1002")
-	op, err := readOptions([]string{"-min-notional", "110000", "-spot-symbols", "btcusdt, ETHUSDT"}, io.Discard)
+	op, err := readOptions([]string{"-min-notional", "110000", "-spot-symbols", "btcusdt, ETHUSDT"}, io.Discard, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,17 +56,17 @@ func TestOptions(t *testing.T) {
 	t.Setenv("BYBIT_DENSITY_SIMULATION_TOPIC_ID", "3")
 	t.Setenv("BYBIT_DENSITY_TELEGRAM_TOKEN", "")
 	t.Setenv("TELEGRAM", "existing-bot")
-	op, err = readOptions(nil, io.Discard)
+	op, err = readOptions(nil, io.Discard, false)
 	if err != nil || op.telegramToken != "existing-bot" ||
 		op.screener != (telegramDestination{chatID: -1001, topicID: 5809}) ||
 		op.simulation != (telegramDestination{chatID: -1001, topicID: 3}) {
 		t.Fatalf("shared forum and existing bot setup failed: %v", err)
 	}
 	t.Setenv("BYBIT_DENSITY_SCREENER_TOPIC_ID", "3")
-	if _, err := readOptions(nil, io.Discard); err == nil {
+	if _, err := readOptions(nil, io.Discard, false); err == nil {
 		t.Fatal("identical chat topics accepted")
 	}
-	if _, err := readOptions([]string{"-help"}, io.Discard); err != flag.ErrHelp {
+	if _, err := readOptions([]string{"-help"}, io.Discard, false); err != flag.ErrHelp {
 		t.Fatalf("expected help: %v", err)
 	}
 }
@@ -182,5 +182,26 @@ func TestReplayRoutesConfirmedDensityAndVirtualFills(t *testing.T) {
 	cancel()
 	if err := <-done; err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestNewWorkerFromEnv(t *testing.T) {
+	t.Setenv("BYBIT_DENSITY_ENABLED", "")
+	t.Setenv("BYBIT_DENSITY_SCREENER_CHAT_ID", "not-a-chat")
+	if worker, err := NewWorkerFromEnv(); worker != nil || err != nil {
+		t.Fatal("disabled Bybit worker loaded its settings")
+	}
+	t.Setenv("BYBIT_DENSITY_ENABLED", "true")
+	if worker, err := NewWorkerFromEnv(); worker != nil || err == nil {
+		t.Fatal("enabled Bybit worker accepted an invalid destination")
+	}
+	t.Setenv("BYBIT_DENSITY_SCREENER_CHAT_ID", "-1001")
+	t.Setenv("BYBIT_DENSITY_SCREENER_TOPIC_ID", "9686")
+	t.Setenv("BYBIT_DENSITY_SIMULATION_CHAT_ID", "-1001")
+	t.Setenv("BYBIT_DENSITY_SIMULATION_TOPIC_ID", "9688")
+	t.Setenv("BYBIT_DENSITY_STATE_DIR", t.TempDir())
+	t.Setenv("TELEGRAM", "test")
+	if worker, err := NewWorkerFromEnv(); worker == nil || err != nil {
+		t.Fatalf("enabled Bybit worker failed to load: %v", err)
 	}
 }

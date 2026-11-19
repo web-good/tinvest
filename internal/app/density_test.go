@@ -28,10 +28,10 @@ func TestMalformedDensityLiveSettingsRemainLocal(t *testing.T) {
 
 func TestDensityCleanupFailureIsLoggedEvenWhenAppCanceled(t *testing.T) {
 	failure := errors.New("unresolved live position")
-	if !shouldLogDensityWorkerError(errors.Join(context.Canceled, failure), context.Canceled) {
+	if !shouldLogWorkerError(errors.Join(context.Canceled, failure), context.Canceled) {
 		t.Fatal("cleanup failure hidden by cancellation")
 	}
-	if shouldLogDensityWorkerError(context.Canceled, context.Canceled) {
+	if shouldLogWorkerError(context.Canceled, context.Canceled) {
 		t.Fatal("normal cancellation reported as failure")
 	}
 }
@@ -44,7 +44,7 @@ func (f *fakeDensityWorker) Run(ctx context.Context) error {
 }
 func TestDensityWorkerStopsWithApp(t *testing.T) {
 	worker := &fakeDensityWorker{started: make(chan struct{}), stopped: make(chan struct{})}
-	stop := startDensityWorker(context.Background(), worker)
+	stop := startWorker(context.Background(), "density", worker)
 	<-worker.started
 	stop()
 	select {

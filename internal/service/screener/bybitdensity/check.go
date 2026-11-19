@@ -1,4 +1,4 @@
-package main
+package bybitdensity
 
 import (
 	"context"
@@ -6,12 +6,22 @@ import (
 	"fmt"
 	"io"
 
+	"tinvest/internal/service/screener/bybitdensity/feed"
 	"tinvest/internal/service/screener/bybitdensity/model"
 
 	"golang.org/x/sync/errgroup"
 )
 
 var errFeedVerified = errors.New("public feed messages verified")
+
+// CheckFeed verifies public BTCUSDT feeds without opening Telegram or the journal.
+func CheckFeed(ctx context.Context, args []string, out io.Writer) error {
+	op, err := readOptions(args, out, true)
+	if err != nil {
+		return err
+	}
+	return checkFeed(ctx, feed.NewClient(op.restURL, op.wsURL), op, out)
+}
 
 func checkFeed(ctx context.Context, market marketData, op options, out io.Writer) error {
 	ctx, cancel := context.WithTimeout(ctx, op.checkTimeout)

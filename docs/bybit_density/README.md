@@ -1,12 +1,13 @@
 # Скринер плотностей Bybit
 
-`cmd/bybit-density` — отдельный процесс TInvest. Он следит за спотовыми парами с котировкой в USDT и линейными бессрочными USDT-фьючерсами на Bybit. Для чтения рынка не требуется API-ключ Bybit. Виртуальные входы и выходы обрабатываются локально.
+Bybit Density — воркер основного приложения TInvest. Он следит за спотовыми парами с котировкой в USDT и линейными бессрочными USDT-фьючерсами на Bybit. Для чтения рынка не требуется API-ключ Bybit. Виртуальные входы и выходы обрабатываются локально.
 
 ## Запуск
 
 Дайте Telegram-боту право отправлять сообщения в настроенные чаты. В одном форуме укажите разные темы. В dotenv-файле или окружении процесса задайте переменные:
 
 ```dotenv
+BYBIT_DENSITY_ENABLED=true
 BYBIT_DENSITY_TELEGRAM_TOKEN=<токен бота>
 BYBIT_DENSITY_SCREENER_CHAT_ID=<ID чата плотностей>
 BYBIT_DENSITY_SIMULATION_CHAT_ID=<ID чата виртуальных сделок>
@@ -14,17 +15,26 @@ BYBIT_DENSITY_SIMULATION_CHAT_ID=<ID чата виртуальных сдело�
 
 При использовании существующего токена `TELEGRAM` отдельная переменная `BYBIT_DENSITY_TELEGRAM_TOKEN` не нужна. Для тем задайте `BYBIT_DENSITY_SCREENER_TOPIC_ID` и `BYBIT_DENSITY_SIMULATION_TOPIC_ID`. Значение `0` означает отправку без указания темы. В `env/prod.env` настроена существующая группа DENSITY с темами `9686` для плотностей Bybit и `9688` для виртуальных исполнений Bybit.
 
-```bash
-go run ./cmd/bybit-density -env-file /путь/к/bybit-density.env
-```
+Основное приложение читает `env/prod.env` в проде и `env/local.env` при локальном запуске. По умолчанию воркер выключен. `BYBIT_DENSITY_ENABLED=true` включает скринер и симуляцию вместе.
 
 Проверка публичного подключения без Telegram и локального журнала:
 
 ```bash
-go run ./cmd/bybit-density -check-feed
+go run ./cmd/main.go bybit-check-feed
 ```
 
 Проверка ждёт стакан, публичную сделку и закрытие минутной свечи BTCUSDT с обоих рынков. По умолчанию ей отводится 90 секунд. `-help` выводит все параметры. Явные флаги имеют приоритет над переменными окружения, а окружение имеет приоритет над dotenv-файлом.
+
+## Проверка на проде
+
+Основной контейнер `tinvest-container` запускает воркер по настройке `BYBIT_DENSITY_ENABLED=true` из `env/prod.env`. Он использует токен `TELEGRAM` и сохраняет журнал в подкаталоге `bybit-density` постоянного тома `tinvest-state`.
+
+```bash
+docker logs --tail 200 -f tinvest-container 2>&1 | grep --line-buffered -i bybit
+docker exec tinvest-container /application/build bybit-check-feed
+```
+
+Строка `Bybit Density worker started` подтверждает запуск воркера и открытие журнала. `Bybit order book connected` для `spot` и `linear` подтверждает свежий стакан на обоих рынках. `Bybit Telegram alert delivered` означает, что Telegram принял сообщение в указанную тему. Первый алерт о плотности возможен после заданной выдержки и прохождения остальных фильтров.
 
 ## Настройки
 

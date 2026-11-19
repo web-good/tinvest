@@ -1,9 +1,10 @@
-package main
+package bybitdensity
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"strconv"
 	"strings"
@@ -42,6 +43,7 @@ func telegramSender(token string) (func(context.Context, telegramDestination, st
 		if err != nil {
 			return errors.New(strings.ReplaceAll(err.Error(), token, "[redacted]"))
 		}
+		slog.Info("Bybit Telegram alert delivered", "chat", destination.chatID, "topic", destination.topicID)
 		return nil
 	}, nil
 }
