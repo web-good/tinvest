@@ -43,6 +43,7 @@ func (s *ServiceProvider) GetDensityService() (*density.Service, error) {
 	market := internalgrpc.NewDensityMarketData(client.Connection(), s.appConfig.GrpcClient.TokenProd)
 	cfg := density.DefaultConfig()
 	cfg.RequireAverageVolume = true
+	cfg.AlertDistanceTicks = c.AlertDistanceTicks
 	cfg.AlertM5VolumeMultiplier = c.AlertM5VolumeMultiplier
 	cfg.MinRubles = c.MinRubles
 	cfg.TurnoverFraction = c.TurnoverFraction

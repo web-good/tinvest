@@ -10,6 +10,7 @@ import (
 )
 
 type Config struct {
+	AlertDistanceTicks                int64
 	AlertM5VolumeMultiplier           float64
 	FixedLimitEntry                   bool
 	CandleEntries                     bool
@@ -23,6 +24,7 @@ type Config struct {
 
 func DefaultConfig() Config {
 	return Config{
+		AlertDistanceTicks:      2,
 		AlertM5VolumeMultiplier: .5,
 		MinNotional:             100000, MinMultiple: 5,
 		Persistence: time.Minute, Freshness: 3 * time.Second,

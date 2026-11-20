@@ -41,6 +41,7 @@ func TestOptions(t *testing.T) {
 	t.Setenv("BYBIT_DENSITY_SIMULATION_TOPIC_ID", "0")
 	t.Setenv("BYBIT_DENSITY_MIN_NOTIONAL", "150000")
 	t.Setenv("BYBIT_DENSITY_ALERT_M5_VOLUME_MULTIPLIER", "0.75")
+	t.Setenv("BYBIT_DENSITY_ALERT_DISTANCE_TICKS", "3")
 	_, err := readOptions(nil, io.Discard, false)
 	if err == nil || !strings.Contains(err.Error(), "different") {
 		t.Fatalf("same destination accepted: %v", err)
@@ -50,7 +51,7 @@ func TestOptions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if op.strategy.MinNotional != 110_000 || op.strategy.AlertM5VolumeMultiplier != .75 || len(op.spotSymbols) != 2 || op.spotSymbols[0] != "BTCUSDT" {
+	if op.strategy.MinNotional != 110_000 || op.strategy.AlertM5VolumeMultiplier != .75 || op.strategy.AlertDistanceTicks != 3 || len(op.spotSymbols) != 2 || op.spotSymbols[0] != "BTCUSDT" {
 		t.Fatal("invalid parsed options")
 	}
 	t.Setenv("BYBIT_DENSITY_SIMULATION_CHAT_ID", "-1001")
@@ -75,7 +76,7 @@ func TestOptions(t *testing.T) {
 
 func TestOptionsReadBybitEntryAndRiskFromEnv(t *testing.T) {
 	t.Setenv("BYBIT_DENSITY_ENTRY_TICKS", "3")
-	t.Setenv("BYBIT_DENSITY_STOP_TICKS", "4")
+	t.Setenv("BYBIT_DENSITY_STOP_TICKS", "unused")
 	t.Setenv("BYBIT_DENSITY_REWARD_RISK", "5")
 	t.Setenv("DENSITY_LIVE_STOP_TICKS", "8")
 	t.Setenv("DENSITY_LIVE_RR", "9")
@@ -84,7 +85,7 @@ func TestOptionsReadBybitEntryAndRiskFromEnv(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg := op.strategy; cfg.EntryTicks != 3 || cfg.StopTicks != 4 || cfg.RewardRisk != 5 {
+	if cfg := op.strategy; cfg.EntryTicks != 3 || cfg.RewardRisk != 5 {
 		t.Fatalf("incorrect entry and risk parameters: %+v", cfg)
 	}
 }
@@ -193,6 +194,9 @@ func TestReplayRoutesConfirmedDensityAndVirtualFills(t *testing.T) {
 	first := wait(densities)
 	if !strings.Contains(first, "Спот · BTCUSDT") || !strings.Contains(first, "Средний объём M5: 9.25 монет") {
 		t.Fatalf("spot market alert missing in %s", first)
+	}
+	if !strings.Contains(first, "\nРасстояние от лучшего bid: 0.00%\n") {
+		t.Fatalf("distance from best bid missing in %q", first)
 	}
 	close(advance)
 	report := wait(fills)

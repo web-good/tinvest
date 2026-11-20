@@ -197,6 +197,13 @@ func TestScreenerDetectorUsesTwoTicksFromBestBid(t *testing.T) {
 			if got := d.Candidates(); len(got) != 0 {
 				t.Fatalf("three-tick level remained eligible for delivery: %+v", got)
 			}
+			cfg.AlertDistanceTicks = 3
+			d = newScreenerDetector(cfg)
+			d.SetInstruments([]Instrument{{ID: "x", PriceStep: tc.step}})
+			update(4, tc.bidThree)
+			if got := update(5, tc.bidThree); len(got) != 1 || got[0].Price != level {
+				t.Fatalf("expected three-tick level with custom limit, got %+v", got)
+			}
 		})
 	}
 }

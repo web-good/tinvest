@@ -8,6 +8,7 @@ import (
 
 // DensityConfig controls the order book density screener.
 type DensityConfig struct {
+	AlertDistanceTicks      int64         `config:"DENSITY_ALERT_DISTANCE_TICKS,backend=env"`
 	AlertM5VolumeMultiplier float64       `config:"DENSITY_ALERT_M5_VOLUME_MULTIPLIER,backend=env"`
 	TurnoverFraction        float64       `config:"DENSITY_TURNOVER_FRACTION,backend=env"`
 	SupportEnabled          bool          `config:"DENSITY_SUPPORT_ENABLED,backend=env"`
@@ -36,13 +37,16 @@ type DensityConfig struct {
 }
 
 func NewDensityConfig() *DensityConfig {
-	return &DensityConfig{AlertM5VolumeMultiplier: .5, MaxBooks: 80, MaxTrades: 10, BookDepth: 50, MinRubles: 5_000_000, MinMultiple: 5, MinNeighbors: 5, MaxNeighbors: 10, Persistence: time.Minute, Freshness: 3 * time.Second, MinTurnover: 100_000_000, MaxLotPrice: 30_000, HistoryInterval: time.Second, SupportLookbackDays: 60, SupportPivotBars: 2, SupportMinTouches: 2, SupportMinSeparation: 6 * time.Hour, SupportBounceFraction: .005, SupportBounceBars: 6, SupportTolerance: .002}
+	return &DensityConfig{AlertDistanceTicks: 2, AlertM5VolumeMultiplier: .5, MaxBooks: 80, MaxTrades: 10, BookDepth: 50, MinRubles: 5_000_000, MinMultiple: 5, MinNeighbors: 5, MaxNeighbors: 10, Persistence: time.Minute, Freshness: 3 * time.Second, MinTurnover: 100_000_000, MaxLotPrice: 30_000, HistoryInterval: time.Second, SupportLookbackDays: 60, SupportPivotBars: 2, SupportMinTouches: 2, SupportMinSeparation: 6 * time.Hour, SupportBounceFraction: .005, SupportBounceBars: 6, SupportTolerance: .002}
 }
 func (c *DensityConfig) Validate() error {
 	if c.Enabled && c.ChatID == 0 {
 		return errors.New("DENSITY_CHAT_ID is required when DENSITY_ENABLED is true")
 	}
 	positive := func(v float64) bool { return v > 0 && !math.IsInf(v, 0) && !math.IsNaN(v) }
+	if c.AlertDistanceTicks < 0 || c.AlertDistanceTicks > 1_000_000 {
+		return errors.New("DENSITY_ALERT_DISTANCE_TICKS must be between 0 and 1000000")
+	}
 	if !positive(c.AlertM5VolumeMultiplier) {
 		return errors.New("DENSITY_ALERT_M5_VOLUME_MULTIPLIER must be finite and positive")
 	}

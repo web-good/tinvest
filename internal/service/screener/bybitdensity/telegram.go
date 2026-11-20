@@ -73,7 +73,7 @@ func formatSignal(signal model.Signal, tick float64) string {
 	if signal.Side == model.Ask {
 		side = "продажа (ask)"
 	}
-	msg := fmt.Sprintf("%s · %s · плотность на %s\nЦена %s USDT\nОбъём %.8g монет (%.2f USDT)\n%.2f× к медиане · %.3f%% от лучшей цены\nДержится %s\nСделки на цене %.8g монет за %s",
+	msg := fmt.Sprintf("%s · %s · плотность на %s\nЦена %s USDT\nОбъём %.8g монет (%.2f USDT)\n%.2f× к медиане\nРасстояние от лучшего bid: %.2f%%\nДержится %s\nСделки на цене %.8g монет за %s",
 		marketLabel(signal.Key.Market), signal.Key.Symbol, side, priceText(signal.Price, tick),
 		signal.Qty, signal.Notional, signal.Multiple, signal.Distance*100,
 		signal.Observed.Truncate(time.Second), signal.TradeQty, signal.TradeCoverage.Truncate(time.Second))

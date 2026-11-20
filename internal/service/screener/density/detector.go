@@ -6,10 +6,7 @@ import (
 	"time"
 )
 
-const (
-	screenerDistanceTicks = 2
-	tradingDistanceTicks  = 25
-)
+const tradingDistanceTicks = 25
 
 type key struct {
 	id    string
@@ -44,7 +41,7 @@ func NewDetector(cfg Config) *Detector {
 }
 
 func newScreenerDetector(cfg Config) *Detector {
-	return newDetector(cfg, screenerDistanceTicks, cfg.AlertM5VolumeMultiplier)
+	return newDetector(cfg, cfg.AlertDistanceTicks, cfg.AlertM5VolumeMultiplier)
 }
 
 func newDetector(cfg Config, maxDistanceTicks int64, averageVolumeMultiplier float64) *Detector {
@@ -86,6 +83,9 @@ func comparePrice(a, b Price) int {
 }
 func valid(p Price) bool { return p.Units >= 0 && p.Nano >= 0 && p.Nano < 1e9 && value(p) > 0 }
 func withinTickDistance(best, level, step Price, maxDistanceTicks int64) bool {
+	if maxDistanceTicks <= 0 {
+		return best == level
+	}
 	const nanosPerUnit = 1_000_000_000
 	units := best.Units - level.Units
 	nanos := int64(best.Nano) - int64(level.Nano)
