@@ -40,7 +40,7 @@ func (s *Strategy) findCandidates(b *model.Book, now time.Time) {
 		if !tradingEligible && !alertEligible {
 			continue
 		}
-		multiple := value / medianNeighbors(s.instrument, levels, i)
+		multiple := value / s.medianNeighbors(levels, i)
 		if multiple < s.cfg.MinMultiple {
 			continue
 		}
@@ -110,7 +110,7 @@ func absTicks(n int64) int64 {
 }
 
 // On a sorted side, the nearest remaining neighbor is adjacent to the selected interval.
-func medianNeighbors(instrument model.Instrument, levels []model.Level, i int) float64 {
+func (s *Strategy) medianNeighbors(levels []model.Level, i int) float64 {
 	var neighbors [10]float64
 	n := min(len(levels)-1, len(neighbors))
 	left, right := i-1, i+1
@@ -123,7 +123,7 @@ func medianNeighbors(instrument model.Instrument, levels []model.Level, i int) f
 			next = levels[right]
 			right++
 		}
-		neighbors[j] = instrument.Price(next.Ticks) * next.Qty
+		neighbors[j] = s.instrument.Price(next.Ticks) * next.Qty
 	}
 	slices.Sort(neighbors[:n])
 	return (neighbors[n/2] + neighbors[(n-1)/2]) / 2

@@ -8,7 +8,6 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -16,7 +15,6 @@ import (
 	"tinvest/internal/service/screener/bybitdensity/feed"
 	"tinvest/internal/service/screener/bybitdensity/journal"
 	"tinvest/internal/service/screener/bybitdensity/model"
-	"tinvest/internal/service/screener/bybitdensity/strategy"
 
 	"golang.org/x/sync/errgroup"
 )
@@ -101,23 +99,6 @@ func serveSession(ctx context.Context, market marketData, op options, session *j
 	return group.Wait()
 }
 
-func spotInstruments(ctx context.Context, market marketData, op options) ([]model.Instrument, error) {
-	instruments, err := market.Instruments(ctx, model.Spot, op.spotSymbols, op.symbolLimit)
-	if err != nil || !op.strategy.SOLBreakout || slices.ContainsFunc(instruments, func(instrument model.Instrument) bool {
-		return instrument.Key.Symbol == strategy.SOLBreakoutSymbol
-	}) {
-		return instruments, err
-	}
-	sol, err := market.Instruments(ctx, model.Spot, []string{strategy.SOLBreakoutSymbol}, 1)
-	if err != nil {
-		return nil, err
-	}
-	if len(sol) != 1 {
-		return nil, errors.New("spot SOLUSDT metadata missing")
-	}
-	return append(instruments, sol[0]), nil
-}
-
 func runSpot(ctx context.Context, market marketData, op options, hub *alertHub) error {
 	const category = model.Spot
 	ctx, cancel := context.WithCancel(ctx)
@@ -133,7 +114,7 @@ func runSpot(ctx context.Context, market marketData, op options, hub *alertHub) 
 	for ctx.Err() == nil {
 		if len(instruments) == 0 {
 			var err error
-			instruments, err = spotInstruments(ctx, market, op)
+			instruments, err = market.Instruments(ctx, category, op.spotSymbols, op.symbolLimit)
 			if errors.Is(err, feed.ErrInvalidSymbols) {
 				return fmt.Errorf("%s instrument configuration: %w", category, err)
 			}

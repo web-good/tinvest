@@ -15,7 +15,6 @@ type setup struct {
 	baseQty         float64
 	averageVolume   *float64
 	limit           int64
-	imbalance       *float64
 }
 
 type position struct {
@@ -129,9 +128,6 @@ func (s *Strategy) validPrice(ticks int64) bool {
 }
 
 func (s *Strategy) entryIntent(p *setup, now time.Time) (Order, bool) {
-	if p.imbalance != nil {
-		return s.sizeEntry(p, p.limit)
-	}
 	qtyAtDensity := quantityAt(levelsOn(s.book, p.side), p.side, p.origin)
 	retained := bounce.Retains(p.baseQty, qtyAtDensity)
 	if s.cfg.FixedLimitEntry {
@@ -147,11 +143,7 @@ func (s *Strategy) entryIntent(p *setup, now time.Time) (Order, bool) {
 	if direction(p.side)*(level.Ticks-p.limit) > 0 {
 		return Order{}, false
 	}
-	return s.sizeEntry(p, max(p.limit, level.Ticks))
-}
-
-func (s *Strategy) sizeEntry(p *setup, ticks int64) (Order, bool) {
-	price := s.instrument.Price(ticks)
+	price := s.instrument.Price(max(p.limit, level.Ticks))
 	qty := s.cfg.PaperNotional / price
 	if s.instrument.MaxQty > 0 {
 		qty = min(qty, s.instrument.MaxQty)
@@ -164,11 +156,8 @@ func (s *Strategy) sizeEntry(p *setup, ticks int64) (Order, bool) {
 	return Order{Entry: true, Reason: "entry", Direction: p.side, Steps: steps, LimitTicks: p.limit}, true
 }
 
-func (s *Strategy) exitIntent(p *position, now time.Time) (Order, bool) {
+func (s *Strategy) exitIntent(p *position) (Order, bool) {
 	best := levelsOn(s.book, p.side)[0].Ticks
-	if p.imbalance != nil {
-		return breakoutExit(p, best, now)
-	}
 	if p.forced == "" {
 		switch {
 		case (p.side == model.Bid && best <= p.stop) || (p.side == model.Ask && best >= p.stop):
@@ -198,7 +187,7 @@ func (s *Strategy) execute(now time.Time) []model.Fill {
 	switch {
 	case s.position != nil:
 		// Keep watching risk while the executor reconciles an earlier IOC.
-		order, ok = s.exitIntent(s.position, now)
+		order, ok = s.exitIntent(s.position)
 	case pending != nil:
 		order, ok = s.entryIntent(pending, now)
 	}
@@ -236,19 +225,14 @@ func (s *Strategy) ConfirmExecution(m Execution, now time.Time) (model.Fill, boo
 	if s.instrument.Key.Market == model.Linear {
 		feeRate = s.cfg.LinearFee
 	}
-	f := model.Fill{Key: s.instrument.Key, Variant: s.variant, Side: order.Direction, Entry: order.Entry, Reason: order.Reason, Price: m.Quote / qty, Qty: qty, Fee: m.Quote * feeRate, At: now}
+	f := model.Fill{Key: s.instrument.Key, Side: order.Direction, Entry: order.Entry, Reason: order.Reason, Price: m.Quote / qty, Qty: qty, Fee: m.Quote * feeRate, At: now}
 	if order.Entry {
 		s.pending = nil
-		var stop, target int64
-		switch {
-		case pending.imbalance != nil:
-			stop = pending.origin
-		case s.cfg.FixedLimitEntry:
+		stop, target := s.entryPrices(pending.side, pending.origin, s.instrument.Ticks(f.Price))
+		if s.cfg.FixedLimitEntry {
 			entryTicks := f.Price / s.instrument.TickSize
 			stop = percentStop(pending.side, entryTicks)
 			target = s.targetPrice(pending.side, entryTicks, stop)
-		default:
-			stop, target = s.entryPrices(pending.side, pending.origin, s.instrument.Ticks(f.Price))
 		}
 		s.position = &position{setup: *pending, entry: f, remaining: m.Steps, stop: stop, target: target}
 		return f, true
@@ -272,7 +256,7 @@ func (s *Strategy) ConfirmExecution(m Execution, now time.Time) (model.Fill, boo
 		f.Closed = &model.TradeSummary{
 			EntryAt: p.entry.At, EntryPrice: p.entry.Price, ExitPrice: p.exitQuote / p.entry.Qty,
 			DensityPrice: s.instrument.Price(p.origin), DensityQty: p.baseQty, AverageVolume: p.averageVolume,
-			Imbalance: p.imbalance, StopPrice: s.instrument.Price(p.stop), TakePrice: s.instrument.Price(p.target),
+			StopPrice: s.instrument.Price(p.stop), TakePrice: s.instrument.Price(p.target),
 			NetPnL: p.netPnL, NetReturn: p.netPnL / (p.entry.Price * p.entry.Qty), ExitReasons: p.exitReasons,
 		}
 		s.position = nil

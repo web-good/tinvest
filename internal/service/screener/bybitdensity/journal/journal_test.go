@@ -242,22 +242,26 @@ func assertDelivery(t *testing.T, j *Journal, expected []string) {
 	}
 }
 
-func TestJournalRecordsIndependentBreakoutPositions(t *testing.T) {
+func TestJournalReplaysLegacySimulationVariants(t *testing.T) {
 	dir := t.TempDir()
 	session, err := Open(dir)
 	require.NoError(t, err)
 	fill := model.Fill{Key: model.Key{Market: model.Spot, Symbol: "SOLUSDT"}, Side: model.Bid, Entry: true, Qty: 1}
-	for _, variant := range []model.Variant{"", model.Breakout, model.BreakoutImbalance} {
-		fill.Variant = variant
-		require.NoError(t, session.Record(fill, ""))
+	require.NoError(t, session.Record(fill, ""))
+	for _, variant := range []string{"breakout", "breakout_imbalance"} {
+		require.NoError(t, session.append(record{
+			Kind: fillRecorded, Session: session.session, Fill: &journalFill{Fill: fill, Variant: variant},
+		}))
 	}
 	fill.Entry = false
-	for _, variant := range []model.Variant{model.Breakout, "", model.BreakoutImbalance} {
-		fill.Variant = variant
-		require.NoError(t, session.Record(fill, ""))
-	}
+	require.NoError(t, session.append(record{
+		Kind: fillRecorded, Session: session.session, Fill: &journalFill{Fill: fill, Variant: "breakout"},
+	}))
+	require.NoError(t, session.Record(fill, ""))
 	require.NoError(t, session.Close())
 	session, err = Open(dir)
 	require.NoError(t, err)
+	fill.Entry = true
+	require.NoError(t, session.Record(fill, ""))
 	require.NoError(t, session.Close())
 }

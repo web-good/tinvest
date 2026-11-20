@@ -234,29 +234,3 @@ func TestNewWorkerFromEnv(t *testing.T) {
 		t.Fatalf("enabled Bybit worker failed to load: %v", err)
 	}
 }
-
-type solSelectionMarket struct{ replayMarket }
-
-func (solSelectionMarket) Instruments(_ context.Context, market model.Market, symbols []string, _ int) ([]model.Instrument, error) {
-	if len(symbols) == 0 {
-		symbols = []string{"BTCUSDT"}
-	}
-	var instruments []model.Instrument
-	for _, symbol := range symbols {
-		instruments = append(instruments, model.Instrument{Key: model.Key{Market: market, Symbol: symbol}})
-	}
-	return instruments, nil
-}
-
-func TestSOLBreakoutIncludesSpotSOL(t *testing.T) {
-	t.Setenv("BYBIT_DENSITY_SOL_BREAKOUT", "true")
-	op, err := readOptions(nil, io.Discard, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	instruments, err := spotInstruments(t.Context(), solSelectionMarket{}, op)
-	if err != nil || len(instruments) != 2 || instruments[0].Key.Symbol != "BTCUSDT" ||
-		instruments[1].Key != (model.Key{Market: model.Spot, Symbol: "SOLUSDT"}) {
-		t.Fatalf("SOLUSDT should be added to the normal selection: %+v, %v", instruments, err)
-	}
-}

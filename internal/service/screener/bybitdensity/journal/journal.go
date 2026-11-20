@@ -27,24 +27,31 @@ const (
 
 type positionKey struct {
 	instrument model.Key
-	variant    model.Variant
+	variant    string
+}
+
+// journalFill preserves the position key when replaying journals written by
+// earlier versions that ran multiple simulations per instrument.
+type journalFill struct {
+	model.Fill
+	Variant string `json:"variant,omitempty"`
 }
 
 type position struct {
-	Entry     model.Fill `json:"entry"`
-	Remaining float64    `json:"remaining"`
+	Entry     journalFill `json:"entry"`
+	Remaining float64     `json:"remaining"`
 }
 
 type record struct {
-	ID       uint64      `json:"id"`
-	Kind     string      `json:"kind"`
-	At       time.Time   `json:"at"`
-	Session  uint64      `json:"session,omitempty"`
-	Reason   string      `json:"reason,omitempty"`
-	Open     []position  `json:"open,omitempty"`
-	Fill     *model.Fill `json:"fill,omitempty"`
-	Message  string      `json:"message,omitempty"`
-	Delivery uint64      `json:"delivery,omitempty"`
+	ID       uint64       `json:"id"`
+	Kind     string       `json:"kind"`
+	At       time.Time    `json:"at"`
+	Session  uint64       `json:"session,omitempty"`
+	Reason   string       `json:"reason,omitempty"`
+	Open     []position   `json:"open,omitempty"`
+	Fill     *journalFill `json:"fill,omitempty"`
+	Message  string       `json:"message,omitempty"`
+	Delivery uint64       `json:"delivery,omitempty"`
 }
 
 type notification struct {
@@ -169,7 +176,7 @@ func (j *Journal) replay() error {
 func (j *Journal) Record(fill model.Fill, message string) error {
 	j.mu.Lock()
 	defer j.mu.Unlock()
-	if err := j.append(record{Kind: fillRecorded, Session: j.session, Fill: &fill, Message: message}); err != nil {
+	if err := j.append(record{Kind: fillRecorded, Session: j.session, Fill: &journalFill{Fill: fill}, Message: message}); err != nil {
 		return err
 	}
 	if message != "" {

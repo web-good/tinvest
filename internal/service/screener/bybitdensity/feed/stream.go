@@ -308,8 +308,6 @@ func (s *streamSymbol) trades(data json.RawMessage) ([]model.Trade, error) {
 		ID     string `json:"i"`
 		Symbol string `json:"s"`
 		Side   string `json:"S"` // Bybit distinguishes symbol and taker side by case.
-		Block  bool   `json:"BT"`
-		RPI    bool   `json:"RPI"`
 		Price  string `json:"p"`
 		Qty    string `json:"v"`
 		At     millis `json:"T"`
@@ -333,11 +331,7 @@ func (s *streamSymbol) trades(data json.RawMessage) ([]model.Trade, error) {
 		if err != nil || qty <= 0 {
 			return nil, fmt.Errorf("invalid trade quantity %q", record.Qty)
 		}
-		side := model.Bid
-		if record.Side == "Sell" {
-			side = model.Ask
-		}
-		trades = append(trades, model.Trade{ID: record.ID, TakerSide: side, OffBook: record.Block || record.RPI, Ticks: ticks, Qty: qty, At: time.UnixMilli(int64(record.At))})
+		trades = append(trades, model.Trade{ID: record.ID, Ticks: ticks, Qty: qty, At: time.UnixMilli(int64(record.At))})
 	}
 
 	return trades, nil

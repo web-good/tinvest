@@ -216,7 +216,7 @@ func TestStreamNormalizesTradesAndConfirmedMinutes(t *testing.T) {
 
 	require.Equal(t, websocket.StatusNormalClosure, websocket.CloseStatus(err))
 	require.Len(t, events, 3)
-	require.Equal(t, []model.Trade{{ID: "trade-1", TakerSide: model.Bid, Ticks: 201, Qty: 0.0125, At: time.UnixMilli(1700000000999)}}, events[1].Trades)
+	require.Equal(t, []model.Trade{{ID: "trade-1", Ticks: 201, Qty: 0.0125, At: time.UnixMilli(1700000000999)}}, events[1].Trades)
 	require.Equal(t, &model.Candle{
 		Start: time.UnixMilli(1699999980000), End: time.UnixMilli(1700000040000), Open: 200, High: 201, Low: 198, Close: 199,
 	}, events[2].Candle)

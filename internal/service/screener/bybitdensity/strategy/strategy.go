@@ -11,7 +11,6 @@ import (
 
 type Config struct {
 	AlertM5VolumeMultiplier           float64
-	SOLBreakout                       bool
 	FixedLimitEntry                   bool
 	CandleEntries                     bool
 	RequireAverageVolume              bool
@@ -38,8 +37,6 @@ type priceLevel struct {
 }
 
 type Strategy struct {
-	breakout                 *breakout
-	variant                  model.Variant
 	bounce                   bounce.Watch[model.Signal]
 	averageVolume            volume.Average
 	candidates               []model.Signal
@@ -66,7 +63,7 @@ func New(instrument model.Instrument, cfg Config) *Strategy {
 
 // NewWithExecutor routes decisions for one instrument to the given executor.
 func NewWithExecutor(instrument model.Instrument, cfg Config, executor Executor) *Strategy {
-	s := &Strategy{
+	return &Strategy{
 		instrument:    instrument,
 		cfg:           cfg,
 		needSnapshot:  true,
@@ -75,10 +72,6 @@ func NewWithExecutor(instrument model.Instrument, cfg Config, executor Executor)
 		sent:          make(map[priceLevel]time.Time),
 		executor:      executor,
 	}
-	if cfg.SOLBreakout && instrument.Key == (model.Key{Market: model.Spot, Symbol: SOLBreakoutSymbol}) {
-		s.breakout = newBreakout(instrument, cfg)
-	}
-	return s
 }
 
 // SetAverageVolume replaces the reference and restarts entry confirmations.
@@ -119,15 +112,6 @@ func (s *Strategy) fresh(b *model.Book, now time.Time) bool {
 }
 
 func (s *Strategy) Apply(e model.Event, now time.Time) ([]model.Signal, []model.Fill) {
-	var breakoutFills []model.Fill
-	if s.breakout != nil {
-		breakoutFills = s.breakout.apply(e, now)
-	}
-	signals, fills := s.applyDensity(e, now)
-	return signals, append(fills, breakoutFills...)
-}
-
-func (s *Strategy) applyDensity(e model.Event, now time.Time) ([]model.Signal, []model.Fill) {
 	s.Expire(now)
 	if e.Reset {
 		s.clearObservation()
