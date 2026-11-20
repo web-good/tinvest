@@ -345,7 +345,7 @@ func (f *Feed) rebase(ep *Episode, s density.Signal, now time.Time) bool {
 }
 
 func (f *Feed) dataLoss(id, reason string) {
-	if ep := f.watches[id]; ep != nil && f.reasons[id] == "" && (!(f.cfg.CandleEntries || f.cfg.FixedLimitEntry) || ep.Entry.Filled == 0) {
+	if ep := f.watches[id]; ep != nil && f.reasons[id] == "" && (!f.cfg.CandleEntries && !f.cfg.FixedLimitEntry || ep.Entry.Filled == 0) {
 		f.reasons[id] = reason
 	}
 }

@@ -341,7 +341,7 @@ func (e *Engine) OnBookWithCandidates(b density.Book, candidates []density.Signa
 		}
 	}
 	e.executeEntry(o, now)
-	if (!(e.cfg.CandleEntries || e.cfg.FixedLimitEntry) || !e.cfg.IgnoreCapital) && e.err == nil && o.State == "open" && b.Time.After(o.Opened) {
+	if (!e.cfg.CandleEntries && !e.cfg.FixedLimitEntry || !e.cfg.IgnoreCapital) && e.err == nil && o.State == "open" && b.Time.After(o.Opened) {
 		e.updateSellLimit(o, b, now)
 	}
 	e.executeTake(o, now)
@@ -497,7 +497,7 @@ func (e *Engine) invalidate(id, reason string, now time.Time) {
 		o.Uncertain = true
 		// Data gaps suspend execution until a fresh valid book arrives.
 		// Keep the position and any previously requested strategy exit intact.
-		if reason == "trading_closed" && (!(e.cfg.CandleEntries || e.cfg.FixedLimitEntry) || !e.cfg.IgnoreCapital) {
+		if reason == "trading_closed" && (!e.cfg.CandleEntries && !e.cfg.FixedLimitEntry || !e.cfg.IgnoreCapital) {
 			e.requestExit(o, reason, now)
 		}
 		e.emit("data_gap", o, now, reason, 0, 0)
