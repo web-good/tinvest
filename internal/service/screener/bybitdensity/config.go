@@ -20,6 +20,7 @@ type options struct {
 	strategy      strategy.Config
 	stateDir      string
 	spotSymbols   []string
+	alertExclude  map[string]struct{}
 	symbolLimit   int
 	depth         int
 	screener      telegramDestination
@@ -37,6 +38,7 @@ func readOptions(args []string, out io.Writer, checkFeed bool) (options, error) 
 	fs.SetOutput(out)
 	envFile := fs.String("env-file", "", "optional dotenv file")
 	spot := fs.String("spot-symbols", "", "comma-separated spot USDT pairs; empty selects by turnover")
+	alertExclude := fs.String("alert-exclude", "", "comma-separated base currencies or pairs to exclude from screener alerts")
 	fs.StringVar(&op.stateDir, "state-dir", "reports/bybit-density", "local simulation state directory")
 	fs.IntVar(&op.symbolLimit, "symbol-limit", 20, "number of automatic spot selections")
 	fs.IntVar(&op.depth, "depth", 200, "Bybit order book depth per side")
@@ -104,6 +106,12 @@ func readOptions(args []string, out io.Writer, checkFeed bool) (options, error) 
 		op.telegramToken = strings.TrimSpace(token)
 	}
 	op.spotSymbols = splitSymbols(*spot)
+	op.alertExclude = make(map[string]struct{})
+	for _, symbol := range splitSymbols(*alertExclude) {
+		if symbol != "" {
+			op.alertExclude[strings.ReplaceAll(symbol, "/", "")] = struct{}{}
+		}
+	}
 	return op, op.validate(checkFeed)
 }
 

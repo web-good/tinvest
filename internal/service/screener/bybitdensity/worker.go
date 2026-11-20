@@ -90,7 +90,7 @@ func serve(ctx context.Context, market marketData, op options, screener, simulat
 }
 
 func serveSession(ctx context.Context, market marketData, op options, session *journal.Journal, screener, simulation sendMessage) error {
-	hub := newAlertHub(op.strategy, session)
+	hub := newAlertHub(op.strategy, session, op.alertExclude)
 	group, ctx := errgroup.WithContext(ctx)
 	group.Go(func() error { return session.Deliver(ctx, simulation) })
 	group.Go(func() error { return hub.sendSignals(ctx, screener) })

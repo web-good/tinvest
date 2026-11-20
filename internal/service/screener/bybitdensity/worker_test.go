@@ -90,6 +90,42 @@ func TestOptionsReadBybitEntryAndRiskFromEnv(t *testing.T) {
 	}
 }
 
+func TestScreenerExcludesConfiguredCurrenciesAndPairs(t *testing.T) {
+	t.Setenv("BYBIT_DENSITY_ALERT_EXCLUDE", " usdc, DAI/USDT, FDUSDUSDT ")
+	op, err := readOptions(nil, io.Discard, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	op.strategy.MinNotional = 500
+	op.strategy.Persistence = time.Second
+	hub := newAlertHub(op.strategy, nil, op.alertExclude)
+	for _, symbol := range []string{"USDCUSDT", "DAIUSDT", "FDUSDUSDT", "BTCUSDT"} {
+		key := model.Key{Market: model.Spot, Symbol: symbol}
+		hub.add([]model.Instrument{{Key: key, TickSize: .1, QtyStep: .1}})
+		now := time.Now()
+		bids := []model.Level{{Ticks: 1000, Qty: 10}}
+		for offset := int64(1); offset <= 5; offset++ {
+			bids = append(bids, model.Level{Ticks: 1000 - offset, Qty: 1})
+		}
+		for _, snapshot := range []bool{true, false} {
+			book := &model.Book{
+				Bids: bids, Asks: []model.Level{{Ticks: 1002, Qty: 1}},
+				At: now, Received: now, Snapshot: snapshot,
+			}
+			if err := hub.apply(model.Event{Key: key, Book: book, TradeReady: true}, now); err != nil {
+				t.Fatal(err)
+			}
+			now = now.Add(time.Second)
+		}
+	}
+	if got := len(hub.signals); got != 1 {
+		t.Fatalf("want one screener alert, got %d", got)
+	}
+	if signal := <-hub.signals; signal.Key.Symbol != "BTCUSDT" {
+		t.Fatalf("unexpected screener alert for %s", signal.Key.Symbol)
+	}
+}
+
 type replayMarket struct {
 	advance <-chan struct{}
 }

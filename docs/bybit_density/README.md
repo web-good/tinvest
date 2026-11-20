@@ -45,6 +45,7 @@ docker exec tinvest-container /application/build bybit-check-feed
 | `BYBIT_DENSITY_DEPTH` | 200 | Глубина стакана с каждой стороны, 50, 200 или 1000 |
 | `BYBIT_DENSITY_MIN_NOTIONAL` | 100000 | Минимальная сумма на уровне в USDT |
 | `BYBIT_DENSITY_ALERT_DISTANCE_TICKS` | 2 | Максимум тиков от лучшего bid до плотности для алерта, включительно |
+| `BYBIT_DENSITY_ALERT_EXCLUDE` | — | Базовые валюты или пары без алертов о плотностях, через запятую, например `USDC,DAI/USDT`. Действует только на скринер |
 | `BYBIT_DENSITY_ALERT_M5_VOLUME_MULTIPLIER` | 0.5 | Минимальный объём уровня для алерта в долях среднего объёма M5 |
 | `BYBIT_DENSITY_MIN_MULTIPLE` | 5 | Минимальная кратность к медиане соседей |
 | `BYBIT_DENSITY_PERSISTENCE` | 60s | Время непрерывного подтверждения |
