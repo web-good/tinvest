@@ -21,11 +21,12 @@ type observation struct {
 	signal      Signal
 }
 type Detector struct {
-	cfg              Config
-	maxDistanceTicks int64
-	observations     map[key]observation
-	timestamps       map[string]time.Time
-	instruments      map[string]Instrument
+	cfg                     Config
+	maxDistanceTicks        int64
+	averageVolumeMultiplier float64
+	observations            map[key]observation
+	timestamps              map[string]time.Time
+	instruments             map[string]Instrument
 }
 
 // SetInstruments installs a fresh history snapshot and restarts confirmations.
@@ -39,11 +40,15 @@ func (d *Detector) SetInstruments(instruments []Instrument) {
 }
 
 func NewDetector(cfg Config) *Detector {
-	return newDetector(cfg, tradingDistanceTicks)
+	return newDetector(cfg, tradingDistanceTicks, 1)
 }
 
-func newDetector(cfg Config, maxDistanceTicks int64) *Detector {
-	return &Detector{cfg: cfg, maxDistanceTicks: maxDistanceTicks, observations: make(map[key]observation), timestamps: make(map[string]time.Time)}
+func newScreenerDetector(cfg Config) *Detector {
+	return newDetector(cfg, screenerDistanceTicks, cfg.AlertM5VolumeMultiplier)
+}
+
+func newDetector(cfg Config, maxDistanceTicks int64, averageVolumeMultiplier float64) *Detector {
+	return &Detector{cfg: cfg, maxDistanceTicks: maxDistanceTicks, averageVolumeMultiplier: averageVolumeMultiplier, observations: make(map[key]observation), timestamps: make(map[string]time.Time)}
 }
 func (d *Detector) Reset(id string) {
 	for k := range d.observations {
@@ -132,7 +137,7 @@ func (d *Detector) Update(b Book, now time.Time) []Signal {
 		if !withinTickDistance(bestBid, l.Price, instrument.PriceStep, d.maxDistanceTicks) {
 			break
 		}
-		if d.cfg.RequireAverageVolume && !average.Allows(float64(l.Quantity), now) {
+		if d.cfg.RequireAverageVolume && !average.AllowsMultiple(float64(l.Quantity), now, d.averageVolumeMultiplier) {
 			continue
 		}
 		price := value(l.Price)

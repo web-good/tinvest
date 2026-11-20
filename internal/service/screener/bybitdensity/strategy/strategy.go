@@ -10,6 +10,7 @@ import (
 )
 
 type Config struct {
+	AlertM5VolumeMultiplier           float64
 	SOLBreakout                       bool
 	FixedLimitEntry                   bool
 	CandleEntries                     bool
@@ -23,7 +24,8 @@ type Config struct {
 
 func DefaultConfig() Config {
 	return Config{
-		MinNotional: 100000, MinMultiple: 5,
+		AlertM5VolumeMultiplier: .5,
+		MinNotional:             100000, MinMultiple: 5,
 		Persistence: time.Minute, Freshness: 3 * time.Second,
 		PaperNotional: 250, SpotFee: .001, LinearFee: .00055,
 		StopTicks: 2, EntryTicks: 1, RewardRisk: 2, MinTarget: .003,
@@ -41,6 +43,7 @@ type Strategy struct {
 	bounce                   bounce.Watch[model.Signal]
 	averageVolume            volume.Average
 	candidates               []model.Signal
+	alertCandidates          []model.Signal
 	instrument               model.Instrument
 	cfg                      Config
 	book                     *model.Book
@@ -106,6 +109,7 @@ func (s *Strategy) clearObservation() {
 	clear(s.episodes)
 	clear(s.alertEpisodes)
 	s.candidates = s.candidates[:0]
+	s.alertCandidates = s.alertCandidates[:0]
 	s.book = nil
 	s.pending = nil
 }
@@ -152,8 +156,8 @@ func (s *Strategy) applyDensity(e model.Event, now time.Time) ([]model.Signal, [
 		s.book = b
 		s.findCandidates(b, now)
 		if s.tradeReady {
-			s.observe(b, now, s.episodes, maxDistanceTicks, nil)
-			signals = s.observe(b, now, s.alertEpisodes, alertDistanceTicks, s.sent)
+			s.observe(b, now, s.episodes, s.candidates, nil)
+			signals = s.observe(b, now, s.alertEpisodes, s.alertCandidates, s.sent)
 			if s.cfg.CandleEntries {
 				s.observeBounceBook(b)
 			} else if s.position == nil && s.pending == nil && s.outstanding == nil {

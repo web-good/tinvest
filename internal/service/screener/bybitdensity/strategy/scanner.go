@@ -22,6 +22,7 @@ type episode struct {
 
 func (s *Strategy) findCandidates(b *model.Book, now time.Time) {
 	s.candidates = s.candidates[:0]
+	s.alertCandidates = s.alertCandidates[:0]
 	levels := b.Bids
 	for i, l := range levels {
 		ticks := levels[0].Ticks - l.Ticks
@@ -31,14 +32,25 @@ func (s *Strategy) findCandidates(b *model.Book, now time.Time) {
 		price := s.instrument.Price(l.Ticks)
 		value := price * l.Qty
 		distance := float64(ticks) / float64(levels[0].Ticks)
-		if value < s.cfg.MinNotional || len(levels) < 6 || !s.volumeAllows(l.Qty, now) {
+		if value < s.cfg.MinNotional || len(levels) < 6 {
+			continue
+		}
+		tradingEligible := s.volumeAllows(l.Qty, now)
+		alertEligible := ticks <= alertDistanceTicks && s.alertVolumeAllows(l.Qty, now)
+		if !tradingEligible && !alertEligible {
 			continue
 		}
 		multiple := value / medianNeighbors(s.instrument, levels, i)
 		if multiple < s.cfg.MinMultiple {
 			continue
 		}
-		s.candidates = append(s.candidates, model.Signal{Key: s.instrument.Key, Side: model.Bid, Ticks: l.Ticks, Price: price, Qty: l.Qty, Notional: value, Distance: distance, Multiple: multiple, AverageVolume: s.averageVolume.Quantity, HasAverageVolume: s.cfg.RequireAverageVolume})
+		signal := model.Signal{Key: s.instrument.Key, Side: model.Bid, Ticks: l.Ticks, Price: price, Qty: l.Qty, Notional: value, Distance: distance, Multiple: multiple, AverageVolume: s.averageVolume.Quantity, HasAverageVolume: s.cfg.RequireAverageVolume}
+		if tradingEligible {
+			s.candidates = append(s.candidates, signal)
+		}
+		if alertEligible {
+			s.alertCandidates = append(s.alertCandidates, signal)
+		}
 	}
 }
 
@@ -46,15 +58,16 @@ func (s *Strategy) volumeAllows(quantity float64, now time.Time) bool {
 	return !s.cfg.RequireAverageVolume || s.averageVolume.Allows(quantity, now)
 }
 
-func (s *Strategy) observe(b *model.Book, now time.Time, episodes map[priceLevel]*episode, maxTicks int64, sent map[priceLevel]time.Time) []model.Signal {
+func (s *Strategy) alertVolumeAllows(quantity float64, now time.Time) bool {
+	return !s.cfg.RequireAverageVolume || s.averageVolume.AllowsMultiple(quantity, now, s.cfg.AlertM5VolumeMultiplier)
+}
+
+func (s *Strategy) observe(b *model.Book, now time.Time, episodes map[priceLevel]*episode, candidates []model.Signal, sent map[priceLevel]time.Time) []model.Signal {
 	for _, ep := range episodes {
 		ep.seen = false
 	}
 	var signals []model.Signal
-	for _, sig := range s.candidates {
-		if b.Bids[0].Ticks-sig.Ticks > maxTicks {
-			break
-		}
+	for _, sig := range candidates {
 		k := priceLevel{sig.Side, sig.Ticks}
 		ep := episodes[k]
 		if ep == nil {
@@ -160,7 +173,7 @@ func (s *Strategy) observeTrade(trade model.Trade) {
 func (s *Strategy) Current(signal model.Signal, now time.Time) (model.Signal, bool) {
 	k := priceLevel{signal.Side, signal.Ticks}
 	ep := s.alertEpisodes[k]
-	if ep == nil || !s.volumeAllows(ep.signal.Qty, now) || signal.Key != s.instrument.Key || s.book == nil || !s.fresh(s.book, now) || !ep.signal.Since.Equal(signal.Since) || ep.confirmed.IsZero() || ep.delivered || now.Before(s.sent[k]) {
+	if ep == nil || !s.alertVolumeAllows(ep.signal.Qty, now) || signal.Key != s.instrument.Key || s.book == nil || !s.fresh(s.book, now) || !ep.signal.Since.Equal(signal.Since) || ep.confirmed.IsZero() || ep.delivered || now.Before(s.sent[k]) {
 		return model.Signal{}, false
 	}
 	return ep.signal, true

@@ -166,7 +166,7 @@ func TestScreenerDetectorUsesTwoTicksFromBestBid(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := DefaultConfig()
 			cfg.Persistence = time.Second
-			d := newDetector(cfg, screenerDistanceTicks)
+			d := newScreenerDetector(cfg)
 			d.SetInstruments([]Instrument{{ID: "x", PriceStep: tc.step}})
 			now := time.Date(2026, 11, 19, 10, 0, 0, 0, time.UTC)
 			level := Price{Units: 250, Nano: 900_000_000}

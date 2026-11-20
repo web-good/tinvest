@@ -40,6 +40,7 @@ func TestOptions(t *testing.T) {
 	t.Setenv("BYBIT_DENSITY_SCREENER_TOPIC_ID", "0")
 	t.Setenv("BYBIT_DENSITY_SIMULATION_TOPIC_ID", "0")
 	t.Setenv("BYBIT_DENSITY_MIN_NOTIONAL", "150000")
+	t.Setenv("BYBIT_DENSITY_ALERT_M5_VOLUME_MULTIPLIER", "0.75")
 	_, err := readOptions(nil, io.Discard, false)
 	if err == nil || !strings.Contains(err.Error(), "different") {
 		t.Fatalf("same destination accepted: %v", err)
@@ -49,7 +50,7 @@ func TestOptions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if op.strategy.MinNotional != 110_000 || len(op.spotSymbols) != 2 || op.spotSymbols[0] != "BTCUSDT" {
+	if op.strategy.MinNotional != 110_000 || op.strategy.AlertM5VolumeMultiplier != .75 || len(op.spotSymbols) != 2 || op.spotSymbols[0] != "BTCUSDT" {
 		t.Fatal("invalid parsed options")
 	}
 	t.Setenv("BYBIT_DENSITY_SIMULATION_CHAT_ID", "-1001")

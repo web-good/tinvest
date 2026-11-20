@@ -456,7 +456,8 @@ func TestAverageVolumeGatesAlertAndPendingEntry(t *testing.T) {
 		signals, fills int
 	}{
 		{"missing", 0, time.Time{}, 10, 0, 0},
-		{"below", 11, at(61), 10, 0, 0},
+		{"below alert threshold", 21, at(61), 10, 0, 0},
+		{"at alert threshold only", 20, at(61), 10, 1, 0},
 		{"equal", 10, at(61), 10, 1, 1},
 		{"shrunk", 10, at(61), 9, 1, 0},
 		{"expired", 10, at(60), 10, 1, 0},
@@ -473,6 +474,11 @@ func TestAverageVolumeGatesAlertAndPendingEntry(t *testing.T) {
 			s.Apply(model.Event{Book: first, TradeReady: true}, at(58))
 			signals, fills := s.Apply(model.Event{Book: wideBook(59, model.Bid)}, at(59))
 			require.Len(t, signals, tc.signals)
+			if len(signals) > 0 {
+				current, ok := s.Current(signals[0], at(59))
+				require.True(t, ok)
+				require.Equal(t, tc.average, current.AverageVolume)
+			}
 			require.Empty(t, fills)
 			last := book(60, model.Bid)
 			last.Bids[0].Qty = tc.lastQty

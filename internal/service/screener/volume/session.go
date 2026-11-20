@@ -16,7 +16,11 @@ type Average struct {
 }
 
 func (a Average) Allows(quantity float64, now time.Time) bool {
-	return now.Before(a.Until) && a.Quantity >= 0 && quantity >= a.Quantity
+	return a.AllowsMultiple(quantity, now, 1)
+}
+
+func (a Average) AllowsMultiple(quantity float64, now time.Time, multiplier float64) bool {
+	return now.Before(a.Until) && a.Quantity >= 0 && quantity >= a.Quantity*multiplier
 }
 
 // PreviousWeekday returns the half-open Moscow session and the next change of reference day.

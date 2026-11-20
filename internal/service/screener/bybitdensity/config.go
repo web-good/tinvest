@@ -49,6 +49,7 @@ func readOptions(args []string, out io.Writer, checkFeed bool) (options, error) 
 	fs.StringVar(&op.restURL, "rest-url", "", "override the Bybit REST base URL")
 	fs.StringVar(&op.wsURL, "ws-url", "", "override the Bybit WebSocket base URL")
 	fs.Float64Var(&cfg.MinNotional, "min-notional", cfg.MinNotional, "minimum density notional in USDT")
+	fs.Float64Var(&cfg.AlertM5VolumeMultiplier, "alert-m5-volume-multiplier", cfg.AlertM5VolumeMultiplier, "minimum density volume for alerts as a multiple of average M5 volume")
 	fs.Float64Var(&cfg.MinMultiple, "min-multiple", cfg.MinMultiple, "minimum multiple of neighbor median")
 	fs.DurationVar(&cfg.Persistence, "persistence", cfg.Persistence, "minimum density confirmation time")
 	fs.DurationVar(&cfg.Freshness, "freshness", cfg.Freshness, "maximum age of a book update")
@@ -136,6 +137,9 @@ func (op options) validate(checkFeed bool) error {
 		return fmt.Errorf("state-dir must be set")
 	}
 	cfg := op.strategy
+	if cfg.AlertM5VolumeMultiplier <= 0 || math.IsNaN(cfg.AlertM5VolumeMultiplier) || math.IsInf(cfg.AlertM5VolumeMultiplier, 0) {
+		return fmt.Errorf("%sALERT_M5_VOLUME_MULTIPLIER must be finite and positive", envPrefix)
+	}
 	for _, value := range []float64{cfg.MinNotional, cfg.MinMultiple, cfg.PaperNotional,
 		cfg.SpotFee, cfg.RewardRisk, cfg.MinTarget} {
 		if math.IsNaN(value) || math.IsInf(value, 0) {

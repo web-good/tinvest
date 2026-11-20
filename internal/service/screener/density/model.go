@@ -34,6 +34,7 @@ type Signal struct {
 	ProfileUntil               time.Time
 }
 type Config struct {
+	AlertM5VolumeMultiplier    float64
 	RequireAverageVolume       bool
 	TurnoverFraction           float64
 	Support                    SupportConfig
@@ -48,5 +49,5 @@ type Config struct {
 }
 
 func DefaultConfig() Config {
-	return Config{MinRubles: 5_000_000, MinMultiple: 5, MinNeighbors: 5, MaxNeighbors: 10, Persistence: time.Minute, Freshness: 3 * time.Second, MinTurnover: 100_000_000, MaxLotPrice: 30_000, MaxBooks: 80, MaxTrades: 10, BookDepth: 50, TradeReadiness: 15 * time.Second}
+	return Config{AlertM5VolumeMultiplier: .5, MinRubles: 5_000_000, MinMultiple: 5, MinNeighbors: 5, MaxNeighbors: 10, Persistence: time.Minute, Freshness: 3 * time.Second, MinTurnover: 100_000_000, MaxLotPrice: 30_000, MaxBooks: 80, MaxTrades: 10, BookDepth: 50, TradeReadiness: 15 * time.Second}
 }
