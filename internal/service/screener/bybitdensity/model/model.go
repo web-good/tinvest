@@ -60,6 +60,7 @@ type Book struct {
 }
 
 type Trade struct {
+	Sell  bool
 	ID    string
 	Ticks int64
 	Qty   float64
@@ -85,6 +86,9 @@ type Event struct {
 }
 
 type Signal struct {
+	HeldAfterSales   bool
+	ZoneHigh         float64
+	Retained         float64
 	Key              Key
 	Side             Side
 	Ticks            int64

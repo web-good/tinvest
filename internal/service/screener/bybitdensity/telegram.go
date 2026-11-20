@@ -69,6 +69,16 @@ func pricePrecision(tick float64) int {
 }
 
 func formatSignal(signal model.Signal, tick float64) string {
+	if signal.ZoneHigh > 0 {
+		msg := fmt.Sprintf("%s · %s · зона покупок %s–%s USDT\nОбъём %.8g монет (%.0f USDT) · %.2f× к медиане\nРасстояние от лучшего bid: %.2f%%\nДержится %s · осталось %.0f%% исходного объёма", marketLabel(signal.Key.Market), signal.Key.Symbol, priceText(signal.Price, tick), priceText(signal.ZoneHigh, tick), signal.Qty, signal.Notional, signal.Multiple, signal.Distance*100, signal.Observed.Truncate(time.Second), signal.Retained*100)
+		if signal.TradeQty > 0 {
+			msg += fmt.Sprintf("\nРыночные продажи в зоне: %.8g монет", signal.TradeQty)
+		}
+		if signal.HeldAfterSales {
+			msg += " · зона удержалась после продаж"
+		}
+		return msg
+	}
 	side := "покупка (bid)"
 	if signal.Side == model.Ask {
 		side = "продажа (ask)"

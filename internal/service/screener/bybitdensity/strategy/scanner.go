@@ -11,6 +11,8 @@ import (
 const tradingDistanceTicks = 25
 
 type episode struct {
+	lastSell                time.Time
+	initialQty              float64
 	signal                  model.Signal
 	firstReceipt, confirmed time.Time
 	seen, delivered         bool
@@ -21,7 +23,10 @@ func (s *Strategy) findCandidates(b *model.Book, now time.Time) {
 	s.candidates = s.candidates[:0]
 	s.alertCandidates = s.alertCandidates[:0]
 	levels := b.Bids
-	maxDistanceTicks := max(tradingDistanceTicks, s.cfg.AlertDistanceTicks)
+	maxDistanceTicks := int64(tradingDistanceTicks)
+	if !s.cfg.ZoneAlerts {
+		maxDistanceTicks = max(maxDistanceTicks, s.cfg.AlertDistanceTicks)
+	}
 	for i, l := range levels {
 		ticks := levels[0].Ticks - l.Ticks
 		if ticks > maxDistanceTicks {
@@ -34,7 +39,7 @@ func (s *Strategy) findCandidates(b *model.Book, now time.Time) {
 			continue
 		}
 		tradingEligible := ticks <= tradingDistanceTicks && s.volumeAllows(l.Qty, now)
-		alertEligible := ticks <= s.cfg.AlertDistanceTicks && s.alertVolumeAllows(l.Qty, now)
+		alertEligible := !s.cfg.ZoneAlerts && ticks <= s.cfg.AlertDistanceTicks && s.alertVolumeAllows(l.Qty, now)
 		if !tradingEligible && !alertEligible {
 			continue
 		}
@@ -161,9 +166,19 @@ func (s *Strategy) observeTrade(trade model.Trade) {
 		return
 	}
 	level := priceLevel{model.Bid, trade.Ticks}
-	for _, ep := range []*episode{s.episodes[level], s.alertEpisodes[level]} {
-		if ep != nil && !trade.At.Before(ep.signal.Since) {
-			ep.signal.TradeQty += trade.Qty
+	if ep := s.episodes[level]; ep != nil && !trade.At.Before(ep.signal.Since) {
+		ep.signal.TradeQty += trade.Qty
+	}
+	if s.cfg.ZoneAlerts {
+		if !trade.Sell || s.zoneWidth == 0 {
+			return
+		}
+		level.ticks -= level.ticks % s.zoneWidth
+	}
+	if ep := s.alertEpisodes[level]; ep != nil && !trade.At.Before(ep.signal.Since) {
+		ep.signal.TradeQty += trade.Qty
+		if trade.At.After(ep.lastSell) {
+			ep.lastSell = trade.At
 		}
 	}
 }
@@ -171,7 +186,7 @@ func (s *Strategy) observeTrade(trade model.Trade) {
 func (s *Strategy) Current(signal model.Signal, now time.Time) (model.Signal, bool) {
 	k := priceLevel{signal.Side, signal.Ticks}
 	ep := s.alertEpisodes[k]
-	if ep == nil || !s.alertVolumeAllows(ep.signal.Qty, now) || signal.Key != s.instrument.Key || s.book == nil || !s.fresh(s.book, now) || !ep.signal.Since.Equal(signal.Since) || ep.confirmed.IsZero() || ep.delivered || now.Before(s.sent[k]) {
+	if ep == nil || (!s.cfg.ZoneAlerts && !s.alertVolumeAllows(ep.signal.Qty, now) || s.cfg.ZoneAlerts && ep.signal.Distance > approachDistance) || signal.Key != s.instrument.Key || s.book == nil || !s.fresh(s.book, now) || !ep.signal.Since.Equal(signal.Since) || ep.confirmed.IsZero() || ep.delivered || now.Before(s.sent[k]) {
 		return model.Signal{}, false
 	}
 	return ep.signal, true

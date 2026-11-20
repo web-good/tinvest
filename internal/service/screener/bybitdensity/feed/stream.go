@@ -331,7 +331,7 @@ func (s *streamSymbol) trades(data json.RawMessage) ([]model.Trade, error) {
 		if err != nil || qty <= 0 {
 			return nil, fmt.Errorf("invalid trade quantity %q", record.Qty)
 		}
-		trades = append(trades, model.Trade{ID: record.ID, Ticks: ticks, Qty: qty, At: time.UnixMilli(int64(record.At))})
+		trades = append(trades, model.Trade{Sell: record.Side == "Sell", ID: record.ID, Ticks: ticks, Qty: qty, At: time.UnixMilli(int64(record.At))})
 	}
 
 	return trades, nil

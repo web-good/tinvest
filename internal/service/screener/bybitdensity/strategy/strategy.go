@@ -10,6 +10,7 @@ import (
 )
 
 type Config struct {
+	ZoneAlerts                        bool
 	AlertDistanceTicks                int64
 	AlertM5VolumeMultiplier           float64
 	FixedLimitEntry                   bool
@@ -39,6 +40,7 @@ type priceLevel struct {
 }
 
 type Strategy struct {
+	zoneWidth                int64
 	bounce                   bounce.Watch[model.Signal]
 	averageVolume            volume.Average
 	candidates               []model.Signal
@@ -80,7 +82,9 @@ func NewWithExecutor(instrument model.Instrument, cfg Config, executor Executor)
 func (s *Strategy) SetAverageVolume(average volume.Average) {
 	s.averageVolume = average
 	clear(s.episodes)
-	clear(s.alertEpisodes)
+	if !s.cfg.ZoneAlerts {
+		clear(s.alertEpisodes)
+	}
 	s.pending = nil
 }
 
@@ -102,6 +106,7 @@ func (s *Strategy) Expire(now time.Time) {
 func (s *Strategy) clearObservation() {
 	s.bounce = bounce.Watch[model.Signal]{}
 	clear(s.episodes)
+	s.zoneWidth = 0
 	clear(s.alertEpisodes)
 	s.candidates = s.candidates[:0]
 	s.alertCandidates = s.alertCandidates[:0]
@@ -143,7 +148,11 @@ func (s *Strategy) Apply(e model.Event, now time.Time) ([]model.Signal, []model.
 		s.findCandidates(b, now)
 		if s.tradeReady {
 			s.observe(b, now, s.episodes, s.candidates, nil)
-			signals = s.observe(b, now, s.alertEpisodes, s.alertCandidates, s.sent)
+			if s.cfg.ZoneAlerts {
+				signals = s.observeZones(b, now)
+			} else {
+				signals = s.observe(b, now, s.alertEpisodes, s.alertCandidates, s.sent)
+			}
 			if s.cfg.CandleEntries {
 				s.observeBounceBook(b)
 			} else if s.position == nil && s.pending == nil && s.outstanding == nil {

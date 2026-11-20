@@ -107,10 +107,10 @@ func TestScreenerExcludesConfiguredCurrenciesAndPairs(t *testing.T) {
 		for offset := int64(1); offset <= 5; offset++ {
 			bids = append(bids, model.Level{Ticks: 1000 - offset, Qty: 1})
 		}
-		for _, snapshot := range []bool{true, false} {
+		for second := 0; second <= 8; second++ {
 			book := &model.Book{
 				Bids: bids, Asks: []model.Level{{Ticks: 1002, Qty: 1}},
-				At: now, Received: now, Snapshot: snapshot,
+				At: now, Received: now, Snapshot: second == 0,
 			}
 			if err := hub.apply(model.Event{Key: key, Book: book, TradeReady: true}, now); err != nil {
 				t.Fatal(err)
@@ -159,7 +159,7 @@ func (r replayMarket) Stream(ctx context.Context, instruments []model.Instrument
 		return book
 	}
 	for _, event := range []model.Event{
-		{Book: makeBook(end.Add(-2*time.Minute-time.Second), true), TradeReady: true},
+		{Book: makeBook(end.Add(-2*time.Minute-8*time.Second), true), TradeReady: true},
 		{Book: makeBook(end.Add(-2*time.Minute), false)},
 	} {
 		event.Key = key
@@ -203,7 +203,8 @@ func TestReplayRoutesConfirmedDensityAndVirtualFills(t *testing.T) {
 	op := options{stateDir: t.TempDir(), depth: 200, symbolLimit: 1, strategy: strategy.DefaultConfig()}
 	op.strategy.MinNotional = 500
 	op.strategy.Persistence = time.Second
-	op.strategy.Freshness = 3 * time.Minute
+	op.strategy.ZoneAlerts = true
+	op.strategy.Freshness = 4 * time.Minute
 	advance := make(chan struct{})
 	densities := make(chan string, 4)
 	fills := make(chan string, 4)
@@ -228,7 +229,7 @@ func TestReplayRoutesConfirmedDensityAndVirtualFills(t *testing.T) {
 		return ""
 	}
 	first := wait(densities)
-	if !strings.Contains(first, "Спот · BTCUSDT") || !strings.Contains(first, "Средний объём M5: 9.25 монет") {
+	if !strings.Contains(first, "Спот · BTCUSDT") || !strings.Contains(first, "зона покупок") {
 		t.Fatalf("spot market alert missing in %s", first)
 	}
 	if !strings.Contains(first, "\nРасстояние от лучшего bid: 0.00%\n") {
