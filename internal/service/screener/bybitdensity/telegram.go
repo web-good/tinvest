@@ -99,6 +99,9 @@ func formatClosedTrade(fill model.Fill, tick float64) string {
 	for i, reason := range trade.ExitReasons {
 		reasons[i] = exitReasonText(reason)
 	}
+	if trade.Imbalance != nil {
+		return formatBreakoutTrade(fill, tick, strings.Join(reasons, " → "), timeLayout)
+	}
 	msg := fmt.Sprintf("СИМУЛЯЦИЯ · %s · %s · %s\nСделка закрыта\n%s по %s USDT · %s\n%s по %s USDT · %s\nПлотность при входе — %s USDT · %.8g монет (%.2f USDT)\nСтоп-лосс — %s USDT\nТейк-профит — %s USDT\nПричина — %s\nРезультат после комиссий %+.2f%% (%+.4f USDT)",
 		marketLabel(fill.Key.Market), fill.Key.Symbol, direction,
 		entryAction, averagePriceText(trade.EntryPrice, tick), trade.EntryAt.In(moscowTime).Format(timeLayout),
@@ -110,6 +113,18 @@ func formatClosedTrade(fill model.Fill, tick float64) string {
 		msg += fmt.Sprintf("\nСредний объём M5 при входе: %.8g монет", *trade.AverageVolume)
 	}
 	return msg
+}
+
+func formatBreakoutTrade(fill model.Fill, tick float64, reason, timeLayout string) string {
+	trade := fill.Closed
+	variant := "без фильтра"
+	if fill.Variant == model.BreakoutImbalance {
+		variant = "с фильтром"
+	}
+	return fmt.Sprintf("СИМУЛЯЦИЯ · Спот · %s · пробой ask (%s)\nКупили по %s USDT · %s\nПродали по %s USDT · %s\nУровень пробоя — %s USDT · %.8g монет\nДисбаланс стакана %+.3f\nПричина — %s\nРезультат после комиссий %+.2f%% (%+.4f USDT)",
+		fill.Key.Symbol, variant, averagePriceText(trade.EntryPrice, tick), trade.EntryAt.In(moscowTime).Format(timeLayout),
+		averagePriceText(trade.ExitPrice, tick), fill.At.In(moscowTime).Format(timeLayout), priceText(trade.DensityPrice, tick),
+		trade.DensityQty, *trade.Imbalance, reason, trade.NetReturn*100, trade.NetPnL)
 }
 
 func averagePriceText(price, tick float64) string {
@@ -126,6 +141,10 @@ func exitReasonText(reason string) string {
 		return "стоп-лосс"
 	case "density_lost":
 		return "плотность исчезла"
+	case "breakout_failed":
+		return "bid вернулся под уровень пробоя"
+	case "timeout":
+		return "истекли 10 секунд"
 	case "take":
 		return "тейк"
 	default:

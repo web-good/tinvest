@@ -25,6 +25,11 @@ const (
 	journalName    = "events.jsonl"
 )
 
+type positionKey struct {
+	instrument model.Key
+	variant    model.Variant
+}
+
 type position struct {
 	Entry     model.Fill `json:"entry"`
 	Remaining float64    `json:"remaining"`
@@ -53,7 +58,7 @@ type Journal struct {
 	lock         *os.File
 	sequence     uint64
 	session      uint64
-	positions    map[model.Key]position
+	positions    map[positionKey]position
 	pending      []notification
 	wake         chan struct{}
 	done         chan struct{}
@@ -220,7 +225,7 @@ func (j *Journal) validate(r record) error {
 		if j.session == 0 || r.Session != j.session || r.Fill == nil || !(r.Fill.Qty > 0) {
 			return errors.New("invalid fill")
 		}
-		current, exists := j.positions[r.Fill.Key]
+		current, exists := j.positions[positionKey{r.Fill.Key, r.Fill.Variant}]
 		if r.Fill.Entry == exists || (exists && current.Entry.Side != r.Fill.Side) {
 			return fmt.Errorf("unexpected fill for %s:%s", r.Fill.Key.Market, r.Fill.Key.Symbol)
 		}
@@ -239,21 +244,22 @@ func (j *Journal) apply(r record) {
 	switch r.Kind {
 	case sessionStarted:
 		j.session = r.Session
-		j.positions = make(map[model.Key]position)
+		j.positions = make(map[positionKey]position)
 	case sessionEnded:
 		j.session = 0
 		j.positions = nil
 	case fillRecorded:
 		fill := *r.Fill
+		key := positionKey{fill.Key, fill.Variant}
 		switch {
 		case fill.Entry:
-			j.positions[fill.Key] = position{Entry: fill, Remaining: fill.Qty}
+			j.positions[key] = position{Entry: fill, Remaining: fill.Qty}
 		case fill.Partial:
-			current := j.positions[fill.Key]
+			current := j.positions[key]
 			current.Remaining -= fill.Qty
-			j.positions[fill.Key] = current
+			j.positions[key] = current
 		default:
-			delete(j.positions, fill.Key)
+			delete(j.positions, key)
 		}
 		if r.Message != "" {
 			j.pending = append(j.pending, notification{id: r.ID, message: r.Message})
@@ -273,7 +279,7 @@ func (j *Journal) endSession(reason string) error {
 		open = append(open, p)
 	}
 	slices.SortFunc(open, func(a, b position) int {
-		return cmp.Or(cmp.Compare(a.Entry.Key.Market, b.Entry.Key.Market), cmp.Compare(a.Entry.Key.Symbol, b.Entry.Key.Symbol))
+		return cmp.Or(cmp.Compare(a.Entry.Key.Market, b.Entry.Key.Market), cmp.Compare(a.Entry.Key.Symbol, b.Entry.Key.Symbol), cmp.Compare(a.Entry.Variant, b.Entry.Variant))
 	})
 	return j.append(record{Kind: sessionEnded, Session: j.session, Reason: reason, Open: open})
 }

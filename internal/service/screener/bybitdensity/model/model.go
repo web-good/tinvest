@@ -60,10 +60,12 @@ type Book struct {
 }
 
 type Trade struct {
-	ID    string
-	Ticks int64
-	Qty   float64
-	At    time.Time
+	ID        string
+	TakerSide Side // Bid for an aggressive buy, Ask for an aggressive sell.
+	OffBook   bool // Block or RPI trade, whose liquidity is absent from the public book.
+	Ticks     int64
+	Qty       float64
+	At        time.Time
 }
 
 type Candle struct {
@@ -109,6 +111,7 @@ type TradeSummary struct {
 	DensityPrice  float64
 	DensityQty    float64
 	AverageVolume *float64 `json:"average_volume,omitempty"`
+	Imbalance     *float64 `json:"imbalance,omitempty"`
 	StopPrice     float64
 	TakePrice     float64
 	NetPnL        float64
@@ -116,9 +119,17 @@ type TradeSummary struct {
 	ExitReasons   []string
 }
 
+type Variant string
+
+const (
+	Breakout          Variant = "breakout"
+	BreakoutImbalance Variant = "breakout_imbalance"
+)
+
 type Fill struct {
 	Key       Key
-	Side      Side // Direction of the position, Bid for long and Ask for short.
+	Variant   Variant `json:"variant,omitempty"`
+	Side      Side    // Direction of the position, Bid for long and Ask for short.
 	Entry     bool
 	Partial   bool
 	Price     float64

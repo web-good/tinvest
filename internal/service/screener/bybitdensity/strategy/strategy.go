@@ -10,6 +10,7 @@ import (
 )
 
 type Config struct {
+	SOLBreakout                       bool
 	FixedLimitEntry                   bool
 	CandleEntries                     bool
 	RequireAverageVolume              bool
@@ -35,6 +36,8 @@ type priceLevel struct {
 }
 
 type Strategy struct {
+	breakout                 *breakout
+	variant                  model.Variant
 	bounce                   bounce.Watch[model.Signal]
 	averageVolume            volume.Average
 	candidates               []model.Signal
@@ -43,6 +46,7 @@ type Strategy struct {
 	book                     *model.Book
 	needSnapshot, tradeReady bool
 	episodes                 map[priceLevel]*episode
+	alertEpisodes            map[priceLevel]*episode
 	sent                     map[priceLevel]time.Time
 	nextCleanup              time.Time
 	trades                   tradeIDs
@@ -59,20 +63,26 @@ func New(instrument model.Instrument, cfg Config) *Strategy {
 
 // NewWithExecutor routes decisions for one instrument to the given executor.
 func NewWithExecutor(instrument model.Instrument, cfg Config, executor Executor) *Strategy {
-	return &Strategy{
-		instrument:   instrument,
-		cfg:          cfg,
-		needSnapshot: true,
-		episodes:     make(map[priceLevel]*episode),
-		sent:         make(map[priceLevel]time.Time),
-		executor:     executor,
+	s := &Strategy{
+		instrument:    instrument,
+		cfg:           cfg,
+		needSnapshot:  true,
+		episodes:      make(map[priceLevel]*episode),
+		alertEpisodes: make(map[priceLevel]*episode),
+		sent:          make(map[priceLevel]time.Time),
+		executor:      executor,
 	}
+	if cfg.SOLBreakout && instrument.Key == (model.Key{Market: model.Spot, Symbol: SOLBreakoutSymbol}) {
+		s.breakout = newBreakout(instrument, cfg)
+	}
+	return s
 }
 
 // SetAverageVolume replaces the reference and restarts entry confirmations.
 func (s *Strategy) SetAverageVolume(average volume.Average) {
 	s.averageVolume = average
 	clear(s.episodes)
+	clear(s.alertEpisodes)
 	s.pending = nil
 }
 
@@ -94,6 +104,7 @@ func (s *Strategy) Expire(now time.Time) {
 func (s *Strategy) clearObservation() {
 	s.bounce = bounce.Watch[model.Signal]{}
 	clear(s.episodes)
+	clear(s.alertEpisodes)
 	s.candidates = s.candidates[:0]
 	s.book = nil
 	s.pending = nil
@@ -104,6 +115,15 @@ func (s *Strategy) fresh(b *model.Book, now time.Time) bool {
 }
 
 func (s *Strategy) Apply(e model.Event, now time.Time) ([]model.Signal, []model.Fill) {
+	var breakoutFills []model.Fill
+	if s.breakout != nil {
+		breakoutFills = s.breakout.apply(e, now)
+	}
+	signals, fills := s.applyDensity(e, now)
+	return signals, append(fills, breakoutFills...)
+}
+
+func (s *Strategy) applyDensity(e model.Event, now time.Time) ([]model.Signal, []model.Fill) {
 	s.Expire(now)
 	if e.Reset {
 		s.clearObservation()
@@ -132,7 +152,8 @@ func (s *Strategy) Apply(e model.Event, now time.Time) ([]model.Signal, []model.
 		s.book = b
 		s.findCandidates(b, now)
 		if s.tradeReady {
-			signals = s.observe(b, now)
+			s.observe(b, now, s.episodes, maxDistanceTicks, nil)
+			signals = s.observe(b, now, s.alertEpisodes, alertDistanceTicks, s.sent)
 			if s.cfg.CandleEntries {
 				s.observeBounceBook(b)
 			} else if s.position == nil && s.pending == nil && s.outstanding == nil {

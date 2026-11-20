@@ -8,7 +8,10 @@ import (
 	"tinvest/internal/service/screener/bybitdensity/model"
 )
 
-const maxDistanceTicks = 25
+const (
+	maxDistanceTicks   = 25
+	alertDistanceTicks = 2
+)
 
 type episode struct {
 	signal                  model.Signal
@@ -31,7 +34,7 @@ func (s *Strategy) findCandidates(b *model.Book, now time.Time) {
 		if value < s.cfg.MinNotional || len(levels) < 6 || !s.volumeAllows(l.Qty, now) {
 			continue
 		}
-		multiple := value / s.medianNeighbors(levels, i)
+		multiple := value / medianNeighbors(s.instrument, levels, i)
 		if multiple < s.cfg.MinMultiple {
 			continue
 		}
@@ -43,17 +46,20 @@ func (s *Strategy) volumeAllows(quantity float64, now time.Time) bool {
 	return !s.cfg.RequireAverageVolume || s.averageVolume.Allows(quantity, now)
 }
 
-func (s *Strategy) observe(b *model.Book, now time.Time) []model.Signal {
-	for _, ep := range s.episodes {
+func (s *Strategy) observe(b *model.Book, now time.Time, episodes map[priceLevel]*episode, maxTicks int64, sent map[priceLevel]time.Time) []model.Signal {
+	for _, ep := range episodes {
 		ep.seen = false
 	}
 	var signals []model.Signal
 	for _, sig := range s.candidates {
+		if b.Bids[0].Ticks-sig.Ticks > maxTicks {
+			break
+		}
 		k := priceLevel{sig.Side, sig.Ticks}
-		ep := s.episodes[k]
+		ep := episodes[k]
 		if ep == nil {
 			ep = &episode{firstReceipt: b.Received}
-			s.episodes[k] = ep
+			episodes[k] = ep
 			sig.Since = b.At
 		} else {
 			sig.Since, sig.TradeQty = ep.signal.Since, ep.signal.TradeQty
@@ -64,13 +70,13 @@ func (s *Strategy) observe(b *model.Book, now time.Time) []model.Signal {
 		if ep.confirmed.IsZero() && sig.Observed >= s.cfg.Persistence {
 			ep.confirmed = b.At
 		}
-		if !ep.confirmed.IsZero() && !ep.delivered && !now.Before(s.sent[k]) {
+		if sent != nil && !ep.confirmed.IsZero() && !ep.delivered && !now.Before(sent[k]) {
 			signals = append(signals, sig)
 		}
 	}
-	for k, ep := range s.episodes {
+	for k, ep := range episodes {
 		if !ep.seen {
-			delete(s.episodes, k)
+			delete(episodes, k)
 		}
 	}
 	return signals
@@ -91,7 +97,7 @@ func absTicks(n int64) int64 {
 }
 
 // On a sorted side, the nearest remaining neighbor is adjacent to the selected interval.
-func (s *Strategy) medianNeighbors(levels []model.Level, i int) float64 {
+func medianNeighbors(instrument model.Instrument, levels []model.Level, i int) float64 {
 	var neighbors [10]float64
 	n := min(len(levels)-1, len(neighbors))
 	left, right := i-1, i+1
@@ -104,7 +110,7 @@ func (s *Strategy) medianNeighbors(levels []model.Level, i int) float64 {
 			next = levels[right]
 			right++
 		}
-		neighbors[j] = s.instrument.Price(next.Ticks) * next.Qty
+		neighbors[j] = instrument.Price(next.Ticks) * next.Qty
 	}
 	slices.Sort(neighbors[:n])
 	return (neighbors[n/2] + neighbors[(n-1)/2]) / 2
@@ -143,14 +149,17 @@ func (s *Strategy) observeTrade(trade model.Trade) {
 	if !s.tradeReady || trade.Qty <= 0 || math.IsNaN(trade.Qty) || math.IsInf(trade.Qty, 0) || !s.trades.add(trade.ID) {
 		return
 	}
-	if ep := s.episodes[priceLevel{model.Bid, trade.Ticks}]; ep != nil && !trade.At.Before(ep.signal.Since) {
-		ep.signal.TradeQty += trade.Qty
+	level := priceLevel{model.Bid, trade.Ticks}
+	for _, ep := range []*episode{s.episodes[level], s.alertEpisodes[level]} {
+		if ep != nil && !trade.At.Before(ep.signal.Since) {
+			ep.signal.TradeQty += trade.Qty
+		}
 	}
 }
 
 func (s *Strategy) Current(signal model.Signal, now time.Time) (model.Signal, bool) {
 	k := priceLevel{signal.Side, signal.Ticks}
-	ep := s.episodes[k]
+	ep := s.alertEpisodes[k]
 	if ep == nil || !s.volumeAllows(ep.signal.Qty, now) || signal.Key != s.instrument.Key || s.book == nil || !s.fresh(s.book, now) || !ep.signal.Since.Equal(signal.Since) || ep.confirmed.IsZero() || ep.delivered || now.Before(s.sent[k]) {
 		return model.Signal{}, false
 	}
@@ -160,7 +169,7 @@ func (s *Strategy) Current(signal model.Signal, now time.Time) (model.Signal, bo
 func (s *Strategy) MarkSent(signal model.Signal, now time.Time) {
 	k := priceLevel{signal.Side, signal.Ticks}
 	s.sent[k] = now.Add(30 * time.Minute)
-	if ep := s.episodes[k]; ep != nil && ep.signal.Since.Equal(signal.Since) {
+	if ep := s.alertEpisodes[k]; ep != nil && ep.signal.Since.Equal(signal.Since) {
 		ep.delivered = true
 	}
 }

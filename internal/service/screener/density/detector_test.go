@@ -153,20 +153,20 @@ func TestDetectorExpiresByExchangeTimestamp(t *testing.T) {
 	}
 }
 
-func TestDetectorUsesTwentyFiveTicksFromBestBid(t *testing.T) {
+func TestScreenerDetectorUsesTwoTicksFromBestBid(t *testing.T) {
 	for _, tc := range []struct {
-		name  string
-		step  Price
-		bid25 Price
-		bid26 Price
+		name     string
+		step     Price
+		bidTwo   Price
+		bidThree Price
 	}{
-		{"fractional step", Price{Nano: 30_000_000}, Price{Units: 251, Nano: 650_000_000}, Price{Units: 251, Nano: 680_000_000}},
-		{"whole step", Price{Units: 1}, Price{Units: 275, Nano: 900_000_000}, Price{Units: 276, Nano: 900_000_000}},
+		{"fractional step", Price{Nano: 30_000_000}, Price{Units: 250, Nano: 960_000_000}, Price{Units: 250, Nano: 990_000_000}},
+		{"whole step", Price{Units: 1}, Price{Units: 252, Nano: 900_000_000}, Price{Units: 253, Nano: 900_000_000}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := DefaultConfig()
 			cfg.Persistence = time.Second
-			d := NewDetector(cfg)
+			d := newDetector(cfg, screenerDistanceTicks)
 			d.SetInstruments([]Instrument{{ID: "x", PriceStep: tc.step}})
 			now := time.Date(2026, 11, 19, 10, 0, 0, 0, time.UTC)
 			level := Price{Units: 250, Nano: 900_000_000}
@@ -183,19 +183,19 @@ func TestDetectorUsesTwentyFiveTicksFromBestBid(t *testing.T) {
 				book.Bids[0].Price = bid
 				return d.Update(book, book.Time)
 			}
-			update(0, tc.bid26)
+			update(0, tc.bidThree)
 			if got := d.Candidates(); len(got) != 0 {
-				t.Fatalf("26-tick level tracked: %+v", got)
+				t.Fatalf("three-tick level tracked: %+v", got)
 			}
-			if got := update(1, tc.bid25); len(got) != 0 {
-				t.Fatalf("25-tick level confirmed before persistence: %+v", got)
+			if got := update(1, tc.bidTwo); len(got) != 0 {
+				t.Fatalf("two-tick level confirmed before persistence: %+v", got)
 			}
-			if got := update(2, tc.bid25); len(got) != 1 || got[0].Price != level {
-				t.Fatalf("expected 25-tick level, got %+v", got)
+			if got := update(2, tc.bidTwo); len(got) != 1 || got[0].Price != level {
+				t.Fatalf("expected two-tick level, got %+v", got)
 			}
-			update(3, tc.bid26)
+			update(3, tc.bidThree)
 			if got := d.Candidates(); len(got) != 0 {
-				t.Fatalf("26-tick level remained eligible for delivery: %+v", got)
+				t.Fatalf("three-tick level remained eligible for delivery: %+v", got)
 			}
 		})
 	}

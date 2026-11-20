@@ -106,7 +106,7 @@ func TestScannerFilters(t *testing.T) {
 				b.Bids[j].Qty = 3
 			}
 		}},
-		{"outside distance", func(b *model.Book) { b.Bids[0].Qty = 1; b.Bids[7] = model.Level{Ticks: 974, Qty: 10} }},
+		{"outside distance", func(b *model.Book) { b.Bids[0].Qty = 1; b.Bids[3].Qty = 10 }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := engine(model.Spot)
@@ -541,7 +541,7 @@ func TestBounceBuysAtThirdMinuteAsk(t *testing.T) {
 	require.InDelta(t, 100.4, fills[0].Price, 1e-8)
 }
 
-func TestAlertWaitsForBidWithinTwentyFiveTicks(t *testing.T) {
+func TestAlertWaitsForBidWithinTwoTicks(t *testing.T) {
 	for _, price := range []int64{500, 101_000} {
 		cfg := strategy.DefaultConfig()
 		cfg.MinNotional = 100
@@ -562,16 +562,16 @@ func TestAlertWaitsForBidWithinTwentyFiveTicks(t *testing.T) {
 			return signals
 		}
 
-		require.Empty(t, update(0, 26))
-		require.Empty(t, update(1, 26))
-		require.Empty(t, update(2, 25))
-		signals := update(3, 25)
+		require.Empty(t, update(0, 3))
+		require.Empty(t, update(1, 3))
+		require.Empty(t, update(2, 2))
+		signals := update(3, 2)
 		require.Len(t, signals, 1)
 		require.Equal(t, at(2), signals[0].Since)
 		_, ok := s.Current(signals[0], at(3))
 		require.True(t, ok)
 
-		require.Empty(t, update(4, 26))
+		require.Empty(t, update(4, 3))
 		_, ok = s.Current(signals[0], at(4))
 		require.False(t, ok)
 	}

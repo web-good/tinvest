@@ -6,7 +6,10 @@ import (
 	"time"
 )
 
-const maxDistanceTicks = 25
+const (
+	screenerDistanceTicks = 2
+	tradingDistanceTicks  = 25
+)
 
 type key struct {
 	id    string
@@ -18,10 +21,11 @@ type observation struct {
 	signal      Signal
 }
 type Detector struct {
-	cfg          Config
-	observations map[key]observation
-	timestamps   map[string]time.Time
-	instruments  map[string]Instrument
+	cfg              Config
+	maxDistanceTicks int64
+	observations     map[key]observation
+	timestamps       map[string]time.Time
+	instruments      map[string]Instrument
 }
 
 // SetInstruments installs a fresh history snapshot and restarts confirmations.
@@ -35,7 +39,11 @@ func (d *Detector) SetInstruments(instruments []Instrument) {
 }
 
 func NewDetector(cfg Config) *Detector {
-	return &Detector{cfg: cfg, observations: make(map[key]observation), timestamps: make(map[string]time.Time)}
+	return newDetector(cfg, tradingDistanceTicks)
+}
+
+func newDetector(cfg Config, maxDistanceTicks int64) *Detector {
+	return &Detector{cfg: cfg, maxDistanceTicks: maxDistanceTicks, observations: make(map[key]observation), timestamps: make(map[string]time.Time)}
 }
 func (d *Detector) Reset(id string) {
 	for k := range d.observations {
@@ -72,7 +80,7 @@ func comparePrice(a, b Price) int {
 	return 1
 }
 func valid(p Price) bool { return p.Units >= 0 && p.Nano >= 0 && p.Nano < 1e9 && value(p) > 0 }
-func withinTickDistance(best, level, step Price) bool {
+func withinTickDistance(best, level, step Price, maxDistanceTicks int64) bool {
 	const nanosPerUnit = 1_000_000_000
 	units := best.Units - level.Units
 	nanos := int64(best.Nano) - int64(level.Nano)
@@ -121,7 +129,7 @@ func (d *Detector) Update(b Book, now time.Time) []Signal {
 	var signals []Signal
 	average := instrument.AverageVolume
 	for i, l := range b.Bids {
-		if !withinTickDistance(bestBid, l.Price, instrument.PriceStep) {
+		if !withinTickDistance(bestBid, l.Price, instrument.PriceStep, d.maxDistanceTicks) {
 			break
 		}
 		if d.cfg.RequireAverageVolume && !average.Allows(float64(l.Quantity), now) {
