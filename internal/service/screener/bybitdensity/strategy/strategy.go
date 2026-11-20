@@ -10,6 +10,7 @@ import (
 )
 
 type Config struct {
+	FixedLimitEntry                   bool
 	CandleEntries                     bool
 	RequireAverageVolume              bool
 	MinNotional, MinMultiple          float64

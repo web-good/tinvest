@@ -68,7 +68,7 @@ func serve(ctx context.Context, market marketData, op options, screener, simulat
 	defer func() { retErr = errors.Join(retErr, session.Close()) }()
 	slog.Info("Bybit Density worker started", "state_dir", op.stateDir)
 	op.strategy.RequireAverageVolume = true
-	op.strategy.CandleEntries = true
+	op.strategy.FixedLimitEntry = true
 
 	for {
 		next := session.NextReset(time.Now())

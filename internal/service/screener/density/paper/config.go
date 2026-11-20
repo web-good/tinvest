@@ -8,6 +8,7 @@ import (
 )
 
 type Config struct {
+	FixedLimitEntry                                 bool
 	CandleEntries                                   bool
 	RestrictEntryHours                              bool  // Allow buys only at 07:00–12:00 and 15:00–18:00 Moscow time.
 	BookExecution                                   bool  // Execute against visible books without a trade subscription.

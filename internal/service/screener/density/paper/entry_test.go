@@ -142,3 +142,32 @@ func TestBookExecutionFillsPassiveEntryAndTakeWithoutTape(t *testing.T) {
 		t.Fatalf("no book take: %+v", o)
 	}
 }
+
+func TestFixedLimitEntryFillsAtFortyPercent(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.FixedLimitEntry = true
+	cfg.Latency = 0
+	i := density.Instrument{ID: "x", Ticker: "T", Lot: 1, PriceStep: p(1)}
+	e, err := New(cfg, []density.Instrument{i}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signal := density.Signal{InstrumentID: i.ID, Price: p(100), Quantity: 100}
+	b := density.Book{InstrumentID: i.ID, Time: start, Lot: 1,
+		Bids: []density.Level{{Price: signal.Price, Quantity: 100}},
+		Asks: []density.Level{{Price: p(102), Quantity: 10}},
+	}
+	e.OnBook(b, start)
+	e.Observe(signal, start)
+	o := e.orders[i.ID]
+	if o == nil || o.State != "pending" || o.Entry != 101*nano || o.Stop != 100*nano {
+		t.Fatalf("expected a resting buy at 101: %+v", o)
+	}
+	b.Time = start.Add(time.Millisecond)
+	b.Bids[0].Quantity = 40
+	b.Asks[0].Price = p(101)
+	e.OnBook(b, b.Time)
+	if o.State != "open" || o.Entry != 101*nano || o.Stop != 100*nano {
+		t.Fatalf("expected a fill at the limit with exactly 40%% of the density: %+v", o)
+	}
+}

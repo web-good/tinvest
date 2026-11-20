@@ -12,6 +12,7 @@ import (
 const Nano int64 = 1000000000
 
 type Config struct {
+	FixedLimitEntry                                      bool
 	CandleEntries                                        bool
 	EntryTicks, EntryZoneTicks, StopTicks                int64
 	RewardRisk, MinRemaining                             float64
@@ -54,11 +55,13 @@ func plan(c Config, i density.Instrument, s density.Signal, b density.Book, now,
 	if i.ID == "" || i.Ticker == "" || i.Lot <= 0 || step <= 0 || step > 1000000*Nano || level <= 0 || level%step != 0 || i.ID != s.InstrumentID || !validBook(b, now, c.Freshness) || b.InstrumentID != i.ID || b.Lot != i.Lot {
 		return nil, fmt.Errorf("invalid entry metadata or book")
 	}
-	if c.StopTicks >= (level+step-1)/step {
+	if !c.FixedLimitEntry && c.StopTicks >= (level+step-1)/step {
 		return nil, fmt.Errorf("stop offset exceeds price range")
 	}
 	entry := Price(b.Asks[0].Price)
-	if entryUntil.IsZero() {
+	if c.FixedLimitEntry {
+		entry = density.FixedEntryLimit(level, step)
+	} else if entryUntil.IsZero() {
 		var err error
 		entry, err = density.EntryLimit(level, step, c.EntryTicks, c.EntryZoneTicks, entry)
 		if err != nil {
@@ -68,6 +71,9 @@ func plan(c Config, i density.Instrument, s density.Signal, b density.Book, now,
 		return nil, fmt.Errorf("invalid bounce entry quote or expired signal")
 	}
 	stop := level - c.StopTicks*step
+	if c.FixedLimitEntry {
+		stop = density.EntryStop(entry, step)
+	}
 	take, validTake := density.TakeProfit(entry, stop, step, c.RewardRisk)
 	if !validTake {
 		return nil, fmt.Errorf("entry crosses ask or invalid protection prices")

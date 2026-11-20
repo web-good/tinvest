@@ -95,7 +95,7 @@ func (e *Engine) reason(now time.Time) error {
 	if reason == "" && ep.Entry.Filled == 0 && (now.Sub(ep.Created) >= e.cfg.EntryTTL || !ep.EntryUntil.IsZero() && !now.Before(ep.EntryUntil)) {
 		reason = "entry_expired"
 	}
-	if reason == "" && !e.cfg.CandleEntries && !ep.Opened.IsZero() && now.Sub(ep.Opened) >= e.cfg.MaxHold {
+	if reason == "" && !e.cfg.CandleEntries && !e.cfg.FixedLimitEntry && !ep.Opened.IsZero() && now.Sub(ep.Opened) >= e.cfg.MaxHold {
 		reason = "max_hold"
 	}
 	if e.stopping {

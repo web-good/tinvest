@@ -6,6 +6,7 @@ import (
 
 	"tinvest/internal/service/screener/bounce"
 	"tinvest/internal/service/screener/bybitdensity/model"
+	"tinvest/internal/service/screener/density"
 )
 
 type setup struct {
@@ -42,7 +43,11 @@ func (s *Strategy) prepareEntry() {
 	}
 	best.entryPlaced = true
 	sig := best.signal
-	limit := sig.Ticks + direction(sig.Side)*s.cfg.EntryTicks
+	offset := s.cfg.EntryTicks
+	if s.cfg.FixedLimitEntry {
+		offset = 1
+	}
+	limit := sig.Ticks + direction(sig.Side)*offset
 	stop, target := s.entryPrices(sig.Side, sig.Ticks, limit)
 	if s.validPrice(limit) && s.validPrice(stop) && s.validPrice(target) {
 		s.pending = &setup{side: sig.Side, origin: sig.Ticks, watched: sig.Ticks, baseQty: sig.Qty, limit: limit}
@@ -94,12 +99,27 @@ func direction(side model.Side) int64 {
 func (s *Strategy) entryPrices(side model.Side, origin, ticks int64) (stop, target int64) {
 	sign := direction(side)
 	stop = origin - sign*s.cfg.StopTicks
-	risk := sign * (ticks - stop)
-	if risk <= 0 {
-		return stop, 0
+	if s.cfg.FixedLimitEntry {
+		stop = percentStop(side, float64(ticks))
 	}
-	gain := max(float64(risk)*s.cfg.RewardRisk, float64(ticks)*s.cfg.MinTarget)
-	return stop, ticks + sign*int64(math.Ceil(gain))
+	return stop, s.targetPrice(side, float64(ticks), stop)
+}
+
+func percentStop(side model.Side, entryTicks float64) int64 {
+	if side == model.Ask {
+		return int64(math.Ceil(math.Nextafter(entryTicks*1.002, 0)))
+	}
+	return int64(math.Floor(math.Nextafter(entryTicks*0.998, math.Inf(1))))
+}
+
+func (s *Strategy) targetPrice(side model.Side, ticks float64, stop int64) int64 {
+	sign := direction(side)
+	risk := float64(sign) * (ticks - float64(stop))
+	if risk <= 0 {
+		return 0
+	}
+	gain := max(risk*s.cfg.RewardRisk, ticks*s.cfg.MinTarget)
+	return sign * int64(math.Ceil(float64(sign)*ticks+gain))
 }
 
 func (s *Strategy) validPrice(ticks int64) bool {
@@ -110,7 +130,9 @@ func (s *Strategy) validPrice(ticks int64) bool {
 func (s *Strategy) entryIntent(p *setup, now time.Time) (Order, bool) {
 	qtyAtDensity := quantityAt(levelsOn(s.book, p.side), p.side, p.origin)
 	retained := bounce.Retains(p.baseQty, qtyAtDensity)
-	if !s.cfg.CandleEntries {
+	if s.cfg.FixedLimitEntry {
+		retained = density.RetainsEntryDensity(p.baseQty, qtyAtDensity)
+	} else if !s.cfg.CandleEntries {
 		retained = qtyAtDensity >= .5*p.baseQty && s.volumeAllows(qtyAtDensity, now)
 	}
 	if !retained {
@@ -207,6 +229,11 @@ func (s *Strategy) ConfirmExecution(m Execution, now time.Time) (model.Fill, boo
 	if order.Entry {
 		s.pending = nil
 		stop, target := s.entryPrices(pending.side, pending.origin, s.instrument.Ticks(f.Price))
+		if s.cfg.FixedLimitEntry {
+			entryTicks := f.Price / s.instrument.TickSize
+			stop = percentStop(pending.side, entryTicks)
+			target = s.targetPrice(pending.side, entryTicks, stop)
+		}
 		s.position = &position{setup: *pending, entry: f, remaining: m.Steps, stop: stop, target: target}
 		return f, true
 	}

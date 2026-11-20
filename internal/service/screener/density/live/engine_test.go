@@ -303,3 +303,22 @@ func TestRestartDoesNotRepostUncertainBuy(t *testing.T) {
 		t.Fatal("replayed uncertain buy")
 	}
 }
+
+func TestFixedLimitStopUsesBrokerFillPrice(t *testing.T) {
+	x := setup(t)
+	x.e.cfg.FixedLimitEntry = true
+	x.f.cfg.FixedLimitEntry = true
+	x.step(t)
+	if len(x.b.posts) != 1 || x.b.posts[0].Price != 101*Nano || x.b.posts[0].Immediate {
+		t.Fatalf("expected resting limit at 101: %+v", x.b.posts)
+	}
+	x.fill()
+	id := "order-" + x.b.posts[0].Key
+	fill := x.b.orders[id]
+	fill.Amount = 1000 * Nano
+	x.b.orders[id] = fill
+	x.step(t)
+	if len(x.b.protections) != 2 || x.b.protections[0].Kind != "stop" || x.b.protections[0].Price != 99*Nano {
+		t.Fatalf("expected stop at 99 after fill at 100: %+v", x.b.protections)
+	}
+}

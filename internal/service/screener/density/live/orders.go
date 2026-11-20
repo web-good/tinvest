@@ -26,11 +26,15 @@ func (e *Engine) applyOrder(dst *Order, got Order) error {
 	dst.Terminal = got.Terminal
 	dst.Status = got.Status
 	if ep := e.episode; dst == &ep.Entry && dst.Filled > 0 {
-		if !ep.EntryUntil.IsZero() && !ep.Take.Sent && dst.Amount > 0 {
+		if (e.cfg.FixedLimitEntry || !ep.EntryUntil.IsZero()) && !ep.Stop.Sent && !ep.Take.Sent && dst.Amount > 0 {
 			step := Price(ep.Instrument.PriceStep)
 			entry := dst.Amount / ep.Instrument.Lot / dst.Filled
-			if take, ok := density.TakeProfit(entry, ep.StopPrice, step, e.cfg.RewardRisk); ok && entry%step == 0 {
-				ep.TakePrice = take
+			stop := ep.StopPrice
+			if e.cfg.FixedLimitEntry {
+				stop = density.EntryStop(entry, step)
+			}
+			if take, ok := density.TakeProfit(entry, stop, step, e.cfg.RewardRisk); ok && (e.cfg.FixedLimitEntry || entry%step == 0) {
+				ep.StopPrice, ep.TakePrice = stop, take
 			}
 		}
 		e.feed.filled(ep, e.Now())

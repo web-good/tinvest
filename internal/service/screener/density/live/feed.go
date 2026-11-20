@@ -95,7 +95,7 @@ func (f *Feed) Trade(event density.Event, now time.Time) {
 		return
 	}
 	f.trades[event.InstrumentID] = event.Time
-	if ep := f.watches[event.InstrumentID]; ep != nil && (ep.Entry.Filled > 0 || Price(f.anchors[event.InstrumentID].Price) == ep.Density) && f.reasons[event.InstrumentID] == "" && Price(event.Price) <= ep.StopPrice {
+	if ep := f.watches[event.InstrumentID]; ep != nil && (ep.Entry.Filled > 0 || !f.cfg.FixedLimitEntry && Price(f.anchors[event.InstrumentID].Price) == ep.Density) && f.reasons[event.InstrumentID] == "" && Price(event.Price) <= ep.StopPrice {
 		f.reasons[event.InstrumentID] = "stop_trade"
 	}
 }
@@ -218,6 +218,12 @@ func (f *Feed) check(now time.Time) {
 				break
 			}
 		}
+		if f.cfg.FixedLimitEntry && ep.Entry.Filled == 0 {
+			if !density.RetainsEntryDensity(float64(ep.DensityLots), float64(qty)) {
+				f.reasons[id] = "density_lost"
+			}
+			continue
+		}
 		minimum := float64(ep.DensityLots) * f.cfg.MinRemaining
 		pendingBounce := ep.Entry.Filled == 0 && ep.EntryDensityLots > 0
 		if pendingBounce {
@@ -294,6 +300,7 @@ func (f *Feed) filled(ep *Episode, now time.Time) {
 	defer f.mu.Unlock()
 	if watch := f.watches[ep.Instrument.ID]; watch != nil {
 		watch.Entry.Filled = ep.Entry.Filled
+		watch.StopPrice = ep.StopPrice
 	}
 	f.check(now)
 }
@@ -338,7 +345,7 @@ func (f *Feed) rebase(ep *Episode, s density.Signal, now time.Time) bool {
 }
 
 func (f *Feed) dataLoss(id, reason string) {
-	if ep := f.watches[id]; ep != nil && f.reasons[id] == "" && (!f.cfg.CandleEntries || ep.Entry.Filled == 0) {
+	if ep := f.watches[id]; ep != nil && f.reasons[id] == "" && (!(f.cfg.CandleEntries || f.cfg.FixedLimitEntry) || ep.Entry.Filled == 0) {
 		f.reasons[id] = reason
 	}
 }

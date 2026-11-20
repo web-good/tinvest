@@ -194,7 +194,9 @@ func (e *Engine) plan(s density.Signal, now time.Time, released float64, entryUn
 		return nil
 	}
 	entry := price(b.Asks[0].Price)
-	if entryUntil.IsZero() {
+	if e.cfg.FixedLimitEntry {
+		entry = density.FixedEntryLimit(level, step)
+	} else if entryUntil.IsZero() {
 		var err error
 		entry, err = density.EntryLimit(level, step, e.cfg.EntryTicks, e.cfg.EntryZoneTicks, entry)
 		if err != nil {
@@ -204,11 +206,14 @@ func (e *Engine) plan(s density.Signal, now time.Time, released float64, entryUn
 		return nil
 	}
 	stop := level - e.cfg.StopTicks*step
+	if e.cfg.FixedLimitEntry {
+		stop = density.EntryStop(entry, step)
+	}
 	if stop <= 0 {
 		return nil
 	}
 	var take int64
-	if entryUntil.IsZero() || !e.cfg.IgnoreCapital {
+	if !e.cfg.IgnoreCapital || entryUntil.IsZero() && !e.cfg.FixedLimitEntry {
 		targetTicks := takeProfitTicks(entry, stop, step, e.cfg.RewardRisk)
 		if targetTicks > float64(math.MaxInt64-entry)/float64(step) {
 			return nil
@@ -295,11 +300,15 @@ func (e *Engine) OnBookWithCandidates(b density.Book, candidates []density.Signa
 			}
 		}
 		reason := ""
+		if o.State == "pending" && e.cfg.FixedLimitEntry && !density.RetainsEntryDensity(float64(o.DensityLots), float64(retained)) {
+			e.cancel(o, "density_lost", now)
+			return
+		}
 		if o.State == "pending" && o.entryDensityLots > 0 && !bounce.Retains(float64(o.entryDensityLots), float64(retained)) {
 			e.cancel(o, "density_lost", now)
 			return
 		}
-		if retained == 0 || (o.State == "pending" && o.entryDensityLots == 0 && float64(retained) < max(float64(o.DensityLots)*e.cfg.MinRemaining, o.AverageVolumeLots)) {
+		if retained == 0 || (o.State == "pending" && !e.cfg.FixedLimitEntry && o.entryDensityLots == 0 && float64(retained) < max(float64(o.DensityLots)*e.cfg.MinRemaining, o.AverageVolumeLots)) {
 			moved, ok := density.Relocation(b, density.Price{Units: anchor / nano, Nano: int32(anchor % nano)}, o.DensityLots, e.cfg.MinRemaining, candidates, now)
 			if !ok {
 				reason = "density_lost"
@@ -332,7 +341,7 @@ func (e *Engine) OnBookWithCandidates(b density.Book, candidates []density.Signa
 		}
 	}
 	e.executeEntry(o, now)
-	if (!e.cfg.CandleEntries || !e.cfg.IgnoreCapital) && e.err == nil && o.State == "open" && b.Time.After(o.Opened) {
+	if (!(e.cfg.CandleEntries || e.cfg.FixedLimitEntry) || !e.cfg.IgnoreCapital) && e.err == nil && o.State == "open" && b.Time.After(o.Opened) {
 		e.updateSellLimit(o, b, now)
 	}
 	e.executeTake(o, now)
@@ -374,7 +383,7 @@ func (e *Engine) OnTrade(t density.Event, now time.Time) {
 // executeEntry models a marketable entry using visible ask liquidity.
 // Passive tick-offset orders continue to require a trade through their limit.
 func (e *Engine) executeEntry(o *Order, now time.Time) {
-	if e.err != nil || (o.entryUntil.IsZero() && e.cfg.EntryZoneTicks <= 0 && !e.cfg.BookExecution) || o.State != "pending" || now.Before(o.ActiveAt) || e.entryExpired(o, now) {
+	if e.err != nil || (!e.cfg.FixedLimitEntry && o.entryUntil.IsZero() && e.cfg.EntryZoneTicks <= 0 && !e.cfg.BookExecution) || o.State != "pending" || now.Before(o.ActiveAt) || e.entryExpired(o, now) {
 		return
 	}
 	b := e.books[o.InstrumentID]
@@ -422,7 +431,10 @@ func takeProfitTicks(entry, stop, step int64, rewardRisk float64) float64 {
 func (e *Engine) fillEntry(o *Order, lots, entry int64, now time.Time) {
 	o.Entry = entry
 	step := price(e.instruments[o.InstrumentID].PriceStep)
-	if o.entryUntil.IsZero() || !e.cfg.IgnoreCapital {
+	if e.cfg.FixedLimitEntry {
+		o.Stop = density.EntryStop(entry, step)
+	}
+	if !e.cfg.IgnoreCapital || o.entryUntil.IsZero() && !e.cfg.FixedLimitEntry {
 		o.Take = entry + int64(takeProfitTicks(entry, o.Stop, step, e.cfg.RewardRisk))*step
 	} else if take, ok := density.TakeProfit(entry, o.Stop, step, e.cfg.RewardRisk); ok {
 		o.Take = take
@@ -485,7 +497,7 @@ func (e *Engine) invalidate(id, reason string, now time.Time) {
 		o.Uncertain = true
 		// Data gaps suspend execution until a fresh valid book arrives.
 		// Keep the position and any previously requested strategy exit intact.
-		if reason == "trading_closed" && (!e.cfg.CandleEntries || !e.cfg.IgnoreCapital) {
+		if reason == "trading_closed" && (!(e.cfg.CandleEntries || e.cfg.FixedLimitEntry) || !e.cfg.IgnoreCapital) {
 			e.requestExit(o, reason, now)
 		}
 		e.emit("data_gap", o, now, reason, 0, 0)

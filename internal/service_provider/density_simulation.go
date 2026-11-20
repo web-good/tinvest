@@ -31,7 +31,7 @@ func (s *ServiceProvider) densitySimulationParticipant(c *config.DensityLiveConf
 			return err
 		}
 		cfg := paper.DefaultConfig()
-		cfg.CandleEntries = lc.CandleEntries
+		cfg.FixedLimitEntry = lc.FixedLimitEntry
 		cfg.RestrictEntryHours = true
 		cfg.IgnoreCapital = true
 		cfg.Commission = 0

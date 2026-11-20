@@ -36,7 +36,7 @@ func main() {
 }
 func run(ctx context.Context, args []string, out io.Writer) (retErr error) {
 	pc := paper.DefaultConfig()
-	pc.CandleEntries = true
+	pc.FixedLimitEntry = true
 	dc := config.NewDensityConfig()
 	fs := flag.NewFlagSet("density-paper", flag.ContinueOnError)
 	fs.SetOutput(out)
@@ -51,11 +51,11 @@ func run(ctx context.Context, args []string, out io.Writer) (retErr error) {
 	fs.Float64Var(&pc.PositionRubles, "position-rubles", pc.PositionRubles, "maximum allocation per entry, including entry commission")
 	fs.Float64Var(&pc.Commission, "commission", pc.Commission, "commission per side as fraction: 0.0005 = 0.05%")
 	fs.IntVar(&pc.MaxPositions, "max-positions", pc.MaxPositions, "maximum concurrent pending/held instruments")
-	fs.Int64Var(&pc.EntryTicks, "entry-ticks", pc.EntryTicks, "legacy entry offset; candle entries use the current ask")
-	fs.Int64Var(&pc.EntryZoneTicks, "entry-zone-ticks", pc.EntryZoneTicks, "legacy entry zone; candle entries use the current ask")
-	fs.Int64Var(&pc.StopTicks, "stop-ticks", pc.StopTicks, "stop below original density in price steps")
+	fs.Int64Var(&pc.EntryTicks, "entry-ticks", pc.EntryTicks, "legacy entry offset (unused)")
+	fs.Int64Var(&pc.EntryZoneTicks, "entry-zone-ticks", pc.EntryZoneTicks, "legacy entry zone (unused)")
+	fs.Int64Var(&pc.StopTicks, "stop-ticks", pc.StopTicks, "legacy stop distance (unused)")
 	fs.Float64Var(&pc.RewardRisk, "rr", pc.RewardRisk, "take distance / entry-to-stop distance")
-	fs.Float64Var(&pc.MinRemaining, "min-remaining", pc.MinRemaining, "minimum retained density fraction before cancel/exit")
+	fs.Float64Var(&pc.MinRemaining, "min-remaining", pc.MinRemaining, "minimum retained fraction for density relocation after entry")
 	fs.DurationVar(&pc.Latency, "latency", pc.Latency, "simulated order activation/exit latency")
 	fs.DurationVar(&pc.EntryTTL, "entry-ttl", pc.EntryTTL, "pending entry lifetime")
 	fs.DurationVar(&pc.MaxHold, "max-hold", pc.MaxHold, "maximum holding time")

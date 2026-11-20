@@ -34,14 +34,33 @@ func EntryLimit(level, step, ticks, zoneTicks, ask int64) (int64, error) {
 	return boundary, nil
 }
 
+// RetainsEntryDensity checks the wall against its size when the entry was planned.
+func RetainsEntryDensity(initial, current float64) bool {
+	return initial > 0 && current >= math.Nextafter(initial*0.4, 0)
+}
+
+// FixedEntryLimit quotes one tick above the wall.
+func FixedEntryLimit(level, step int64) int64 {
+	if level <= 0 || step <= 0 || level > math.MaxInt64-step {
+		return 0
+	}
+	return level + step
+}
+
+// EntryStop rounds 0.2% below the fill down to an exchange tick.
+func EntryStop(entry, step int64) int64 {
+	return ((entry - entry/500 - min(entry%500, 1)) / step) * step
+}
+
 // TakeProfit rounds the reward target up to an exchange tick.
 func TakeProfit(entry, stop, step int64, rewardRisk float64) (int64, bool) {
 	if stop <= 0 || entry <= stop || step <= 0 {
 		return 0, false
 	}
-	ticks := math.Ceil(float64(entry-stop) / float64(step) * rewardRisk)
-	if !(ticks >= 1 && ticks < float64(math.MaxInt64)) || int64(ticks) > (math.MaxInt64-entry)/step {
+	base := entry - entry%step
+	ticks := math.Ceil(float64(entry%step)/float64(step) + float64(entry-stop)/float64(step)*rewardRisk)
+	if !(ticks >= 1 && ticks < float64(math.MaxInt64)) || int64(ticks) > (math.MaxInt64-base)/step {
 		return 0, false
 	}
-	return entry + int64(ticks)*step, true
+	return base + int64(ticks)*step, true
 }

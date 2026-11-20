@@ -576,3 +576,42 @@ func TestAlertWaitsForBidWithinTwentyFiveTicks(t *testing.T) {
 		require.False(t, ok)
 	}
 }
+
+func TestFixedLimitEntryRetainsFortyPercent(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		qty  float64
+		fill bool
+	}{
+		{"retains at forty percent", 4, true},
+		{"cancels below forty percent", 3.9, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := strategy.DefaultConfig()
+			cfg.FixedLimitEntry = true
+			cfg.MinNotional = 500
+			cfg.Persistence = time.Second
+			cfg.EntryTicks = 3
+			cfg.StopTicks = 20
+			s := strategy.New(model.Instrument{Key: model.Key{Market: model.Spot, Symbol: "TESTUSDT"}, TickSize: .1, QtyStep: .1}, cfg)
+			start(t, s, model.Bid)
+			b := book(60, model.Bid)
+			b.Bids[0].Qty = tc.qty
+			_, fills := s.Apply(model.Event{Book: b}, at(60))
+			if !tc.fill {
+				require.Empty(t, fills)
+				return
+			}
+			require.Len(t, fills, 1)
+			require.InDelta(t, 100.1, fills[0].Price, 1e-10)
+			b = book(61, model.Bid)
+			b.Bids = b.Bids[2:]
+			b.Bids[0].Qty = 2
+			_, fills = s.Apply(model.Event{Book: b}, at(61))
+			require.Len(t, fills, 1)
+			require.Equal(t, "stop", fills[0].Reason)
+			require.NotNil(t, fills[0].Closed)
+			require.InDelta(t, 99.8, fills[0].Closed.StopPrice, 1e-10)
+		})
+	}
+}
