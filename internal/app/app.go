@@ -8,12 +8,14 @@ import (
 	"tinvest/internal/enum"
 	newsscheduler "tinvest/internal/service/news/scheduler"
 	"tinvest/internal/service/screener/bybitdensity"
+	"tinvest/internal/service/screener/movement"
 	goldenx "tinvest/internal/service/trading_strategy/golden_x/dto"
 	gxmodel "tinvest/internal/service/trading_strategy/golden_x/model"
 	"tinvest/internal/service/trading_strategy/golden_x/scheduler"
 	rsipullbackdto "tinvest/internal/service/trading_strategy/rsi_pullback/live/dto"
 	rsipullbackscheduler "tinvest/internal/service/trading_strategy/rsi_pullback/live/scheduler"
 	"tinvest/internal/service_provider"
+	"tinvest/pkg/client/telegram"
 	"tinvest/pkg/closer"
 	"tinvest/pkg/logger"
 )
@@ -68,6 +70,20 @@ func (a *App) Run(ctx context.Context) error {
 		defer startWorker(ctx, "Bybit Density", bybit)()
 	}
 
+	if a.config.MovementEnabled {
+		bot, err := a.sp.GetTelegramBot()
+		if err != nil {
+			return err
+		}
+		grpc, err := a.sp.GetGrpcClient()
+		if err != nil {
+			return err
+		}
+		cfg := a.config.TelegramClient
+		send := telegram.NewTopicSender(bot, cfg.GroupChatID, cfg.TopicMovement).SendMessage
+		defer startWorker(ctx, "movement MOEX", movement.NewMOEX(grpc.Connection(), a.config.GrpcClient.TokenProd, a.config.MovementMOEXPct, send))()
+		defer startWorker(ctx, "movement Binance", movement.NewBinance(a.config.MovementBinancePct, send))()
+	}
 	if a.config.AppEnv == "prod" {
 		a.runProd(ctx)
 

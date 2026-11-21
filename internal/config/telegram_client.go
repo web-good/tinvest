@@ -10,6 +10,7 @@ type TelegramClient struct {
 	TopicGapFade      int    `config:"TELEGRAM_TOPIC_GAP_FADE"`
 	TopicPDLRSI       int    `config:"TELEGRAM_TOPIC_PDL_RSI"`
 	TopicFVGImbalance int    `config:"TELEGRAM_TOPIC_FVG_IMBALANCE"`
+	TopicMovement     int    `config:"TELEGRAM_TOPIC_MOVEMENT"`
 	TopicNews         int    `config:"TELEGRAM_TOPIC_NEWS"`
 	AllowedUserIDs    []int64
 }
