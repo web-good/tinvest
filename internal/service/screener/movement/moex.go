@@ -18,8 +18,8 @@ type moex struct {
 	auth   grpc.CallOption
 }
 
-func NewMOEX(conn grpc.ClientConnInterface, token string, minPct float64, send func(string) error) *Worker {
-	return &Worker{"Мосбиржа · акции", moex{pb.NewInstrumentsServiceClient(conn), pb.NewMarketDataServiceClient(conn), client.NewRPCCredential(client.NewAuth(token))}, minPct, 450 * time.Millisecond, send}
+func NewMOEX(conn grpc.ClientConnInterface, token string, minPct, minRVOL float64, send func(string) error) *Worker {
+	return &Worker{market: "Мосбиржа · акции", feed: moex{pb.NewInstrumentsServiceClient(conn), pb.NewMarketDataServiceClient(conn), client.NewRPCCredential(client.NewAuth(token))}, minPct: minPct, minRVOL: minRVOL, delay: 450 * time.Millisecond, send: send}
 }
 
 func (m moex) instruments(ctx context.Context) ([]instrument, error) {
@@ -53,7 +53,7 @@ func (m moex) candles(ctx context.Context, id string, start, end time.Time) ([]b
 	var out []bar
 	for _, c := range resp.GetCandles() {
 		if c.GetIsComplete() {
-			out = append(out, bar{c.GetTime().AsTime(), price(c.GetOpen()), price(c.GetHigh()), price(c.GetLow())})
+			out = append(out, bar{c.GetTime().AsTime(), price(c.GetOpen()), price(c.GetHigh()), price(c.GetLow()), float64(c.GetVolume())})
 		}
 	}
 	return out, nil

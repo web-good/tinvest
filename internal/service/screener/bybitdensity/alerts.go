@@ -3,7 +3,6 @@ package bybitdensity
 import (
 	"context"
 	"log/slog"
-	"strings"
 	"sync"
 	"time"
 
@@ -30,16 +29,16 @@ type alertHub struct {
 	mu         sync.Mutex
 	config     strategy.Config
 	recorder   fillRecorder
-	excluded   map[string]struct{}
+	profiles   map[string]spotProfile
 	states     map[model.Key]instrumentState
 	signals    chan model.Signal
 	pending    map[signalLevel]struct{}
 	retryAfter map[signalLevel]time.Time
 }
 
-func newAlertHub(cfg strategy.Config, recorder fillRecorder, excluded map[string]struct{}) *alertHub {
+func newAlertHub(cfg strategy.Config, recorder fillRecorder, profiles map[string]spotProfile) *alertHub {
 	return &alertHub{
-		config: cfg, recorder: recorder, excluded: excluded,
+		config: cfg, recorder: recorder, profiles: profiles,
 		states:     make(map[model.Key]instrumentState),
 		signals:    make(chan model.Signal, 64),
 		pending:    make(map[signalLevel]struct{}),
@@ -50,8 +49,15 @@ func newAlertHub(cfg strategy.Config, recorder fillRecorder, excluded map[string
 func (h *alertHub) add(instruments []model.Instrument) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	for _, value := range instruments {
-		h.states[value.Key] = instrumentState{instrument: value, strategy: strategy.New(value, h.config)}
+	for _, instrument := range instruments {
+		profile, ok := h.profiles[instrument.Key.Symbol]
+		if !ok || instrument.Key.Market != model.Spot {
+			continue
+		}
+		cfg := h.config
+		cfg.MinNotional = profile.minNotional
+		cfg.ZoneWidthUSDT = profile.zoneWidthUSDT
+		h.states[instrument.Key] = instrumentState{instrument: instrument, strategy: strategy.New(instrument, cfg)}
 	}
 }
 
@@ -64,12 +70,6 @@ func (h *alertHub) apply(event model.Event, now time.Time) error {
 	}
 	signals, fills := state.strategy.Apply(event, now)
 	for _, signal := range signals {
-		symbol := signal.Key.Symbol
-		_, excludedPair := h.excluded[symbol]
-		_, excludedCurrency := h.excluded[strings.TrimSuffix(symbol, "USDT")]
-		if excludedPair || excludedCurrency {
-			continue
-		}
 		level := signalLevel{key: signal.Key, side: signal.Side, ticks: signal.Ticks}
 		if _, queued := h.pending[level]; queued || now.Before(h.retryAfter[level]) {
 			continue

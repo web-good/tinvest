@@ -81,8 +81,8 @@ func (a *App) Run(ctx context.Context) error {
 		}
 		cfg := a.config.TelegramClient
 		send := telegram.NewTopicSender(bot, cfg.GroupChatID, cfg.TopicMovement).SendMessage
-		defer startWorker(ctx, "movement MOEX", movement.NewMOEX(grpc.Connection(), a.config.GrpcClient.TokenProd, a.config.MovementMOEXPct, send))()
-		defer startWorker(ctx, "movement Binance", movement.NewBinance(a.config.MovementBinancePct, send))()
+		defer startWorker(ctx, "movement MOEX", movement.NewMOEX(grpc.Connection(), a.config.GrpcClient.TokenProd, a.config.MovementMOEXPct, a.config.MovementMOEXRVOL, send))()
+		defer startWorker(ctx, "movement Binance", movement.NewBinance(a.config.MovementBinancePct, a.config.MovementBinanceRVOL, send))()
 	}
 	if a.config.AppEnv == "prod" {
 		a.runProd(ctx)

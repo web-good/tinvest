@@ -19,9 +19,7 @@ const envPrefix = "BYBIT_DENSITY_"
 type options struct {
 	strategy      strategy.Config
 	stateDir      string
-	spotSymbols   []string
-	alertExclude  map[string]struct{}
-	symbolLimit   int
+	spotProfiles  map[string]spotProfile
 	depth         int
 	screener      telegramDestination
 	simulation    telegramDestination
@@ -32,16 +30,13 @@ type options struct {
 }
 
 func readOptions(args []string, out io.Writer, checkFeed bool) (options, error) {
-	op := options{strategy: strategy.DefaultConfig()}
+	op := options{strategy: strategy.DefaultConfig(), spotProfiles: defaultSpotProfiles()}
 	cfg := &op.strategy
 	fs := flag.NewFlagSet("bybit-check-feed", flag.ContinueOnError)
 	fs.SetOutput(out)
 	envFile := fs.String("env-file", "", "optional dotenv file")
 	fs.BoolVar(&cfg.ZoneAlerts, "zone-alerts", true, "alert on persistent bid zones near the market")
-	spot := fs.String("spot-symbols", "", "comma-separated spot USDT pairs; empty selects by turnover")
-	alertExclude := fs.String("alert-exclude", "", "comma-separated base currencies or pairs to exclude from screener alerts")
 	fs.StringVar(&op.stateDir, "state-dir", "reports/bybit-density", "local simulation state directory")
-	fs.IntVar(&op.symbolLimit, "symbol-limit", 20, "number of automatic spot selections")
 	fs.IntVar(&op.depth, "depth", 200, "Bybit order book depth per side")
 	fs.Int64Var(&op.screener.chatID, "screener-chat-id", 0, "Telegram chat for confirmed densities")
 	fs.IntVar(&op.screener.topicID, "screener-topic-id", 0, "optional Telegram topic for confirmed densities")
@@ -50,7 +45,6 @@ func readOptions(args []string, out io.Writer, checkFeed bool) (options, error) 
 	fs.DurationVar(&op.checkTimeout, "check-timeout", 90*time.Second, "timeout for public feed check")
 	fs.StringVar(&op.restURL, "rest-url", "", "override the Bybit REST base URL")
 	fs.StringVar(&op.wsURL, "ws-url", "", "override the Bybit WebSocket base URL")
-	fs.Float64Var(&cfg.MinNotional, "min-notional", cfg.MinNotional, "minimum density notional in USDT")
 	fs.Int64Var(&cfg.AlertDistanceTicks, "alert-distance-ticks", cfg.AlertDistanceTicks, "maximum distance from best bid to alert on a density, in ticks")
 	fs.Float64Var(&cfg.AlertM5VolumeMultiplier, "alert-m5-volume-multiplier", cfg.AlertM5VolumeMultiplier, "minimum density volume for alerts as a multiple of average M5 volume")
 	fs.Float64Var(&cfg.MinMultiple, "min-multiple", cfg.MinMultiple, "minimum multiple of neighbor median")
@@ -106,33 +100,11 @@ func readOptions(args []string, out io.Writer, checkFeed bool) (options, error) 
 		token, _ := lookup("TELEGRAM")
 		op.telegramToken = strings.TrimSpace(token)
 	}
-	op.spotSymbols = splitSymbols(*spot)
-	op.alertExclude = make(map[string]struct{})
-	for _, symbol := range splitSymbols(*alertExclude) {
-		if symbol != "" {
-			op.alertExclude[strings.ReplaceAll(symbol, "/", "")] = struct{}{}
-		}
-	}
 	return op, op.validate(checkFeed)
-}
-
-func splitSymbols(input string) []string {
-	if strings.TrimSpace(input) == "" {
-		return nil
-	}
-	items := strings.Split(input, ",")
-	for index := range items {
-		items[index] = strings.ToUpper(strings.TrimSpace(items[index]))
-	}
-	return items
 }
 
 func (op options) validate(checkFeed bool) error {
 	switch {
-	case op.symbolLimit < 1 || op.symbolLimit > 100:
-		return fmt.Errorf("symbol-limit must be between 1 and 100")
-	case len(op.spotSymbols) > 100:
-		return fmt.Errorf("explicit spot instrument list must have at most 100 entries")
 	case op.depth != 50 && op.depth != 200 && op.depth != 1000:
 		return fmt.Errorf("depth must be 50, 200 or 1000")
 	case op.checkTimeout <= 0:
@@ -152,13 +124,13 @@ func (op options) validate(checkFeed bool) error {
 	if cfg.AlertM5VolumeMultiplier <= 0 || math.IsNaN(cfg.AlertM5VolumeMultiplier) || math.IsInf(cfg.AlertM5VolumeMultiplier, 0) {
 		return fmt.Errorf("%sALERT_M5_VOLUME_MULTIPLIER must be finite and positive", envPrefix)
 	}
-	for _, value := range []float64{cfg.MinNotional, cfg.MinMultiple, cfg.PaperNotional,
+	for _, value := range []float64{cfg.MinMultiple, cfg.PaperNotional,
 		cfg.SpotFee, cfg.RewardRisk, cfg.MinTarget} {
 		if math.IsNaN(value) || math.IsInf(value, 0) {
 			return fmt.Errorf("strategy parameters must be finite")
 		}
 	}
-	if cfg.MinNotional <= 0 || cfg.MinMultiple <= 0 ||
+	if cfg.MinMultiple <= 0 ||
 		cfg.Persistence <= 0 || cfg.Freshness <= 0 {
 		return fmt.Errorf("invalid density thresholds or durations")
 	}

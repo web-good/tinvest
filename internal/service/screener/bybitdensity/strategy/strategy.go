@@ -11,6 +11,7 @@ import (
 
 type Config struct {
 	ZoneAlerts                        bool
+	ZoneWidthUSDT                     float64
 	AlertDistanceTicks                int64
 	AlertM5VolumeMultiplier           float64
 	FixedLimitEntry                   bool

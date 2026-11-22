@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -90,7 +92,7 @@ func serve(ctx context.Context, market marketData, op options, screener, simulat
 }
 
 func serveSession(ctx context.Context, market marketData, op options, session *journal.Journal, screener, simulation sendMessage) error {
-	hub := newAlertHub(op.strategy, session, op.alertExclude)
+	hub := newAlertHub(op.strategy, session, op.spotProfiles)
 	group, ctx := errgroup.WithContext(ctx)
 	group.Go(func() error { return session.Deliver(ctx, simulation) })
 	group.Go(func() error { return hub.sendSignals(ctx, screener) })
@@ -101,6 +103,10 @@ func serveSession(ctx context.Context, market marketData, op options, session *j
 
 func runSpot(ctx context.Context, market marketData, op options, hub *alertHub) error {
 	const category = model.Spot
+	symbols := slices.Sorted(maps.Keys(op.spotProfiles))
+	if len(symbols) == 0 {
+		return errors.New("no bybit spot profiles configured")
+	}
 	ctx, cancel := context.WithCancel(ctx)
 	var volumeDone chan struct{}
 	defer func() {
@@ -114,7 +120,7 @@ func runSpot(ctx context.Context, market marketData, op options, hub *alertHub) 
 	for ctx.Err() == nil {
 		if len(instruments) == 0 {
 			var err error
-			instruments, err = market.Instruments(ctx, category, op.spotSymbols, op.symbolLimit)
+			instruments, err = market.Instruments(ctx, category, symbols, len(symbols))
 			if errors.Is(err, feed.ErrInvalidSymbols) {
 				return fmt.Errorf("%s instrument configuration: %w", category, err)
 			}

@@ -15,8 +15,8 @@ import (
 const step = 5 * time.Minute
 
 type bar struct {
-	at              time.Time
-	open, high, low float64
+	at                      time.Time
+	open, high, low, volume float64
 }
 
 type instrument struct{ symbol, id string }
@@ -30,6 +30,8 @@ type result struct {
 	symbol string
 	mean   float64
 	hits   int
+	volume float64
+	rvol   float64
 }
 
 func summarize(bars []bar, end time.Time, n int, minPct float64) (result, bool) {
@@ -43,6 +45,10 @@ func summarize(bars []bar, end time.Time, n int, minPct float64) (result, bool) 
 		if !b.at.Equal(start.Add(time.Duration(seen)*step)) || !(b.low > 0 && b.high >= b.open && b.open >= b.low) {
 			return result{}, false
 		}
+		if b.volume < 0 || math.IsNaN(b.volume) || math.IsInf(b.volume, 0) {
+			return result{}, false
+		}
+		r.volume += b.volume
 		pct := (b.high - b.low) / b.open * 100
 		r.mean += pct
 		if pct+1e-12 >= minPct {
@@ -54,20 +60,25 @@ func summarize(bars []bar, end time.Time, n int, minPct float64) (result, bool) 
 		return result{}, false
 	}
 	r.mean /= float64(n)
-	return r, !math.IsInf(r.mean, 0)
+	return r, !math.IsInf(r.mean, 0) && !math.IsInf(r.volume, 0)
 }
 
 type Worker struct {
-	market string
-	feed   source
-	minPct float64
-	delay  time.Duration
-	send   func(string) error
+	market  string
+	feed    source
+	minPct  float64
+	minRVOL float64
+	history volumeHistory
+	delay   time.Duration
+	send    func(string) error
 }
 
-func (w Worker) Run(ctx context.Context) error {
+func (w *Worker) Run(ctx context.Context) error {
 	if w.minPct < 0 || math.IsNaN(w.minPct) || math.IsInf(w.minPct, 0) {
 		return errors.New("invalid movement threshold")
+	}
+	if w.minRVOL <= 0 || math.IsNaN(w.minRVOL) || math.IsInf(w.minRVOL, 0) {
+		return errors.New("invalid relative volume threshold")
 	}
 	for {
 		end := time.Now().UTC().Truncate(30 * time.Minute).Add(30 * time.Minute)
@@ -82,7 +93,7 @@ func (w Worker) Run(ctx context.Context) error {
 	}
 }
 
-func (w Worker) scan(ctx context.Context, end time.Time) error {
+func (w *Worker) scan(ctx context.Context, end time.Time) error {
 	ctx, cancel := context.WithTimeout(ctx, 25*time.Minute)
 	defer cancel()
 	instruments, err := w.feed.instruments(ctx)
@@ -100,21 +111,36 @@ func (w Worker) scan(ctx context.Context, end time.Time) error {
 	var firstErr error
 	pace := time.NewTicker(w.delay)
 	defer pace.Stop()
-	for _, inst := range instruments {
+	if w.history == nil {
+		w.history = make(volumeHistory)
+	}
+	cutoff := start.UTC().Truncate(24*time.Hour).AddDate(0, 0, -historyLookbackDays)
+	for key := range w.history {
+		if key.day.Before(cutoff) {
+			delete(w.history, key)
+		}
+	}
+	fetch := func(id string, start, end time.Time) ([]bar, error) {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return nil, ctx.Err()
 		case <-pace.C:
+			return w.feed.candles(ctx, id, start, end)
 		}
-		bars, err := w.feed.candles(ctx, inst.id, start, end)
+	}
+	recordFailure := func(symbol string, err error) {
+		failed++
+		if firstErr == nil {
+			firstErr = fmt.Errorf("%s: %w", symbol, err)
+		}
+	}
+	for _, inst := range instruments {
+		bars, err := fetch(inst.id, start, end)
 		if err != nil {
-			if errors.Is(err, errRateLimited) {
+			if ctx.Err() != nil || errors.Is(err, errRateLimited) {
 				return err
 			}
-			failed++
-			if firstErr == nil {
-				firstErr = fmt.Errorf("%s: %w", inst.symbol, err)
-			}
+			recordFailure(inst.symbol, err)
 			continue
 		}
 		for _, n := range windows {
@@ -123,7 +149,22 @@ func (w Worker) scan(ctx context.Context, end time.Time) error {
 				continue
 			}
 			valid[n]++
-			if r.mean+1e-12 >= w.minPct {
+			if r.mean+1e-12 < w.minPct {
+				continue
+			}
+			baseline, err := w.history.baseline(fetch, inst.id, end, n)
+			if err != nil {
+				if ctx.Err() != nil || errors.Is(err, errRateLimited) {
+					return err
+				}
+				recordFailure(inst.symbol, err)
+				continue
+			}
+			if baseline <= 0 {
+				continue
+			}
+			r.rvol = r.volume / baseline
+			if !math.IsInf(r.rvol, 0) && r.rvol >= w.minRVOL {
 				r.symbol = inst.symbol
 				ranks[n] = append(ranks[n], r)
 			}
@@ -145,9 +186,9 @@ func (w Worker) scan(ctx context.Context, end time.Time) error {
 			return rows[i].mean > rows[j].mean
 		})
 		var msg strings.Builder
-		fmt.Fprintf(&msg, "%s · %d мин до %s МСК\nСредний размах 5м · свечей ≥ %g%%", w.market, n*5, end.In(time.FixedZone("MSK", 3*3600)).Format("15:04"), w.minPct)
+		fmt.Fprintf(&msg, "%s · %d мин до %s МСК\nСредний размах 5м · свечей ≥ %g%% · RVOL ≥ %g×", w.market, n*5, end.In(time.FixedZone("MSK", 3*3600)).Format("15:04"), w.minPct, w.minRVOL)
 		for _, r := range rows[:min(10, len(rows))] {
-			fmt.Fprintf(&msg, "\n%s    %.2f%%    %d/%d", html.EscapeString(r.symbol), r.mean, r.hits, n)
+			fmt.Fprintf(&msg, "\n%s    %.2f%%    %d/%d    RVOL %.2f×", html.EscapeString(r.symbol), r.mean, r.hits, n, r.rvol)
 		}
 		if len(rows) == 0 {
 			msg.WriteString("\nИнструментов выше или на уровне порога нет.")

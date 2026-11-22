@@ -1,7 +1,6 @@
 package strategy
 
 import (
-	"math"
 	"slices"
 	"time"
 
@@ -11,7 +10,6 @@ import (
 const (
 	searchDistance   = .003
 	approachDistance = .0005
-	zoneFraction     = .0002
 	zoneMultiple     = 3
 	zoneAge          = 8 * time.Second
 	retainedFraction = .6
@@ -46,7 +44,7 @@ func zoneMedian(zones []bidZone, index int) float64 {
 func (s *Strategy) observeZones(b *model.Book, now time.Time) []model.Signal {
 	best := b.Bids[0].Ticks
 	if s.zoneWidth == 0 {
-		s.zoneWidth = max(1, int64(math.Round(float64(best)*zoneFraction)))
+		s.zoneWidth = max(1, s.instrument.Ticks(s.cfg.ZoneWidthUSDT))
 	}
 	var zones []bidZone
 	for _, level := range b.Bids {

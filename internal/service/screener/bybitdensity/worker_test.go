@@ -3,7 +3,9 @@ package bybitdensity
 import (
 	"context"
 	"flag"
+	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -39,7 +41,8 @@ func TestOptions(t *testing.T) {
 	t.Setenv("BYBIT_DENSITY_SIMULATION_CHAT_ID", "-1001")
 	t.Setenv("BYBIT_DENSITY_SCREENER_TOPIC_ID", "0")
 	t.Setenv("BYBIT_DENSITY_SIMULATION_TOPIC_ID", "0")
-	t.Setenv("BYBIT_DENSITY_MIN_NOTIONAL", "150000")
+	t.Setenv("BYBIT_DENSITY_MIN_NOTIONAL", "obsolete")
+	t.Setenv("BYBIT_DENSITY_ALERT_EXCLUDE", "BTC,ETH,SOL")
 	t.Setenv("BYBIT_DENSITY_ALERT_M5_VOLUME_MULTIPLIER", "0.75")
 	t.Setenv("BYBIT_DENSITY_ALERT_DISTANCE_TICKS", "3")
 	_, err := readOptions(nil, io.Discard, false)
@@ -47,11 +50,11 @@ func TestOptions(t *testing.T) {
 		t.Fatalf("same destination accepted: %v", err)
 	}
 	t.Setenv("BYBIT_DENSITY_SIMULATION_CHAT_ID", "-1002")
-	op, err := readOptions([]string{"-min-notional", "110000", "-spot-symbols", "btcusdt, ETHUSDT"}, io.Discard, false)
+	op, err := readOptions(nil, io.Discard, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if op.strategy.MinNotional != 110_000 || op.strategy.AlertM5VolumeMultiplier != .75 || op.strategy.AlertDistanceTicks != 3 || len(op.spotSymbols) != 2 || op.spotSymbols[0] != "BTCUSDT" {
+	if op.strategy.AlertM5VolumeMultiplier != .75 || op.strategy.AlertDistanceTicks != 3 {
 		t.Fatal("invalid parsed options")
 	}
 	t.Setenv("BYBIT_DENSITY_SIMULATION_CHAT_ID", "-1001")
@@ -90,26 +93,32 @@ func TestOptionsReadBybitEntryAndRiskFromEnv(t *testing.T) {
 	}
 }
 
-func TestScreenerExcludesConfiguredCurrenciesAndPairs(t *testing.T) {
-	t.Setenv("BYBIT_DENSITY_ALERT_EXCLUDE", " usdc, DAI/USDT, FDUSDUSDT ")
+func TestScreenerUsesSpotProfiles(t *testing.T) {
+	t.Setenv("BYBIT_DENSITY_ALERT_EXCLUDE", "BTC,ETH,SOL")
 	op, err := readOptions(nil, io.Discard, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	op.strategy.MinNotional = 500
-	op.strategy.Persistence = time.Second
-	hub := newAlertHub(op.strategy, nil, op.alertExclude)
-	for _, symbol := range []string{"USDCUSDT", "DAIUSDT", "FDUSDUSDT", "BTCUSDT"} {
-		key := model.Key{Market: model.Spot, Symbol: symbol}
-		hub.add([]model.Instrument{{Key: key, TickSize: .1, QtyStep: .1}})
+	op.strategy.ZoneAlerts = true
+	hub := newAlertHub(op.strategy, nil, op.spotProfiles)
+	for _, market := range []struct {
+		symbol   string
+		tickSize float64
+	}{{"BTCUSDT", 1}, {"ETHUSDT", .005}, {"SOLUSDT", .001}, {"XRPUSDT", .001}} {
+		key := model.Key{Market: model.Spot, Symbol: market.symbol}
+		hub.add([]model.Instrument{{Key: key, TickSize: market.tickSize, QtyStep: .1}})
 		now := time.Now()
-		bids := []model.Level{{Ticks: 1000, Qty: 10}}
-		for offset := int64(1); offset <= 5; offset++ {
-			bids = append(bids, model.Level{Ticks: 1000 - offset, Qty: 1})
+		var bids []model.Level
+		for tick := int64(100004); tick >= 99400; tick-- {
+			qty := .001
+			if tick >= 100000 {
+				qty = 2
+			}
+			bids = append(bids, model.Level{Ticks: tick, Qty: qty / market.tickSize})
 		}
 		for second := 0; second <= 8; second++ {
 			book := &model.Book{
-				Bids: bids, Asks: []model.Level{{Ticks: 1002, Qty: 1}},
+				Bids: bids, Asks: []model.Level{{Ticks: 100005, Qty: 1}},
 				At: now, Received: now, Snapshot: second == 0,
 			}
 			if err := hub.apply(model.Event{Key: key, Book: book, TradeReady: true}, now); err != nil {
@@ -118,11 +127,55 @@ func TestScreenerExcludesConfiguredCurrenciesAndPairs(t *testing.T) {
 			now = now.Add(time.Second)
 		}
 	}
-	if got := len(hub.signals); got != 1 {
-		t.Fatalf("want one screener alert, got %d", got)
+	for _, want := range []struct {
+		symbol   string
+		tickSize float64
+		high     int64
+	}{{"ETHUSDT", .005, 100199}, {"SOLUSDT", .001, 100099}} {
+		select {
+		case signal := <-hub.signals:
+			inst := model.Instrument{TickSize: want.tickSize}
+			if signal.Key.Symbol != want.symbol || signal.Ticks != 100000 || inst.Ticks(signal.ZoneHigh) != want.high {
+				t.Fatalf("unexpected alert: %+v", signal)
+			}
+		default:
+			t.Fatalf("missing alert for %s", want.symbol)
+		}
 	}
-	if signal := <-hub.signals; signal.Key.Symbol != "BTCUSDT" {
-		t.Fatalf("unexpected screener alert for %s", signal.Key.Symbol)
+	if len(hub.signals) != 0 {
+		t.Fatalf("unexpected extra alert: %+v", <-hub.signals)
+	}
+}
+
+func TestBTCSpotProfileGroupsBidsByTenUSDT(t *testing.T) {
+	cfg := strategy.DefaultConfig()
+	cfg.ZoneAlerts = true
+	hub := newAlertHub(cfg, nil, defaultSpotProfiles())
+	inst := model.Instrument{Key: model.Key{Market: model.Spot, Symbol: "BTCUSDT"}, TickSize: .1}
+	hub.add([]model.Instrument{inst})
+
+	bids := []model.Level{
+		{Ticks: 585373, Qty: 15}, {Ticks: 585300, Qty: 15},
+		{Ticks: 585200, Qty: 1}, {Ticks: 585100, Qty: 1}, {Ticks: 585000, Qty: 1},
+	}
+	start := time.Now()
+	for second := range 9 {
+		at := start.Add(time.Duration(second) * time.Second)
+		book := &model.Book{
+			Bids: bids, Asks: []model.Level{{Ticks: 585374, Qty: 1}},
+			At: at, Received: at, Snapshot: second == 0,
+		}
+		if err := hub.apply(model.Event{Key: inst.Key, Book: book, TradeReady: true}, at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	select {
+	case signal := <-hub.signals:
+		if signal.Ticks != 585300 || inst.Ticks(signal.ZoneHigh) != 585399 || signal.Qty != 30 {
+			t.Fatalf("unexpected BTC bid zone: %+v", signal)
+		}
+	default:
+		t.Fatal("missing BTC alert for the grouped bids at 58530.0 and 58537.3")
 	}
 }
 
@@ -130,9 +183,9 @@ type replayMarket struct {
 	advance <-chan struct{}
 }
 
-func (r replayMarket) Instruments(_ context.Context, market model.Market, _ []string, _ int) ([]model.Instrument, error) {
-	if market != model.Spot {
-		return nil, feed.ErrInvalidSymbols
+func (r replayMarket) Instruments(_ context.Context, market model.Market, symbols []string, _ int) ([]model.Instrument, error) {
+	if market != model.Spot || !slices.Equal(symbols, []string{"BTCUSDT", "ETHUSDT", "SOLUSDT"}) {
+		return nil, fmt.Errorf("%w: unexpected request %s %v", feed.ErrInvalidSymbols, market, symbols)
 	}
 	return []model.Instrument{{Key: model.Key{Market: market, Symbol: "BTCUSDT"}, TickSize: .1, QtyStep: .1}}, nil
 }
@@ -200,8 +253,8 @@ func (r replayMarket) Stream(ctx context.Context, instruments []model.Instrument
 func TestReplayRoutesConfirmedDensityAndVirtualFills(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	op := options{stateDir: t.TempDir(), depth: 200, symbolLimit: 1, strategy: strategy.DefaultConfig()}
-	op.strategy.MinNotional = 500
+	op := options{stateDir: t.TempDir(), depth: 200, spotProfiles: defaultSpotProfiles(), strategy: strategy.DefaultConfig()}
+	op.spotProfiles["BTCUSDT"] = spotProfile{zoneWidthUSDT: 0.1, minNotional: 500}
 	op.strategy.Persistence = time.Second
 	op.strategy.ZoneAlerts = true
 	op.strategy.Freshness = 4 * time.Minute

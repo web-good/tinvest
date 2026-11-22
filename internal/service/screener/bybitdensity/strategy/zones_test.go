@@ -10,6 +10,7 @@ import (
 func TestZoneApproachAfterConfirmation(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.ZoneAlerts = true
+	cfg.ZoneWidthUSDT = 2
 	cfg.RequireAverageVolume = true // Zone alerts work without a candle reference.
 	inst := model.Instrument{Key: model.Key{Market: model.Spot, Symbol: "BTCUSDT"}, TickSize: 1, QtyStep: .001}
 	s := New(inst, cfg)
