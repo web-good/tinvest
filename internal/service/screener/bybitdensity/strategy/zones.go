@@ -71,12 +71,15 @@ func (s *Strategy) observeZones(b *model.Book, now time.Time) []model.Signal {
 			break
 		}
 		median := zoneMedian(zones, i)
-		if median <= 0 {
+		multiple := 0.0
+		if median > 0 {
+			multiple = z.value / median
+		} else if s.instrument.Key.Market != model.Spot {
 			continue
 		}
 		k := priceLevel{model.Bid, z.low}
 		ep := s.alertEpisodes[k]
-		qualifies := z.value >= s.cfg.MinNotional && z.value >= median*zoneMultiple
+		qualifies := z.value >= s.cfg.MinNotional && (s.instrument.Key.Market == model.Spot || multiple >= zoneMultiple)
 		if ep == nil {
 			if !qualifies {
 				continue
@@ -93,7 +96,7 @@ func (s *Strategy) observeZones(b *model.Book, now time.Time) []model.Signal {
 		ep.signal = model.Signal{
 			Key: s.instrument.Key, Side: model.Bid, Ticks: z.low,
 			Price: s.instrument.Price(z.low), ZoneHigh: s.instrument.Price(high),
-			Qty: z.qty, Notional: z.value, Multiple: z.value / median,
+			Qty: z.qty, Notional: z.value, Multiple: multiple,
 			Distance: distance, Retained: retained, Observed: elapsed,
 			Since: ep.signal.Since, TradeQty: ep.signal.TradeQty,
 			HeldAfterSales: !ep.lastSell.IsZero() && b.At.After(ep.lastSell),

@@ -19,7 +19,7 @@ func TestZoneApproachAfterConfirmation(t *testing.T) {
 		at := start.Add(time.Duration(second) * time.Second)
 		b := &model.Book{At: at, Received: at, Snapshot: second == 0, Asks: []model.Level{{Ticks: best + 2, Qty: 1}}}
 		for tick := best; tick >= 9960; tick-- {
-			size := .5
+			size := 3.0 // The target is only twice as large as its neighbors.
 			if tick == 9980 || tick == 9981 {
 				size = qty
 			}
