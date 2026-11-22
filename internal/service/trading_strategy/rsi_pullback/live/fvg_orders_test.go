@@ -9,10 +9,14 @@ import (
 
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	imodel "tinvest/internal/model"
 	pb "tinvest/internal/pb/v1"
+	"tinvest/internal/service/trading_strategy/livecore/candles"
 	"tinvest/internal/service/trading_strategy/livecore/statestore"
 	"tinvest/internal/service/trading_strategy/livecore/stoporders"
 	"tinvest/internal/service/trading_strategy/scalping/model"
@@ -89,6 +93,11 @@ func TestFVGCancelFailureKeepsState(t *testing.T) {
 func TestFVGStochasticExitCancelsBothOrdersBeforeSell(t *testing.T) {
 	f := &fakeStrategy{name: "fvg_imbalance", trade: true}
 	env := newSharedEnv(t, sharedNow, nil, nil, f)
+	env.svc.market = tradingStatusMarket{status: &pb.GetTradingStatusResponse{
+		TradingStatus:            pb.SecurityTradingStatus_SECURITY_TRADING_STATUS_NORMAL_TRADING,
+		MarketOrderAvailableFlag: true,
+		ApiTradeAvailableFlag:    true,
+	}}
 	e := statestore.Entry{Quantity: 10, StopOrderID: "sl", TakeProfitOrderID: "tp"}
 	pc := &passCtx{state: map[string]statestore.Entry{"GAZP": e}, store: env.svc.stateStore()}
 	env.stops.EXPECT().CancelStopOrder(mock.Anything, mock.MatchedBy(func(r *pb.CancelStopOrderRequest) bool { return r.GetStopOrderId() == "tp" })).Return(&pb.CancelStopOrderResponse{}, nil).Once()
@@ -102,6 +111,70 @@ func TestFVGStochasticExitCancelsBothOrdersBeforeSell(t *testing.T) {
 	err := env.svc.sell(context.Background(), pc, env.svc.slotByName("fvg_imbalance"), "GAZP", &imodel.Share{ID: "uid-GAZP", Lot: 1}, e, held("GAZP", 10), model.Signal{Kind: model.SignalSell, Reason: "STOCH_EXIT"})
 	if err != nil || pc.state["GAZP"].FVGExitOrderID != "market-child" {
 		t.Fatalf("exit state: %+v %v", pc.state, err)
+	}
+}
+
+type tradingStatusMarket struct {
+	candles.CandleClient
+	status *pb.GetTradingStatusResponse
+}
+
+func (m tradingStatusMarket) GetTradingStatus(context.Context, string) (*pb.GetTradingStatusResponse, error) {
+	return m.status, nil
+}
+
+func TestFVGDealerSessionKeepsProtection(t *testing.T) {
+	f := &fakeStrategy{name: "fvg_imbalance", trade: true}
+	env := newSharedEnv(t, sharedNow, nil, nil, f)
+	env.svc.market = tradingStatusMarket{status: &pb.GetTradingStatusResponse{
+		TradingStatus:            pb.SecurityTradingStatus_SECURITY_TRADING_STATUS_DEALER_NORMAL_TRADING,
+		MarketOrderAvailableFlag: true,
+		ApiTradeAvailableFlag:    true,
+	}}
+	e := statestore.Entry{Quantity: 10, StopOrderID: "sl", TakeProfitOrderID: "tp"}
+	pc := &passCtx{state: map[string]statestore.Entry{"GAZP": e}, store: env.svc.stateStore()}
+	err := env.svc.sell(context.Background(), pc, env.svc.slotByName("fvg_imbalance"), "GAZP",
+		&imodel.Share{ID: "uid-GAZP", Lot: 1}, e, held("GAZP", 10), model.Signal{Kind: model.SignalSell, Reason: "STOCH_EXIT"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := pc.state["GAZP"]; got.PendingExit != "STOCH_EXIT" || got.StopOrderID != "sl" ||
+		got.TakeProfitOrderID != "tp" || got.FVGExitStopID != "" {
+		t.Fatalf("state after deferring sale: %+v", got)
+	}
+}
+
+func TestFVGFrozenPriceRejectionRestoresBothOrders(t *testing.T) {
+	f := &fakeStrategy{name: "fvg_imbalance", trade: true}
+	env := newSharedEnv(t, sharedNow, nil, nil, f)
+	e := statestore.Entry{Quantity: 10, StopOrderID: "sl", StopPrice: 100, StopReason: "SL", TakeProfitOrderID: "tp", TakeProfit: 120}
+	pc := &passCtx{shared: true, state: map[string]statestore.Entry{"GAZP": e}, store: env.svc.stateStore()}
+	env.stops.EXPECT().CancelStopOrder(mock.Anything, mock.Anything).Return(&pb.CancelStopOrderResponse{}, nil).Twice()
+	env.orders.EXPECT().PostOrder(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Run(func(_ context.Context, _ *pb.PostOrderRequest, opts ...grpc.CallOption) {
+			for _, opt := range opts {
+				if trailer, ok := opt.(grpc.TrailerCallOption); ok {
+					*trailer.TrailerAddr = metadata.Pairs("message", "Post order error: Zamorozhennaya czena ne sootvetstvuet tipu zayavki")
+				}
+			}
+		}).Return(nil, status.Error(codes.InvalidArgument, "30049")).Once()
+	for orderType, id := range map[pb.StopOrderType]string{
+		pb.StopOrderType_STOP_ORDER_TYPE_STOP_LOSS:   "new-sl",
+		pb.StopOrderType_STOP_ORDER_TYPE_TAKE_PROFIT: "new-tp",
+	} {
+		env.stops.EXPECT().PostStopOrder(mock.Anything, mock.MatchedBy(func(req *pb.PostStopOrderRequest) bool {
+			return req.GetStopOrderType() == orderType && req.GetQuantity() == 10
+		})).Return(&pb.PostStopOrderResponse{StopOrderId: id}, nil).Once()
+	}
+	share := &imodel.Share{ID: "uid-GAZP", Lot: 1, MinPriceIncrement: 0.01}
+	err := env.svc.sell(context.Background(), pc, env.svc.slotByName("fvg_imbalance"), "GAZP", share, e,
+		held("GAZP", 10), model.Signal{Kind: model.SignalSell, Reason: "STOCH_EXIT"})
+	if err != nil {
+		t.Fatalf("confirmed rejection should restore protection: %v", err)
+	}
+	if got := pc.state["GAZP"]; got.PendingExit != "STOCH_EXIT" || got.FVGExitStopID != "" ||
+		got.FVGExitOrderID != "" || got.ExitRequestID != "" || got.StopOrderID != "new-sl" || got.TakeProfitOrderID != "new-tp" {
+		t.Fatalf("state after rejection: %+v", got)
 	}
 }
 

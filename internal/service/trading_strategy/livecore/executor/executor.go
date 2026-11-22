@@ -4,12 +4,15 @@ package executor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 
 	investapi "tinvest/internal/pb/v1"
 	"tinvest/internal/utils"
@@ -118,7 +121,31 @@ func withBrokerDetails(err error, header, trailer metadata.MD) error {
 	if msg == "" && trackingID == "" {
 		return err
 	}
-	return fmt.Errorf("%w (message: %q, tracking-id: %s)", err, msg, trackingID)
+	return &brokerError{err: err, message: msg, trackingID: trackingID}
+}
+
+type brokerError struct {
+	err        error
+	message    string
+	trackingID string
+}
+
+func (e *brokerError) Error() string {
+	return fmt.Sprintf("%v (message: %q, tracking-id: %s)", e.err, e.message, e.trackingID)
+}
+
+func (e *brokerError) Unwrap() error { return e.err }
+
+// IsFrozenPriceRejection identifies a rejected order by its specific broker reason.
+// The generic code 30049 alone does not establish what happened.
+func IsFrozenPriceRejection(err error) bool {
+	var broker *brokerError
+	if !errors.As(err, &broker) {
+		return false
+	}
+	rpc := status.Convert(broker.err)
+	return rpc.Code() == codes.InvalidArgument && rpc.Message() == "30049" &&
+		broker.message == "Post order error: Zamorozhennaya czena ne sootvetstvuet tipu zayavki"
 }
 
 func (e *Executor) Cancel(ctx context.Context, id string) error {

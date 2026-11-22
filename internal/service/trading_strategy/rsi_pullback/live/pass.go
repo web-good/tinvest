@@ -12,6 +12,7 @@ import (
 
 	"tinvest/internal/enum"
 	imodel "tinvest/internal/model"
+	pb "tinvest/internal/pb/v1"
 	"tinvest/internal/service/trading_strategy/livecore/accountcoord"
 	"tinvest/internal/service/trading_strategy/livecore/adapter"
 	"tinvest/internal/service/trading_strategy/livecore/executor"
@@ -1311,6 +1312,25 @@ func (s *service) sell(ctx context.Context, pc *passCtx, sl *slot, ticker string
 		return nil
 	}
 
+	if market, ok := s.market.(interface {
+		GetTradingStatus(context.Context, string) (*pb.GetTradingStatusResponse, error)
+	}); ok && sl.strat.Name() == "fvg_imbalance" && sl.strat.TradeEnabled() {
+		status, err := market.GetTradingStatus(ctx, sh.ID)
+		// Dealer sessions can report market availability even though they reject MARKET.
+		if err != nil || status.GetTradingStatus() == pb.SecurityTradingStatus_SECURITY_TRADING_STATUS_DEALER_NORMAL_TRADING ||
+			!status.GetMarketOrderAvailableFlag() || !status.GetApiTradeAvailableFlag() || status.GetOnlyBestPrice() {
+			entry.PendingExit = pending
+			pc.state[ticker] = entry
+			if saveErr := pc.store.Save(pc.state); saveErr != nil {
+				return fmt.Errorf("save deferred market sell: %w", saveErr)
+			}
+			if err != nil {
+				return fmt.Errorf("check market sell availability: %w", err)
+			}
+			return nil
+		}
+	}
+
 	if entry.TakeProfitOrderID != "" {
 		if err := sl.stops.Cancel(ctx, entry.TakeProfitOrderID); err != nil {
 			remember()
@@ -1359,7 +1379,14 @@ func (s *service) sell(ctx context.Context, pc *passCtx, sl *slot, ticker string
 	}
 	if err != nil {
 		if (pair || pc.shared) && sl.strat.TradeEnabled() {
-			return fmt.Errorf("market sell outcome unknown; manual reconciliation required: %w", err)
+			if !executor.IsFrozenPriceRejection(err) {
+				return fmt.Errorf("market sell outcome unknown; manual reconciliation required: %w", err)
+			}
+			entry.FVGExitStopID, entry.ExitRequestID = "", ""
+			pc.state[ticker] = entry
+			if saveErr := pc.store.Save(pc.state); saveErr != nil {
+				return fmt.Errorf("save rejected market sell: %w", saveErr)
+			}
 		}
 		sl.alert(ticker, "ордер на продажу отклонён: "+err.Error())
 		logger.ErrorContext(ctx, fmt.Sprintf("%s: %s sell rejected: %v", sl.strat.Name(), ticker, err))
@@ -1374,6 +1401,12 @@ func (s *service) sell(ctx context.Context, pc *passCtx, sl *slot, ticker string
 			}
 		}
 		pc.state[ticker] = entry
+		if pair || pc.shared {
+			if saveErr := pc.store.Save(pc.state); saveErr != nil {
+				return saveErr
+			}
+			return s.placeTarget(ctx, pc, sl, ticker, sh)
+		}
 		_ = pc.store.Save(pc.state)
 		return nil // повтор на следующем тике — по отметке PendingExit, а не по сигналу
 	}
