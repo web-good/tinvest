@@ -112,7 +112,8 @@ func TestScreenerUsesSpotProfiles(t *testing.T) {
 		for tick := int64(100004); tick >= 99400; tick-- {
 			qty := .001
 			if tick >= 100000 {
-				qty = 2
+				// The zone totals ~900k USDT: above ETH/SOL thresholds, below BTC.
+				qty = 1.8
 			}
 			bids = append(bids, model.Level{Ticks: tick, Qty: qty / market.tickSize})
 		}
