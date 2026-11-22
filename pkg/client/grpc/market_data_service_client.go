@@ -14,6 +14,7 @@ import (
 )
 
 type MarketDataServiceClient interface {
+	GetTradingStatus(ctx context.Context, instrumentID string) (*investapi.GetTradingStatusResponse, error)
 	GetTechAnalyseMacD(context context.Context, instrumentUID string, interval int, from *timestamppb.Timestamp, to *timestamppb.Timestamp, fastLength int32) ([]*model.MacDItemTechAnalyse, error)
 	GetTechAnalyseRsi(context context.Context, instrumentUID string, interval int, from *timestamppb.Timestamp, to *timestamppb.Timestamp, length int32) ([]*model.RsiItemTechAnalyse, error)
 	GetTechAnalyseEma(context context.Context, instrumentUID string, interval int, from *timestamppb.Timestamp, to *timestamppb.Timestamp, length int32) ([]*model.EmaItemTechAnalyse, error)
@@ -25,6 +26,12 @@ type MarketDataServiceClient interface {
 type marketDataService struct {
 	marketDataAPI investapi.MarketDataServiceClient
 	auth          *Auth
+}
+
+func (m *marketDataService) GetTradingStatus(ctx context.Context, instrumentID string) (*investapi.GetTradingStatusResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	return m.marketDataAPI.GetTradingStatus(ctx, &investapi.GetTradingStatusRequest{InstrumentId: &instrumentID}, NewRPCCredential(m.auth))
 }
 
 func (m *marketDataService) GetTechAnalyseBB(ctx context.Context, instrumentUID string, interval int, from *timestamppb.Timestamp, to *timestamppb.Timestamp) ([]*model.BbItemTechAnalyse, error) {
