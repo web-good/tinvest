@@ -16,6 +16,49 @@ var minute = time.Date(2026, 11, 19, 12, 0, 0, 0, time.UTC)
 
 func at(seconds int) time.Time { return minute.Add(time.Duration(seconds) * time.Second) }
 
+func TestSpotSimulationUsesAggregatedDensity(t *testing.T) {
+	cfg := strategy.DefaultConfig()
+	cfg.RequirePreviousHigh = true
+	cfg.SpotVolumeMultiplier = 1.5
+	cfg.ZoneWidthUSDT = 1
+	cfg.FixedLimitEntry = true
+	cfg.Persistence = time.Second
+	key := model.Key{Market: model.Spot, Symbol: "TESTUSDT"}
+	s := strategy.New(model.Instrument{Key: key, TickSize: .1, QtyStep: .1}, cfg)
+	book := &model.Book{
+		Bids: []model.Level{{Ticks: 1008, Qty: 6}, {Ticks: 1001, Qty: 6}, {Ticks: 999, Qty: 10}},
+		Asks: []model.Level{{Ticks: 1010, Qty: 10}},
+	}
+	apply := func(seconds int) []model.Fill {
+		now := at(seconds)
+		book.At, book.Received, book.Snapshot = now, now, seconds == 0
+		_, fills := s.Apply(model.Event{Key: key, Book: book, TradeReady: true}, now)
+		return fills
+	}
+	require.Empty(t, apply(0))
+	require.Empty(t, apply(1))
+	s.SetAverageVolume(volume.Average{Quantity: 8, Until: at(60)})
+	require.Empty(t, apply(2))
+	s.SetPreviousHigh(1008, at(60))
+	require.Empty(t, apply(3))
+	s.SetPreviousHigh(1007, at(60))
+	fills := apply(4)
+	require.Len(t, fills, 1)
+	require.True(t, fills[0].Entry)
+	require.InDelta(t, 101, fills[0].Price, 1e-9)
+
+	book = &model.Book{
+		Bids: []model.Level{{Ticks: 999, Qty: 10}},
+		Asks: []model.Level{{Ticks: 1000, Qty: 10}},
+	}
+	fills = apply(5)
+	require.Len(t, fills, 1)
+	require.Equal(t, "stop", fills[0].Reason)
+	require.NotNil(t, fills[0].Closed)
+	require.InDelta(t, 99.9, fills[0].Closed.StopPrice, 1e-9)
+	require.InDelta(t, 1205.4, fills[0].Closed.DensityNotional, 1e-9)
+}
+
 func engine(market model.Market) *strategy.Strategy {
 	cfg := strategy.DefaultConfig()
 	cfg.MinNotional = 500

@@ -36,33 +36,60 @@ func parseDecimal(text string) (decimal, error) {
 }
 
 func (d decimal) ticks(price string) (int64, error) {
+	ticks, aligned, err := d.splitTicks(price)
+	if err != nil {
+		return 0, err
+	}
+	if !aligned {
+		return 0, fmt.Errorf("price %q is not aligned to the exchange tick", price)
+	}
+	return ticks, nil
+}
+
+// tradeTicks preserves the direction of strict price comparisons against
+// aligned limits when the archive prints a finer price than the book tick.
+func (d decimal) tradeTicks(price string, sell bool) (int64, error) {
+	ticks, aligned, err := d.splitTicks(price)
+	if err != nil {
+		return 0, err
+	}
+	if !aligned && !sell {
+		if ticks == math.MaxInt64 {
+			return 0, fmt.Errorf("price %q exceeds tick range", price)
+		}
+		ticks++
+	}
+	return ticks, nil
+}
+
+func (d decimal) splitTicks(price string) (ticks int64, aligned bool, err error) {
 	p, err := parseDecimal(price)
 	if err != nil || p.mantissa == 0 {
-		return 0, fmt.Errorf("invalid price %q", price)
+		return 0, false, fmt.Errorf("invalid price %q", price)
 	}
-	if p.scale > d.scale {
-		return 0, fmt.Errorf("price %q is not aligned to the exchange tick", price)
+	aligned = p.scale <= d.scale
+	for ; p.scale > d.scale && p.mantissa > 0; p.scale-- {
+		p.mantissa /= 10
 	}
 
 	var high uint64
 	low := p.mantissa
+	if low == 0 {
+		return 0, false, nil
+	}
 	for range d.scale - p.scale {
 		carry, next := bits.Mul64(low, 10)
 		if high > (math.MaxUint64-carry)/10 {
-			return 0, fmt.Errorf("price %q exceeds tick range", price)
+			return 0, false, fmt.Errorf("price %q exceeds tick range", price)
 		}
 		high, low = high*10+carry, next
 	}
 	if high >= d.mantissa {
-		return 0, fmt.Errorf("price %q exceeds tick range", price)
+		return 0, false, fmt.Errorf("price %q exceeds tick range", price)
 	}
-	ticks, remainder := bits.Div64(high, low, d.mantissa)
-	if remainder != 0 {
-		return 0, fmt.Errorf("price %q is not aligned to the exchange tick", price)
+	units, remainder := bits.Div64(high, low, d.mantissa)
+	if units > math.MaxInt64 {
+		return 0, false, fmt.Errorf("price %q exceeds tick range", price)
 	}
-	if ticks > math.MaxInt64 {
-		return 0, fmt.Errorf("price %q exceeds tick range", price)
-	}
-
-	return int64(ticks), nil
+	return int64(units), aligned && remainder == 0, nil
 }

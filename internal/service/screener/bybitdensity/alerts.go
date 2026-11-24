@@ -55,8 +55,10 @@ func (h *alertHub) add(instruments []model.Instrument) {
 			continue
 		}
 		cfg := h.config
-		cfg.MinNotional = profile.minNotional
+		cfg.SpotVolumeMultiplier = profile.m5VolumeMultiplier
 		cfg.ZoneWidthUSDT = profile.zoneWidthUSDT
+		cfg.SpotZoneFilter = profile.zoneFilter
+		cfg.RequireInPlay = profile.inPlay.Enabled()
 		h.states[instrument.Key] = instrumentState{instrument: instrument, strategy: strategy.New(instrument, cfg)}
 	}
 }

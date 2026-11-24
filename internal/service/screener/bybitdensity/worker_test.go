@@ -13,6 +13,7 @@ import (
 	"tinvest/internal/service/screener/bybitdensity/feed"
 	"tinvest/internal/service/screener/bybitdensity/model"
 	"tinvest/internal/service/screener/bybitdensity/strategy"
+	"tinvest/internal/service/screener/volume"
 )
 
 func TestDestinations(t *testing.T) {
@@ -43,7 +44,6 @@ func TestOptions(t *testing.T) {
 	t.Setenv("BYBIT_DENSITY_SIMULATION_TOPIC_ID", "0")
 	t.Setenv("BYBIT_DENSITY_MIN_NOTIONAL", "obsolete")
 	t.Setenv("BYBIT_DENSITY_ALERT_EXCLUDE", "BTC,ETH,SOL")
-	t.Setenv("BYBIT_DENSITY_ALERT_M5_VOLUME_MULTIPLIER", "0.75")
 	t.Setenv("BYBIT_DENSITY_ALERT_DISTANCE_TICKS", "3")
 	_, err := readOptions(nil, io.Discard, false)
 	if err == nil || !strings.Contains(err.Error(), "different") {
@@ -54,7 +54,7 @@ func TestOptions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if op.strategy.AlertM5VolumeMultiplier != .75 || op.strategy.AlertDistanceTicks != 3 {
+	if op.strategy.AlertDistanceTicks != 3 {
 		t.Fatal("invalid parsed options")
 	}
 	t.Setenv("BYBIT_DENSITY_SIMULATION_CHAT_ID", "-1001")
@@ -100,6 +100,10 @@ func TestScreenerUsesSpotProfiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	op.strategy.ZoneAlerts = true
+	profile := op.spotProfiles["BTCUSDT"]
+	profile.m5VolumeMultiplier = 2
+	op.spotProfiles["BTCUSDT"] = profile
+	op.spotProfiles["SOLUSDT"] = spotProfile{zoneWidthUSDT: .1, m5VolumeMultiplier: 1}
 	hub := newAlertHub(op.strategy, nil, op.spotProfiles)
 	for _, market := range []struct {
 		symbol   string
@@ -108,11 +112,14 @@ func TestScreenerUsesSpotProfiles(t *testing.T) {
 		key := model.Key{Market: model.Spot, Symbol: market.symbol}
 		hub.add([]model.Instrument{{Key: key, TickSize: market.tickSize, QtyStep: .1}})
 		now := time.Now()
+		if state, ok := hub.states[key]; ok {
+			state.strategy.SetAverageVolume(volume.Average{Quantity: 9 / market.tickSize, Until: now.Add(time.Hour)})
+		}
 		var bids []model.Level
 		for tick := int64(100004); tick >= 99400; tick-- {
 			qty := .001
 			if tick >= 100000 {
-				// The zone totals ~900k USDT: above ETH/SOL thresholds, below BTC.
+				// The zone matches one average and falls short of two.
 				qty = 1.8
 			}
 			bids = append(bids, model.Level{Ticks: tick, Qty: qty / market.tickSize})
@@ -160,6 +167,7 @@ func TestBTCSpotProfileGroupsBidsByTenUSDT(t *testing.T) {
 		{Ticks: 585200, Qty: 1}, {Ticks: 585100, Qty: 1}, {Ticks: 585000, Qty: 1},
 	}
 	start := time.Now()
+	hub.states[inst.Key].strategy.SetAverageVolume(volume.Average{Quantity: 30, Until: start.Add(time.Hour)})
 	for second := range 9 {
 		at := start.Add(time.Duration(second) * time.Second)
 		book := &model.Book{
@@ -185,14 +193,20 @@ type replayMarket struct {
 }
 
 func (r replayMarket) Instruments(_ context.Context, market model.Market, symbols []string, _ int) ([]model.Instrument, error) {
-	if market != model.Spot || !slices.Equal(symbols, []string{"BTCUSDT", "ETHUSDT", "SOLUSDT"}) {
+	if market != model.Spot || !slices.Equal(symbols, []string{"BTCUSDT", "ETHUSDT", "PIEVERSEUSDT", "SOLUSDT"}) {
 		return nil, fmt.Errorf("%w: unexpected request %s %v", feed.ErrInvalidSymbols, market, symbols)
 	}
 	return []model.Instrument{{Key: model.Key{Market: market, Symbol: "BTCUSDT"}, TickSize: .1, QtyStep: .1}}, nil
 }
 
+func (r replayMarket) DayHigh(context.Context, model.Key, time.Time) (float64, error) { return 90, nil }
+
 func (r replayMarket) AverageVolume(context.Context, model.Key, time.Time, time.Time) (float64, error) {
 	return 9.25, nil
+}
+
+func (r replayMarket) SpotM5(context.Context, model.Key, time.Time, time.Time) ([]model.M5Candle, error) {
+	return nil, fmt.Errorf("unexpected in-play history request")
 }
 
 func (r replayMarket) Stream(ctx context.Context, instruments []model.Instrument, _ int, emit func(model.Event) error) error {
@@ -255,7 +269,7 @@ func TestReplayRoutesConfirmedDensityAndVirtualFills(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	op := options{stateDir: t.TempDir(), depth: 200, spotProfiles: defaultSpotProfiles(), strategy: strategy.DefaultConfig()}
-	op.spotProfiles["BTCUSDT"] = spotProfile{zoneWidthUSDT: 0.1, minNotional: 500}
+	op.spotProfiles["BTCUSDT"] = spotProfile{zoneWidthUSDT: 0.1, m5VolumeMultiplier: 1}
 	op.strategy.Persistence = time.Second
 	op.strategy.ZoneAlerts = true
 	op.strategy.Freshness = 4 * time.Minute
@@ -293,7 +307,7 @@ func TestReplayRoutesConfirmedDensityAndVirtualFills(t *testing.T) {
 	report := wait(fills)
 	for _, want := range []string{
 		"СИМУЛЯЦИЯ · Спот", "Сделка закрыта", "Купили по 100.1 USDT", "Продали по 100.7 USDT",
-		"Плотность при входе — 100.0 USDT", "Средний объём M5 при входе: 9.25 монет", "Стоп-лосс — 99.8 USDT", "Тейк-профит — 100.7 USDT",
+		"Плотность при входе — 100.0 USDT", "Средний объём M5 при входе: 9.25 монет", "Стоп-лосс — 99.9 USDT", "Тейк-профит — 100.5 USDT",
 		"Причина — тейк", "Результат после комиссий +0.40% (+0.5988 USDT)",
 	} {
 		if !strings.Contains(report, want) {

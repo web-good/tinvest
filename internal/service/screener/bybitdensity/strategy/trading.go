@@ -13,6 +13,7 @@ type setup struct {
 	side            model.Side
 	origin, watched int64
 	baseQty         float64
+	baseNotional    float64
 	averageVolume   *float64
 	limit           int64
 }
@@ -34,6 +35,9 @@ func (s *Strategy) prepareEntry() {
 		if ep.confirmed.IsZero() || ep.entryPlaced || sig.Side != model.Bid {
 			continue
 		}
+		if s.cfg.RequirePreviousHigh && s.usesSpotZones() && sig.Ticks+s.zoneWidth <= s.previousHigh {
+			continue
+		}
 		if best == nil || preferred(sig, best.signal) {
 			best = ep
 		}
@@ -48,9 +52,12 @@ func (s *Strategy) prepareEntry() {
 		offset = 1
 	}
 	limit := sig.Ticks + direction(sig.Side)*offset
+	if s.usesSpotZones() {
+		limit = sig.Ticks + s.zoneWidth
+	}
 	stop, target := s.entryPrices(sig.Side, sig.Ticks, limit)
 	if s.validPrice(limit) && s.validPrice(stop) && s.validPrice(target) {
-		s.pending = &setup{side: sig.Side, origin: sig.Ticks, watched: sig.Ticks, baseQty: sig.Qty, limit: limit}
+		s.pending = &setup{side: sig.Side, origin: sig.Ticks, watched: sig.Ticks, baseQty: sig.Qty, baseNotional: sig.Notional, limit: limit}
 		if sig.HasAverageVolume {
 			s.pending.averageVolume = &sig.AverageVolume
 		}
@@ -69,7 +76,7 @@ func preferred(a, b model.Signal) bool {
 
 // follow keeps tracking support for an open position if the wall is relocated.
 func (s *Strategy) follow(p *setup) bool {
-	if quantityAt(levelsOn(s.book, p.side), p.side, p.watched) > 0 {
+	if s.densityQuantity(p.side, p.watched) > 0 {
 		return true
 	}
 	var best model.Signal
@@ -99,7 +106,9 @@ func direction(side model.Side) int64 {
 func (s *Strategy) entryPrices(side model.Side, origin, ticks int64) (stop, target int64) {
 	sign := direction(side)
 	stop = origin - sign*s.cfg.StopTicks
-	if s.cfg.FixedLimitEntry {
+	if s.usesSpotZones() {
+		stop = zoneStopTicks(origin)
+	} else if s.cfg.FixedLimitEntry {
 		stop = percentStop(side, float64(ticks))
 	}
 	return stop, s.targetPrice(side, float64(ticks), stop)
@@ -128,9 +137,15 @@ func (s *Strategy) validPrice(ticks int64) bool {
 }
 
 func (s *Strategy) entryIntent(p *setup, now time.Time) (Order, bool) {
-	qtyAtDensity := quantityAt(levelsOn(s.book, p.side), p.side, p.origin)
+	if !s.abovePreviousHigh(now) {
+		s.pending = nil
+		return Order{}, false
+	}
+	qtyAtDensity := s.densityQuantity(p.side, p.origin)
 	retained := bounce.Retains(p.baseQty, qtyAtDensity)
-	if s.cfg.FixedLimitEntry {
+	if s.usesSpotZones() {
+		retained = density.RetainsEntryDensity(p.baseQty, qtyAtDensity) && (s.cfg.SpotZoneFilter.Enabled() || now.Before(s.averageVolume.Until))
+	} else if s.cfg.FixedLimitEntry {
 		retained = density.RetainsEntryDensity(p.baseQty, qtyAtDensity)
 	} else if !s.cfg.CandleEntries {
 		retained = qtyAtDensity >= .5*p.baseQty && s.volumeAllows(qtyAtDensity, now)
@@ -154,6 +169,14 @@ func (s *Strategy) entryIntent(p *setup, now time.Time) (Order, bool) {
 		return Order{}, false
 	}
 	return Order{Entry: true, Reason: "entry", Direction: p.side, Steps: steps, LimitTicks: p.limit}, true
+}
+
+func (s *Strategy) densityQuantity(side model.Side, ticks int64) float64 {
+	levels := levelsOn(s.book, side)
+	if !s.usesSpotZones() {
+		return quantityAt(levels, side, ticks)
+	}
+	return bidZoneQuantity(levels, ticks, s.zoneWidth)
 }
 
 func (s *Strategy) exitIntent(p *position) (Order, bool) {
@@ -231,7 +254,9 @@ func (s *Strategy) ConfirmExecution(m Execution, now time.Time) (model.Fill, boo
 		stop, target := s.entryPrices(pending.side, pending.origin, s.instrument.Ticks(f.Price))
 		if s.cfg.FixedLimitEntry {
 			entryTicks := f.Price / s.instrument.TickSize
-			stop = percentStop(pending.side, entryTicks)
+			if !s.usesSpotZones() {
+				stop = percentStop(pending.side, entryTicks)
+			}
 			target = s.targetPrice(pending.side, entryTicks, stop)
 		}
 		s.position = &position{setup: *pending, entry: f, remaining: m.Steps, stop: stop, target: target}
@@ -255,7 +280,7 @@ func (s *Strategy) ConfirmExecution(m Execution, now time.Time) (model.Fill, boo
 	if !f.Partial {
 		f.Closed = &model.TradeSummary{
 			EntryAt: p.entry.At, EntryPrice: p.entry.Price, ExitPrice: p.exitQuote / p.entry.Qty,
-			DensityPrice: s.instrument.Price(p.origin), DensityQty: p.baseQty, AverageVolume: p.averageVolume,
+			DensityPrice: s.instrument.Price(p.origin), DensityQty: p.baseQty, DensityNotional: p.baseNotional, AverageVolume: p.averageVolume,
 			StopPrice: s.instrument.Price(p.stop), TakePrice: s.instrument.Price(p.target),
 			NetPnL: p.netPnL, NetReturn: p.netPnL / (p.entry.Price * p.entry.Qty), ExitReasons: p.exitReasons,
 		}

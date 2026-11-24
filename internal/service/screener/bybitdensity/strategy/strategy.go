@@ -10,8 +10,12 @@ import (
 )
 
 type Config struct {
+	RequireInPlay                     bool
+	RequirePreviousHigh               bool
 	ZoneAlerts                        bool
 	ZoneWidthUSDT                     float64
+	SpotVolumeMultiplier              float64
+	SpotZoneFilter                    ZoneFilter
 	AlertDistanceTicks                int64
 	AlertM5VolumeMultiplier           float64
 	FixedLimitEntry                   bool
@@ -41,6 +45,9 @@ type priceLevel struct {
 }
 
 type Strategy struct {
+	inPlay                   InPlayWindow
+	previousHigh             int64
+	highUntil                time.Time
 	zoneWidth                int64
 	bounce                   bounce.Watch[model.Signal]
 	averageVolume            volume.Average
@@ -69,6 +76,7 @@ func New(instrument model.Instrument, cfg Config) *Strategy {
 // NewWithExecutor routes decisions for one instrument to the given executor.
 func NewWithExecutor(instrument model.Instrument, cfg Config, executor Executor) *Strategy {
 	return &Strategy{
+		zoneWidth:     max(1, instrument.Ticks(cfg.ZoneWidthUSDT)),
 		instrument:    instrument,
 		cfg:           cfg,
 		needSnapshot:  true,
@@ -79,20 +87,55 @@ func NewWithExecutor(instrument model.Instrument, cfg Config, executor Executor)
 	}
 }
 
+func (s *Strategy) usesSpotZones() bool {
+	return s.cfg.SpotZoneFilter.Enabled() || s.cfg.SpotVolumeMultiplier > 0
+}
+
+func (s *Strategy) usesZoneAlerts() bool {
+	return s.cfg.ZoneAlerts || s.cfg.SpotZoneFilter.Enabled()
+}
+
+func (s *Strategy) SetPreviousHigh(ticks int64, until time.Time) {
+	s.previousHigh, s.highUntil = ticks, until
+	s.pending = nil
+}
+
+func (s *Strategy) abovePreviousHigh(now time.Time) bool {
+	return !s.cfg.RequirePreviousHigh || (s.previousHigh > 0 && now.Before(s.highUntil) && s.book.Bids[0].Ticks > s.previousHigh)
+}
+
 // SetAverageVolume replaces the reference and restarts entry confirmations.
 func (s *Strategy) SetAverageVolume(average volume.Average) {
 	s.averageVolume = average
+	if s.cfg.SpotZoneFilter.Enabled() {
+		return
+	}
 	clear(s.episodes)
-	if !s.cfg.ZoneAlerts {
+	if !s.cfg.ZoneAlerts || s.cfg.SpotVolumeMultiplier > 0 {
 		clear(s.alertEpisodes)
 	}
 	s.pending = nil
+}
+
+func (s *Strategy) SetInPlayWindow(window InPlayWindow, now time.Time) {
+	if !s.inPlay.allows(now) || !window.allows(now) {
+		s.clearEntries()
+	}
+	s.inPlay = window
+}
+
+func (s *Strategy) inPlayAllows(now time.Time) bool {
+	return !s.cfg.RequireInPlay || s.inPlay.allows(now)
 }
 
 // Expire ends observation and cancels any pending entry on loss of freshness.
 func (s *Strategy) Expire(now time.Time) {
 	if s.book != nil && !s.fresh(s.book, now) {
 		s.clearObservation()
+	}
+	if s.cfg.RequireInPlay && s.inPlay.Active && !now.Before(s.inPlay.From.Add(InPlayInterval)) {
+		s.clearEntries()
+		s.inPlay.Active = false
 	}
 	if !now.Before(s.nextCleanup) {
 		for level, until := range s.sent {
@@ -105,13 +148,16 @@ func (s *Strategy) Expire(now time.Time) {
 }
 
 func (s *Strategy) clearObservation() {
-	s.bounce = bounce.Watch[model.Signal]{}
-	clear(s.episodes)
-	s.zoneWidth = 0
-	clear(s.alertEpisodes)
+	s.clearEntries()
 	s.candidates = s.candidates[:0]
 	s.alertCandidates = s.alertCandidates[:0]
 	s.book = nil
+}
+
+func (s *Strategy) clearEntries() {
+	s.bounce = bounce.Watch[model.Signal]{}
+	clear(s.episodes)
+	clear(s.alertEpisodes)
 	s.pending = nil
 }
 
@@ -147,24 +193,27 @@ func (s *Strategy) Apply(e model.Event, now time.Time) ([]model.Signal, []model.
 		}
 		s.book = b
 		s.findCandidates(b, now)
-		if s.tradeReady {
+		if s.tradeReady && s.inPlayAllows(now) && s.inPlayAllows(b.At) {
 			s.observe(b, now, s.episodes, s.candidates, nil)
-			if s.cfg.ZoneAlerts {
+			if s.usesZoneAlerts() {
 				signals = s.observeZones(b, now)
 			} else {
 				signals = s.observe(b, now, s.alertEpisodes, s.alertCandidates, s.sent)
 			}
 			if s.cfg.CandleEntries {
 				s.observeBounceBook(b)
-			} else if s.position == nil && s.pending == nil && s.outstanding == nil {
+			} else if s.position == nil && s.pending == nil && s.outstanding == nil && s.abovePreviousHigh(now) {
 				s.prepareEntry()
 			}
 		}
 	}
 	for _, trade := range e.Trades {
 		s.observeTrade(trade)
+		if s.cfg.RequirePreviousHigh && s.pending != nil && s.book != nil && !trade.At.Before(s.book.At) && trade.Ticks <= s.previousHigh {
+			s.pending = nil
+		}
 	}
-	if s.cfg.CandleEntries && s.book != nil {
+	if s.cfg.CandleEntries && s.book != nil && s.inPlayAllows(now) {
 		if c := e.Candle; c != nil && c.End.Equal(c.Start.Add(time.Minute)) {
 			s.bounce.Candle(c.Start, c.Low, c.Close, now)
 		}

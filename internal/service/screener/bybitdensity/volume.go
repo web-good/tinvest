@@ -9,8 +9,16 @@ import (
 	"tinvest/internal/service/screener/volume"
 )
 
+func previousSpotVolumeWindow(now time.Time) (from, to, until time.Time) {
+	session, _, until := volume.PreviousWeekday(now)
+	day := session.In(moscowTime)
+	from = time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, moscowTime)
+	return from, from.AddDate(0, 0, 1), until
+}
+
 func refreshVolumes(ctx context.Context, market marketData, hub *alertHub, instruments []model.Instrument, loaded map[model.Key]time.Time) time.Duration {
-	from, to, until := volume.PreviousWeekday(time.Now())
+	now := time.Now()
+	from, to, until := previousSpotVolumeWindow(now)
 	delay := time.Until(until)
 	for _, instrument := range instruments {
 		if ctx.Err() != nil {
@@ -21,7 +29,7 @@ func refreshVolumes(ctx context.Context, market marketData, hub *alertHub, instr
 			continue
 		}
 		quantity, err := market.AverageVolume(ctx, key, from, to)
-		if err != nil {
+		if err != nil || quantity <= 0 {
 			slog.WarnContext(ctx, "Bybit volume history failed", "symbol", key.Symbol, "error", err)
 			delay = min(delay, time.Minute)
 			continue

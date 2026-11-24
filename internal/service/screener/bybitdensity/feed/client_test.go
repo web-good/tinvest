@@ -306,7 +306,8 @@ func TestAverageVolumeUsesSpotBaseQuantityAndSession(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		query := r.URL.Query()
 		if r.URL.Path != "/v5/market/kline" || query.Get("category") != "spot" || query.Get("symbol") != "BTCUSDT" ||
-			query.Get("interval") != "5" || query.Get("start") != fmt.Sprint(from.UnixMilli()) || query.Get("end") != fmt.Sprint(to.UnixMilli()-1) {
+			query.Get("interval") != "5" || query.Get("limit") != "108" ||
+			query.Get("start") != fmt.Sprint(from.UnixMilli()) || query.Get("end") != fmt.Sprint(to.UnixMilli()-1) {
 			t.Errorf("unexpected request %s", r.URL)
 		}
 		fmt.Fprintf(w, `{"retCode":0,"result":{"symbol":"BTCUSDT","category":"spot","list":[

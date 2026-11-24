@@ -76,6 +76,18 @@ type Candle struct {
 	Close int64
 }
 
+// CandleClose is a completed interval's final trade price.
+type CandleClose struct {
+	End   time.Time
+	Price float64
+}
+
+// M5Candle is a closed spot candle with turnover in the quote asset.
+type M5Candle struct {
+	End                       time.Time
+	Open, High, Low, Turnover float64
+}
+
 type Event struct {
 	Key        Key
 	Book       *Book
@@ -86,38 +98,40 @@ type Event struct {
 }
 
 type Signal struct {
-	HeldAfterSales   bool
-	ZoneHigh         float64
-	Retained         float64
-	Key              Key
-	Side             Side
-	Ticks            int64
-	Price            float64
-	Qty              float64
-	Notional         float64
-	Multiple         float64
-	Distance         float64
-	Since            time.Time
-	Observed         time.Duration
-	TradeQty         float64
-	TradeCoverage    time.Duration
-	AverageVolume    float64
-	HasAverageVolume bool
+	HeldAfterSales      bool
+	ZoneHigh            float64
+	Retained            float64
+	Key                 Key
+	Side                Side
+	Ticks               int64
+	Price               float64
+	Qty                 float64
+	Notional            float64
+	Multiple            float64
+	Distance            float64
+	Since               time.Time
+	Observed            time.Duration
+	TradeQty            float64
+	TradeCoverage       time.Duration
+	AverageVolume       float64
+	HasAverageVolume    bool
+	HasNeighborMultiple bool
 }
 
 // TradeSummary describes the whole position and is attached to its final fill.
 type TradeSummary struct {
-	EntryAt       time.Time
-	EntryPrice    float64
-	ExitPrice     float64 // Quantity-weighted average across all exits.
-	DensityPrice  float64
-	DensityQty    float64
-	AverageVolume *float64 `json:"average_volume,omitempty"`
-	StopPrice     float64
-	TakePrice     float64
-	NetPnL        float64
-	NetReturn     float64
-	ExitReasons   []string
+	EntryAt         time.Time
+	EntryPrice      float64
+	ExitPrice       float64 // Quantity-weighted average across all exits.
+	DensityPrice    float64
+	DensityQty      float64
+	DensityNotional float64  `json:"density_notional,omitempty"`
+	AverageVolume   *float64 `json:"average_volume,omitempty"`
+	StopPrice       float64
+	TakePrice       float64
+	NetPnL          float64
+	NetReturn       float64
+	ExitReasons     []string
 }
 
 type Fill struct {

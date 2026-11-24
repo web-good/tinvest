@@ -71,7 +71,9 @@ func pricePrecision(tick float64) int {
 func formatSignal(signal model.Signal, tick float64) string {
 	if signal.ZoneHigh > 0 {
 		comparison := ""
-		if signal.Multiple > 0 {
+		if signal.HasNeighborMultiple {
+			comparison = fmt.Sprintf(" · %.2f× к большей из двух соседних зон", signal.Multiple)
+		} else if signal.Multiple > 0 {
 			comparison = fmt.Sprintf(" · %.2f× к медиане", signal.Multiple)
 		}
 		msg := fmt.Sprintf("%s · %s · зона покупок %s–%s USDT\nОбъём %.8g монет (%.0f USDT)%s\nРасстояние от лучшего bid: %.2f%%\nДержится %s · осталось %.0f%% исходного объёма", marketLabel(signal.Key.Market), signal.Key.Symbol, priceText(signal.Price, tick), priceText(signal.ZoneHigh, tick), signal.Qty, signal.Notional, comparison, signal.Distance*100, signal.Observed.Truncate(time.Second), signal.Retained*100)
@@ -80,6 +82,9 @@ func formatSignal(signal model.Signal, tick float64) string {
 		}
 		if signal.HeldAfterSales {
 			msg += " · зона удержалась после продаж"
+		}
+		if signal.HasAverageVolume {
+			msg += fmt.Sprintf("\nСредний объём M5: %.8g монет", signal.AverageVolume)
 		}
 		return msg
 	}
@@ -113,11 +118,15 @@ func formatClosedTrade(fill model.Fill, tick float64) string {
 	for i, reason := range trade.ExitReasons {
 		reasons[i] = exitReasonText(reason)
 	}
+	densityNotional := trade.DensityNotional
+	if densityNotional == 0 {
+		densityNotional = trade.DensityPrice * trade.DensityQty
+	}
 	msg := fmt.Sprintf("СИМУЛЯЦИЯ · %s · %s · %s\nСделка закрыта\n%s по %s USDT · %s\n%s по %s USDT · %s\nПлотность при входе — %s USDT · %.8g монет (%.2f USDT)\nСтоп-лосс — %s USDT\nТейк-профит — %s USDT\nПричина — %s\nРезультат после комиссий %+.2f%% (%+.4f USDT)",
 		marketLabel(fill.Key.Market), fill.Key.Symbol, direction,
 		entryAction, averagePriceText(trade.EntryPrice, tick), trade.EntryAt.In(moscowTime).Format(timeLayout),
 		exitAction, averagePriceText(trade.ExitPrice, tick), fill.At.In(moscowTime).Format(timeLayout),
-		priceText(trade.DensityPrice, tick), trade.DensityQty, trade.DensityPrice*trade.DensityQty,
+		priceText(trade.DensityPrice, tick), trade.DensityQty, densityNotional,
 		priceText(trade.StopPrice, tick), priceText(trade.TakePrice, tick), strings.Join(reasons, " → "),
 		trade.NetReturn*100, trade.NetPnL)
 	if trade.AverageVolume != nil {

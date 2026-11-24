@@ -22,9 +22,15 @@ type episode struct {
 func (s *Strategy) findCandidates(b *model.Book, now time.Time) {
 	s.candidates = s.candidates[:0]
 	s.alertCandidates = s.alertCandidates[:0]
+	if s.usesSpotZones() {
+		s.findZoneCandidates(b, now)
+		if s.usesZoneAlerts() {
+			return
+		}
+	}
 	levels := b.Bids
 	maxDistanceTicks := int64(tradingDistanceTicks)
-	if !s.cfg.ZoneAlerts {
+	if !s.usesZoneAlerts() {
 		maxDistanceTicks = max(maxDistanceTicks, s.cfg.AlertDistanceTicks)
 	}
 	for i, l := range levels {
@@ -35,11 +41,11 @@ func (s *Strategy) findCandidates(b *model.Book, now time.Time) {
 		price := s.instrument.Price(l.Ticks)
 		value := price * l.Qty
 		distance := float64(ticks) / float64(levels[0].Ticks)
-		if value < s.cfg.MinNotional || len(levels) < 6 {
+		if (s.cfg.SpotVolumeMultiplier == 0 && value < s.cfg.MinNotional) || len(levels) < 6 {
 			continue
 		}
-		tradingEligible := ticks <= tradingDistanceTicks && s.volumeAllows(l.Qty, now)
-		alertEligible := !s.cfg.ZoneAlerts && ticks <= s.cfg.AlertDistanceTicks && s.alertVolumeAllows(l.Qty, now)
+		tradingEligible := s.cfg.SpotVolumeMultiplier == 0 && ticks <= tradingDistanceTicks && s.volumeAllows(l.Qty, now)
+		alertEligible := !s.usesZoneAlerts() && ticks <= s.cfg.AlertDistanceTicks && s.alertVolumeAllows(l.Qty, now)
 		if !tradingEligible && !alertEligible {
 			continue
 		}
@@ -62,7 +68,14 @@ func (s *Strategy) volumeAllows(quantity float64, now time.Time) bool {
 }
 
 func (s *Strategy) alertVolumeAllows(quantity float64, now time.Time) bool {
+	if s.cfg.SpotVolumeMultiplier > 0 {
+		return s.spotVolumeAllows(quantity, now)
+	}
 	return !s.cfg.RequireAverageVolume || s.averageVolume.AllowsMultiple(quantity, now, s.cfg.AlertM5VolumeMultiplier)
+}
+
+func (s *Strategy) spotVolumeAllows(quantity float64, now time.Time) bool {
+	return s.averageVolume.Quantity > 0 && s.averageVolume.AllowsMultiple(quantity, now, s.cfg.SpotVolumeMultiplier)
 }
 
 func (s *Strategy) observe(b *model.Book, now time.Time, episodes map[priceLevel]*episode, candidates []model.Signal, sent map[priceLevel]time.Time) []model.Signal {
@@ -166,10 +179,14 @@ func (s *Strategy) observeTrade(trade model.Trade) {
 		return
 	}
 	level := priceLevel{model.Bid, trade.Ticks}
+	if s.usesSpotZones() {
+		level.ticks -= level.ticks % s.zoneWidth
+	}
 	if ep := s.episodes[level]; ep != nil && !trade.At.Before(ep.signal.Since) {
 		ep.signal.TradeQty += trade.Qty
 	}
-	if s.cfg.ZoneAlerts {
+	level.ticks = trade.Ticks
+	if s.usesZoneAlerts() {
 		if !trade.Sell || s.zoneWidth == 0 {
 			return
 		}
@@ -184,9 +201,15 @@ func (s *Strategy) observeTrade(trade model.Trade) {
 }
 
 func (s *Strategy) Current(signal model.Signal, now time.Time) (model.Signal, bool) {
+	if !s.inPlayAllows(now) {
+		return model.Signal{}, false
+	}
 	k := priceLevel{signal.Side, signal.Ticks}
 	ep := s.alertEpisodes[k]
-	if ep == nil || (!s.cfg.ZoneAlerts && !s.alertVolumeAllows(ep.signal.Qty, now) || s.cfg.ZoneAlerts && ep.signal.Distance > approachDistance) || signal.Key != s.instrument.Key || s.book == nil || !s.fresh(s.book, now) || !ep.signal.Since.Equal(signal.Since) || ep.confirmed.IsZero() || ep.delivered || now.Before(s.sent[k]) {
+	if ep != nil && s.cfg.SpotVolumeMultiplier > 0 && !s.spotVolumeAllows(ep.signal.Qty, now) {
+		return model.Signal{}, false
+	}
+	if ep == nil || (!s.usesZoneAlerts() && !s.alertVolumeAllows(ep.signal.Qty, now) || s.usesZoneAlerts() && ep.signal.Distance > approachDistance) || signal.Key != s.instrument.Key || s.book == nil || !s.fresh(s.book, now) || !ep.signal.Since.Equal(signal.Since) || ep.confirmed.IsZero() || ep.delivered || now.Before(s.sent[k]) {
 		return model.Signal{}, false
 	}
 	return ep.signal, true

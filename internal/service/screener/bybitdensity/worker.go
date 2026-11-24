@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"tinvest/internal/service/screener/bybitdensity/feed"
@@ -22,6 +23,7 @@ import (
 )
 
 type marketData interface {
+	m5Reader
 	AverageVolume(context.Context, model.Key, time.Time, time.Time) (float64, error)
 	Instruments(context.Context, model.Market, []string, int) ([]model.Instrument, error)
 	Stream(context.Context, []model.Instrument, int, func(model.Event) error) error
@@ -108,12 +110,10 @@ func runSpot(ctx context.Context, market marketData, op options, hub *alertHub) 
 		return errors.New("no bybit spot profiles configured")
 	}
 	ctx, cancel := context.WithCancel(ctx)
-	var volumeDone chan struct{}
+	var refreshers sync.WaitGroup
 	defer func() {
 		cancel()
-		if volumeDone != nil {
-			<-volumeDone
-		}
+		refreshers.Wait()
 	}()
 	var instruments []model.Instrument
 	var retry time.Duration
@@ -136,15 +136,14 @@ func runSpot(ctx context.Context, market marketData, op options, hub *alertHub) 
 				continue
 			}
 			hub.add(instruments)
+			refreshers.Go(func() { runInPlay(ctx, market, hub, instruments) })
 			loaded := make(map[model.Key]time.Time, len(instruments))
 			delay := refreshVolumes(ctx, market, hub, instruments, loaded)
-			volumeDone = make(chan struct{})
-			go func() {
-				defer close(volumeDone)
+			refreshers.Go(func() {
 				for waitRetry(ctx, delay) {
 					delay = refreshVolumes(ctx, market, hub, instruments, loaded)
 				}
-			}()
+			})
 			retry = 0
 			slog.Info("Bybit instruments selected", "market", category, "count", len(instruments))
 		}
