@@ -9,8 +9,7 @@ func (e *Engine) entryHoursBlocked(now time.Time) bool {
 		return false
 	}
 	hour := now.In(moscowEntryClock).Hour()
-	inEntryWindow := (hour >= 7 && hour < 12) || (hour >= 15 && hour < 18)
-	return !inEntryWindow
+	return hour < 9 || hour >= 19
 }
 
 func (e *Engine) cancelEntryOutsideHours(o *Order, now time.Time) bool {

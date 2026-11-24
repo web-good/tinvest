@@ -11,7 +11,7 @@ type Config struct {
 	ScreenerStrategy                                bool // Use screener filters and fixed percentage exits.
 	FixedLimitEntry                                 bool
 	CandleEntries                                   bool
-	RestrictEntryHours                              bool  // Allow buys only at 07:00–12:00 and 15:00–18:00 Moscow time.
+	RestrictEntryHours                              bool  // Allow buys only at 09:00–19:00 Moscow time.
 	BookExecution                                   bool  // Execute against visible books without a trade subscription.
 	IgnoreCapital                                   bool  // Price-only simulation does not allocate a virtual balance.
 	MaxEntryLots                                    int64 // Zero keeps allocation-based sizing; live simulation uses one lot.

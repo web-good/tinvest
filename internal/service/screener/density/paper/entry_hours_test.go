@@ -11,10 +11,10 @@ func TestMoscowEntryHours(t *testing.T) {
 		utc     string
 		blocked bool
 	}{
-		{"03:59:59", true}, {"04:00:00", false},
-		{"08:59:59", false}, {"09:00:00", true},
-		{"11:59:59", true}, {"12:00:00", false},
-		{"14:59:59", false}, {"15:00:00", true},
+		{"05:59:59", true}, {"06:00:00", false},
+		{"09:00:00", false}, {"10:21:00", false},
+		{"15:00:00", false},
+		{"15:59:59", false}, {"16:00:00", true},
 	} {
 		t.Run(tc.utc, func(t *testing.T) {
 			at, err := time.Parse("2006-01-02 15:04:05", "2026-11-17 "+tc.utc)
@@ -33,7 +33,7 @@ func TestMoscowEntryHours(t *testing.T) {
 }
 
 func TestMoscowEntryHoursCancelPendingBuyAndKeepOpenPosition(t *testing.T) {
-	boundary := time.Date(2026, 11, 17, 15, 0, 0, 0, time.UTC) // 18:00 МСК
+	boundary := time.Date(2026, 11, 17, 16, 0, 0, 0, time.UTC) // 19:00 МСК
 	before := boundary.Add(-2 * time.Second)
 	for _, event := range []string{"book", "trade", "tick", "take"} {
 		t.Run(event, func(t *testing.T) {
