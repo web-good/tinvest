@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 	"tinvest/internal/service/screener/density"
+	"tinvest/internal/service/screener/volume"
 )
 
 func TestJournalPersistsRecordsAndSummaryAndReportsFailures(t *testing.T) {
@@ -98,6 +99,62 @@ func TestRunnerRequiresAcksAndOpenStatus(t *testing.T) {
 			}
 			if !ready && len(e.orders) > 0 {
 				t.Fatal("entry without acknowledgments")
+			}
+		})
+	}
+}
+
+func TestRunnerUsesScreenerDistanceAndVolumeForEntries(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		distanceTicks int64
+		minVolume     float64
+		wantEntry     bool
+	}{
+		{name: "matching density", distanceTicks: 1, minVolume: .6, wantEntry: true},
+		{name: "outside alert distance", distanceTicks: 0, minVolume: .6},
+		{name: "below alert volume", distanceTicks: 1, minVolume: .61},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			now := time.Now().Add(-time.Millisecond)
+			b := book(now, 60)
+			b.Bids[2].Quantity = 1
+			b.Bids = append(b.Bids, density.Level{Price: p(98), Quantity: 1}, density.Level{Price: p(97), Quantity: 1}, density.Level{Price: p(96), Quantity: 1})
+			i := density.Instrument{ID: "x", Ticker: "X", Lot: 1, PriceStep: p(1),
+				AverageVolume: volume.Average{Quantity: 100, Until: now.Add(time.Hour)}}
+			cfg := DefaultConfig()
+			cfg.BookExecution = true
+			cfg.ScreenerStrategy = true
+			e, err := New(cfg, []density.Instrument{i}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			dc := density.DefaultConfig()
+			dc.RequireAverageVolume = true
+			dc.AlertDistanceTicks = tc.distanceTicks
+			dc.AlertM5VolumeMultiplier = tc.minVolume
+			dc.MinRubles = 1
+			dc.Persistence = 0
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			events := []density.Event{
+				{Kind: density.EventBookAck, InstrumentID: i.ID, Success: true},
+				{Kind: density.EventInfoAck, InstrumentID: i.ID, Success: true},
+				{Kind: density.EventTradingStatus, InstrumentID: i.ID, TradingOpen: true},
+				{Kind: density.EventBook, InstrumentID: i.ID, Book: b},
+			}
+			r := Runner{Source: fakeSource{events}, Universe: []density.Instrument{i}, Engine: e, Detector: dc,
+				ReportInterval: time.Millisecond, Report: func(Summary) error {
+					if !e.lastBook[i.ID].IsZero() {
+						cancel()
+					}
+					return nil
+				}}
+			if err := r.Run(ctx); !errors.Is(err, context.Canceled) {
+				t.Fatal(err)
+			}
+			if o := e.orders[i.ID]; (o != nil) != tc.wantEntry {
+				t.Fatalf("order = %+v, want entry = %t", o, tc.wantEntry)
 			}
 		})
 	}

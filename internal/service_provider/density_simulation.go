@@ -31,22 +31,17 @@ func (s *ServiceProvider) densitySimulationParticipant(c *config.DensityLiveConf
 			return err
 		}
 		cfg := paper.DefaultConfig()
-		cfg.FixedLimitEntry = lc.FixedLimitEntry
+		cfg.ScreenerStrategy = true
 		cfg.RestrictEntryHours = true
 		cfg.IgnoreCapital = true
 		cfg.Commission = 0
 		cfg.Latency = 0
 		cfg.MaxEntryLots = 1
 		cfg.MaxPositions = len(c.Tickers)
-		cfg.BookExecution = c.FollowScreener
+		cfg.BookExecution = true
 		if c.FollowScreener {
 			cfg.MaxPositions = detector.MaxBooks
 		}
-		cfg.EntryTicks = lc.EntryTicks
-		cfg.EntryZoneTicks = lc.EntryZoneTicks
-		cfg.StopTicks = lc.StopTicks
-		cfg.RewardRisk = lc.RewardRisk
-		cfg.MinRemaining = lc.MinRemaining
 		cfg.Freshness = lc.Freshness
 		cfg.EntryTTL = lc.EntryTTL
 		cfg.MaxHold = 0 // Alert simulation holds positions until a strategy exit.

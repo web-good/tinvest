@@ -38,7 +38,7 @@ func TestDetectorRequiresCurrentAverageVolume(t *testing.T) {
 			t.Errorf("average %v, until %v: got %d trading signals, want %d", tc.average, tc.until, got, tc.wantTrading)
 		}
 
-		screener := newScreenerDetector(cfg)
+		screener := NewScreenerDetector(cfg)
 		screener.SetInstruments(instruments)
 		signals := screener.Update(b, now)
 		if len(signals) != tc.wantAlert {

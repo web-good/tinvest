@@ -172,7 +172,7 @@ func runConnection(parent context.Context, s *Service, universe []Instrument) er
 	}()
 	commands <- subscription{EventBookAck, ids, true}
 	commands <- subscription{EventInfoAck, ids, true}
-	detector := newScreenerDetector(s.cfg)
+	detector := NewScreenerDetector(s.cfg)
 	detector.SetInstruments(universe)
 	candidates := NewCandidates(s.cfg.MaxTrades, s.cfg.TradeReadiness)
 	open := make(map[string]bool)

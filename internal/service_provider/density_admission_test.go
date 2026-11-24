@@ -67,6 +67,8 @@ func TestDensityFollowScreenerUsesFullUniverseAndSharedAdmission(t *testing.T) {
 	cfg.DensityLive.Enabled = true
 	cfg.DensityLive.FollowScreener = true
 	cfg.Density.ChatID = 1
+	cfg.Density.AlertDistanceTicks = 3
+	cfg.Density.AlertM5VolumeMultiplier = .7
 	s := &ServiceProvider{appConfig: cfg}
 	p, err := s.GetDensityLiveService()
 	if err != nil {
@@ -74,6 +76,9 @@ func TestDensityFollowScreenerUsesFullUniverseAndSharedAdmission(t *testing.T) {
 	}
 	if !p.FollowScreener || p.Detector.MaxBooks != cfg.Density.MaxBooks || p.AllowEntry == nil {
 		t.Fatalf("expanded mode not wired: %+v", p)
+	}
+	if p.Detector.AlertDistanceTicks != 3 || p.Detector.AlertM5VolumeMultiplier != .7 {
+		t.Fatalf("participant did not receive the screener thresholds: %+v", p.Detector)
 	}
 	i := density.Instrument{ID: "extra", Ticker: "EXTRA"}
 	signal := density.Signal{InstrumentID: i.ID}

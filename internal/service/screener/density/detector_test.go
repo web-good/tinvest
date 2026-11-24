@@ -166,7 +166,7 @@ func TestScreenerDetectorUsesTwoTicksFromBestBid(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := DefaultConfig()
 			cfg.Persistence = time.Second
-			d := newScreenerDetector(cfg)
+			d := NewScreenerDetector(cfg)
 			d.SetInstruments([]Instrument{{ID: "x", PriceStep: tc.step}})
 			now := time.Date(2026, 11, 19, 10, 0, 0, 0, time.UTC)
 			level := Price{Units: 250, Nano: 900_000_000}
@@ -198,7 +198,7 @@ func TestScreenerDetectorUsesTwoTicksFromBestBid(t *testing.T) {
 				t.Fatalf("three-tick level remained eligible for delivery: %+v", got)
 			}
 			cfg.AlertDistanceTicks = 3
-			d = newScreenerDetector(cfg)
+			d = NewScreenerDetector(cfg)
 			d.SetInstruments([]Instrument{{ID: "x", PriceStep: tc.step}})
 			update(4, tc.bidThree)
 			if got := update(5, tc.bidThree); len(got) != 1 || got[0].Price != level {

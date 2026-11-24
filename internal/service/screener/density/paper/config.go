@@ -8,6 +8,7 @@ import (
 )
 
 type Config struct {
+	ScreenerStrategy                                bool // Use screener filters and fixed percentage exits.
 	FixedLimitEntry                                 bool
 	CandleEntries                                   bool
 	RestrictEntryHours                              bool  // Allow buys only at 07:00–12:00 and 15:00–18:00 Moscow time.
@@ -24,6 +25,10 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{InitialCash: 100000, PositionRubles: 10000, Commission: .0005, MaxPositions: 3, EntryTicks: 1, StopTicks: 2, RewardRisk: 2, MinRemaining: .5, Latency: 250 * time.Millisecond, Freshness: 3 * time.Second, EntryTTL: 2 * time.Minute, MaxHold: 10 * time.Minute, Cooldown: 5 * time.Minute}
 }
+func (c Config) fixedLimitEntry() bool {
+	return c.FixedLimitEntry || c.ScreenerStrategy
+}
+
 func (c Config) Validate() error {
 	if c.EntryZoneTicks < 0 || c.EntryZoneTicks > 1000000 {
 		return fmt.Errorf("invalid paper entry zone ticks")

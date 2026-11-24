@@ -131,6 +131,9 @@ func (r *Runner) connection(parent context.Context) error {
 	open := map[string]bool{}
 	candles := map[string]bool{}
 	detector := density.NewDetector(r.Detector)
+	if r.Engine.cfg.ScreenerStrategy {
+		detector = density.NewScreenerDetector(r.Detector)
+	}
 	detector.SetInstruments(r.Universe)
 	ready := func(id string, now time.Time) bool {
 		at := tradeAck[id]

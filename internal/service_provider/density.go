@@ -3,6 +3,7 @@ package service_provider
 import (
 	"context"
 	"fmt"
+	"tinvest/internal/config"
 	"tinvest/internal/service/screener/density"
 	internalgrpc "tinvest/pkg/client/grpc"
 
@@ -41,6 +42,10 @@ func (s *ServiceProvider) GetDensityService() (*density.Service, error) {
 		return nil, err
 	}
 	market := internalgrpc.NewDensityMarketData(client.Connection(), s.appConfig.GrpcClient.TokenProd)
+	return density.NewService(densityDetectorConfig(c), market, market, densitySender{bot: bot.API(), chatID: c.ChatID, topicID: c.TopicID, onSent: s.service.densityAlerts.Record}, c.HistoryInterval), nil
+}
+
+func densityDetectorConfig(c *config.DensityConfig) density.Config {
 	cfg := density.DefaultConfig()
 	cfg.RequireAverageVolume = true
 	cfg.AlertDistanceTicks = c.AlertDistanceTicks
@@ -65,5 +70,5 @@ func (s *ServiceProvider) GetDensityService() (*density.Service, error) {
 	cfg.MaxBooks = c.MaxBooks
 	cfg.MaxTrades = c.MaxTrades
 	cfg.BookDepth = int32(c.BookDepth)
-	return density.NewService(cfg, market, market, densitySender{bot: bot.API(), chatID: c.ChatID, topicID: c.TopicID, onSent: s.service.densityAlerts.Record}, c.HistoryInterval), nil
+	return cfg
 }

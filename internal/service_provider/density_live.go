@@ -102,31 +102,10 @@ func (s *ServiceProvider) GetDensityLiveService() (*densitylive.Participant, err
 	if err := copy.Validate(); err != nil {
 		return nil, err
 	}
-	detector := density.DefaultConfig()
-	detector.RequireAverageVolume = true
-	detector.MinRubles = d.MinRubles
-	detector.TurnoverFraction = d.TurnoverFraction
-	detector.Support.Enabled = d.SupportEnabled
-	detector.Support.LookbackDays = d.SupportLookbackDays
-	detector.Support.PivotBars = d.SupportPivotBars
-	detector.Support.MinTouches = d.SupportMinTouches
-	detector.Support.MinSeparation = d.SupportMinSeparation
-	detector.Support.BounceFraction = d.SupportBounceFraction
-	detector.Support.BounceBars = d.SupportBounceBars
-	detector.Support.Tolerance = d.SupportTolerance
-	detector.MinMultiple = d.MinMultiple
-	detector.MinNeighbors = d.MinNeighbors
-	detector.MaxNeighbors = d.MaxNeighbors
-	detector.Persistence = d.Persistence
-	detector.Freshness = d.Freshness
-	detector.MinTurnover = d.MinTurnover
-	detector.MaxLotPrice = d.MaxLotPrice
-	detector.MaxBooks = min(len(c.Tickers), d.MaxBooks)
-	if c.FollowScreener {
-		detector.MaxBooks = d.MaxBooks
+	detector := densityDetectorConfig(d)
+	if !c.FollowScreener {
+		detector.MaxBooks = min(len(c.Tickers), d.MaxBooks)
 	}
-	detector.MaxTrades = d.MaxTrades
-	detector.BookDepth = int32(d.BookDepth)
 	lc := densitylive.DefaultConfig()
 	lc.FixedLimitEntry = true
 	lc.EntryTicks = c.EntryTicks

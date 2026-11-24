@@ -40,7 +40,8 @@ func NewDetector(cfg Config) *Detector {
 	return newDetector(cfg, tradingDistanceTicks, 1)
 }
 
-func newScreenerDetector(cfg Config) *Detector {
+// NewScreenerDetector applies the same distance and volume thresholds as alerts.
+func NewScreenerDetector(cfg Config) *Detector {
 	return newDetector(cfg, cfg.AlertDistanceTicks, cfg.AlertM5VolumeMultiplier)
 }
 

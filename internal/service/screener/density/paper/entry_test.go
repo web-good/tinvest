@@ -171,3 +171,71 @@ func TestFixedLimitEntryFillsAtFortyPercent(t *testing.T) {
 		t.Fatalf("expected a fill at the limit with exactly 40%% of the density: %+v", o)
 	}
 }
+
+func TestScreenerStrategyOrderLifecycle(t *testing.T) {
+	for _, exit := range []string{"density_lost", "stop", "take_profit"} {
+		t.Run(exit, func(t *testing.T) {
+			cfg := DefaultConfig()
+			cfg.ScreenerStrategy = true
+			cfg.BookExecution = true
+			cfg.Latency = 0
+			cfg.MaxHold = 0
+			i := density.Instrument{ID: "x", Ticker: "X", Lot: 1, PriceStep: density.Price{Nano: 10_000_000}}
+			e, err := New(cfg, []density.Instrument{i}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			wall := density.Level{Price: p(100), Quantity: 60}
+			b := density.Book{InstrumentID: i.ID, Lot: 1, Time: start,
+				Bids: []density.Level{wall, {Price: p(99), Quantity: 1}},
+				Asks: []density.Level{{Price: p(101), Quantity: 1}},
+			}
+			e.OnBook(b, b.Time)
+			e.Observe(density.Signal{InstrumentID: i.ID, Price: wall.Price, Quantity: wall.Quantity, MinLots: 100, HasAverageVolume: true}, b.Time)
+			o := e.orders[i.ID]
+			if o == nil || o.State != "pending" || o.Entry != 100_010_000_000 {
+				t.Fatalf("expected a resting buy one tick above the wall: %+v", o)
+			}
+
+			b.Time = b.Time.Add(time.Millisecond)
+			b.Asks[0].Price = density.Price{Units: 100, Nano: 10_000_000}
+			if exit == "density_lost" {
+				b.Bids = b.Bids[1:]
+			}
+			e.OnBook(b, b.Time)
+			if exit == "density_lost" {
+				if o.State != "canceled" || o.ExitReason != exit || o.FilledLots != 0 {
+					t.Fatalf("density loss should cancel before execution: %+v", o)
+				}
+				return
+			}
+			if o.State != "open" || o.Stop != 99_900_000_000 || o.Take != 100_520_000_000 {
+				t.Fatalf("expected fill with stop 99.90 and take 100.52: %+v", o)
+			}
+
+			b.Time = b.Time.Add(time.Millisecond)
+			b.Bids = []density.Level{{Price: p(100), Quantity: 1}}
+			e.OnBook(b, b.Time)
+			b.Time = b.Time.Add(time.Millisecond)
+			b.Bids[0].Price = density.Price{Units: 100, Nano: 510_000_000}
+			b.Asks[0].Price = p(101)
+			e.OnBook(b, b.Time)
+			if o.State != "open" {
+				t.Fatalf("position closed before either exit level: %+v", o)
+			}
+			b.Time = b.Time.Add(time.Millisecond)
+			if exit == "stop" {
+				b.Bids[0].Price = density.Price{Units: 99, Nano: 900_000_000}
+				e.OnBook(b, b.Time)
+				b.Time = b.Time.Add(time.Millisecond)
+			} else {
+				b.Bids[0].Price = density.Price{Units: 100, Nano: 520_000_000}
+			}
+			e.OnBook(b, b.Time)
+			if o.State != "closed" || o.ExitReason != exit {
+				t.Fatalf("expected %s to close position: %+v", exit, o)
+			}
+		})
+	}
+}
