@@ -45,9 +45,12 @@ type expandedStream struct {
 
 func (*expandedStream) SubscribeBooks([]string, int32, bool) error { return nil }
 func (*expandedStream) SubscribeInfo([]string, bool) error         { return nil }
-func (s *expandedStream) SubscribeTrades([]string, bool) error {
+func (s *expandedStream) SubscribeTrades(ids []string, subscribe bool) error {
+	if !subscribe || len(ids) != 11 {
+		return errors.New("missing universe tape subscriptions")
+	}
 	s.market.tradeCalls.Add(1)
-	return errors.New("unexpected tape subscription")
+	return nil
 }
 func (*expandedStream) Close() error { return nil }
 func (s *expandedStream) Receive() ([]density.Event, error) {
@@ -59,7 +62,7 @@ func (s *expandedStream) Receive() ([]density.Event, error) {
 			return nil, s.ctx.Err()
 		}
 	}
-	b := density.Book{InstrumentID: "10", Lot: 1, Time: time.Now(), Asks: []density.Level{{Price: density.Price{Units: 100, Nano: 200_000_000}, Quantity: 10}}}
+	b := density.Book{InstrumentID: "10", Lot: 1, Time: time.Now().Add(-time.Millisecond), Asks: []density.Level{{Price: density.Price{Units: 100, Nano: 200_000_000}, Quantity: 10}}}
 	for n := int64(0); n < 6; n++ {
 		qty := int64(1)
 		if n == 0 {
@@ -72,8 +75,17 @@ func (s *expandedStream) Receive() ([]density.Event, error) {
 		b.Asks[0].Price = density.Price{Units: 111}
 	}
 	events := []density.Event{{Kind: density.EventBook, InstrumentID: "10", Book: b}}
+	if s.step == 2 {
+		next := b
+		next.Time = b.Time.Add(3 * time.Microsecond)
+		events = append(events,
+			density.Event{Kind: density.EventTrade, InstrumentID: "10", Price: b.Bids[0].Price, Quantity: 1, Time: b.Time.Add(time.Microsecond)},
+			density.Event{Kind: density.EventTrade, InstrumentID: "10", Price: density.Price{Units: 100, Nano: 10_000_000}, Quantity: 1, Time: b.Time.Add(2 * time.Microsecond)},
+			density.Event{Kind: density.EventBook, InstrumentID: "10", Book: next},
+		)
+	}
 	if s.step == 1 {
-		events = append([]density.Event{{Kind: density.EventBookAck, InstrumentID: "10", Success: true}, {Kind: density.EventInfoAck, InstrumentID: "10", Success: true}, {Kind: density.EventTradingStatus, InstrumentID: "10", TradingOpen: true}}, events...)
+		events = append([]density.Event{{Kind: density.EventTradeAck, InstrumentID: "10", Success: true}, {Kind: density.EventBookAck, InstrumentID: "10", Success: true}, {Kind: density.EventInfoAck, InstrumentID: "10", Success: true}, {Kind: density.EventTradingStatus, InstrumentID: "10", TradingOpen: true}}, events...)
 	}
 	return events, nil
 }
@@ -83,7 +95,7 @@ func TestSimulationFollowsAdditionalTickerInUniverseLargerThanTen(t *testing.T) 
 	var admitted atomic.Bool
 	checked := make(chan struct{}, 2)
 	cfg := paper.DefaultConfig()
-	cfg.EntryZoneTicks = 20
+	cfg.ScreenerStrategy = true
 	cfg.Latency = 0
 	cfg.MaxEntryLots = 1
 	detector := density.DefaultConfig()
@@ -163,7 +175,7 @@ entry:
 	case <-time.After(2 * time.Second):
 		t.Fatal("no completed trade for admitted additional ticker")
 	}
-	if market.tradeCalls.Load() != 0 {
-		t.Fatal("expanded mode subscribed to tape")
+	if market.tradeCalls.Load() != 1 {
+		t.Fatal("expected one tape subscription for the universe")
 	}
 }

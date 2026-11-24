@@ -173,7 +173,7 @@ func TestFixedLimitEntryFillsAtFortyPercent(t *testing.T) {
 }
 
 func TestScreenerStrategyOrderLifecycle(t *testing.T) {
-	for _, exit := range []string{"density_lost", "stop", "take_profit"} {
+	for _, exit := range []string{"density_lost", "breach", "no_touch", "stop", "take_profit"} {
 		t.Run(exit, func(t *testing.T) {
 			cfg := DefaultConfig()
 			cfg.ScreenerStrategy = true
@@ -193,22 +193,40 @@ func TestScreenerStrategyOrderLifecycle(t *testing.T) {
 			}
 			e.OnBook(b, b.Time)
 			e.Observe(density.Signal{InstrumentID: i.ID, Price: wall.Price, Quantity: wall.Quantity, MinLots: 100, HasAverageVolume: true}, b.Time)
-			o := e.orders[i.ID]
-			if o == nil || o.State != "pending" || o.Entry != 100_010_000_000 {
-				t.Fatalf("expected a resting buy one tick above the wall: %+v", o)
+			if e.orders[i.ID] != nil {
+				t.Fatal("order placed before a trade touched the wall")
+			}
+			if exit != "no_touch" {
+				e.OnTrade(density.Event{InstrumentID: i.ID, Price: wall.Price, Quantity: 1, Time: start.Add(time.Microsecond)}, start.Add(time.Microsecond))
 			}
 
-			b.Time = b.Time.Add(time.Millisecond)
+			b.Time = start.Add(time.Millisecond)
 			b.Asks[0].Price = density.Price{Units: 100, Nano: 10_000_000}
 			if exit == "density_lost" {
 				b.Bids = b.Bids[1:]
 			}
 			e.OnBook(b, b.Time)
-			if exit == "density_lost" {
-				if o.State != "canceled" || o.ExitReason != exit || o.FilledLots != 0 {
-					t.Fatalf("density loss should cancel before execution: %+v", o)
+			if e.orders[i.ID] != nil {
+				t.Fatal("book movement alone triggered entry")
+			}
+			rebound := b.Time.Add(time.Microsecond)
+			e.OnTrade(density.Event{InstrumentID: i.ID, Price: b.Asks[0].Price, Quantity: 1, Time: rebound}, rebound)
+			if exit == "breach" {
+				// Same exchange timestamp as the bounce; this trade must still veto the entry.
+				e.OnTrade(density.Event{InstrumentID: i.ID, Price: p(99), Quantity: 1, Time: rebound}, rebound)
+				e.Observe(density.Signal{InstrumentID: i.ID, Price: wall.Price, Quantity: wall.Quantity}, rebound)
+			}
+			b.Time = rebound.Add(time.Millisecond)
+			e.OnBook(b, b.Time)
+			o := e.orders[i.ID]
+			if exit == "density_lost" || exit == "breach" || exit == "no_touch" {
+				if o != nil {
+					t.Fatalf("unexpected entry: %+v", o)
 				}
 				return
+			}
+			if o == nil {
+				t.Fatal("missing entry after rebound")
 			}
 			if o.State != "open" || o.Stop != 99_900_000_000 || o.Take != 100_520_000_000 {
 				t.Fatalf("expected fill with stop 99.90 and take 100.52: %+v", o)

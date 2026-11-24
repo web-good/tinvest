@@ -58,6 +58,7 @@ type Engine struct {
 	cfg                                     Config
 	instruments                             map[string]density.Instrument
 	orders                                  map[string]*Order
+	reboundWatches                          map[string]map[int64]*reboundWatch
 	bounces                                 map[string]*density.BounceWatch
 	books                                   map[string]marketBook
 	lastTrade                               map[string]time.Time
@@ -74,7 +75,7 @@ func New(cfg Config, instruments []density.Instrument, record func(Record) error
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
-	e := &Engine{cfg: cfg, instruments: make(map[string]density.Instrument), orders: make(map[string]*Order), bounces: make(map[string]*density.BounceWatch), books: make(map[string]marketBook), lastTrade: make(map[string]time.Time), lastBook: make(map[string]time.Time), cooldown: make(map[string]time.Time), cash: cfg.InitialCash, peak: cfg.InitialCash, complete: true, record: record}
+	e := &Engine{cfg: cfg, instruments: make(map[string]density.Instrument), orders: make(map[string]*Order), reboundWatches: make(map[string]map[int64]*reboundWatch), bounces: make(map[string]*density.BounceWatch), books: make(map[string]marketBook), lastTrade: make(map[string]time.Time), lastBook: make(map[string]time.Time), cooldown: make(map[string]time.Time), cash: cfg.InitialCash, peak: cfg.InitialCash, complete: true, record: record}
 	for _, i := range instruments {
 		if i.ID == "" || i.Ticker == "" || i.Lot <= 0 || price(i.PriceStep) <= 0 {
 			return nil, fmt.Errorf("invalid instrument metadata for %s", i.Ticker)
@@ -138,7 +139,9 @@ func (e *Engine) fresh(id string, now time.Time) bool {
 	return ok && now.Sub(b.received) <= e.cfg.Freshness && now.Sub(b.book.Time) <= e.cfg.Freshness
 }
 func (e *Engine) Observe(s density.Signal, now time.Time) {
-	if !e.cfg.CandleEntries {
+	if e.cfg.ScreenerStrategy {
+		e.watchRebound(s, now)
+	} else if !e.cfg.CandleEntries {
 		e.observe(s, now, time.Time{})
 	}
 }
@@ -195,15 +198,15 @@ func (e *Engine) plan(s density.Signal, now time.Time, released float64, entryUn
 		return nil
 	}
 	entry := price(b.Asks[0].Price)
-	if e.cfg.fixedLimitEntry() {
+	if !e.cfg.ScreenerStrategy && e.cfg.fixedLimitEntry() {
 		entry = density.FixedEntryLimit(level, step)
-	} else if entryUntil.IsZero() {
+	} else if !e.cfg.ScreenerStrategy && entryUntil.IsZero() {
 		var err error
 		entry, err = density.EntryLimit(level, step, e.cfg.EntryTicks, e.cfg.EntryZoneTicks, entry)
 		if err != nil {
 			return nil
 		}
-	} else if !now.Add(e.cfg.Latency).Before(entryUntil) || entry <= level || !bounce.Retains(float64(s.Quantity), float64(densityLots)) {
+	} else if !entryUntil.IsZero() && (!now.Add(e.cfg.Latency).Before(entryUntil) || entry <= level || !bounce.Retains(float64(s.Quantity), float64(densityLots))) {
 		return nil
 	}
 	stop := level - e.cfg.StopTicks*step
@@ -280,9 +283,13 @@ func (e *Engine) OnBookWithCandidates(b density.Book, candidates []density.Signa
 	b.Asks = append([]density.Level(nil), b.Asks...)
 	if previous, ok := e.books[b.InstrumentID]; ok && now.Sub(previous.book.Time) > e.cfg.Freshness {
 		delete(e.bounces, b.InstrumentID)
+		delete(e.reboundWatches, b.InstrumentID)
 	}
 	e.lastBook[b.InstrumentID] = b.Time
 	e.books[b.InstrumentID] = marketBook{book: b, received: now, candidates: candidates}
+	if e.cfg.ScreenerStrategy {
+		defer e.checkReboundBook(b, now)
+	}
 	o := e.orders[b.InstrumentID]
 	if o == nil || !active(o) {
 		e.mark(now)
@@ -357,6 +364,10 @@ func (e *Engine) OnBookWithCandidates(b density.Book, candidates []density.Signa
 	e.mark(now)
 }
 func (e *Engine) OnTrade(t density.Event, now time.Time) {
+	if e.cfg.ScreenerStrategy {
+		e.trackReboundTrade(t, now)
+		return // Exits still execute against the book.
+	}
 	if e.err != nil || !e.fresh(t.InstrumentID, now) || t.Quantity <= 0 || price(t.Price) <= 0 || t.Time.IsZero() || t.Time.After(now) || now.Sub(t.Time) > e.cfg.Freshness || !t.Time.After(e.lastTrade[t.InstrumentID]) {
 		return
 	}
@@ -507,6 +518,7 @@ func (e *Engine) invalidate(id, reason string, now time.Time) {
 	_, hadBook := e.books[id]
 	delete(e.books, id)
 	delete(e.bounces, id)
+	delete(e.reboundWatches, id)
 	if now.After(e.lastBook[id]) {
 		e.lastBook[id] = now
 	}

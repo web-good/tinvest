@@ -12,7 +12,7 @@ type Config struct {
 	FixedLimitEntry                                 bool
 	CandleEntries                                   bool
 	RestrictEntryHours                              bool  // Allow buys only at 09:00–19:00 Moscow time.
-	BookExecution                                   bool  // Execute against visible books without a trade subscription.
+	BookExecution                                   bool  // Execute against visible order-book liquidity.
 	IgnoreCapital                                   bool  // Price-only simulation does not allocate a virtual balance.
 	MaxEntryLots                                    int64 // Zero keeps allocation-based sizing; live simulation uses one lot.
 	InitialCash, PositionRubles, Commission         float64

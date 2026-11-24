@@ -103,7 +103,7 @@ func (r *Runner) connection(parent context.Context) error {
 			return err
 		}
 	}
-	if !r.Engine.cfg.BookExecution {
+	if !r.Engine.cfg.BookExecution || r.Engine.cfg.ScreenerStrategy {
 		if err = stream.SubscribeTrades(ids, true); err != nil {
 			return err
 		}
@@ -163,6 +163,7 @@ func (r *Runner) connection(parent context.Context) error {
 				}
 			}
 			detector.SetInstruments(profiles)
+			clear(r.Engine.reboundWatches)
 		case now := <-tick.C:
 			r.Engine.Tick(now)
 			if r.Engine.Err() != nil {
@@ -196,6 +197,12 @@ func (r *Runner) connection(parent context.Context) error {
 					}
 					infoAck[id] = true
 				case density.EventTradeAck:
+					if !event.Success && r.Engine.cfg.ScreenerStrategy {
+						delete(tradeAck, id)
+						delete(r.Engine.reboundWatches, id)
+						slog.WarnContext(ctx, "simulation tape subscription rejected", "instrument", id)
+						continue
+					}
 					if !event.Success {
 						return fmt.Errorf("trade subscription rejected: %s", id)
 					}
@@ -225,6 +232,9 @@ func (r *Runner) connection(parent context.Context) error {
 					}
 					signals := detector.Update(event.Book, now)
 					r.Engine.OnBookWithCandidates(event.Book, detector.Candidates(), now)
+					if r.Engine.cfg.ScreenerStrategy && tradeAck[id].IsZero() {
+						continue
+					}
 					var admitted []density.Signal
 					for _, s := range signals {
 						if r.Engine.cfg.BookExecution && r.AllowEntry != nil && !r.AllowEntry(r.Engine.instruments[id], s) {

@@ -125,6 +125,7 @@ func TestRunnerUsesScreenerDistanceAndVolumeForEntries(t *testing.T) {
 			cfg := DefaultConfig()
 			cfg.BookExecution = true
 			cfg.ScreenerStrategy = true
+			cfg.Latency = 0
 			e, err := New(cfg, []density.Instrument{i}, nil)
 			if err != nil {
 				t.Fatal(err)
@@ -139,10 +140,18 @@ func TestRunnerUsesScreenerDistanceAndVolumeForEntries(t *testing.T) {
 			defer cancel()
 			events := []density.Event{
 				{Kind: density.EventBookAck, InstrumentID: i.ID, Success: true},
+				{Kind: density.EventTradeAck, InstrumentID: i.ID, Success: true},
 				{Kind: density.EventInfoAck, InstrumentID: i.ID, Success: true},
 				{Kind: density.EventTradingStatus, InstrumentID: i.ID, TradingOpen: true},
 				{Kind: density.EventBook, InstrumentID: i.ID, Book: b},
 			}
+			next := b
+			next.Time = now.Add(3 * time.Microsecond)
+			events = append(events,
+				density.Event{Kind: density.EventTrade, InstrumentID: i.ID, Price: p(100), Quantity: 1, Time: now.Add(time.Microsecond)},
+				density.Event{Kind: density.EventTrade, InstrumentID: i.ID, Price: p(101), Quantity: 1, Time: now.Add(2 * time.Microsecond)},
+				density.Event{Kind: density.EventBook, InstrumentID: i.ID, Book: next},
+			)
 			r := Runner{Source: fakeSource{events}, Universe: []density.Instrument{i}, Engine: e, Detector: dc,
 				ReportInterval: time.Millisecond, Report: func(Summary) error {
 					if !e.lastBook[i.ID].IsZero() {
