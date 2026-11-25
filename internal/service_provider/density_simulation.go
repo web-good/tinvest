@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 	"tinvest/internal/config"
 	"tinvest/internal/service/screener/density"
 	densitylive "tinvest/internal/service/screener/density/live"
@@ -15,7 +14,6 @@ import (
 )
 
 func (s *ServiceProvider) densitySimulationParticipant(c *config.DensityLiveConfig, d *config.DensityConfig, detector density.Config, lc densitylive.Config) *densitylive.Participant {
-	detector.Persistence = max(detector.Persistence, 5*time.Minute)
 	p := &densitylive.Participant{FollowScreener: c.FollowScreener, AllowEntry: s.densityEntryFilter(c.Tickers), StateDir: c.StateDir, Tickers: append([]string(nil), c.Tickers...), Config: lc, Detector: detector, HistoryInterval: d.HistoryInterval}
 	p.RunPaper = func(ctx context.Context) error {
 		if err := densitylive.CheckSimulationState(c.StateDir); err != nil {

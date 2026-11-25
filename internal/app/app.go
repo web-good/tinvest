@@ -8,7 +8,7 @@ import (
 	"tinvest/internal/enum"
 	newsscheduler "tinvest/internal/service/news/scheduler"
 	"tinvest/internal/service/screener/bybitdensity"
-	"tinvest/internal/service/screener/movement"
+	"tinvest/internal/service/screener/inplay"
 	goldenx "tinvest/internal/service/trading_strategy/golden_x/dto"
 	gxmodel "tinvest/internal/service/trading_strategy/golden_x/model"
 	"tinvest/internal/service/trading_strategy/golden_x/scheduler"
@@ -70,7 +70,7 @@ func (a *App) Run(ctx context.Context) error {
 		defer startWorker(ctx, "Bybit Density", bybit)()
 	}
 
-	if a.config.MovementEnabled {
+	if a.config.InplayEnabled {
 		bot, err := a.sp.GetTelegramBot()
 		if err != nil {
 			return err
@@ -80,9 +80,10 @@ func (a *App) Run(ctx context.Context) error {
 			return err
 		}
 		cfg := a.config.TelegramClient
-		send := telegram.NewTopicSender(bot, cfg.GroupChatID, cfg.TopicMovement).SendMessage
-		defer startWorker(ctx, "movement MOEX", movement.NewMOEX(grpc.Connection(), a.config.GrpcClient.TokenProd, a.config.MovementMOEXPct, a.config.MovementMOEXRVOL, send))()
-		defer startWorker(ctx, "movement Binance", movement.NewBinance(a.config.MovementBinancePct, a.config.MovementBinanceRVOL, send))()
+		send := telegram.NewTopicSender(bot, cfg.GroupChatID, cfg.TopicInplay).SendMessage
+		defer startWorker(ctx, "inplay MOEX", inplay.NewMOEX(grpc.Connection(), a.config.GrpcClient.TokenProd, a.config.InplayMOEXPct, a.config.InplayMOEXRVOL, send))()
+		defer startWorker(ctx, "inplay Bybit", inplay.NewBybit(send))()
+		defer startWorker(ctx, "inplay Binance", inplay.NewBinance(a.config.InplayBinancePct, a.config.InplayBinanceRVOL, send))()
 	}
 	if a.config.AppEnv == "prod" {
 		a.runProd(ctx)

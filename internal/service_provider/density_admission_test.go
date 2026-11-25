@@ -78,8 +78,8 @@ func TestDensityFollowScreenerUsesFullUniverseAndSharedAdmission(t *testing.T) {
 	if !p.FollowScreener || p.Detector.MaxBooks != cfg.Density.MaxBooks || p.AllowEntry == nil {
 		t.Fatalf("expanded mode not wired: %+v", p)
 	}
-	if p.Detector.Persistence != 5*time.Minute {
-		t.Fatalf("simulation density confirmation = %v, want 5m", p.Detector.Persistence)
+	if p.Detector.Persistence != cfg.Density.Persistence {
+		t.Fatalf("simulation density confirmation = %v, want %v", p.Detector.Persistence, cfg.Density.Persistence)
 	}
 	if p.Detector.AlertDistanceTicks != 3 || p.Detector.AlertM5VolumeMultiplier != .7 {
 		t.Fatalf("participant did not receive the screener thresholds: %+v", p.Detector)

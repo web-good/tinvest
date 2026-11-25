@@ -106,6 +106,38 @@ func (c *Client) Instruments(ctx context.Context, market model.Market, symbols [
 		return nil, err
 	}
 
+	selected, err := c.marketCandidates(ctx, market, names, limit)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]model.Instrument, 0, len(selected))
+	for _, item := range selected {
+		instrument, err := item.instrument(market)
+		if err != nil {
+			return nil, fmt.Errorf("instrument %s:%s: %w", market, item.info.Symbol, err)
+		}
+		result = append(result, instrument)
+	}
+
+	return result, nil
+}
+
+// SpotTurnovers lists active USDT spot pairs with their 24-hour quote turnover.
+func (c *Client) SpotTurnovers(ctx context.Context) ([]model.Instrument, error) {
+	items, err := c.marketCandidates(ctx, model.Spot, nil, math.MaxInt)
+	if err != nil {
+		return nil, err
+	}
+	instruments := make([]model.Instrument, 0, len(items))
+	for _, item := range items {
+		instruments = append(instruments, model.Instrument{
+			Key: model.Key{Market: model.Spot, Symbol: item.info.Symbol}, Turnover: item.turnover,
+		})
+	}
+	return instruments, nil
+}
+
+func (c *Client) marketCandidates(ctx context.Context, market model.Market, names []string, limit int) ([]candidate, error) {
 	directory, err := c.directory(ctx, market)
 	if err != nil {
 		return nil, err
@@ -125,21 +157,7 @@ func (c *Client) Instruments(ctx context.Context, market model.Market, symbols [
 		return nil, fmt.Errorf("tickers returned category %q for %q", tickers.Category, market)
 	}
 
-	selected, err := selectInstruments(directory, tickers.List, market, names, limit)
-	if err != nil {
-		return nil, err
-	}
-
-	result := make([]model.Instrument, 0, len(selected))
-	for _, item := range selected {
-		instrument, err := item.instrument(market)
-		if err != nil {
-			return nil, fmt.Errorf("instrument %s:%s: %w", market, item.info.Symbol, err)
-		}
-		result = append(result, instrument)
-	}
-
-	return result, nil
+	return selectInstruments(directory, tickers.List, market, names, limit)
 }
 
 func normalizeSymbols(input []string) ([]string, error) {

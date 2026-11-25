@@ -1,4 +1,4 @@
-package movement
+package inplay
 
 import (
 	"context"
@@ -75,7 +75,7 @@ type Worker struct {
 
 func (w *Worker) Run(ctx context.Context) error {
 	if w.minPct < 0 || math.IsNaN(w.minPct) || math.IsInf(w.minPct, 0) {
-		return errors.New("invalid movement threshold")
+		return errors.New("invalid inplay threshold")
 	}
 	if w.minRVOL <= 0 || math.IsNaN(w.minRVOL) || math.IsInf(w.minRVOL, 0) {
 		return errors.New("invalid relative volume threshold")
@@ -88,7 +88,7 @@ func (w *Worker) Run(ctx context.Context) error {
 		case <-time.After(time.Until(end.Add(5 * time.Second))):
 		}
 		if err := w.scan(ctx, end); err != nil && ctx.Err() == nil {
-			slog.ErrorContext(ctx, "movement scan failed", "market", w.market, "error", err)
+			slog.ErrorContext(ctx, "inplay scan failed", "market", w.market, "error", err)
 		}
 	}
 }
@@ -186,7 +186,7 @@ func (w *Worker) scan(ctx context.Context, end time.Time) error {
 			return rows[i].mean > rows[j].mean
 		})
 		var msg strings.Builder
-		fmt.Fprintf(&msg, "%s · %d мин до %s МСК\nСредний размах 5м · свечей ≥ %g%% · RVOL ≥ %g×", w.market, n*5, end.In(time.FixedZone("MSK", 3*3600)).Format("15:04"), w.minPct, w.minRVOL)
+		fmt.Fprintf(&msg, "inplay · %s · %d мин до %s МСК\nСредний размах 5м · свечей ≥ %g%% · RVOL ≥ %g×", w.market, n*5, end.In(time.FixedZone("MSK", 3*3600)).Format("15:04"), w.minPct, w.minRVOL)
 		for _, r := range rows[:min(10, len(rows))] {
 			fmt.Fprintf(&msg, "\n%s    %.2f%%    %d/%d    RVOL %.2f×", html.EscapeString(r.symbol), r.mean, r.hits, n, r.rvol)
 		}

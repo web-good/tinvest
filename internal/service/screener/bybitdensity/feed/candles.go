@@ -126,8 +126,17 @@ type SpotBar struct {
 
 // SpotBars requires a continuous series of spot candles in [from, to).
 func (c *Client) SpotBars(ctx context.Context, key model.Key, interval time.Duration, from, to time.Time) ([]SpotBar, error) {
+	return c.spotBars(ctx, key, interval, from, to, true)
+}
+
+// AvailableSpotBars reads the closed OHLC bars available in [from, to).
+func (c *Client) AvailableSpotBars(ctx context.Context, key model.Key, interval time.Duration, from, to time.Time) ([]SpotBar, error) {
+	return c.spotBars(ctx, key, interval, from, to, false)
+}
+
+func (c *Client) spotBars(ctx context.Context, key model.Key, interval time.Duration, from, to time.Time, requireComplete bool) ([]SpotBar, error) {
 	var bars []SpotBar
-	err := c.readSpotCandles(ctx, key, interval, from, to, true, func(end time.Time, row []string) bool {
+	err := c.readSpotCandles(ctx, key, interval, from, to, requireComplete, func(end time.Time, row []string) bool {
 		var prices [4]float64
 		for i := range prices {
 			price, err := nonnegative(row[i+1])
