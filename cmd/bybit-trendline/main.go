@@ -6,7 +6,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	tg "github.com/go-telegram/bot"
 	"math"
 	"os"
 	"os/signal"
@@ -19,6 +18,8 @@ import (
 	"tinvest/internal/service/screener/bybitdensity/feed"
 	"tinvest/internal/service/screener/bybitdensity/model"
 	trendline "tinvest/internal/service/trading_strategy/bybit_trendline"
+
+	tg "github.com/go-telegram/bot"
 )
 
 type checkpoint struct {
@@ -73,7 +74,7 @@ func report(path string, s checkpoint, end time.Time, e *engine, periods []inPla
 	}
 	return os.WriteFile(path, []byte(b.String()), 0644)
 }
-func run(ctx context.Context) error {
+func run(ctx context.Context) (runErr error) {
 	mode := flag.String("mode", "backtest", "backtest or watch")
 	symbol := flag.String("symbol", "BTCUSDT", "Bybit spot symbol")
 	minutes := flag.Int("minutes", 15, "candle interval")
@@ -108,7 +109,8 @@ func run(ctx context.Context) error {
 	var end time.Time
 	var send func(string) error
 	path := *state
-	if *mode == "watch" {
+	switch *mode {
+	case "watch":
 		token := os.Getenv("TELEGRAM_BOT_TOKEN")
 		chat, err := strconv.ParseInt(os.Getenv("TELEGRAM_GROUP_CHAT_ID"), 10, 64)
 		topic, topicErr := strconv.Atoi(os.Getenv("TELEGRAM_TOPIC_TRENDLINE"))
@@ -124,7 +126,7 @@ func run(ctx context.Context) error {
 			defer cancel()
 			_, err := bot.SendMessage(req, &tg.SendMessageParams{ChatID: chat, MessageThreadID: topic, Text: msg})
 			if err != nil {
-				return errors.New("Telegram delivery failed; checkpoint retained")
+				return errors.New("failed to deliver Telegram message; checkpoint retained")
 			}
 			return nil
 		}
@@ -135,7 +137,11 @@ func run(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		defer lock.Close()
+		defer func() {
+			if err := lock.Close(); err != nil {
+				runErr = errors.Join(runErr, err)
+			}
+		}()
 		if err = syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 			return errors.New("watch checkpoint already in use")
 		}
@@ -173,7 +179,7 @@ func run(ctx context.Context) error {
 			}
 			s = old
 		}
-	} else if *mode == "backtest" {
+	case "backtest":
 		var err error
 		s.Start, err = time.Parse(time.DateOnly, *from)
 		if err != nil {
@@ -183,7 +189,7 @@ func run(ctx context.Context) error {
 		if err != nil || !s.Start.Before(end) || end.After(time.Now().UTC().Truncate(d)) {
 			return errors.New("invalid exclusive -to date")
 		}
-	} else {
+	default:
 		return errors.New("unknown mode")
 	}
 	client := feed.NewClient("", "")

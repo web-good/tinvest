@@ -85,7 +85,8 @@ func dailyRatios(start, end time.Time, trades []trade) (string, string) {
 	}
 	mean /= float64(days)
 	for _, g := range growth {
-		variance += math.Pow(g-1-mean, 2)
+		deviation := g - 1 - mean
+		variance += deviation * deviation
 	}
 	sharpe, sortino := "—", "—"
 	if variance > 0 {
