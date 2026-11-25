@@ -26,7 +26,12 @@ func ConvertCouponsFromPb(in []*investapi.Coupon) []*model.BondCoupon {
 }
 
 func ConvertBondModelFromBondPb(bond *investapi.Bond) *model.Bond {
+	levels := make([]string, 0, len(bond.Ratings))
+	for _, rating := range bond.Ratings {
+		levels = append(levels, rating.GetRatingLevel())
+	}
 	return &model.Bond{
+		RatingLevels:          levels,
 		ID:                    bond.Uid,
 		Name:                  bond.Name,
 		CouponQuantityPerYear: bond.CouponQuantityPerYear,

@@ -13,6 +13,7 @@ type Bond struct {
 	FloatingCouponFlag    bool
 	Nominal               float64
 	RiskLevel             string
+	RatingLevels          []string
 	Nkd                   float64
 	LiquidityFlag         bool
 	SubordinatedFlag      bool

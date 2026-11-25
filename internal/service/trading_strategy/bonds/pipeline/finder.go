@@ -30,7 +30,7 @@ func Finder(doneCh chan struct{}, bonds []*pkgmodel.Bond, isOfz bool, dateFrom, 
 				continue
 			}
 
-			if !isOfz && (reOfz.MatchString(bond.Name) || reRegion.MatchString(bond.Name)) {
+			if !isOfz && (reOfz.MatchString(bond.Name) || reRegion.MatchString(bond.Name) || !hasOnlyAAA(bond.RatingLevels)) {
 				continue
 			}
 

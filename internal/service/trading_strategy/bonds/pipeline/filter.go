@@ -1,6 +1,9 @@
 package pipeline
 
-import pkgmodel "tinvest/pkg/client/grpc/model"
+import (
+	"strings"
+	pkgmodel "tinvest/pkg/client/grpc/model"
+)
 
 // riskLevelLow — строковое представление RiskLevel_RISK_LEVEL_LOW из proto
 // (модель хранит RiskLevel как .String()).
@@ -20,4 +23,16 @@ func PassesReliability(b *pkgmodel.Bond) bool {
 		return false
 	}
 	return true
+}
+
+// Для корпоративного выпуска требуется хотя бы одна оценка, и каждая должна быть AAA.
+func hasOnlyAAA(levels []string) bool {
+	for _, level := range levels {
+		switch strings.ToUpper(strings.TrimSpace(level)) {
+		case "AAA", "AAA(RU)", "RUAAA", "AAA.RU", "AAA|RU|":
+		default:
+			return false
+		}
+	}
+	return len(levels) > 0
 }

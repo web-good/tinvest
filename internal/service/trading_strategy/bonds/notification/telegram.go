@@ -26,7 +26,11 @@ func Send(bonds []domain.BondReport, dateFrom time.Time, dateTo time.Time) strin
 	fmt.Fprintf(&notifyMessageBuilder, "🏛️ <b>%s</b>\n\n", bondType)
 
 	// Строка политики отбора облигаций
-	notifyMessageBuilder.WriteString("🛡️ <i>Отбор: только LOW risk, несубординированные, ликвидные</i>\n\n")
+	policy := "только LOW risk, несубординированные, ликвидные"
+	if bonds[0].Type == domain.CorpBondEnum {
+		policy += ", кредитный рейтинг AAA"
+	}
+	fmt.Fprintf(&notifyMessageBuilder, "🛡️ <i>Отбор: %s</i>\n\n", policy)
 
 	// Список облигаций
 	for i, bond := range bonds {
