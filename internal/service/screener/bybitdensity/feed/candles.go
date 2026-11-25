@@ -59,11 +59,12 @@ func (c *Client) SpotM5(ctx context.Context, key model.Key, from, to time.Time) 
 		open, openErr := nonnegative(row[1])
 		high, highErr := nonnegative(row[2])
 		low, lowErr := nonnegative(row[3])
+		volume, volumeErr := nonnegative(row[5])
 		turnover, turnoverErr := nonnegative(row[6])
-		if openErr != nil || highErr != nil || lowErr != nil || turnoverErr != nil || low <= 0 || open < low || open > high {
+		if openErr != nil || highErr != nil || lowErr != nil || volumeErr != nil || turnoverErr != nil || low <= 0 || open < low || open > high {
 			return false
 		}
-		candles = append(candles, model.M5Candle{End: end, Open: open, High: high, Low: low, Turnover: turnover})
+		candles = append(candles, model.M5Candle{End: end, Open: open, High: high, Low: low, Volume: volume, Turnover: turnover})
 		return true
 	})
 	if err != nil {
@@ -115,4 +116,35 @@ func (c *Client) readSpotCandles(ctx context.Context, key model.Key, interval ti
 		start = end
 	}
 	return nil
+}
+
+// SpotBar contains the OHLC prices of a completed spot candle.
+type SpotBar struct {
+	End                    time.Time
+	Open, High, Low, Close float64
+}
+
+// SpotBars requires a continuous series of spot candles in [from, to).
+func (c *Client) SpotBars(ctx context.Context, key model.Key, interval time.Duration, from, to time.Time) ([]SpotBar, error) {
+	var bars []SpotBar
+	err := c.readSpotCandles(ctx, key, interval, from, to, true, func(end time.Time, row []string) bool {
+		var prices [4]float64
+		for i := range prices {
+			price, err := nonnegative(row[i+1])
+			if err != nil || price <= 0 {
+				return false
+			}
+			prices[i] = price
+		}
+		o, h, l, cl := prices[0], prices[1], prices[2], prices[3]
+		if l > min(o, cl) || h < max(o, cl) {
+			return false
+		}
+		bars = append(bars, SpotBar{end, o, h, l, cl})
+		return true
+	})
+	if err != nil {
+		return nil, err
+	}
+	return bars, nil
 }

@@ -82,10 +82,10 @@ type CandleClose struct {
 	Price float64
 }
 
-// M5Candle is a closed spot candle with turnover in the quote asset.
+// M5Candle is a closed spot candle with volume in the base asset and turnover in the quote asset.
 type M5Candle struct {
-	End                       time.Time
-	Open, High, Low, Turnover float64
+	End                               time.Time
+	Open, High, Low, Volume, Turnover float64
 }
 
 type Event struct {

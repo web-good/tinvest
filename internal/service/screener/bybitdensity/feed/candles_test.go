@@ -88,8 +88,8 @@ func TestSpotM5UsesClosedRangeAndQuoteTurnover(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(bars) != 2 || bars[0] != (model.M5Candle{End: from.Add(5 * time.Minute), Open: 99, High: 103, Low: 98, Turnover: 710}) ||
-		bars[1] != (model.M5Candle{End: to, Open: 100, High: 105, Low: 99, Turnover: 506}) {
+	if len(bars) != 2 || bars[0] != (model.M5Candle{End: from.Add(5 * time.Minute), Open: 99, High: 103, Low: 98, Volume: 7, Turnover: 710}) ||
+		bars[1] != (model.M5Candle{End: to, Open: 100, High: 105, Low: 99, Volume: 5, Turnover: 506}) {
 		t.Fatalf("unexpected bars: %+v", bars)
 	}
 }
